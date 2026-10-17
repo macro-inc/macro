@@ -26,7 +26,7 @@
   ],
   "additionalProperties": false,
   "title": "DisplayResults",
-  "description": "Present results as a rich, interactive view (lists, timelines, channel messages) directly in the conversation. Prefer this tool when answering questions about workspace data: summaries of tasks/docs/activity, lists of entities, and information that would otherwise need a markdown table or long bulleted list. The user does not need to ask for a dashboard. Typical triggers: \"what did I get done this week?\", \"what is a teammate working on?\", \"show my open tasks\", \"summarize this project\", and \"what happened in this channel?\". ReadActivity already renders a complete activity timeline: do not call DisplayResults to repeat its events; add at most one short textual takeaway. The view is the answer. Keep accompanying prose to a one-line lead-in at most and do not restate the same data. Entity-backed widgets take real workspace entity ids obtained from other tools such as ListEntities or search; never invent ids. Prefer list sources with kind \"items\" and those entity references. The frontend renders the view from the tool arguments immediately; this tool only acknowledges it.",
+  "description": "Present results as a rich, interactive view (lists, timelines, calendar agendas, item cards, tags, channel messages) directly in the conversation. Prefer this tool when answering questions about workspace data: summaries of tasks/docs/activity, lists of entities, and information that would otherwise need a markdown table or long bulleted list. The user does not need to ask for a dashboard. Typical triggers: \"what did I get done this week?\", \"what is a teammate working on?\", \"show my open tasks\", \"summarize this project\", and \"what happened in this channel?\". ReadActivity already renders a complete activity timeline: do not call DisplayResults to repeat its events; add at most one short textual takeaway. The view is the answer. Keep accompanying prose to a one-line lead-in at most and do not restate the same data. Entity-backed widgets take real workspace entity ids obtained from other tools such as ListEntities or search; never invent ids. Prefer list sources with kind \"items\" and those entity references. To show calendar events, use an events widget with the eventIds a calendar tool returned: it renders an agenda loaded live from the calendar, so never restate the times in prose. When the answer is about one to four specific items - a document or spreadsheet, an email thread, an event - show them in a cards widget; mention items in passing as chips instead. To show tags - the user's own, or a taxonomy or ontology of any depth - use a tags widget, never a table or a list in markdown. Nest narrower tags under the tags they belong to, and give a tag that exists the tagId a tag tool returned. In a channel or a private conversation with the user, the view is posted with your reply. The view is checked against this schema before it is shown: a view that does not match is not shown, and the error says what to fix.",
   "$defs": {
     "__schema0": {
       "anyOf": [
@@ -45,7 +45,8 @@
             "type",
             "markdown"
           ],
-          "additionalProperties": false
+          "additionalProperties": false,
+          "description": "Markdown text: the narrative between the other widgets. Its type is \"md\", never \"markdown\"."
         },
         {
           "type": "object",
@@ -267,6 +268,111 @@
           "properties": {
             "type": {
               "type": "string",
+              "const": "events"
+            },
+            "title": {
+              "type": "string"
+            },
+            "events": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "eventId": {
+                    "type": "string",
+                    "description": "The eventId a calendar tool such as ListCalendarEvents returned."
+                  },
+                  "occurrenceKey": {
+                    "description": "One instance of a recurring event: that instance's recurrenceId from ListCalendarEvents.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "eventId"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "type",
+            "events"
+          ],
+          "additionalProperties": false,
+          "description": "A calendar agenda: the events grouped by day with their times, places and attendees, loaded live from the user's calendars. Use it whenever an answer is about calendar events instead of listing them in text."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "cards"
+            },
+            "title": {
+              "type": "string"
+            },
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "document",
+                      "email_thread",
+                      "calendar_event"
+                    ]
+                  },
+                  "id": {
+                    "type": "string",
+                    "description": "A document id (documents and spreadsheets), an email thread id, or a calendar eventId, exactly as a tool returned it."
+                  }
+                },
+                "required": [
+                  "type",
+                  "id"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "type",
+            "items"
+          ],
+          "additionalProperties": false,
+          "description": "Rich cards for the one to four specific items the answer is about: a document or spreadsheet, an email thread, or a calendar event. Each card opens its item. Use a list widget for longer sets."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "tags"
+            },
+            "title": {
+              "type": "string"
+            },
+            "tags": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/__schema1"
+              }
+            }
+          },
+          "required": [
+            "type",
+            "tags"
+          ],
+          "additionalProperties": false,
+          "description": "Tags as coloured pills, nested to any depth: the user's tags, a taxonomy the answer proposes, or any other ontology of tags, each with what it is for. Use it whenever an answer is about tags, instead of a table or a list in markdown."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
               "const": "container"
             },
             "direction": {
@@ -317,6 +423,38 @@
           "additionalProperties": false
         }
       ]
+    },
+    "__schema1": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string",
+          "description": "The tag's name. Name a narrower tag on its own: \"bug\" under \"Type\", not \"Type/bug\"."
+        },
+        "color": {
+          "description": "One of the tag colours: red, tomato, orange, amber, yellow, green, teal, blue, indigo, purple, pink, gray. Gray when omitted.",
+          "type": "string"
+        },
+        "description": {
+          "description": "What the tag is for, in a few words.",
+          "type": "string"
+        },
+        "tagId": {
+          "description": "For a tag that exists, the id ListTags or CreateTag returned: the tag then shows its current name and colour, and opens what is tagged with it.",
+          "type": "string"
+        },
+        "children": {
+          "description": "The narrower tags under this one.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema1"
+          }
+        }
+      },
+      "required": [
+        "label"
+      ],
+      "additionalProperties": false
     }
   }
 }

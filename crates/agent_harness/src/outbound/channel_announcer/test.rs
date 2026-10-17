@@ -159,6 +159,90 @@ fn the_reply_serializes_as_the_endpoint_reads_it() {
     );
 }
 
+fn carded_run(card: agent_fold::domain::model::ActivityCard) -> ProjectedSegment {
+    use agent_fold::domain::model::{ActivityRow, Segment};
+    ProjectedSegment {
+        segment: Segment {
+            index: 1,
+            kind: SegmentKind::Activity,
+            start: 1,
+            end: 2,
+            sealed: true,
+            rows: vec![ActivityRow {
+                id: "call-1".to_owned(),
+                label: "Create document".to_owned(),
+                detail: Some("Launch FAQ".to_owned()),
+                status: ActivityStatus::Completed,
+                card: Some(card),
+            }],
+        },
+        text: None,
+    }
+}
+
+/// A step's card reaches the composer in the fold's own shape, so the
+/// message stores what the live view showed.
+#[test]
+fn a_steps_card_travels_with_its_row() {
+    use agent_fold::domain::model::{ActivityCard, CardAction, CardItemType};
+    let card = ActivityCard::Item {
+        item_type: CardItemType::Document,
+        item_id: "doc-1".to_owned(),
+        file_type: Some("md".to_owned()),
+        action: CardAction::Created,
+        title: Some("Launch FAQ".to_owned()),
+        summary: None,
+    };
+    let segments = reply_segments(TurnId(2), &[carded_run(card)]);
+    assert_eq!(
+        serde_json::to_value(&segments).unwrap()[0]["rows"][0]["card"],
+        serde_json::json!({
+            "kind": "item",
+            "itemType": "document",
+            "itemId": "doc-1",
+            "fileType": "md",
+            "action": "created",
+            "title": "Launch FAQ",
+            "summary": null,
+        })
+    );
+}
+
+/// A message is read by the whole conversation, so what was done to an
+/// item (here, who an email went to) stays out of the card it stores.
+#[test]
+fn a_stored_card_leaves_out_what_only_the_items_readers_may_see() {
+    use agent_fold::domain::model::{ActivityCard, CardAction, CardItemType};
+    let card = ActivityCard::Item {
+        item_type: CardItemType::EmailThread,
+        item_id: "thread-1".to_owned(),
+        file_type: None,
+        action: CardAction::Sent,
+        title: Some("Launch plan".to_owned()),
+        summary: Some("to Ana Ruiz".to_owned()),
+    };
+    let segments = reply_segments(TurnId(2), &[carded_run(card)]);
+    let stored = &serde_json::to_value(&segments).unwrap()[0]["rows"][0]["card"];
+    assert_eq!(stored["action"], "sent");
+    assert_eq!(stored["title"], "Launch plan");
+    assert_eq!(stored["summary"], serde_json::Value::Null);
+}
+
+/// A runaway view is not stored; its row still says what the step did.
+#[test]
+fn a_card_too_large_to_store_leaves_its_row() {
+    use agent_fold::domain::model::ActivityCard;
+    let card = ActivityCard::View {
+        view: serde_json::json!({
+            "widgets": [{"type": "md", "markdown": "x".repeat(MAX_STORED_CARD_BYTES)}],
+        }),
+    };
+    let segments = reply_segments(TurnId(2), &[carded_run(card)]);
+    let row = &serde_json::to_value(&segments).unwrap()[0]["rows"][0];
+    assert_eq!(row["label"], "Create document");
+    assert!(row.get("card").is_none());
+}
+
 /// The answer goes out as the agent wrote it.
 #[test]
 fn an_answer_is_posted_as_written() {
@@ -453,18 +537,21 @@ async fn shared_thread_and_dm_snapshots_omit_raw_tool_details() {
                     label: "Ran".into(),
                     detail: Some("TOKEN=private-value run-report".into()),
                     status: ActivityStatus::Completed,
+                    card: None,
                 },
                 ActivityRow {
                     id: "search".into(),
                     label: "Searched".into(),
                     detail: Some("confidential acquisition".into()),
                     status: ActivityStatus::Completed,
+                    card: None,
                 },
                 ActivityRow {
                     id: "request".into(),
                     label: "Fetched".into(),
                     detail: Some("https://internal.example/?token=private-value".into()),
                     status: ActivityStatus::Failed,
+                    card: None,
                 },
             ],
         },

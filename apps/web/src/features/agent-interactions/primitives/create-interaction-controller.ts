@@ -1,11 +1,22 @@
 import { createStore } from 'solid-js/store';
 import { match } from 'ts-pattern';
-import type {
-  InteractionController,
-  InteractionIdentity,
-  InteractionResponse,
-  InteractionSource,
+import {
+  DEFAULT_ANSWERERS,
+  type InteractionController,
+  type InteractionDraft,
+  type InteractionIdentity,
+  type InteractionResponse,
+  type InteractionSource,
 } from '../context/interaction';
+
+/**
+ * A request's identity within its session. The fold sends a new object for
+ * the same request on every event, so a surface listing requests keys them
+ * by this, not by the object.
+ */
+export function interactionKey(request: InteractionIdentity): string {
+  return JSON.stringify([request.turn, request.kind, request.requestId]);
+}
 
 /** Answers live requests through the session's existing optimistic path. */
 export function createInteractionController(
@@ -16,13 +27,11 @@ export function createInteractionController(
   const [answering, setAnswering] = createStore<
     Record<string, true | undefined>
   >({});
+  // Unsent answers live as long as the surface that made this controller,
+  // which outlasts the cards it shows: a card remounts, the answer stays.
+  const drafts = new Map<string, InteractionDraft>();
   const key = (request: InteractionIdentity) =>
-    JSON.stringify([
-      source.sessionId(),
-      request.turn,
-      request.kind,
-      request.requestId,
-    ]);
+    JSON.stringify([source.sessionId(), interactionKey(request)]);
   const canAnswer = () => source.canEdit() === true;
 
   const respond = async (response: InteractionResponse): Promise<boolean> => {
@@ -64,6 +73,7 @@ export function createInteractionController(
         );
         return false;
       }
+      drafts.delete(identity);
       return true;
     } catch {
       source.onFailure("Couldn't send your answer");
@@ -76,7 +86,14 @@ export function createInteractionController(
   return {
     pending: source.pending,
     canAnswer,
+    answerers: source.answerers ?? DEFAULT_ANSWERERS,
+    owns: () => source.owns?.() === true,
     answering: (request) => answering[key(request)] === true,
     respond,
+    draft: (request) => drafts.get(key(request)),
+    keepDraft: (request, draft) => {
+      const identity = key(request);
+      drafts.set(identity, { ...drafts.get(identity), ...draft });
+    },
   };
 }

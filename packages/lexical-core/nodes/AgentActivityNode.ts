@@ -28,13 +28,179 @@ export const AGENT_ACTIVITY_STATUSES = [
 /** Where one step of an agent's work got to. */
 export type AgentActivityStatus = (typeof AGENT_ACTIVITY_STATUSES)[number];
 
+/** The kinds of workspace item a step's card opens. */
+export const AGENT_ACTIVITY_CARD_ITEM_TYPES = [
+  'document',
+  'email_thread',
+  'calendar_event',
+  'project',
+  'channel',
+  'routine',
+  'form',
+  'initiative',
+] as const;
+
+/** What a step did to the item its card opens. */
+export const AGENT_ACTIVITY_CARD_ACTIONS = [
+  'created',
+  'edited',
+  'sent',
+  'updated',
+  'moved',
+  'shared',
+  'renamed',
+  'commented',
+  'deleted',
+  'failed',
+] as const;
+
+/** What a saved review's drafts are: emails to send, or events to create. */
+export const AGENT_ACTIVITY_REVIEW_DRAFTS = ['email', 'calendar'] as const;
+
+/**
+ * Something a step produced, shown as a card after the steps of its run: a
+ * workspace item it created, changed or sent, a view the agent composed for
+ * the user, what its searches found, a database answer, or drafts it saved
+ * for the user to review. The same shape the session's fold gives its rows.
+ */
+export type AgentActivityCard =
+  | {
+      kind: 'item';
+      itemType: (typeof AGENT_ACTIVITY_CARD_ITEM_TYPES)[number];
+      itemId: string;
+      /** A document's file type, when the step named it. */
+      fileType?: string | null;
+      action: (typeof AGENT_ACTIVITY_CARD_ACTIONS)[number];
+      /** The item's name as the step knew it, until the item loads. */
+      title?: string | null;
+      /**
+       * What happened to it, without quoting it: `3 changes`. A message
+       * stores none, since its whole conversation reads it; older messages
+       * may still hold one.
+       */
+      summary?: string | null;
+    }
+  | {
+      kind: 'view';
+      /** A dynamic-UI view, validated where it renders. */
+      view: unknown;
+    }
+  | {
+      kind: 'sources';
+      /** What the step looked for. */
+      query?: string | null;
+      /** The first of what it found. */
+      sources: AgentActivitySource[];
+      /** How many different things it found in all. */
+      total: number;
+    }
+  | {
+      kind: 'data';
+      /** A `SELECT` statement readers run again with their own access. */
+      sql: string;
+      databaseId?: string | null;
+      /** How the agent asked to show it: `table`, `bar`, `line`. */
+      display?: string | null;
+    }
+  | {
+      kind: 'review';
+      /** The saved review, which readers load with their own access. */
+      reviewId: string;
+      drafts: (typeof AGENT_ACTIVITY_REVIEW_DRAFTS)[number];
+    };
+
+/**
+ * Something an answer rests on: a web page by address, or a workspace item
+ * by kind and id only, which readers load with their own access.
+ */
+export type AgentActivitySource =
+  | { kind: 'web'; url: string; title?: string | null }
+  | {
+      kind: 'item';
+      itemType: (typeof AGENT_ACTIVITY_CARD_ITEM_TYPES)[number];
+      itemId: string;
+    };
+
 /** One step of work as the agent session's fold worded it. */
 export type AgentActivityRow = {
   id: string;
   label: string;
   detail?: string;
   status: AgentActivityStatus;
+  /**
+   * What the step produced. A card this version cannot read is kept but not
+   * shown, so a newer server's cards never invalidate the steps.
+   */
+  card?: AgentActivityCard | null;
 };
+
+const isOptionalText = (value: unknown) =>
+  value === undefined || value === null || typeof value === 'string';
+
+const isWebAddress = (value: unknown) =>
+  typeof value === 'string' && /^https?:\/\//i.test(value);
+
+/** Return whether a value is a source this version knows how to show. */
+export function isAgentActivitySource(
+  value: unknown
+): value is AgentActivitySource {
+  if (!value || typeof value !== 'object') return false;
+  const source = value as Record<string, unknown>;
+  if (source.kind === 'web')
+    return isWebAddress(source.url) && isOptionalText(source.title);
+  return (
+    source.kind === 'item' &&
+    (AGENT_ACTIVITY_CARD_ITEM_TYPES as readonly unknown[]).includes(
+      source.itemType
+    ) &&
+    typeof source.itemId === 'string' &&
+    source.itemId.length > 0
+  );
+}
+
+function isItemCard(card: Record<string, unknown>) {
+  return (
+    (AGENT_ACTIVITY_CARD_ITEM_TYPES as readonly unknown[]).includes(
+      card.itemType
+    ) &&
+    typeof card.itemId === 'string' &&
+    card.itemId.length > 0 &&
+    (AGENT_ACTIVITY_CARD_ACTIONS as readonly unknown[]).includes(card.action) &&
+    isOptionalText(card.fileType) &&
+    isOptionalText(card.title) &&
+    isOptionalText(card.summary)
+  );
+}
+
+/** Return whether a value is a card this version knows how to show. */
+export function isAgentActivityCard(
+  value: unknown
+): value is AgentActivityCard {
+  if (!value || typeof value !== 'object') return false;
+  const card = value as Record<string, unknown>;
+  if (card.kind === 'view') return 'view' in card;
+  if (card.kind === 'sources')
+    return (
+      isOptionalText(card.query) &&
+      typeof card.total === 'number' &&
+      Array.isArray(card.sources) &&
+      card.sources.every(isAgentActivitySource)
+    );
+  if (card.kind === 'review')
+    return (
+      typeof card.reviewId === 'string' &&
+      card.reviewId.length > 0 &&
+      (AGENT_ACTIVITY_REVIEW_DRAFTS as readonly unknown[]).includes(card.drafts)
+    );
+  if (card.kind === 'data')
+    return (
+      typeof card.sql === 'string' &&
+      card.sql.length > 0 &&
+      isOptionalText(card.databaseId) &&
+      isOptionalText(card.display)
+    );
+  return card.kind === 'item' && isItemCard(card);
+}
 
 /**
  * The steps an agent took between two passages of a reply: the activity
@@ -76,7 +242,10 @@ function isAgentActivityRow(value: unknown): value is AgentActivityRow {
     typeof row.id === 'string' &&
     typeof row.label === 'string' &&
     (row.detail === undefined || typeof row.detail === 'string') &&
-    isAgentActivityStatus(row.status)
+    isAgentActivityStatus(row.status) &&
+    (row.card === undefined ||
+      row.card === null ||
+      typeof row.card === 'object')
   );
 }
 

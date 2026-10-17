@@ -43,6 +43,7 @@ import {
   WorkingLine,
 } from '../ui';
 import { LiveToolGroup } from '../views/LiveToolGroup';
+import { ToolRunCards } from '../views/ToolRunCards';
 import { PromptFooter } from './PromptFooter';
 import { AttachmentPart } from './parts/AttachmentPart';
 import { ControlPart } from './parts/ControlPart';
@@ -110,17 +111,24 @@ function AgentMessagePart(props: {
       </Match>
       <Match when={props.part.kind === 'tool_use' && props.part}>
         {(part) => (
-          <ToolCallPart
-            part={part()}
-            context={{
-              sessionId: props.message.agentSessionId,
-              // Turn and side identify a message within its session.
-              messageId: `${props.message.agentSessionId}:${props.message.turn}:${props.message.author.kind}`,
-              partIndex: props.index,
-              inFlight: props.inFlight,
-              followedBy: toolUsedAfter(props.message.parts, props.index),
-            }}
-          />
+          <>
+            <ToolCallPart
+              part={part()}
+              context={{
+                sessionId: props.message.agentSessionId,
+                // Turn and side identify a message within its session.
+                messageId: `${props.message.agentSessionId}:${props.message.turn}:${props.message.author.kind}`,
+                partIndex: props.index,
+                inFlight: props.inFlight,
+                followedBy: toolUsedAfter(props.message.parts, props.index),
+              }}
+            />
+            {/* A user tool stands outside the runs, so its receipt - the
+                email it sent, the event it made - sits under it. */}
+            <Show when={part().detail.kind === 'user_tool'}>
+              <ToolRunCards message={props.message} calls={[part().id]} />
+            </Show>
+          </>
         )}
       </Match>
       <Match when={props.part.kind === 'permission' && props.part}>
@@ -136,7 +144,17 @@ function AgentMessagePart(props: {
         {(part) => <ControlPart part={part()} />}
       </Match>
       <Match when={props.part.kind === 'elicitation' && props.part}>
-        {(part) => <ElicitationPart part={part()} turn={props.message.turn} />}
+        {(part) => (
+          <>
+            <ElicitationPart part={part()} turn={props.message.turn} />
+            {/* A draft the user finished leaves its receipt under it. */}
+            <Show when={part().toolCall}>
+              {(call) => (
+                <ToolRunCards message={props.message} calls={[call()]} />
+              )}
+            </Show>
+          </>
+        )}
       </Match>
     </Switch>
   );
@@ -145,7 +163,7 @@ function AgentMessagePart(props: {
 /**
  * A run of consecutive tool calls and their accompanying thoughts (see
  * `segmentParts`), folded to one row that opens to those parts, each at
- * its original index.
+ * its original index, with the cards of what the run produced under it.
  */
 function ToolGroupPart(props: {
   message: FoldedMessage;
@@ -190,6 +208,10 @@ function ToolGroupPart(props: {
       >
         {renderParts()}
       </LiveToolGroup>
+      <ToolRunCards
+        message={props.message}
+        calls={calls().map((call) => call.id)}
+      />
     </Show>
   );
 }

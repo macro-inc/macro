@@ -35,5 +35,7 @@
  *   when an agent mentions a PR by URL, and the decorator resolves the synced PR.
  * Version 8.0 - Oct 2026. Added BookingLinkMentionNode for Macro `/app/book/…` URLs.
  * Version 9.0 - Oct 2026. Added AgentActivityNode: the steps of an agent's reply between two passages, with a snapshot of its rows and live rendering where the session is readable.
+ * Version 9.1 - Oct 2026. AgentActivityNode rows carry an optional `card`: an item the step created, changed or sent, or a view the agent composed.
+ * Version 9.2 - Oct 2026. AgentActivityNode item cards: projects, channels, routines, forms and initiatives, more actions (updated, moved, shared, renamed, commented, deleted, failed), and an optional `summary` of what happened.
  */
-export const MARKDOWN_VERSION_COUNTER = 9.0;
+export const MARKDOWN_VERSION_COUNTER = 9.2;

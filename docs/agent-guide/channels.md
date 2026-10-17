@@ -80,6 +80,32 @@ does not invoke the agent again. A reply inside a thread is not part of the
 conversation: the agent answers it only when mentioned there, in the thread,
 as in any channel.
 
+What a step made, changed, or showed appears as a card under its step: a
+document, a sent email, an event, a composed view. The cards of steps folded
+behind `N earlier steps` show above that control, and a finished run that
+folds into `Worked for … · N steps` keeps its cards. A card's short summary
+(`3 changes`, `to Ana Ruiz`) shows only while its run is live, to a reader of
+the session who can open the item. Once the run is over, the card shows the
+item's kind and when it last changed instead; the session keeps the summary.
+A drafted email or event the agent waits on is its composer for the person
+the agent works for, as in the agent's session: the email composer's Send
+sends it and **Discard** under it declines; the calendar's composer creates
+it or cancels it. Anyone else who can answer sees the draft as the agent
+wrote it, with **Send** (or **Create event**) and **Discard**. Text typed into a
+question, or an edit to a drafted email or event, stays through scrolling
+away, a follow-up, or a backgrounded phone until it is sent.
+
+When the agent saves drafts for you to review without waiting on you
+(`PresentReview`, in any mode), its reply carries the saved review in place
+of the step: the drafts in their composers, `1 of N` with a draft picker and
+**Send all** (**Create all** for events) for several, each sent or dismissed
+on its own. The drafts are the session owner's to decide; anyone else in the
+thread sees `Email drafts to review · Waiting for <owner>` and nothing of the
+drafts. When the agent needs an app, its reply ends with a
+**Connect** card. Connecting from the agent's latest reply, while nothing else
+runs or waits once the sign-in finishes, tells the agent to continue; from an
+older reply, or while the agent works, it only connects, and a toast says so.
+
 Each failed, stopped, or interrupted source message has its own **Retry message**
 action in the current context. Retry is explicit because an interrupted attempt
 may already have performed an external action. Refreshing or reopening the

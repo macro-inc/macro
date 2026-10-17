@@ -152,6 +152,56 @@ describe('DisplayResultsToolCall', () => {
     expect(rendered.container.querySelector('.magic-chip-shimmer')).toBeNull();
   });
 
+  it('renders the widgets that match and counts the ones that do not', () => {
+    const cards = {
+      type: 'cards',
+      title: 'Onboarding Summary',
+      items: [{ type: 'document', id: 'doc-1' }],
+    };
+    const view = {
+      title: 'Workspace Setup',
+      widgets: [
+        { type: 'tags', title: 'Created Tags' },
+        { type: 'markdown', markdown: 'private-markdown' },
+        cards,
+      ],
+    };
+    const rendered = render(() => (
+      <DisplayResultsToolCall input={{ view }} common={common()} />
+    ));
+
+    expect(rendered.getByTestId('dashboard').textContent).toBe(
+      JSON.stringify({ title: 'Workspace Setup', widgets: [cards] })
+    );
+    expect(rendered.container.textContent).toContain(
+      "Couldn't render 2 widgets — they didn't match the schema."
+    );
+    expect(rendered.container.textContent).not.toContain('private-markdown');
+  });
+
+  it('counts an unmatched widget only once the call ends', () => {
+    const md = { type: 'md', markdown: 'Done so far' };
+    const view = { widgets: [md, { type: 'md' }] };
+    const [props, setProps] = createStore<{
+      input: unknown;
+      common: ToolCallCommon;
+    }>({ input: { view }, common: common('running') });
+    const rendered = render(() => <DisplayResultsToolCall {...props} />);
+
+    expect(rendered.getByTestId('dashboard').textContent).toBe(
+      JSON.stringify({ widgets: [md] })
+    );
+    expect(rendered.container.textContent).not.toContain("Couldn't render");
+
+    setProps('common', common());
+    expect(rendered.getByTestId('dashboard').textContent).toBe(
+      JSON.stringify({ widgets: [md] })
+    );
+    expect(rendered.container.textContent).toContain(
+      "Couldn't render one widget — it didn't match the schema."
+    );
+  });
+
   it('reports a render error before showing the fallback', () => {
     const rendered = render(() => (
       <DisplayResultsToolCall

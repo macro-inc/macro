@@ -1,8 +1,11 @@
 import { Col, Row, View } from './core/Layout';
 import { Compose, Render } from './render';
+import { Cards } from './widgets/Cards';
 import { ChannelMessage } from './widgets/ChannelMessage';
+import { Events } from './widgets/Events';
 import { List } from './widgets/List';
 import { Md } from './widgets/Md';
+import { Tags } from './widgets/Tags';
 import { Timeline } from './widgets/Timeline';
 
 /**
@@ -20,4 +23,7 @@ export const Widget = {
   Timeline,
   ChannelMessage,
   List,
+  Events,
+  Cards,
+  Tags,
 };

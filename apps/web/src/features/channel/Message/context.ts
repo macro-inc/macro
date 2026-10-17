@@ -37,6 +37,11 @@ export function useMessage(): Accessor<MessageData> {
   return ctx;
 }
 
+/** The message a component renders in, for content that may render outside one. */
+export function useOptionalMessage(): Accessor<MessageData> | undefined {
+  return useContext(MessageContext);
+}
+
 export function useMessageActions(): MessageActions | undefined {
   return useContext(MessageActionsContext);
 }

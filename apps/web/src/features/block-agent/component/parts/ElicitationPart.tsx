@@ -1,32 +1,26 @@
 /**
- * The agent asking the user a question.
+ * The agent asking the user a question, or to finish a draft.
  *
- * Interactive only while the fold's metadata still names this question as the
- * one to answer: a `pending` part on a turn that has ended, or on a dead
- * connection, reads as "not answered" rather than offering a form the agent
- * is no longer waiting on. Resolved parts read back what was chosen.
+ * While the fold's metadata still names this request as the one to answer,
+ * it is the ask card the same request is in a channel (`InteractionCard`):
+ * the question as its title, or the draft in the composer it goes out
+ * from. A `pending` part on a turn that has ended, or on a dead connection,
+ * reads as "not answered" rather than offering what the agent is no longer
+ * waiting on. Resolved parts read back what was chosen.
  *
- * Editors can answer; viewers see the same live card with inert controls.
- *
- * The form, URL consent, and unrecognized-request controls are the
- * `LiveElicitation` ones the channel's Magic Chip shares; a Macro user tool
- * under review opens the tool's own composer here.
+ * Editors can answer; everyone else sees the same card with nothing to
+ * press, and who can.
  */
 
-import {
-  LiveQuestionCard,
-  parseDraftedTool,
-  type RespondToElicitation,
-  UserToolComposer,
-  type UserToolRequest,
-} from '@app/features/agent-interactions/components/LiveElicitation';
+import { InteractionCard } from '@app/features/agent-interactions/components/InteractionCard';
+import type { AgentInteraction } from '@app/features/agent-interactions/context/interaction';
 import type {
   AnsweredField,
   AnsweredValue,
   MessagePart,
 } from '@service-agent-fold/generated/types';
-import { createMemo, For, Show } from 'solid-js';
-import { match, P } from 'ts-pattern';
+import { For, Show } from 'solid-js';
+import { match } from 'ts-pattern';
 import { useAgentSession } from '../../context/AgentSessionContext';
 import { ToolCard } from '../../ui';
 import { UserToolCall } from './UserToolCall';
@@ -54,111 +48,26 @@ export function ElicitationPart(props: {
   part: ElicitationPartData;
   turn: number;
 }) {
-  const { interactions, bot } = useAgentSession();
-
-  // Live only while the metadata slot names this exact request.
+  const { interactions } = useAgentSession();
+  // Live only while the metadata slot names this exact request. Each event
+  // brings the request anew; the card stays mounted, and keeps whatever was
+  // typed into it with the controller.
   const live = () =>
-    props.part.outcome.kind === 'pending' &&
-    interactions
-      .pending()
-      .some(
-        (request) =>
-          request.kind === 'elicitation' &&
-          request.requestId === props.part.requestId &&
-          request.turn === props.turn
-      );
-
-  const agentName = () => bot()?.name ?? 'The agent';
-  const identity = () => ({
-    kind: 'elicitation' as const,
-    requestId: props.part.requestId,
-    turn: props.turn,
-  });
-  const locked = () =>
-    !interactions.canAnswer() || interactions.answering(identity());
-  const respond: RespondToElicitation = (answer) =>
-    interactions.respond({ ...identity(), answer });
-  const waitingFor = () =>
-    interactions.canAnswer() ? 'Waiting for you' : 'Waiting for an editor';
+    props.part.outcome.kind === 'pending'
+      ? interactions
+          .pending()
+          .find(
+            (request): request is AgentInteraction =>
+              request.kind === 'elicitation' &&
+              request.requestId === props.part.requestId &&
+              request.turn === props.turn
+          )
+      : undefined;
 
   return (
     <Show when={live()} fallback={<ResolvedElicitation part={props.part} />}>
-      <ToolCard
-        title={`${agentName()} is asking`}
-        status="running"
-        defaultOpen
-        trailing={<span class="text-ink-muted">{waitingFor()}</span>}
-      >
-        <div class="flex flex-col gap-3 py-1">
-          <div class="text-sm text-ink">{props.part.message}</div>
-          <Show when={!interactions.canAnswer()}>
-            <div class="text-xs text-ink-extra-muted">
-              Only people who can edit this session can answer.
-            </div>
-          </Show>
-          {match(props.part.request)
-            .with({ kind: 'user_tool' }, (request) => (
-              <LiveUserTool
-                request={request}
-                toolCall={props.part.toolCall ?? String(props.part.requestId)}
-                locked={locked()}
-                onRespond={respond}
-              />
-            ))
-            .with(
-              { kind: P.union('form', 'url', 'unrecognized') },
-              (request) => (
-                <LiveQuestionCard
-                  request={request}
-                  locked={locked()}
-                  onRespond={respond}
-                />
-              )
-            )
-            .exhaustive()}
-        </div>
-      </ToolCard>
-    </Show>
-  );
-}
-
-/**
- * A Macro user tool under review, in the tool's own composer. A draft the
- * tool's schema rejects, or a tool with no composer here, falls back to the
- * flat form the agent also sent. The email composer has only Send, so the
- * card adds a Cancel: without it the turn could only be refused from the
- * chip, or by stopping it.
- */
-function LiveUserTool(props: {
-  request: UserToolRequest;
-  toolCall: string;
-  locked: boolean;
-  onRespond: RespondToElicitation;
-}) {
-  const { interactions } = useAgentSession();
-  const drafted = createMemo(() =>
-    parseDraftedTool(props.request, props.toolCall)
-  );
-  const fallback = (
-    <LiveQuestionCard
-      request={{ kind: 'form', schema: props.request.schema }}
-      locked={props.locked}
-      onRespond={props.onRespond}
-    />
-  );
-  return (
-    <Show when={drafted()} fallback={fallback}>
-      {(tool) => (
-        <UserToolComposer
-          tool={tool()}
-          toolCall={props.toolCall}
-          cancel
-          fallback={fallback}
-          review={{
-            canAnswer: () => interactions.canAnswer() && !props.locked,
-            respond: props.onRespond,
-          }}
-        />
+      {(request) => (
+        <InteractionCard request={request()} controller={interactions} />
       )}
     </Show>
   );

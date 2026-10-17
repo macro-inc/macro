@@ -1,9 +1,10 @@
 /**
  * @vitest-environment jsdom
  *
- * What this part must get right: a form is offered only while the fold says
- * the agent is still waiting on it, an answer sends exactly one key, and a
- * URL is never opened without the user pressing Open.
+ * What this part must get right: a question is offered only while the fold
+ * says the agent is still waiting on it - as the ask card the channel shows -
+ * an answer sends exactly one key, and a URL is never opened without the
+ * user pressing Open.
  */
 
 import type { InteractionResponse } from '@app/features/agent-interactions/context/interaction';
@@ -19,18 +20,22 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const respond = vi.fn<(answer: ElicitationAnswer) => Promise<boolean>>();
 let pending: PendingElicitation | undefined;
 let canAnswer = true;
+let owns = true;
 
 vi.mock('../../context/AgentSessionContext', () => ({
   useAgentSession: () => ({
-    bot: () => ({ name: 'Macro Coder' }),
     interactions: {
       pending: () => (pending ? [{ kind: 'elicitation', ...pending }] : []),
       canAnswer: () => canAnswer,
+      answerers: 'someone who can edit this session',
+      owns: () => owns,
       answering: () => false,
       respond: (response: InteractionResponse) =>
         response.kind === 'elicitation'
           ? respond(response.answer)
           : Promise.resolve(false),
+      draft: () => undefined,
+      keepDraft: () => {},
     },
   }),
 }));
@@ -128,6 +133,10 @@ vi.mock('@core/component/AI/component/tool/email/DraftComposer', () => ({
   EmailDraftComposer: composerStub('email'),
 }));
 vi.mock('./UserToolCall', () => ({
+  EmailDraft: (props: { email: { subject: string } }) => (
+    <div data-testid="email-draft">{props.email.subject}</div>
+  ),
+  EventDraft: () => <div data-testid="event-draft" />,
   UserToolCall: (props: {
     detail: { outcome: { kind: string } };
     common: { label: string; status: string };
@@ -203,34 +212,32 @@ beforeEach(() => {
   respond.mockResolvedValue(true);
   pending = undefined;
   canAnswer = true;
+  owns = true;
 });
 
 describe('ElicitationPart', () => {
-  it('offers the form only while the metadata names this question', () => {
+  it('asks with the question card only while the metadata names this question', () => {
     pending = live();
-    const { queryByTestId, getByTestId } = render(() => (
+    const { queryByTestId, getByRole } = render(() => (
       <ElicitationPart turn={0} part={part()} />
     ));
     expect(queryByTestId('form')).not.toBeNull();
-    expect(getByTestId('title').textContent).toContain('Macro Coder is asking');
-    expect(getByTestId('trailing').textContent).toBe('Waiting for you');
+    const card = getByRole('region', { name: 'Agent question' });
+    expect(card.textContent).toContain('What is the best colour?');
+    expect(queryByTestId('tool-card')).toBeNull();
   });
 
-  it('a viewer without edit access sees the question locked', () => {
+  it('a viewer without edit access sees the question, who can answer it, and nothing to press', () => {
     pending = live();
     canAnswer = false;
-    const { getByTestId, getByText } = render(() => (
+    const { getByText, queryByRole } = render(() => (
       <ElicitationPart turn={0} part={part()} />
     ));
-    expect(getByTestId('trailing').textContent).toBe('Waiting for an editor');
-    expect(getByTestId('body').textContent).toContain(
-      'Only people who can edit this session can answer.'
-    );
-    for (const label of ['Submit', 'Decline', 'Cancel']) {
-      const button = getByText(label).closest('button');
-      expect(button?.disabled).toBe(true);
-      fireEvent.click(getByText(label));
-    }
+    expect(
+      getByText('Only someone who can edit this session can answer.')
+    ).toBeTruthy();
+    expect(queryByRole('button', { name: 'Submit' })).toBeNull();
+    expect(queryByRole('button', { name: 'Skip' })).toBeNull();
     expect(respond).not.toHaveBeenCalled();
   });
 
@@ -295,15 +302,13 @@ describe('ElicitationPart', () => {
     expect(respond).not.toHaveBeenCalled();
   });
 
-  it('decline and cancel send their actions', () => {
+  it('Skip declines the question', () => {
     pending = live();
     const { getByText } = render(() => (
       <ElicitationPart turn={0} part={part()} />
     ));
-    fireEvent.click(getByText('Decline'));
+    fireEvent.click(getByText('Skip'));
     expect(respond).toHaveBeenCalledWith({ action: 'decline' });
-    fireEvent.click(getByText('Cancel'));
-    expect(respond).toHaveBeenCalledWith({ action: 'cancel' });
   });
 
   it('shows the harness-reported answer over what was sent', () => {
@@ -482,7 +487,7 @@ describe('ElicitationPart', () => {
 
     // The email composer offers only Send, so the card carries the decline the
     // calendar composer answers through its own Cancel.
-    it('an email review can be declined from the card', () => {
+    it('an email review can be discarded from the card', () => {
       const request = review('SendEmail', {
         to: [{ email: 'alice@example.com' }],
         cc: [],
@@ -494,7 +499,7 @@ describe('ElicitationPart', () => {
       const { getByText } = render(() => (
         <ElicitationPart turn={0} part={part({ request })} />
       ));
-      fireEvent.click(getByText('Cancel'));
+      fireEvent.click(getByText('Discard'));
       expect(respond).toHaveBeenCalledWith({ action: 'decline' });
     });
 
@@ -507,10 +512,32 @@ describe('ElicitationPart', () => {
       ));
       expect(getByTestId('calendar-composer').dataset.canAct).toBe('false');
       expect(getByTestId('locked-notice').textContent).toBe(
-        'Waiting for an editor to answer.'
+        'Only someone who can edit this session can create this.'
       );
       fireEvent.click(getByTestId('composer-execute'));
       expect(respond).not.toHaveBeenCalled();
+    });
+
+    it('shows an editor who does not own the session the draft as the agent wrote it', () => {
+      owns = false;
+      const draft = {
+        to: [{ email: 'alice@example.com' }],
+        cc: [],
+        bcc: [],
+        subject: 'Q3 plan',
+        body: 'Hi Alice',
+      };
+      const request = review('SendEmail', draft);
+      pending = { ...live(), request };
+      const { queryByTestId, getByRole } = render(() => (
+        <ElicitationPart turn={0} part={part({ request })} />
+      ));
+      expect(queryByTestId('email-composer')).toBeNull();
+      fireEvent.click(getByRole('button', { name: 'Send' }));
+      const [answer] = respond.mock.calls[0] ?? [];
+      expect(answer?.action).toBe('accept');
+      const sent = answer?.action === 'accept' ? answer.content : undefined;
+      expect(JSON.parse(String(sent?.draft))).toEqual(draft);
     });
 
     it("falls back to the flat form for a draft the tool's schema rejects", () => {

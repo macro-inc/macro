@@ -4,7 +4,8 @@
 use crate::domain::fold::{FoldMachineImpl, fold};
 use crate::domain::harness::{self, ToolShape, macro_tools, mcp};
 use crate::domain::model::{
-    Harness, MessagePart, SubagentResult, ToolDetail, ToolName, ToolStatus, UserToolOutcome,
+    ActivityCard, CardAction, CardItemType, Harness, MessagePart, SubagentResult, ToolDetail,
+    ToolName, ToolStatus, UserToolOutcome, segments,
 };
 use crate::domain::ports::FoldMachine;
 use crate::domain::test::util::Frame;
@@ -253,6 +254,78 @@ fn reads_user_tool_responses() {
     assert_eq!(
         macro_tools::user_tool_outcome(email, &Value::Null),
         UserToolOutcome::Pending
+    );
+    // A host with no composer runs `CreateCalendarEvent` at once and
+    // returns the event bare; only that tool's event reads as done.
+    let created = json!({"eventId": "evt", "title": "Sync"});
+    assert_eq!(
+        macro_tools::user_tool_outcome("CreateCalendarEvent", &created),
+        UserToolOutcome::Completed {
+            result: created.clone()
+        }
+    );
+    assert_eq!(
+        macro_tools::user_tool_outcome(email, &created),
+        UserToolOutcome::Unrecognized
+    );
+    assert_eq!(
+        macro_tools::user_tool_outcome("CreateCalendarEvent", &json!({"title": "Sync"})),
+        UserToolOutcome::Unrecognized
+    );
+}
+
+/// Macro's MCP server has no composer, so its `CreateCalendarEvent` is an
+/// ordinary tool that creates the event at once: the step still earns the
+/// event's card.
+#[test]
+fn an_event_created_over_mcp_is_carded_like_one_the_user_finished() {
+    let event =
+        json!({"eventId": "evt-1", "title": "Design review", "start": "2026-10-09T15:00:00Z"});
+    let log = [
+        r#"{"direction":"to_server","content":{"type":"event","event":"acp_ready"}}"#.to_owned(),
+        r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":1}}}"#.to_owned(),
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"init-1","result":{"protocolVersion":1,"agentCapabilities":{},"agentInfo":{"name":"@agentclientprotocol/claude-agent-acp","version":"0.64.2"}}}}"#.to_owned(),
+        r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"prompt-1","method":"session/prompt","params":{"sessionId":"s1","prompt":[{"type":"text","text":"book the design review"}]}}}"#.to_owned(),
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s1","update":{"_meta":{"claudeCode":{"toolName":"mcp__macro__CreateCalendarEvent"}},"toolCallId":"tc-event","sessionUpdate":"tool_call","rawInput":{"title":"Design review"},"status":"pending","title":"mcp__macro__CreateCalendarEvent","kind":"other","content":[]}}}}"#.to_owned(),
+        format!(
+            r#"{{"direction":"to_server","content":{{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{{"sessionId":"s1","update":{{"_meta":{{"claudeCode":{{"toolName":"mcp__macro__CreateCalendarEvent"}}}},"toolCallId":"tc-event","sessionUpdate":"tool_call_update","status":"completed","rawOutput":{{"content":[{{"type":"text","text":{text}}}],"structuredContent":{event},"isError":false}}}}}}}}}}"#,
+            text = serde_json::to_string(&event.to_string()).expect("a JSON string"),
+        ),
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"prompt-1","result":{"stopReason":"end_turn"}}}"#.to_owned(),
+    ]
+    .join("\n");
+    let messages = fold(parse_log(&log));
+    let agent = messages
+        .iter()
+        .find(|message| message.author == crate::domain::model::Author::Agent)
+        .expect("the agent answered");
+    let Some(MessagePart::ToolUse {
+        detail: ToolDetail::UserTool { outcome, .. },
+        ..
+    }) = agent.parts.first()
+    else {
+        panic!("the call folds to a user tool: {:#?}", agent.parts);
+    };
+    assert_eq!(
+        *outcome,
+        UserToolOutcome::Completed {
+            result: event.clone()
+        }
+    );
+    let row = &segments(&agent.parts, true)[0].rows[0];
+    assert_eq!(row.label, "Created event");
+    assert!(
+        matches!(
+            &row.card,
+            Some(ActivityCard::Item {
+                item_type: CardItemType::CalendarEvent,
+                item_id,
+                action: CardAction::Created,
+                ..
+            }) if item_id == "evt-1"
+        ),
+        "{:?}",
+        row.card
     );
 }
 

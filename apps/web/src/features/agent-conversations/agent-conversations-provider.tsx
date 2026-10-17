@@ -22,7 +22,7 @@ export function AgentConversationsProvider(
         // until the next poll succeeds.
         conversations: () =>
           props.hasAgents && queryReadyGate(query) ? query.data : undefined,
-        refresh: () => void query.refetch(),
+        refresh: async () => !(await query.refetch()).isError,
       }}
     >
       {props.children}

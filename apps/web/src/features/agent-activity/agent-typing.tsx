@@ -1,13 +1,17 @@
 import { PersonaAvatar } from '@app/features/agent-dms/components/persona-avatar';
 import { InteractionCard } from '@app/features/agent-interactions/components/InteractionCard';
 import type { AgentInteraction } from '@app/features/agent-interactions/context/interaction';
-import { createInteractionController } from '@app/features/agent-interactions/primitives/create-interaction-controller';
+import {
+  createInteractionController,
+  interactionKey,
+} from '@app/features/agent-interactions/primitives/create-interaction-controller';
 import {
   isWorkingTurn,
   sessionTurn,
   subscribeSessionTurns,
 } from '@core/agent-session/session-turn';
 import { toast } from '@core/component/Toast/Toast';
+import { useUserId } from '@core/context/user';
 import { useAgentSessionQuery } from '@queries/agent-session/session';
 import { firstPartyBotName } from '@queries/bots/first-party-bot-name';
 import { useBotProfile } from '@queries/bots/profiles';
@@ -22,16 +26,21 @@ import {
   createMemo,
   createSignal,
   For,
-  type JSX,
   onCleanup,
   type ParentProps,
   Show,
   Suspense,
   useContext,
 } from 'solid-js';
+import { insert } from 'solid-js/web';
 import { LiveTail } from './components/live-tail';
 import { TypingRow } from './components/typing-row';
-import { openReply, streamingProse, typingLabel } from './core/live-reply';
+import {
+  currentStep,
+  openReply,
+  streamingProse,
+  typingLabel,
+} from './core/live-reply';
 import { createLiveSession } from './queries/live-session';
 
 /** One place of a conversation: the timeline, or one thread. */
@@ -39,7 +48,12 @@ type TypingPlace = { parent: MessageParent; threadId: string | null };
 
 const KeptRowsContext = createContext<{
   shows: (place: TypingPlace) => boolean;
-  rows: JSX.Element;
+  /**
+   * Show the rows in `holder` until the returned release is called. The
+   * latest holder has them; a released holder's rows go back to the latest
+   * one still holding.
+   */
+  hold: (holder: HTMLElement) => () => void;
 }>();
 
 /**
@@ -55,12 +69,17 @@ export function AgentTyping(props: TypingPlace) {
   const kept = useContext(KeptRowsContext);
   return (
     <Show
-      when={kept?.shows(props)}
+      when={kept?.shows(props) ? kept : undefined}
       fallback={
         <AgentTypingRows parent={props.parent} threadId={props.threadId} />
       }
     >
-      {kept?.rows}
+      {(keeper) => (
+        <div
+          class="contents"
+          ref={(holder) => onCleanup(keeper().hold(holder))}
+        />
+      )}
     </Show>
   );
 }
@@ -73,21 +92,42 @@ export function AgentTyping(props: TypingPlace) {
  * load again, and every card beneath it would start over, dropping an
  * answer or a draft the viewer had half written. Made here, the rows outlive
  * the list's rows and only move between them.
+ *
+ * They move by hand, not as an element two rows insert: a list mounts its
+ * new newest row before it lets the old one go, and redraws a row as a
+ * message arrives, so for a moment two rows show them. Inserted by both,
+ * the old row took them back as it redrew and away with it as it went, and
+ * the turn - and whatever it was waiting on - left the page.
  */
 export function AgentTypingProvider(props: ParentProps<TypingPlace>) {
+  const rows = document.createElement('div');
+  rows.className = 'contents';
   // A boundary of their own: rows that suspend must not blank the list.
-  const rows = (
+  insert(
+    rows,
     <Suspense>
       <AgentTypingRows parent={props.parent} threadId={props.threadId} />
     </Suspense>
   );
+  // The rows that show the turn, latest last.
+  const holders: HTMLElement[] = [];
+  const hold = (holder: HTMLElement) => {
+    holders.push(holder);
+    holder.append(rows);
+    return () => {
+      const at = holders.lastIndexOf(holder);
+      if (at >= 0) holders.splice(at, 1);
+      const latest = holders.at(-1);
+      if (latest && rows.parentNode !== latest) latest.append(rows);
+    };
+  };
   return (
     <KeptRowsContext.Provider
       value={{
         shows: (place) =>
           place.threadId === props.threadId &&
           parentKey(place.parent) === parentKey(props.parent),
-        rows,
+        hold,
       }}
     >
       {props.children}
@@ -164,12 +204,19 @@ function AgentTypingEntry(props: {
       (request): request is AgentInteraction =>
         request.kind !== 'tool_approval' && request.turn === reply()?.turn
     );
+  const viewer = useUserId();
   const interactions = createInteractionController({
     sessionId: () => props.sessionId,
     pending,
     canEdit,
     issue: (action) => live.issue(action),
     onFailure: (message) => toast.failure(message),
+    owns: () => {
+      const id = viewer();
+      return queryReadyGate(sessionQuery) && id
+        ? sessionQuery.data?.ownerId === id
+        : undefined;
+    },
   });
   const toolFor = (toolCall: string | null) => {
     const part = reply()?.parts.find(
@@ -178,6 +225,11 @@ function AgentTypingEntry(props: {
     );
     return part;
   };
+  // The run's own wording for the step a request is about.
+  const stepFor = (toolCall: string | null) =>
+    reply()
+      ?.segments.flatMap((segment) => segment.rows)
+      .find((row) => row.id === toolCall);
   const [stopping, setStopping] = createSignal(false);
   const stop = async () => {
     setStopping(true);
@@ -202,6 +254,12 @@ function AgentTypingEntry(props: {
         />
       }
       label={label()}
+      step={(() => {
+        const open = reply();
+        return open && props.phase === 'working'
+          ? currentStep(open)
+          : undefined;
+      })()}
     >
       <Show when={reply() || live.failed()}>
         <LiveTail
@@ -213,17 +271,13 @@ function AgentTypingEntry(props: {
         >
           {/* Each metadata event carries every request anew. Keyed by what
               it asks, a card keeps whatever was typed into it. */}
-          <Key
-            each={pending()}
-            by={(request) =>
-              JSON.stringify([request.turn, request.kind, request.requestId])
-            }
-          >
+          <Key each={pending()} by={interactionKey}>
             {(request) => (
               <InteractionCard
                 request={request()}
                 controller={interactions}
                 tool={toolFor(request().toolCall)}
+                step={stepFor(request().toolCall)}
               />
             )}
           </Key>

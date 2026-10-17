@@ -1,4 +1,4 @@
-use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolResult};
+use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use schemars::{JsonSchema, Schema, SchemaGenerator};
@@ -14,6 +14,13 @@ pub struct DisplayResultsResponse {
 
 #[cfg(test)]
 mod test;
+mod view_check;
+
+/// The model-facing schema, generated from the renderer's Zod schema.
+const SCHEMA_JSON: &str = include_str!("display_results/schema.generated.json");
+
+/// How many of a view's problems the model is told at once.
+const PROBLEMS_LISTED: usize = 10;
 
 /// A view rendered by the frontend directly from the tool-call arguments.
 ///
@@ -21,8 +28,8 @@ mod test;
 /// on the tool means agent sessions do not depend on frontend instructions.
 #[derive(Debug, Deserialize)]
 pub struct DisplayResults {
-    /// Kept opaque so the renderer can handle partial and malformed views.
-    #[expect(dead_code, reason = "the frontend consumes the tool-call arguments")]
+    /// Kept as JSON: the renderer reads it from the tool-call arguments as
+    /// they stream, and the call checks it against the generated schema.
     pub view: serde_json::Value,
 }
 
@@ -52,7 +59,7 @@ impl JsonSchema for DisplayResults {
             // The AI pipeline requests a complete root schema. Its recursive
             // widget refs and $defs must stay together at that root; nesting
             // this schema below `view` would break their JSON-pointer targets.
-            serde_json::from_str(include_str!("display_results/schema.generated.json"))
+            serde_json::from_str(SCHEMA_JSON)
                 .expect("the generated DisplayResults tool schema must be valid JSON Schema")
         } else {
             DisplayResultsWire::json_schema(generator)
@@ -76,9 +83,38 @@ impl AsyncTool<ToolServiceContext> for DisplayResults {
         _request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         // The view is rendered on the frontend from the tool call arguments.
-        // The backend has nothing to do; acknowledge immediately.
+        // One the renderer would not draw is turned back while the model can
+        // still fix it, instead of being posted as a broken dashboard.
+        check_view(&self.view)?;
         Ok(DisplayResultsResponse {
             message: "The results have been displayed to the user.".to_string(),
         })
     }
+}
+
+/// A view the renderer would not draw is not posted. The model is told what
+/// to change, so it can send the view again.
+fn check_view(view: &serde_json::Value) -> ToolResult<()> {
+    let problems = view_check::view_problems(view);
+    if problems.is_empty() {
+        return Ok(());
+    }
+    let mut lines: Vec<String> = problems
+        .iter()
+        .take(PROBLEMS_LISTED)
+        .map(|problem| format!("- {problem}"))
+        .collect();
+    if problems.len() > PROBLEMS_LISTED {
+        lines.push(format!("- and {} more", problems.len() - PROBLEMS_LISTED));
+    }
+    Err(ToolCallError {
+        description: format!(
+            "The view was not shown: it does not match the DisplayResults schema.\n{}\nFix these and call DisplayResults again with the whole view.",
+            lines.join("\n")
+        ),
+        internal_error: anyhow::anyhow!(
+            "the view does not match the DisplayResults schema ({} problems)",
+            problems.len()
+        ),
+    })
 }

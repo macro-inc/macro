@@ -1,4 +1,9 @@
-import { AGENT_ACTIVITY_STATUSES } from '@macro-inc/lexical-core/nodes/AgentActivityNode';
+import {
+  AGENT_ACTIVITY_CARD_ACTIONS,
+  AGENT_ACTIVITY_CARD_ITEM_TYPES,
+  AGENT_ACTIVITY_REVIEW_DRAFTS,
+  AGENT_ACTIVITY_STATUSES,
+} from '@macro-inc/lexical-core/nodes/AgentActivityNode';
 import { CONNECT_APP_TARGETS } from '@macro-inc/lexical-core/nodes/ConnectAppNode';
 import {
   MAGIC_CHIP_AUTHORS,
@@ -56,11 +61,63 @@ const sessionAnnouncementRequest = z.object({
  * turn runs, or prose the harness patches in - the answer, a fallback for a
  * turn that said nothing, a question only the session view can answer.
  */
+/** Something an answer rests on: a web page, or a workspace item by id. */
+const activitySource = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('web'),
+    url: z.string().regex(/^https?:\/\//i),
+    title: z.string().nullish(),
+  }),
+  z.object({
+    kind: z.literal('item'),
+    itemType: z.enum(AGENT_ACTIVITY_CARD_ITEM_TYPES),
+    itemId: z.string().min(1),
+  }),
+]);
+
+/**
+ * What a step produced: an item it made, changed or sent, a view, what a
+ * search found, a database answer to show, or drafts saved for review.
+ */
+const activityCard = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('item'),
+    itemType: z.enum(AGENT_ACTIVITY_CARD_ITEM_TYPES),
+    itemId: z.string().min(1),
+    fileType: z.string().nullish(),
+    action: z.enum(AGENT_ACTIVITY_CARD_ACTIONS),
+    title: z.string().nullish(),
+    summary: z.string().nullish(),
+  }),
+  z.object({ kind: z.literal('view'), view: z.unknown() }),
+  z.object({
+    kind: z.literal('sources'),
+    query: z.string().nullish(),
+    sources: z.array(activitySource),
+    total: z.number().int().nonnegative(),
+  }),
+  z.object({
+    kind: z.literal('data'),
+    sql: z.string().min(1),
+    databaseId: z.string().nullish(),
+    display: z.string().nullish(),
+  }),
+  z.object({
+    kind: z.literal('review'),
+    reviewId: z.string().min(1),
+    drafts: z.enum(AGENT_ACTIVITY_REVIEW_DRAFTS),
+  }),
+]);
+
 const activityRow = z.object({
   id: z.string(),
   label: z.string(),
   detail: z.string().nullish(),
   status: z.enum(AGENT_ACTIVITY_STATUSES),
+  // A card this version cannot read is dropped, not the reply: the row
+  // still says what the step did, so a newer agent service never has to
+  // wait on this one to post.
+  card: activityCard.nullish().catch(null),
 });
 
 const replySegment = z.discriminatedUnion('kind', [
@@ -175,6 +232,14 @@ export class AgentAnnouncementEndpoint extends OpenAPIRoute {
                               label: row.label,
                               status: row.status,
                               ...(row.detail ? { detail: row.detail } : {}),
+                              ...(row.card
+                                ? {
+                                    card:
+                                      row.card.kind === 'view'
+                                        ? { kind: 'view', view: row.card.view }
+                                        : row.card,
+                                  }
+                                : {}),
                             })),
                           }
                     ),

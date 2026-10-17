@@ -126,6 +126,11 @@ export function AgentSessionProvider(
     canEdit: () => live.session()?.canEdit,
     issue: live.issue,
     onFailure: toast.failure,
+    answerers: 'someone who can edit this session',
+    owns: () => {
+      const viewer = userId();
+      return !!viewer && live.session()?.ownerId === viewer;
+    },
   });
   useAgentSessionSubscription(sessionId);
   const toolApprovals = createToolApprovalController({

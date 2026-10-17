@@ -13,10 +13,3 @@ export const TEXT = {
   tertiary: 'text-ink-extra-muted',
   accent: 'text-accent',
 } as const;
-
-/** Borders + surfaces. */
-export const SURFACE = {
-  panel: 'bg-surface',
-  border: 'border-edge',
-  borderMuted: 'border-edge-muted',
-} as const;

@@ -45,7 +45,8 @@ pub fn mcp_tool(name: &ToolName) -> Option<&str> {
 ///
 /// Registered with `add_user_tool` on the backend: calling one returns
 /// `"PendingUserExecution"` and performs nothing until the user acts through
-/// the session's own API.
+/// the session's own API. A host with no composer runs one at once instead
+/// (see [`user_tool_outcome`]).
 pub const USER_TOOLS: &[&str] = &["SendEmail", "CreateCalendarEvent"];
 
 /// Macro's own delegation tool. Mirrors `agent_inmem`'s `SUBAGENT_TOOL`.
@@ -134,13 +135,25 @@ pub fn user_tool_outcome(tool: &str, value: &Value) -> UserToolOutcome {
         return UserToolOutcome::Pending;
     }
     let Ok(response) = serde_json::from_value::<UserToolResponse>(value.clone()) else {
-        return UserToolOutcome::Unrecognized;
+        return ran_directly(tool, value).unwrap_or(UserToolOutcome::Unrecognized);
     };
     match response {
         UserToolResponse::PendingUserExecution => UserToolOutcome::Pending,
         UserToolResponse::Rejected => UserToolOutcome::Rejected,
         UserToolResponse::UserAction(action) => user_action_outcome(tool, action),
     }
+}
+
+/// A user tool a host ran at once, with no draft for the user to finish:
+/// Macro's MCP server has no composer, so it registers `CreateCalendarEvent`
+/// as an ordinary tool (`calendar_events`' `mcp_toolset`), which creates the
+/// event and returns it bare.
+fn ran_directly(tool: &str, value: &Value) -> Option<UserToolOutcome> {
+    (tool == "CreateCalendarEvent" && value.get("eventId").is_some_and(Value::is_string)).then(
+        || UserToolOutcome::Completed {
+            result: value.clone(),
+        },
+    )
 }
 
 fn user_action_outcome(tool: &str, action: Value) -> UserToolOutcome {

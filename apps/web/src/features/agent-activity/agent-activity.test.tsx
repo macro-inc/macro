@@ -18,6 +18,16 @@ vi.mock('./queries/live-session', () => ({
 vi.mock('@app/features/block-agent/ui', () => ({
   TextShimmer: (props: { text: string }) => <>{props.text}</>,
 }));
+vi.mock('@app/features/agent-cards/components/run-cards', () => ({
+  default: (props: {
+    cards: { key: string; rowId: string }[];
+    sessionId?: string;
+  }) => (
+    <aside aria-label="Cards" data-session={props.sessionId}>
+      {props.cards.map((card) => `${card.rowId}:${card.key}`).join(',')}
+    </aside>
+  ),
+}));
 
 import { AgentActivity } from './agent-activity';
 
@@ -93,7 +103,136 @@ it('ticks an open run live from the session, keeping the snapshot until it loads
   ]);
 });
 
-it('folds a long run behind a count of its earlier steps', () => {
+it('keeps a long live run on its latest steps, folding the earlier ones behind a count', () => {
+  const rows = Array.from({ length: 8 }, (_, index) => ({
+    id: `t${index}`,
+    label: `Step ${index}`,
+    status: 'completed' as const,
+  }));
+  const view = render(() => (
+    <AgentActivity
+      agentSessionId="session"
+      turn={2}
+      segment={1}
+      rows={rows}
+      sealed={false}
+    />
+  ));
+  expect(view.getByRole('button', { name: '2 earlier steps' })).toBeTruthy();
+  expect(view.queryByText('Step 1')).toBeNull();
+  view.getByRole('button', { name: '2 earlier steps' }).click();
+  expect(view.getByText('Step 1')).toBeTruthy();
+});
+
+it('keeps a live step and what it produced in place while the run ticks', async () => {
+  const created = {
+    id: 't1',
+    label: 'Create document',
+    detail: 'Launch FAQ',
+    status: 'completed' as const,
+    card: {
+      kind: 'item',
+      itemType: 'document',
+      itemId: 'doc-1',
+      action: 'created',
+      fileType: null,
+      title: 'Launch FAQ',
+      summary: null,
+    } as const,
+  };
+  const view = render(() => (
+    <AgentActivity
+      agentSessionId="session"
+      turn={2}
+      segment={1}
+      rows={snapshot}
+      sealed={false}
+    />
+  ));
+  setMessages([
+    reply([
+      { ...created },
+      {
+        id: 't2',
+        label: 'Reading',
+        detail: 'lib.rs',
+        status: 'running',
+        card: null,
+      },
+    ]),
+  ]);
+  const step = view.getByText('Create document').closest('li');
+  const card = await view.findByRole('complementary', { name: 'Cards' });
+  // A paint later the fold has sent new objects for every step.
+  setMessages([
+    reply([
+      { ...created },
+      {
+        id: 't2',
+        label: 'Read',
+        detail: 'lib.rs',
+        status: 'completed',
+        card: null,
+      },
+      {
+        id: 't3',
+        label: 'Running',
+        detail: 'cargo',
+        status: 'running',
+        card: null,
+      },
+    ]),
+  ]);
+  expect(view.getByText('Create document').closest('li')).toBe(step);
+  expect(view.getByRole('complementary', { name: 'Cards' })).toBe(card);
+  expect(steps(view).map(([, status]) => status)).toEqual([
+    'completed',
+    'completed',
+    'running',
+  ]);
+});
+
+it('keeps what folded-away steps produced in view above the count', async () => {
+  const rows = (last: 'running' | 'failed'): AgentActivityRow[] =>
+    Array.from({ length: 8 }, (_, index) => ({
+      id: `t${index}`,
+      label: `Step ${index}`,
+      status: index === 7 ? last : 'completed',
+      card:
+        index === 0
+          ? {
+              kind: 'item',
+              itemType: 'document',
+              itemId: 'doc-1',
+              action: 'created',
+            }
+          : null,
+    }));
+  for (const [sealed, last] of [
+    [false, 'running'],
+    [true, 'failed'],
+  ] as const) {
+    const view = render(() => (
+      <AgentActivity
+        agentSessionId="session"
+        turn={2}
+        segment={1}
+        rows={rows(last)}
+        sealed={sealed}
+      />
+    ));
+    const count = view.getByRole('button', { name: '2 earlier steps' });
+    expect(view.queryByText('Step 0')).toBeNull();
+    const card = await view.findByRole('complementary', { name: 'Cards' });
+    expect(card.textContent).toBe('t0:document:doc-1');
+    expect(
+      card.compareDocumentPosition(count) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    cleanup();
+  }
+});
+
+it('folds a finished run into one line that opens to every step', () => {
   const rows = Array.from({ length: 8 }, (_, index) => ({
     id: `t${index}`,
     label: `Step ${index}`,
@@ -108,10 +247,11 @@ it('folds a long run behind a count of its earlier steps', () => {
       sealed
     />
   ));
-  expect(view.getByRole('button', { name: '2 earlier steps' })).toBeTruthy();
-  expect(view.queryByText('Step 1')).toBeNull();
-  view.getByRole('button', { name: '2 earlier steps' }).click();
-  expect(view.getByText('Step 1')).toBeTruthy();
+  const summary = view.getByRole('button', { name: /Worked · 8 steps/ });
+  expect(view.queryByText('Step 0')).toBeNull();
+  summary.click();
+  expect(view.getByText('Step 0')).toBeTruthy();
+  expect(view.getByText('Step 7')).toBeTruthy();
 });
 
 it('updates a live row in place as the run paints, rather than redrawing it', () => {
@@ -178,4 +318,107 @@ it('keeps snapshots free of tool details while authorized live rows retain them'
   expect(liveView.getByRole('listitem').textContent).toBe(
     'RanTOKEN=private-value run-report'
   );
+});
+
+it('keeps a finished run open when a step failed', () => {
+  const view = render(() => (
+    <AgentActivity
+      agentSessionId="session"
+      turn={2}
+      segment={1}
+      rows={[
+        { id: 't1', label: 'Searched', status: 'completed' },
+        { id: 't2', label: 'Posted', status: 'failed' },
+      ]}
+      sealed
+    />
+  ));
+  expect(view.queryByRole('button', { name: /Worked/ })).toBeNull();
+  expect(steps(view)).toEqual([
+    ['Searched', 'completed'],
+    ['Posted', 'failed'],
+  ]);
+});
+
+it('shows what a step produced under it, and a composed view in place of its step', async () => {
+  const view = render(() => (
+    <AgentActivity
+      agentSessionId="session"
+      turn={2}
+      segment={1}
+      rows={[
+        {
+          id: 't1',
+          label: 'Create document',
+          detail: 'Launch FAQ',
+          status: 'completed',
+          card: {
+            kind: 'item',
+            itemType: 'document',
+            itemId: 'doc-1',
+            action: 'created',
+          },
+        },
+        {
+          id: 't2',
+          label: 'Display results',
+          status: 'completed',
+          card: { kind: 'view', view: { widgets: [] } },
+        },
+      ]}
+      sealed
+    />
+  ));
+  const cards = await view.findAllByRole('complementary', { name: 'Cards' });
+  expect(cards.map((card) => card.textContent)).toEqual([
+    't1:document:doc-1',
+    't2:t2',
+  ]);
+  expect(view.getByText('Create document')).toBeTruthy();
+  expect(view.queryByText('Display results')).toBeNull();
+  expect(live.acquired).toEqual([]);
+});
+
+it('shows drafts saved for review in place of the step that presented them', async () => {
+  const view = render(() => (
+    <AgentActivity
+      agentSessionId="session"
+      turn={2}
+      segment={1}
+      rows={[
+        {
+          id: 'call_1',
+          label: 'Prepared drafts to review',
+          status: 'completed',
+        },
+        {
+          id: 'review_r-1',
+          label: 'Prepared drafts to review',
+          status: 'completed',
+          card: { kind: 'review', reviewId: 'r-1', drafts: 'email' },
+        },
+      ]}
+      sealed
+    />
+  ));
+  const cards = await view.findAllByRole('complementary', { name: 'Cards' });
+  expect(cards.map((card) => card.textContent)).toEqual([
+    'review_r-1:review:r-1',
+  ]);
+  expect(cards[0].dataset.session).toBe('session');
+  // The agent's own call stays a step; the presentation is its card.
+  expect(view.getAllByText('Prepared drafts to review')).toHaveLength(1);
+});
+
+it('loads no cards for a run that produced none', () => {
+  const view = render(() => (
+    <AgentActivity
+      agentSessionId="session"
+      turn={2}
+      segment={1}
+      rows={snapshot}
+      sealed
+    />
+  ));
+  expect(view.queryByRole('complementary', { name: 'Cards' })).toBeNull();
 });

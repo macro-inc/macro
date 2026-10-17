@@ -49,6 +49,18 @@ export function segmentRows(
   return found?.kind === 'activity' ? found.rows : undefined;
 }
 
+/**
+ * The step the agent is taking right now, worded as its row says it: the
+ * latest running step of the reply's open run of steps.
+ */
+export function currentStep(reply: FoldedMessage): string | undefined {
+  const last = reply.segments.at(-1);
+  if (!last || last.kind !== 'activity' || last.sealed) return undefined;
+  const running = last.rows.findLast((row) => row.status === 'running');
+  if (!running) return undefined;
+  return running.detail ? `${running.label} ${running.detail}` : running.label;
+}
+
 const PHASE_VERBS: Record<TurnPhase, string> = {
   thinking: 'is thinking',
   writing: 'is typing',

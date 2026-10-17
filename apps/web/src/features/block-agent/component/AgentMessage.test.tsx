@@ -136,6 +136,12 @@ vi.mock('../views/LiveToolGroup', () => ({
   ),
 }));
 
+vi.mock('../views/ToolRunCards', () => ({
+  ToolRunCards: (props: { calls: readonly string[] }) => (
+    <div data-testid="run-cards">{props.calls.join(',')}</div>
+  ),
+}));
+
 afterEach(() => {
   viewerId.current = 'macro|me@macro.com';
   renderTelemetry.context.mockReset();
@@ -300,6 +306,84 @@ describe('Message tool grouping', () => {
       '2',
     ]);
     expect(view.getByTestId('permission')).toBeTruthy();
+  });
+
+  it("shows each run's cards under that run, outside its fold", () => {
+    const view = render(() => (
+      <Message
+        message={message([
+          tool('a'),
+          tool('b'),
+          text('Made the plan.'),
+          tool('c'),
+        ])}
+        inFlight={false}
+      />
+    ));
+    const cards = view.getAllByTestId('run-cards');
+    expect(cards.map((el) => el.textContent)).toEqual(['a,b', 'c']);
+    for (const [index, group] of view.getAllByTestId('group').entries()) {
+      expect(group.contains(cards[index])).toBe(false);
+      expect(group.nextElementSibling).toBe(cards[index]);
+    }
+  });
+
+  it('shows the receipt of a user tool or a reviewed draft under it, outside any run', () => {
+    const view = render(() => (
+      <Message
+        message={message([
+          tool('a'),
+          tool('send', {
+            name: { kind: 'native', name: 'SendEmail' },
+            detail: {
+              kind: 'user_tool',
+              input: {},
+              outcome: { kind: 'pending' },
+            },
+          }),
+          {
+            kind: 'elicitation',
+            requestId: 1,
+            toolCall: 'review',
+            message: 'Send email?',
+            request: {
+              kind: 'form',
+              schema: {
+                title: null,
+                description: null,
+                required: [],
+                properties: [],
+              },
+            },
+            outcome: { kind: 'accepted', answers: [] },
+            reported: null,
+            toolOutcome: null,
+          },
+          {
+            kind: 'elicitation',
+            requestId: 2,
+            toolCall: null,
+            message: 'Which colour?',
+            request: {
+              kind: 'form',
+              schema: {
+                title: null,
+                description: null,
+                required: [],
+                properties: [],
+              },
+            },
+            outcome: { kind: 'declined' },
+            reported: null,
+            toolOutcome: null,
+          },
+        ])}
+        inFlight={false}
+      />
+    ));
+    expect(
+      view.getAllByTestId('run-cards').map((el) => el.textContent)
+    ).toEqual(['a', 'send', 'review']);
   });
 
   it('keeps DisplayResults outside the tool groups before and after it', () => {

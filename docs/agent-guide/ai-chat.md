@@ -1020,16 +1020,23 @@ where the text is an ordinary prompt; the model's `AskUser` tool and user-tool
 review remain independent of this development setting.
 
 An agent session (the `/app/channel/<channel>/agent/<session>` pane) can pause its turn to
-ask you something. A card titled `<bot> is asking` with trailing text `Waiting for you`
-appears in the transcript, and the notice `The agent is waiting for your answer above` sits
-over the composer. Forms have one control per field (radios for a choice, an `Other` text
-box when the agent allows a custom answer, checkboxes for multi-select, text/number inputs)
-plus `Submit` / `Decline` / `Cancel`; a link request shows the target host and URL with an
-`Open` button that only opens a new tab after you click it. Once answered the card collapses
-to `Question · <text>` with `Answered` / `Declined` / `Cancelled` on the right and the agent
-continues. Messages typed while a question is open queue behind it; the composer's `Stop`
-square cancels the question and the turn. Anyone with edit access to the session may
-answer; viewers see the form locked with `Waiting for an editor`. The owner and everyone
+ask you something. The question appears in the transcript as the same card an agent DM
+asks with, titled by the question, and the notice `The agent is waiting for your answer
+above` sits over the composer. Two or three short answers are buttons; a longer choice or
+a form has one control per field (radios for a choice, an `Other` text box when the agent
+allows a custom answer, checkboxes for multi-select, text/number inputs) with `Skip` and
+`Submit`; a link request shows the target host and URL with an `Open` button that only
+opens a new tab after you click it. A drafted email or event the agent waits on is its
+composer for the session's owner, whose name it goes out under: the email composer's Send
+sends it and **Discard** under it declines; the calendar's composer creates it or cancels
+it. Another editor sees the draft as the agent wrote it, with **Send** (or **Create
+event**) and **Discard**. What you type or edit stays if the card scrolls away and comes
+back. Once answered the card collapses to `Question · <text>` with
+`Answered` / `Declined` / `Cancelled` on the right and the agent continues; a sent email or
+created event leaves its receipt card under its row. Messages typed while a question is
+open queue behind it; the composer's `Stop` square cancels the question and the turn.
+Anyone with edit access to the session may answer; viewers see the card with `Only someone
+who can edit this session can answer.` and nothing to press. The owner and everyone
 who has prompted or answered the session also receive an `agent_session_waiting_for_input`
 notification (inbox, browser, and iOS push) when the question is asked; it stays until
 marked done.
@@ -1220,6 +1227,13 @@ closing, or interacting with a group overrides automatic collapse. Subagents
 and tools requiring user input remain outside these groups so they stay visible
 during other tool bursts. Nested agent activity has its own scrollable window.
 
+Under each run of tool calls, open or folded, are the cards of what it made: a
+receipt for each document, email, event, project, routine or form it created,
+changed or sent, a database answer it showed, and one sources pill for what its
+searches found - the same cards its reply carries in a channel. A receipt
+appears as soon as its call finishes and opens its item; its summary shows only
+to a reader who can open the item.
+
 The group caret sits immediately after its label and appears on hover or keyboard
 focus. Expand an edit row to view its diffs. Result bodies load only when their
 row opens; syntax highlighting may appear after the diff text. Opening a session
@@ -1229,10 +1243,16 @@ contains many file edits.
 `DisplayResults` renders its dynamic view directly in the reply and stays visible
 without opening a tool row. It breaks tool groups before and after itself,
 including while pending; later calls start a separate group.
-Its dashboard supports markdown, timelines, entity lists, and channel messages,
-using the same full-width view as AI chat. Incomplete arguments stay hidden while
-streaming; a valid view updates as arguments arrive. Malformed completed views
-show **Couldn't render dashboard**; failed calls show a **Failed** summary row
+Its dashboard supports markdown, timelines, entity lists, calendar agendas, item
+cards, tags, and channel messages, using the same full-width view as AI chat.
+Tags nest to any depth, each with its colour and what it is for; a tag that exists
+shows its current name and opens the items tagged with it. A card of more than
+eight tags holds its height and offers **Show all**. Incomplete arguments stay hidden while
+streaming; a valid view updates as arguments arrive. A completed view renders
+every widget that matches the schema and says how many it left out, and one with
+no matching widget shows **Couldn't render dashboard**. The tool turns back a view
+that does not match the schema, naming what to fix, so the agent sends it again;
+failed calls show a **Failed** summary row
 without a disclosure. Macro's built-in agents receive the complete view schema
 with the tool definition. External coding agents connected through Macro's MCP
 server do not currently receive this tool.
@@ -1569,16 +1589,18 @@ must stay hidden; subsequent live messages must still appear.
   entries, then stop.
 - **Permission prompts.** Everyone with **Edit** access to a session may approve or
   reject its ACP permission requests, even when they did not create the session.
-  A pending request shows one `Approval needed` card above the composer, with
-  the command or affected file separate from the actions. The transcript does
-  not repeat the pending request.
+  A pending request shows one approval card above the composer, the same card
+  an agent DM asks with: the action as the run words it (`Run a command`,
+  `Create document`) over `Approval needed`, the command or affected item
+  separate from the actions, and **Show input** for the tool's raw input. The
+  transcript does not repeat the pending request.
   `Allow once` and `Deny` answer immediately; `More options` contains remembered
   choices with the agent's full rule text. Channel Magic Chips expose the same
   approval card in place of their loading state, alongside existing questions.
   Only authenticated users with **Edit** or **Owner** session access may answer;
   bot, harness, and internal-service credentials cannot approve on their behalf.
-  Viewers and commenters see a waiting notice without
-  action buttons. Stopping a turn cancels open requests; answered requests show
+  Viewers and commenters see `Waiting for someone who can edit this session to
+  approve` without action buttons. Stopping a turn cancels open requests; answered requests show
   a compact outcome such as `Allowed once` or `Denied` in the transcript.
   Permission requests and questions both put the agent in a waiting state.
   Several permissions may be pending alongside one question; answering one leaves

@@ -56,6 +56,29 @@ describe('DisplayResults tool contract', () => {
               channelId: 'channel-1',
               messageId: 'message-1',
             },
+            {
+              type: 'tags',
+              title: 'Company tags',
+              tags: [
+                {
+                  label: 'Area',
+                  children: [
+                    {
+                      label: 'Platform',
+                      color: 'teal',
+                      children: [
+                        {
+                          label: 'infra',
+                          color: '#FFB224',
+                          description: 'Cloud and CI/CD',
+                          tagId: 'tag-1',
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
           ],
         },
       ],
@@ -78,6 +101,17 @@ describe('DisplayResults tool contract', () => {
               kind: 'items',
               entities: [{ id: 'doc-1', type: 'invented' }],
             },
+          },
+        ],
+      },
+    },
+    { view: { widgets: [{ type: 'tags', tags: [{ color: 'red' }] }] } },
+    {
+      view: {
+        widgets: [
+          {
+            type: 'tags',
+            tags: [{ label: 'Area', children: [{ description: 'No name' }] }],
           },
         ],
       },

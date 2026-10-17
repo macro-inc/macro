@@ -139,6 +139,175 @@ describe('agent announcements', () => {
       'Checking first.\n\n<m-agent-activity>{"agentSessionId":"session","turn":2,"segment":1,"rows":[{"id":"t1","label":"Ran","status":"completed","detail":"ls"},{"id":"t2","label":"Read","status":"completed"}],"sealed":true}</m-agent-activity>'
     );
   });
+  it('keeps what a step produced as its card', async () => {
+    const card = {
+      kind: 'item',
+      itemType: 'document',
+      itemId: 'doc-1',
+      fileType: 'md',
+      action: 'created',
+      title: 'Launch FAQ',
+    };
+    const response = await request({
+      chatReply: {
+        sessionId: 'session',
+        link: false,
+        body: {
+          kind: 'segments',
+          segments: [
+            {
+              kind: 'activity',
+              turn: 2,
+              segment: 0,
+              sealed: true,
+              rows: [
+                {
+                  id: 't1',
+                  label: 'Create document',
+                  detail: 'Launch FAQ',
+                  status: 'completed',
+                  card,
+                },
+              ],
+            },
+          ],
+        },
+      },
+    });
+    expect(response.status).toBe(200);
+    const { markdown }: { markdown: string } = await response.json();
+    expect(markdown).toBe(
+      `<m-agent-activity>{"agentSessionId":"session","turn":2,"segment":0,"rows":[{"id":"t1","label":"Create document","status":"completed","detail":"Launch FAQ","card":${JSON.stringify(card)}}],"sealed":true}</m-agent-activity>`
+    );
+  });
+
+  it('keeps what a search found and a database answer to show', async () => {
+    const cards = [
+      {
+        kind: 'sources',
+        query: 'lumen pricing',
+        sources: [
+          { kind: 'web', url: 'https://lumen.example/blog', title: 'Prices' },
+          { kind: 'item', itemType: 'document', itemId: 'doc-1' },
+        ],
+        total: 2,
+      },
+      { kind: 'data', sql: 'SELECT 1', databaseId: null, display: 'table' },
+    ];
+    const response = await request({
+      chatReply: {
+        sessionId: 'session',
+        link: false,
+        body: {
+          kind: 'segments',
+          segments: [
+            {
+              kind: 'activity',
+              turn: 2,
+              segment: 0,
+              sealed: true,
+              rows: cards.map((card, index) => ({
+                id: `t${index}`,
+                label: 'Searched',
+                status: 'completed',
+                card,
+              })),
+            },
+          ],
+        },
+      },
+    });
+    expect(response.status).toBe(200);
+    const { markdown }: { markdown: string } = await response.json();
+    for (const card of cards) expect(markdown).toContain(JSON.stringify(card));
+  });
+
+  it('keeps drafts saved for review, by the review and what its drafts are', async () => {
+    const card = {
+      kind: 'review',
+      reviewId: '0199f3a2-1b2c-7d4e-8f90-a1b2c3d4e5f6',
+      drafts: 'email',
+    };
+    const response = await request({
+      chatReply: {
+        sessionId: 'session',
+        link: false,
+        body: {
+          kind: 'segments',
+          segments: [
+            {
+              kind: 'activity',
+              turn: 2,
+              segment: 0,
+              sealed: true,
+              rows: [
+                {
+                  id: 'review_0199f3a2-1b2c-7d4e-8f90-a1b2c3d4e5f6',
+                  label: 'Prepared drafts to review',
+                  status: 'completed',
+                  card,
+                },
+                {
+                  id: 't2',
+                  label: 'Prepared drafts to review',
+                  status: 'completed',
+                  card: { ...card, drafts: 'memo' },
+                },
+              ],
+            },
+          ],
+        },
+      },
+    });
+    expect(response.status).toBe(200);
+    const { markdown }: { markdown: string } = await response.json();
+    expect(markdown).toContain(JSON.stringify(card));
+    expect(markdown).not.toContain('memo');
+  });
+
+  it('drops a card it does not know and keeps the step', async () => {
+    const response = await request({
+      chatReply: {
+        sessionId: 'session',
+        link: false,
+        body: {
+          kind: 'segments',
+          segments: [
+            {
+              kind: 'activity',
+              turn: 2,
+              segment: 0,
+              sealed: true,
+              rows: [
+                {
+                  id: 't1',
+                  label: 'Ran',
+                  status: 'completed',
+                  card: { kind: 'hologram', depth: 3 },
+                },
+                {
+                  id: 't2',
+                  label: 'Searched',
+                  status: 'completed',
+                  card: {
+                    kind: 'sources',
+                    total: 1,
+                    sources: [{ kind: 'web', url: 'javascript:alert(1)' }],
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      },
+    });
+    expect(response.status).toBe(200);
+    const { markdown }: { markdown: string } = await response.json();
+    expect(markdown).toBe(
+      '<m-agent-activity>{"agentSessionId":"session","turn":2,"segment":0,"rows":[{"id":"t1","label":"Ran","status":"completed"},{"id":"t2","label":"Searched","status":"completed"}],"sealed":true}</m-agent-activity>'
+    );
+  });
+
   it('rejects a chat reply body it does not know', async () => {
     const response = await request({
       chatReply: { sessionId: 'session', body: { kind: 'spinner' } },

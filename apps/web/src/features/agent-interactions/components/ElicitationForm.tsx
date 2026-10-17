@@ -33,6 +33,8 @@ export interface ElicitationFormProps {
   errors: Record<string, string>;
   disabled?: boolean;
   onChange: (name: string, value: FieldValue) => void;
+  /** The surface asks the question itself, as a card's title does. */
+  asked?: boolean;
 }
 
 /** The text a free-text or number field is showing. */
@@ -78,7 +80,7 @@ function ChoiceBox(props: { checked: boolean; multiple: boolean }) {
         props.multiple ? 'rounded-sm' : 'rounded-full',
         props.checked
           ? 'border-accent bg-accent'
-          : 'border-edge-muted bg-transparent group-hover:border-edge'
+          : 'border-edge bg-transparent group-hover:border-ink-subtle'
       )}
     >
       <CheckIcon class={cn('size-2.5', !props.checked && 'hidden')} />
@@ -432,11 +434,18 @@ function Field(props: {
   property: ElicitationProperty;
   required: boolean;
   error?: string;
+  /** The surface already asks the question: the label is for readers only. */
+  quiet?: boolean;
   children: JSX.Element;
 }) {
   return (
     <div class="flex flex-col gap-1">
-      <div class="flex items-baseline gap-1 text-xs text-ink-muted">
+      <div
+        class={cn(
+          'flex items-baseline gap-1 text-xs text-ink-muted',
+          props.quiet && 'sr-only'
+        )}
+      >
         <span id={labelIdOf(props.property)}>
           {props.property.title ?? props.property.name}
         </span>
@@ -461,6 +470,9 @@ function Field(props: {
 
 export function ElicitationForm(props: ElicitationFormProps) {
   const required = (name: string) => props.schema.required.includes(name);
+  // A card that asks the question in its title does not repeat it as the
+  // label of the one field that answers it.
+  const quiet = () => !!props.asked && props.schema.properties.length === 1;
 
   return (
     <div class="flex flex-col gap-3 py-1">
@@ -475,6 +487,7 @@ export function ElicitationForm(props: ElicitationFormProps) {
             property={property}
             required={required(property.name)}
             error={props.errors[property.name]}
+            quiet={quiet()}
           >
             <FieldControl
               field={property.schema}

@@ -4,8 +4,9 @@
  *
  * Accept sends the whole edited draft under the `draft` field (Macro's
  * `_macro/json` extension); the agent's finisher runs the tool with it.
- * Reject declines. There is nothing to persist between edits - the draft
- * lives in the form until the user decides - so `onEdit` is left out.
+ * Reject declines. The session has nowhere to keep an edit until the user
+ * decides, so an edit in progress goes to `onEdit` only when the surface
+ * keeps it itself: a card that can unmount while the review stays open.
  */
 
 import type { UserToolReviewSink } from '@core/component/AI/component/tool/user-tool-review';
@@ -18,12 +19,22 @@ export const DRAFT_FIELD = 'draft';
 export function createElicitationReviewSink<T>(options: {
   canAnswer: Accessor<boolean>;
   respond: (answer: ElicitationAnswer) => Promise<boolean>;
+  /** Keep an edit in progress, so it outlives the composer. */
+  onEdit?: (args: T) => void;
+  /**
+   * Why the composer is read-only, when the surface can say better than a
+   * locked composer can: an answer on its way is no reason to say anything.
+   */
+  lockedNotice?: Accessor<string | undefined>;
 }): UserToolReviewSink<T> {
   const canAct = () => options.canAnswer();
   return {
     canAct,
-    lockedNotice: () =>
-      options.canAnswer() ? undefined : 'Waiting for an editor to answer.',
+    lockedNotice:
+      options.lockedNotice ??
+      (() =>
+        options.canAnswer() ? undefined : 'Waiting for an editor to answer.'),
+    onEdit: options.onEdit,
     onExecute: (args) =>
       canAct()
         ? options.respond({

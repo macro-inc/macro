@@ -89,7 +89,10 @@ import { AgentContext as AgentContextDecorator } from '../decorator/AgentContext
 import { AgentSessionMention as AgentSessionMentionDecorator } from '../decorator/AgentSessionMention';
 import { Await as AwaitDecorator } from '../decorator/Await';
 import { BookingLinkMention as BookingLinkMentionDecorator } from '../decorator/BookingLinkMention';
-import { ConnectApp as ConnectAppDecorator } from '../decorator/ConnectApp';
+import {
+  $isAloneOnItsLine,
+  ConnectApp as ConnectAppDecorator,
+} from '../decorator/ConnectApp';
 import { ContactMention as ContactMentionDecorator } from '../decorator/ContactMention';
 import { CursorSystemNotification as CursorSystemNotificationDecorator } from '../decorator/CursorSystemNotification';
 import { DatabaseQuery as DatabaseQueryDecorator } from '../decorator/DatabaseQuery';
@@ -473,15 +476,21 @@ const ThemeMention: TypedRenderableEntity<ThemeMentionNode> = {
 const ConnectApp: TypedRenderableEntity<ConnectAppNode> = {
   guard: (node: LexicalNode): node is ConnectAppNode =>
     node.__type === 'connect-app',
-  render: (props) => (
-    <span>
-      {ConnectAppDecorator({
-        ...props.node.exportComponentProps(),
-        key: props.node.getKey(),
-        theme: props.theme,
-      })}
-    </span>
-  ),
+  render: (props) => {
+    // Read while the render is still inside the state's read: the node's
+    // line decides between a card and a chip.
+    const standalone = $isAloneOnItsLine(props.node);
+    return (
+      <span>
+        {ConnectAppDecorator({
+          ...props.node.exportComponentProps(),
+          key: props.node.getKey(),
+          theme: props.theme,
+          standalone,
+        })}
+      </span>
+    );
+  },
 };
 
 const DatabaseQuery: TypedRenderableEntity<DatabaseQueryNode> = {

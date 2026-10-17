@@ -14,6 +14,7 @@
  */
 
 import type { Query } from '@app/features/next-soup/filters/filter-store/types';
+import { TAG_COLOR_OPTIONS } from '@app/features/property/tags/tagColors';
 import { EntityType } from '@core/types';
 import { z } from 'zod';
 
@@ -37,10 +38,14 @@ export const QuerySchema = z.custom<Query>();
 
 /** Static markdown — the narrative glue between data widgets. Supports the full
  *  markdown feature set (headings, lists, bold/italic, links, blockquotes, …). */
-export const MdWidgetSchema = z.object({
-  type: z.literal('md'),
-  markdown: z.string(),
-});
+export const MdWidgetSchema = z
+  .object({
+    type: z.literal('md'),
+    markdown: z.string(),
+  })
+  .describe(
+    'Markdown text: the narrative between the other widgets. Its type is "md", never "markdown".'
+  );
 export type MdWidget = z.infer<typeof MdWidgetSchema>;
 
 /** A chronological sequence of events. Great for "what happened" answers. */
@@ -93,6 +98,128 @@ export const ChannelMessageWidgetSchema = z.object({
 export type ChannelMessageWidget = z.infer<typeof ChannelMessageWidgetSchema>;
 
 /**
+ * A calendar agenda: events grouped by day with their times, places and
+ * people, loaded live from the viewer's own calendars. Times are never
+ * restated by the model, so they cannot drift from the calendar.
+ */
+export const EventsWidgetSchema = z
+  .object({
+    type: z.literal('events'),
+    title: z.string().optional(),
+    events: z.array(
+      z.object({
+        eventId: z
+          .string()
+          .describe(
+            'The eventId a calendar tool such as ListCalendarEvents returned.'
+          ),
+        occurrenceKey: z
+          .string()
+          .optional()
+          .describe(
+            "One instance of a recurring event: that instance's recurrenceId from ListCalendarEvents."
+          ),
+      })
+    ),
+  })
+  .describe(
+    "A calendar agenda: the events grouped by day with their times, places and attendees, loaded live from the user's calendars. Use it whenever an answer is about calendar events instead of listing them in text."
+  );
+export type EventsWidget = z.infer<typeof EventsWidgetSchema>;
+
+/** The kinds of item a `cards` widget shows. */
+export const CARD_ITEM_TYPES = [
+  'document',
+  'email_thread',
+  'calendar_event',
+] as const;
+
+/**
+ * Rich cards for the few specific items an answer is about. Each card loads
+ * its item with the viewer's own access and opens it.
+ */
+export const CardsWidgetSchema = z
+  .object({
+    type: z.literal('cards'),
+    title: z.string().optional(),
+    items: z.array(
+      z.object({
+        type: z.enum(CARD_ITEM_TYPES),
+        id: z
+          .string()
+          .describe(
+            'A document id (documents and spreadsheets), an email thread id, or a calendar eventId, exactly as a tool returned it.'
+          ),
+      })
+    ),
+  })
+  .describe(
+    'Rich cards for the one to four specific items the answer is about: a document or spreadsheet, an email thread, or a calendar event. Each card opens its item. Use a list widget for longer sets.'
+  );
+export type CardsWidget = z.infer<typeof CardsWidgetSchema>;
+
+/**
+ * One tag of an ontology and the narrower tags under it, to any depth. A tag
+ * may exist already - its id shows its current name and colour - or be one
+ * the answer proposes.
+ *
+ * `TagNode` is recursive, so its type is declared explicitly and the schema
+ * annotated to match, as for {@link ContainerWidget}.
+ */
+export type TagNode = {
+  label: string;
+  /** A palette colour by name or hex. Any other value shows as gray. */
+  color?: string;
+  description?: string;
+  tagId?: string;
+  children?: TagNode[];
+};
+
+export const TagNodeSchema: z.ZodType<TagNode> = z.object({
+  label: z
+    .string()
+    .describe(
+      'The tag\'s name. Name a narrower tag on its own: "bug" under "Type", not "Type/bug".'
+    ),
+  // A colour written some other way shows as gray rather than failing the
+  // whole view, so this stays a string.
+  color: z
+    .string()
+    .optional()
+    .describe(
+      `One of the tag colours: ${TAG_COLOR_OPTIONS.map((option) => option.name.toLowerCase()).join(', ')}. Gray when omitted.`
+    ),
+  description: z
+    .string()
+    .optional()
+    .describe('What the tag is for, in a few words.'),
+  tagId: z
+    .string()
+    .optional()
+    .describe(
+      'For a tag that exists, the id ListTags or CreateTag returned: the tag then shows its current name and colour, and opens what is tagged with it.'
+    ),
+  get children() {
+    return z
+      .array(TagNodeSchema)
+      .optional()
+      .describe('The narrower tags under this one.');
+  },
+});
+
+/** Tags as coloured pills, nested to any depth. */
+export const TagsWidgetSchema = z
+  .object({
+    type: z.literal('tags'),
+    title: z.string().optional(),
+    tags: z.array(TagNodeSchema),
+  })
+  .describe(
+    "Tags as coloured pills, nested to any depth: the user's tags, a taxonomy the answer proposes, or any other ontology of tags, each with what it is for. Use it whenever an answer is about tags, instead of a table or a list in markdown."
+  );
+export type TagsWidget = z.infer<typeof TagsWidgetSchema>;
+
+/**
  * A nestable flex container. This is what makes real dashboards composable.
  *
  * `ContainerWidget` and `Widget` are mutually recursive, so their types are
@@ -129,6 +256,9 @@ export type Widget =
   | TimelineWidget
   | ListWidget
   | ChannelMessageWidget
+  | EventsWidget
+  | CardsWidget
+  | TagsWidget
   | ContainerWidget;
 
 export const WidgetSchema: z.ZodType<Widget> = z.union([
@@ -136,6 +266,9 @@ export const WidgetSchema: z.ZodType<Widget> = z.union([
   TimelineWidgetSchema,
   ListWidgetSchema,
   ChannelMessageWidgetSchema,
+  EventsWidgetSchema,
+  CardsWidgetSchema,
+  TagsWidgetSchema,
   ContainerWidgetSchema,
 ]);
 

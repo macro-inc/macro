@@ -55,11 +55,13 @@ vi.mock('@entity/composed/ListEntity', () => ({
   ListLayoutProvider: (props: { children: unknown }) => props.children,
 }));
 
-vi.mock('@entity/components/CollapsibleList', () => ({
-  CollapsibleList: (props: {
-    items: unknown[];
-    children: (item: unknown) => JSX.Element;
-  }) => <div>{props.children(props.items[0])}</div>,
+vi.mock('@app/features/agent-cards/components/collection', () => ({
+  CollectionCard: (props: { children?: JSX.Element }) => (
+    <div>{props.children}</div>
+  ),
+  CollectionGroup: (props: { children?: JSX.Element }) => (
+    <div>{props.children}</div>
+  ),
 }));
 
 import { List } from './List';

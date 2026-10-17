@@ -1,3 +1,4 @@
+import { NoticeCard } from '@app/features/agent-cards/components/notice';
 import { toast } from '@core/component/Toast/Toast';
 import type {
   AgentConversation,
@@ -5,7 +6,7 @@ import type {
 } from '@service-agent-harness/agent-conversations';
 import { Key } from '@solid-primitives/keyed';
 import { Button } from '@ui';
-import { Show } from 'solid-js';
+import { Match, Show, Switch } from 'solid-js';
 import { useOptionalAgentConversations } from './context';
 import { useAgentConversationControl } from './queries/controls';
 
@@ -63,7 +64,7 @@ export function AgentConversationMessageStatus(props: { messageId: string }) {
         <TurnStatus
           conversation={entry().conversation}
           turn={entry().turn}
-          onChanged={context.refresh}
+          onChanged={() => void context.refresh()}
         />
       )}
     </Key>
@@ -88,36 +89,57 @@ function TurnStatus(props: {
     onError: () =>
       toast.failure('Could not retry this message. Refresh and try again.'),
   });
+  const retry = (variant: 'cta' | 'outline' | 'ghost') => (
+    <Show when={failed() && retryable()}>
+      <Button
+        size="sm"
+        variant={variant}
+        disabled={mutation.isPending}
+        onClick={() =>
+          mutation.mutate({
+            type: 'retry',
+            conversation: props.conversation,
+            turn: props.turn,
+          })
+        }
+      >
+        Retry
+      </Button>
+    </Show>
+  );
   return (
-    <div
-      class="ml-14 flex items-center gap-3 pb-2 text-xs text-ink-muted"
-      role="status"
-    >
-      <span>
-        {props.turn.state === 'queued'
-          ? 'Queued'
-          : props.turn.state === 'interrupted'
-            ? 'Interrupted. Review completed actions before retrying.'
-            : props.turn.state === 'stopped'
-              ? 'Stopped'
-              : 'Could not finish this message.'}
-      </span>
-      <Show when={failed() && retryable()}>
-        <Button
-          size="xs"
-          variant="ghost"
-          disabled={mutation.isPending}
-          onClick={() =>
-            mutation.mutate({
-              type: 'retry',
-              conversation: props.conversation,
-              turn: props.turn,
-            })
-          }
-        >
-          Retry message
-        </Button>
-      </Show>
+    <div class="ml-14 pb-2">
+      <Switch>
+        <Match when={props.turn.state === 'failed'}>
+          <NoticeCard
+            tone="error"
+            title="Couldn't finish this"
+            detail={
+              retryable()
+                ? 'Retry runs your message again'
+                : 'Anything it already did is above'
+            }
+            action={retry('cta')}
+          />
+        </Match>
+        <Match when={props.turn.state === 'interrupted'}>
+          <NoticeCard
+            tone="warning"
+            title="Interrupted before it finished"
+            detail="Check what it already did before you retry"
+            action={retry('outline')}
+          />
+        </Match>
+        <Match when={true}>
+          <div
+            class="flex items-center gap-3 text-xs text-ink-muted"
+            role="status"
+          >
+            <span>{props.turn.state === 'queued' ? 'Queued' : 'Stopped'}</span>
+            {retry('ghost')}
+          </div>
+        </Match>
+      </Switch>
     </div>
   );
 }
