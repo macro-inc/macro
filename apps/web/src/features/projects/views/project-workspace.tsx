@@ -20,6 +20,7 @@ import {
   ProjectTasksList,
   type ProjectTasksListProps,
 } from './project-tasks-list';
+import { ProjectTimeView } from './project-time';
 
 const PROJECT_PROPERTY_ORDER = [
   SYSTEM_PROPERTY_IDS.STATUS,
@@ -165,6 +166,14 @@ export function ProjectWorkspace(props: {
                     <AddProjectTasks project={props.project} />
                   </Show>
                 }
+              />
+            </Match>
+            <Match when={props.section === 'time'}>
+              <ProjectTimeView
+                projectId={props.project.id}
+                projectName={props.project.name}
+                data={undefined}
+                isLoading={false}
               />
             </Match>
           </Switch>

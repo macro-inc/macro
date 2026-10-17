@@ -489,6 +489,14 @@ export const enableReminders = defineFlag({
   default: onInDev,
 });
 
+// Time tracking: the Time Logged property on tasks, the Time tab in projects,
+// and auto-tracking for calls and channels. PostHog-gated with a dev-mode default.
+export const enableTimeTracking = defineFlag({
+  key: 'enable-time-tracking',
+  env: 'ENABLE_TIME_TRACKING',
+  default: onInDev,
+});
+
 export const enableHistoryComponent = defineFlag({
   key: 'enable-history-component',
   env: 'ENABLE_HISTORY_COMPONENT',

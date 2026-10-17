@@ -4,6 +4,7 @@ import {
   makeCopyEntityIdAction,
   makeCopyLinkAction,
 } from '@app/features/next-soup/actions';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useNavigate } from '@app/lib/split-router';
 import {
   projectDetailRoute,
@@ -20,12 +21,20 @@ import {
 import { TabsInset } from '@core/component/TabsInset';
 import { toast } from '@core/component/Toast/Toast';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
+import { enableTimeTracking } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import StackIcon from '@phosphor/stack.svg';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { Property } from '@property/types';
 import { Button } from '@ui';
-import { createSignal, Match, Show, Suspense, Switch } from 'solid-js';
+import {
+  createMemo,
+  createSignal,
+  Match,
+  Show,
+  Suspense,
+  Switch,
+} from 'solid-js';
 import { DeleteProjectsDialog } from './components/delete-projects-dialog';
 import { ProjectMenuDropdown } from './components/project-row-menu';
 import { ProjectContentSkeleton } from './components/project-skeletons';
@@ -97,6 +106,33 @@ type ProjectDetailProps = {
   breadcrumb?: ProjectBreadcrumbProps;
   onDelete?(): void;
 };
+
+function ProjectDetailTabs(props: {
+  section: ProjectSection;
+  onChange: (section: string) => void;
+}) {
+  const timeTrackingFlag = useFeatureFlag(enableTimeTracking);
+  const tabs = createMemo(() => {
+    const base = [
+      { value: 'overview', label: 'Overview' },
+      { value: 'tasks', label: 'Tasks' },
+    ];
+    if (timeTrackingFlag().enabled) {
+      base.push({ value: 'time', label: 'Time' });
+    }
+    return base;
+  });
+
+  return (
+    <TabsInset
+      list={tabs()}
+      value={props.section}
+      onChange={props.onChange}
+      aria-label="Project sections"
+      class="shrink-0 whitespace-nowrap"
+    />
+  );
+}
 
 function ProjectTitleMenu(props: {
   project: ProjectDetailData;
@@ -251,15 +287,9 @@ function ProjectDetailHost(props: ProjectDetailProps) {
           </Show>
         }
         navigation={
-          <TabsInset
-            list={[
-              { value: 'overview', label: 'Overview' },
-              { value: 'tasks', label: 'Tasks' },
-            ]}
-            value={props.route.section}
+          <ProjectDetailTabs
+            section={props.route.section}
             onChange={(value) => section(value as ProjectSection)}
-            aria-label="Project sections"
-            class="shrink-0 whitespace-nowrap"
           />
         }
       >

@@ -11,6 +11,9 @@ const calls = vi.hoisted(() => ({
     | undefined,
   context: undefined as unknown,
 }));
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({ enabled: false }),
+}));
 vi.mock('@app/components/entity-detail/use-list-navigation-hotkeys', () => ({
   useListNavigationHotkeys: (options: typeof calls.navigation) => {
     calls.navigation = options;
@@ -67,6 +70,7 @@ vi.mock('@core/component/TopBar/shareModal', () => ({
 }));
 vi.mock('../tasks-view-context', () => ({ useTasksView: () => calls.context }));
 vi.mock('./TaskDetail', () => ({ TaskDetail: () => null }));
+vi.mock('./TimeEntryButton', () => ({ TimeEntryButton: () => null }));
 afterEach(cleanup);
 
 it('steps within the provider task source without switching to tasks outside the project', async () => {

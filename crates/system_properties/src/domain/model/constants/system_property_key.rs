@@ -106,6 +106,9 @@ define_system_properties! {
 
     // Projects: the one project (initiative) a task belongs to
     Project,           PROJECT_UUID,            0x14, "Project";
+
+    // Time tracking: duration in minutes logged on a task
+    TimeLogged,        TIME_LOGGED_UUID,        0x15, "Time Logged";
 }
 
 impl SystemPropertyKey {
@@ -126,6 +129,7 @@ impl SystemPropertyKey {
                 Self::EFFORT_UUID,
                 Self::STORY_POINTS_UUID,
                 Self::RELEVANT_DOCUMENTS_UUID,
+                Self::TIME_LOGGED_UUID,
             ],
             EntityType::Company => &[
                 Self::STAGE_UUID,
@@ -183,7 +187,7 @@ mod tests {
     #[test]
     fn test_all_system_property_keys_returns_all_uuids() {
         let all_keys = SystemPropertyKey::all_system_property_keys();
-        assert_eq!(all_keys.len(), 20);
+        assert_eq!(all_keys.len(), 21);
         assert!(all_keys.contains(&SystemPropertyKey::ASSIGNEES_UUID));
         assert!(all_keys.contains(&SystemPropertyKey::STATUS_UUID));
         assert!(all_keys.contains(&SystemPropertyKey::PRIORITY_UUID));
@@ -204,6 +208,7 @@ mod tests {
         assert!(all_keys.contains(&SystemPropertyKey::REVENUE_UUID));
         assert!(all_keys.contains(&SystemPropertyKey::CONTACTS_UUID));
         assert!(all_keys.contains(&SystemPropertyKey::PROJECT_UUID));
+        assert!(all_keys.contains(&SystemPropertyKey::TIME_LOGGED_UUID));
     }
 
     #[test]
@@ -227,7 +232,7 @@ mod tests {
     #[test]
     fn test_required_property_ids_for_task() {
         let required = SystemPropertyKey::required_property_ids_for_entity(EntityType::Task);
-        assert_eq!(required.len(), 10);
+        assert_eq!(required.len(), 11);
         assert!(required.contains(&SystemPropertyKey::ASSIGNEES_UUID));
         assert!(required.contains(&SystemPropertyKey::STATUS_UUID));
         assert!(required.contains(&SystemPropertyKey::PRIORITY_UUID));
@@ -238,6 +243,7 @@ mod tests {
         assert!(required.contains(&SystemPropertyKey::EFFORT_UUID));
         assert!(required.contains(&SystemPropertyKey::STORY_POINTS_UUID));
         assert!(required.contains(&SystemPropertyKey::RELEVANT_DOCUMENTS_UUID));
+        assert!(required.contains(&SystemPropertyKey::TIME_LOGGED_UUID));
     }
 
     #[test]
@@ -311,6 +317,7 @@ mod tests {
             SystemPropertyKey::Revenue,
             SystemPropertyKey::Contacts,
             SystemPropertyKey::Project,
+            SystemPropertyKey::TimeLogged,
         ];
 
         for variant in variants {

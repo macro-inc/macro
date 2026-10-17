@@ -528,7 +528,7 @@ export const projectDetailRoute = defineRoute({
   path: 'projects/:projectId/:section',
   params: z.object({
     projectId: z.string().uuid(),
-    section: z.enum(['overview', 'tasks']),
+    section: z.enum(['overview', 'tasks', 'time']),
   }),
   remountKey: ({ projectId }) => projectId,
   claim: ({ projectId }) => ({

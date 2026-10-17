@@ -44,4 +44,4 @@ export const canDeleteProject = (project: Pick<Project, 'access'>) =>
 export const canDiscussProject = (project: ProjectDetail) =>
   project.access !== 'view';
 
-export type ProjectSection = 'overview' | 'tasks';
+export type ProjectSection = 'overview' | 'tasks' | 'time';

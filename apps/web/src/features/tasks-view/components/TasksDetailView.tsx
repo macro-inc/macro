@@ -14,6 +14,7 @@ import { useDocumentShareModal } from '@core/component/TopBar/shareModal';
 import { useTasksView } from '../tasks-view-context';
 import type { TaskDetailTarget } from '../types';
 import { TaskDetail } from './TaskDetail';
+import { TimeEntryButton } from './TimeEntryButton';
 
 function TaskDetailTopBar(props: { documentId: string }) {
   const panel = useSplitPanelOrThrow();
@@ -30,6 +31,7 @@ function TaskDetailTopBar(props: { documentId: string }) {
       />
       <div class="ml-auto flex shrink-0 items-center gap-1">
         <SidePanel.HeaderActionsOutlet />
+        <TimeEntryButton documentId={props.documentId} />
         <ShareTrigger
           onClick={openShare}
           id={props.documentId}

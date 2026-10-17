@@ -21,6 +21,8 @@ export const SYSTEM_PROPERTY_IDS = {
   CONTACTS: '00000001-0000-0000-0000-000000000013',
   /** The one project (initiative) a task belongs to. */
   PROJECT: '00000001-0000-0000-0000-000000000014',
+  /** Time logged on a task in minutes. */
+  TIME_LOGGED: '00000001-0000-0000-0000-000000000015',
 } as const;
 
 /** Stable option IDs, kept independent of UI/block registries for tooling. */
