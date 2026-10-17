@@ -17,11 +17,15 @@ export type SentMessage = {
   readonly open: () => void;
 };
 
+export type DeliveryError = { readonly kind: 'failed' };
+
 export type ShareDeliveryContext = {
   readonly resolvePeopleChannel: (
     userIds: readonly string[]
-  ) => Promise<string | undefined>;
-  readonly send: (message: OutgoingMessage) => Promise<SentMessage | undefined>;
+  ) => Promise<Result<string, DeliveryError>>;
+  readonly send: (
+    message: OutgoingMessage
+  ) => Promise<Result<SentMessage, DeliveryError>>;
   readonly changeChannelAccess: (
     item: ShareItemRef,
     change: ChannelAccessChange

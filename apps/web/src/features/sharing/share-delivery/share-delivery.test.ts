@@ -212,6 +212,30 @@ describe('useShareForm', () => {
     ]);
   });
 
+  it('retries a recipient whose direct message did not resolve', async () => {
+    mocks.resolvePeopleChannel
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce('dm-1');
+    mocks.sendToChannel.mockResolvedValue({
+      channelId: 'dm-1',
+      navigateToChannel: vi.fn(),
+    });
+    const form = mountForm([plan], 'forward_to_channel');
+    form.setRecipients([user('user-1')]);
+
+    const first = await form.submit();
+
+    expect(mocks.sendToChannel).not.toHaveBeenCalled();
+    expect(first?.outcome).toMatchObject({ complete: false, retryable: true });
+
+    await form.submit();
+
+    expect(
+      mocks.sendToChannel.mock.calls.map(([message]) => message.channelId)
+    ).toEqual(['dm-1']);
+    expect(form.status().t).toBe('complete');
+  });
+
   it('grants through the kind registry and tracks the forward', async () => {
     mocks.sendToChannel.mockResolvedValue({
       channelId: 'channel-1',

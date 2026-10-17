@@ -80,11 +80,11 @@ function setup(
   const opened: string[] = [];
   const context = {
     resolvePeopleChannel: vi.fn<ShareDeliveryContext['resolvePeopleChannel']>(
-      async (userIds) => `dm:${userIds.join('+')}`
+      async (userIds) => ok(`dm:${userIds.join('+')}`)
     ),
     send: vi.fn<ShareDeliveryContext['send']>(async ({ channelId }) => {
-      if (failingChannels.has(channelId)) return undefined;
-      return { open: () => opened.push(channelId) };
+      if (failingChannels.has(channelId)) return err({ kind: 'failed' });
+      return ok({ open: () => opened.push(channelId) });
     }),
     changeChannelAccess: vi.fn<ShareDeliveryContext['changeChannelAccess']>(
       async (ref) => {

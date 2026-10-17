@@ -176,14 +176,12 @@ export function createShareForm<Recipient extends PickedRecipient>(
       record = work.channel.record;
     } else {
       span.setAttr('share.recipients', work.channel.userIds.length);
-      const channelId = await context.resolvePeopleChannel(
-        work.channel.userIds
-      );
-      if (channelId === undefined) {
+      const channel = await context.resolvePeopleChannel(work.channel.userIds);
+      if (channel.isErr()) {
         span.error('No channel for the recipients');
         return undefined;
       }
-      record = emptyRecord(channelId);
+      record = emptyRecord(channel.value);
     }
     span.setAttr('channel.id', record.channelId);
     let open: (() => void) | undefined;
@@ -203,13 +201,13 @@ export function createShareForm<Recipient extends PickedRecipient>(
         items: message.items,
         text: message.text,
       });
-      if (!sent) {
+      if (sent.isErr()) {
         span.error('Message was not sent');
         break;
       }
       sentCount++;
       record = withDelivery(record, message.id);
-      open ??= sent.open;
+      open ??= sent.value.open;
       record = (await grantAll(record, message.grantAfter, span)).record;
     }
     span.setAttr('share.sent', sentCount);

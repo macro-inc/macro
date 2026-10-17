@@ -8,6 +8,7 @@ import { newMessageId } from '@queries/messages/mutations';
 import type { NewAttachment } from '@service-storage/generated/schemas/newAttachment';
 import type { SharePermissionV2ChannelSharePermissions } from '@service-storage/generated/schemas/sharePermissionV2ChannelSharePermissions';
 import { itemTypeToReferenceEntityType } from '@service-storage/itemType';
+import { err, ok } from 'neverthrow';
 import type { Accessor } from 'solid-js';
 import { match } from 'ts-pattern';
 import type { ShareDeliveryContext } from './context/share-delivery-context';
@@ -102,7 +103,10 @@ function useAppShareDeliveryContext(
   const analytics = useAnalytics();
 
   return {
-    resolvePeopleChannel,
+    resolvePeopleChannel: async (userIds) => {
+      const channelId = await resolvePeopleChannel(userIds);
+      return channelId === undefined ? err({ kind: 'failed' }) : ok(channelId);
+    },
     send: async ({ channelId, messageId, items: attached, text }) => {
       const sent = await sendToChannel({
         channelId,
@@ -111,7 +115,9 @@ function useAppShareDeliveryContext(
         attachments: attached.map(toAttachment),
         messageId,
       });
-      return sent && { open: sent.navigateToChannel };
+      return sent
+        ? ok({ open: sent.navigateToChannel })
+        : err({ kind: 'failed' });
     },
     changeChannelAccess,
     track: (event) =>

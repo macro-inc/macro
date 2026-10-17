@@ -74,6 +74,7 @@ function setup(items: readonly ShareItem[]) {
     log = { ...log, [channelId]: [...(log[channelId] ?? []), line] };
   };
   let events: ShareEvent[] = [];
+  const unreachable = new Set<string>();
   const failingPosts = new Set<string>();
   const brokenPosts = new Map<string, Error>();
   const grantErrors = new Map<string, ChannelAccessError>();
@@ -81,15 +82,19 @@ function setup(items: readonly ShareItem[]) {
   const context: ShareDeliveryContext = {
     async resolvePeopleChannel(userIds) {
       const channelId = `dm:${userIds.join('+')}`;
+      if (userIds.some((id) => unreachable.has(id))) {
+        note(channelId, 'resolve failed');
+        return err({ kind: 'failed' });
+      }
       note(channelId, 'resolve');
-      return channelId;
+      return ok(channelId);
     },
     async send({ channelId, messageId, items: attached, text }) {
       const broken = brokenPosts.get(messageId);
       if (broken) throw broken;
       if (failingPosts.has(messageId)) {
         note(channelId, `post ${messageId} failed`);
-        return undefined;
+        return err({ kind: 'failed' });
       }
       const ids = attached.map(({ id }) => id).join(' ');
       note(
@@ -98,7 +103,7 @@ function setup(items: readonly ShareItem[]) {
           ? `post ${messageId}: ${ids} "${text}"`
           : `post ${messageId}: ${ids}`
       );
-      return { open: () => note(channelId, 'open') };
+      return ok({ open: () => note(channelId, 'open') });
     },
     async changeChannelAccess(ref, change) {
       const level = change.t === 'set' ? change.level : 'removed';
@@ -132,6 +137,7 @@ function setup(items: readonly ShareItem[]) {
 
   return {
     form,
+    unreachable,
     failingPosts,
     brokenPosts,
     grantErrors,
@@ -220,6 +226,37 @@ it('retries only the failed delivery, under its planned message id', async () =>
     { t: 'access-set', item: spec, level: 'view' },
     { t: 'forwarded', item: spec, target: 'user' },
   ]);
+  expect(form.status().t).toBe('complete');
+});
+
+it('retries a direct message it could not find or create', async () => {
+  const spec = item('document', 'spec');
+  const { form, takeLog, unreachable } = setup([spec]);
+  form.setRecipients([channel('design'), person('ana')]);
+  unreachable.add('ana');
+
+  const first = await form.submit();
+
+  expect(takeLog()).toEqual({
+    design: ['post m1: spec', 'grant spec view'],
+    'dm:ana': ['resolve failed'],
+  });
+  expect(first?.outcome.recipients[1]).toEqual({
+    key: 'people:ana',
+    target: { t: 'people', userIds: ['ana'] },
+    unsent: [spec],
+    accessIssues: [],
+  });
+  expect(traces[0].children[1].errors).toEqual([
+    'No channel for the recipients',
+  ]);
+
+  unreachable.clear();
+  await form.submit();
+
+  expect(takeLog()).toEqual({
+    'dm:ana': ['resolve', 'post m2: spec', 'grant spec view'],
+  });
   expect(form.status().t).toBe('complete');
 });
 
