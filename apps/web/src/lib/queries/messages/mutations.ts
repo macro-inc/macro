@@ -3,6 +3,8 @@ import type { OptimisticPostMessageAttachment } from '@channel/Input/message-pay
 import { toast } from '@core/component/Toast/Toast';
 import type { DateValue } from '@core/util/date';
 import { markMessageSent } from '@core/util/message-send-motion';
+import { thrownResultErrorHasCode } from '@core/util/result';
+import type { Span } from '@macro-inc/observability';
 import {
   messageReferencesCrmRecord,
   refreshCrmAssociatedSoupQueries,
@@ -405,6 +407,8 @@ type SendMessageParams = {
   /** From `newMessageId`; the message's final id, not a placeholder. */
   optimisticId: string;
   senderId: string;
+  /** The mutation awaits before its request, so a caller's span is passed in. */
+  trace?: Pick<Span, 'run'>;
 };
 
 type SendMessageContext = {
@@ -428,13 +432,25 @@ export function useSendMessageMutation(
   return useMutation(() => ({
     gcTime: 0,
     mutationFn: async (vars: SendMessageParams) => {
+      const traced = <T>(request: () => T): T =>
+        vars.trace ? vars.trace.run(request) : request();
       // The server keeps optimisticId as the message id, so the optimistic
       // message never changes id; it is also the nonce the server echoes.
-      return entityMessagesClient.post(vars.parent, {
-        ...vars.message,
-        id: vars.optimisticId,
-        nonce: vars.optimisticId,
-      });
+      try {
+        return await traced(() =>
+          entityMessagesClient.post(vars.parent, {
+            ...vars.message,
+            id: vars.optimisticId,
+            nonce: vars.optimisticId,
+          })
+        );
+      } catch (error) {
+        // A resend after a lost response finds its id already stored.
+        if (!thrownResultErrorHasCode(error, 'CONFLICT')) throw error;
+        return traced(() =>
+          entityMessagesClient.get(vars.parent, vars.optimisticId)
+        );
+      }
     },
     ...withCallbacks<
       EntityMessage,

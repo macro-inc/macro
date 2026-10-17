@@ -13,10 +13,18 @@ import {
 } from '@app/features/access-requests/share-request-trigger';
 import {
   fetchPipelineSharePermissions,
-  updatePipelineSharePermissions,
   updatePipelineTeamShare,
 } from '@app/features/crm/sharing-adapter';
 import { projectRouteId } from '@app/features/projects/core/route';
+import {
+  changeChannelAccess,
+  isSendRestricted,
+  parseChannelAccessLevel,
+  type RestrictedKind,
+  type ShareItem,
+  type ShareKind,
+  toShareItem,
+} from '@app/features/sharing/share-delivery/share-delivery';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useChannelParticipants } from '@channel/use-channel-participants';
 import { HeaderActionButton } from '@components/app/HeaderActionButton';
@@ -80,14 +88,8 @@ import {
   fetchInitiativeSharePermissions,
   updateInitiativeSharePermissions,
 } from '@queries/initiative/share-permissions';
-import {
-  getDatabaseSharePermissions,
-  updateDatabaseSharePermissions,
-} from '@queries/storage/databases';
-import {
-  getFormSharePermissions,
-  updateFormSharePermissions,
-} from '@queries/storage/forms';
+import { getDatabaseSharePermissions } from '@queries/storage/databases';
+import { getFormSharePermissions } from '@queries/storage/forms';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import {
@@ -112,7 +114,6 @@ import {
 import type { Result } from 'neverthrow';
 import {
   type Component,
-  type ComponentProps,
   createMemo,
   createResource,
   createSignal,
@@ -208,7 +209,7 @@ const SHARE_LINK_SUBTEXT =
 // Only these items' owners (a pipeline's editors) can grant access, so only
 // they may forward. Their links don't grant access to recipients either, so
 // copying skips SHARE_LINK_SUBTEXT.
-const RESTRICTED_SHARE_DESCRIPTIONS: Partial<Record<ShareItemType, string>> = {
+const RESTRICTED_SHARE_DESCRIPTIONS: Record<RestrictedKind, string> = {
   crm_pipeline:
     'Only editors can share this pipeline. You can copy a link for people who already have access.',
   agent_session:
@@ -217,45 +218,20 @@ const RESTRICTED_SHARE_DESCRIPTIONS: Partial<Record<ShareItemType, string>> = {
     'Only the owner can share access to this project. You can copy a link for people who already have access.',
 };
 
+const restrictedShareDescription = (kind: ShareKind) =>
+  isSendRestricted(kind) ? RESTRICTED_SHARE_DESCRIPTIONS[kind] : undefined;
+
+const CHANNEL_REMOVED_SUBTEXT: Partial<Record<ShareKind, string>> = {
+  document: 'Channel no longer has access to this document',
+  chat: 'Channel no longer has access to this chat',
+  initiative: 'Channel no longer has access to this project',
+  form: 'Its members can no longer respond',
+};
+
 type ChannelPermissionSetter = (
   channelId: string,
-  accessLevel: AccessLevel,
-  hideSuccessToast?: boolean
-) => Promise<boolean | undefined>;
-
-/**
- * Where a forwarded message points. Nothing grants a native project or a
- * pipeline on send, so recipients could not open it yet: both grant first.
- */
-function forwardTarget(
-  blockAlias: ShareBlockType,
-  id: string,
-  setChannelPermissions: ChannelPermissionSetter
-): Pick<
-  ComponentProps<typeof ForwardToChannel>,
-  'blockId' | 'blockName' | 'entity' | 'prepareChannel'
-> {
-  const prepareChannel = async (
-    channelId: string,
-    accessLevel: AccessLevel | null
-  ) => {
-    const granted =
-      accessLevel &&
-      (await setChannelPermissions(channelId, accessLevel, true));
-    if (!granted)
-      throw new Error(
-        `Could not share this ${blockAlias === 'pipeline' ? 'pipeline' : 'project'}`
-      );
-  };
-  if (blockAlias === 'pipeline')
-    return { blockId: id, blockName: blockAlias, prepareChannel };
-  if (blockAlias !== 'initiative')
-    return { blockId: id, blockName: blockAlias };
-  return {
-    entity: { entity_type: 'initiative', entity_id: id },
-    prepareChannel,
-  };
-}
+  accessLevel: AccessLevel
+) => Promise<void>;
 
 const permissionsBlockResource = createBlockResource(
   () => {
@@ -299,13 +275,12 @@ const accessLevelText = (accessLevel?: AccessLevel | null) => {
 };
 
 const [refetchArray, setRefetchArray] = createSignal<(() => void)[]>([]);
+/**
+ * Refetches each mounted block's share permissions. Share modals outside a
+ * block read their own when they open.
+ */
 export const refetchDocumentShareButtonResource = () => {
-  const refetchArray_ = refetchArray();
-  if (refetchArray_.length === 0) {
-    console.warn('no document share permission refetch functions initialized');
-    return;
-  }
-  refetchArray_.forEach((refetch) => refetch());
+  refetchArray().forEach((refetch) => refetch());
 };
 
 export function getShareDrawerRecipientInput(): HTMLElement | null {
@@ -317,7 +292,7 @@ export function getShareDrawerRecipientInput(): HTMLElement | null {
 interface ShareModalProps extends ManagedDialogProps {
   userPermissions: Permissions;
   blockAlias: ShareBlockType;
-  itemType: ShareItemType;
+  itemType: ShareKind;
   owner?: string;
   name: string;
   id: string;
@@ -553,7 +528,8 @@ interface MobileShareDrawerProps {
   blockAlias: ShareBlockType;
   name: string;
   id: string;
-  itemType: ShareItemType;
+  itemType: ShareKind;
+  shareItem: ShareItem;
   owner?: string;
   people?: Component;
   linkSharing?: Component;
@@ -672,30 +648,16 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
           >
             <Show when={!props.canForward}>
               <p class="px-4 py-3 text-sm text-ink-muted">
-                {RESTRICTED_SHARE_DESCRIPTIONS[props.itemType]}
+                {restrictedShareDescription(props.itemType)}
               </p>
             </Show>
             <Show when={props.canForward}>
               <ForwardToChannel
-                {...forwardTarget(
-                  props.blockAlias,
-                  props.id,
-                  props.setChannelPermissions
-                )}
+                item={props.shareItem}
                 editPermissionEnabled={props.editPermissionEnabled}
                 ref={(handle) => setForwardRef(handle)}
-                submitPermissionInfo={{
-                  setChannelPermissions: (id, accessLevel) =>
-                    props.setChannelPermissions(id, accessLevel, true),
-                  userPermissions: props.userPermissions,
-                  channelSharePermissions: props.recipients,
-                }}
                 onSubmit={() => props.setIsOpen(false)}
                 refetch={props.refetch}
-                name={props.name}
-                hideAccessLevelSelector={props.itemType === 'email'}
-                initialAccessLevel={props.itemType === 'email' ? 'view' : null}
-                allowedAccessLevels={shareLevelsFor(props.itemType)}
               />
             </Show>
             <Show when={!props.canForward}>
@@ -901,7 +863,7 @@ export function ShareModal(props: ShareModalProps) {
   const canForward = () =>
     props.itemType === 'crm_pipeline'
       ? canSharePipeline()
-      : !RESTRICTED_SHARE_DESCRIPTIONS[props.itemType] ||
+      : !isSendRestricted(props.itemType) ||
         (Boolean(userId()) && props.owner === userId());
   const userPermissions = () =>
     props.itemType === 'agent_session' && !canForward()
@@ -923,7 +885,7 @@ export function ShareModal(props: ShareModalProps) {
   const copyLink = createCallback(() => {
     if (props.copyLink) return props.copyLink();
     copyEntityLink(shareUrl(props.blockAlias, props.id), {
-      subtext: RESTRICTED_SHARE_DESCRIPTIONS[props.itemType]
+      subtext: isSendRestricted(props.itemType)
         ? undefined
         : SHARE_LINK_SUBTEXT,
     });
@@ -986,6 +948,17 @@ export function ShareModal(props: ShareModalProps) {
     (recipients()?.length ?? 0) === 0 &&
     !props.hasDirectShares;
 
+  const shareItem = createMemo(() =>
+    toShareItem({
+      id: props.id,
+      kind: props.itemType,
+      name: props.name,
+      block: props.blockAlias === 'initiative' ? undefined : props.blockAlias,
+      canGrant: recipientPermissions() === Permissions.OWNER,
+      channelGrants: recipients(),
+    })
+  );
+
   // Function to navigate to a channel
   const navigateToChannel = createCallback((channelId: string) => {
     navigate(`/channel/${channelId}`);
@@ -994,263 +967,48 @@ export function ShareModal(props: ShareModalProps) {
 
   const removeChannelAccess = createCallback(async (channelId: string) => {
     if (recipientPermissions() !== Permissions.OWNER) return;
-    if (props.itemType === 'crm_pipeline') {
-      const result = await updatePipelineSharePermissions(props.id, {
-        channelSharePermissions: [{ operation: 'remove', channelId }],
+    const result = await changeChannelAccess(
+      { kind: props.itemType, id: props.id },
+      { t: 'remove', channelId }
+    );
+    const noun = props.itemType === 'project' ? 'folder' : 'channel';
+    if (result.isErr()) {
+      toast.alert(`Failed to remove ${noun} access`, {
+        subtext: 'Please try again',
       });
-      if (result.isOk()) {
-        refetch();
-        toast.success('Removed channel access');
-      } else {
-        toast.alert('Failed to remove channel access', {
-          subtext: 'Please try again',
-        });
-      }
-    } else if (props.itemType === 'agent_session') {
-      const result = await updateAgentSessionSharePermissions(props.id, {
-        channelSharePermissions: [{ operation: 'remove', channelId }],
-      });
-      if (result.isOk()) {
-        refetch();
-        toast.success('Removed channel access');
-      } else {
-        toast.alert('Failed to remove channel access', {
-          subtext: 'Please try again',
-        });
-      }
-    } else if (props.itemType === 'initiative') {
-      const result = await updateInitiativeSharePermissions(props.id, {
-        channelSharePermissions: [{ operation: 'remove', channelId }],
-      });
-      if (result.isOk()) {
-        refetch();
-        toast.success('Removed channel access', {
-          subtext: 'Channel no longer has access to this project',
-        });
-      } else {
-        toast.alert('Failed to remove channel access', {
-          subtext: 'Please try again',
-        });
-        console.error(result);
-      }
-    } else if (props.itemType === 'database') {
-      const result = await updateDatabaseSharePermissions({
-        id: props.id,
-        channelSharePermissions: [{ operation: 'remove', channelId }],
-      });
-      if (result.isOk()) {
-        await refetch();
-        toast.success('Removed channel access');
-      } else {
-        toast.alert('Failed to remove channel access', {
-          subtext: 'Please try again',
-        });
-      }
-    } else if (props.itemType === 'form') {
-      const result = await updateFormSharePermissions({
-        id: props.id,
-        channelSharePermissions: [{ operation: 'remove', channelId }],
-      });
-      if (result.isOk()) {
-        await refetch();
-        toast.success('Removed channel access', {
-          subtext: 'Its members can no longer respond',
-        });
-      } else {
-        toast.alert('Failed to remove channel access', {
-          subtext: 'Please try again',
-        });
-      }
-    } else if (props.itemType === 'chat') {
-      const result = await cognitionApiServiceClient.updateChatPermissions({
-        chat_id: props.id,
-        sharePermission: {
-          channelSharePermissions: [
-            {
-              operation: 'remove',
-              channelId,
-            },
-          ],
-        },
-      });
-      if (!result.isErr()) {
-        refetch();
-        toast.success('Removed channel access', {
-          subtext: 'Channel no longer has access to this chat',
-        });
-      } else {
-        toast.alert('Failed to remove channel access', {
-          subtext: 'Please try again',
-        });
-        console.error(result);
-      }
-    } else if (props.itemType === 'document') {
-      const result = await storageServiceClient.editDocument({
-        documentId: props.id,
-        sharePermission: {
-          channelSharePermissions: [
-            {
-              operation: 'remove',
-              channelId,
-            },
-          ],
-        },
-      });
-      if (!result.isErr()) {
-        refetch();
-        toast.success('Removed channel access', {
-          subtext: 'Channel no longer has access to this document',
-        });
-      } else {
-        toast.alert('Failed to remove channel access', {
-          subtext: 'Please try again',
-        });
-        console.error(result);
-      }
-    } else if (props.itemType === 'project') {
-      const result = await storageServiceClient.projects.edit({
-        id: props.id,
-        sharePermission: {
-          channelSharePermissions: [
-            {
-              operation: 'remove',
-              channelId,
-            },
-          ],
-        },
-      });
-      if (!result.isErr()) {
-        refetch();
-        toast.success('Removed folder access');
-      } else {
-        toast.alert('Failed to remove folder access', {
-          subtext: 'Please try again',
-        });
-        console.error(result);
-      }
+      return;
     }
+    refetch();
+    toast.success(`Removed ${noun} access`, {
+      subtext: CHANNEL_REMOVED_SUBTEXT[props.itemType],
+    });
   });
 
   const setChannelPermissions = createCallback(
-    async (
-      channelId: string,
-      accessLevel: AccessLevel,
-      hideSuccessToast?: boolean
-    ) => {
-      if (recipientPermissions() !== Permissions.OWNER) return;
+    async (channelId: string, accessLevel: AccessLevel) => {
+      const level = parseChannelAccessLevel(accessLevel);
+      if (recipientPermissions() !== Permissions.OWNER || !level) return;
 
-      let result:
-        | Result<any, ResultError<any>[]>
-        | Result<void, ResultError<any>[]>
-        | null = null;
-      if (props.itemType === 'crm_pipeline') {
-        result = await updatePipelineSharePermissions(props.id, {
-          channelSharePermissions: [
-            { operation: 'replace', accessLevel, channelId },
-          ],
-        });
-      } else if (props.itemType === 'agent_session') {
-        result = await updateAgentSessionSharePermissions(props.id, {
-          channelSharePermissions: [
-            { operation: 'replace', accessLevel, channelId },
-          ],
-        });
-      } else if (props.itemType === 'initiative') {
-        result = await updateInitiativeSharePermissions(props.id, {
-          channelSharePermissions: [
-            { operation: 'replace', accessLevel, channelId },
-          ],
-        });
-      } else if (props.itemType === 'database') {
-        result = await updateDatabaseSharePermissions({
-          id: props.id,
-          channelSharePermissions: [
-            { operation: 'replace', accessLevel, channelId },
-          ],
-        });
-      } else if (props.itemType === 'form') {
-        result = await updateFormSharePermissions({
-          id: props.id,
-          channelSharePermissions: [
-            { operation: 'replace', accessLevel, channelId },
-          ],
-        });
-      } else if (props.itemType === 'chat') {
-        result = await cognitionApiServiceClient.updateChatPermissions({
-          sharePermission: {
-            channelSharePermissions: [
-              {
-                operation: 'replace',
-                accessLevel,
-                channelId,
-              },
-            ],
-          },
-          chat_id: props.id,
-        });
-      } else if (props.itemType === 'document') {
-        result = await storageServiceClient.editDocument({
-          sharePermission: {
-            channelSharePermissions: [
-              {
-                operation: 'replace',
-                accessLevel,
-                channelId,
-              },
-            ],
-          },
-          documentId: props.id,
-        });
-      } else if (props.itemType === 'project') {
-        result = await storageServiceClient.projects.edit({
-          sharePermission: {
-            channelSharePermissions: [
-              {
-                operation: 'replace',
-                accessLevel,
-                channelId,
-              },
-            ],
-          },
-          id: props.id,
-        });
-      } else if (props.itemType === 'email') {
-        result = await storageServiceClient.editThread({
-          sharePermission: {
-            channelSharePermissions: [
-              {
-                operation: 'replace',
-                accessLevel,
-                channelId,
-              },
-            ],
-          },
-          threadId: props.id,
-        });
-      }
-
-      if (result && result.isOk()) {
-        refetch();
-        if (!hideSuccessToast) {
-          toast.success('Changed channel access level', {
-            subtext: accessLevelText(accessLevel),
-          });
-        }
-
-        analytics.track('share_entity', {
-          entityType: props.itemType,
-          entityId: props.id,
-          shareMethod: 'channel',
-          accessLevel,
-        });
-        return true;
-      } else {
+      const result = await changeChannelAccess(
+        { kind: props.itemType, id: props.id },
+        { t: 'set', channelId, level }
+      );
+      if (result.isErr()) {
         toast.alert('Failed to change channel access', {
           subtext: 'Please try again',
         });
-        console.error(result);
-        return false;
+        return;
       }
+      refetch();
+      toast.success('Changed channel access level', {
+        subtext: accessLevelText(accessLevel),
+      });
+      analytics.track('share_entity', {
+        entityType: props.itemType,
+        entityId: props.id,
+        shareMethod: 'channel',
+        accessLevel,
+      });
     }
   );
 
@@ -1488,6 +1246,7 @@ export function ShareModal(props: ShareModalProps) {
           name={props.name}
           id={props.id}
           itemType={props.itemType}
+          shareItem={shareItem()}
           owner={props.owner ?? requests.state()?.owner ?? undefined}
           people={props.people}
           linkSharing={props.linkSharing}
@@ -1534,32 +1293,16 @@ export function ShareModal(props: ShareModalProps) {
                 <Panel.Body>
                   <Show when={!canForward()}>
                     <p class="px-4 py-3 text-sm text-ink-muted">
-                      {RESTRICTED_SHARE_DESCRIPTIONS[props.itemType]}
+                      {restrictedShareDescription(props.itemType)}
                     </p>
                   </Show>
                   <Show when={canForward()}>
                     <ForwardToChannel
-                      {...forwardTarget(
-                        props.blockAlias,
-                        props.id,
-                        setChannelPermissions
-                      )}
+                      item={shareItem()}
                       editPermissionEnabled={editPermissionEnabled()}
-                      submitPermissionInfo={{
-                        setChannelPermissions: (id, accessLevel) =>
-                          setChannelPermissions(id, accessLevel, true),
-                        userPermissions: recipientPermissions(),
-                        channelSharePermissions: recipients(),
-                      }}
                       onSubmit={() => props.onOpenChange(false)}
                       onCancel={() => props.onOpenChange(false)}
                       refetch={refetch}
-                      name={props.name}
-                      hideAccessLevelSelector={props.itemType === 'email'}
-                      initialAccessLevel={
-                        props.itemType === 'email' ? 'view' : null
-                      }
-                      allowedAccessLevels={shareLevelsFor(props.itemType)}
                     />
                   </Show>
                   <Show when={!canForward()}>
