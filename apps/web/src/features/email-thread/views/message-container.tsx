@@ -3,9 +3,11 @@ import { FloatingInputLoader } from '@core/component/FloatingInputLoader';
 import { createMemo, createSignal, Match, Show, Switch } from 'solid-js';
 import { isPersonalMessage } from '../../email-message/core/is-personal-message';
 import { EmailMessageView } from '../../email-message/views/email-message';
+import { DraftReplyPreview } from '../components/draft-reply-preview';
 import { ReplyInWindowNotice } from '../components/reply-in-window-notice';
 import { useEmailThreadState } from '../context/email-thread-state-context';
 import { useEmailThreadViewContext } from '../context/email-thread-view-context';
+import { draftPreviewText } from '../core/draft-preview';
 import { openEmailReplyComposerForMessage } from '../primitives/reply-actions';
 import { createReplyWindowBinding } from '../primitives/reply-window-binding';
 import {
@@ -87,6 +89,10 @@ export function MessageContainer(props: MessageContainerProps) {
       !isTouchDevice() &&
       context.drafts.initialDraftsSettled()
   );
+
+  // Touch replies live in a drawer, so a saved one would otherwise be invisible.
+  const touchDraft = () =>
+    isTouchDevice() && context.permissions().isOwner ? draftChild() : undefined;
 
   const showInlineReplyArea = createMemo(
     () =>
@@ -173,6 +179,20 @@ export function MessageContainer(props: MessageContainerProps) {
           : undefined
       }
     >
+      <Show when={touchDraft()}>
+        {(draft) => (
+          <div class="-mx-4 mt-3 border-t border-edge-muted px-4">
+            <DraftReplyPreview
+              text={draftPreviewText(draft())}
+              onOpen={() => {
+                const messageId = props.message.db_id;
+                if (messageId)
+                  context.mobileReplyComposer.openForMessage(messageId);
+              }}
+            />
+          </div>
+        )}
+      </Show>
       <Show when={showInlineReplyArea()}>
         <div class="relative -mx-4 mb-0 border-t border-edge-frame mt-4">
           <Show when={props.isLastMessage && !isTouchDevice()}>
