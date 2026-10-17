@@ -1,29 +1,24 @@
+import {
+  createImageActions,
+  ImageActionButtons,
+} from '@core/component/ImageActions';
 import { Dialog, useDialogContext } from '@kobalte/core/dialog';
-import ClipboardIcon from '@phosphor/clipboard.svg';
-import DownloadIcon from '@phosphor/download-simple.svg';
 import XIcon from '@phosphor/x.svg';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import { Button, cn } from '@ui';
 import {
   type Accessor,
-  type Component,
   createEffect,
   createSignal,
-  type JSX,
   Show,
   untrack,
 } from 'solid-js';
 import { Zoompinch, type ZoompinchHandle } from '../Zoompinch';
 import { createGestures } from './createGestures';
-import { createImageActions } from './createImageActions';
 import { createMomentum } from './createMomentum';
 import { createZoomModel } from './createZoomModel';
 import { LightboxChrome } from './LightboxChrome';
 import { LightboxToolbar } from './LightboxToolbar';
-
-const SpinnerIcon: Component<JSX.SvgSVGAttributes<SVGSVGElement>> = (p) => (
-  <Spinner {...p} class="animate-spin" />
-);
 
 type LightboxProps = {
   // Current image to display
@@ -86,24 +81,7 @@ export function Lightbox(props: LightboxProps) {
         class="flex items-center justify-center bg-surface rounded-md overflow-hidden"
       >
         <LightboxToolbar isVisible={true}>
-          <Button
-            variant="ghost"
-            size="icon-md"
-            onClick={images.copyToClipboard}
-            disabled={images.isBusy() || images.isPrefetching()}
-            label="Copy image"
-          >
-            {images.isCopying() ? <SpinnerIcon /> : <ClipboardIcon />}
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-md"
-            onClick={images.downloadImage}
-            disabled={images.isBusy() || images.isPrefetching()}
-            label="Download image"
-          >
-            {images.isDownloading() ? <SpinnerIcon /> : <DownloadIcon />}
-          </Button>
+          <ImageActionButtons actions={images} />
           <Dialog.CloseButton
             as={Button}
             variant="ghost"
