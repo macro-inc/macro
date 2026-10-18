@@ -18,6 +18,8 @@ import { makePersistedState } from '@app/lib/persistence';
 import { PullToRefresh } from '@components/app/mobile/PullToRefresh';
 import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { MenuItem } from '@core/component/ContextMenu';
+import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
   type EntityData,
@@ -48,6 +50,7 @@ import {
   soupNavigationTouchHighlight,
 } from '../../next-soup/soup-view/soup-navigation-touch-highlight';
 import { openEntityInSplitFromUnifiedList } from '../../next-soup/utils';
+import { EMAIL_TABS } from '../constants';
 import {
   type EmailListActivationMetadata,
   useEmailView,
@@ -61,6 +64,7 @@ import { createEmailRowActionState } from '../primitives/row-action-state';
 import type { EmailDataSourceItem } from '../queries/use-email-query';
 import { EMAIL_TOUR } from '../tour';
 import { useEmailListHotkeys } from '../use-email-list-hotkeys';
+import { EmailBulkBar } from './EmailBulkBar';
 import { EmailDateGroupHeader } from './EmailDateGroupHeader';
 import { EmailEmptyState } from './EmailEmptyState';
 import { EmailRowActions, EmailStarAction } from './EmailRowActions';
@@ -79,11 +83,14 @@ export function EmailList(props: EmailListProps) {
   const {
     state,
     source,
+    bulk,
     list,
     registerListActivationHandler,
     openThread,
     filterByTag,
   } = useEmailView();
+  const viewLabel = () =>
+    EMAIL_TABS.find((tab) => tab.id === state.tab)?.label ?? 'Email';
   const panel = useSplitPanelOrThrow();
 
   function openEntity(
@@ -207,6 +214,42 @@ export function EmailList(props: EmailListProps) {
       .flatMap((row) => (row.kind === 'entity' ? [row.entity] : []))
   );
 
+  // Loaded rows a bulk selection covers: every row from the anchor down, or
+  // every row in the view. Rows that never loaded are covered on the server.
+  const bulkRowIds = createMemo(() => {
+    const selection = bulk.state();
+    if (selection.status === 'idle' || selection.status === 'failed')
+      return new Set<string>();
+    const entityRows = rows().flatMap((row) =>
+      row.kind === 'entity' ? [row] : []
+    );
+    const start =
+      selection.scope === 'view'
+        ? 0
+        : entityRows.findIndex((row) => row.entity.id === selection.anchorId);
+    return new Set(
+      start < 0 ? [] : entityRows.slice(start).map((row) => row.id)
+    );
+  });
+
+  const loadedEntityCount = () =>
+    rows().filter((row) => row.kind === 'entity').length;
+  // Gmail's "select all conversations": the loaded page is selected and more exist.
+  const canSelectWholeView = () =>
+    bulk.canSelect() &&
+    source.hasMore() &&
+    selectedEntities().length === loadedEntityCount();
+
+  function selectBelow(entityId: string) {
+    listInteractions.selection.clear();
+    void bulk.selectBelow(entityId);
+  }
+
+  function selectWholeView() {
+    listInteractions.selection.clear();
+    void bulk.selectView();
+  }
+
   const focusedEntity = () => {
     const row = list.focus.result()?.item;
     return row?.kind === 'entity' ? row.entity : undefined;
@@ -274,7 +317,8 @@ export function EmailList(props: EmailListProps) {
     restoreFocus: () => grid()?.focus(),
     viewContext: entityActionViewContext,
     splitHandle: panel.handle,
-    condition: panel.isPanelActive,
+    // A bulk selection owns E and the other entity keys while it is active.
+    condition: () => panel.isPanelActive() && !bulk.isActive(),
   });
 
   useEmailListHotkeys({
@@ -282,6 +326,9 @@ export function EmailList(props: EmailListProps) {
     enabled: panel.isPanelActive,
     selectedEntities,
     clearSelection: listInteractions.selection.clear,
+    focusedEntityId: () => focusedEntity()?.id,
+    bulk,
+    viewLabel,
   });
 
   function actionGroupsFor(row: EmailActionRow) {
@@ -574,6 +621,21 @@ export function EmailList(props: EmailListProps) {
                                     rowId: entityRow().id,
                                   });
                                 }}
+                                extraItems={
+                                  <Show when={bulk.canSelect()}>
+                                    <MenuItem
+                                      text="Select all below"
+                                      hotkeyToken={TOKENS.email.selectAllBelow}
+                                      onClick={() =>
+                                        selectBelow(entityRow().entity.id)
+                                      }
+                                    />
+                                    <MenuItem
+                                      text={`Select all in ${viewLabel()}`}
+                                      onClick={selectWholeView}
+                                    />
+                                  </Show>
+                                }
                               >
                                 <div
                                   id={entityRow().id}
@@ -634,9 +696,11 @@ export function EmailList(props: EmailListProps) {
                                           />
                                         </Show>
                                       }
-                                      checked={list.selection.isSelected(
-                                        entityRow().id
-                                      )}
+                                      checked={
+                                        list.selection.isSelected(
+                                          entityRow().id
+                                        ) || bulkRowIds().has(entityRow().id)
+                                      }
                                       highlighted={
                                         !isTouchDevice() &&
                                         list.focus.key() === entityRow().id
@@ -652,13 +716,14 @@ export function EmailList(props: EmailListProps) {
                                           openInNewSplit,
                                         });
                                       }}
-                                      onChecked={(selected, shiftKey) =>
+                                      onChecked={(selected, shiftKey) => {
+                                        bulk.clear();
                                         listInteractions.selection.set(
                                           entityRow().id,
                                           selected,
                                           { range: shiftKey }
-                                        )
-                                      }
+                                        );
+                                      }}
                                       entityRowConfig={{
                                         swipeLeftColor: 'bg-success',
                                         swipeLeftRevealedComponent: (
@@ -666,6 +731,7 @@ export function EmailList(props: EmailListProps) {
                                         ),
                                       }}
                                       onClick={(event) => {
+                                        bulk.clear();
                                         if (
                                           event.metaKey ||
                                           event.ctrlKey ||
@@ -758,8 +824,27 @@ export function EmailList(props: EmailListProps) {
             selected={selectedEntities()}
             onClear={listInteractions.selection.clear}
             analyticsSource="email_view_selection_toolbar"
-          />
+          >
+            <Show when={canSelectWholeView()}>
+              <Button
+                variant="outline"
+                class="p-1 px-2 bg-surface"
+                depth={3}
+                onClick={selectWholeView}
+              >
+                Select all in {viewLabel()}
+              </Button>
+            </Show>
+          </EntitySelectionToolbar>
         </Show>
+        <EmailBulkBar
+          state={bulk.state()}
+          progress={bulk.progress()}
+          viewLabel={viewLabel()}
+          onClear={bulk.clear}
+          onRetry={() => void bulk.retry()}
+          onRun={(kind) => void bulk.run(kind)}
+        />
       </div>
     </MaybeSoupEntityActionDrawerManager>
   );

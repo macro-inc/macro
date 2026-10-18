@@ -1,5 +1,6 @@
 use crate::domain::models::{
-    Attachment, AttachmentDraft, AttachmentForwarded, Contact, ContactInfo, CreateDraftInput,
+    Attachment, AttachmentDraft, AttachmentForwarded, BulkThreadAction, BulkThreadActionResult,
+    BulkThreadTargetsPage, BulkThreadTargetsRequest, Contact, ContactInfo, CreateDraftInput,
     CreatedDraft, DeletedUserDraft, DraftDeletion, EmailErr, EmailFilter, EmailInboxDetails,
     EmailThreadMailProjection, EmailThreadMetadata, EmailThreadPreview, EnrichedEmailThreadPreview,
     GetEmailsRequest, Label, Link, LinkLabel, Message, MessageAttachment, MessageLabel, MessageRow,
@@ -603,6 +604,27 @@ pub trait EmailUserService: Send + Sync + 'static {
         &self,
         macro_id: MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<Vec<UserEmailLink>, EmailErr>> + Send;
+}
+
+/// Mail actions over a view's query, for selections that reach threads the
+/// client never loaded.
+pub trait EmailBulkThreadService: Send + Sync + 'static {
+    /// One page of the caller's threads matching a Mail view's query, in the
+    /// list's order, across every inbox the caller can read.
+    fn list_bulk_thread_targets(
+        &self,
+        macro_id: MacroUserIdStr<'static>,
+        request: BulkThreadTargetsRequest,
+    ) -> impl Future<Output = Result<BulkThreadTargetsPage, EmailErr>> + Send;
+
+    /// Apply one action to each thread. Repeating a request is harmless, and a
+    /// thread that fails is reported without failing the rest.
+    fn apply_bulk_thread_action(
+        &self,
+        macro_id: MacroUserIdStr<'static>,
+        thread_ids: Vec<Uuid>,
+        action: BulkThreadAction,
+    ) -> impl Future<Output = BulkThreadActionResult> + Send;
 }
 
 pub trait EmailService: Send + Sync + 'static {

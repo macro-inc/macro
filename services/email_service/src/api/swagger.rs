@@ -31,6 +31,10 @@ use ::email::inbound::axum::api_types::{
     SendMessageRequest as HexSendMessageRequest, SendMessageResponse as HexSendMessageResponse,
 };
 use ::email::inbound::axum::axum_impls::GetPreviewsCursorParams;
+use ::email::inbound::axum::bulk_threads_router::{
+    ApiBulkThreadAction, ApiBulkThreadCursor, ApiBulkThreadTarget, ApplyBulkThreadActionRequest,
+    ApplyBulkThreadActionResponse, ListBulkThreadTargetsRequest, ListBulkThreadTargetsResponse,
+};
 use ::email::inbound::axum::email_filter_router::{
     ApiEmailFilter, ListEmailFiltersResponse, UpsertEmailFilterRequest, UpsertEmailFilterResponse,
 };
@@ -87,6 +91,8 @@ use utoipa::OpenApi;
         email::threads::get::get_thread_messages_handler,
         email::threads::archived::archived_handler,
         inbound::axum::thread_labels_router::update_thread_labels_handler,
+        inbound::axum::bulk_threads_router::list_bulk_thread_targets_handler,
+        inbound::axum::bulk_threads_router::apply_bulk_thread_action_handler,
         inbound::axum::previews_router::cursor_handler,
         inbound::axum::get_thread_router::get_thread_handler,
         inbound::axum::thread_project_router::update_thread_project_handler,
@@ -148,6 +154,13 @@ use utoipa::OpenApi;
             UpdateThreadLabelsResponse,
             UpdateThreadProjectRequest,
             UpdateThreadProjectResponse,
+            ListBulkThreadTargetsRequest,
+            ListBulkThreadTargetsResponse,
+            ApiBulkThreadCursor,
+            ApiBulkThreadTarget,
+            ApplyBulkThreadActionRequest,
+            ApplyBulkThreadActionResponse,
+            ApiBulkThreadAction,
             ThreadPreviewCursor,
             GetThreadResponse,
             ApiThread,

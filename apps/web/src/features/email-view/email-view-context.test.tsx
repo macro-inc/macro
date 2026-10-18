@@ -76,6 +76,9 @@ vi.mock('./persistence', () => ({ createEmailViewPersistence: () => ({}) }));
 vi.mock('./queries/use-email-query', () => ({
   useEmailDataSource: () => ({ items: () => [] }),
 }));
+vi.mock('./use-email-bulk-selection', () => ({
+  useEmailBulkSelection: () => ({}),
+}));
 vi.mock('./route', () => ({
   emailSplitRoute: { id: 'view-mail' },
   emailThreadRoute: { id: 'mail-thread' },

@@ -2398,6 +2398,134 @@
         }
       }
     },
+    "/email/threads/bulk": {
+      "post": {
+        "tags": ["Threads"],
+        "summary": "Apply one action to each of the caller's threads. Idempotent: a repeated\nrequest leaves threads as they are, and one failing thread never fails\nthe others.",
+        "operationId": "apply_bulk_thread_action",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplyBulkThreadActionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplyBulkThreadActionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/threads/bulk/targets": {
+      "post": {
+        "tags": ["Threads"],
+        "summary": "List one page of the caller's threads matching a Mail view's query, so a\nselection can include threads the client has not loaded.",
+        "operationId": "list_bulk_thread_targets",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ListBulkThreadTargetsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListBulkThreadTargetsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`fromThreadId` is no longer in the view",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/email/threads/previews/cursor/{view}": {
       "get": {
         "tags": ["Previews"],
@@ -3198,6 +3326,49 @@
           }
         }
       },
+      "ApiBulkThreadAction": {
+        "type": "string",
+        "description": "An action applied to every thread in a bulk request.",
+        "enum": ["archive", "unarchive", "mark_read", "mark_unread"]
+      },
+      "ApiBulkThreadCursor": {
+        "type": "object",
+        "description": "A thread's position in a Mail view's order, echoed back to continue a listing.",
+        "required": ["threadId", "sortTs"],
+        "properties": {
+          "sortTs": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "threadId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "ApiBulkThreadTarget": {
+        "type": "object",
+        "description": "A thread a bulk action may change.",
+        "required": ["id", "done", "read", "sortTs"],
+        "properties": {
+          "done": {
+            "type": "boolean",
+            "description": "Mail Done: the thread is out of the inbox."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "read": {
+            "type": "boolean"
+          },
+          "sortTs": {
+            "type": "string",
+            "format": "date-time",
+            "description": "The thread's position in the view; it moves when new mail arrives."
+          }
+        }
+      },
       "ApiContact": {
         "type": "object",
         "required": ["id", "linkId"],
@@ -3953,6 +4124,45 @@
           "viewedAt": {
             "type": ["string", "null"],
             "format": "date-time"
+          }
+        }
+      },
+      "ApplyBulkThreadActionRequest": {
+        "type": "object",
+        "description": "Request body for applying one action to a batch of threads.",
+        "required": ["threadIds", "action"],
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/ApiBulkThreadAction"
+          },
+          "threadIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Between 1 and 100 threads."
+          }
+        }
+      },
+      "ApplyBulkThreadActionResponse": {
+        "type": "object",
+        "description": "Per-thread outcome of a bulk action, in request order.",
+        "required": ["succeededIds", "failedIds"],
+        "properties": {
+          "failedIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "succeededIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         }
       },
@@ -5302,6 +5512,66 @@
               "type": "string"
             },
             "description": "List of email addresses that are currently blocked."
+          }
+        }
+      },
+      "ListBulkThreadTargetsRequest": {
+        "type": "object",
+        "description": "Request body for listing one page of a Mail view's threads.",
+        "required": ["emailView"],
+        "properties": {
+          "cursor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ApiBulkThreadCursor",
+                "description": "The previous page's `nextCursor`."
+              }
+            ]
+          },
+          "ef": {
+            "description": "The view's email filter tree, exactly as its list sends it to `/items/soup/ast`."
+          },
+          "emailView": {
+            "type": "string",
+            "description": "The view's mailbox slice, exactly as its list sends it to `/items/soup/ast`."
+          },
+          "fromThreadId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Start at this thread, inclusive (\"select all below\"). It must still\nmatch the view. Omit, with `cursor`, to start at the top."
+          },
+          "limit": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Threads per page, at most 500. Defaults to 500.",
+            "minimum": 0
+          }
+        }
+      },
+      "ListBulkThreadTargetsResponse": {
+        "type": "object",
+        "description": "One page of a Mail view's threads, in the list's order.",
+        "required": ["threads"],
+        "properties": {
+          "nextCursor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ApiBulkThreadCursor",
+                "description": "Absent on the last page."
+              }
+            ]
+          },
+          "threads": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiBulkThreadTarget"
+            }
           }
         }
       },

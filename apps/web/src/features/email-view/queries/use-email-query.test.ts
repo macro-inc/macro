@@ -7,6 +7,7 @@ import type { useSearchSoupQuery } from '@queries/soup/search';
 import { batch, createRoot, createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createEmailBulkOverlay } from '../primitives/bulk-overlay';
 import type { EmailTab, EmailViewState } from '../types';
 import { buildEmailQuery } from './email-query';
 import {
@@ -262,12 +263,15 @@ function mount(search = '') {
       extraLists.push({ query: lookup, setError, setMissing });
       return lookup;
     });
+    const bulkOverlay = createEmailBulkOverlay();
     const source = useEmailDataSource(state, {
       tagSets: () => [],
       tagSetsReady,
+      bulkOverlay,
     });
     return {
       source,
+      bulkOverlay,
       query,
       extraLists,
       searchNext,
@@ -825,6 +829,96 @@ describe('Email list query transitions', () => {
     expect(ids(source)).toEqual([]);
     expect(source.isLoading()).toBe(true);
     expect(source.hasMore()).toBe(false);
+  });
+});
+
+describe('Email list bulk actions', () => {
+  const targeted = (id: string) => ({
+    id,
+    sortTs: '2026-09-21T12:00:00Z',
+  });
+
+  it('hides threads marked done from Noise until a stale refetch is replaced by the server’s answer', () => {
+    const { source, bulkOverlay, setEntities } = mount();
+    setEntities([email('kept'), email('archived')]);
+
+    bulkOverlay.set([targeted('archived')], { done: true });
+    expect(ids(source)).toEqual(['kept']);
+
+    // A replica that has not seen the archive yet still lists the thread.
+    setEntities([email('kept'), email('archived')]);
+    expect(ids(source)).toEqual(['kept']);
+
+    setEntities([email('kept')]);
+    expect(ids(source)).toEqual(['kept']);
+  });
+
+  it('keeps done threads in All and shows them as done', () => {
+    const { source, bulkOverlay, setState, setEntities } = mount();
+    setState('tab', 'all');
+    setEntities([email('thread')]);
+
+    bulkOverlay.set([targeted('thread')], { done: true });
+
+    const row = source.items().find((item) => item.kind === 'entity');
+    expect(row?.kind === 'entity' && row.entity).toMatchObject({
+      id: 'thread',
+      done: true,
+    });
+  });
+
+  it('shows a done thread again when newer mail returns it to the inbox', () => {
+    const { source, bulkOverlay, setEntities } = mount();
+    setEntities([email('thread')]);
+    bulkOverlay.set([targeted('thread')], { done: true });
+    expect(ids(source)).toEqual([]);
+
+    setEntities([{ ...email('thread'), sortTs: '2026-09-22T08:00:00Z' }]);
+
+    expect(ids(source)).toEqual(['thread']);
+    // The intent is gone, so a later stale row cannot hide the thread again.
+    setEntities([email('thread')]);
+    expect(ids(source)).toEqual(['thread']);
+  });
+
+  it('forgets a read intent once the server agrees, so a later Mark unread shows', () => {
+    const { source, bulkOverlay, setEntities } = mount();
+    setEntities([email('thread')]);
+    bulkOverlay.set([targeted('thread')], { read: true });
+    const isRead = () =>
+      source
+        .items()
+        .flatMap((item) =>
+          item.kind === 'entity' && item.entity.type === 'email'
+            ? [item.entity.isRead]
+            : []
+        );
+    expect(isRead()).toEqual([true]);
+
+    setEntities([{ ...email('thread'), isRead: true }]);
+    setEntities([{ ...email('thread'), isRead: false }]);
+
+    expect(isRead()).toEqual([false]);
+  });
+
+  it('offers a bulk query only when the server query describes the whole list', () => {
+    const { source, setState } = mount();
+    expect(source.bulkQuery()).toEqual({
+      ef: buildEmailQuery({
+        tab: 'noise',
+        inboxIds: ['inbox-a'],
+        facets: {},
+        facetContext: { tagPropertyDefinitionByOptionId: new Map() },
+      }).body.ef,
+      emailView: 'inbox',
+    });
+
+    setState('facets', { attachments: ['attachment-pdf'] });
+    expect(source.bulkQuery()).toBeUndefined();
+
+    setState('facets', {});
+    setState('tab', 'drafts');
+    expect(source.bulkQuery()).toBeUndefined();
   });
 });
 

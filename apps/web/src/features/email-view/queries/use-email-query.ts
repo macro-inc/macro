@@ -26,11 +26,20 @@ import { useFavoritesQuery } from '@queries/favorites/favorites';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
 import { useSearchSoupQuery } from '@queries/soup/search';
 import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
-import { type Accessor, createMemo, createSignal, indexArray } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createMemo,
+  createSignal,
+  indexArray,
+  on,
+} from 'solid-js';
 import { match } from 'ts-pattern';
 import { EMAIL_FACETS, type EmailFacetContext } from '../filters/email-facets';
+import type { EmailBulkOverlay } from '../primitives/bulk-overlay';
 import type { EmailTab, EmailViewState } from '../types';
 import { advanceEmptyAliasPages } from './advance-empty-alias-pages';
+import { type EmailBulkQuery, emailBulkQuery } from './bulk-query';
 import { buildEmailQuery, type EmailQueryContext } from './email-query';
 import { groupEmailEntitiesByDate } from './email-results';
 import { buildEmailSearchRequest } from './email-search';
@@ -42,6 +51,11 @@ export type EmailDataSourceItem = SoupRow<WithNotification<EntityData>>;
 
 export type EmailDataSource = ListDataSource<EmailDataSourceItem> & {
   reminderForThread?: (threadId: string) => EmailRowReminder | undefined;
+};
+
+export type EmailViewDataSource = EmailDataSource & {
+  /** The server query behind the whole list, when a bulk selection can use it. */
+  bulkQuery: () => EmailBulkQuery | undefined;
 };
 
 export type EmailDataSourceInput = Pick<
@@ -56,6 +70,8 @@ export type UseEmailDataSourceOptions = {
    */
   tagSets: Accessor<readonly TagSetResponse[]>;
   tagSetsReady: Accessor<boolean>;
+  /** Bulk actions' pending changes, shown before the lists catch up. */
+  bulkOverlay: EmailBulkOverlay;
 };
 
 /**
@@ -99,7 +115,7 @@ type RetainedEmailPublication = AdmittedEmails & {
 export function useEmailDataSource(
   state: EmailDataSourceInput,
   options: UseEmailDataSourceOptions
-): EmailDataSource {
+): EmailViewDataSource {
   const notificationSource = useGlobalNotificationSource();
   const userId = useUserId();
   const scheduled = useScheduledEmailSource(state);
@@ -397,10 +413,23 @@ export function useEmailDataSource(
   );
   const entities = () => publication().items;
 
+  // Fetched rows retire the bulk intents they already reflect.
+  createEffect(
+    on(entities, (fetched) => options.bulkOverlay.reconcile(fetched))
+  );
+
+  // Signal and Noise list inbox mail only, so a done thread leaves them.
+  const listsInboxOnly = () =>
+    state.tab === 'important' || state.tab === 'noise';
   const listEntities = createMemo((): WithNotification<EntityData>[] =>
-    entities().map((email) =>
-      withEntityNotifications(email, notificationSource)
-    )
+    options.bulkOverlay
+      .apply(
+        entities(),
+        (email) =>
+          emailMatchesTab(email, state.tab, userId()) &&
+          !(listsInboxOnly() && email.done)
+      )
+      .map((email) => withEntityNotifications(email, notificationSource))
   );
 
   const usesServiceSearch = search.usesServiceSearch;
@@ -479,6 +508,7 @@ export function useEmailDataSource(
   return {
     reminderForThread: (threadId) =>
       showsReminders() ? reminders.reminderForThread?.(threadId) : undefined,
+    bulkQuery: () => emailBulkQuery(queryContext(), state.search),
     items: () =>
       showsReminders()
         ? reminders.items()
@@ -564,5 +594,5 @@ export function useEmailDataSource(
         setRefreshing(false);
       }
     },
-  } satisfies EmailDataSource;
+  } satisfies EmailViewDataSource;
 }

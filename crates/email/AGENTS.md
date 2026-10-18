@@ -12,6 +12,10 @@ tools — hexagonal, heavily feature-gated.
   traits its adapters implement.
 - `src/inbound/axum.rs`: HTTP routes (feature `axum`); `src/inbound/toolset.rs`:
   the AI email tools (feature `ai_tools`).
+- `src/domain/service/bulk.rs` + `src/inbound/axum/bulk_threads_router.rs`:
+  Mail bulk selections — list a view's threads from its Soup email filter
+  (optionally from an anchor thread down) and apply Done/read actions in
+  idempotent batches.
 - `src/outbound/email_pg_repo.rs`, `src/outbound/invitation_pg.rs`: Postgres
   adapters (feature `outbound`); `src/outbound/email_service_http.rs`: calls
   into `email_service`; `src/outbound/s3_draft_attachment_storage.rs`: staged

@@ -1,4 +1,5 @@
 pub mod attachment;
+pub mod bulk;
 pub mod calendar_invitation;
 pub mod contact;
 pub mod draft;
@@ -19,6 +20,11 @@ mod tests;
 pub use attachment::{
     Attachment, AttachmentDraft, AttachmentForwarded, MAX_DRAFT_ATTACHMENTS_BYTES,
     MessageAttachment, SourcedAttachment,
+};
+pub use bulk::{
+    BulkThreadAction, BulkThreadActionResult, BulkThreadCursor, BulkThreadQuery, BulkThreadStart,
+    BulkThreadTarget, BulkThreadTargetsPage, BulkThreadTargetsRequest,
+    MAX_BULK_THREAD_ACTION_BATCH, MAX_BULK_THREAD_TARGETS_PAGE,
 };
 pub use contact::{Contact, ContactInfo, RecipientType};
 pub use draft::{
