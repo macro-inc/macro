@@ -384,6 +384,7 @@ vi.mock('./graphql-soup-websocket', () => ({
 }));
 vi.mock('@urql/core', () => ({
   fetchExchange: { kind: 'fetch' },
+  mapExchange: () => ({ kind: 'map' }),
   subscriptionExchange: () => ({ kind: 'subscription' }),
   createClient: (options: {
     exchanges: Array<{ kind?: string; host?: typeof mocks.host }>;

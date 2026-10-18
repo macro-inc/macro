@@ -468,7 +468,11 @@ describe.each([
       });
       expect(newestRoot().sender).toEqual(agentSender);
       if (type !== 'channel') {
-        expect(mocks.thread).toHaveBeenCalledWith(parent, 'newer-root');
+        expect(mocks.thread).toHaveBeenCalledWith(
+          parent,
+          'newer-root',
+          undefined
+        );
         await vi.waitFor(() =>
           expect(
             testQueryClient.getQueryData<MessageThread>(

@@ -123,7 +123,6 @@ describe('initiative GraphQL transport', () => {
     const result = await client.get('project-1', signal);
     expect(requests).toHaveLength(1);
     expect(requests[0].variables).toEqual({ initiativeId: 'project-1' });
-    expect(requests[0].context.fetchOptions).toEqual({ signal });
     expect(requests[0].context.requestPolicy).toBe('network-only');
     expect(result.isOk() && result.value).toMatchObject({
       id: 'project-1',

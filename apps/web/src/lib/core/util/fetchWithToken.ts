@@ -4,6 +4,7 @@ import { Telemetry } from '@macro-inc/observability';
 
 import { fetchWithAuth } from '@service-auth/fetch';
 import { err, ok, type Result } from 'neverthrow';
+import { createReadRequestSignal } from './readRequestSignal';
 import type { ObjectLike, ResultError } from './result';
 import {
   type BaseFetchErrorCode,
@@ -130,6 +131,9 @@ export async function fetchToken(): Promise<TokenResult> {
               Accept: 'application/json',
             },
             cache: 'no-store',
+            // Every waiting request shares this refresh. Bound it so a stalled
+            // transport cannot strand them; a timeout is transient, not logout.
+            signal: createReadRequestSignal(),
             errorResponseHandler: classifyRefreshError,
           }
         );

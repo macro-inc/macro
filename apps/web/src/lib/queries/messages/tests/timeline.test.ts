@@ -18,6 +18,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   timeline: vi.fn(),
+  timelineSignals: [] as (AbortSignal | undefined)[],
   track: vi.fn(),
 }));
 
@@ -30,7 +31,12 @@ vi.mock('../../client', () => ({
 }));
 
 vi.mock('@service-storage/messages', () => ({
-  entityMessagesClient: { timeline: mocks.timeline },
+  entityMessagesClient: {
+    timeline: (parent: unknown, selection: unknown, signal?: AbortSignal) => {
+      mocks.timelineSignals.push(signal);
+      return mocks.timeline(parent, selection);
+    },
+  },
 }));
 
 vi.mock('@app/lib/analytics', () => ({
@@ -158,6 +164,7 @@ function resultError(code: string) {
 beforeEach(() => {
   testQueryClient = new QueryClient();
   mocks.timeline.mockReset();
+  mocks.timelineSignals.length = 0;
   mocks.track.mockReset();
 });
 
@@ -401,9 +408,23 @@ describe('messageTimelineQueryOptions', () => {
     });
   });
 
-  it('catch-up failure falls back except on auth errors', async () => {
+  it('forwards query cancellation to the delta and fallback reads', async () => {
     seedLatestCache([createMessage('msg-1', '2026-09-10T13:19:00.123456Z')]);
-    mocks.timeline.mockRejectedValueOnce(resultError('INTERNAL'));
+    mocks.timeline.mockRejectedValueOnce(resultError('BAD_REQUEST'));
+    mocks.timeline.mockResolvedValueOnce(fullPage());
+    const signal = new AbortController().signal;
+
+    await messageTimelineQueryOptions(parent, null).queryFn({
+      pageParam: null,
+      signal,
+    });
+
+    expect(mocks.timelineSignals).toEqual([signal, signal]);
+  });
+
+  it('a rejected cursor falls back to the full timeline', async () => {
+    seedLatestCache([createMessage('msg-1', '2026-09-10T13:19:00.123456Z')]);
+    mocks.timeline.mockRejectedValueOnce(resultError('BAD_REQUEST'));
     mocks.timeline.mockResolvedValueOnce(fullPage());
 
     const result = await messageTimelineQueryOptions(parent, null).queryFn({
@@ -418,10 +439,17 @@ describe('messageTimelineQueryOptions', () => {
       reason: 'catch_up_error',
       after: '2026-09-10T13:19:00.123456Z',
     });
+  });
 
-    mocks.timeline.mockClear();
-    mocks.track.mockClear();
-    mocks.timeline.mockRejectedValueOnce(resultError('UNAUTHORIZED'));
+  it.each([
+    'NETWORK_ERROR',
+    'UNKNOWN_ERROR',
+    'SERVER_ERROR',
+    'UNAUTHORIZED',
+    'FORBIDDEN',
+  ])('a %s catch-up failure is not repeated as a full read', async (code) => {
+    seedLatestCache([createMessage('msg-1', '2026-09-10T13:19:00.123456Z')]);
+    mocks.timeline.mockRejectedValueOnce(resultError(code));
 
     await expect(
       messageTimelineQueryOptions(parent, null).queryFn({
@@ -429,6 +457,7 @@ describe('messageTimelineQueryOptions', () => {
       })
     ).rejects.toBeInstanceOf(ThrownResultError);
     expect(mocks.timeline).toHaveBeenCalledTimes(1);
+    expect(mocks.track).not.toHaveBeenCalled();
   });
 
   it('list ahead sets the reason', async () => {

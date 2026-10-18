@@ -18,6 +18,7 @@ import {
   UpdateInitiativeDocument,
   type UpdateInitiativeInput,
 } from './graphql/generated/graphql';
+import { toPromiseWithSignal } from './graphql-read';
 import { getGraphqlSoupClient, mapGraphqlProperties } from './graphql-soup';
 
 type InitiativeAccess = Lowercase<GraphqlEntityAccessLevel>;
@@ -155,12 +156,10 @@ export function createInitiativeClient(client: () => Client) {
     signal?: AbortSignal
   ) {
     signal?.throwIfAborted();
-    const result = await client()
-      .query(document, variables, {
-        requestPolicy: 'network-only',
-        ...(signal ? { fetchOptions: { signal } } : {}),
-      })
-      .toPromise();
+    const result = await toPromiseWithSignal(
+      client().query(document, variables, { requestPolicy: 'network-only' }),
+      signal
+    );
     signal?.throwIfAborted();
     return operationData(result);
   }

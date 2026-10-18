@@ -2,6 +2,7 @@ import { SERVER_HOSTS, SYNC_SERVICE_HOSTS } from '@core/constant/servers';
 import { Telemetry } from '@macro-inc/observability';
 import { err, ok, type Result } from 'neverthrow';
 import { match } from 'ts-pattern';
+import { isNetworkFailure } from './networkFailure';
 import { platformFetch } from './platformFetch';
 import type { ObjectLike, ResultError } from './result';
 import { sleep } from './sleep';
@@ -335,7 +336,7 @@ export async function safeFetch<
         return ok(data as T);
       }
     } catch (error) {
-      if (error instanceof TypeError && error.message === 'Failed to fetch') {
+      if (isNetworkFailure(error)) {
         lastError = fetchErr([
           { code: 'NETWORK_ERROR', message: 'Network error occurred' },
         ]);

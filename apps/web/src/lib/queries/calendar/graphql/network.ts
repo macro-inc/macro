@@ -2,6 +2,7 @@ import {
   HYDRATE_ONLY_CONTEXT_KEY,
   normalizedCacheResultMetadata,
 } from '@graphql-cache/exchange/normalized-cache-exchange';
+import { toPromiseWithSignal } from '@service-storage/graphql-read';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import type { AnyVariables, DocumentInput } from '@urql/core';
 
@@ -15,13 +16,13 @@ export async function fetchCached<Data, Variables extends AnyVariables>(
   variables: Variables,
   options: { hydrateOnly?: boolean; signal?: AbortSignal } = {}
 ): Promise<Data> {
-  const result = await getGraphqlSoupClient()
-    .query(document, variables, {
+  const result = await toPromiseWithSignal(
+    getGraphqlSoupClient().query(document, variables, {
       requestPolicy: 'network-only',
       ...(options.hydrateOnly ? { [HYDRATE_ONLY_CONTEXT_KEY]: true } : {}),
-      ...(options.signal ? { fetchOptions: { signal: options.signal } } : {}),
-    })
-    .toPromise();
+    }),
+    options.signal
+  );
   if (result.error) throw result.error;
   if (!result.data) throw new Error('Calendar query returned no data');
   const metadata = normalizedCacheResultMetadata(result);

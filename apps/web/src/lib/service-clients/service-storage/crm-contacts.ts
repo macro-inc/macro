@@ -4,6 +4,7 @@ import {
   CrmContactsDocument,
   type GraphqlCrmContactExpr,
 } from './graphql/generated/graphql';
+import { toPromiseWithSignal } from './graphql-read';
 import { getGraphqlSoupCacheHost, getGraphqlSoupClient } from './graphql-soup';
 
 const NIL_UUID = '00000000-0000-0000-0000-000000000000';
@@ -25,8 +26,8 @@ export async function fetchCrmContacts(options: {
       },
     },
   };
-  const result = await getGraphqlSoupClient()
-    .query(
+  const result = await toPromiseWithSignal(
+    getGraphqlSoupClient().query(
       CrmContactsDocument,
       {
         input: options.cursor
@@ -51,12 +52,10 @@ export async function fetchCrmContacts(options: {
               },
             },
       },
-      {
-        requestPolicy: 'network-only',
-        fetchOptions: { signal: options.signal },
-      }
-    )
-    .toPromise();
+      { requestPolicy: 'network-only' }
+    ),
+    options.signal
+  );
   if (result.error) throw result.error;
   if (!result.data) throw new Error('Contact query returned no data');
   const page = result.data.user.soup;

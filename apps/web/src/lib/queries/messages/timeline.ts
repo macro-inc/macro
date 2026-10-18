@@ -91,8 +91,8 @@ export function fetchResolvedChannelMessage(
 }> {
   return queryClient.fetchQuery({
     queryKey: messageKeys.resolveMessage(parent, messageId).queryKey,
-    queryFn: async () => {
-      const message = await entityMessagesClient.get(parent, messageId);
+    queryFn: async ({ signal }) => {
+      const message = await entityMessagesClient.get(parent, messageId, signal);
       return {
         id: message.id,
         parent: message.parent,
@@ -210,17 +210,22 @@ function trackMessageTimelineLoad(
 async function fetchMessageTimelinePage(
   parent: MessageParent,
   pageParam: MessageTimelinePageParam | null,
-  loadAroundMessageId: string | null
+  loadAroundMessageId: string | null,
+  signal: AbortSignal | undefined
 ): Promise<MessageTimelinePage> {
-  const page = await entityMessagesClient.timeline(parent, {
-    limit: pageParam ? 100 : 50,
-    cursor: pageParam?.next_cursor ?? pageParam?.previous_cursor,
-    direction: pageParam?.previous_cursor ? 'newer' : 'older',
-    around: !pageParam ? loadAroundMessageId : null,
-    // Annotation layout recovers missed deletions from the same document
-    // roots used by Discussion, whose projection hides deleted threads.
-    include_deleted_threads: parent.type === 'document',
-  });
+  const page = await entityMessagesClient.timeline(
+    parent,
+    {
+      limit: pageParam ? 100 : 50,
+      cursor: pageParam?.next_cursor ?? pageParam?.previous_cursor,
+      direction: pageParam?.previous_cursor ? 'newer' : 'older',
+      around: !pageParam ? loadAroundMessageId : null,
+      // Annotation layout recovers missed deletions from the same document
+      // roots used by Discussion, whose projection hides deleted threads.
+      include_deleted_threads: parent.type === 'document',
+    },
+    signal
+  );
   return normalizeMessageTimelinePageSenders(page);
 }
 
@@ -232,17 +237,20 @@ export function messageTimelineQueryOptions(
     queryKey: messageKeys.messages(parent, loadAroundMessageId).queryKey,
     queryFn: async ({
       pageParam,
+      signal,
     }: {
       pageParam: MessageTimelinePageParam | null;
+      signal?: AbortSignal;
     }) => {
       if (pageParam) {
-        return fetchMessageTimelinePage(parent, pageParam, null);
+        return fetchMessageTimelinePage(parent, pageParam, null, signal);
       }
       if (loadAroundMessageId) {
         const page = await fetchMessageTimelinePage(
           parent,
           null,
-          loadAroundMessageId
+          loadAroundMessageId,
+          signal
         );
         trackMessageTimelineLoad(parent, {
           path: 'full',
@@ -253,11 +261,11 @@ export function messageTimelineQueryOptions(
       // Rejoining a project must recover missed edits, reactions and deletions
       // on existing discussions. A created-at delta only includes new roots.
       if (parent.type === 'initiative') {
-        return fetchMessageTimelinePage(parent, null, null);
+        return fetchMessageTimelinePage(parent, null, null, signal);
       }
       const watermark = readMessageTimelineWatermark(parent);
       if (watermark.kind !== 'ready') {
-        const page = await fetchMessageTimelinePage(parent, null, null);
+        const page = await fetchMessageTimelinePage(parent, null, null, signal);
         trackMessageTimelineLoad(parent, {
           path: 'full',
           reason: watermark.kind,
@@ -266,15 +274,24 @@ export function messageTimelineQueryOptions(
       }
       try {
         const delta = normalizeMessageTimelinePageSenders(
-          await entityMessagesClient.timeline(parent, {
-            cursor: watermark.after,
-            direction: 'newer',
-            limit: 50,
-            include_deleted_threads: parent.type === 'document',
-          })
+          await entityMessagesClient.timeline(
+            parent,
+            {
+              cursor: watermark.after,
+              direction: 'newer',
+              limit: 50,
+              include_deleted_threads: parent.type === 'document',
+            },
+            signal
+          )
         );
         if (delta.previous_cursor) {
-          const page = await fetchMessageTimelinePage(parent, null, null);
+          const page = await fetchMessageTimelinePage(
+            parent,
+            null,
+            null,
+            signal
+          );
           trackMessageTimelineLoad(parent, {
             path: 'full',
             reason: 'delta_overflow',
@@ -296,13 +313,10 @@ export function messageTimelineQueryOptions(
         });
         return merged;
       } catch (error) {
-        if (
-          thrownResultErrorHasCode(error, 'UNAUTHORIZED') ||
-          thrownResultErrorHasCode(error, 'FORBIDDEN')
-        ) {
-          throw error;
-        }
-        const page = await fetchMessageTimelinePage(parent, null, null);
+        // Only a rejected cursor is recovered by a full read. Transport,
+        // server and auth failures would fail it too, doubling outage work.
+        if (!thrownResultErrorHasCode(error, 'BAD_REQUEST')) throw error;
+        const page = await fetchMessageTimelinePage(parent, null, null, signal);
         trackMessageTimelineLoad(parent, {
           path: 'full',
           reason: 'catch_up_error',
@@ -361,11 +375,12 @@ function messageTimelineByIdsQueryOptions(
 ) {
   return queryOptions({
     queryKey: messageKeys.messagesByIds(parent, messageIds).queryKey,
-    queryFn: async (): Promise<MessageListItem[]> => {
-      const page = await entityMessagesClient.list(parent, {
-        ids: messageIds,
-        limit: 100,
-      });
+    queryFn: async ({ signal }): Promise<MessageListItem[]> => {
+      const page = await entityMessagesClient.list(
+        parent,
+        { ids: messageIds, limit: 100 },
+        signal
+      );
       return page.items.map(normalizeChannelMessageSender);
     },
     enabled: messageIds.length > 0,
