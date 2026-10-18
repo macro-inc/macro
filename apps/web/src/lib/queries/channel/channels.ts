@@ -50,6 +50,23 @@ const listChannelsQueryOptions = queryOptions({
   queryFn: ({ signal }) => fetchAllChannels(signal),
 });
 
+function channelMetadataQueryOptions(id: string, enabled: boolean) {
+  return queryOptions({
+    queryKey: channelKeys.withID(id).queryKey,
+    queryFn: () =>
+      throwOnErr(() => storageServiceClient.getChannelMetadata(id)),
+    enabled: enabled && !!id,
+    staleTime: 30_000,
+  });
+}
+
+export function useChannelMetadataQuery(
+  id: Accessor<string>,
+  enabled: Accessor<boolean>
+) {
+  return useQuery(() => channelMetadataQueryOptions(id(), enabled()));
+}
+
 export function useListChannelsQuery() {
   return useQuery(() => listChannelsQueryOptions);
 }
@@ -80,9 +97,12 @@ export function useCachedGraphqlChannelsQuery(
 }
 
 export function invalidateListChannels() {
-  return queryClient.invalidateQueries({
-    queryKey: channelKeys.listChannels.queryKey,
-  });
+  return Promise.all([
+    queryClient.invalidateQueries({
+      queryKey: channelKeys.listChannels.queryKey,
+    }),
+    queryClient.invalidateQueries({ queryKey: channelKeys.withID._def }),
+  ]);
 }
 
 /**
@@ -172,6 +192,9 @@ export function usePatchChannelMutation(callbacks?: PatchChannelCallbacks) {
             channelKeys.listChannels.queryKey,
             (channels) => updateCachedChannel(channels, vars)
           );
+          await queryClient.invalidateQueries({
+            queryKey: channelKeys.withID(vars.channelId).queryKey,
+          });
           if (typeof vars.auto_join_team === 'boolean') {
             await invalidateChannelParticipants(vars.channelId);
           }

@@ -361,3 +361,28 @@ fn test_job_keeps_vitest_module_cache_on_the_cache_volume() {
         "vitest writes its module cache to the mounted path: {test_job}"
     );
 }
+
+#[test]
+fn messaging_is_required_for_affected_paths_without_changing_the_shared_build() {
+    let yaml = web_app_check_main().to_string().unwrap();
+    let shared = job(&yaml, "build", "messaging");
+    assert!(!shared.contains("VITE_LOCAL_SERVERS"));
+    assert!(!shared.contains("FUNCTIONAL_MESSAGING"));
+    assert!(shared.contains("bun run test:functional"));
+    let messaging = job(&yaml, "messaging", "ios-native-check");
+    assert!(messaging.contains("messaging_changed == 'true'"));
+    assert!(messaging.contains("meta-messaging.spec.ts"));
+    assert!(messaging.contains("VITE_LOCAL_SERVERS"));
+    for path in [
+        "src/features/channel/**",
+        "src/components/ui/**",
+        "src/features/entity/**",
+        "src/lib/core/**",
+        "src/lib/queries/**",
+        "bun.lock",
+        "crates/entity_access/**",
+    ] {
+        assert!(yaml.contains(path), "missing dependency: {path}");
+    }
+    assert!(yaml.contains("needs.messaging.result }}\" == \"failure\""));
+}

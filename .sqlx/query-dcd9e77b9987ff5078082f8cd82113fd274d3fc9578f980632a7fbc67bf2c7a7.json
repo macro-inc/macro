@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n            EXISTS(SELECT 1 FROM meta_messaging_customer_alias WHERE connection_id=$1 AND identifier=$2 AND customer_id<>$2)\n            OR EXISTS(SELECT 1 FROM meta_messaging_conversation v JOIN meta_messaging_connection c ON c.id=v.connection_id\n                WHERE v.connection_id=$1 AND v.customer_id=$2 AND $3 AND c.provider='whatsapp'\n                AND v.customer_phone_at IS NOT NULL AND v.customer_phone IS DISTINCT FROM v.customer_id) AS \"invalid_route!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "invalid_route!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "dcd9e77b9987ff5078082f8cd82113fd274d3fc9578f980632a7fbc67bf2c7a7"
+}

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT group_invite_link FROM meta_messaging_conversation WHERE channel_id=$1 AND kind='group' AND group_status<>'deleted'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "group_invite_link",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "5a57f55779f2e81c9fbfa2b57c3189182d368b000ebb9934696b6338ee70a03a"
+}

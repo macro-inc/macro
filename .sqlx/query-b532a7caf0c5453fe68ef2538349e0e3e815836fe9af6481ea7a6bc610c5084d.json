@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT to_jsonb(c) - 'credential' AS \"data!\" FROM meta_messaging_connection c WHERE team_id = $1 ORDER BY id DESC LIMIT 100",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "data!",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "b532a7caf0c5453fe68ef2538349e0e3e815836fe9af6481ea7a6bc610c5084d"
+}

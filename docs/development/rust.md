@@ -53,6 +53,12 @@ have the same build requirements.
 Command definitions live in [rust.just](../../tooling/just/rust.just) and
 [check.just](../../tooling/just/check.just).
 
+## Patched dependencies
+
+Swagger UI 9 is temporarily patched under `vendor/utoipa-swagger-ui` to use
+ZIP 9 without migrating the workspace to Utoipa 6. Read its `PATCH.md` before
+updating either dependency, and retain the vendor overlay in pruned Nix sources.
+
 ## Test the affected packages
 
 Use the package name from the affected `Cargo.toml`, not a guessed spelling of

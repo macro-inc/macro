@@ -264,7 +264,10 @@ pub async fn run() -> anyhow::Result<()> {
             frecency_service,
             ReadonlyEmailPreviewAdapter(email_service),
             channels_service,
-            CallRecordQueryServiceImpl::new(PgCallRepo::new(db.clone())),
+            CallRecordQueryServiceImpl::new(PgCallRepo::new(
+                db.clone(),
+                channels::outbound::pg_channels_repo::PgChannelsRepo::new(db.clone()),
+            )),
             crm::domain::service::NoOpCrmService,
             github_pull_request_service,
         )
@@ -456,7 +459,10 @@ pub async fn run() -> anyhow::Result<()> {
     tracing::info!("initialized email tool context");
 
     let call_service = CallServiceImpl::new(
-        PgCallRepo::new(db.clone()),
+        PgCallRepo::new(
+            db.clone(),
+            channels::outbound::pg_channels_repo::PgChannelsRepo::new(db.clone()),
+        ),
         NoOpCallRtcClient,
         NoOpConnectionService,
         (*entity_access_service).clone(),

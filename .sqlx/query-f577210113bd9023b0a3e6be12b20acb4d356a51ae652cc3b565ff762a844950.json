@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT c.channel_id,m.message_id FROM meta_messaging_message m JOIN meta_messaging_conversation c ON c.connection_id=m.connection_id AND c.customer_id=m.customer_id AND c.kind=m.conversation_kind WHERE m.connection_id=$1 AND m.provider_message_id=$2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "channel_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "message_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "f577210113bd9023b0a3e6be12b20acb4d356a51ae652cc3b565ff762a844950"
+}

@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_attachment SET status='stored',lease_id=NULL,lease_until=NULL WHERE connection_id=$1 AND provider_message_id=$2 AND ordinal=$3 AND lease_id=$4 AND lease_until>now() AND EXISTS (SELECT 1 FROM meta_messaging_message m WHERE m.connection_id=$1 AND m.provider_message_id=$2 AND m.provenance<>'macro_reply' AND NOT EXISTS (SELECT 1 FROM meta_messaging_revision r WHERE r.connection_id=m.connection_id AND r.customer_id=m.customer_id AND r.provider_message_id=m.provider_message_id AND r.direction=m.direction AND r.deleted_at IS NOT NULL))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int2",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f7591ceacb98fba0989a8c25c0c3eaebdb2f5d5e3c79bd54cc98c819c2b290de"
+}

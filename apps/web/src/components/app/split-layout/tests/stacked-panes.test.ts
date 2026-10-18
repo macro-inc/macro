@@ -123,6 +123,22 @@ afterEach(() => {
 });
 
 describe('stacked panes', () => {
+  it.each([false, true])(
+    'returns to the default when every history entry is deleted (multiple=%s)',
+    async (multiple) => {
+      const { manager, active } = setup('/settings/account');
+      const handle = manager.activeSplit()!;
+      if (multiple) handle.replace({ next: documents });
+
+      await handle.removeFromHistory((entry) => entry.id !== 'home');
+
+      expect(active()).toBe('home');
+      expect(handle.history().map((entry) => entry.id)).toEqual(['home']);
+      expect(handle.canGoBack()).toBe(false);
+      expect(handle.canGoForward()).toBe(false);
+    }
+  );
+
   it('opens content in a new pane in front, and going back closes it', () => {
     const { manager, stack, shown, active } = setup('/home');
     const forward = vi.fn();

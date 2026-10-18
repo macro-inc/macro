@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT message_id,customer_id,conversation_kind AS \"conversation_kind: ConversationKind\",direction FROM meta_messaging_message WHERE connection_id = $1 AND provider_message_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "customer_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "conversation_kind: ConversationKind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "direction",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "adc83500fa09e841714704a0ee3be3591443c75b8b43467c98c35bd223684ec4"
+}

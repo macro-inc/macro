@@ -1910,6 +1910,11 @@ where
         self.0.channel.channel.name.as_deref()
     }
 
+    /// Authoritative external binding, including pending provider group setup.
+    async fn messaging_binding(&self) -> &str {
+        self.0.channel.channel.messaging_binding.as_ref()
+    }
+
     /// The channel type.
     async fn channel_type(&self) -> &'static str {
         Self::channel_type_name(self.0.channel.channel.channel_type)

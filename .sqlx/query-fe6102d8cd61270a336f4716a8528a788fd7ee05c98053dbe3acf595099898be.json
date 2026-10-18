@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_history_import SET progress=GREATEST(progress,$3),\n            status=CASE WHEN $4 THEN 'declined' WHEN status='declined' THEN status WHEN $3=100 THEN 'complete' WHEN status='complete' THEN status ELSE 'syncing' END,\n            error_code=CASE WHEN $4 THEN 'history_sharing_declined' ELSE NULL END,updated_at=now()\n            WHERE connection_id=$1 AND connected_at=$2 AND step='waiting' AND error_code IS DISTINCT FROM 'history_permission_lost'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Int2",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fe6102d8cd61270a336f4716a8528a788fd7ee05c98053dbe3acf595099898be"
+}

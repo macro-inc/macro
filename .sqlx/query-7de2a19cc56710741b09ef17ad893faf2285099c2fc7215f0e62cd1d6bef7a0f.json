@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH candidate AS (\n            SELECT s.id FROM meta_messaging_send s\n            WHERE s.state='pending' AND s.available_at<=now() AND s.attempts<20\n              AND NOT EXISTS (SELECT 1 FROM meta_messaging_send earlier\n                  WHERE earlier.connection_id=s.connection_id AND earlier.channel_id=s.channel_id\n                    AND earlier.state IN ('pending','sending')\n                    AND (earlier.created_at,earlier.id)<(s.created_at,s.id))\n            ORDER BY s.created_at,s.id FOR UPDATE SKIP LOCKED LIMIT 1\n        ) UPDATE meta_messaging_send s SET state='sending',lease_id=$1,dispatch_started_at=NULL,\n            lease_until=now()+interval '5 minutes',attempts=attempts+1,updated_at=now()\n          FROM candidate c WHERE s.id=c.id\n          RETURNING s.id,s.connection_id,s.channel_id,s.user_id,s.created_at,s.payload,s.attempts\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "connection_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "channel_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "payload",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 6,
+        "name": "attempts",
+        "type_info": "Int2"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "7de2a19cc56710741b09ef17ad893faf2285099c2fc7215f0e62cd1d6bef7a0f"
+}

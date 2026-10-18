@@ -44,7 +44,8 @@ DMs, and the shared message store other domains discuss things on.
 
 ## Checks
 
-- `cargo test -p channels` (`SQLX_OFFLINE` unset).
+- `cargo test -p channels --all-features` (`SQLX_OFFLINE` unset); default features
+  do not execute the mutation service or provider lifecycle guard tests.
 
 ## Gotchas
 
@@ -56,3 +57,17 @@ DMs, and the shared message store other domains discuss things on.
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/db.md`
+
+The notification port accepts external display names and an optional stable source ID
+for recovered channel-message notifications. Ordinary posts retain fresh IDs. Callers
+select authorized recipients; this port does not invoke human-post agent triggers.
+
+## Provider-managed groups
+
+`ChannelInfo.messaging_binding` is set atomically for direct bindings and group setup;
+channel detail, lists and GraphQL expose the same enum. Native detail reads require
+view access, including public and unjoined team viewers; mutation role checks stay separate. The domain blocks
+local name/visibility mutations and fails generic deletion closed for these channels; provider-owned explicit deletion
+revalidates human authority and synchronizes through native teardown. DSS uses explicit human-authorized messaging deletion, so its generic native
+delete remains fail closed for groups. Private-chat reuse selects only native bindings, excluding every external conversation. `pg_channels_repo/provider.rs` owns transactional provider
+subject changes; DSS publishes the returned ordinary channel event.

@@ -154,7 +154,7 @@ export function globalRemoveFromSplitHistory(
 ) {
   for (const split of manager.splits()) {
     const handle = manager.getSplit(split.id);
-    handle?.removeFromHistory(predicate);
+    void handle?.removeFromHistory(predicate);
   }
 }
 

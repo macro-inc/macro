@@ -1,0 +1,50 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT c.channel_id,m.message_id,m.effect_revision,m.published_revision,m.provenance,m.direction FROM meta_messaging_message m JOIN meta_messaging_conversation c ON c.connection_id = m.connection_id AND c.customer_id = m.customer_id AND c.kind=m.conversation_kind WHERE m.published_revision<m.effect_revision AND m.native_retry_at<=now() ORDER BY m.native_retry_at,m.created_at,m.message_id LIMIT 100",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "channel_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "message_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "effect_revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "published_revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "provenance",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "direction",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "f44788824ab9d02d2577e8a2cee8df8b8ad77d880dc404c31946f9e0362d9504"
+}

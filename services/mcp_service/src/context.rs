@@ -213,7 +213,10 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
             ReadonlyEmailPreviewAdapter(email_service),
             channels_service,
             call::domain::service::CallRecordQueryServiceImpl::new(
-                call::outbound::pg_call_repo::PgCallRepo::new(db.clone()),
+                call::outbound::pg_call_repo::PgCallRepo::new(
+                    db.clone(),
+                    channels::outbound::pg_channels_repo::PgChannelsRepo::new(db.clone()),
+                ),
             ),
             crm::domain::service::NoOpCrmService,
             github_pull_request_service,
@@ -358,7 +361,10 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
     );
 
     let call_service = call::domain::service::CallServiceImpl::new(
-        call::outbound::pg_call_repo::PgCallRepo::new(db.clone()),
+        call::outbound::pg_call_repo::PgCallRepo::new(
+            db.clone(),
+            channels::outbound::pg_channels_repo::PgChannelsRepo::new(db.clone()),
+        ),
         NoOpCallRtcClient,
         NoOpConnectionService,
         EntityAccessServiceImpl::new(PgAccessRepository::new(db.clone())),

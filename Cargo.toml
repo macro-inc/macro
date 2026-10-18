@@ -1,5 +1,6 @@
 [workspace]
 resolver = "2"
+exclude = ["vendor/utoipa-swagger-ui"]
 
 members = [
   "crates/access_requests",
@@ -99,6 +100,7 @@ members = [
   "crates/maybe_send",
   "crates/memory",
   "crates/messages",
+  "crates/meta_messaging",
   "crates/model_owner",
   "crates/mcp_select",
   "crates/mcp_toolset",
@@ -456,12 +458,16 @@ serde_urlencoded = "0.7.1"
 strum_macros = "0.27.1"
 unicode-segmentation = "1.9.0"
 url = "2.5.0"
-zip = "=2.4.2"
-ammonia = "4.1.7"
+# Preserve the existing ZIP 2 codec set without enabling newly added formats.
+zip = { version = "=9.0.5", default-features = false, features = ["aes-crypto", "bzip2", "deflate64", "deflate", "lzma", "time", "zstd", "xz"] }
+ammonia = "4.1.8"
 html-escape = "0.2"
 subtle = "2.6.1"
 
 [patch.crates-io]
+# Keep the Utoipa 5 API while replacing Swagger's vulnerable ZIP build dependency.
+# Remove when a compatible upstream release includes ZIP >=9.0.5.
+utoipa-swagger-ui = { path = "vendor/utoipa-swagger-ui" }
 # Only replaces tungstenite 0.27 (GraphQL subscriptions); 0.28/0.29 stay upstream.
 tungstenite = { git = "https://github.com/signalapp/tungstenite-rs", rev = "a1837ccfe96b6895a57352d7f0112e4557516c27" }
 

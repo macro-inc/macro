@@ -1,5 +1,10 @@
+import { openBulkEditModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
 import type { EntityData } from '@entity';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+beforeEach(() => {
+  vi.mocked(openBulkEditModal).mockClear();
+});
 
 vi.mock('@app/features/entity/bulk-edit/BulkEditEntityModal', () => ({
   openBulkEditModal: vi.fn(),
@@ -27,6 +32,7 @@ const channel = (
 ) =>
   entity('channel', {
     channelType: 'private',
+    messagingBinding: 'native',
     ...overrides,
   });
 
@@ -104,4 +110,19 @@ describe('makeRenameAction.canExecute', () => {
     expect(canExecute(entity('email'))).toBe(false);
     expect(canExecute(entity('foreign'))).toBe(false);
   });
+});
+
+it('uses native metadata for rename with no messaging lookup', async () => {
+  const action = makeRenameAction({ userId: () => ME });
+  for (const messagingBinding of ['whatsapp_group', undefined] as const) {
+    const group = channel({ messagingBinding });
+    expect(canExecute(group)).toBe(false);
+    await action.execute([group]);
+  }
+  expect(openBulkEditModal).not.toHaveBeenCalled();
+  await action.execute([channel()]);
+  expect(openBulkEditModal).toHaveBeenCalledOnce();
+  expect(canExecute(channel({ messagingBinding: 'whatsapp_direct' }))).toBe(
+    true
+  );
 });

@@ -1,7 +1,7 @@
 import { MACRO_AGENT_PRINCIPAL_ID } from '@core/constant/macroAgent';
 import { MACRO_SYSTEM_PRINCIPAL_ID } from '@core/constant/macroSystem';
 import { createRoot } from 'solid-js';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   createMockActivityContext,
   MOCK_VIEWER_ID,
@@ -55,5 +55,17 @@ describe('createActorName', () => {
 
   it('never says "Routine" for ids it cannot parse', () => {
     expect(nameOf(context, 'system:nightly')).toBe('Unknown');
+  });
+
+  it('labels external customer activity without looking up a Macro user or bot', () => {
+    const displayName = vi.fn(() => () => undefined);
+    const botName = vi.fn(() => () => undefined);
+    const external = createMockActivityContext({ displayName, botName });
+    expect(
+      nameOf(external, 'external|01900000-0000-7000-8000-000000000001')
+    ).toBe('External sender');
+    expect(nameOf(external, 'external|not-a-uuid')).toBe('Unknown');
+    expect(displayName).not.toHaveBeenCalled();
+    expect(botName).not.toHaveBeenCalled();
   });
 });

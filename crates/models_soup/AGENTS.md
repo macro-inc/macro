@@ -40,7 +40,9 @@ model.
 
 ## Checks
 
-- `cargo test -p models_soup` (`SQLX_OFFLINE` unset).
+- `cargo test -p models_soup --all-features` (`SQLX_OFFLINE` unset); the standalone
+  schema build must enable schemas for nested channel models without relying on
+  downstream Cargo feature unification.
 
 ## Related
 

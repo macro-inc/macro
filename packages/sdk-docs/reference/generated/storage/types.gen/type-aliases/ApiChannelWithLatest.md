@@ -1,6 +1,6 @@
 # Type Alias: ApiChannelWithLatest
 
-> **ApiChannelWithLatest** = \{ `agent_dm?`: `null` \| [`AgentDmProfile`](AgentDmProfile.md); `auto_join_team`: `boolean`; `channel_type`: [`ApiChannelListType`](ApiChannelListType.md); `created_at`: `string`; `frecency_score?`: `number` \| `null`; `id`: `string`; `interacted_at?`: `string` \| `null`; `is_participant`: `boolean`; `latest_message?`: `null` \| [`ApiChannelListMessage`](ApiChannelListMessage.md); `latest_non_thread_message?`: `null` \| [`ApiChannelListMessage`](ApiChannelListMessage.md); `name?`: `string` \| `null`; `org_id?`: `number` \| `null`; `owner_id`: `string`; `participants`: [`ApiChannelListParticipant`](ApiChannelListParticipant.md)[]; `team_id?`: `string` \| `null`; `updated_at`: `string`; `viewed_at?`: `string` \| `null`; \}
+> **ApiChannelWithLatest** = \{ `agent_dm?`: `null` \| [`AgentDmProfile`](AgentDmProfile.md); `auto_join_team`: `boolean`; `channel_type`: [`ApiChannelListType`](ApiChannelListType.md); `created_at`: `string`; `frecency_score?`: `number` \| `null`; `id`: `string`; `interacted_at?`: `string` \| `null`; `is_participant`: `boolean`; `latest_message?`: `null` \| [`ApiChannelListMessage`](ApiChannelListMessage.md); `latest_non_thread_message?`: `null` \| [`ApiChannelListMessage`](ApiChannelListMessage.md); `messaging_binding`: [`MessagingBinding`](MessagingBinding.md); `name?`: `string` \| `null`; `org_id?`: `number` \| `null`; `owner_id`: `string`; `participants`: [`ApiChannelListParticipant`](ApiChannelListParticipant.md)[]; `team_id?`: `string` \| `null`; `updated_at`: `string`; `viewed_at?`: `string` \| `null`; \}
 
 Channel list response item.
 
@@ -18,6 +18,7 @@ Channel list response item.
 | <a id="property-is_participant"></a> `is_participant` | `boolean` | Whether the requesting user is an active participant of the channel. |
 | <a id="property-latest_message"></a> `latest_message?` | `null` \| [`ApiChannelListMessage`](ApiChannelListMessage.md) | - |
 | <a id="property-latest_non_thread_message"></a> `latest_non_thread_message?` | `null` \| [`ApiChannelListMessage`](ApiChannelListMessage.md) | - |
+| <a id="property-messaging_binding"></a> `messaging_binding` | [`MessagingBinding`](MessagingBinding.md) | Authoritative external binding, including pending provider group setup. |
 | <a id="property-name"></a> `name?` | `string` \| `null` | Channel name. |
 | <a id="property-org_id"></a> `org_id?` | `number` \| `null` | Organization id. |
 | <a id="property-owner_id"></a> `owner_id` | `string` | Channel owner user id. |

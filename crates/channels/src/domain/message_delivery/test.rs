@@ -86,6 +86,8 @@ fn repo() -> MockChannelRepo {
     repo.expect_get_channel_metadata().returning(|_, _| {
         Box::pin(async {
             Ok(ChannelMetadata {
+                auto_join_team: false,
+                messaging_binding: Default::default(),
                 channel_type: ChannelType::Private,
                 channel_name: "Test".into(),
             })
@@ -94,6 +96,8 @@ fn repo() -> MockChannelRepo {
     repo.expect_get_channel_info().returning(|id| {
         Box::pin(async move {
             Ok(ChannelInfo {
+                auto_join_team: false,
+                messaging_binding: Default::default(),
                 id,
                 name: Some("Test".into()),
                 channel_type: ChannelType::Private,

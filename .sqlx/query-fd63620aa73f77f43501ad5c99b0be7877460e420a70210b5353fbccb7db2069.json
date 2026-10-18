@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS(SELECT 1 FROM meta_messaging_revision a JOIN meta_messaging_revision b ON b.connection_id=a.connection_id AND b.provider_message_id=a.provider_message_id WHERE a.connection_id=$1 AND a.customer_id=$2 AND b.customer_id=$3 AND a.direction<>b.direction AND NOT EXISTS(SELECT 1 FROM meta_messaging_message m WHERE m.connection_id=a.connection_id AND m.customer_id=$2 AND m.provider_message_id=a.provider_message_id))",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "exists",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "fd63620aa73f77f43501ad5c99b0be7877460e420a70210b5353fbccb7db2069"
+}

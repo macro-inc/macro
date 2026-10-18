@@ -210,6 +210,7 @@ fn list_channel(id: Uuid, updated_at_seconds: i64) -> ChannelWithLatest {
         agent_dm: None,
         channel: ChannelWithParticipants {
             channel: ChannelListItem {
+                messaging_binding: Default::default(),
                 id,
                 name: Some(format!("channel-{id}")),
                 channel_type: DomainChannelType::Private,
@@ -249,6 +250,7 @@ async fn channel_list_returns_an_opaque_cursor_page_and_honors_limit() {
     let page: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(page["items"].as_array().unwrap().len(), 1);
     assert_eq!(page["items"][0]["id"], first_id.to_string());
+    assert_eq!(page["items"][0]["messaging_binding"], "native");
     assert!(page["next_cursor"].as_str().is_some());
     assert_eq!(
         tracker.calls(),

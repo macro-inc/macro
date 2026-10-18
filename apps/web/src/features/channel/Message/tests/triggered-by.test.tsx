@@ -36,6 +36,7 @@ vi.mock('../Message', () => {
       Content: Nothing,
       SenderIcon: Nothing,
       SenderName: Nothing,
+      ExternalBadge: Nothing,
       AgentBadge: Nothing,
       Timestamp: Nothing,
       EditedIndicator: Nothing,

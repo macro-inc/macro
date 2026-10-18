@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO meta_messaging_customer_alias(connection_id,identifier,customer_id) VALUES ($1,$2,$3) ON CONFLICT (connection_id,identifier) DO UPDATE SET customer_id=EXCLUDED.customer_id",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "56ae398407e00df941886d06c0dfe297e3aef149d53d9447c2ea5b6ff793e1ce"
+}

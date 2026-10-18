@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT to_jsonb(c) - 'credential' AS \"data!\" FROM meta_messaging_connection c WHERE provider = 'whatsapp' AND business_account_id = $1 LIMIT 100",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "data!",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "857bccc719a09ddd646403337b91bb85ca2b678622593f4843073fc9effa410f"
+}

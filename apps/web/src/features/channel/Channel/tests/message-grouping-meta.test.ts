@@ -38,6 +38,16 @@ function createMessage(
 }
 
 describe('message grouping meta', () => {
+  it('separates internal notes and external replies by visible author in both directions', () => {
+    const previous = createMessage('m1', '2026-02-20T09:00:00.000Z');
+    const current = createMessage('m2', '2026-02-20T09:01:00.000Z');
+    current.imported_author = { name: 'Business · sent via WhatsApp' };
+    expect(shouldGroupWithPreviousMessage(current, previous, true)).toBe(false);
+    previous.imported_author = current.imported_author;
+    expect(shouldGroupWithPreviousMessage(current, previous, true)).toBe(true);
+    current.imported_author = null;
+    expect(shouldGroupWithPreviousMessage(current, previous, true)).toBe(false);
+  });
   it('groups same-author messages within the five-minute window', () => {
     const previous = createMessage('m1', '2026-02-20T09:00:00.000Z');
     const current = createMessage('m2', '2026-02-20T09:05:00.000Z');
@@ -129,4 +139,13 @@ describe('message grouping meta', () => {
 
     expect(shouldGroupWithPreviousMessage(current, previous)).toBe(false);
   });
+});
+
+it('preserves ordinary imported-message grouping when the visible import label changes', () => {
+  const previous = createMessage('m1', '2026-02-20T09:00:00.000Z');
+  const current = createMessage('m2', '2026-02-20T09:01:00.000Z');
+  previous.imported_author = { name: 'Slack author before rename' };
+  current.imported_author = { name: 'Slack author after rename' };
+  expect(shouldGroupWithPreviousMessage(current, previous)).toBe(true);
+  expect(shouldGroupWithPreviousMessage(current, previous, true)).toBe(false);
 });

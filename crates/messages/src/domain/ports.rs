@@ -332,13 +332,24 @@ pub struct ReactionResult {
     pub changed: bool,
 }
 
+/// Parent existence and provider-owned mutation policy from the same snapshot.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ParentState {
+    /// Missing or deleted parent.
+    Missing,
+    /// Parent permits ordinary native messaging.
+    Native,
+    /// Human mutations are controlled by an external provider.
+    ProviderManaged,
+}
+
 /// Persistence boundary. Implementations enforce parent/thread integrity atomically.
 pub trait MessageRepository: Send + Sync + 'static {
-    /// Whether the parent still exists and permits messaging lifecycle-wise.
-    fn parent_exists(
+    /// Existence and native mutation policy from one authoritative parent lookup.
+    fn parent_state(
         &self,
         parent: &MessageParent,
-    ) -> impl Future<Output = Result<bool, MessageError>> + Send;
+    ) -> impl Future<Output = Result<ParentState, MessageError>> + Send;
     /// File type of a live document, for document-specific anchor validation.
     fn document_file_type(
         &self,

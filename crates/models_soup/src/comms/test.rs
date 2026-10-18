@@ -5,6 +5,7 @@ fn sample_channel(is_participant: bool) -> SoupChannel {
     SoupChannel {
         channel: ChannelWithParticipants {
             channel: Channel {
+                messaging_binding: Default::default(),
                 id: ChannelId(Uuid::nil()),
                 name: Some("general".to_string()),
                 channel_type: ChannelType::Team,

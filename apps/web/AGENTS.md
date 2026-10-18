@@ -6,6 +6,8 @@
 - `bun run format`: format changes with biome 
 - `bun run knip`: to check for dead code
 - Email rendering is isolated in `packages/email-renderer` at the repository root. Run `just test-email-rendering` for its Node and Chromium suites. Add fixtures under `packages/email-renderer/tests/fixtures`, run `just test-email-rendering-update`, and review changed images. These are renderer tests, not inbox e2e.
+- `bun run test:functional` runs lightweight fixtures without a prebuilt app. Set `FUNCTIONAL_MESSAGING=1` to include bundled messaging scenarios after building `dist` with the environment in [the messaging test guide](../../docs/META_MESSAGING_TESTING.md#browser-journeys). PR CI keeps lightweight coverage and runs the bundled messaging scenario in its
+required path-gated job, with an isolated build. Screenshot paths belong to Playwright's per-test output directory.
 - The app does not register a service worker. Keep `public/sw.js` as a retirement
   endpoint for existing installations; see the [startup bundle rule](../../.agents/rules/web/startup-bundle.md).
   Loro uses async WASM loading and HTML preloads independently of service workers.
@@ -192,3 +194,31 @@ On a physical iPhone, WKWebView still synthesises the compatibility `mousedown`/
 3. **Run it on the device, not the Simulator**, with Safari Web Inspector attached (Develop → the iPhone → the Macro webview), filter the console by the prefix, reproduce, and read the order. A `mousedown` arriving after a `pointerdown` logged with `defaultPrevented: true`, followed by `focusout` whose `relatedTarget` is a container, is this bug.
 
 4. **Strip the instrumentation before committing.**
+
+## Instagram OAuth
+
+Customer timeline rows keep a visible External label so provider display names
+cannot impersonate a Macro teammate or a reply submitted through Macro.
+
+Keep `public/instagram-callback.html` standalone and free of app boot, telemetry,
+external assets and URL logging. Completion belongs to the initiating Settings
+window and uses the authenticated Meta query mutation with its in-memory proof.
+Use the shared SettingsPage, SettingsSection and SettingsRow for provider account
+details; history import has one review dialog, not a nested account dialog.
+Show previous connections as compact reconnect rows, without an accordion or a
+large generic permissions section. Keep the account card focused on status and actions.
+Clear transient login instructions when the attempt settles; account rows own
+the current connection status, and failed attempts retain their error message.
+See `docs/META_MESSAGING.md` at repository root for the server boundary and setup.
+
+## WhatsApp groups
+
+`CreateChannelModal` offers ready Platform accounts connected by the caller.
+`useMetaBinding` caches the full binding so pending group setup cannot fall through
+to an internal composer; `useMetaConversation` selects only bound messaging data.
+Group controls live in the messaging feature and the existing desktop/mobile
+Participants surfaces. Keep discard and remote-delete confirmations distinct, and
+fetch invite links only through the authorized action. The shared functional
+messaging journeys cover these flows using fixtures, not live Meta effects.
+
+Native metadata loading/error state gates the composer and exposes a retry; unknown metadata never implies native. Participants/team controls read channel detail, independent of sidebar membership. Keep cached account rows mounted through refresh errors so transient PIN input survives only in memory.

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_history_import SET unavailable_media=true WHERE connection_id=$1 AND connected_at=$2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4e3fb53faa59ee7ca2387369a298a3a91ed89cf2bdfa72ca4b4df82f94d0d636"
+}

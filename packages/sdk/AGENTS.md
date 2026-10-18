@@ -31,6 +31,9 @@ explicitly classified in `src/coverage/skipped.ts`.
 
 - Regenerate Rust OpenAPI and web service clients before `bun run sync-specs &&
   bun run generate`; do not copy deployed schemas over a local API change.
+- After SDK contract changes, regenerate both `../sdk-docs` and
+  `../code-mode-sdk` with `bun run generate`; CI also checks the backend SDK
+  documentation catalog and Deno bundle.
 - Workspace advanced filters use the server's serialized AST names, not Rust
   enum variant names. Validate new filter examples against the real local API.
 - Async iterators are lazy; `limit` is page size. Preserve filters on every page

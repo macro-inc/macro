@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_receipt SET status = CASE WHEN $4::integer IS NOT NULL AND (attempts < 20 OR $3='account_state_changed') AND created_at>now()-interval '30 days' THEN 'pending' WHEN $3::text IS NULL AND decode_failures=0 THEN 'complete' ELSE 'failed' END, completed_at=CASE WHEN $3::text IS NULL AND decode_failures=0 THEN COALESCE(completed_at,now()) ELSE completed_at END, error_code = COALESCE($3,CASE WHEN decode_failures>0 THEN 'invalid_provider_payload' END), available_at = now() + make_interval(secs => COALESCE($4, 0)), lease_id = NULL, lease_until = NULL WHERE id = $1 AND lease_id = $2 AND lease_until > now() AND status = 'processing'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b0273f7de30dfb9ecf48ddd2c19c5fea3d03aa28ac24ac0d905b7f4d4e623eed"
+}

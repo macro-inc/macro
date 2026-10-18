@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT customer_id,customer_phone,kind AS \"kind: ConversationKind\",group_status AS \"group_status: GroupStatus\" FROM meta_messaging_conversation WHERE connection_id=$1 AND channel_id=$2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "customer_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "customer_phone",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "kind: ConversationKind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "group_status: GroupStatus",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "9e3349780b9d2f60dbcff0653014dee2ebc2bcf5d508d496cfc30b071119313b"
+}

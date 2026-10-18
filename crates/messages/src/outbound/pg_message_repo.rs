@@ -6,6 +6,8 @@ use sqlx::{PgPool, Postgres, Transaction, types::Json};
 use std::collections::HashMap;
 use uuid::Uuid;
 
+mod external;
+pub use external::{ExternalMessageRevision, ExternalReplyAttribution};
 mod historical;
 mod timeline;
 
@@ -562,25 +564,39 @@ impl MessageRepository for PgMessageRepository {
         .map_err(database_error)
     }
 
-    async fn parent_exists(&self, parent: &MessageParent) -> Result<bool, MessageError> {
+    async fn parent_state(&self, parent: &MessageParent) -> Result<ParentState, MessageError> {
         let exists = match parent {
             MessageParent::Initiative(id) => {
-                let Some(initiatives) = &self.initiatives else { return Ok(false); };
+                let Some(initiatives) = &self.initiatives else { return Ok(ParentState::Missing); };
                 return initiatives.read_basic(initiative::domain::models::InitiativeId::from_uuid(*id))
-                    .await.map(|value| value.is_some())
+                    .await.map(|value| if value.is_some() { ParentState::Native } else { ParentState::Missing })
                     .map_err(|error| MessageError::Repository(rootcause::report!(error).into()));
             }
             MessageParent::CrmCompany(_) | MessageParent::CrmContact(_) => {
-                return self.crm_parent_exists(parent).await;
+                return self.crm_parent_exists(parent).await.map(|exists| if exists { ParentState::Native } else { ParentState::Missing });
             }
             MessageParent::Document(_) => sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM "Document" WHERE id = $1 AND "deletedAt" IS NULL) AS "exists!""#, parent.entity_id())
                 .fetch_one(&self.pool).await,
-            MessageParent::Channel(id) => sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM comms_channels WHERE id = $1) AS "exists!""#, id)
-                .fetch_one(&self.pool).await,
+            MessageParent::Channel(id) => {
+                return sqlx::query_scalar!(r#"SELECT messaging_binding = 'whatsapp_group' AS "managed!" FROM comms_channels WHERE id = $1"#, id)
+                    .fetch_optional(&self.pool).await.map(|managed| match managed {
+                        None => ParentState::Missing,
+                        Some(true) => ParentState::ProviderManaged,
+                        Some(false) => ParentState::Native,
+                    }).map_err(database_error);
+            },
             MessageParent::Call(id) => sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM calls WHERE id = $1 UNION ALL SELECT 1 FROM call_records WHERE id = $1) AS "exists!""#, id)
                 .fetch_one(&self.pool).await,
         };
-        exists.map_err(database_error)
+        exists
+            .map(|exists| {
+                if exists {
+                    ParentState::Native
+                } else {
+                    ParentState::Missing
+                }
+            })
+            .map_err(database_error)
     }
 
     async fn get(&self, parent: &MessageParent, id: Uuid) -> Result<Option<Message>, MessageError> {

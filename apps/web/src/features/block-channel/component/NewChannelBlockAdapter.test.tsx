@@ -80,8 +80,22 @@ vi.mock('@components/app/split-layout/components/SplitFileMenu', () => ({}));
 vi.mock('@components/app/split-layout/components/SplitLabel', () => ({}));
 vi.mock('@components/app/split-layout/components/SplitHeader', () => ({}));
 vi.mock('@core/context/channels', () => ({
+  useChannelType: () => () => 'private',
+  useChannelMessagingBinding: () => ({
+    value: () => 'native',
+    error: () => null,
+    isPending: () => false,
+    refetch: vi.fn(),
+  }),
   useChannel: () => () => undefined,
   useChannelCanCall: () => () => true,
+}));
+// These tests isolate route targeting in an ordinary channel. Customer call
+// suppression is covered by the interaction tests and bundled browser harness.
+vi.mock('@app/features/meta-messaging/queries/channel-messaging', () => ({
+  createChannelInteraction: () => ({
+    interaction: () => ({ kind: 'internal' }),
+  }),
 }));
 vi.mock('@core/context/user', () => ({}));
 vi.mock('@queries/call/call', () => ({}));

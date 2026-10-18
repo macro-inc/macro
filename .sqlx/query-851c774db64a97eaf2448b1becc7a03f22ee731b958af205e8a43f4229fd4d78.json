@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_conversation c SET customer_phone=$3,customer_phone_at=$4\n            WHERE connection_id=$1 AND kind='direct' AND customer_id=$2 AND (customer_phone_at IS NULL OR customer_phone_at<=$4)\n            AND NOT EXISTS (SELECT 1 FROM meta_messaging_conversation other WHERE other.connection_id=$1 AND other.kind='direct'\n                AND other.customer_id<>$2 AND other.customer_phone=$3 AND other.customer_phone_at>$4)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "851c774db64a97eaf2448b1becc7a03f22ee731b958af205e8a43f4229fd4d78"
+}

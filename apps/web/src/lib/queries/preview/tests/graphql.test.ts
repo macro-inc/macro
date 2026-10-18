@@ -303,6 +303,7 @@ describe('GraphQL item previews', () => {
   it('uses a cached viewer-relative direct-message name when available', () => {
     const record = {
       __typename: 'GraphqlSoupChannel',
+      messagingBinding: 'native',
       id: 'channel-1',
       displayName: 'Jordan',
       channelDisplayName: null,
@@ -319,6 +320,7 @@ describe('GraphQL item previews', () => {
   it('leaves unnamed direct messages on the viewer-relative REST path', () => {
     const record = {
       __typename: 'GraphqlSoupChannel',
+      messagingBinding: 'native',
       id: 'channel-1',
       displayName: null,
       channelDisplayName: null,

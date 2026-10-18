@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO meta_messaging_revision (connection_id,customer_id,provider_message_id,direction,content,edit_number,edited_at,deleted_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT (connection_id,customer_id,provider_message_id) DO UPDATE SET content=EXCLUDED.content,edit_number=GREATEST(meta_messaging_revision.edit_number,EXCLUDED.edit_number),edited_at=EXCLUDED.edited_at,deleted_at=EXCLUDED.deleted_at WHERE meta_messaging_revision.deleted_at IS NULL AND (EXCLUDED.deleted_at IS NOT NULL OR EXCLUDED.edit_number>meta_messaging_revision.edit_number)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Int8",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b29098dabf882445501a0579e9821cb7e4f429741e74967b2f73a971e42a4ac0"
+}

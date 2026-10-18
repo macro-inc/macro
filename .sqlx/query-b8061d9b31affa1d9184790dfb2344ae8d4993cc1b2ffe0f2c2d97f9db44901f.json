@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO meta_messaging_connection (id,team_id,user_id,provider,account_id,business_account_id,display_name,credential,credential_expires_at,status,connected_at,developer_account,human_agent_approved,whatsapp_mode,registration_status)\n               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'connecting',now(),$10,$11,$12,$13)\n               ON CONFLICT (id) DO UPDATE SET credential = EXCLUDED.credential, credential_expires_at = EXCLUDED.credential_expires_at,\n                   user_id = EXCLUDED.user_id, display_name = EXCLUDED.display_name, status = 'connecting',\n                   human_agent_approved = EXCLUDED.human_agent_approved, whatsapp_mode=EXCLUDED.whatsapp_mode,\n                   registration_status=CASE WHEN EXCLUDED.registration_status='registered' THEN 'registered'\n                       WHEN meta_messaging_connection.registration_status IN ('unconfirmed','rate_limited') THEN meta_messaging_connection.registration_status ELSE EXCLUDED.registration_status END,\n                   connected_at = now(), health_error = NULL, checked_at = NULL, updated_at = now()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Bytea",
+        "Timestamptz",
+        "Bool",
+        "Bool",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b8061d9b31affa1d9184790dfb2344ae8d4993cc1b2ffe0f2c2d97f9db44901f"
+}

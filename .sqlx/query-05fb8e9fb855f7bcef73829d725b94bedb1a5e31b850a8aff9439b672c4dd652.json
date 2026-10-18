@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM meta_messaging_revision r WHERE connection_id=$1 AND customer_id=$2 AND NOT EXISTS(SELECT 1 FROM meta_messaging_message m WHERE m.connection_id=r.connection_id AND m.customer_id=$2 AND m.provider_message_id=r.provider_message_id)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "05fb8e9fb855f7bcef73829d725b94bedb1a5e31b850a8aff9439b672c4dd652"
+}

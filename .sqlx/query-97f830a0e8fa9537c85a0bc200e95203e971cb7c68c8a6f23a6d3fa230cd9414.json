@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH fence AS MATERIALIZED (SELECT clock_timestamp() AS at),\n            deadline AS (SELECT at, at - make_interval(secs => $5::integer) AS oldest FROM fence)\n            UPDATE meta_messaging_send s SET\n                state=CASE WHEN s.created_at<=f.oldest THEN 'failed' ELSE 'sending' END,\n                error_code=CASE WHEN s.created_at<=f.oldest THEN 'send_expired' ELSE NULL END,\n                payload=CASE WHEN s.created_at<=f.oldest THEN s.payload ELSE jsonb_set(s.payload,'{rendered_text}',to_jsonb($3::text)) END,\n                dispatch_started_at=CASE WHEN s.created_at<=f.oldest THEN NULL ELSE f.at END,\n                lease_id=CASE WHEN s.created_at<=f.oldest THEN NULL ELSE s.lease_id END,\n                lease_until=CASE WHEN s.created_at<=f.oldest THEN NULL ELSE f.at+interval '5 minutes' END,\n                updated_at=f.at\n            FROM deadline f WHERE s.id=$1 AND s.lease_id=$2 AND s.lease_until>f.at\n              AND s.dispatch_started_at IS NULL\n              AND s.provider_message_id IS NULL AND s.state='sending' AND s.connection_id=$4\n            RETURNING s.state='failed' AS \"expired!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "expired!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "97f830a0e8fa9537c85a0bc200e95203e971cb7c68c8a6f23a6d3fa230cd9414"
+}

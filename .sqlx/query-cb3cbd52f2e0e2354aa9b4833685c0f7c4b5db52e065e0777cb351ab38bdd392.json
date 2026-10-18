@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO meta_messaging_status (connection_id,provider_message_id,state) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cb3cbd52f2e0e2354aa9b4833685c0f7c4b5db52e065e0777cb351ab38bdd392"
+}

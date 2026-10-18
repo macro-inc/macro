@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT credential FROM meta_messaging_connection WHERE id = $1 AND status IN ('connected','connecting','error')",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "credential",
+        "type_info": "Bytea"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "9848b9fe7bea2b60f0360b7bf9034a5f51a5edd8922dde84399687363f258bbf"
+}

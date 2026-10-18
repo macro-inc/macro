@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS(SELECT 1 FROM meta_messaging_conversation WHERE channel_id=$1 AND connection_id=$2 AND kind='group' AND group_status='deleted') AS \"allowed!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "allowed!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "6de7617d2493264bd553d805bdfad9f76481d300d6b85e7994bd16c4a1409df8"
+}

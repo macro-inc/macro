@@ -4,6 +4,7 @@ import {
   type SearchDocumentWire,
   selectRecords,
 } from '@graphql-cache/index';
+import { MessagingBinding } from '@service-storage/generated/schemas/messagingBinding';
 import {
   type GraphqlChannelQuickAccessFieldsFragment,
   GraphqlChannelQuickAccessFieldsFragmentDoc,
@@ -16,6 +17,7 @@ export type CachedGraphqlChannel = {
   name: string;
   ownerId: string;
   channelType: 'direct_message' | 'private' | 'public' | 'team';
+  messagingBinding?: MessagingBinding;
   participantIds: string[];
   createdAt: string;
   updatedAt: string;
@@ -63,6 +65,9 @@ export async function materializeCachedGraphqlChannels(
         name: channel.name ?? '',
         ownerId: channel.ownerId,
         channelType: normalizeChannelType(channel.channelType),
+        messagingBinding: Object.values(MessagingBinding).find(
+          (value) => value === channel.messagingBinding
+        ),
         participantIds: channel.participants.map(({ userId }) => userId),
         createdAt: channel.createdAt,
         updatedAt: channel.updatedAt,

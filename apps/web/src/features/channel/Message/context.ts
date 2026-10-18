@@ -1,6 +1,14 @@
 import type { MessageActions, MessageData } from '@core/messages/types';
 import { type Accessor, createContext, useContext } from 'solid-js';
 
+const CustomerConversationContext = createContext<Accessor<boolean>>(
+  () => false
+);
+export const CustomerConversationProvider =
+  CustomerConversationContext.Provider;
+export const useCustomerConversation = () =>
+  useContext(CustomerConversationContext);
+
 const MessageContext = createContext<Accessor<MessageData>>();
 const MessageActionsContext = createContext<MessageActions>();
 

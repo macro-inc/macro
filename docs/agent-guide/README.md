@@ -54,3 +54,13 @@ hosted Google/SSO redirect allowlist does not include arbitrary hostnames.
 Email magic links retain the page's HTTP or HTTPS scheme and port.
 On allowed OAuth origins such as `https://localhost`, standalone Vite uses the
 session-code handoff to establish cookies on the local hostname after SSO.
+
+### Instagram account connections
+
+In Settings → Integrations → Accounts, connect/reconnect Instagram from the
+configured web origin. Allow the popup and keep the initiating Settings window
+open. The static `/app/instagram-callback.html` return page clears OAuth parameters
+and sends the result only to its same-origin opener; Settings performs authenticated
+completion with an in-memory browser proof. If cancelled, expired, reloaded, or
+signed in as another Macro account, start again from Settings. Follow
+[Meta testing](../META_MESSAGING_TESTING.md) for controlled live verification.

@@ -2,10 +2,10 @@ import { firstPartyBotMark } from '@core/component/firstPartyBotMark';
 import { UserIcon } from '@core/component/UserIcon';
 import { senderFromStorageId } from '@queries/messages/message-sender';
 import type { MessageSender } from '@service-storage/messages';
-import { cn } from '@ui';
+import { Avatar, cn } from '@ui';
 import { Show } from 'solid-js';
 import { BotIcon } from './BotIcon';
-import { useMessage } from './context';
+import { useCustomerConversation, useMessage } from './context';
 
 type SenderIconProps = {
   class?: string;
@@ -14,6 +14,7 @@ type SenderIconProps = {
 
 export function SenderIcon(props: SenderIconProps) {
   const message = useMessage();
+  const customerConversation = useCustomerConversation();
 
   // Team bots render their uploaded avatar; first-party bots have none and
   // keep their brand mark, which UserIcon draws the same way the mention menu
@@ -34,7 +35,20 @@ export function SenderIcon(props: SenderIconProps) {
       {!props.hidden && (
         <Show
           when={botSender()}
-          fallback={<UserIcon id={message().sender_id} size="fill" />}
+          fallback={
+            <Show
+              when={customerConversation() && message().imported_author?.name}
+              fallback={<UserIcon id={message().sender_id} size="fill" />}
+            >
+              {(name) => (
+                <Avatar size="fill">
+                  <Avatar.Fallback class="font-semibold">
+                    {name().trim().charAt(0).toUpperCase()}
+                  </Avatar.Fallback>
+                </Avatar>
+              )}
+            </Show>
+          }
         >
           {(bot) => (
             <BotIcon

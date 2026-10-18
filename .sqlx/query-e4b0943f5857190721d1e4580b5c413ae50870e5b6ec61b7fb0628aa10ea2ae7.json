@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH expired AS (\n            SELECT id FROM meta_messaging_receipt WHERE status='processing'\n                AND attempts>=20 AND lease_until<=now()\n                AND error_code IS DISTINCT FROM 'account_state_changed'\n            ORDER BY lease_until,id FOR UPDATE SKIP LOCKED LIMIT 100\n        ) UPDATE meta_messaging_receipt r SET status='failed',\n            error_code='interrupted_receipt_retries_exhausted',lease_id=NULL,lease_until=NULL\n          FROM expired WHERE r.id=expired.id",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "e4b0943f5857190721d1e4580b5c413ae50870e5b6ec61b7fb0628aa10ea2ae7"
+}

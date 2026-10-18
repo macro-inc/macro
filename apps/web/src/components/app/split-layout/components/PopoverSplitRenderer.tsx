@@ -89,7 +89,7 @@ function PopoverSplitModal(props: {
     // A popover has no history to rewrite.
     adoptContentId: () => {},
     updateCurrentEntry: () => {},
-    removeFromHistory: () => {},
+    removeFromHistory: async () => {},
     registerContentChangeListener: () => {},
     unregisterContentChangeListener: () => {},
     previousContent: () => null,

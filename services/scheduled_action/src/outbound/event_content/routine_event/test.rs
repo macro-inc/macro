@@ -2,7 +2,7 @@ use call::domain::{
     meetings::GuestId,
     models::{CallRecord, CallRecordGuest, CallRecordParticipant, CallRecordTranscriptSegment},
 };
-use channels::domain::models::{ChannelMetadata, ChannelType as ChannelKind};
+use channels::domain::models::{ChannelMetadata, ChannelType as ChannelKind, MessagingBinding};
 use chrono::{DateTime, TimeZone, Utc};
 use document_sub_type::DocumentSubType;
 use email::domain::models::{ContactInfo, ParsedLabel, ParsedMessage};
@@ -446,6 +446,8 @@ fn a_channel_reply_carries_its_thread_through_the_message() {
     };
     let content = EventContent::Channel {
         channel: ChannelMetadata {
+            auto_join_team: false,
+            messaging_binding: MessagingBinding::Native,
             channel_type: ChannelKind::Public,
             channel_name: "eng".into(),
         },

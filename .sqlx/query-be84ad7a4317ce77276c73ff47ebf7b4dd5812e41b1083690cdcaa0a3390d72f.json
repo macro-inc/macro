@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_message SET effect_revision=effect_revision+1,native_retry_at=now(),media_state=CASE WHEN $2 THEN 'stored' ELSE media_state END WHERE message_id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "be84ad7a4317ce77276c73ff47ebf7b4dd5812e41b1083690cdcaa0a3390d72f"
+}

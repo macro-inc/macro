@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE comms_channels SET messaging_binding=$2 WHERE id=$1 AND channel_type='private' AND team_id IS NULL AND messaging_binding='native'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "34f6cf4ade84e7e40a21b6e7949195a608543ef647f8dc54efa6393f99712e6e"
+}

@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH expired AS (\n            SELECT id FROM meta_messaging_send WHERE state='sending' AND lease_until<=now()\n            ORDER BY lease_until,id FOR UPDATE SKIP LOCKED LIMIT 100\n        ) UPDATE meta_messaging_send s SET\n            state=CASE WHEN dispatch_started_at IS NULL THEN 'pending' ELSE 'unknown' END,\n            error_code=CASE WHEN dispatch_started_at IS NULL THEN 'preparation_interrupted' ELSE 'interrupted_send_check_provider' END,\n            lease_id=NULL,lease_until=NULL,available_at=now(),updated_at=now() FROM expired WHERE s.id=expired.id",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "0c7b1d912d3a4655e31e22a34137e80b1b1170e12adc2e8cce4c3a6aaf850c80"
+}

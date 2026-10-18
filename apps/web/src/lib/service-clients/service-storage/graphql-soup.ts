@@ -1715,6 +1715,7 @@ export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem | null {
               id: entity.id,
               name: entity.channelName ?? undefined,
               channel_type: normalizeChannelType(entity.channelType),
+              messaging_binding: entity.messagingBinding,
               owner_id: entity.ownerId,
               org_id: entity.organizationId ?? undefined,
               team_id: entity.channelTeamId ?? undefined,

@@ -22,14 +22,27 @@ export function MessageSenderName(props: SenderNameProps) {
   );
 }
 
+/** External attribution never represents a signed-in Macro teammate. */
+export function ExternalBadge() {
+  const message = useMessage();
+  return (
+    <Show when={message().sender_id.startsWith('external|')}>
+      <span
+        class="shrink-0 rounded px-1 text-xs text-ink-muted ring ring-edge-muted"
+        title="Sent from a connected external account"
+      >
+        External
+      </span>
+    </Show>
+  );
+}
+
 export function SenderName(props: { message: MessageData }) {
   const macroId = () => tryMacroId(props.message.sender_id);
   const displayName = () => getDisplayName(macroId());
   const agentName = () =>
     getBotDisplayName(props.message.sender_id, props.message.sender);
-  const importedName = () => {
-    const name = props.message.imported_author?.name?.trim();
-    return name ? name : undefined;
-  };
+  const importedName = () =>
+    props.message.imported_author?.name?.trim() || undefined;
   return <>{importedName() ?? agentName() ?? displayName()}</>;
 }

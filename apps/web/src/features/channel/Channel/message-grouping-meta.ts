@@ -2,7 +2,13 @@ import type { MessageData } from '@core/messages/types';
 
 export type GroupableMessage = Pick<
   MessageData,
-  'id' | 'sender_id' | 'sender' | 'created_at' | 'attachments' | 'deleted_at'
+  | 'id'
+  | 'sender_id'
+  | 'sender'
+  | 'imported_author'
+  | 'created_at'
+  | 'attachments'
+  | 'deleted_at'
 > & {
   thread?: { reply_count: number };
 };
@@ -19,10 +25,19 @@ function hasThreadReplies(message: GroupableMessage): boolean {
 
 export function shouldGroupWithPreviousMessage(
   current: GroupableMessage,
-  previous: GroupableMessage | undefined
+  previous: GroupableMessage | undefined,
+  customerConversation = false
 ): boolean {
   if (!previous) return false;
   if (current.sender_id !== previous.sender_id) return false;
+  // A teammate's internal note and business-account reply have different visible
+  // authors. Keep that boundary even though both carry the same Macro sender ID.
+  if (
+    customerConversation &&
+    (current.imported_author?.name ?? null) !==
+      (previous.imported_author?.name ?? null)
+  )
+    return false;
   // Agent messages share the Macro bot's sender_id but carry the triggering
   // user in `sender.triggered_by`; messages prompted by different users must
   // not merge under a single "from" pill.

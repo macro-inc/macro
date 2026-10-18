@@ -3481,6 +3481,9 @@ export const getChannelParams = zod.object({
 
 export const getChannelResponse = zod
   .object({
+    auto_join_team: zod
+      .boolean()
+      .describe('Whether new team members automatically join this channel.'),
     channel_id: zod.uuid().describe('Channel id.'),
     channel_name: zod
       .string()
@@ -3488,6 +3491,11 @@ export const getChannelResponse = zod
     channel_type: zod
       .enum(['public', 'private', 'direct_message', 'team'])
       .describe('Type of channel.'),
+    messaging_binding: zod
+      .enum(['native', 'whatsapp_direct', 'instagram_direct', 'whatsapp_group'])
+      .describe(
+        'Authoritative external binding, including an unbound provider group setup.\nNative authorization always reads this from storage, never from a client.'
+      ),
     participants: zod
       .array(
         zod
@@ -4046,6 +4054,16 @@ export const getChannelsResponse = zod
                   .describe('Channel message in API responses.'),
               ])
               .optional(),
+            messaging_binding: zod
+              .enum([
+                'native',
+                'whatsapp_direct',
+                'instagram_direct',
+                'whatsapp_group',
+              ])
+              .describe(
+                'Authoritative external binding, including an unbound provider group setup.\nNative authorization always reads this from storage, never from a client.'
+              ),
             name: zod.string().nullish().describe('Channel name.'),
             org_id: zod
               .number()
@@ -25339,6 +25357,16 @@ export const getItemsSoupResponse = zod
                         .datetime({})
                         .describe('Creation timestamp.'),
                       id: zod.uuid().describe('Channel id.'),
+                      messaging_binding: zod
+                        .enum([
+                          'native',
+                          'whatsapp_direct',
+                          'instagram_direct',
+                          'whatsapp_group',
+                        ])
+                        .describe(
+                          'Authoritative external binding, including an unbound provider group setup.\nNative authorization always reads this from storage, never from a client.'
+                        ),
                       name: zod
                         .string()
                         .nullish()
@@ -29982,6 +30010,16 @@ export const postItemsSoupResponse = zod
                         .datetime({})
                         .describe('Creation timestamp.'),
                       id: zod.uuid().describe('Channel id.'),
+                      messaging_binding: zod
+                        .enum([
+                          'native',
+                          'whatsapp_direct',
+                          'instagram_direct',
+                          'whatsapp_group',
+                        ])
+                        .describe(
+                          'Authoritative external binding, including an unbound provider group setup.\nNative authorization always reads this from storage, never from a client.'
+                        ),
                       name: zod
                         .string()
                         .nullish()
@@ -34099,6 +34137,16 @@ export const postItemsSoupAstResponse = zod
                         .datetime({})
                         .describe('Creation timestamp.'),
                       id: zod.uuid().describe('Channel id.'),
+                      messaging_binding: zod
+                        .enum([
+                          'native',
+                          'whatsapp_direct',
+                          'instagram_direct',
+                          'whatsapp_group',
+                        ])
+                        .describe(
+                          'Authoritative external binding, including an unbound provider group setup.\nNative authorization always reads this from storage, never from a client.'
+                        ),
                       name: zod
                         .string()
                         .nullish()
@@ -38561,6 +38609,16 @@ export const postItemsSoupAstGroupedResponse = zod
                               .datetime({})
                               .describe('Creation timestamp.'),
                             id: zod.uuid().describe('Channel id.'),
+                            messaging_binding: zod
+                              .enum([
+                                'native',
+                                'whatsapp_direct',
+                                'instagram_direct',
+                                'whatsapp_group',
+                              ])
+                              .describe(
+                                'Authoritative external binding, including an unbound provider group setup.\nNative authorization always reads this from storage, never from a client.'
+                              ),
                             name: zod
                               .string()
                               .nullish()
@@ -42659,6 +42717,16 @@ export const postItemsSoupAstGroupedResponse = zod
                               .datetime({})
                               .describe('Creation timestamp.'),
                             id: zod.uuid().describe('Channel id.'),
+                            messaging_binding: zod
+                              .enum([
+                                'native',
+                                'whatsapp_direct',
+                                'instagram_direct',
+                                'whatsapp_group',
+                              ])
+                              .describe(
+                                'Authoritative external binding, including an unbound provider group setup.\nNative authorization always reads this from storage, never from a client.'
+                              ),
                             name: zod
                               .string()
                               .nullish()
@@ -48272,6 +48340,1718 @@ export const entityMessageTypingBody = zod
       .describe('Root being replied to, absent for the parent composer.'),
   })
   .describe('Transient typing update.');
+
+export const metaAuthorizeBody = zod
+  .object({
+    provider: zod
+      .enum(['whatsapp', 'instagram'])
+      .describe(
+        'The official API used for an account. Personal accounts are not supported.'
+      ),
+    reconnect_id: zod
+      .uuid()
+      .nullish()
+      .describe('Existing connection identity, when reconnecting.'),
+  })
+  .describe('Initiate a product-specific official login.');
+
+export const metaAuthorizeResponse = zod
+  .object({
+    browser_transaction: zod
+      .string()
+      .nullish()
+      .describe(
+        'Secret proof retained only by the initiating Instagram window; never sent to Meta.'
+      ),
+    configuration: zod
+      .object({
+        graph_version: zod
+          .string()
+          .describe('Explicitly supported Graph API version.'),
+        instagram_app_id: zod
+          .string()
+          .nullish()
+          .describe(
+            'Instagram app ID within the configured Meta business app.'
+          ),
+        instagram_human_agent_approved: zod
+          .boolean()
+          .describe(
+            'Operator-confirmed Meta HUMAN_AGENT approval for the configured Instagram app.'
+          ),
+        instagram_redirect_uri: zod
+          .string()
+          .nullish()
+          .describe('Approved redirect URI for Instagram Login.'),
+        whatsapp_app_id: zod
+          .string()
+          .nullish()
+          .describe('Meta app ID used by WhatsApp Embedded Signup.'),
+        whatsapp_configuration_id: zod
+          .string()
+          .nullish()
+          .describe(
+            'Facebook Login for Business v4 configuration ID with coexistence enabled.'
+          ),
+        whatsapp_developer_available: zod
+          .boolean()
+          .describe(
+            'A server-configured, recipient-restricted local WhatsApp test account exists.'
+          ),
+        whatsapp_platform_configuration_id: zod
+          .string()
+          .nullish()
+          .describe('Optional dedicated v4 configuration for Platform signup.'),
+      })
+      .describe(
+        'Public setup configuration, returned by the server rather than hardcoded in UI.'
+      ),
+    state: zod
+      .string()
+      .describe('Random anti-CSRF state echoed through the callback.'),
+  })
+  .describe(
+    'Browser OAuth initiation result. State is scoped to the authenticated initiator.'
+  );
+
+export const metaAuthorizeCompleteBody = zod
+  .object({
+    browser_transaction: zod
+      .string()
+      .nullish()
+      .describe(
+        'Proof returned at initiation; mandatory for Instagram, absent for WhatsApp.'
+      ),
+    business_account_id: zod
+      .union([
+        zod.null(),
+        zod
+          .string()
+          .describe(
+            'Provider identifier, scoped separately by the persisted connection.'
+          ),
+      ])
+      .optional(),
+    code: zod.string().describe('Single-use authorization code.'),
+    phone_number_id: zod
+      .union([
+        zod.null(),
+        zod
+          .string()
+          .describe(
+            'Provider identifier, scoped separately by the persisted connection.'
+          ),
+      ])
+      .optional(),
+    state: zod
+      .string()
+      .describe(
+        'State returned by the server for this caller\/team\/provider.'
+      ),
+    whatsapp_mode: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['coexistence', 'platform'])
+          .describe('Supported production WhatsApp onboarding paths.'),
+      ])
+      .optional(),
+  })
+  .describe('Callback input. Tokens are always exchanged server-side.');
+
+export const metaAuthorizeCompleteResponse = zod
+  .object({
+    account_id: zod
+      .string()
+      .describe(
+        'Provider identifier, scoped separately by the persisted connection.'
+      ),
+    business_account_id: zod
+      .union([
+        zod.null(),
+        zod
+          .string()
+          .describe(
+            'Provider identifier, scoped separately by the persisted connection.'
+          ),
+      ])
+      .optional(),
+    connected_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe(
+        'Last successful connection time, not the start of imported history.'
+      ),
+    credential_expires_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe(
+        'Expiry returned by the provider; absence does not mean irrevocable access.'
+      ),
+    developer_account: zod
+      .boolean()
+      .describe('Development test number; never evidence of coexistence.'),
+    display_name: zod
+      .string()
+      .describe('Display label returned by the provider.'),
+    health_error: zod
+      .string()
+      .nullish()
+      .describe('Sanitized operational error code.'),
+    human_agent_approved: zod
+      .boolean()
+      .describe('Verified HUMAN_AGENT approval; false by default.'),
+    id: zod
+      .uuid()
+      .describe('Macro connection identity, preserved through reconnect.'),
+    provider: zod
+      .enum(['whatsapp', 'instagram'])
+      .describe(
+        'The official API used for an account. Personal accounts are not supported.'
+      ),
+    registration_attempted_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe(
+        'Time of the latest uncertain or rate-limited registration attempt; never a PIN.'
+      ),
+    registration_status: zod
+      .union([
+        zod.null(),
+        zod
+          .enum([
+            'required',
+            'unconfirmed',
+            'registered',
+            'rate_limited',
+            'unavailable',
+          ])
+          .describe(
+            'Durable registration uncertainty is separate from account health.'
+          ),
+      ])
+      .optional(),
+    status: zod
+      .enum(['connecting', 'connected', 'disconnected', 'revoked', 'error'])
+      .describe(
+        'Connection state transitions do not delete retained channels\/content.'
+      ),
+    team_id: zod.uuid().describe('Owning Macro team.'),
+    user_id: zod
+      .string()
+      .describe(
+        'Current connector. Reconnect changes this user without transferring existing channel\/file grants.'
+      ),
+    whatsapp_mode: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['coexistence', 'platform'])
+          .describe('Supported production WhatsApp onboarding paths.'),
+      ])
+      .optional(),
+  })
+  .describe('Public account health; never includes credentials.');
+
+export const metaConversationParams = zod.object({
+  channel_id: zod.uuid(),
+});
+
+export const metaConversationResponseMessagingCapabilitiesMaxAttachmentsMin = 0;
+
+export const metaConversationResponseMessagingCapabilitiesMediaItemCaptionLimitMin = 0;
+
+export const metaConversationResponseMessagingCapabilitiesMediaItemMaxBytesMin = 0;
+
+export const metaConversationResponseMessagingCapabilitiesTextLimitMin = 0;
+
+export const metaConversationResponseMessagingMediaItemCaptionLimitMin = 0;
+
+export const metaConversationResponseMessagingMediaItemMaxBytesMin = 0;
+
+export const metaConversationResponseMessagingTextLimitMin = 0;
+
+export const metaConversationResponse = zod
+  .object({
+    group: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            can_copy_link: zod
+              .boolean()
+              .describe(
+                'Native posting permission and business team membership.'
+              ),
+            can_delete: zod
+              .boolean()
+              .describe('Native ownership and business team membership.'),
+            can_remove: zod
+              .boolean()
+              .describe(
+                'Native participant admin permission and team membership.'
+              ),
+            can_retry: zod
+              .boolean()
+              .describe(
+                'Current connector and owner may deliberately retry creation.'
+              ),
+            channel_id: zod.uuid().describe('Native identity.'),
+            participants: zod
+              .array(
+                zod
+                  .object({
+                    customer_id: zod
+                      .string()
+                      .describe(
+                        'Provider identifier, scoped separately by the persisted connection.'
+                      ),
+                    display_name: zod
+                      .string()
+                      .nullish()
+                      .describe('Optional provider display name.'),
+                    external_sender_id: zod
+                      .uuid()
+                      .describe(
+                        'Stable native external author across departure and identity updates.'
+                      ),
+                    phone: zod
+                      .string()
+                      .nullish()
+                      .describe('Separately supplied phone.'),
+                    username: zod
+                      .string()
+                      .nullish()
+                      .describe('Optional mutable username.'),
+                  })
+                  .describe(
+                    'Confirmed external participant, independent of native teammate membership.'
+                  )
+              )
+              .describe('Confirmed current participants.'),
+            setup: zod
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    channel_id: zod
+                      .uuid()
+                      .describe(
+                        'Native identity, reserved before provider I\/O.'
+                      ),
+                    connection_id: zod
+                      .uuid()
+                      .describe('Selected business connection.'),
+                    error_code: zod
+                      .string()
+                      .nullish()
+                      .describe('Sanitized diagnostic.'),
+                    state: zod
+                      .enum([
+                        'bound',
+                        'creating',
+                        'pending',
+                        'failed',
+                        'unknown',
+                      ])
+                      .describe(
+                        'Creation outcome, including an idempotent response after successful binding.'
+                      ),
+                    subject: zod
+                      .string()
+                      .describe("Native owner's requested subject."),
+                  })
+                  .describe(
+                    'Public creation result; never contains a speculative remote group ID\/link.'
+                  ),
+              ])
+              .optional(),
+            status: zod
+              .union([
+                zod.null(),
+                zod
+                  .enum(['active', 'suspended', 'deleted'])
+                  .describe(
+                    'Monotonic remote lifecycle; deletion cannot be cleared by a later status.'
+                  ),
+              ])
+              .optional(),
+          })
+          .describe(
+            'Restricted group controls and participants; invite link is fetched separately.'
+          ),
+      ])
+      .optional(),
+    messaging: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            account_name: zod
+              .string()
+              .describe(
+                'Business account shown beside the explicit send control.'
+              ),
+            can_reply: zod
+              .boolean()
+              .describe(
+                'Current caller may deliberately reply through this account and channel.'
+              ),
+            capabilities: zod
+              .object({
+                max_attachments: zod
+                  .number()
+                  .min(
+                    metaConversationResponseMessagingCapabilitiesMaxAttachmentsMin
+                  )
+                  .describe('Maximum files in one implemented send operation.'),
+                media: zod
+                  .array(
+                    zod
+                      .object({
+                        caption_limit: zod
+                          .number()
+                          .min(
+                            metaConversationResponseMessagingCapabilitiesMediaItemCaptionLimitMin
+                          )
+                          .nullish()
+                          .describe(
+                            'Maximum caption characters, absent when text must be sent separately.'
+                          ),
+                        kind: zod
+                          .enum(['image', 'audio', 'video', 'document'])
+                          .describe(
+                            'Supported attachment categories; provider limits remain explicit in the sender.'
+                          ),
+                        max_bytes: zod
+                          .number()
+                          .min(
+                            metaConversationResponseMessagingCapabilitiesMediaItemMaxBytesMin
+                          )
+                          .describe('Effective provider and Macro byte limit.'),
+                        mime_types: zod
+                          .array(zod.string())
+                          .describe(
+                            'Allowed MIME types for the selected account.'
+                          ),
+                      })
+                      .describe(
+                        'One currently supported provider attachment category.'
+                      )
+                  )
+                  .describe(
+                    'Supported private attachment categories and effective limits.'
+                  ),
+                modes: zod
+                  .array(
+                    zod
+                      .enum(['free_form', 'approved_template', 'human_support'])
+                      .describe('Policy mode of the requested send.')
+                  )
+                  .describe('Supported explicit sending modes.'),
+                text_limit: zod
+                  .number()
+                  .min(
+                    metaConversationResponseMessagingCapabilitiesTextLimitMin
+                  )
+                  .describe('Maximum text units.'),
+                text_limit_in_bytes: zod
+                  .boolean()
+                  .describe(
+                    'Whether text is counted in UTF-8 bytes instead of Unicode characters.'
+                  ),
+              })
+              .describe(
+                'Operations implemented by this integration, independently of current permission.'
+              ),
+            conversation: zod
+              .object({
+                channel_id: zod.uuid().describe('Real Macro channel identity.'),
+                connection_id: zod
+                  .uuid()
+                  .describe("Owning account's connection."),
+                customer_display_name: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Account-scoped display label; never a Macro or CRM identity.'
+                  ),
+                customer_handle: zod
+                  .string()
+                  .nullish()
+                  .describe('Mutable handle for display only.'),
+                customer_id: zod
+                  .string()
+                  .describe(
+                    'Provider identifier, scoped separately by the persisted connection.'
+                  ),
+                customer_phone: zod
+                  .string()
+                  .nullish()
+                  .describe('Verified phone, when present.'),
+                group_status: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .enum(['active', 'suspended', 'deleted'])
+                      .describe(
+                        'Monotonic remote lifecycle; deletion cannot be cleared by a later status.'
+                      ),
+                  ])
+                  .optional(),
+                kind: zod
+                  .enum(['direct', 'group'])
+                  .optional()
+                  .describe(
+                    'Provider destination namespace, independent of an individual author.'
+                  ),
+                last_customer_message_at: zod.iso
+                  .datetime({})
+                  .nullish()
+                  .describe('Latest eligible inbound source timestamp.'),
+              })
+              .describe(
+                'Native conversation metadata, available only after ordinary channel access.'
+              ),
+            developer_account: zod
+              .boolean()
+              .describe(
+                'Whether this connection uses an explicitly configured developer number.'
+              ),
+            eligibility: zod
+              .object({
+                evaluated_at: zod.iso
+                  .datetime({})
+                  .describe(
+                    'Server time used to evaluate every mode in this response.'
+                  ),
+                modes: zod
+                  .array(
+                    zod
+                      .object({
+                        allowed: zod
+                          .boolean()
+                          .describe(
+                            'True only when every current server-side condition is satisfied.'
+                          ),
+                        expires_at: zod.iso
+                          .datetime({})
+                          .nullish()
+                          .describe(
+                            'An allowed control may expire locally; the browser cannot extend permission.'
+                          ),
+                        mode: zod
+                          .enum([
+                            'free_form',
+                            'approved_template',
+                            'human_support',
+                          ])
+                          .describe('Policy mode of the requested send.'),
+                        reason: zod
+                          .union([
+                            zod.null(),
+                            zod
+                              .enum([
+                                'forbidden',
+                                'disconnected',
+                                'window_closed',
+                                'template_required',
+                                'human_support_required',
+                                'group_read_only',
+                                'unsupported',
+                              ])
+                              .describe(
+                                'Stable reason a supported operation cannot run now.'
+                              ),
+                          ])
+                          .optional(),
+                      })
+                      .describe(
+                        'Current server decision for one implemented sending mode.'
+                      )
+                  )
+                  .describe(
+                    'Current decisions, separate from static implemented support.'
+                  ),
+              })
+              .describe(
+                'Eligibility is a snapshot, re-evaluated before dispatch.'
+              ),
+            health_error: zod
+              .string()
+              .nullish()
+              .describe(
+                'Sanitized account-health reason, so channel users see the correct recovery action.'
+              ),
+            human_agent_approved: zod
+              .boolean()
+              .describe(
+                "Server-observed eligibility for Instagram's human-support mode."
+              ),
+            media: zod
+              .array(
+                zod
+                  .object({
+                    caption_limit: zod
+                      .number()
+                      .min(
+                        metaConversationResponseMessagingMediaItemCaptionLimitMin
+                      )
+                      .nullish()
+                      .describe(
+                        'Maximum caption characters, absent when text must be sent separately.'
+                      ),
+                    kind: zod
+                      .enum(['image', 'audio', 'video', 'document'])
+                      .describe(
+                        'Supported attachment categories; provider limits remain explicit in the sender.'
+                      ),
+                    max_bytes: zod
+                      .number()
+                      .min(
+                        metaConversationResponseMessagingMediaItemMaxBytesMin
+                      )
+                      .describe('Effective provider and Macro byte limit.'),
+                    mime_types: zod
+                      .array(zod.string())
+                      .describe('Allowed MIME types for the selected account.'),
+                  })
+                  .describe(
+                    'One currently supported provider attachment category.'
+                  )
+              )
+              .describe(
+                'Supported attachment types and effective size limits.'
+              ),
+            provider: zod
+              .enum(['whatsapp', 'instagram'])
+              .describe(
+                'The official API used for an account. Personal accounts are not supported.'
+              ),
+            sends: zod
+              .array(
+                zod
+                  .object({
+                    channel_id: zod.uuid().describe('Native conversation.'),
+                    created_at: zod.iso
+                      .datetime({})
+                      .describe('Intent creation time.'),
+                    error_code: zod
+                      .string()
+                      .nullish()
+                      .describe('Sanitized rejection\/recovery code.'),
+                    id: zod.uuid().describe('Stable local intent ID.'),
+                    message_id: zod
+                      .uuid()
+                      .nullish()
+                      .describe('Linked native message, when created.'),
+                    payload: zod
+                      .object({
+                        human_support: zod
+                          .boolean()
+                          .optional()
+                          .describe(
+                            'Explicit human support action, never inferred from closing the window.'
+                          ),
+                        idempotency_key: zod
+                          .uuid()
+                          .describe(
+                            'Stable client intent key. A changed payload with this key is a conflict.'
+                          ),
+                        message: zod
+                          .union([
+                            zod
+                              .object({
+                                text: zod
+                                  .string()
+                                  .describe(
+                                    "UTF-8 text, checked against the selected provider's limit."
+                                  ),
+                                type: zod.enum(['text']),
+                              })
+                              .describe('Free-form text.'),
+                            zod
+                              .object({
+                                caption: zod
+                                  .string()
+                                  .nullish()
+                                  .describe(
+                                    'Optional caption, where the provider permits it.'
+                                  ),
+                                document_id: zod
+                                  .uuid()
+                                  .describe(
+                                    'Existing Macro document ID, authorized again by the worker.'
+                                  ),
+                                kind: zod
+                                  .enum(['image', 'audio', 'video', 'document'])
+                                  .describe(
+                                    'Supported attachment categories; provider limits remain explicit in the sender.'
+                                  ),
+                                type: zod.enum(['media']),
+                              })
+                              .describe(
+                                'Media loaded through an authorized Macro document.'
+                              ),
+                            zod
+                              .object({
+                                language: zod
+                                  .string()
+                                  .describe('Exact approved language.'),
+                                parameters: zod
+                                  .array(zod.string())
+                                  .describe(
+                                    'Ordered text parameters for header\/body. Buttons and media templates\nare validated separately and never passed through as raw provider JSON.'
+                                  ),
+                                template_id: zod
+                                  .string()
+                                  .describe(
+                                    'Provider identifier, scoped separately by the persisted connection.'
+                                  ),
+                                type: zod.enum(['template']),
+                              })
+                              .describe(
+                                'Approved WhatsApp template, resolved by ID against the sending account.'
+                              ),
+                          ])
+                          .describe(
+                            'Text, Macro-owned media or approved-template input. Remote arbitrary URLs are\nnot accepted from clients as attachments.'
+                          ),
+                        reply_to: zod
+                          .union([
+                            zod.null(),
+                            zod
+                              .string()
+                              .describe(
+                                'Provider identifier, scoped separately by the persisted connection.'
+                              ),
+                          ])
+                          .optional(),
+                      })
+                      .describe(
+                        'Explicit send action; ordinary channel posts never call this boundary.'
+                      ),
+                    state: zod
+                      .enum([
+                        'pending',
+                        'sending',
+                        'unknown',
+                        'accepted',
+                        'sent',
+                        'delivered',
+                        'read',
+                        'failed',
+                      ])
+                      .describe(
+                        'Observed outbound state. Unknown outcomes require reconciliation, not resend.'
+                      ),
+                    user_id: zod
+                      .string()
+                      .describe('Human who explicitly submitted this reply.'),
+                  })
+                  .describe(
+                    'Durable result of an intentional send; accepted does not mean delivered.'
+                  )
+              )
+              .describe(
+                'Durable outbound intents including pending, unknown and failed replies.'
+              ),
+            status: zod
+              .enum([
+                'connecting',
+                'connected',
+                'disconnected',
+                'revoked',
+                'error',
+              ])
+              .describe(
+                'Connection state transitions do not delete retained channels\/content.'
+              ),
+            text_limit: zod
+              .number()
+              .min(metaConversationResponseMessagingTextLimitMin)
+              .describe(
+                "Maximum text units, counted by the provider's rule below."
+              ),
+            text_limit_in_bytes: zod
+              .boolean()
+              .describe(
+                'Instagram counts UTF-8 bytes; WhatsApp counts characters.'
+              ),
+          })
+          .describe(
+            'Metadata rendered with an authorized native channel, without management secrets.'
+          ),
+      ])
+      .optional(),
+  })
+  .describe('Optional messaging metadata for an ordinary native channel.');
+
+export const metaUploadAttachmentParams = zod.object({
+  channel_id: zod.uuid(),
+});
+
+export const metaUploadAttachmentBody = zod
+  .object({
+    file: zod.instanceof(File).describe('One image, audio, video or PDF file.'),
+  })
+  .describe('Multipart private-file staging contract.');
+
+export const metaUploadAttachmentResponse = zod
+  .object({
+    document_id: zod
+      .uuid()
+      .describe('Native Macro document, authorized again at send time.'),
+    filename: zod.string().describe('Original display filename.'),
+    kind: zod
+      .enum(['image', 'audio', 'video', 'document'])
+      .describe(
+        'Supported attachment categories; provider limits remain explicit in the sender.'
+      ),
+  })
+  .describe(
+    'A private file staged for an explicit customer reply; staging never sends it.'
+  );
+
+export const metaMessageDeliveryParams = zod.object({
+  channel_id: zod.uuid(),
+});
+
+export const metaMessageDeliveryBodyItem = zod.uuid();
+export const metaMessageDeliveryBody = zod.array(metaMessageDeliveryBodyItem);
+
+export const metaMessageDeliveryResponseItem = zod
+  .object({
+    channel_id: zod.uuid().describe('Native conversation.'),
+    created_at: zod.iso.datetime({}).describe('Intent creation time.'),
+    error_code: zod
+      .string()
+      .nullish()
+      .describe('Sanitized rejection\/recovery code.'),
+    id: zod.uuid().describe('Stable local intent ID.'),
+    message_id: zod
+      .uuid()
+      .nullish()
+      .describe('Linked native message, when created.'),
+    payload: zod
+      .object({
+        human_support: zod
+          .boolean()
+          .optional()
+          .describe(
+            'Explicit human support action, never inferred from closing the window.'
+          ),
+        idempotency_key: zod
+          .uuid()
+          .describe(
+            'Stable client intent key. A changed payload with this key is a conflict.'
+          ),
+        message: zod
+          .union([
+            zod
+              .object({
+                text: zod
+                  .string()
+                  .describe(
+                    "UTF-8 text, checked against the selected provider's limit."
+                  ),
+                type: zod.enum(['text']),
+              })
+              .describe('Free-form text.'),
+            zod
+              .object({
+                caption: zod
+                  .string()
+                  .nullish()
+                  .describe('Optional caption, where the provider permits it.'),
+                document_id: zod
+                  .uuid()
+                  .describe(
+                    'Existing Macro document ID, authorized again by the worker.'
+                  ),
+                kind: zod
+                  .enum(['image', 'audio', 'video', 'document'])
+                  .describe(
+                    'Supported attachment categories; provider limits remain explicit in the sender.'
+                  ),
+                type: zod.enum(['media']),
+              })
+              .describe('Media loaded through an authorized Macro document.'),
+            zod
+              .object({
+                language: zod.string().describe('Exact approved language.'),
+                parameters: zod
+                  .array(zod.string())
+                  .describe(
+                    'Ordered text parameters for header\/body. Buttons and media templates\nare validated separately and never passed through as raw provider JSON.'
+                  ),
+                template_id: zod
+                  .string()
+                  .describe(
+                    'Provider identifier, scoped separately by the persisted connection.'
+                  ),
+                type: zod.enum(['template']),
+              })
+              .describe(
+                'Approved WhatsApp template, resolved by ID against the sending account.'
+              ),
+          ])
+          .describe(
+            'Text, Macro-owned media or approved-template input. Remote arbitrary URLs are\nnot accepted from clients as attachments.'
+          ),
+        reply_to: zod
+          .union([
+            zod.null(),
+            zod
+              .string()
+              .describe(
+                'Provider identifier, scoped separately by the persisted connection.'
+              ),
+          ])
+          .optional(),
+      })
+      .describe(
+        'Explicit send action; ordinary channel posts never call this boundary.'
+      ),
+    state: zod
+      .enum([
+        'pending',
+        'sending',
+        'unknown',
+        'accepted',
+        'sent',
+        'delivered',
+        'read',
+        'failed',
+      ])
+      .describe(
+        'Observed outbound state. Unknown outcomes require reconciliation, not resend.'
+      ),
+    user_id: zod
+      .string()
+      .describe('Human who explicitly submitted this reply.'),
+  })
+  .describe(
+    'Durable result of an intentional send; accepted does not mean delivered.'
+  );
+export const metaMessageDeliveryResponse = zod.array(
+  metaMessageDeliveryResponseItem
+);
+
+export const metaDeleteGroupParams = zod.object({
+  channel_id: zod.uuid(),
+});
+
+export const metaDiscardGroupSetupParams = zod.object({
+  channel_id: zod.uuid(),
+});
+
+export const metaGroupLinkParams = zod.object({
+  channel_id: zod.uuid(),
+});
+
+export const metaGroupLinkResponse = zod
+  .object({
+    invite_link: zod.string().describe('Validated Meta invite URL.'),
+  })
+  .describe('Link returned only through the explicit authorized operation.');
+
+export const metaRemoveGroupParticipantParams = zod.object({
+  channel_id: zod.uuid(),
+  participant_id: zod.uuid(),
+});
+
+export const metaRetryGroupParams = zod.object({
+  channel_id: zod.uuid(),
+});
+
+export const metaRetryGroupResponse = zod
+  .object({
+    channel_id: zod
+      .uuid()
+      .describe('Native identity, reserved before provider I\/O.'),
+    connection_id: zod.uuid().describe('Selected business connection.'),
+    error_code: zod.string().nullish().describe('Sanitized diagnostic.'),
+    state: zod
+      .enum(['bound', 'creating', 'pending', 'failed', 'unknown'])
+      .describe(
+        'Creation outcome, including an idempotent response after successful binding.'
+      ),
+    subject: zod.string().describe("Native owner's requested subject."),
+  })
+  .describe(
+    'Public creation result; never contains a speculative remote group ID\/link.'
+  );
+
+export const metaReplyParams = zod.object({
+  channel_id: zod.uuid(),
+});
+
+export const metaReplyBody = zod
+  .object({
+    human_support: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Explicit human support action, never inferred from closing the window.'
+      ),
+    idempotency_key: zod
+      .uuid()
+      .describe(
+        'Stable client intent key. A changed payload with this key is a conflict.'
+      ),
+    message: zod
+      .union([
+        zod
+          .object({
+            text: zod
+              .string()
+              .describe(
+                "UTF-8 text, checked against the selected provider's limit."
+              ),
+            type: zod.enum(['text']),
+          })
+          .describe('Free-form text.'),
+        zod
+          .object({
+            caption: zod
+              .string()
+              .nullish()
+              .describe('Optional caption, where the provider permits it.'),
+            document_id: zod
+              .uuid()
+              .describe(
+                'Existing Macro document ID, authorized again by the worker.'
+              ),
+            kind: zod
+              .enum(['image', 'audio', 'video', 'document'])
+              .describe(
+                'Supported attachment categories; provider limits remain explicit in the sender.'
+              ),
+            type: zod.enum(['media']),
+          })
+          .describe('Media loaded through an authorized Macro document.'),
+        zod
+          .object({
+            language: zod.string().describe('Exact approved language.'),
+            parameters: zod
+              .array(zod.string())
+              .describe(
+                'Ordered text parameters for header\/body. Buttons and media templates\nare validated separately and never passed through as raw provider JSON.'
+              ),
+            template_id: zod
+              .string()
+              .describe(
+                'Provider identifier, scoped separately by the persisted connection.'
+              ),
+            type: zod.enum(['template']),
+          })
+          .describe(
+            'Approved WhatsApp template, resolved by ID against the sending account.'
+          ),
+      ])
+      .describe(
+        'Text, Macro-owned media or approved-template input. Remote arbitrary URLs are\nnot accepted from clients as attachments.'
+      ),
+    reply_to: zod
+      .union([
+        zod.null(),
+        zod
+          .string()
+          .describe(
+            'Provider identifier, scoped separately by the persisted connection.'
+          ),
+      ])
+      .optional(),
+  })
+  .describe(
+    'Explicit send action; ordinary channel posts never call this boundary.'
+  );
+
+export const metaReplyResponse = zod
+  .object({
+    channel_id: zod.uuid().describe('Native conversation.'),
+    created_at: zod.iso.datetime({}).describe('Intent creation time.'),
+    error_code: zod
+      .string()
+      .nullish()
+      .describe('Sanitized rejection\/recovery code.'),
+    id: zod.uuid().describe('Stable local intent ID.'),
+    message_id: zod
+      .uuid()
+      .nullish()
+      .describe('Linked native message, when created.'),
+    payload: zod
+      .object({
+        human_support: zod
+          .boolean()
+          .optional()
+          .describe(
+            'Explicit human support action, never inferred from closing the window.'
+          ),
+        idempotency_key: zod
+          .uuid()
+          .describe(
+            'Stable client intent key. A changed payload with this key is a conflict.'
+          ),
+        message: zod
+          .union([
+            zod
+              .object({
+                text: zod
+                  .string()
+                  .describe(
+                    "UTF-8 text, checked against the selected provider's limit."
+                  ),
+                type: zod.enum(['text']),
+              })
+              .describe('Free-form text.'),
+            zod
+              .object({
+                caption: zod
+                  .string()
+                  .nullish()
+                  .describe('Optional caption, where the provider permits it.'),
+                document_id: zod
+                  .uuid()
+                  .describe(
+                    'Existing Macro document ID, authorized again by the worker.'
+                  ),
+                kind: zod
+                  .enum(['image', 'audio', 'video', 'document'])
+                  .describe(
+                    'Supported attachment categories; provider limits remain explicit in the sender.'
+                  ),
+                type: zod.enum(['media']),
+              })
+              .describe('Media loaded through an authorized Macro document.'),
+            zod
+              .object({
+                language: zod.string().describe('Exact approved language.'),
+                parameters: zod
+                  .array(zod.string())
+                  .describe(
+                    'Ordered text parameters for header\/body. Buttons and media templates\nare validated separately and never passed through as raw provider JSON.'
+                  ),
+                template_id: zod
+                  .string()
+                  .describe(
+                    'Provider identifier, scoped separately by the persisted connection.'
+                  ),
+                type: zod.enum(['template']),
+              })
+              .describe(
+                'Approved WhatsApp template, resolved by ID against the sending account.'
+              ),
+          ])
+          .describe(
+            'Text, Macro-owned media or approved-template input. Remote arbitrary URLs are\nnot accepted from clients as attachments.'
+          ),
+        reply_to: zod
+          .union([
+            zod.null(),
+            zod
+              .string()
+              .describe(
+                'Provider identifier, scoped separately by the persisted connection.'
+              ),
+          ])
+          .optional(),
+      })
+      .describe(
+        'Explicit send action; ordinary channel posts never call this boundary.'
+      ),
+    state: zod
+      .enum([
+        'pending',
+        'sending',
+        'unknown',
+        'accepted',
+        'sent',
+        'delivered',
+        'read',
+        'failed',
+      ])
+      .describe(
+        'Observed outbound state. Unknown outcomes require reconciliation, not resend.'
+      ),
+    user_id: zod
+      .string()
+      .describe('Human who explicitly submitted this reply.'),
+  })
+  .describe(
+    'Durable result of an intentional send; accepted does not mean delivered.'
+  );
+
+export const metaTemplatesParams = zod.object({
+  channel_id: zod.uuid(),
+});
+
+export const metaTemplatesResponseItem = zod
+  .object({
+    category: zod
+      .string()
+      .nullish()
+      .describe(
+        'Provider category; authentication templates cannot be sent to groups.'
+      ),
+    components: zod
+      .unknown()
+      .describe('Approved components used for preview\/parameter collection.'),
+    id: zod
+      .string()
+      .describe(
+        'Provider identifier, scoped separately by the persisted connection.'
+      ),
+    language: zod.string().describe('Exact approved language code.'),
+    name: zod.string().describe('Exact approved name.'),
+    parameter_labels: zod
+      .array(zod.string())
+      .describe(
+        'Ordered text inputs, including the component and any named variable.'
+      ),
+    unsupported_reason: zod
+      .string()
+      .nullish()
+      .describe(
+        'Nonempty when this approved template needs inputs this composer cannot supply.'
+      ),
+  })
+  .describe(
+    "An approved WhatsApp template returned from this connection's account."
+  );
+export const metaTemplatesResponse = zod.array(metaTemplatesResponseItem);
+
+export const metaConfigurationResponse = zod
+  .object({
+    graph_version: zod
+      .string()
+      .describe('Explicitly supported Graph API version.'),
+    instagram_app_id: zod
+      .string()
+      .nullish()
+      .describe('Instagram app ID within the configured Meta business app.'),
+    instagram_human_agent_approved: zod
+      .boolean()
+      .describe(
+        'Operator-confirmed Meta HUMAN_AGENT approval for the configured Instagram app.'
+      ),
+    instagram_redirect_uri: zod
+      .string()
+      .nullish()
+      .describe('Approved redirect URI for Instagram Login.'),
+    whatsapp_app_id: zod
+      .string()
+      .nullish()
+      .describe('Meta app ID used by WhatsApp Embedded Signup.'),
+    whatsapp_configuration_id: zod
+      .string()
+      .nullish()
+      .describe(
+        'Facebook Login for Business v4 configuration ID with coexistence enabled.'
+      ),
+    whatsapp_developer_available: zod
+      .boolean()
+      .describe(
+        'A server-configured, recipient-restricted local WhatsApp test account exists.'
+      ),
+    whatsapp_platform_configuration_id: zod
+      .string()
+      .nullish()
+      .describe('Optional dedicated v4 configuration for Platform signup.'),
+  })
+  .describe(
+    'Public setup configuration, returned by the server rather than hardcoded in UI.'
+  );
+
+export const metaConnectionsResponseItem = zod
+  .object({
+    account_id: zod
+      .string()
+      .describe(
+        'Provider identifier, scoped separately by the persisted connection.'
+      ),
+    business_account_id: zod
+      .union([
+        zod.null(),
+        zod
+          .string()
+          .describe(
+            'Provider identifier, scoped separately by the persisted connection.'
+          ),
+      ])
+      .optional(),
+    connected_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe(
+        'Last successful connection time, not the start of imported history.'
+      ),
+    credential_expires_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe(
+        'Expiry returned by the provider; absence does not mean irrevocable access.'
+      ),
+    developer_account: zod
+      .boolean()
+      .describe('Development test number; never evidence of coexistence.'),
+    display_name: zod
+      .string()
+      .describe('Display label returned by the provider.'),
+    health_error: zod
+      .string()
+      .nullish()
+      .describe('Sanitized operational error code.'),
+    human_agent_approved: zod
+      .boolean()
+      .describe('Verified HUMAN_AGENT approval; false by default.'),
+    id: zod
+      .uuid()
+      .describe('Macro connection identity, preserved through reconnect.'),
+    provider: zod
+      .enum(['whatsapp', 'instagram'])
+      .describe(
+        'The official API used for an account. Personal accounts are not supported.'
+      ),
+    registration_attempted_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe(
+        'Time of the latest uncertain or rate-limited registration attempt; never a PIN.'
+      ),
+    registration_status: zod
+      .union([
+        zod.null(),
+        zod
+          .enum([
+            'required',
+            'unconfirmed',
+            'registered',
+            'rate_limited',
+            'unavailable',
+          ])
+          .describe(
+            'Durable registration uncertainty is separate from account health.'
+          ),
+      ])
+      .optional(),
+    status: zod
+      .enum(['connecting', 'connected', 'disconnected', 'revoked', 'error'])
+      .describe(
+        'Connection state transitions do not delete retained channels\/content.'
+      ),
+    team_id: zod.uuid().describe('Owning Macro team.'),
+    user_id: zod
+      .string()
+      .describe(
+        'Current connector. Reconnect changes this user without transferring existing channel\/file grants.'
+      ),
+    whatsapp_mode: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['coexistence', 'platform'])
+          .describe('Supported production WhatsApp onboarding paths.'),
+      ])
+      .optional(),
+  })
+  .describe('Public account health; never includes credentials.');
+export const metaConnectionsResponse = zod.array(metaConnectionsResponseItem);
+
+export const metaDisconnectParams = zod.object({
+  connection_id: zod.uuid(),
+});
+
+export const metaDisconnectResponse = zod
+  .object({
+    remote_unsubscribed: zod
+      .boolean()
+      .describe("Meta confirmed removal of this app's subscription."),
+    shared_subscription_kept: zod
+      .boolean()
+      .describe(
+        'Another connected account still needs the same provider subscription.'
+      ),
+  })
+  .describe(
+    'Disconnect outcome; removing one phone must preserve a shared WABA subscription.'
+  );
+
+export const metaCreateGroupParams = zod.object({
+  connection_id: zod.uuid(),
+});
+
+export const metaCreateGroupBody = zod
+  .object({
+    channel_id: zod
+      .uuid()
+      .describe(
+        'Client-retained native identity, also used after a lost HTTP response.'
+      ),
+    subject: zod.string().describe('WhatsApp subject (1–128 characters).'),
+  })
+  .describe(
+    'Human request to create a private native channel and its WhatsApp group.'
+  );
+
+export const metaCreateGroupResponse = zod
+  .object({
+    channel_id: zod
+      .uuid()
+      .describe('Native identity, reserved before provider I\/O.'),
+    connection_id: zod.uuid().describe('Selected business connection.'),
+    error_code: zod.string().nullish().describe('Sanitized diagnostic.'),
+    state: zod
+      .enum(['bound', 'creating', 'pending', 'failed', 'unknown'])
+      .describe(
+        'Creation outcome, including an idempotent response after successful binding.'
+      ),
+    subject: zod.string().describe("Native owner's requested subject."),
+  })
+  .describe(
+    'Public creation result; never contains a speculative remote group ID\/link.'
+  );
+
+export const metaHistoryParams = zod.object({
+  connection_id: zod.uuid(),
+});
+
+export const metaHistoryResponseImportProgressMin = 0;
+
+export const metaHistoryResponse = zod
+  .object({
+    can_import: zod
+      .boolean()
+      .describe(
+        'Whether the connector or administrator may start or resume an import now.'
+      ),
+    import: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            error_code: zod
+              .string()
+              .nullish()
+              .describe('Sanitized, actionable recovery reason.'),
+            progress: zod
+              .number()
+              .min(metaHistoryResponseImportProgressMin)
+              .nullish()
+              .describe('Provider progress, when available.'),
+            requested_at: zod.iso
+              .datetime({})
+              .describe(
+                'Explicit consent time, independent of connection time.'
+              ),
+            status: zod
+              .enum([
+                'not_requested',
+                'pending',
+                'syncing',
+                'complete',
+                'declined',
+                'failed',
+              ])
+              .describe(
+                'History progress is independent from live account health.'
+              ),
+            unavailable_media: zod
+              .boolean()
+              .describe(
+                'Some media was unavailable, with a notice retained in its channel.'
+              ),
+          })
+          .describe(
+            'Durable import status safe to display in account settings.'
+          ),
+      ])
+      .optional(),
+    reason: zod
+      .string()
+      .nullish()
+      .describe(
+        'Explanation when unavailable; no credentials or provider response bodies.'
+      ),
+  })
+  .describe('Server-authorized import affordance and current progress.');
+
+export const metaImportHistoryParams = zod.object({
+  connection_id: zod.uuid(),
+});
+
+export const metaImportHistoryResponseImportProgressMin = 0;
+
+export const metaImportHistoryResponse = zod
+  .object({
+    can_import: zod
+      .boolean()
+      .describe(
+        'Whether the connector or administrator may start or resume an import now.'
+      ),
+    import: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            error_code: zod
+              .string()
+              .nullish()
+              .describe('Sanitized, actionable recovery reason.'),
+            progress: zod
+              .number()
+              .min(metaImportHistoryResponseImportProgressMin)
+              .nullish()
+              .describe('Provider progress, when available.'),
+            requested_at: zod.iso
+              .datetime({})
+              .describe(
+                'Explicit consent time, independent of connection time.'
+              ),
+            status: zod
+              .enum([
+                'not_requested',
+                'pending',
+                'syncing',
+                'complete',
+                'declined',
+                'failed',
+              ])
+              .describe(
+                'History progress is independent from live account health.'
+              ),
+            unavailable_media: zod
+              .boolean()
+              .describe(
+                'Some media was unavailable, with a notice retained in its channel.'
+              ),
+          })
+          .describe(
+            'Durable import status safe to display in account settings.'
+          ),
+      ])
+      .optional(),
+    reason: zod
+      .string()
+      .nullish()
+      .describe(
+        'Explanation when unavailable; no credentials or provider response bodies.'
+      ),
+  })
+  .describe('Server-authorized import affordance and current progress.');
+
+export const metaRegisterParams = zod.object({
+  connection_id: zod.uuid(),
+});
+
+export const metaRegisterBodyPinRegExpTwo = new RegExp('^[0-9]{6}$');
+
+export const metaRegisterBody = zod
+  .object({
+    pin: zod
+      .union([
+        zod.null(),
+        zod
+          .string()
+          .regex(metaRegisterBodyPinRegExpTwo)
+          .describe(
+            'A six-digit secret, accepted only in an explicit registration request.\nZeroized on drop, deliberately neither Debug nor Serialize, and never persisted.'
+          ),
+      ])
+      .optional(),
+  })
+  .describe(
+    'A request without a PIN only checks whether a previous attempt completed.'
+  );
+
+export const metaRegisterResponse = zod
+  .object({
+    account_id: zod
+      .string()
+      .describe(
+        'Provider identifier, scoped separately by the persisted connection.'
+      ),
+    business_account_id: zod
+      .union([
+        zod.null(),
+        zod
+          .string()
+          .describe(
+            'Provider identifier, scoped separately by the persisted connection.'
+          ),
+      ])
+      .optional(),
+    connected_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe(
+        'Last successful connection time, not the start of imported history.'
+      ),
+    credential_expires_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe(
+        'Expiry returned by the provider; absence does not mean irrevocable access.'
+      ),
+    developer_account: zod
+      .boolean()
+      .describe('Development test number; never evidence of coexistence.'),
+    display_name: zod
+      .string()
+      .describe('Display label returned by the provider.'),
+    health_error: zod
+      .string()
+      .nullish()
+      .describe('Sanitized operational error code.'),
+    human_agent_approved: zod
+      .boolean()
+      .describe('Verified HUMAN_AGENT approval; false by default.'),
+    id: zod
+      .uuid()
+      .describe('Macro connection identity, preserved through reconnect.'),
+    provider: zod
+      .enum(['whatsapp', 'instagram'])
+      .describe(
+        'The official API used for an account. Personal accounts are not supported.'
+      ),
+    registration_attempted_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe(
+        'Time of the latest uncertain or rate-limited registration attempt; never a PIN.'
+      ),
+    registration_status: zod
+      .union([
+        zod.null(),
+        zod
+          .enum([
+            'required',
+            'unconfirmed',
+            'registered',
+            'rate_limited',
+            'unavailable',
+          ])
+          .describe(
+            'Durable registration uncertainty is separate from account health.'
+          ),
+      ])
+      .optional(),
+    status: zod
+      .enum(['connecting', 'connected', 'disconnected', 'revoked', 'error'])
+      .describe(
+        'Connection state transitions do not delete retained channels\/content.'
+      ),
+    team_id: zod.uuid().describe('Owning Macro team.'),
+    user_id: zod
+      .string()
+      .describe(
+        'Current connector. Reconnect changes this user without transferring existing channel\/file grants.'
+      ),
+    whatsapp_mode: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['coexistence', 'platform'])
+          .describe('Supported production WhatsApp onboarding paths.'),
+      ])
+      .optional(),
+  })
+  .describe('Public account health; never includes credentials.');
+
+export const metaDeveloperWhatsappResponse = zod
+  .object({
+    account_id: zod
+      .string()
+      .describe(
+        'Provider identifier, scoped separately by the persisted connection.'
+      ),
+    business_account_id: zod
+      .union([
+        zod.null(),
+        zod
+          .string()
+          .describe(
+            'Provider identifier, scoped separately by the persisted connection.'
+          ),
+      ])
+      .optional(),
+    connected_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe(
+        'Last successful connection time, not the start of imported history.'
+      ),
+    credential_expires_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe(
+        'Expiry returned by the provider; absence does not mean irrevocable access.'
+      ),
+    developer_account: zod
+      .boolean()
+      .describe('Development test number; never evidence of coexistence.'),
+    display_name: zod
+      .string()
+      .describe('Display label returned by the provider.'),
+    health_error: zod
+      .string()
+      .nullish()
+      .describe('Sanitized operational error code.'),
+    human_agent_approved: zod
+      .boolean()
+      .describe('Verified HUMAN_AGENT approval; false by default.'),
+    id: zod
+      .uuid()
+      .describe('Macro connection identity, preserved through reconnect.'),
+    provider: zod
+      .enum(['whatsapp', 'instagram'])
+      .describe(
+        'The official API used for an account. Personal accounts are not supported.'
+      ),
+    registration_attempted_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe(
+        'Time of the latest uncertain or rate-limited registration attempt; never a PIN.'
+      ),
+    registration_status: zod
+      .union([
+        zod.null(),
+        zod
+          .enum([
+            'required',
+            'unconfirmed',
+            'registered',
+            'rate_limited',
+            'unavailable',
+          ])
+          .describe(
+            'Durable registration uncertainty is separate from account health.'
+          ),
+      ])
+      .optional(),
+    status: zod
+      .enum(['connecting', 'connected', 'disconnected', 'revoked', 'error'])
+      .describe(
+        'Connection state transitions do not delete retained channels\/content.'
+      ),
+    team_id: zod.uuid().describe('Owning Macro team.'),
+    user_id: zod
+      .string()
+      .describe(
+        'Current connector. Reconnect changes this user without transferring existing channel\/file grants.'
+      ),
+    whatsapp_mode: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['coexistence', 'platform'])
+          .describe('Supported production WhatsApp onboarding paths.'),
+      ])
+      .optional(),
+  })
+  .describe('Public account health; never includes credentials.');
 
 /**
  * @summary Gets the users pinned items

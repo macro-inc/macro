@@ -35,6 +35,7 @@ type CreateCloudStorageServiceServiceArgs = {
   platform: { family: string; architecture: 'amd64' | 'arm64' };
   documentStorageBucketArn: pulumi.Output<string> | string;
   docxUploadBucketArn: pulumi.Output<string> | string;
+  emailAttachmentsBucketArn: pulumi.Output<string> | string;
   githubPullRequestPatchBucketArn: pulumi.Output<string> | string;
   serviceContainerPort: number;
   containerEnvVars?: { name: string; value: pulumi.Output<string> | string }[];
@@ -64,6 +65,7 @@ export class CloudStorageService extends pulumi.ComponentResource {
       platform,
       documentStorageBucketArn,
       docxUploadBucketArn,
+      emailAttachmentsBucketArn,
       githubPullRequestPatchBucketArn,
       serviceContainerPort,
       healthCheckPath,
@@ -212,6 +214,70 @@ export class CloudStorageService extends pulumi.ComponentResource {
           ],
         },
         tags: { ...this.tags, 'call-recording-access': 'true' },
+      },
+      { parent: this }
+    );
+
+    new aws.iam.RolePolicy(
+      `${BASE_NAME}-meta-media-copies`,
+      {
+        role: this.role.name,
+        policy: pulumi.jsonStringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Action: ['s3:PutObject', 's3:GetObject'],
+              Resource: pulumi.interpolate`${emailAttachmentsBucketArn}/temp/macro-messaging/*`,
+            },
+          ],
+        }),
+      },
+      { parent: this }
+    );
+
+    const metaMessagingKey = new aws.kms.Key(
+      `${BASE_NAME}-meta-messaging-key`,
+      {
+        description:
+          'Encrypt account-scoped WhatsApp Business and Instagram credentials',
+        enableKeyRotation: true,
+        deletionWindowInDays: 30,
+        tags,
+      },
+      { parent: this }
+    );
+    new aws.kms.Alias(
+      `${BASE_NAME}-meta-messaging-alias`,
+      {
+        name: `alias/cloud-storage-meta-messaging-${stack}`,
+        targetKeyId: metaMessagingKey.keyId,
+      },
+      { parent: this }
+    );
+    new aws.iam.RolePolicy(
+      `${BASE_NAME}-meta-messaging-policy`,
+      {
+        role: this.role.name,
+        policy: pulumi.jsonStringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Action: ['kms:Encrypt', 'kms:Decrypt'],
+              Resource: metaMessagingKey.arn,
+              Condition: {
+                StringEquals: {
+                  'kms:EncryptionContext:purpose': 'meta-business-messaging-v1',
+                },
+                Null: {
+                  'kms:EncryptionContext:team': 'false',
+                  'kms:EncryptionContext:connection': 'false',
+                },
+              },
+            },
+          ],
+        }),
       },
       { parent: this }
     );
@@ -369,7 +435,13 @@ export class CloudStorageService extends pulumi.ComponentResource {
               stopTimeout: 10, // 10 seconds to force kill the task
               cpu: stack === 'prod' ? 2048 : 512,
               memory: stack === 'prod' ? 4096 : 2048,
-              environment: [...(containerEnvVars ?? [])],
+              environment: [
+                ...(containerEnvVars ?? []),
+                {
+                  name: 'META_CREDENTIAL_KMS_KEY',
+                  value: metaMessagingKey.arn,
+                },
+              ],
               secrets: [...dopplerEcsEnvironment.containerSecrets],
               logConfiguration: {
                 logDriver: 'awsfirelens',

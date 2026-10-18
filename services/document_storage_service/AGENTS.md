@@ -23,6 +23,13 @@ threads, pins, recents, notifications, folders, activity.
   deletion side effects (feature-gated: `delete_document_worker`).
 - `src/service/conn_gateway.rs`: pushes realtime updates through
   `connection_gateway` (feature-gated: `connection_gateway`).
+- `src/native_messaging/native/test/http/oauth.rs`: Instagram browser-proof,
+  user/team, membership, expiry, replay and reconnect HTTP/database regressions.
+- `native_messaging/native/test/http/{members,registration}.rs` and
+  `native_messaging/native/test/identity.rs`: account management, Platform readiness
+  and native channel preservation through BSUID aliasing. Messaging workers share the DSS task
+  tracker and drain claimed work on cancellation. Messaging domain services own
+  connector authorization; the native adapter commits channel/message/file effects.
 - `README.md`: local setup (`just run_dbs`, `.env` from `.env.sample`).
 
 ## Scope
@@ -61,3 +68,15 @@ threads, pins, recents, notifications, folders, activity.
 ## Related
 
 - Rules: `.agents/rules/rust/db.md`, `.agents/rules/observability.md`
+
+Group wiring lives in `native_messaging/native/groups.rs`. It
+composes pending binding/native channel creation atomically, fails generic native group deletion closed and handles explicit human deletion through Meta policy, and publishes provider subject changes through
+channel events. `native/test/http/groups.rs` covers signed group receipts, explicit
+retry, dropped clients, ordered membership, native permissions and deletion fences.
+
+Accepted sends are finalized only by the durable native recovery worker; dispatch
+records acceptance and wakes it. `files.rs` separates authorized native reads from dispatch-only provider preparation
+and shares private upload plumbing. Reads retain readiness/content checks and recheck
+permissions after I/O; temporary staging rechecks file access. Native effects select
+authorized recipients and suppress history/revisions, then use the channels notification
+port for external author metadata, stable recovery IDs and delivery routing.

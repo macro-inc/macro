@@ -400,6 +400,8 @@ impl ChannelService for ToolTestChannelService {
         _viewer_user_id: MacroUserIdStr<'static>,
     ) -> Result<ChannelMetadata, crate::domain::ports::ChannelMessagesErr> {
         Ok(ChannelMetadata {
+            auto_join_team: false,
+            messaging_binding: Default::default(),
             channel_type: ChannelType::Private,
             channel_name: self
                 .metadata_name

@@ -16,6 +16,7 @@ import type { ApiChannelWithLatestName } from './apiChannelWithLatestName';
 import type { ApiChannelWithLatestOrgId } from './apiChannelWithLatestOrgId';
 import type { ApiChannelWithLatestTeamId } from './apiChannelWithLatestTeamId';
 import type { ApiChannelWithLatestViewedAt } from './apiChannelWithLatestViewedAt';
+import type { MessagingBinding } from './messagingBinding';
 
 /**
  * Channel list response item.
@@ -38,6 +39,8 @@ export interface ApiChannelWithLatest {
   is_participant: boolean;
   latest_message?: ApiChannelWithLatestLatestMessage;
   latest_non_thread_message?: ApiChannelWithLatestLatestNonThreadMessage;
+  /** Authoritative external binding, including pending provider group setup. */
+  messaging_binding: MessagingBinding;
   /** Channel name. */
   name?: ApiChannelWithLatestName;
   /**

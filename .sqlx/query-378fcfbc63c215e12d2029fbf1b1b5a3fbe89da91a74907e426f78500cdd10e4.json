@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_attachment SET lease_id=$4,lease_until=now()+interval '5 minutes' WHERE connection_id=$1 AND provider_message_id=$2 AND ordinal=$3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int2",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "378fcfbc63c215e12d2029fbf1b1b5a3fbe89da91a74907e426f78500cdd10e4"
+}

@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH candidate AS (\n            SELECT h.connection_id FROM meta_messaging_history_import h\n            JOIN meta_messaging_connection c ON c.id=h.connection_id AND c.connected_at=h.connected_at\n            WHERE h.status IN ('pending','syncing') AND h.step<>'waiting' AND h.available_at<=now()\n                AND h.attempts<10 AND (h.lease_until IS NULL OR h.lease_until<=now()) AND c.status='connected'\n            ORDER BY h.available_at,h.connection_id FOR UPDATE OF h SKIP LOCKED LIMIT 1)\n            UPDATE meta_messaging_history_import h SET status='syncing',lease_id=$1,lease_until=now()+interval '5 minutes',attempts=attempts+1,updated_at=now()\n            FROM candidate WHERE h.connection_id=candidate.connection_id\n            RETURNING h.connection_id,h.connected_at,h.user_id,h.step,h.cursor,h.attempts",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "connection_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "connected_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "step",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "cursor",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "attempts",
+        "type_info": "Int2"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "3f21e8eab8ccc2599504be513e0ef584dfaf622081236b5fd3f05ee46f0bc944"
+}

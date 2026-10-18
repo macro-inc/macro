@@ -11,6 +11,8 @@ note: |-
   with fake clients and controllers with fake capabilities; neither imports
   rendering code, including block-agent’s `ui/` and `component/` layers.
 files:
+  - apps/web/src/features/meta-messaging/queries/**
+  - apps/web/src/features/meta-messaging/primitives/**
   - apps/web/src/features/access-requests/queries/**
   - apps/web/src/features/access-requests/primitives/**
   - apps/web/src/features/agent-activity/queries/**

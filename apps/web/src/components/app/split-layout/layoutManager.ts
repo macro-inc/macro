@@ -446,7 +446,9 @@ export type SplitHandle<TMeta extends ComponentMeta = ComponentMeta> = {
     type: BlockName | 'component';
     nextId: string;
   }) => void;
-  removeFromHistory: (predicate: (content: SplitContent) => boolean) => void;
+  removeFromHistory: (
+    predicate: (content: SplitContent) => boolean
+  ) => Promise<void>;
   toggleSpotlight: (force?: boolean) => void;
   setDisplayName: (name: string) => void;
   canGoForward: () => boolean;
@@ -918,13 +920,22 @@ export function createSplitLayout(
     void router.navigatePane(paneOf(id), 1);
   }
 
-  function removeFromHistory(
+  async function removeFromHistory(
     id: SplitId,
     predicate: (content: SplitContent) => boolean
   ) {
-    void router.removeEntries(paneOf(id), (entry) =>
-      predicate(contentAt(entry))
-    );
+    const pane = paneOf(id);
+    const matches = (entry: Entry) => predicate(contentAt(entry));
+    const snapshot = router.history(pane);
+    // A pane must retain an entry. Cold links can contain only the deleted
+    // entity, so install the default before removing the remaining dead history.
+    if (snapshot?.entries.length && snapshot.entries.every(matches)) {
+      const result = await navigateSplit(id, DEFAULT_SPLIT_CONTENT, {
+        replace: true,
+      });
+      if (result.status !== 'committed') return;
+    }
+    await router.removeEntries(pane, matches);
   }
 
   /**
@@ -1199,7 +1210,7 @@ export function createSplitLayout(
       adoptContentId: ({ type, nextId }) =>
         adoptContentId(currentSplit.id, type, nextId),
       removeFromHistory: (predicate: (content: SplitContent) => boolean) => {
-        removeFromHistory(currentSplit.id, predicate);
+        return removeFromHistory(currentSplit.id, predicate);
       },
       previousContent: () => {
         const snapshot = router.history(paneOf(currentSplit.id));

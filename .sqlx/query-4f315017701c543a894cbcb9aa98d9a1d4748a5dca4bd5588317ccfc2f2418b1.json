@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO meta_messaging_group_participant(channel_id,customer_id,external_sender_id,display_name,username,phone,active,membership_at,profile_at)\n            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$8)\n            ON CONFLICT(channel_id,customer_id) DO UPDATE SET\n              active=CASE WHEN $9 AND (meta_messaging_group_participant.membership_at<EXCLUDED.membership_at OR (meta_messaging_group_participant.membership_at=EXCLUDED.membership_at AND NOT EXCLUDED.active)) THEN EXCLUDED.active ELSE meta_messaging_group_participant.active END,\n              membership_at=CASE WHEN $9 THEN GREATEST(meta_messaging_group_participant.membership_at,EXCLUDED.membership_at) ELSE meta_messaging_group_participant.membership_at END,\n              display_name=CASE WHEN EXCLUDED.profile_at>=meta_messaging_group_participant.profile_at THEN COALESCE(EXCLUDED.display_name,meta_messaging_group_participant.display_name) ELSE meta_messaging_group_participant.display_name END,\n              username=CASE WHEN EXCLUDED.profile_at>=meta_messaging_group_participant.profile_at THEN COALESCE(EXCLUDED.username,meta_messaging_group_participant.username) ELSE meta_messaging_group_participant.username END,\n              phone=CASE WHEN EXCLUDED.profile_at>=meta_messaging_group_participant.profile_at THEN COALESCE(EXCLUDED.phone,meta_messaging_group_participant.phone) ELSE meta_messaging_group_participant.phone END,\n              profile_at=GREATEST(EXCLUDED.profile_at,meta_messaging_group_participant.profile_at)\n            RETURNING external_sender_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "external_sender_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Bool",
+        "Timestamptz",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "4f315017701c543a894cbcb9aa98d9a1d4748a5dca4bd5588317ccfc2f2418b1"
+}

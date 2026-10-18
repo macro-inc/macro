@@ -82,7 +82,7 @@ function CanvasBlockEmbedContent(props: CanvasEmbedViewProps) {
     isPopover: () => true,
     replace: () => {},
     adoptContentId: () => {},
-    removeFromHistory: () => {},
+    removeFromHistory: async () => {},
     registerContentChangeListener: () => {},
     unregisterContentChangeListener: () => {},
     previousContent: () => null,

@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_connection SET status='disconnected',credential=NULL,credential_expires_at=NULL,updated_at=now() WHERE id=$1 AND team_id=$2 AND connected_at=$3 AND connected_at<=$4",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4ebf305ebf6a1c7e751cf095a6105fa6487e6c2a44fe1e07742eebcdc45d6217"
+}

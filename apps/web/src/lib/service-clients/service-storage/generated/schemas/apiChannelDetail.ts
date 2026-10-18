@@ -7,6 +7,7 @@
 
 import type { ApiChannelParticipant } from './apiChannelParticipant';
 import type { ChannelType } from './channelType';
+import type { MessagingBinding } from './messagingBinding';
 
 /**
  * Channel detail: metadata and active participants.
@@ -14,12 +15,16 @@ import type { ChannelType } from './channelType';
 Messages are read through `/messages/channel/{channel_id}`.
  */
 export interface ApiChannelDetail {
+  /** Whether new team members automatically join this channel. */
+  auto_join_team: boolean;
   /** Channel id. */
   channel_id: string;
   /** Resolved display name from the viewer's perspective. */
   channel_name: string;
   /** Channel type. */
   channel_type: ChannelType;
+  /** Authoritative external binding. */
+  messaging_binding: MessagingBinding;
   /** Active participants. */
   participants: ApiChannelParticipant[];
 }

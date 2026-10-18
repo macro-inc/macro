@@ -53,6 +53,7 @@ import type {
   SoupProperty,
 } from '@service-storage/generated/schemas';
 import type { ChannelType } from '@service-storage/generated/schemas/channelType';
+import type { MessagingBinding } from '@service-storage/generated/schemas/messagingBinding';
 import { formatDocumentName } from '@service-storage/util/filename';
 import type { UseQueryResult } from '@tanstack/solid-query';
 import { differenceInMilliseconds } from 'date-fns';
@@ -280,7 +281,11 @@ export function mapChannelSearchResultItem(
     owner_id?: string | null;
     channel_message_search_results: ChannelSearchResult[];
   },
-  channels: ReadonlyArray<{ id: string; name?: string | null }>
+  channels: ReadonlyArray<{
+    id: string;
+    name?: string | null;
+    messaging_binding?: MessagingBinding;
+  }>
 ): WithSearch<ChannelMessageEntity>[] {
   const channelWithLatest = channels.find((c) => c.id === result.channel_id);
   const channelName =
@@ -331,7 +336,11 @@ export const useSearchResponseItemMapper = () => {
 };
 
 export const createSearchResponseItemMapper = (
-  channels: ReadonlyArray<{ id: string; name?: string | null }>
+  channels: ReadonlyArray<{
+    id: string;
+    name?: string | null;
+    messaging_binding?: MessagingBinding;
+  }>
 ) => {
   return (
     result: UnifiedSearchResponseItem,
@@ -516,6 +525,9 @@ export const createSearchResponseItemMapper = (
             name: channelName,
             ownerId: result.owner_id ?? '',
             channelType: result.channel_type as ChannelType,
+            messagingBinding: channels.find(
+              (channel) => channel.id === result.channel_id
+            )?.messaging_binding,
             createdAt: result.metadata.created_at,
             updatedAt: result.metadata.updated_at,
             viewedAt: result.metadata.viewed_at,
@@ -878,6 +890,7 @@ export const mapApiSoupItemToEntity = (
         id: item.data.channel.id,
         name: item.data.channel.name || 'Unknown Channel',
         channelType: item.data.channel.channel_type,
+        messagingBinding: item.data.channel.messaging_binding,
         ownerId: item.data.channel.owner_id,
         frecencyScore: item.frecency_score ?? 0,
         updatedAt: item.data.channel.updated_at,

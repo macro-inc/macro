@@ -24,12 +24,19 @@ export const makeRenameAction = (options: MakeRenameOptions) => {
     }
     if (entity.type === 'foreign') return false;
 
-    if (entity.type === 'channel') return canEditChannelIdentity(entity);
+    if (entity.type === 'channel') {
+      return (
+        !!entity.messagingBinding &&
+        entity.messagingBinding !== 'whatsapp_group' &&
+        canEditChannelIdentity(entity)
+      );
+    }
 
     return entity.ownerId === userId();
   };
 
   const execute = async (entities: EntityData[]) => {
+    if (!entities.every(canExecute)) return;
     openBulkEditModal({
       view: 'rename',
       entities,
@@ -45,6 +52,7 @@ export const makeRenameAction = (options: MakeRenameOptions) => {
     entities: EntityData[],
     soup: EntityActionListState
   ) => {
+    if (!entities.every(canExecute)) return;
     const firstEntity = entities[0];
 
     openBulkEditModal({

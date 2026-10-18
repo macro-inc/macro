@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_conversation SET group_status='deleted',group_status_at=now(),group_invite_link=NULL WHERE channel_id=$1 AND connection_id=$2 AND kind='group'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "26b6df5cd614b9b27b2dac211f403c84ecca40c847bf2047cc433c452cf1b561"
+}

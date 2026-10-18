@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_history_import SET\n            status=CASE WHEN status IN ('complete','declined') OR error_code='history_permission_lost' THEN status ELSE $3 END,error_code=CASE WHEN error_code='history_permission_lost' THEN error_code ELSE $4 END,\n            attempts=CASE WHEN $4::text IS NULL THEN 0 ELSE attempts END,\n            available_at=now()+make_interval(secs=>COALESCE($5,0)),lease_id=NULL,lease_until=NULL,updated_at=now()\n            WHERE connection_id=$1 AND lease_id=$2 AND lease_until>now()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "834390ec7d652f6f5760feae6b02fc31fcaef67ccefac931b31da34fe2be0d19"
+}

@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT to_jsonb(s) AS \"data!\", request_sha256 FROM meta_messaging_send s WHERE channel_id = $1 AND user_id = $2 AND idempotency_key = $3 FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "data!",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 1,
+        "name": "request_sha256",
+        "type_info": "Bytea"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      false
+    ]
+  },
+  "hash": "f351946c5be912cd284f9e69e109d3e9382a9641b1d8afe879bf8fd9c83631c5"
+}

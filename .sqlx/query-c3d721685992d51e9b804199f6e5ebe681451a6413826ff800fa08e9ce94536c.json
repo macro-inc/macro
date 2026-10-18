@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT customer_display_name,customer_handle FROM meta_messaging_conversation WHERE connection_id=$1 AND kind='direct' AND customer_id=$2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "customer_display_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "customer_handle",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      true,
+      true
+    ]
+  },
+  "hash": "c3d721685992d51e9b804199f6e5ebe681451a6413826ff800fa08e9ce94536c"
+}

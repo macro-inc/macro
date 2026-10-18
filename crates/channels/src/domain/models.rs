@@ -373,6 +373,48 @@ pub struct ThreadReplyRow {
     pub edited_at: Option<DateTime<Utc>>,
 }
 
+/// Authoritative external binding, including an unbound provider group setup.
+/// Native authorization always reads this from storage, never from a client.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Default,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    strum::EnumString,
+    strum::Display,
+    strum::AsRefStr,
+)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "outbound", derive(sqlx::Type))]
+#[cfg_attr(
+    feature = "outbound",
+    sqlx(type_name = "text", rename_all = "snake_case")
+)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum MessagingBinding {
+    /// Ordinary native channel.
+    #[default]
+    Native,
+    /// Direct WhatsApp conversation.
+    WhatsappDirect,
+    /// Direct Instagram conversation.
+    InstagramDirect,
+    /// Pending or bound WhatsApp group, with provider-owned lifecycle.
+    WhatsappGroup,
+}
+
+impl MessagingBinding {
+    /// Whether the provider owns group lifecycle and native mutation policy.
+    pub fn is_group(self) -> bool {
+        self == Self::WhatsappGroup
+    }
+}
+
 /// Type of channel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
@@ -794,6 +836,10 @@ pub struct RemoveParticipantsRequest {
 /// Channel metadata needed for notifications.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChannelMetadata {
+    /// Whether new team members automatically join this channel.
+    pub auto_join_team: bool,
+    /// External binding read alongside the native channel metadata.
+    pub messaging_binding: MessagingBinding,
     /// Channel type.
     pub channel_type: ChannelType,
     /// Resolved display name.
@@ -828,6 +874,10 @@ pub struct MutatedMessage {
 /// Channel info row used by mutation logic.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChannelInfo {
+    /// Whether new team members automatically join this channel.
+    pub auto_join_team: bool,
+    /// External binding and lifecycle policy.
+    pub messaging_binding: MessagingBinding,
     /// Channel id.
     pub id: Uuid,
     /// Stored channel name.
@@ -1129,6 +1179,8 @@ pub struct ChannelWithParticipants {
 #[cfg(feature = "list")]
 #[derive(Debug, Clone)]
 pub struct ChannelListItem {
+    /// External binding, including pending provider groups.
+    pub messaging_binding: MessagingBinding,
     /// Channel id.
     pub id: Uuid,
     /// Resolved or stored name.

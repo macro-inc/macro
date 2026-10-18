@@ -15,6 +15,7 @@ jobs:
     runs-on: namespace-profile-linux-tiny-no-cache
     outputs:
       should_run: ${{ steps.filter.outputs.should_run }}
+      messaging_changed: ${{ steps.filter.outputs.messaging_changed }}
       codegen_changed: ${{ steps.filter.outputs.codegen_changed }}
     steps:
     - name: Checkout Repo
@@ -61,6 +62,51 @@ jobs:
             - 'apps/web/scripts/services.ts'
             - 'packages/sdk/**'
             - 'apps/docs/**'
+            - '.github/actions/setup-reqs-web/**'
+          messaging_changed:
+            - 'apps/web/src/features/block-channel/**'
+            - 'apps/web/src/features/meta-messaging/**'
+            - 'apps/web/src/features/channel/**'
+            - 'apps/web/src/features/entity/**'
+            - 'apps/web/src/features/next-soup/actions/**'
+            - 'apps/web/src/features/channels-view/**'
+            - 'apps/web/src/lib/core/**'
+            - 'apps/web/src/lib/queries/**'
+            - 'apps/web/src/lib/service-clients/service-storage/**'
+            - 'apps/web/src/lib/graphql-cache/**'
+            - 'apps/web/src/components/app/**'
+            - 'apps/web/src/components/ui/**'
+            - 'apps/web/src/routes/**'
+            - 'apps/web/tests/functional/**'
+            - 'apps/web/tests/native/fixtures/**'
+            - 'apps/web/package.json'
+            - 'apps/web/vite.config.ts'
+            - 'package.json'
+            - 'bun.lock'
+            - 'Cargo.toml'
+            - 'Cargo.lock'
+            - 'crates/meta_messaging/**'
+            - 'crates/graphql_soup/**'
+            - 'crates/models_soup/**'
+            - 'crates/complete_graph/**'
+            - 'static_assets/schema.graphql'
+            - 'services/document_storage_service/src/server.rs'
+            - 'services/document_storage_service/src/api/**'
+            - 'crates/channels/**'
+            - 'crates/messages/**'
+            - 'crates/call/**'
+            - 'crates/entity_access/**'
+            - 'crates/entity_access_db_utils/**'
+            - 'crates/macro_middleware/**'
+            - 'crates/client/**'
+            - 'packages/collaboration/**'
+            - 'apps/web/src/lib/service-clients/service-connection/**'
+            - 'crates/macro_authorization/**'
+            - 'services/document_storage_service/src/native_messaging/**'
+            - 'services/document_storage_service/src/native_messaging.rs'
+            - 'crates/macro_db_client/migrations/**'
+            - 'tooling/xtask/crates/xtask_workflows/src/workflows/web_app_check_main*'
+            - '.github/workflows/web-app-check-main.yml'
             - '.github/actions/setup-reqs-web/**'
   android-native-check:
     name: Android Native Check
@@ -485,12 +531,87 @@ jobs:
       env:
         WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
       working-directory: apps/web
-    - name: Test Optimistic Mutations in Chromium
+    - name: Test Shared Functional Scenarios in Chromium
       run: bun run test:functional
       working-directory: apps/web
     - name: show sccache stats
       if: always()
       run: sccache --show-stats || true
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
+  messaging:
+    needs:
+    - path-check
+    if: needs.path-check.outputs.messaging_changed == 'true'
+    name: Messaging Browser Check
+    runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
+    steps:
+    - name: Checkout Repo
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+    - name: Mount Namespace cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        cache: nix
+        path: |-
+          /home/runner/.bun/install/cache
+          /home/runner/.cargo/registry
+          /home/runner/.cargo/git
+          /home/runner/.cache/.wasm-pack
+          /home/runner/.cache/wasm-pkgs
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+    - name: Setup
+      uses: './.github/actions/setup-reqs-web'
+      with:
+        playwright: 'true'
+    - name: Configure Namespace remote sccache
+      if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
+      run: |-
+        set -euo pipefail
+        env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
+        trap 'rm -f "$env_file"' EXIT
+        if nsc cache sccache setup --cache_name web-ci > "$env_file"; then
+          # Register credential values as masked BEFORE exporting: GitHub only
+          # masks `secrets.*`, so without this SCCACHE_WEBDAV_TOKEN — a broad,
+          # ~24h Namespace workspace token (registry + cache write) — printed
+          # verbatim in every subsequent step's env dump. Masking is selective by
+          # key name: masking non-secrets like the endpoint URL or key prefix
+          # would redact those strings everywhere in the logs.
+          while IFS= read -r line; do
+            k="${line%%=*}"
+            v="${line#*=}"
+            [ -n "$v" ] && [ "$k" != "$line" ] || continue
+            case "$k" in
+              *TOKEN*|*SECRET*|*PASSWORD*) echo "::add-mask::$v" ;;
+            esac
+          done < "$env_file"
+          cat "$env_file" >> "$GITHUB_ENV"
+          # Force the next compiler invocation to start a server with the new remote
+          # backend even if a setup hook happened to launch one already.
+          sccache --stop-server >/dev/null 2>&1 || true
+        else
+          echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
+        fi
+    - name: Start sccache server
+      run: sccache --start-server
+    - name: Build isolated messaging fixture
+      run: just build-dev
+      env:
+        VITE_LOCAL_SERVERS: ALL
+        VITE_LOCAL_BACKEND_ORIGIN: same-origin
+        VITE_ENABLE_GRAPHQL_SOUP: 'true'
+        VITE_DISABLE_BROWSER_TURSO_CACHE: 'true'
+        VITE_ENABLE_IN_APP_TOURS: 'false'
+        VITE_ENABLE_BROWSER_OTEL: 'false'
+        WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
+      working-directory: apps/web
+    - name: Test Native Messaging in Chromium
+      run: bun run test:functional meta-messaging.spec.ts
+      env:
+        FUNCTIONAL_MESSAGING: '1'
+      working-directory: apps/web
     - name: Teardown Nix
       if: always()
       uses: './.github/actions/teardown-nix'
@@ -745,6 +866,7 @@ jobs:
     - test
     - cycles
     - build
+    - messaging
     - ios-native-check
     if: always()
     name: Web App Status Check
@@ -760,6 +882,7 @@ jobs:
         echo "test: ${{ needs.test.result }}"
         echo "cycles: ${{ needs.cycles.result }}"
         echo "build: ${{ needs.build.result }}"
+        echo "messaging: ${{ needs.messaging.result }}"
         echo "ios-native-check: ${{ needs.ios-native-check.result }}"
 
         # Fail if any job failed (skipped and success are both OK). The iOS
@@ -772,6 +895,8 @@ jobs:
            [[ "${{ needs.test.result }}" == "failure" ]] || \
            [[ "${{ needs.cycles.result }}" == "failure" ]] || \
            [[ "${{ needs.build.result }}" == "failure" ]] || \
+           [[ "${{ needs.messaging.result }}" == "failure" ]] || \
+           [[ "${{ needs.messaging.result }}" == "cancelled" ]] || \
            [[ "${{ needs.ios-native-check.result }}" == "failure" ]] || \
            [[ "${{ needs.ios-native-check.result }}" == "cancelled" ]]; then
           echo "One or more jobs failed"

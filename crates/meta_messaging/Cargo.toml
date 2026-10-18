@@ -1,0 +1,50 @@
+[package]
+name = "meta_messaging"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[[example]]
+name = "openapi"
+required-features = ["axum"]
+
+[features]
+default = []
+ports = ["dep:entity_access", "dep:messages", "dep:futures", "dep:tokio", "dep:tokio-util"]
+outbound = ["ports", "dep:base64", "dep:sqlx", "dep:reqwest", "dep:aws-sdk-kms", "dep:aws-sdk-s3", "dep:url", "dep:tokio", "dep:macro_tower_layers"]
+axum = ["ports", "dep:axum", "dep:macro_authorization", "entity_access/inbound", "schema"]
+schema = ["dep:utoipa"]
+
+[dependencies]
+base64 = { workspace = true, optional = true }
+async-trait = { workspace = true }
+axum = { workspace = true, features = ["multipart"], optional = true }
+aws-sdk-kms = { workspace = true, optional = true }
+aws-sdk-s3 = { workspace = true, optional = true }
+chrono = { workspace = true }
+hmac = { workspace = true }
+futures = { workspace = true, optional = true }
+entity_access = { path = "../entity_access", default-features = false, features = ["ports"], optional = true }
+macro_authorization = { path = "../macro_authorization", default-features = false, features = ["axum"], optional = true }
+messages = { path = "../messages", default-features = false, features = ["ports"], optional = true }
+reqwest = { workspace = true, features = ["multipart", "stream"], optional = true }
+rootcause = { workspace = true }
+serde = { workspace = true }
+strum = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+sqlx = { workspace = true, optional = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["sync", "time", "rt"], optional = true }
+tokio-util = { workspace = true, features = ["rt"], optional = true }
+macro_tower_layers = { path = "../macro_tower_layers", optional = true }
+tracing = { workspace = true }
+url = { workspace = true, optional = true }
+utoipa = { workspace = true, optional = true }
+uuid = { workspace = true }
+zeroize = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+macro_db_migrator = { path = "../macro_db_migrator" }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

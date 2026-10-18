@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM meta_messaging_group_setup WHERE channel_id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d56bdbfef0d81b2d54189b18a4cee68cc590effb6b1c685b78bd3a8a1d540722"
+}

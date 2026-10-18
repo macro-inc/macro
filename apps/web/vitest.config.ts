@@ -211,6 +211,16 @@ export default defineConfig({
         },
       },
       {
+        extends: './src/lib/core/vitest.config.ts',
+        test: {
+          include: [
+            'src/features/meta-messaging/**/*.{test,spec}.{ts,tsx}',
+            'src/lib/queries/meta-messaging/**/*.{test,spec}.{ts,tsx}',
+          ],
+          name: 'meta-messaging',
+        },
+      },
+      {
         extends: './src/features/notifications/vitest.config.ts',
         test: {
           include: ['src/features/notifications/**/*.{test,spec}.{ts,tsx}'],

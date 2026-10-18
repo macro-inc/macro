@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO meta_messaging_group_setup(channel_id,connection_id,subject,state,attempt_id,generation) VALUES ($1,$2,$3,'creating',$4,$5)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "02c3e44509cf0a76380ddd0c9672c61b87dd45b932d4c664e6500522ee35069c"
+}

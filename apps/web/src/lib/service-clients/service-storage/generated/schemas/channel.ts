@@ -9,6 +9,7 @@ import type { ChannelName } from './channelName';
 import type { ChannelOrgId } from './channelOrgId';
 import type { ChannelTeamId } from './channelTeamId';
 import type { ChannelType } from './channelType';
+import type { MessagingBinding } from './messagingBinding';
 
 /**
  * Channel metadata in soup payloads.
@@ -20,6 +21,8 @@ export interface Channel {
   created_at: string;
   /** Channel id. */
   id: string;
+  /** Authoritative external binding, including pending group setup. */
+  messaging_binding: MessagingBinding;
   /** Channel display name. */
   name?: ChannelName;
   /**

@@ -127,7 +127,11 @@
           let
             rel = pkgs.lib.removePrefix ((toString ../.) + "/") (toString path);
           in
-          (rel == "infra")
+          # Patched third-party path dependencies must retain real source in
+          # pruned deploy trees; they are deliberately not workspace members.
+          (rel == "vendor")
+          || (pkgs.lib.hasPrefix "vendor/" rel)
+          || (rel == "infra")
           || (rel == "infra/local")
           || (rel == "infra/local/certs")
           || (localCaFilter path type)

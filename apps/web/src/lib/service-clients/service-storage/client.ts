@@ -39,6 +39,7 @@ import type { Agent } from './generated/schemas/agent';
 import type { AnchorResponse } from './generated/schemas/anchorResponse';
 import type { ApiActivity } from './generated/schemas/apiActivity';
 import type { ApiChannelAttachmentsPage } from './generated/schemas/apiChannelAttachmentsPage';
+import type { ApiChannelDetail } from './generated/schemas/apiChannelDetail';
 import type { ApiChannelParticipant } from './generated/schemas/apiChannelParticipant';
 import type { Bot } from './generated/schemas/bot';
 import type { BotChannel } from './generated/schemas/botChannel';
@@ -709,6 +710,14 @@ export const storageServiceClient = {
   // The channel list is still served by the comms hex, mounted at
   // `/comms/channels` on the same DSS host. Repoint to `/channels` once the
   // list moves into the channels hex (alongside the comms teardown).
+  /** Native view-authorized metadata, including channels not in the participant list. */
+  async getChannelMetadata(channelId: string) {
+    return dssFetch<ApiChannelDetail>(
+      `/channels/${encodeURIComponent(channelId)}`,
+      { method: 'GET' }
+    );
+  },
+
   async getChannels(args: {
     cursor?: string;
     limit?: number;

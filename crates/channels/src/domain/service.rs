@@ -386,6 +386,11 @@ where
             .get_channel_info(channel_id)
             .await
             .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+        if info.messaging_binding.is_group() {
+            return Err(ChannelMutationErr::Forbidden(
+                "Provider-managed owns this group name and private visibility".into(),
+            ));
+        }
         if matches!(info.channel_type, ChannelType::DirectMessage) && req.channel_name.is_some() {
             return Err(ChannelMutationErr::BadRequest(
                 "cannot change channel_name for direct message channels".to_string(),
@@ -480,6 +485,16 @@ where
         channel_id: Uuid,
     ) -> Result<(), ChannelMutationErr> {
         let actor = require_user_actor(&actor)?;
+        let info = self
+            .repo
+            .get_channel_info(channel_id)
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+        if info.messaging_binding.is_group() {
+            return Err(ChannelMutationErr::Forbidden(
+                "Provider-managed groups require explicit provider deletion".into(),
+            ));
+        }
         self.repo
             .delete_channel(channel_id, actor.as_ref().to_string())
             .await

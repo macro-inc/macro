@@ -138,6 +138,8 @@ export type ChannelEntity = EntityBase & {
     createdAt: DateValue;
   }[];
   channelType: 'direct_message' | 'private' | 'public' | 'team';
+  /** Authoritative native metadata; undefined means not loaded. */
+  messagingBinding?: import('@service-storage/generated/schemas/messagingBinding').MessagingBinding;
   interactedAt?: DateValue | null;
   participantIds?: string[];
   /**

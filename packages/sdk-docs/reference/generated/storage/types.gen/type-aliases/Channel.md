@@ -1,6 +1,6 @@
 # Type Alias: Channel
 
-> **Channel** = \{ `channel_type`: [`ChannelType`](ChannelType.md); `created_at`: `string`; `id`: `string`; `name?`: `string` \| `null`; `org_id?`: `number` \| `null`; `owner_id`: `string`; `team_id?`: `string` \| `null`; `updated_at`: `string`; \}
+> **Channel** = \{ `channel_type`: [`ChannelType`](ChannelType.md); `created_at`: `string`; `id`: `string`; `messaging_binding`: [`MessagingBinding`](MessagingBinding.md); `name?`: `string` \| `null`; `org_id?`: `number` \| `null`; `owner_id`: `string`; `team_id?`: `string` \| `null`; `updated_at`: `string`; \}
 
 Channel metadata in soup payloads.
 
@@ -11,6 +11,7 @@ Channel metadata in soup payloads.
 | <a id="property-channel_type"></a> `channel_type` | [`ChannelType`](ChannelType.md) | Channel type. |
 | <a id="property-created_at"></a> `created_at` | `string` | Creation timestamp. |
 | <a id="property-id"></a> `id` | `string` | Channel id. |
+| <a id="property-messaging_binding"></a> `messaging_binding` | [`MessagingBinding`](MessagingBinding.md) | Authoritative external binding, including pending group setup. |
 | <a id="property-name"></a> `name?` | `string` \| `null` | Channel display name. |
 | <a id="property-org_id"></a> `org_id?` | `number` \| `null` | Organization id. |
 | <a id="property-owner_id"></a> `owner_id` | `string` | Channel owner. |

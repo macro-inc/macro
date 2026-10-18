@@ -13,6 +13,7 @@ const item: SoupApiItem = {
       id: 'channel-1',
       name: 'Restored conversation',
       channel_type: 'direct_message',
+      messaging_binding: 'native',
       owner_id: 'macro|sender@example.com',
       created_at: '2026-09-24T12:00:00Z',
       updated_at: '2026-09-24T12:00:00Z',

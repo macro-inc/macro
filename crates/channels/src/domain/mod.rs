@@ -46,3 +46,7 @@ pub mod side_effects;
 /// Ensure teammate direct messages from a join payload.
 #[cfg(feature = "ports")]
 pub mod teammate_dms;
+
+/// Provider-managed channel lifecycle boundaries.
+#[cfg(feature = "ports")]
+pub mod provider;

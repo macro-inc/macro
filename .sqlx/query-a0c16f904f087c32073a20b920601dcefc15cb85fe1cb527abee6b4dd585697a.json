@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE comms_messages SET sender_id=$5,imported_author=NULL,\n            content=CASE WHEN deleted_at IS NULL AND edited_at IS NULL THEN $6 ELSE content END,\n            import_metadata=import_metadata||jsonb_build_object('provenance','macro_reply'),updated_at=GREATEST(updated_at,now())\n            WHERE id=$1 AND parent_entity_type='channel' AND parent_entity_id=$2\n              AND import_metadata->>'connection_id'=$3 AND import_metadata->>'provider_message_id'=$4\n              AND import_metadata->>'direction'='outbound'\n              AND import_metadata->>'provenance' IN ('phone_echo','onboarding_history')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a0c16f904f087c32073a20b920601dcefc15cb85fe1cb527abee6b4dd585697a"
+}

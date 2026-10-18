@@ -1,0 +1,216 @@
+{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "waba",
+      "changes": [
+        {
+          "field": "group_lifecycle_update",
+          "value": {
+            "metadata": {
+              "phone_number_id": "business"
+            },
+            "groups": [
+              {
+                "type": "group_create",
+                "request_id": "current-request",
+                "group_id": "opaque-group",
+                "subject": "Project",
+                "invite_link": "https://chat.whatsapp.com/current",
+                "timestamp": "1800000000"
+              }
+            ]
+          }
+        },
+        {
+          "field": "group_participants_update",
+          "value": {
+            "metadata": {
+              "phone_number_id": "business"
+            },
+            "groups": [
+              {
+                "type": "group_participants_add",
+                "group_id": "opaque-group",
+                "timestamp": "1800000001",
+                "added_participants": [
+                  {
+                    "user_id": "US.A",
+                    "username": "alice"
+                  },
+                  {
+                    "user_id": "bad id"
+                  },
+                  {
+                    "user_id": "US.B"
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "field": "group_participants_update",
+          "value": {
+            "metadata": {
+              "phone_number_id": "business"
+            },
+            "groups": [
+              {
+                "type": "group_participants_remove",
+                "group_id": "opaque-group",
+                "timestamp": "1800000002",
+                "removed_participants": [
+                  {
+                    "input": "US.A"
+                  }
+                ],
+                "failed_participants": [
+                  {
+                    "input": "US.B",
+                    "errors": [
+                      {
+                        "code": 131204
+                      }
+                    ]
+                  }
+                ],
+                "errors": [
+                  {
+                    "code": 131204
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "field": "group_settings_update",
+          "value": {
+            "metadata": {
+              "phone_number_id": "business"
+            },
+            "groups": [
+              {
+                "type": "group_settings_update",
+                "group_id": "opaque-group",
+                "timestamp": "1800000003",
+                "group_subject": {
+                  "text": "New subject",
+                  "update_successful": true
+                },
+                "errors": [
+                  {
+                    "code": 1
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "field": "group_status_update",
+          "value": {
+            "metadata": {
+              "phone_number_id": "business"
+            },
+            "groups": [
+              {
+                "type": "group_suspend",
+                "group_id": "opaque-group",
+                "timestamp": "1800000004"
+              }
+            ]
+          }
+        },
+        {
+          "field": "group_lifecycle_update",
+          "value": {
+            "metadata": {
+              "phone_number_id": "business"
+            },
+            "groups": [
+              {
+                "type": "group_delete",
+                "group_id": "opaque-group",
+                "request_id": "delete-request",
+                "timestamp": "1800000005",
+                "errors": [
+                  {
+                    "code": 131041
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "field": "messages",
+          "value": {
+            "metadata": {
+              "phone_number_id": "business"
+            },
+            "contacts": [
+              {
+                "user_id": "US.A",
+                "profile": {
+                  "name": "Alice",
+                  "username": "alice"
+                }
+              }
+            ],
+            "messages": [
+              {
+                "from_user_id": "US.A",
+                "group_id": "opaque-group",
+                "id": "incoming",
+                "timestamp": "1800000006",
+                "type": "text",
+                "text": {
+                  "body": "Hello"
+                }
+              }
+            ],
+            "statuses": [
+              {
+                "id": "out",
+                "recipient_type": "group",
+                "recipient_id": "opaque-group",
+                "status": "sent",
+                "timestamp": "1800000006"
+              },
+              {
+                "id": "out",
+                "recipient_type": "group",
+                "recipient_id": "opaque-group",
+                "status": "read",
+                "recipient_participant_user_id": "US.A",
+                "timestamp": "1800000007"
+              },
+              {
+                "id": "out",
+                "recipient_type": "group",
+                "recipient_id": "opaque-group",
+                "status": "delivered",
+                "participant_recipient_id": "15550000001",
+                "timestamp": "1800000008"
+              },
+              {
+                "id": "failed",
+                "recipient_type": "group",
+                "recipient_id": "opaque-group",
+                "status": "failed",
+                "timestamp": "1800000009",
+                "errors": [
+                  {
+                    "code": 131020
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

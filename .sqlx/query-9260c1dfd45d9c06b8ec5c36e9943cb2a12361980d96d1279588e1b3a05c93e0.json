@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_history_import SET status='failed',error_code='history_interrupted',lease_id=NULL,lease_until=NULL,updated_at=now()\n            WHERE status IN ('pending','syncing') AND\n            ((attempts>=10 AND (lease_until IS NULL OR lease_until<=now())) OR\n             (step='waiting' AND updated_at<now()-interval '24 hours'))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "9260c1dfd45d9c06b8ec5c36e9943cb2a12361980d96d1279588e1b3a05c93e0"
+}

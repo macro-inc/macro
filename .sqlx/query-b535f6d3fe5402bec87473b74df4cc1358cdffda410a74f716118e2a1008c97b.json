@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO meta_messaging_attachment (connection_id,provider_message_id,ordinal,document_id,sha256) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (connection_id,provider_message_id,ordinal) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int2",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b535f6d3fe5402bec87473b74df4cc1358cdffda410a74f716118e2a1008c97b"
+}

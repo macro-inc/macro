@@ -38,6 +38,7 @@ run-local.fish
 infra/local/generated/
 **/target/
 /target
+/vendor/utoipa-swagger-ui/Cargo.lock
 **/ai_tools/schemas/
 .pi/outputs/
 .commandcode/

@@ -145,7 +145,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             ));
         }
         let parent = parent_from_receipt(access)?;
-        self.ensure_parent(&parent).await?;
+        self.ensure_parent(&parent, None).await?;
         query.limit = Some(query.limit.unwrap_or(50).clamp(1, 100));
         if query.ids.len() > 100 || (query.around.is_some() && query.cursor.is_some()) {
             return Err(MessageError::Invalid("invalid timeline selection"));
@@ -161,7 +161,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         id: Uuid,
     ) -> Result<Message, MessageError> {
         let parent = parent_from_receipt(&access)?;
-        self.ensure_parent(&parent).await?;
+        self.ensure_parent(&parent, None).await?;
         self.active_message(&parent, id, true).await
     }
 
@@ -173,7 +173,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         root_id: Uuid,
     ) -> Result<MessageThread, MessageError> {
         let parent = parent_from_receipt(&access)?;
-        self.ensure_parent(&parent).await?;
+        self.ensure_parent(&parent, None).await?;
         let state = self.active_thread(&parent, root_id).await?;
         let root = self.active_message(&parent, root_id, true).await?;
         let replies = self.repo.replies(&parent, root_id).await?;
@@ -193,7 +193,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         limit: u16,
     ) -> Result<Vec<Message>, MessageError> {
         let parent = parent_from_receipt(&access)?;
-        self.ensure_parent(&parent).await?;
+        self.ensure_parent(&parent, None).await?;
         self.active_message(&parent, id, false).await?;
         self.repo.preceding(&parent, id, limit.clamp(1, 100)).await
     }
@@ -239,7 +239,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
     ) -> Result<(), MessageError> {
         let parent = parent_from_receipt(&access)?;
         let actor = actor_from_receipt(&access, &parent)?;
-        self.ensure_parent(&parent).await?;
+        self.ensure_parent(&parent, None).await?;
         if let Some(root_id) = root_id {
             self.active_thread(&parent, root_id).await?;
         }
@@ -275,7 +275,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             return self.post_validated(access, input).await;
         };
         let actor = actor_from_receipt(&access, &parent)?;
-        self.ensure_parent(&parent).await?;
+        self.ensure_parent(&parent, None).await?;
         // The first call message uses the call ID, so its submitted ID must be
         // resolved separately. Replays return persisted content without delivery.
         if let Some(message) = self
@@ -308,7 +308,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         validate_uuid_v7(event_id)?;
         let parent = parent_from_receipt(&access)?;
         let actor = actor_from_receipt(&access, &parent)?;
-        self.ensure_parent(&parent).await?;
+        self.ensure_parent(&parent, None).await?;
         let thread_id = input.thread_id;
         if let Some(message) = self.repo.get(&parent, event_id).await? {
             return validate_event_message(message, &parent, &actor, thread_id);
@@ -334,7 +334,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
     ) -> Result<Message, MessageError> {
         let parent = parent_from_receipt(&access)?;
         let actor = actor_from_receipt(&access, &parent)?;
-        self.ensure_parent(&parent).await?;
+        self.ensure_parent(&parent, Some(&actor)).await?;
         if actor.as_bot().is_some() && input.mentions.is_empty() {
             input.mentions = self.mentions.extract(&input.content).await?;
         }
@@ -410,7 +410,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
     ) -> Result<Message, MessageError> {
         let parent = parent_from_receipt(&access)?;
         let actor = actor_from_receipt(&access, &parent)?;
-        self.ensure_parent(&parent).await?;
+        self.ensure_parent(&parent, Some(&actor)).await?;
         let current = self.active_message(&parent, id, false).await?;
         if current.sender_id != actor
             && !(matches!(parent, MessageParent::Channel(_))
@@ -508,7 +508,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
     ) -> Result<Message, MessageError> {
         let parent = parent_from_receipt(&access)?;
         let actor = actor_from_receipt(&access, &parent)?;
-        self.ensure_parent(&parent).await?;
+        self.ensure_parent(&parent, Some(&actor)).await?;
         let current = self.active_message(&parent, id, false).await?;
         // A comment's replies and its place in the document belong to the comment,
         // not to its first message, so the root carries the whole discussion with
@@ -553,7 +553,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
     ) -> Result<Message, MessageError> {
         let parent = parent_from_receipt(&access)?;
         let actor = actor_from_receipt(&access, &parent)?;
-        self.ensure_parent(&parent).await?;
+        self.ensure_parent(&parent, Some(&actor)).await?;
         self.active_message(&parent, id, false).await?;
         if emoji.is_empty() || emoji.chars().count() > 32 || emoji.chars().any(char::is_control) {
             return Err(MessageError::Invalid("invalid reaction"));
@@ -591,12 +591,12 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
     ) -> Result<ThreadState, MessageError> {
         let parent = parent_from_receipt(&access)?;
         let actor = actor_from_receipt(&access, &parent)?;
+        self.ensure_parent(&parent, Some(&actor)).await?;
         if !parent.is_discussion() {
             return Err(MessageError::Invalid(
                 "only entity discussions support thread updates",
             ));
         }
-        self.ensure_parent(&parent).await?;
         let thread = self.active_thread(&parent, root_id).await?;
         if patch.resolved.is_none() && !patch.detach_anchor {
             return Err(MessageError::Invalid("thread update must change a field"));
@@ -640,12 +640,12 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
     ) -> Result<ThreadState, MessageError> {
         let parent = parent_from_receipt(&access)?;
         let actor = actor_from_receipt(&access, &parent)?;
+        self.ensure_parent(&parent, Some(&actor)).await?;
         if !parent.is_discussion() {
             return Err(MessageError::Invalid(
                 "only entity discussions support whole-thread deletion",
             ));
         }
-        self.ensure_parent(&parent).await?;
         self.delete_discussion(&access, &parent, &actor, root_id, nonce)
             .await
     }
@@ -694,7 +694,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         is_thread: bool,
     ) -> Result<Message, MessageError> {
         let parent = parent_from_receipt(&access)?;
-        self.ensure_parent(&parent).await?;
+        self.ensure_parent(&parent, None).await?;
         let id = self
             .repo
             .resolve_legacy(&parent, id, is_thread)
@@ -828,11 +828,18 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         Ok(())
     }
 
-    async fn ensure_parent(&self, parent: &MessageParent) -> Result<(), MessageError> {
-        if !self.repo.parent_exists(parent).await? {
-            return Err(MessageError::NotFound);
+    async fn ensure_parent(
+        &self,
+        parent: &MessageParent,
+        actor: Option<&ChannelSender<'_>>,
+    ) -> Result<(), MessageError> {
+        match self.repo.parent_state(parent).await? {
+            ParentState::Missing => Err(MessageError::NotFound),
+            ParentState::ProviderManaged if actor.is_some_and(|actor| actor.as_bot().is_none()) => {
+                Err(MessageError::Forbidden)
+            }
+            _ => Ok(()),
         }
-        Ok(())
     }
 
     async fn active_thread(

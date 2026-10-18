@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO meta_messaging_conversation(connection_id,kind,customer_id,channel_id,external_sender_id,customer_display_name,group_status,group_status_at,group_subject_at,group_invite_link,group_creation_subject,group_creation_generation) VALUES ($1,'group',$2,$3,$4,$5,'active',$6,$6,$7,$8,$9)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Timestamptz",
+        "Text",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "88c1a8296b194941c8ab365bc80646812f5e8ac186553f9bd101ca520a85dd6f"
+}

@@ -264,6 +264,7 @@ where
                     .map_err(|e| anyhow::anyhow!("{e:?}"))?;
             }
             ChannelNotificationEffect::ChannelMessage {
+                notification_id,
                 channel_id,
                 message_id,
                 sender,
@@ -291,7 +292,7 @@ where
                             sender_id: sender.as_user().cloned(),
                             recipient_ids,
                         }
-                        .into_request()
+                        .into_request_with_id(notification_id.unwrap_or_else(Uuid::now_v7))
                         .with_apns()
                         .with_conn_gateway(),
                     )

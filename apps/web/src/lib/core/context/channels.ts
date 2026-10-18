@@ -1,6 +1,9 @@
 import type { DateValue } from '@core/util/date';
 import { useChannelsActivityQuery } from '@queries/channel/activity';
-import { useListChannelsQuery } from '@queries/channel/channels';
+import {
+  useChannelMetadataQuery,
+  useListChannelsQuery,
+} from '@queries/channel/channels';
 import { queryReadyGate } from '@queries/gate';
 import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
 import { ChannelTypeEnum } from '@service-storage/client';
@@ -62,7 +65,9 @@ export const [ChannelsContextProvider, useChannelsContext] =
 
 export function useChannel(channelId: string) {
   const ctx = useChannelsContext();
-  return createMemo(() => ctx.channelsById()[channelId]);
+  return createMemo<ApiChannelWithLatest | undefined>(
+    () => ctx.channelsById()[channelId]
+  );
 }
 
 /**
@@ -81,14 +86,45 @@ export function useChannelCanCall(
   });
 }
 
+/** Shared native detail fallback for channels absent from the sidebar list. */
+function useChannelMetadataSource(channelId: string) {
+  const channel = useChannel(channelId);
+  const metadata = useChannelMetadataQuery(
+    () => channelId,
+    () => !channel()?.messaging_binding
+  );
+  return { channel, metadata };
+}
+
 export function useChannelName(channelId: string, fallback?: string) {
-  const ctx = useChannelsContext();
-  return createMemo(() => ctx.channelsById()[channelId]?.name ?? fallback);
+  const { channel, metadata } = useChannelMetadataSource(channelId);
+  return createMemo(
+    () =>
+      channel()?.name ??
+      (queryReadyGate(metadata) ? metadata.data.channel_name : fallback)
+  );
+}
+
+/** Undefined means native metadata has not loaded; it never implies ordinary. */
+export function useChannelMessagingBinding(channelId: string) {
+  const { channel, metadata } = useChannelMetadataSource(channelId);
+  return {
+    value: () =>
+      channel()?.messaging_binding ??
+      (queryReadyGate(metadata) ? metadata.data.messaging_binding : undefined),
+    isPending: () => !channel()?.messaging_binding && metadata.isPending,
+    error: () => (!channel()?.messaging_binding ? metadata.error : null),
+    refetch: () => metadata.refetch(),
+  };
 }
 
 export function useChannelType(channelId: string) {
-  const ctx = useChannelsContext();
-  return createMemo(() => ctx.channelsById()[channelId]?.channel_type);
+  const { channel, metadata } = useChannelMetadataSource(channelId);
+  return createMemo(
+    () =>
+      channel()?.channel_type ??
+      (queryReadyGate(metadata) ? metadata.data.channel_type : undefined)
+  );
 }
 
 export function useChannelActivity(channelId: string) {

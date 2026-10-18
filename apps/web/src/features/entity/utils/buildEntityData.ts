@@ -24,6 +24,7 @@ export type BuildEntityDataArgs = {
   fileType?: string;
   isCompleted?: boolean;
   channelType?: ChannelEntity['channelType'];
+  messagingBinding?: ChannelEntity['messagingBinding'];
   isParticipant?: boolean;
   cron?: string;
   enabled?: boolean;
@@ -144,6 +145,9 @@ export function buildEntityData(
           ...base,
           type: 'channel',
           channelType: args.channelType,
+          ...(args.messagingBinding
+            ? { messagingBinding: args.messagingBinding }
+            : {}),
           ...(args.isParticipant === undefined
             ? {}
             : { isParticipant: args.isParticipant }),

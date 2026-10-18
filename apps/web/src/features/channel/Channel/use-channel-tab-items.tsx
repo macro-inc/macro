@@ -1,12 +1,18 @@
+import { createChannelInteraction } from '@app/features/meta-messaging/queries/channel-messaging';
 import { useCall } from '@channel/Call/use-call';
 import { isNativeCallEnabled } from '@channel/Call/use-callkit';
 import type { TabItem } from '@core/component/Tabs';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
-import { useChannel, useChannelType } from '@core/context/channels';
+import {
+  useChannel,
+  useChannelMessagingBinding,
+  useChannelType,
+} from '@core/context/channels';
 import { useActiveCallQuery } from '@queries/call/call';
 import { ChannelType } from '@service-storage/generated/schemas/channelType';
 import type { Accessor } from 'solid-js';
 import { useChannelTab } from './ChannelTabContext';
+import { channelCallsAllowed } from './channel-calls-allowed';
 import {
   CHANNEL_TABS,
   type ChannelTabId,
@@ -19,7 +25,9 @@ export const canUseInlineCallTab = () => {
 
 // Native iOS CallKit owns the call surface, so the embedded Call tab should
 // never become the active channel tab on that platform.
-export const normalizeChannelTab = (tab: ChannelTabId) => {
+export const normalizeChannelTab = (tab: ChannelTabId, callsAllowed = true) => {
+  if (!callsAllowed && (tab === 'call' || tab === 'calls'))
+    return DEFAULT_CHANNEL_TAB;
   return tab === 'call' && !canUseInlineCallTab() ? DEFAULT_CHANNEL_TAB : tab;
 };
 
@@ -40,6 +48,12 @@ function CallTabLabel() {
 export function useChannelTabItems(channelId: string): Accessor<TabItem[]> {
   const { activeTab } = useChannelTab();
   const channelType = useChannelType(channelId);
+  const interaction = createChannelInteraction({
+    channelId: () => channelId,
+    binding: useChannelMessagingBinding(channelId),
+  });
+  const callsAllowed = () =>
+    channelCallsAllowed(interaction.interaction(), !!channel()?.agent_dm);
   const channel = useChannel(channelId);
   const call = useCall(() => channelId);
   const activeCallQuery = useActiveCallQuery(() => channelId);
@@ -48,7 +62,7 @@ export function useChannelTabItems(channelId: string): Accessor<TabItem[]> {
   // `activeTab` to `call` before the join request resolves).
   const showCallTab = () =>
     ENABLE_CALLS &&
-    !channel()?.agent_dm &&
+    callsAllowed() &&
     canUseInlineCallTab() &&
     (call.isInThisChannel() ||
       call.isJoining() ||
@@ -58,7 +72,7 @@ export function useChannelTabItems(channelId: string): Accessor<TabItem[]> {
     let filtered = [...CHANNEL_TABS];
     if (channelType() === ChannelType.direct_message)
       filtered = filtered.filter((tab) => tab.value !== 'participants');
-    if (!ENABLE_CALLS || channel()?.agent_dm)
+    if (!ENABLE_CALLS || !callsAllowed())
       filtered = filtered.filter((tab) => tab.value !== 'calls');
     if (!showCallTab())
       filtered = filtered.filter((tab) => tab.value !== 'call');

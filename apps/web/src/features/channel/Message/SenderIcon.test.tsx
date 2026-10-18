@@ -4,7 +4,7 @@ import { MACRO_NEW_PRINCIPAL_ID } from '@core/constant/macroNew';
 import type { MessageData } from '@core/messages/types';
 import { cleanup, render } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { MessageProvider } from './context';
+import { CustomerConversationProvider, MessageProvider } from './context';
 import { SenderIcon } from './SenderIcon';
 
 vi.mock('@core/component/UserIcon', () => ({
@@ -72,4 +72,25 @@ describe('SenderIcon', () => {
     const { getByTestId } = renderSender(message('macro|peter@macro.com'));
     expect(getByTestId('user-icon').textContent).toBe('macro|peter@macro.com');
   });
+});
+
+it('keeps ordinary imported-message avatars and scopes account initials to customer conversations', () => {
+  const data = {
+    ...message('macro|owner@example.com'),
+    imported_author: { name: 'Business' },
+  };
+  const ordinary = renderSender(data);
+  expect(ordinary.getByTestId('user-icon').textContent).toBe(
+    'macro|owner@example.com'
+  );
+  cleanup();
+  const customer = render(() => (
+    <CustomerConversationProvider value={() => true}>
+      <MessageProvider value={() => data}>
+        <SenderIcon />
+      </MessageProvider>
+    </CustomerConversationProvider>
+  ));
+  expect(customer.queryByTestId('user-icon')).toBeNull();
+  expect(customer.getByText('B')).toBeTruthy();
 });

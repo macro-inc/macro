@@ -55,3 +55,7 @@ in-call chat.
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/db.md`
+
+Provider-managed channel groups fail the domain `channel_allows_calls` gate before
+looking up an existing call or allocating an RTC room. Keep this server check in
+addition to the frontend call controls.

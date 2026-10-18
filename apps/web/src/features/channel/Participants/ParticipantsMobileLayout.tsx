@@ -5,6 +5,8 @@ import { createSignal, type JSX, Match, Show, Switch } from 'solid-js';
 import { ParticipantsActionSheet } from './ParticipantsActionSheet';
 
 export function ParticipantsMobileLayout(props: {
+  peopleLabel?: string;
+  externalPeople?: () => JSX.Element;
   search: () => JSX.Element;
   list: () => JSX.Element;
   inviteLink?: () => JSX.Element;
@@ -32,7 +34,10 @@ export function ParticipantsMobileLayout(props: {
         <Tabs
           aria-label="Channel participants"
           list={[
-            { value: 'people', label: 'People' },
+            { value: 'people', label: props.peopleLabel ?? 'People' },
+            ...(props.externalPeople
+              ? [{ value: 'whatsapp', label: 'WhatsApp' }]
+              : []),
             ...(props.bots ? [{ value: 'bots', label: 'Bots' }] : []),
             ...(props.settings
               ? [{ value: 'settings', label: 'Settings' }]
@@ -63,6 +68,11 @@ export function ParticipantsMobileLayout(props: {
             </Show>
           </div>
           <div class="min-h-0 flex-1">{props.list()}</div>
+        </Match>
+        <Match when={tab() === 'whatsapp'}>
+          <div class="min-h-0 flex-1 overflow-y-auto">
+            {props.externalPeople?.()}
+          </div>
         </Match>
         <Match when={tab() === 'bots'}>
           {props.bots?.(

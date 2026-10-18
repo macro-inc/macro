@@ -839,6 +839,16 @@ impl<
         channel_id: &Uuid,
         user_id: MacroUserIdStr<'_>,
     ) -> Result<CallTokenResponse, CallError> {
+        if !self
+            .repo
+            .channel_allows_calls(channel_id)
+            .await
+            .map_err(|e| CallError::Internal(e.into()))?
+        {
+            return Err(CallError::InvalidRequest(
+                "Provider-managed groups do not support calls".into(),
+            ));
+        }
         let call = match self
             .repo
             .get_call_by_channel_id(channel_id)

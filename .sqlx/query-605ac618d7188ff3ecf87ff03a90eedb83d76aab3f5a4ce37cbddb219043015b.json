@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_history_import SET status='failed',error_code='history_permission_lost',updated_at=now() WHERE connection_id=$1 AND connected_at=$2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "605ac618d7188ff3ecf87ff03a90eedb83d76aab3f5a4ce37cbddb219043015b"
+}

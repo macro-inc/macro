@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_conversation SET customer_id=$3 WHERE connection_id=$1 AND kind='direct' AND customer_id=$2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d87794cbd7235c94f06e7d53b118f596445846a1fd4c41c5245b5dafa4126c4f"
+}

@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_connection SET registration_status=$3,\n            registration_attempted_at=CASE WHEN $3 IN ('unconfirmed','rate_limited') THEN CASE WHEN registration_status IS DISTINCT FROM $3 THEN now() ELSE COALESCE(registration_attempted_at,now()) END ELSE NULL END,\n            status=CASE WHEN $3='registered' THEN status ELSE 'connecting' END,\n            health_error=$4,checked_at=now(),updated_at=now()\n            WHERE id=$1 AND connected_at=$2 AND status NOT IN ('disconnected','revoked')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c6b3506278b37e5eb8c74b1b0482906386233cb1c683d78c2eead81924e9b83c"
+}

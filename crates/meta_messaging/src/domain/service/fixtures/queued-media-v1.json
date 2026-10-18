@@ -1,0 +1,9 @@
+{
+  "idempotency_key": "0198a9c0-0000-7000-8000-000000000001",
+  "message": {
+    "type": "media",
+    "document_id": "0198a9c0-0000-7000-8000-000000000002",
+    "kind": "image",
+    "caption": null
+  }
+}

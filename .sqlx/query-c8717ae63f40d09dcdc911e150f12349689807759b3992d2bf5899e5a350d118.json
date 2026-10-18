@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT direction FROM meta_messaging_revision WHERE connection_id=$1 AND customer_id=$2 AND provider_message_id=$3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "direction",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "c8717ae63f40d09dcdc911e150f12349689807759b3992d2bf5899e5a350d118"
+}

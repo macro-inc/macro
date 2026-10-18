@@ -100,6 +100,7 @@ fragment ItemPreviewFields on GraphqlSoupEntity {
 	... on GraphqlSoupChannel {
 		channelDisplayName: name
 		channelType
+		messagingBinding
 	}
 	... on GraphqlSoupCall {
 		customName

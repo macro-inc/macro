@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT user_id FROM meta_messaging_history_import\n            WHERE connection_id=$1 AND connected_at=$2 AND requested_at<=$3 AND (NOT $4 OR step='waiting')\n                AND status IN ('pending','syncing','complete','failed') AND error_code IS DISTINCT FROM 'history_permission_lost'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Timestamptz",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "90597b1d9866ee48ee22fdffe32d07aeb2c757e2cb65aa336ecb217a0d2f52de"
+}

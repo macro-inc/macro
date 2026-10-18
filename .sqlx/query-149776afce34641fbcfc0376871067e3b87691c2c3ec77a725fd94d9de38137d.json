@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT to_jsonb(c) - 'credential' AS \"data!\" FROM meta_messaging_connection c WHERE status IN ('connecting','connected','error') AND (checked_at IS NULL OR checked_at < now() - interval '1 hour' OR (health_error = $1 AND checked_at < now() - interval '5 minutes')) ORDER BY checked_at NULLS FIRST LIMIT 10",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "data!",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "149776afce34641fbcfc0376871067e3b87691c2c3ec77a725fd94d9de38137d"
+}

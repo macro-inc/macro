@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_send SET native_retry_at=now()+interval '30 seconds' WHERE id=$1 AND connection_id=$2 AND channel_id=$3 AND provider_message_id=$4 AND state IN ('accepted','sent','delivered','read','failed') AND (message_id IS NULL OR EXISTS (SELECT 1 FROM meta_messaging_message m WHERE m.message_id=meta_messaging_send.message_id AND m.media_state='pending'))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b518a37cf944f499dc7ba1f8cd60179802f876294e828d1cdde5f9b79d6ea755"
+}

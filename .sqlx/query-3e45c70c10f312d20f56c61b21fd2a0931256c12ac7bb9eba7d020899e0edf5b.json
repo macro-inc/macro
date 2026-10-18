@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS(SELECT 1 FROM meta_messaging_group_participant p JOIN meta_messaging_conversation c ON c.channel_id=p.channel_id\n                WHERE c.connection_id=$1 AND c.kind='group' AND p.customer_id=$2 AND (p.phone=$2 OR p.phone IS NULL) AND p.profile_at<=$3) AS \"legacy!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "legacy!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "3e45c70c10f312d20f56c61b21fd2a0931256c12ac7bb9eba7d020899e0edf5b"
+}

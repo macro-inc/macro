@@ -1,0 +1,7 @@
+{
+  "idempotency_key": "0198a9c0-0000-7000-8000-000000000001",
+  "message": {
+    "type": "text",
+    "text": "An old queued reply"
+  }
+}

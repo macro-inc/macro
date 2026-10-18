@@ -411,6 +411,19 @@ async fn create_channel_persists_auto_join_team_and_adds_current_members(pool: P
         .await
         .unwrap();
 
+    for (id, expected) in [
+        (enabled_channel_id.id, true),
+        (disabled_channel_id.id, false),
+    ] {
+        let metadata = repo
+            .get_channel_metadata(id, macro_user_id(USER_A))
+            .await
+            .unwrap();
+        assert_eq!(
+            metadata.auto_join_team, expected,
+            "detail reads expose persisted team settings"
+        );
+    }
     let enabled = sqlx::query_scalar!(
         "SELECT auto_join_team FROM comms_channels WHERE id = $1",
         enabled_channel_id.id,
@@ -2454,5 +2467,42 @@ async fn channel_picture_round_trips_through_batched_previews(pool: Pool<Postgre
         assert_eq!(previews.len(), 1);
         assert_eq!(previews[0].profile_picture_id, picture);
         assert!(previews[0].has_access);
+    }
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn private_teammate_chat_never_reuses_external_conversations(pool: Pool<Postgres>) {
+    let repo = repo(pool.clone());
+    // Identical native membership must not make a provider conversation reusable.
+    let channel = Uuid::now_v7();
+    sqlx::query!("INSERT INTO comms_channels(id,name,owner_id,channel_type) VALUES ($1,'Customer',$2,'private')", channel, USER_A).execute(&pool).await.unwrap();
+    for user in [USER_A, USER_B] {
+        sqlx::query!("INSERT INTO comms_channel_participants(channel_id,user_id,role) VALUES ($1,$2,'member')", channel, user).execute(&pool).await.unwrap();
+    }
+    for binding in [
+        "whatsapp_direct",
+        "instagram_direct",
+        "whatsapp_group",
+        "native",
+    ] {
+        sqlx::query!(
+            "UPDATE comms_channels SET messaging_binding=$2 WHERE id=$1",
+            channel,
+            binding
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let found = repo
+            .maybe_get_private_channel(HashSet::from([
+                macro_user_id(USER_A),
+                macro_user_id(USER_B),
+            ]))
+            .await
+            .unwrap();
+        assert_eq!(found, (binding == "native").then_some(channel), "{binding}");
     }
 }

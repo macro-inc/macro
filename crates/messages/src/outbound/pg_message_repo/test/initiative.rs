@@ -147,7 +147,10 @@ async fn project_discussions_use_shared_parent_lifecycle_checks(pool: PgPool) {
         .execute(&pool)
         .await
         .unwrap();
-    assert!(!repo.parent_exists(&parent).await.unwrap());
+    assert_eq!(
+        repo.parent_state(&parent).await.unwrap(),
+        ParentState::Missing
+    );
     assert!(matches!(
         service.get(receipt::<MessageView>(id), active.id).await,
         Err(MessageError::NotFound)

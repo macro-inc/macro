@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_group_participant p SET customer_id=$3 FROM meta_messaging_conversation c WHERE p.channel_id=c.channel_id AND c.connection_id=$1 AND c.kind='group' AND p.customer_id=$2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2b098f628b92fe8269be416f7f59e8976298af9ffdb67afd8bab3266b18289af"
+}

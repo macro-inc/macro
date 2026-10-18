@@ -6,9 +6,11 @@ use std::sync::{Arc, Mutex};
 mod call_retries;
 mod event_posts;
 mod initiative;
+mod provider;
 
 #[derive(Clone)]
 struct Repo {
+    provider_managed: bool,
     message: Message,
     replies: Vec<Message>,
     state: ThreadState,
@@ -58,8 +60,12 @@ impl MessageRepository for Repo {
             .cloned()
             .collect())
     }
-    async fn parent_exists(&self, _: &MessageParent) -> Result<bool, MessageError> {
-        Ok(true)
+    async fn parent_state(&self, _: &MessageParent) -> Result<ParentState, MessageError> {
+        Ok(if self.provider_managed {
+            ParentState::ProviderManaged
+        } else {
+            ParentState::Native
+        })
     }
     async fn get(&self, parent: &MessageParent, id: Uuid) -> Result<Option<Message>, MessageError> {
         if self.concurrent_create && self.creates.lock().unwrap().is_empty() {
@@ -241,6 +247,7 @@ fn fixture() -> Repo {
     let id = Uuid::from_u128(1);
     let user = "macro|author@example.com";
     Repo {
+        provider_managed: false,
         message: Message {
             id,
             parent: MessageParent::parse("document", "doc").unwrap(),
@@ -1300,8 +1307,12 @@ impl MessageRepository for StrictRepo {
     ) -> Result<Vec<Message>, MessageError> {
         self.inner.replies(parent, root).await
     }
-    async fn parent_exists(&self, _: &MessageParent) -> Result<bool, MessageError> {
-        Ok(self.parent_exists)
+    async fn parent_state(&self, _: &MessageParent) -> Result<ParentState, MessageError> {
+        Ok(if self.parent_exists {
+            ParentState::Native
+        } else {
+            ParentState::Missing
+        })
     }
     async fn get(&self, parent: &MessageParent, id: Uuid) -> Result<Option<Message>, MessageError> {
         self.inner.get(parent, id).await
@@ -2141,14 +2152,15 @@ async fn call_posts_use_the_canonical_thread_and_reject_another_root() {
             .await
             .unwrap();
     }
-    let creates = repo.creates.lock().unwrap();
-    assert_eq!(creates.len(), 2);
-    assert!(
-        creates
-            .iter()
-            .all(|command| command.canonical_root_id == Some(call_id))
-    );
-    drop(creates);
+    {
+        let creates = repo.creates.lock().unwrap();
+        assert_eq!(creates.len(), 2);
+        assert!(
+            creates
+                .iter()
+                .all(|command| command.canonical_root_id == Some(call_id))
+        );
+    }
     let mut input = post_input();
     input.thread_id = Some(Uuid::from_u128(11));
     assert!(matches!(

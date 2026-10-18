@@ -1,0 +1,59 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT channel_id,connection_id,subject,CASE WHEN state IN ('creating','pending') AND started_at<now()-make_interval(secs=>$2::int) THEN 'unknown' ELSE state END AS \"state!\",error_code,attempt_id,generation FROM meta_messaging_group_setup WHERE channel_id=$1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "channel_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "connection_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "subject",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "state!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "error_code",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "attempt_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "generation",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "82b7e1201249e11251b77f2cf3e98fdf9037b7e602e1570e4d644eeca49fff4b"
+}

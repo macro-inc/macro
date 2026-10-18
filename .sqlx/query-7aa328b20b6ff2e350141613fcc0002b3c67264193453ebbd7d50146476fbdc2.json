@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS(SELECT 1 FROM meta_messaging_conversation WHERE connection_id=$1 AND kind='direct'\n                AND ((customer_phone=$2 AND customer_id<>$2) OR (customer_id=$2 AND customer_phone IS DISTINCT FROM $2)))\n                OR EXISTS(SELECT 1 FROM meta_messaging_group_participant p JOIN meta_messaging_conversation c ON c.channel_id=p.channel_id WHERE c.connection_id=$1 AND c.kind='group' AND p.phone=$2 AND p.customer_id<>$2) AS \"ambiguous!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "ambiguous!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "7aa328b20b6ff2e350141613fcc0002b3c67264193453ebbd7d50146476fbdc2"
+}

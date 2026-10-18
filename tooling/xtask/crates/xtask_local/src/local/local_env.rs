@@ -376,6 +376,10 @@ impl InfraEnv {
             "CODEX_OAUTH_KMS_KEY_ID".into(),
             resources::CODEX_OAUTH_KMS_ALIAS.into(),
         );
+        env.insert(
+            "META_CREDENTIAL_KMS_KEY".into(),
+            resources::META_MESSAGING_KMS_ALIAS.into(),
+        );
         // Dummy creds: the SDK talks to LocalStack, never real AWS.
         env.insert("AWS_ACCESS_KEY_ID".into(), "test".into());
         env.insert("AWS_SECRET_ACCESS_KEY".into(), "test".into());
@@ -677,6 +681,11 @@ struct BootStubEnv;
 
 impl BootStubEnv {
     fn write(&self, env: &mut BTreeMap<String, String>) {
+        // Empty keeps optional Platform signup off until an explicit local config supplies it.
+        env.insert(
+            "META_WHATSAPP_PLATFORM_CONFIGURATION_ID".into(),
+            String::new(),
+        );
         // The worker is opt-in and ships paused; an explicit env-file can enable it.
         env.insert("SLACK_IMPORT_ENABLED".into(), "false".into());
         env.insert("SLACK_IMPORT_CONCURRENCY".into(), "1".into());

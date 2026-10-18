@@ -43,6 +43,11 @@ pub trait CallRepository: Send + Sync + 'static {
     /// The error type returned by repository operations.
     type Err: Into<anyhow::Error> + Send + Debug;
 
+    /// Provider-managed channels cannot create or join native channel calls.
+    fn channel_allows_calls(
+        &self,
+        channel_id: &Uuid,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
     /// Persist an owner-bound room reservation and discard expired reservation metadata.
     fn insert_meeting_preparation(
         &self,

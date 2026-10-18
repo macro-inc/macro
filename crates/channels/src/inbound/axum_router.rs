@@ -831,6 +831,10 @@ pub async fn get_channel_attachments_handler<
 /// Messages are read through `/messages/channel/{channel_id}`.
 #[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct ApiChannelDetail {
+    /// Whether new team members automatically join this channel.
+    auto_join_team: bool,
+    /// Authoritative external binding.
+    messaging_binding: crate::domain::models::MessagingBinding,
     /// Channel id.
     channel_id: Uuid,
     /// Channel type.
@@ -863,7 +867,7 @@ pub async fn get_channel_handler<
     Auth: MacroAuthorizationService,
 >(
     State(state): State<ChannelsRouterState<S, Svc, Auth>>,
-    access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc, Auth>,
+    access: ChannelAccessLevelExtractor<ViewOnly, Svc, Auth>,
 ) -> Result<Json<ApiChannelDetail>, ChannelsHandlerErr> {
     let channel_id = channel_id_from_receipt(&access.entity_access_receipt)?;
     tracing::Span::current().record("channel_id", tracing::field::display(channel_id));
@@ -880,8 +884,10 @@ pub async fn get_channel_handler<
     let participants = state.service.get_channel_participants(channel_id).await?;
 
     Ok(Json(ApiChannelDetail {
+        auto_join_team: metadata.auto_join_team,
         channel_id,
         channel_type: metadata.channel_type,
+        messaging_binding: metadata.messaging_binding,
         channel_name: metadata.channel_name,
         participants: participants
             .into_iter()

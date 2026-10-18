@@ -76,7 +76,10 @@ static USER_D: LazyLock<MacroUserIdStr<'static>> =
     LazyLock::new(|| MacroUserIdStr::parse_from_str("macro|user-d@test.com").unwrap());
 
 pub(super) fn repo(pool: Pool<Postgres>) -> PgCallRepo {
-    PgCallRepo::new(pool)
+    PgCallRepo::new(
+        pool.clone(),
+        channels::outbound::pg_channels_repo::PgChannelsRepo::new(pool),
+    )
 }
 
 fn call_status(records: &[CallRecord], call_id: Uuid) -> Option<CallStatus> {

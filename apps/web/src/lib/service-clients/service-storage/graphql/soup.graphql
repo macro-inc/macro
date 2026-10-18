@@ -251,6 +251,7 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 	... on GraphqlSoupChannel {
 		channelName: name
 		channelType
+		messagingBinding
 		ownerId
 		organizationId
 		channelTeamId: teamId

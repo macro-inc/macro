@@ -131,7 +131,10 @@ async fn repo(pool: PgPool) -> PgCallRepo {
             .await
             .unwrap();
     }
-    PgCallRepo::new(pool)
+    PgCallRepo::new(
+        pool.clone(),
+        channels::outbound::pg_channels_repo::PgChannelsRepo::new(pool),
+    )
 }
 
 fn meeting() -> Meeting {

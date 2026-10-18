@@ -254,6 +254,8 @@ impl ApiChannelListParticipant {
 /// Channel list response item.
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct ApiChannelWithLatest {
+    /// Authoritative external binding, including pending provider group setup.
+    pub messaging_binding: crate::domain::models::MessagingBinding,
     /// Persona identity when this is the viewer's private agent DM.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub agent_dm: Option<crate::domain::agent_dm::AgentDmProfile>,
@@ -310,6 +312,7 @@ impl ApiChannelWithLatest {
             id: ch.id,
             name: ch.name,
             channel_type: ch.channel_type,
+            messaging_binding: ch.messaging_binding,
             org_id: ch.org_id,
             team_id: ch.team_id,
             auto_join_team: ch.auto_join_team,
@@ -339,6 +342,8 @@ fn map_frecency(f: Option<AggregateFrecency>) -> Option<f64> {
 /// Channel fields in API responses.
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct ApiChannelListItem {
+    /// Authoritative external binding, including pending provider group setup.
+    pub messaging_binding: crate::domain::models::MessagingBinding,
     /// uuid of the channel
     pub id: Uuid,
     /// string name of the channel
@@ -367,6 +372,7 @@ impl ApiChannelListItem {
             id: value.id,
             name: value.name,
             channel_type: ApiChannelListType::new_from_domain(value.channel_type),
+            messaging_binding: value.messaging_binding,
             org_id: value.org_id.and_then(|org_id| u32::try_from(org_id).ok()),
             team_id: value.team_id,
             auto_join_team: value.auto_join_team,

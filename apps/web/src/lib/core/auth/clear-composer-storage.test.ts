@@ -9,6 +9,7 @@ it('clears scoped and legacy drafts and attachments while retaining preferences'
     'input-value-agents-new-conversation-persist-v0:bob',
     'input-value-channel-1',
     'attachment-tracker-agents-new-conversation-persist-v0:alice',
+    'macro:meta-reply:v1:channel-1:macro%7Calice',
   ];
   for (const key of keys) localStorage.setItem(key, 'private draft');
   localStorage.setItem('macro-selected-theme', 'dark');

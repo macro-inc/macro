@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_conversation SET group_status=$2,group_status_at=$3 WHERE channel_id=$1 AND group_status<>'deleted' AND (group_status_at IS NULL OR group_status_at<$3 OR (group_status_at=$3 AND $2='suspended'))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0fa0dca5f5376aaba4a54cbec12a1885a1c037d3b1549488a66d701f79c11988"
+}

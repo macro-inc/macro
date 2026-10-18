@@ -4,7 +4,8 @@ export function clearComposerStorage(): void {
     const key = localStorage.key(index);
     if (
       key?.startsWith('input-value-') ||
-      key?.startsWith('attachment-tracker-')
+      key?.startsWith('attachment-tracker-') ||
+      key?.startsWith('macro:meta-reply:')
     ) {
       localStorage.removeItem(key);
     }

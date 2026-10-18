@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE comms_messages SET\n            content=CASE WHEN $6::timestamp IS NOT NULL THEN '' ELSE COALESCE($5::text,content) END,\n            edited_at=COALESCE($8::timestamp,edited_at),deleted_at=COALESCE(deleted_at,$6::timestamp),\n            updated_at=GREATEST(updated_at,COALESCE($6::timestamp,$8::timestamp)),\n            import_metadata=import_metadata||jsonb_build_object('provider_edit_number',$7::bigint)\n            WHERE id=$1 AND parent_entity_type='channel' AND parent_entity_id=$2\n            AND import_metadata->>'connection_id'=$3 AND import_metadata->>'provider_message_id'=$4\n            AND deleted_at IS NULL AND ($6::timestamp IS NOT NULL OR ($5::text IS NOT NULL\n                AND $7::bigint>COALESCE((import_metadata->>'provider_edit_number')::bigint,0)\n                AND (edited_at IS NULL OR import_metadata ? 'provider_edit_number')))\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Timestamp",
+        "Int8",
+        "Timestamp"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "886eb0539435292dd653fa84da30e2b8670ed8b210466c437c0c6134f28caf10"
+}

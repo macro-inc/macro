@@ -189,7 +189,10 @@ async fn run() -> anyhow::Result<()> {
                 initiative::outbound::PgInitiativeRepo::new(pool.clone()),
             ),
             crm::outbound::lookup::PgCrmParentReader::new(pool.clone()),
-            call::outbound::pg_call_repo::PgCallRepo::new(pool.clone()),
+            call::outbound::pg_call_repo::PgCallRepo::new(
+                pool.clone(),
+                channels::outbound::pg_channels_repo::PgChannelsRepo::new(pool.clone()),
+            ),
         ),
         lexical.clone(),
     );

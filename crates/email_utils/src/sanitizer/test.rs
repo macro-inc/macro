@@ -1,6 +1,26 @@
 use super::*;
 
 #[test]
+fn mixed_case_css_urls_cannot_bypass_scheme_filtering() {
+    for html in [
+        r#"<div style='color:red;background-image:URL("javascript:alert(1)")'>content</div>"#,
+        r#"<div style='color:red;background-image:Url("javascript:alert(1)")'>content</div>"#,
+        r#"<div style='color:red;background-image:uRl("javascript:alert(1)")'>content</div>"#,
+    ] {
+        for sanitize in [
+            sanitize_email_html,
+            sanitize_html_fragment,
+            sanitize_authored_html,
+        ] {
+            let sanitized = sanitize(html);
+            assert!(sanitized.contains("content"));
+            assert!(sanitized.contains("color:red"));
+            assert!(!sanitized.to_ascii_lowercase().contains("javascript:"));
+        }
+    }
+}
+
+#[test]
 fn inline_style_url_quotes_remain_escaped_after_html_round_trip() {
     let html = r#"<div style='background-image:url("cid:\"")'>content</div>"#;
 

@@ -415,6 +415,7 @@ it('maps the unread alias without pretending it is the full notification edge', 
   const { mapGraphqlSoupItem } = await import('./graphql-soup');
   const item = {
     __typename: 'GraphqlSoupChannel',
+    messagingBinding: 'native',
     id: 'channel',
     entityType: 'CHANNEL',
     displayName: 'Channel',

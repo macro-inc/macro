@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_history_import SET step=$3,cursor=$4,\n            updated_at=now() WHERE connection_id=$1 AND lease_id=$2 AND lease_until>now()\n                AND EXISTS(SELECT 1 FROM meta_messaging_connection c WHERE c.id=$1 AND c.connected_at=meta_messaging_history_import.connected_at AND c.status='connected')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "017a451b797e595b30f4e98f779aca0e7b7cb52e297148d06e3ec5313d2f0211"
+}

@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT group_creation_subject AS subject FROM meta_messaging_conversation WHERE channel_id=$1 AND connection_id=$2 AND kind='group' AND group_creation_subject IS NOT NULL AND group_creation_generation IS NOT DISTINCT FROM $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "subject",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "7bb40b9a9f6f0135a5ebe8761b308648315c05ca85e9812feae4c3f0ab7d848a"
+}

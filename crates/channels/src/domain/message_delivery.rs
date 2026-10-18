@@ -84,6 +84,8 @@ where
             .await
             .map_err(repo_error)?;
         Ok(ChannelMetadata {
+            auto_join_team: info.auto_join_team,
+            messaging_binding: info.messaging_binding,
             channel_type: info.channel_type,
             channel_name: info.name.unwrap_or_default(),
         })

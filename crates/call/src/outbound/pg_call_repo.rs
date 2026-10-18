@@ -243,16 +243,28 @@ fn status_set_for_expr(expr: &Expr<CallLiteral>) -> Option<CallStatusSet> {
 #[derive(Clone)]
 pub struct PgCallRepo {
     pool: PgPool,
+    channel_policy:
+        std::sync::Arc<dyn channels::domain::provider::ChannelCallPolicy<Err = sqlx::Error>>,
 }
 
 impl PgCallRepo {
     /// Create a new repo with the given connection pool.
-    pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+    pub fn new(
+        pool: PgPool,
+        channel_policy: impl channels::domain::provider::ChannelCallPolicy<Err = sqlx::Error> + 'static,
+    ) -> Self {
+        Self {
+            pool,
+            channel_policy: std::sync::Arc::new(channel_policy),
+        }
     }
 }
 
 impl CallRepository for PgCallRepo {
+    async fn channel_allows_calls(&self, channel_id: &Uuid) -> Result<bool, Self::Err> {
+        self.channel_policy.allows_calls(*channel_id).await
+    }
+
     type Err = sqlx::Error;
 
     async fn insert_meeting_preparation(

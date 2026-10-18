@@ -4,6 +4,8 @@ import {
   ChatWithAgentIcon,
   openChatWithAgent,
 } from '@app/features/chat/ChatWithAgentButton';
+import { CustomerIdentity } from '@app/features/meta-messaging/components/customer-identity';
+import { createChannelInteraction } from '@app/features/meta-messaging/queries/channel-messaging';
 import {
   makeRenameAction,
   useBlockEntityCommands,
@@ -32,6 +34,7 @@ import {
   useChannelTab,
 } from '@channel/Channel/ChannelTabContext';
 import { ChannelTopBarLiveIndicators } from '@channel/Channel/ChannelTopBarLiveIndicators';
+import { channelCallsAllowed } from '@channel/Channel/channel-calls-allowed';
 import { CHANNEL_TAB_ICONS } from '@channel/Channel/channel-tab-icons';
 import {
   type ChannelTabId,
@@ -66,6 +69,7 @@ import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import {
   useChannel,
   useChannelCanCall,
+  useChannelMessagingBinding,
   useChannelName,
   useChannelType,
 } from '@core/context/channels';
@@ -129,6 +133,13 @@ function NewTop(props: { channelId: string }) {
   const { activeTab, setActiveTab } = useChannelTab();
   const channelName = useChannelName(props.channelId);
   const channelType = useChannelType(props.channelId);
+  const binding = useChannelMessagingBinding(props.channelId);
+  const messaging = createChannelInteraction({
+    channelId: () => props.channelId,
+    binding,
+  });
+  const callsAllowed = () =>
+    channelCallsAllowed(messaging.interaction(), !!channel()?.agent_dm);
   const channel = useChannel(props.channelId);
   const userId = useUserId();
   const renameAction = makeRenameAction({ userId });
@@ -147,6 +158,7 @@ function NewTop(props: { channelId: string }) {
       name: ch.name ?? 'New Channel',
       blockName: 'channel',
       channelType: ch.channel_type,
+      messagingBinding: ch.messaging_binding,
       ownerId: ch.owner_id,
       isParticipant: participantsQuery.isSuccess
         ? (participantsQuery.data ?? []).some(
@@ -198,6 +210,11 @@ function NewTop(props: { channelId: string }) {
         channelType={channelType()!}
         participants={participants() ?? []}
         channelName={channelName() ?? 'New Channel'}
+        lockRename={
+          !binding.value() ||
+          !!binding.error() ||
+          binding.value() === 'whatsapp_group'
+        }
         tabs={tabs()}
         activeTab={activeTab()}
         onTabChange={setActiveTab}
@@ -236,7 +253,12 @@ function NewTop(props: { channelId: string }) {
               },
               condition: () => {
                 const entity = channelEntity();
-                return !!entity && renameAction.canExecute(entity);
+                return (
+                  !messaging.group() &&
+                  messaging.interaction().kind !== 'group_setup' &&
+                  !!entity &&
+                  renameAction.canExecute(entity)
+                );
               },
             },
             {
@@ -279,9 +301,7 @@ function NewTop(props: { channelId: string }) {
         )}
       </Show>
       {/* Hidden once the user has joined — the call surface owns the UI. */}
-      <Show
-        when={ENABLE_CALLS && !channel()?.agent_dm && !call.isInThisChannel()}
-      >
+      <Show when={ENABLE_CALLS && callsAllowed() && !call.isInThisChannel()}>
         <SplitHeaderRight>
           <HeaderIsland
             class={cn(
@@ -297,6 +317,15 @@ function NewTop(props: { channelId: string }) {
             </div>
           </HeaderIsland>
         </SplitHeaderRight>
+      </Show>
+      <Show when={isMobile() && messaging.account()}>
+        {(account) => (
+          <SplitHeaderRight>
+            <HeaderIsland>
+              <CustomerIdentity account={account()} />
+            </HeaderIsland>
+          </SplitHeaderRight>
+        )}
       </Show>
       <ChannelTopBarLiveIndicators />
     </Suspense>
@@ -390,7 +419,16 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
     !isOpenCallTabRequested(searchParams[CHANNEL_URL_PARAMS.openCallTab]) &&
     !hasInitialTargetRequest();
 
-  const [activeTab, setActiveTabInternal] = createSignal<ChannelTabId>(
+  const messaging = createChannelInteraction({
+    channelId: () => channelId,
+    binding: useChannelMessagingBinding(channelId),
+  });
+  const callsAllowed = () =>
+    channelCallsAllowed(
+      messaging.interaction(),
+      !!conversationChannel()?.agent_dm
+    );
+  const [requestedTab, setActiveTabInternal] = createSignal<ChannelTabId>(
     initialChannelTab({
       wantsJoinCall,
       hasActiveCallHere,
@@ -399,14 +437,13 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
         : undefined,
     })
   );
-  createComputed(() => {
-    if (
-      conversationChannel()?.agent_dm &&
-      ['call', 'calls', 'participants'].includes(activeTab())
-    )
-      setActiveTabInternal(DEFAULT_CHANNEL_TAB);
-  });
-  const [pendingJoinCall, setPendingJoinCall] = createSignal(wantsJoinCall);
+  const activeTab = () =>
+    conversationChannel()?.agent_dm &&
+    ['call', 'calls', 'participants'].includes(requestedTab())
+      ? DEFAULT_CHANNEL_TAB
+      : normalizeChannelTab(requestedTab(), callsAllowed());
+  const [joinRequested, setPendingJoinCall] = createSignal(wantsJoinCall);
+  const pendingJoinCall = () => callsAllowed() && joinRequested();
 
   // Navigation flows into the surface as state; the messages part navigates
   // whenever a fresh request lands, whether or not it was mounted at the time.

@@ -657,6 +657,10 @@ export type ApiChannelAttachmentsPage = {
  */
 export type ApiChannelDetail = {
     /**
+     * Whether new team members automatically join this channel.
+     */
+    auto_join_team: boolean;
+    /**
      * Channel id.
      */
     channel_id: string;
@@ -668,6 +672,10 @@ export type ApiChannelDetail = {
      * Channel type.
      */
     channel_type: ChannelType;
+    /**
+     * Authoritative external binding.
+     */
+    messaging_binding: MessagingBinding;
     /**
      * Active participants.
      */
@@ -814,6 +822,10 @@ export type ApiChannelWithLatest = {
     is_participant: boolean;
     latest_message?: null | ApiChannelListMessage;
     latest_non_thread_message?: null | ApiChannelListMessage;
+    /**
+     * Authoritative external binding, including pending provider group setup.
+     */
+    messaging_binding: MessagingBinding;
     /**
      * Channel name.
      */
@@ -1256,6 +1268,20 @@ export type BasicDocumentSubType = {
     type: 'skill';
 } | {
     type: 'initiative_description';
+};
+
+/**
+ * Initiate a product-specific official login.
+ */
+export type BeginRequest = {
+    /**
+     * Product to connect.
+     */
+    provider: MetaProvider;
+    /**
+     * Existing connection identity, when reconnecting.
+     */
+    reconnect_id?: string | null;
 };
 
 export type BomPart = {
@@ -2416,6 +2442,10 @@ export type Channel = {
      * Channel id.
      */
     id: string;
+    /**
+     * Authoritative external binding, including pending group setup.
+     */
+    messaging_binding: MessagingBinding;
     /**
      * Channel display name.
      */
@@ -5081,6 +5111,20 @@ export type DirectAccess = {
      * Recipient.
      */
     userId: string;
+};
+
+/**
+ * Disconnect outcome; removing one phone must preserve a shared WABA subscription.
+ */
+export type DisconnectResult = {
+    /**
+     * Meta confirmed removal of this app's subscription.
+     */
+    remote_unsubscribed: boolean;
+    /**
+     * Another connected account still needs the same provider subscription.
+     */
+    shared_subscription_kept: boolean;
 };
 
 /**
@@ -9512,6 +9556,654 @@ export type MessageTopicEvent = {
 };
 
 /**
+ * Authoritative external binding, including an unbound provider group setup.
+ * Native authorization always reads this from storage, never from a client.
+ */
+export type MessagingBinding = 'native' | 'whatsapp_direct' | 'instagram_direct' | 'whatsapp_group';
+
+/**
+ * Browser OAuth initiation result. State is scoped to the authenticated initiator.
+ */
+export type MetaBeginAuthorization = {
+    /**
+     * Secret proof retained only by the initiating Instagram window; never sent to Meta.
+     */
+    browser_transaction?: string | null;
+    /**
+     * Public SDK/login configuration.
+     */
+    configuration: MetaPublicConfiguration;
+    /**
+     * Random anti-CSRF state echoed through the callback.
+     */
+    state: string;
+};
+
+/**
+ * Callback input. Tokens are always exchanged server-side.
+ */
+export type MetaCompleteAuthorization = {
+    /**
+     * Proof returned at initiation; mandatory for Instagram, absent for WhatsApp.
+     */
+    browser_transaction?: string | null;
+    business_account_id?: null | MetaProviderId;
+    /**
+     * Single-use authorization code.
+     */
+    code: string;
+    phone_number_id?: null | MetaProviderId;
+    /**
+     * State returned by the server for this caller/team/provider.
+     */
+    state: string;
+    whatsapp_mode?: null | WhatsappMode;
+};
+
+/**
+ * Public account health; never includes credentials.
+ */
+export type MetaConnection = {
+    /**
+     * Connected phone-number ID or Instagram professional ID.
+     */
+    account_id: MetaProviderId;
+    business_account_id?: null | MetaProviderId;
+    /**
+     * Last successful connection time, not the start of imported history.
+     */
+    connected_at?: string | null;
+    /**
+     * Expiry returned by the provider; absence does not mean irrevocable access.
+     */
+    credential_expires_at?: string | null;
+    /**
+     * Development test number; never evidence of coexistence.
+     */
+    developer_account: boolean;
+    /**
+     * Display label returned by the provider.
+     */
+    display_name: string;
+    /**
+     * Sanitized operational error code.
+     */
+    health_error?: string | null;
+    /**
+     * Verified HUMAN_AGENT approval; false by default.
+     */
+    human_agent_approved: boolean;
+    /**
+     * Macro connection identity, preserved through reconnect.
+     */
+    id: string;
+    /**
+     * Official API used by this connection.
+     */
+    provider: MetaProvider;
+    /**
+     * Time of the latest uncertain or rate-limited registration attempt; never a PIN.
+     */
+    registration_attempted_at?: string | null;
+    registration_status?: null | RegistrationStatus;
+    /**
+     * Current local connection health.
+     */
+    status: MetaConnectionStatus;
+    /**
+     * Owning Macro team.
+     */
+    team_id: string;
+    /**
+     * Current connector. Reconnect changes this user without transferring existing channel/file grants.
+     */
+    user_id: string;
+    whatsapp_mode?: null | WhatsappMode;
+};
+
+/**
+ * Connection state transitions do not delete retained channels/content.
+ */
+export type MetaConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'revoked' | 'error';
+
+/**
+ * Native conversation metadata, available only after ordinary channel access.
+ */
+export type MetaConversation = {
+    /**
+     * Real Macro channel identity.
+     */
+    channel_id: string;
+    /**
+     * Owning account's connection.
+     */
+    connection_id: string;
+    /**
+     * Account-scoped display label; never a Macro or CRM identity.
+     */
+    customer_display_name?: string | null;
+    /**
+     * Mutable handle for display only.
+     */
+    customer_handle?: string | null;
+    /**
+     * Recipient's account-scoped identity.
+     */
+    customer_id: MetaProviderId;
+    /**
+     * Verified phone, when present.
+     */
+    customer_phone?: string | null;
+    group_status?: null | MetaGroupStatus;
+    /**
+     * Destination kind; group identifiers never enter person alias resolution.
+     */
+    kind?: MetaConversationKind;
+    /**
+     * Latest eligible inbound source timestamp.
+     */
+    last_customer_message_at?: string | null;
+};
+
+/**
+ * Provider destination namespace, independent of an individual author.
+ */
+export type MetaConversationKind = 'direct' | 'group';
+
+/**
+ * Optional messaging metadata for an ordinary native channel.
+ */
+export type MetaConversationResponse = {
+    group?: null | MetaGroupView;
+    messaging?: null | MetaConversationView;
+};
+
+/**
+ * Metadata rendered with an authorized native channel, without management secrets.
+ */
+export type MetaConversationView = {
+    /**
+     * Business account shown beside the explicit send control.
+     */
+    account_name: string;
+    /**
+     * Current caller may deliberately reply through this account and channel.
+     */
+    can_reply: boolean;
+    /**
+     * Implemented send operations and content limits.
+     */
+    capabilities: ReplyCapabilities;
+    /**
+     * Persisted account-scoped customer identity.
+     */
+    conversation: MetaConversation;
+    /**
+     * Whether this connection uses an explicitly configured developer number.
+     */
+    developer_account: boolean;
+    /**
+     * Current account, user and provider eligibility, evaluated by the server.
+     */
+    eligibility: ReplyEligibility;
+    /**
+     * Sanitized account-health reason, so channel users see the correct recovery action.
+     */
+    health_error?: string | null;
+    /**
+     * Server-observed eligibility for Instagram's human-support mode.
+     */
+    human_agent_approved: boolean;
+    /**
+     * Supported attachment types and effective size limits.
+     */
+    media: Array<MetaMediaCapability>;
+    /**
+     * Connected provider.
+     */
+    provider: MetaProvider;
+    /**
+     * Durable outbound intents including pending, unknown and failed replies.
+     */
+    sends: Array<MetaSendProgress>;
+    /**
+     * Connected/disconnected/recovery state.
+     */
+    status: MetaConnectionStatus;
+    /**
+     * Maximum text units, counted by the provider's rule below.
+     */
+    text_limit: number;
+    /**
+     * Instagram counts UTF-8 bytes; WhatsApp counts characters.
+     */
+    text_limit_in_bytes: boolean;
+};
+
+/**
+ * Human request to create a private native channel and its WhatsApp group.
+ */
+export type MetaCreateGroup = {
+    /**
+     * Client-retained native identity, also used after a lost HTTP response.
+     */
+    channel_id: string;
+    /**
+     * WhatsApp subject (1–128 characters).
+     */
+    subject: string;
+};
+
+/**
+ * Observed outbound state. Unknown outcomes require reconciliation, not resend.
+ */
+export type MetaDeliveryState = 'pending' | 'sending' | 'unknown' | 'accepted' | 'sent' | 'delivered' | 'read' | 'failed';
+
+/**
+ * Link returned only through the explicit authorized operation.
+ */
+export type MetaGroupInviteLink = {
+    /**
+     * Validated Meta invite URL.
+     */
+    invite_link: string;
+};
+
+/**
+ * Confirmed external participant, independent of native teammate membership.
+ */
+export type MetaGroupParticipant = {
+    /**
+     * Current scoped BSUID or legacy phone.
+     */
+    customer_id: MetaProviderId;
+    /**
+     * Optional provider display name.
+     */
+    display_name?: string | null;
+    /**
+     * Stable native external author across departure and identity updates.
+     */
+    external_sender_id: string;
+    /**
+     * Separately supplied phone.
+     */
+    phone?: string | null;
+    /**
+     * Optional mutable username.
+     */
+    username?: string | null;
+};
+
+/**
+ * Public creation result; never contains a speculative remote group ID/link.
+ */
+export type MetaGroupSetup = {
+    /**
+     * Native identity, reserved before provider I/O.
+     */
+    channel_id: string;
+    /**
+     * Selected business connection.
+     */
+    connection_id: string;
+    /**
+     * Sanitized diagnostic.
+     */
+    error_code?: string | null;
+    /**
+     * Current creation outcome.
+     */
+    state: MetaGroupSetupState;
+    /**
+     * Native owner's requested subject.
+     */
+    subject: string;
+};
+
+/**
+ * Creation outcome, including an idempotent response after successful binding.
+ */
+export type MetaGroupSetupState = 'bound' | 'creating' | 'pending' | 'failed' | 'unknown';
+
+/**
+ * Monotonic remote lifecycle; deletion cannot be cleared by a later status.
+ */
+export type MetaGroupStatus = 'active' | 'suspended' | 'deleted';
+
+/**
+ * Restricted group controls and participants; invite link is fetched separately.
+ */
+export type MetaGroupView = {
+    /**
+     * Native posting permission and business team membership.
+     */
+    can_copy_link: boolean;
+    /**
+     * Native ownership and business team membership.
+     */
+    can_delete: boolean;
+    /**
+     * Native participant admin permission and team membership.
+     */
+    can_remove: boolean;
+    /**
+     * Current connector and owner may deliberately retry creation.
+     */
+    can_retry: boolean;
+    /**
+     * Native identity.
+     */
+    channel_id: string;
+    /**
+     * Confirmed current participants.
+     */
+    participants: Array<MetaGroupParticipant>;
+    setup?: null | MetaGroupSetup;
+    status?: null | MetaGroupStatus;
+};
+
+/**
+ * Durable import status safe to display in account settings.
+ */
+export type MetaHistoryImport = {
+    /**
+     * Sanitized, actionable recovery reason.
+     */
+    error_code?: string | null;
+    /**
+     * Provider progress, when available.
+     */
+    progress?: number | null;
+    /**
+     * Explicit consent time, independent of connection time.
+     */
+    requested_at: string;
+    /**
+     * Current import outcome; acceptance is not completion.
+     */
+    status: MetaHistoryStatus;
+    /**
+     * Some media was unavailable, with a notice retained in its channel.
+     */
+    unavailable_media: boolean;
+};
+
+/**
+ * Server-authorized import affordance and current progress.
+ */
+export type MetaHistoryImportView = {
+    /**
+     * Whether the connector or administrator may start or resume an import now.
+     */
+    can_import: boolean;
+    import?: null | MetaHistoryImport;
+    /**
+     * Explanation when unavailable; no credentials or provider response bodies.
+     */
+    reason?: string | null;
+};
+
+/**
+ * History progress is independent from live account health.
+ */
+export type MetaHistoryStatus = 'not_requested' | 'pending' | 'syncing' | 'complete' | 'declined' | 'failed';
+
+/**
+ * One currently supported provider attachment category.
+ */
+export type MetaMediaCapability = {
+    /**
+     * Maximum caption characters, absent when text must be sent separately.
+     */
+    caption_limit?: number | null;
+    /**
+     * Native attachment category.
+     */
+    kind: MetaMediaKind;
+    /**
+     * Effective provider and Macro byte limit.
+     */
+    max_bytes: number;
+    /**
+     * Allowed MIME types for the selected account.
+     */
+    mime_types: Array<string>;
+};
+
+/**
+ * Supported attachment categories; provider limits remain explicit in the sender.
+ */
+export type MetaMediaKind = 'image' | 'audio' | 'video' | 'document';
+
+/**
+ * The official API used for an account. Personal accounts are not supported.
+ */
+export type MetaProvider = 'whatsapp' | 'instagram';
+
+/**
+ * Provider identifier, scoped separately by the persisted connection.
+ */
+export type MetaProviderId = string;
+
+/**
+ * Public setup configuration, returned by the server rather than hardcoded in UI.
+ */
+export type MetaPublicConfiguration = {
+    /**
+     * Explicitly supported Graph API version.
+     */
+    graph_version: string;
+    /**
+     * Instagram app ID within the configured Meta business app.
+     */
+    instagram_app_id?: string | null;
+    /**
+     * Operator-confirmed Meta HUMAN_AGENT approval for the configured Instagram app.
+     */
+    instagram_human_agent_approved: boolean;
+    /**
+     * Approved redirect URI for Instagram Login.
+     */
+    instagram_redirect_uri?: string | null;
+    /**
+     * Meta app ID used by WhatsApp Embedded Signup.
+     */
+    whatsapp_app_id?: string | null;
+    /**
+     * Facebook Login for Business v4 configuration ID with coexistence enabled.
+     */
+    whatsapp_configuration_id?: string | null;
+    /**
+     * A server-configured, recipient-restricted local WhatsApp test account exists.
+     */
+    whatsapp_developer_available: boolean;
+    /**
+     * Optional dedicated v4 configuration for Platform signup.
+     */
+    whatsapp_platform_configuration_id?: string | null;
+};
+
+/**
+ * Text, Macro-owned media or approved-template input. Remote arbitrary URLs are
+ * not accepted from clients as attachments.
+ */
+export type MetaReplyContent = {
+    /**
+     * UTF-8 text, checked against the selected provider's limit.
+     */
+    text: string;
+    type: 'text';
+} | {
+    /**
+     * Optional caption, where the provider permits it.
+     */
+    caption?: string | null;
+    /**
+     * Existing Macro document ID, authorized again by the worker.
+     */
+    document_id: string;
+    /**
+     * Desired provider media category.
+     */
+    kind: MetaMediaKind;
+    type: 'media';
+} | {
+    /**
+     * Exact approved language.
+     */
+    language: string;
+    /**
+     * Ordered text parameters for header/body. Buttons and media templates
+     * are validated separately and never passed through as raw provider JSON.
+     */
+    parameters: Array<string>;
+    /**
+     * Account-scoped provider template identity.
+     */
+    template_id: MetaProviderId;
+    type: 'template';
+};
+
+/**
+ * Durable result of an intentional send; accepted does not mean delivered.
+ */
+export type MetaSendProgress = {
+    /**
+     * Native conversation.
+     */
+    channel_id: string;
+    /**
+     * Intent creation time.
+     */
+    created_at: string;
+    /**
+     * Sanitized rejection/recovery code.
+     */
+    error_code?: string | null;
+    /**
+     * Stable local intent ID.
+     */
+    id: string;
+    /**
+     * Linked native message, when created.
+     */
+    message_id?: string | null;
+    /**
+     * Retained intent for recovering a failed draft without inventing content.
+     */
+    payload: MetaSendReply;
+    /**
+     * Current delivery observation.
+     */
+    state: MetaDeliveryState;
+    /**
+     * Human who explicitly submitted this reply.
+     */
+    user_id: string;
+};
+
+/**
+ * Explicit send action; ordinary channel posts never call this boundary.
+ */
+export type MetaSendReply = {
+    /**
+     * Explicit human support action, never inferred from closing the window.
+     */
+    human_support?: boolean;
+    /**
+     * Stable client intent key. A changed payload with this key is a conflict.
+     */
+    idempotency_key: string;
+    /**
+     * Message payload, subject to provider-specific validation.
+     */
+    message: MetaReplyContent;
+    reply_to?: null | MetaProviderId;
+};
+
+/**
+ * An approved WhatsApp template returned from this connection's account.
+ */
+export type MetaTemplate = {
+    /**
+     * Provider category; authentication templates cannot be sent to groups.
+     */
+    category?: string | null;
+    /**
+     * Approved components used for preview/parameter collection.
+     */
+    components: unknown;
+    /**
+     * Provider template identity.
+     */
+    id: MetaProviderId;
+    /**
+     * Exact approved language code.
+     */
+    language: string;
+    /**
+     * Exact approved name.
+     */
+    name: string;
+    /**
+     * Ordered text inputs, including the component and any named variable.
+     */
+    parameter_labels: Array<string>;
+    /**
+     * Nonempty when this approved template needs inputs this composer cannot supply.
+     */
+    unsupported_reason?: string | null;
+};
+
+/**
+ * Multipart private-file staging contract.
+ */
+export type MetaUploadRequest = {
+    /**
+     * One image, audio, video or PDF file.
+     */
+    file: Blob | File;
+};
+
+/**
+ * A private file staged for an explicit customer reply; staging never sends it.
+ */
+export type MetaUploadedAttachment = {
+    /**
+     * Native Macro document, authorized again at send time.
+     */
+    document_id: string;
+    /**
+     * Original display filename.
+     */
+    filename: string;
+    /**
+     * Verified attachment category.
+     */
+    kind: MetaMediaKind;
+};
+
+/**
+ * Current server decision for one implemented sending mode.
+ */
+export type ModeEligibility = {
+    /**
+     * True only when every current server-side condition is satisfied.
+     */
+    allowed: boolean;
+    /**
+     * An allowed control may expire locally; the browser cannot extend permission.
+     */
+    expires_at?: string | null;
+    /**
+     * Explicit operation whose eligibility was evaluated.
+     */
+    mode: ReplyMode;
+    reason?: null | ReplyBlockReason;
+};
+
+/**
  * A signed-in respondent's own response, with its answers as the row
  * holds them now.
  */
@@ -10697,6 +11389,13 @@ export type RecentlyDeletedResponseData = {
 };
 
 /**
+ * A request without a PIN only checks whether a previous attempt completed.
+ */
+export type RegisterPhone = {
+    pin?: null | RegistrationPin;
+};
+
+/**
  * Batched registration, also used to renew an unchanged descriptor's grant.
  */
 export type RegisterUploads = {
@@ -10705,6 +11404,17 @@ export type RegisterUploads = {
      */
     descriptors: Array<UploadDescriptor>;
 };
+
+/**
+ * A six-digit secret, accepted only in an explicit registration request.
+ * Zeroized on drop, deliberately neither Debug nor Serialize, and never persisted.
+ */
+export type RegistrationPin = string;
+
+/**
+ * Durable registration uncertainty is separate from account health.
+ */
+export type RegistrationStatus = 'required' | 'unconfirmed' | 'registered' | 'rate_limited' | 'unavailable';
 
 /**
  * Request to remove participants.
@@ -10771,6 +11481,56 @@ export type ReplaceCrmStagesRequest = {
      */
     stages: Array<CrmStageInput>;
 };
+
+/**
+ * Stable reason a supported operation cannot run now.
+ */
+export type ReplyBlockReason = 'forbidden' | 'disconnected' | 'window_closed' | 'template_required' | 'human_support_required' | 'group_read_only' | 'unsupported';
+
+/**
+ * Operations implemented by this integration, independently of current permission.
+ */
+export type ReplyCapabilities = {
+    /**
+     * Maximum files in one implemented send operation.
+     */
+    max_attachments: number;
+    /**
+     * Supported private attachment categories and effective limits.
+     */
+    media: Array<MetaMediaCapability>;
+    /**
+     * Supported explicit sending modes.
+     */
+    modes: Array<ReplyMode>;
+    /**
+     * Maximum text units.
+     */
+    text_limit: number;
+    /**
+     * Whether text is counted in UTF-8 bytes instead of Unicode characters.
+     */
+    text_limit_in_bytes: boolean;
+};
+
+/**
+ * Eligibility is a snapshot, re-evaluated before dispatch.
+ */
+export type ReplyEligibility = {
+    /**
+     * Server time used to evaluate every mode in this response.
+     */
+    evaluated_at: string;
+    /**
+     * Current decisions, separate from static implemented support.
+     */
+    modes: Array<ModeEligibility>;
+};
+
+/**
+ * Policy mode of the requested send.
+ */
+export type ReplyMode = 'free_form' | 'approved_template' | 'human_support';
 
 /**
  * Requester submission; an existing pending request requires its revision.
@@ -14886,6 +15646,11 @@ export type WebhookValidationTestEvent = {
      */
     webhook_id: String;
 };
+
+/**
+ * Supported production WhatsApp onboarding paths.
+ */
+export type WhatsappMode = 'coexistence' | 'platform';
 
 /**
  * How a question is asked. Each column kind takes a few, the first its
@@ -21302,6 +22067,291 @@ export type EntityMessageTypingResponses = {
 };
 
 export type EntityMessageTypingResponse = EntityMessageTypingResponses[keyof EntityMessageTypingResponses];
+
+export type MetaAuthorizeData = {
+    body: BeginRequest;
+    path?: never;
+    query?: never;
+    url: '/meta/authorize';
+};
+
+export type MetaAuthorizeResponses = {
+    200: MetaBeginAuthorization;
+};
+
+export type MetaAuthorizeResponse = MetaAuthorizeResponses[keyof MetaAuthorizeResponses];
+
+export type MetaAuthorizeCompleteData = {
+    body: MetaCompleteAuthorization;
+    path?: never;
+    query?: never;
+    url: '/meta/authorize/complete';
+};
+
+export type MetaAuthorizeCompleteResponses = {
+    200: MetaConnection;
+};
+
+export type MetaAuthorizeCompleteResponse = MetaAuthorizeCompleteResponses[keyof MetaAuthorizeCompleteResponses];
+
+export type MetaConversationData = {
+    body?: never;
+    path: {
+        channel_id: string;
+    };
+    query?: never;
+    url: '/meta/channels/{channel_id}';
+};
+
+export type MetaConversationResponses = {
+    200: MetaConversationResponse;
+};
+
+export type MetaConversationResponse2 = MetaConversationResponses[keyof MetaConversationResponses];
+
+export type MetaUploadAttachmentData = {
+    body: MetaUploadRequest;
+    path: {
+        channel_id: string;
+    };
+    query?: never;
+    url: '/meta/channels/{channel_id}/attachments';
+};
+
+export type MetaUploadAttachmentResponses = {
+    200: MetaUploadedAttachment;
+};
+
+export type MetaUploadAttachmentResponse = MetaUploadAttachmentResponses[keyof MetaUploadAttachmentResponses];
+
+export type MetaMessageDeliveryData = {
+    body: Array<string>;
+    path: {
+        channel_id: string;
+    };
+    query?: never;
+    url: '/meta/channels/{channel_id}/delivery';
+};
+
+export type MetaMessageDeliveryResponses = {
+    200: Array<MetaSendProgress>;
+};
+
+export type MetaMessageDeliveryResponse = MetaMessageDeliveryResponses[keyof MetaMessageDeliveryResponses];
+
+export type MetaDeleteGroupData = {
+    body?: never;
+    path: {
+        channel_id: string;
+    };
+    query?: never;
+    url: '/meta/channels/{channel_id}/group';
+};
+
+export type MetaDeleteGroupResponses = {
+    200: unknown;
+};
+
+export type MetaDiscardGroupSetupData = {
+    body?: never;
+    path: {
+        channel_id: string;
+    };
+    query?: never;
+    url: '/meta/channels/{channel_id}/group/discard';
+};
+
+export type MetaDiscardGroupSetupResponses = {
+    200: unknown;
+};
+
+export type MetaGroupLinkData = {
+    body?: never;
+    path: {
+        channel_id: string;
+    };
+    query?: never;
+    url: '/meta/channels/{channel_id}/group/link';
+};
+
+export type MetaGroupLinkResponses = {
+    200: MetaGroupInviteLink;
+};
+
+export type MetaGroupLinkResponse = MetaGroupLinkResponses[keyof MetaGroupLinkResponses];
+
+export type MetaRemoveGroupParticipantData = {
+    body?: never;
+    path: {
+        channel_id: string;
+        participant_id: string;
+    };
+    query?: never;
+    url: '/meta/channels/{channel_id}/group/participants/{participant_id}';
+};
+
+export type MetaRemoveGroupParticipantResponses = {
+    200: unknown;
+};
+
+export type MetaRetryGroupData = {
+    body?: never;
+    path: {
+        channel_id: string;
+    };
+    query?: never;
+    url: '/meta/channels/{channel_id}/group/retry';
+};
+
+export type MetaRetryGroupResponses = {
+    200: MetaGroupSetup;
+};
+
+export type MetaRetryGroupResponse = MetaRetryGroupResponses[keyof MetaRetryGroupResponses];
+
+export type MetaReplyData = {
+    body: MetaSendReply;
+    path: {
+        channel_id: string;
+    };
+    query?: never;
+    url: '/meta/channels/{channel_id}/replies';
+};
+
+export type MetaReplyResponses = {
+    200: MetaSendProgress;
+};
+
+export type MetaReplyResponse = MetaReplyResponses[keyof MetaReplyResponses];
+
+export type MetaTemplatesData = {
+    body?: never;
+    path: {
+        channel_id: string;
+    };
+    query?: never;
+    url: '/meta/channels/{channel_id}/templates';
+};
+
+export type MetaTemplatesResponses = {
+    200: Array<MetaTemplate>;
+};
+
+export type MetaTemplatesResponse = MetaTemplatesResponses[keyof MetaTemplatesResponses];
+
+export type MetaConfigurationData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/meta/configuration';
+};
+
+export type MetaConfigurationResponses = {
+    200: MetaPublicConfiguration;
+};
+
+export type MetaConfigurationResponse = MetaConfigurationResponses[keyof MetaConfigurationResponses];
+
+export type MetaConnectionsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/meta/connections';
+};
+
+export type MetaConnectionsResponses = {
+    200: Array<MetaConnection>;
+};
+
+export type MetaConnectionsResponse = MetaConnectionsResponses[keyof MetaConnectionsResponses];
+
+export type MetaDisconnectData = {
+    body?: never;
+    path: {
+        connection_id: string;
+    };
+    query?: never;
+    url: '/meta/connections/{connection_id}/disconnect';
+};
+
+export type MetaDisconnectResponses = {
+    200: DisconnectResult;
+};
+
+export type MetaDisconnectResponse = MetaDisconnectResponses[keyof MetaDisconnectResponses];
+
+export type MetaCreateGroupData = {
+    body: MetaCreateGroup;
+    path: {
+        connection_id: string;
+    };
+    query?: never;
+    url: '/meta/connections/{connection_id}/groups';
+};
+
+export type MetaCreateGroupResponses = {
+    200: MetaGroupSetup;
+};
+
+export type MetaCreateGroupResponse = MetaCreateGroupResponses[keyof MetaCreateGroupResponses];
+
+export type MetaHistoryData = {
+    body?: never;
+    path: {
+        connection_id: string;
+    };
+    query?: never;
+    url: '/meta/connections/{connection_id}/history';
+};
+
+export type MetaHistoryResponses = {
+    200: MetaHistoryImportView;
+};
+
+export type MetaHistoryResponse = MetaHistoryResponses[keyof MetaHistoryResponses];
+
+export type MetaImportHistoryData = {
+    body?: never;
+    path: {
+        connection_id: string;
+    };
+    query?: never;
+    url: '/meta/connections/{connection_id}/history';
+};
+
+export type MetaImportHistoryResponses = {
+    200: MetaHistoryImportView;
+};
+
+export type MetaImportHistoryResponse = MetaImportHistoryResponses[keyof MetaImportHistoryResponses];
+
+export type MetaRegisterData = {
+    body: RegisterPhone;
+    path: {
+        connection_id: string;
+    };
+    query?: never;
+    url: '/meta/connections/{connection_id}/register';
+};
+
+export type MetaRegisterResponses = {
+    200: MetaConnection;
+};
+
+export type MetaRegisterResponse = MetaRegisterResponses[keyof MetaRegisterResponses];
+
+export type MetaDeveloperWhatsappData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/meta/developer/whatsapp';
+};
+
+export type MetaDeveloperWhatsappResponses = {
+    200: MetaConnection;
+};
+
+export type MetaDeveloperWhatsappResponse = MetaDeveloperWhatsappResponses[keyof MetaDeveloperWhatsappResponses];
 
 export type GetPinsHandlerData = {
     body?: never;

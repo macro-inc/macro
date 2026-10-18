@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_connection SET status = $2, health_error = $3, checked_at = now(), updated_at = now() WHERE id = $1 AND connected_at IS NOT DISTINCT FROM $4 AND status <> 'disconnected'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5b44a6e4eb5197d16fd7030505582fa7cc04a8eb92dd4373369747aa109d99f9"
+}

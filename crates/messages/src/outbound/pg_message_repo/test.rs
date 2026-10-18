@@ -459,12 +459,18 @@ async fn soft_deleted_parents_disappear_and_cursor_does_not_repeat_roots(pool: P
     assert_eq!(second.items.len(), 1);
     assert_ne!(first.items[0].message.id, second.items[0].message.id);
     assert!(second.next_cursor.is_none());
-    assert!(repo.parent_exists(&root.parent).await.unwrap());
+    assert_eq!(
+        repo.parent_state(&root.parent).await.unwrap(),
+        ParentState::Native
+    );
     sqlx::query!(r#"UPDATE "Document" SET "deletedAt" = now() WHERE id = 'message-doc-a'"#)
         .execute(&pool)
         .await
         .unwrap();
-    assert!(!repo.parent_exists(&root.parent).await.unwrap());
+    assert_eq!(
+        repo.parent_state(&root.parent).await.unwrap(),
+        ParentState::Missing
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -1595,7 +1601,10 @@ async fn verify_call_chat_archive(pool: PgPool, call_id: Uuid) {
         .await
         .unwrap();
     tx.commit().await.unwrap();
-    assert!(repo.parent_exists(&parent).await.unwrap());
+    assert_eq!(
+        repo.parent_state(&parent).await.unwrap(),
+        ParentState::Native
+    );
     assert_eq!(
         repo.get(&parent, call_id).await.unwrap().unwrap().content,
         "Persistent chat"
@@ -1607,7 +1616,10 @@ async fn verify_call_chat_archive(pool: PgPool, call_id: Uuid) {
         .execute(&pool)
         .await
         .unwrap();
-    assert!(!repo.parent_exists(&parent).await.unwrap());
+    assert_eq!(
+        repo.parent_state(&parent).await.unwrap(),
+        ParentState::Missing
+    );
     assert!(repo.get(&parent, call_id).await.unwrap().is_none());
     assert!(repo.thread(&parent, call_id).await.unwrap().is_none());
     let mention_count = sqlx::query_scalar!(

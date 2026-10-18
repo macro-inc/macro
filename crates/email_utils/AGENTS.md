@@ -46,6 +46,8 @@ sender/generic-address checks.
 - Sanitization is security-sensitive (XSS via email HTML): any allowlist
   change needs a test proving the previously-dangerous input is now stripped,
   not just that benign input survives.
+- Keep Ammonia on a patched release and cover mixed-case CSS URL functions in
+  every sanitizer entry point; CSS function names are case-insensitive.
 
 ## Related
 

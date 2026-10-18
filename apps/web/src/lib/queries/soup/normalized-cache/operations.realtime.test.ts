@@ -54,6 +54,7 @@ function channel(updatedAt: string, notifiedAt?: string): SoupApiItem {
         id: 'channel-1',
         name: 'Live notification test',
         channel_type: 'direct_message',
+        messaging_binding: 'native',
         owner_id: 'macro|sender@example.com',
         created_at: OLD,
         updated_at: updatedAt,

@@ -50,6 +50,8 @@ pub enum ParticipantRole {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct Channel {
+    /// Authoritative external binding, including pending group setup.
+    pub messaging_binding: channels::domain::models::MessagingBinding,
     /// Channel id.
     #[cfg_attr(feature = "schema", schema(value_type = Uuid))]
     pub id: ChannelId,
@@ -317,6 +319,7 @@ impl Channel {
             id: ChannelId(channel.id),
             name: channel.name,
             channel_type: ChannelType::new_from_channels(channel.channel_type),
+            messaging_binding: channel.messaging_binding,
             org_id: channel
                 .org_id
                 .and_then(|org_id| u32::try_from(org_id).ok())

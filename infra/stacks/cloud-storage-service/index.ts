@@ -155,6 +155,13 @@ const emailServiceStack = new pulumi.StackReference('email-service-stack', {
   name: `macro-inc/email-service/${stack}`,
 });
 
+// Same stable name used by the email viewer and shared ai_tools IAM wiring;
+// avoids requiring a new email-service stack output before this rollout.
+const emailAttachmentsBucketName = pulumi.output(
+  `macro-email-attachments-${stack}`
+);
+const emailAttachmentsBucketArn = pulumi.interpolate`arn:aws:s3:::${emailAttachmentsBucketName}`;
+
 const emailScheduledQueueArn: pulumi.Output<string> = emailServiceStack
   .getOutput('scheduledQueueArn')
   .apply((arn) => arn as string);
@@ -362,6 +369,7 @@ const cloudStorageService = new CloudStorageService(
     },
     documentStorageBucketArn,
     docxUploadBucketArn,
+    emailAttachmentsBucketArn,
     githubPullRequestPatchBucketArn: githubPullRequestPatchBucket.arn,
     serviceContainerPort: 8080,
     healthCheckPath: '/health',
@@ -381,6 +389,7 @@ const cloudStorageService = new CloudStorageService(
     callRecordingCrudPolicyArn,
     snsPlatformArns: [snsApnsVoipPlatformArn],
     containerEnvVars: [
+      { name: 'ATTACHMENT_BUCKET', value: emailAttachmentsBucketName },
       {
         name: 'GITHUB_PULL_REQUEST_PATCH_BUCKET',
         value: githubPullRequestPatchBucket.bucket,

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM meta_messaging_customer_alias WHERE connection_id=$1 AND identifier=$2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "438661154c40b62ee3fce2ef4ea010c079937f52023515c575f38817c111d480"
+}

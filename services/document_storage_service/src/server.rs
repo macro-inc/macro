@@ -748,7 +748,10 @@ pub async fn run() -> anyhow::Result<()> {
     );
     let call_connection_service =
         ConnectionServiceImpl::new(entity_access_service.clone(), connection_gateway.clone());
-    let call_repo = PgCallRepo::new(db.clone());
+    let call_repo = PgCallRepo::new(
+        db.clone(),
+        channels::outbound::pg_channels_repo::PgChannelsRepo::new(db.clone()),
+    );
     let egress_config = match (
         config::CallRecordingS3Bucket::new(),
         config::CallRecordingS3Region::new(),
@@ -1101,9 +1104,7 @@ pub async fn run() -> anyhow::Result<()> {
         let cancellation_token = consumer_cancellation_token.clone();
         let consumer = crm::inbound::call_archived::CallArchivedConsumer::new(
             crm::domain::call_links::CallRecordLinker::new(
-                call::domain::service::CallRecordQueryServiceImpl::new(PgCallRepo::new(
-                    db.clone(),
-                )),
+                call::domain::service::CallRecordQueryServiceImpl::new(PgCallRepo::new(db.clone(), channels::outbound::pg_channels_repo::PgChannelsRepo::new(db.clone()))),
                 crm::outbound::call_link::PgCallCrmLinker::new(
                     db.clone(),
                     (*system_properties_service).clone(),
@@ -1370,7 +1371,9 @@ pub async fn run() -> anyhow::Result<()> {
     macro_agent_tool_context.channel_tool_context =
         ai_tools::build_channel_tool_context_with_dispatcher(
             db.clone(),
-            std::sync::Arc::new(SpawnedChannelEventDispatcher::new(channel_side_effects)),
+            std::sync::Arc::new(SpawnedChannelEventDispatcher::new(
+                channel_side_effects.clone(),
+            )),
             message_service.clone(),
         );
     let macro_agent_tools = ai_tools::tools_for(ai_tools::AiHost::ChannelBot);
@@ -1451,6 +1454,24 @@ pub async fn run() -> anyhow::Result<()> {
         entity_access_service: entity_access_service.clone(),
         authorization_state: authorization_state.clone(),
     };
+
+    let meta_state = crate::native_messaging::build(crate::native_messaging::Dependencies {
+        channel_events: Arc::new(SpawnedChannelEventDispatcher::new(
+            channel_side_effects.clone(),
+        )),
+        tracker: consumer_tracker.clone(),
+        cancellation: consumer_cancellation_token.clone(),
+        pool: db.clone(),
+        access: entity_access_service.clone(),
+        authorization: authorization_state.clone(),
+        gateway: conn_gateway_client.clone(),
+        search: sqs_client.clone(),
+        environment: config.environment,
+        documents: document_service.clone(),
+        broker: macro_event_broker.clone(),
+        notifications: notification_ingress_service.clone(),
+    })
+    .await?;
 
     // Held by value here and behind an `Arc` in the router state: the impl is a
     // pool handle, so cloning is cheap and `SoupImpl` needs an owned service.
@@ -1572,7 +1593,10 @@ pub async fn run() -> anyhow::Result<()> {
                 frecency_storage.clone(),
             )
             .with_agent_dm_profiles(agent_dm_profiles),
-            call::domain::service::CallRecordQueryServiceImpl::new(PgCallRepo::new(db.clone())),
+            call::domain::service::CallRecordQueryServiceImpl::new(PgCallRepo::new(
+                db.clone(),
+                channels::outbound::pg_channels_repo::PgChannelsRepo::new(db.clone()),
+            )),
             crm_service.clone(),
             GithubPullRequestServiceImpl::new(
                 ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
@@ -1608,6 +1632,7 @@ pub async fn run() -> anyhow::Result<()> {
             )),
             call::domain::service::CallRecordQueryServiceImpl::new(PgCallRepo::new(
                 readonly_db.clone(),
+                channels::outbound::pg_channels_repo::PgChannelsRepo::new(readonly_db.clone()),
             )),
             crm_service.clone(),
             GithubPullRequestServiceImpl::new(
@@ -2081,6 +2106,7 @@ pub async fn run() -> anyhow::Result<()> {
             authorization_state.clone(),
         ),
         slack_state,
+        meta_state,
         reminders_state: RemindersRouterState::new(
             Arc::new(reminders_service),
             entity_access_service.clone(),

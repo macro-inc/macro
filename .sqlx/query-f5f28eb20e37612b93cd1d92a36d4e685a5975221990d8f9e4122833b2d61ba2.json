@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO meta_messaging_send (id,connection_id,channel_id,user_id,idempotency_key,request_sha256,payload,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,clock_timestamp()) ON CONFLICT (channel_id,user_id,idempotency_key) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Bytea",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f5f28eb20e37612b93cd1d92a36d4e685a5975221990d8f9e4122833b2d61ba2"
+}

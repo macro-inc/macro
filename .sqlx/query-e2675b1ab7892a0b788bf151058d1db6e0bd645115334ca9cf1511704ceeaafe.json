@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_group_participant older SET\n            active=CASE WHEN newer.membership_at>older.membership_at THEN newer.active ELSE older.active END,\n            membership_at=GREATEST(older.membership_at,newer.membership_at),\n            display_name=CASE WHEN newer.profile_at>older.profile_at THEN COALESCE(newer.display_name,older.display_name) ELSE older.display_name END,\n            username=CASE WHEN newer.profile_at>older.profile_at THEN COALESCE(newer.username,older.username) ELSE older.username END,\n            phone=CASE WHEN newer.profile_at>older.profile_at THEN COALESCE(newer.phone,older.phone) ELSE older.phone END,\n            profile_at=GREATEST(older.profile_at,newer.profile_at)\n            FROM meta_messaging_group_participant newer,meta_messaging_conversation c WHERE c.connection_id=$1 AND c.kind='group'\n            AND older.channel_id=c.channel_id AND newer.channel_id=older.channel_id AND older.customer_id=$2 AND newer.customer_id=$3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e2675b1ab7892a0b788bf151058d1db6e0bd645115334ca9cf1511704ceeaafe"
+}

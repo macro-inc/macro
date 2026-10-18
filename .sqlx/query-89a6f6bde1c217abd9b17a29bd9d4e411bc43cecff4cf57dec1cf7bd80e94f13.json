@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id FROM meta_messaging_connection WHERE id=$1 AND team_id=$2 AND connected_at=$3 AND status='connected' AND (whatsapp_mode IS DISTINCT FROM 'platform' OR registration_status='registered') FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "89a6f6bde1c217abd9b17a29bd9d4e411bc43cecff4cf57dec1cf7bd80e94f13"
+}

@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS(SELECT 1 FROM meta_messaging_group_setup WHERE channel_id=$1 AND connection_id=$2 AND (state IN ('failed','unknown') OR started_at<now()-make_interval(secs=>$3::int))) AS \"allowed!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "allowed!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "0743be5549573eab33be9fa35cb6b656c8e94b11e08dfdac25de7f42ede5239c"
+}

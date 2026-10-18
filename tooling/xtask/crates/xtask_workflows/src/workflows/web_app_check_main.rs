@@ -56,6 +56,7 @@ pub fn web_app_check_main() -> Workflow {
         .add_job("test", test())
         .add_job("cycles", cycles())
         .add_job("build", build())
+        .add_job("messaging", messaging())
         .add_job(ios_native_check::JOB_ID, ios_native_check::job())
         .add_job("status-check", status_check())
 }
@@ -70,6 +71,10 @@ fn path_check() -> Job {
     Job::default()
         .runs_on(runners::Runner::TinyNoCache.to_string())
         .add_output("should_run", "${{ steps.filter.outputs.should_run }}")
+        .add_output(
+            "messaging_changed",
+            "${{ steps.filter.outputs.messaging_changed }}",
+        )
         .add_output(
             "codegen_changed",
             "${{ steps.filter.outputs.codegen_changed }}",
@@ -224,6 +229,32 @@ fn build() -> Job {
         .add_step(steps::teardown_nix())
 }
 
+/// The bundled messaging journey needs fixture routing. Keep its build and test
+/// restricted to the messaging feature and the shared surfaces it exercises.
+fn messaging() -> Job {
+    Job::default()
+        .needs(vec!["path-check".into()])
+        .cond(Expression::new(
+            "needs.path-check.outputs.messaging_changed == 'true'",
+        ))
+        .name("Messaging Browser Check")
+        .runs_on(mid_web_runner())
+        .add_step(checkout("Checkout Repo", false))
+        .add_step(steps::mount_web_build_check_cache_volume())
+        .add_step(steps::setup_nix())
+        .add_step(steps::setup_reqs_web("Setup", true))
+        .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
+        .add_step(steps::start_sccache_server())
+        .add_step(run_messaging_build())
+        .add_step(
+            Step::new("Test Native Messaging in Chromium")
+                .run("bun run test:functional meta-messaging.spec.ts")
+                .add_env(("FUNCTIONAL_MESSAGING", "1"))
+                .working_directory(xtask_paths::repo_dir!("apps/web")),
+        )
+        .add_step(steps::teardown_nix())
+}
+
 /// Always-run collector used as the required status check. Its name must stay
 /// stable because branch protection can reference it. New gates join the
 /// `needs` list (and [`check_job_results`]) rather than the ruleset: the
@@ -241,6 +272,7 @@ fn status_check() -> Job {
             "test".to_string(),
             "cycles".to_string(),
             "build".to_string(),
+            "messaging".to_string(),
             ios_native_check::JOB_ID.to_string(),
         ])
         .runs_on(runners::Runner::TinyNoCache.to_string())
@@ -288,7 +320,7 @@ fn paths_filter() -> Step<Use> {
         .add_with((
             "filters",
             format!(
-                "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - 'packages/sdk/**'\n  - 'packages/sdk-docs/**'\n  - 'services/ai-editing-worker/**'\n  - 'packages/code-mode-sdk/**'\n  - 'crates/code_execution/src/outbound/deno/*.mjs'\n  - 'crates/agent_code_mode/src/domain/documentation.json'\n  - 'crates/agent_code_mode/SKILL.md'\n  - 'crates/ai_tools/src/display_results/schema.generated.json'\n  - '.github/actions/setup-reqs-web/**'\ncodegen_changed:\n  - 'crates/**/*.rs'\n  - 'services/**/*.rs'\n  - 'Cargo.toml'\n  - 'Cargo.lock'\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - 'packages/sdk/**'\n  - 'apps/docs/**'\n  - '.github/actions/setup-reqs-web/**'\n"
+                "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - 'packages/sdk/**'\n  - 'packages/sdk-docs/**'\n  - 'services/ai-editing-worker/**'\n  - 'packages/code-mode-sdk/**'\n  - 'crates/code_execution/src/outbound/deno/*.mjs'\n  - 'crates/agent_code_mode/src/domain/documentation.json'\n  - 'crates/agent_code_mode/SKILL.md'\n  - 'crates/ai_tools/src/display_results/schema.generated.json'\n  - '.github/actions/setup-reqs-web/**'\ncodegen_changed:\n  - 'crates/**/*.rs'\n  - 'services/**/*.rs'\n  - 'Cargo.toml'\n  - 'Cargo.lock'\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - 'packages/sdk/**'\n  - 'apps/docs/**'\n  - '.github/actions/setup-reqs-web/**'\nmessaging_changed:\n  - 'apps/web/src/features/block-channel/**'\n  - 'apps/web/src/features/meta-messaging/**'\n  - 'apps/web/src/features/channel/**'\n  - 'apps/web/src/features/entity/**'\n  - 'apps/web/src/features/next-soup/actions/**'\n  - 'apps/web/src/features/channels-view/**'\n  - 'apps/web/src/lib/core/**'\n  - 'apps/web/src/lib/queries/**'\n  - 'apps/web/src/lib/service-clients/service-storage/**'\n  - 'apps/web/src/lib/graphql-cache/**'\n  - 'apps/web/src/components/app/**'\n  - 'apps/web/src/components/ui/**'\n  - 'apps/web/src/routes/**'\n  - 'apps/web/tests/functional/**'\n  - 'apps/web/tests/native/fixtures/**'\n  - 'apps/web/package.json'\n  - 'apps/web/vite.config.ts'\n  - 'package.json'\n  - 'bun.lock'\n  - 'Cargo.toml'\n  - 'Cargo.lock'\n  - 'crates/meta_messaging/**'\n  - 'crates/graphql_soup/**'\n  - 'crates/models_soup/**'\n  - 'crates/complete_graph/**'\n  - 'static_assets/schema.graphql'\n  - 'services/document_storage_service/src/server.rs'\n  - 'services/document_storage_service/src/api/**'\n  - 'crates/channels/**'\n  - 'crates/messages/**'\n  - 'crates/call/**'\n  - 'crates/entity_access/**'\n  - 'crates/entity_access_db_utils/**'\n  - 'crates/macro_middleware/**'\n  - 'crates/client/**'\n  - 'packages/collaboration/**'\n  - 'apps/web/src/lib/service-clients/service-connection/**'\n  - 'crates/macro_authorization/**'\n  - 'services/document_storage_service/src/native_messaging/**'\n  - 'services/document_storage_service/src/native_messaging.rs'\n  - 'crates/macro_db_client/migrations/**'\n  - 'tooling/xtask/crates/xtask_workflows/src/workflows/web_app_check_main*'\n  - '.github/workflows/web-app-check-main.yml'\n  - '.github/actions/setup-reqs-web/**'\n"
             ),
         ))
 }
@@ -432,7 +464,7 @@ fn run_tests() -> Step<Run> {
 }
 
 fn run_functional_tests() -> Step<Run> {
-    Step::new("Test Optimistic Mutations in Chromium")
+    Step::new("Test Shared Functional Scenarios in Chromium")
         .run("bun run test:functional")
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
@@ -464,6 +496,20 @@ fn run_build() -> Step<Run> {
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 
+fn run_messaging_build() -> Step<Run> {
+    Step::new("Build isolated messaging fixture")
+        .run("just build-dev")
+        // The functional app preview uses this same build with isolated transports.
+        .add_env(("VITE_LOCAL_SERVERS", "ALL"))
+        .add_env(("VITE_LOCAL_BACKEND_ORIGIN", "same-origin"))
+        .add_env(("VITE_ENABLE_GRAPHQL_SOUP", "true"))
+        .add_env(("VITE_DISABLE_BROWSER_TURSO_CACHE", "true"))
+        .add_env(("VITE_ENABLE_IN_APP_TOURS", "false"))
+        .add_env(("VITE_ENABLE_BROWSER_OTEL", "false"))
+        .add_env(("WASM_PKG_CACHE_DIR", vars::WASM_PKG_CACHE_DIR))
+        .working_directory(xtask_paths::repo_dir!("apps/web"))
+}
+
 fn check_job_results() -> Step<Run> {
     Step::new("Check job results").run(indoc::indoc! {r#"
         echo "path-check: ${{ needs.path-check.result }}"
@@ -474,6 +520,7 @@ fn check_job_results() -> Step<Run> {
         echo "test: ${{ needs.test.result }}"
         echo "cycles: ${{ needs.cycles.result }}"
         echo "build: ${{ needs.build.result }}"
+        echo "messaging: ${{ needs.messaging.result }}"
         echo "ios-native-check: ${{ needs.ios-native-check.result }}"
 
         # Fail if any job failed (skipped and success are both OK). The iOS
@@ -486,6 +533,8 @@ fn check_job_results() -> Step<Run> {
            [[ "${{ needs.test.result }}" == "failure" ]] || \
            [[ "${{ needs.cycles.result }}" == "failure" ]] || \
            [[ "${{ needs.build.result }}" == "failure" ]] || \
+           [[ "${{ needs.messaging.result }}" == "failure" ]] || \
+           [[ "${{ needs.messaging.result }}" == "cancelled" ]] || \
            [[ "${{ needs.ios-native-check.result }}" == "failure" ]] || \
            [[ "${{ needs.ios-native-check.result }}" == "cancelled" ]]; then
           echo "One or more jobs failed"

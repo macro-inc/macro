@@ -137,6 +137,7 @@ rdkafka = { workspace = true, optional = true }
 recursion = { workspace = true, optional = true }
 rootcause = { workspace = true, optional = true }
 serde = { workspace = true }
+strum = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, optional = true }
 share_permission_db_utils = { path = "../share_permission_db_utils", optional = true }
 sqlx = { workspace = true, optional = true }

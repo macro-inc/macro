@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS(SELECT 1 FROM meta_messaging_group_setup WHERE connection_id=$1 AND state IN ('creating','pending') AND started_at>=now()-make_interval(secs=>$3::int) AND (NOT $2 OR (state='creating' AND request_id IS NULL))) AS \"waiting!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "waiting!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "3891c819e3e01f9498d26d6e109820693ae33a913f9e5c8de29c280c399209d4"
+}

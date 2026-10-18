@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_conversation SET customer_display_name=$2,group_subject_at=$3 WHERE channel_id=$1 AND (group_subject_at IS NULL OR group_subject_at<$3)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6903435acf889d2fc750bae5feea066ce55aba86216aff23e1db7992229bf924"
+}

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH expired AS (\n            SELECT id FROM meta_messaging_send WHERE created_at<=clock_timestamp()-make_interval(secs=>$1::integer)\n              AND provider_message_id IS NULL\n              AND (state='pending' OR (state='sending' AND dispatch_started_at IS NULL))\n            ORDER BY created_at,id FOR UPDATE SKIP LOCKED LIMIT 100\n        ) UPDATE meta_messaging_send s SET state='failed',error_code='send_expired',lease_id=NULL,lease_until=NULL,\n            updated_at=clock_timestamp() FROM expired WHERE s.id=expired.id",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ccfce1a84acc234f33190deff99e2f51c9b36dd171ebf7ea8c97575116fb5a8b"
+}

@@ -34,5 +34,7 @@ converts their XML parts into a Bill Of Materials (BOM) stored in MacroDB.
 
 ## Gotchas
 
+- ZIP entry-name decoding is fallible. Propagate invalid names as unzip errors;
+  retain the DOCX fixture's expected part paths and content hashes.
 - Do not build this crate for deployment from this directory — use the repo's
   Lambda build path (`make build` here targets the Lambda release artifact).

@@ -60,3 +60,11 @@ they need.
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/db.md` ·
   Skill: `collab-surface-core`
+
+## Provider-managed channels
+
+The repository reads native group policy and existence together as `ParentState`;
+mutations use the same parent lookup as reads, without an extra per-channel query.
+The domain blocks ordinary human posts and unsupported edits/deletes/reactions/
+threads on pending or bound provider groups. Existing permissioned bot behavior
+remains internal. Explicit external replies use the separate messaging domain.

@@ -12,9 +12,10 @@ note: |-
   reactive view models in `primitives/`. The `dateBucket` import from
   `soup/collection/date-buckets` (a pure date-fns module, not the soup barrel)
   is the documented exception for feed labels that must match soup views.
-  The shared @core/util/base64 codec, cron helpers, and dateSearch/parseTime parser are pure utilities and may be reused.
+  The shared @core/util/base64 codec, cron helpers, dateSearch/parseTime parser, and message-timeline comparator are pure utilities and may be reused.
   Block-agent names its rendering layers `ui/` and `component/`.
 files:
+  - apps/web/src/features/meta-messaging/core/**
   - apps/web/src/features/access-requests/core/**
   - apps/web/src/features/agent-activity/core/**
   - apps/web/src/features/agent-dms/core/**
@@ -51,7 +52,7 @@ rule:
   kind: string
   regex: ^['"](solid-js|@urql|urql|@app/lib/urql|@queries/|@service-storage/|@core/|@property/|@components/|@ui|@entity/|(\.\./)+(queries|primitives|components|views|ui|component|context)(/|['"]))
   not:
-    regex: ^['"]@core/util/(base64|cron|dateSearch/parseTime)['"]
+    regex: ^['"]@core/util/(base64|cron|dateSearch/parseTime|message-timeline)['"]
   any:
     - inside:
         kind: import_statement

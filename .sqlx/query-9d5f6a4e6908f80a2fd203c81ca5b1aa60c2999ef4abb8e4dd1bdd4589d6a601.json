@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_group_setup s SET state=$4,request_id=$5,error_code=$6 WHERE channel_id=$1 AND connection_id=$2 AND attempt_id=$3 AND generation=$7 AND EXISTS(SELECT 1 FROM meta_messaging_connection c WHERE c.id=s.connection_id AND c.connected_at=s.generation)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9d5f6a4e6908f80a2fd203c81ca5b1aa60c2999ef4abb8e4dd1bdd4589d6a601"
+}

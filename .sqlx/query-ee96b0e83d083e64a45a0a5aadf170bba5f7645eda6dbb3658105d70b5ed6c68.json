@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_customer_alias SET customer_id=$3 WHERE connection_id=$1 AND customer_id=$2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ee96b0e83d083e64a45a0a5aadf170bba5f7645eda6dbb3658105d70b5ed6c68"
+}

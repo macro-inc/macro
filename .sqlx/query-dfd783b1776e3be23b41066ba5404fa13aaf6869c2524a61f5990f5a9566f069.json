@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT message_id FROM meta_messaging_message WHERE connection_id=$1 AND provider_message_id=$2 AND provenance<>'macro_reply' AND media_state<>'stored' FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "dfd783b1776e3be23b41066ba5404fa13aaf6869c2524a61f5990f5a9566f069"
+}

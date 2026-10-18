@@ -56,6 +56,11 @@ pub enum ChannelRealtimeEffect {
 pub enum NotificationSender {
     /// A user sender.
     User(MacroUserIdStr<'static>),
+    /// An imported author with no native user identity.
+    External {
+        /// Provider display name, if supplied.
+        name: Option<String>,
+    },
     /// A bot sender resolved to its public display name.
     Bot {
         /// Bot display name.
@@ -68,15 +73,16 @@ impl NotificationSender {
     pub fn as_user(&self) -> Option<&MacroUserIdStr<'static>> {
         match self {
             NotificationSender::User(id) => Some(id),
-            NotificationSender::Bot { .. } => None,
+            NotificationSender::Bot { .. } | NotificationSender::External { .. } => None,
         }
     }
 
-    /// The sender's display name, when the sender is a bot.
+    /// The display name for a sender without a native user identity.
     pub fn display_name(&self) -> Option<&str> {
         match self {
             NotificationSender::User(_) => None,
             NotificationSender::Bot { name } => Some(name),
+            NotificationSender::External { name } => name.as_deref(),
         }
     }
 }
@@ -187,8 +193,10 @@ pub enum ChannelNotificationEffect {
         /// Message author who should receive the notification.
         recipient_id: MacroUserIdStr<'static>,
     },
-    /// A normal channel message was posted.
+    /// A channel message was posted.
     ChannelMessage {
+        /// Stable source identity for durable recovery; ordinary posts allocate an id.
+        notification_id: Option<Uuid>,
         /// Channel containing the message.
         channel_id: Uuid,
         /// Message id.
@@ -805,6 +813,7 @@ where
         context: &PostedMessageNotificationContext,
     ) {
         self.send_notification(ChannelNotificationEffect::ChannelMessage {
+            notification_id: None,
             channel_id,
             message_id: message.id,
             sender: context.sender.clone(),

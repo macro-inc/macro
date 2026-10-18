@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_message m SET media_state=CASE WHEN $3 THEN 'stored' ELSE 'failed' END,effect_revision=effect_revision+1,native_retry_at=now() WHERE connection_id=$1 AND provider_message_id=$2 AND ($3 OR m.media_state<>'stored') AND NOT EXISTS (SELECT 1 FROM meta_messaging_revision r WHERE r.connection_id=m.connection_id AND r.customer_id=m.customer_id AND r.provider_message_id=m.provider_message_id AND r.direction=m.direction AND r.deleted_at IS NOT NULL)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "381070fef1e28a8bba0376de6353cccff79b379dd88028d4981818cb40b7e58a"
+}

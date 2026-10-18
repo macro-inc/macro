@@ -28,6 +28,7 @@ mod active_meetings;
 mod meeting_invites;
 mod meeting_participants;
 mod meeting_startup;
+mod provider;
 
 use crate::domain::meetings::GuestId;
 use crate::domain::models::{
@@ -515,11 +516,13 @@ type BaseGetOrCreateCallService<Cn> = CallServiceImpl<
 >;
 
 fn build_get_or_create_service<B: MacroEventBroker + Clone, Cn: ConnectionService>(
-    repo: MockCallRepository,
+    mut repo: MockCallRepository,
     connection_service: Cn,
     event_broker: B,
     recording_enabled: bool,
 ) -> impl CallService {
+    repo.expect_channel_allows_calls()
+        .returning(|_| Box::pin(async { Ok(true) }));
     let service: BaseGetOrCreateCallService<Cn> = CallServiceImpl::new(
         repo,
         MockRtcClient::new(),
@@ -717,6 +720,8 @@ const SWITCHED_FROM_ROOM: &str = "switched-from-room";
 fn switching_repo(remaining: i64) -> MockCallRepository {
     let call = started_event_call(STARTED_EVENT_CREATOR);
     let mut repo = MockCallRepository::new();
+    repo.expect_channel_allows_calls()
+        .returning(|_| Box::pin(async { Ok(true) }));
     repo.expect_get_call_by_channel_id()
         .times(1)
         .return_once(move |_| Box::pin(async move { Ok(Some(call)) }));
@@ -3676,7 +3681,10 @@ async fn enroll_stable_speaker_voices_links_all_voices_for_consistent_diarized_s
     use crate::outbound::{pg_call_repo::PgCallRepo, pg_voice_repo::PgVoiceRepo};
     use chrono::{Duration, Utc};
 
-    let call_repo = PgCallRepo::new(pool.clone());
+    let call_repo = PgCallRepo::new(
+        pool.clone(),
+        channels::outbound::pg_channels_repo::PgChannelsRepo::new(pool.clone()),
+    );
     let voice_repo = PgVoiceRepo::new(pool.clone());
     let user_a = MacroUserIdStr::parse_from_str("macro|user-a@test.com")?;
     let user_b = MacroUserIdStr::parse_from_str("macro|user-b@test.com")?;

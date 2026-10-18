@@ -99,6 +99,10 @@ fn api_router(state: ApiContext) -> Router {
     // cal.com validates via HMAC signature.
     let webhook_router = Router::new()
         .nest(
+            "/meta",
+            meta_messaging::inbound::router::webhook_router(state.meta_state.clone()),
+        )
+        .nest(
             "/call",
             call::inbound::axum_router::webhook_router(
                 state.call_webhook_state.clone(),
@@ -117,6 +121,10 @@ fn api_router(state: ApiContext) -> Router {
     );
 
     let internal_router = Router::new()
+        .nest(
+            "/meta",
+            meta_messaging::inbound::router::router(state.meta_state.clone()),
+        )
         .nest(
             "/dictation",
             dictation::inbound::axum_router::dictation_router(state.dictation_state.clone()),

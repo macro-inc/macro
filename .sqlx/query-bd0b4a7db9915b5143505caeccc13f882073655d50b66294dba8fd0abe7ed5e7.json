@@ -1,0 +1,70 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, name, channel_type AS \"channel_type: ChannelType\", org_id, team_id, auto_join_team, messaging_binding AS \"messaging_binding: MessagingBinding\"\n            FROM comms_channels\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "channel_type: ChannelType",
+        "type_info": {
+          "Custom": {
+            "name": "comms_channel_type",
+            "kind": {
+              "Enum": [
+                "public",
+                "private",
+                "direct_message",
+                "team"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "org_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "auto_join_team",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 6,
+        "name": "messaging_binding: MessagingBinding",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "bd0b4a7db9915b5143505caeccc13f882073655d50b66294dba8fd0abe7ed5e7"
+}
