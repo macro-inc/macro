@@ -4,6 +4,7 @@ import {
   isShareableEntity,
   isShareableEntityType,
 } from '@app/features/sharing/global-share-modal/shareable-entity';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { EntityData } from '@entity';
 import { restoreSoupFocus } from '../utils';
 import type { EntityActionListState } from './entity-action-context';
@@ -47,14 +48,14 @@ export const makeShareAction = () => {
         if (focusedId) {
           soup.focus.set(focusedId);
         }
-        void restoreSoupFocus(focusedId);
+        fireAndForget(restoreSoupFocus(focusedId), 'entity-actions');
       },
       onCancel: () => {
         const firstEntity = entities[0];
         if (firstEntity) {
           soup.focus.set(firstEntity.id);
         }
-        void restoreSoupFocus(firstEntity?.id);
+        fireAndForget(restoreSoupFocus(firstEntity?.id), 'entity-actions');
       },
     });
   };

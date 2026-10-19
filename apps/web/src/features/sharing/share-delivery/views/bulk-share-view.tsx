@@ -11,6 +11,7 @@ import {
 } from '@core/component/TopBar/ShareDrawer';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
+import { fireAndForget } from '@core/util/fireAndForget';
 import PaperPlaneTilt from '@phosphor/paper-plane-tilt.svg';
 import { Button, Dialog, Hotkey, Panel } from '@ui';
 import { type JSX, onMount, Show } from 'solid-js';
@@ -81,7 +82,10 @@ export function BulkShareView<Recipient extends PickedRecipient>(props: {
     props.onFinish();
   }
 
-  const send = () => (settled() ? props.onFinish() : void share());
+  const send = () => {
+    if (settled()) props.onFinish();
+    else fireAndForget(share(), 'bulk-share');
+  };
 
   const setLevel = (accessLevel: string | null) => {
     const parsed = accessLevel && parseChannelAccessLevel(accessLevel);
@@ -229,7 +233,7 @@ export function BulkShareView<Recipient extends PickedRecipient>(props: {
                     variant="strong"
                     depth={3}
                     disabled={!canShare()}
-                    onClick={() => void share()}
+                    onClick={() => fireAndForget(share(), 'bulk-share')}
                   >
                     <PaperPlaneTilt class="size-4" />
                     {report() ? 'Retry' : 'Share'}
