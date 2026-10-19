@@ -1,9 +1,4 @@
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-} from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal, Show } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ShareDrawer } from './ShareDrawer';
@@ -48,10 +43,13 @@ describe('ShareDrawer', () => {
     await screen.findByRole('dialog', { name: 'Share' });
     const row = screen.getByRole('button', { name: 'Smoke note B' });
 
-    fireEvent.pointerDown(document.querySelector('[data-corvu-drawer-overlay]')!, {
-      pointerType: 'touch',
-      button: 0,
-    });
+    fireEvent.pointerDown(
+      document.querySelector('[data-corvu-drawer-overlay]')!,
+      {
+        pointerType: 'touch',
+        button: 0,
+      }
+    );
     expect(open()).toBe(false);
     fireEvent.pointerUp(row, { pointerType: 'touch', button: 0 });
     fireEvent.click(row);
