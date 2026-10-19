@@ -989,6 +989,40 @@ failed items selected for retry.
 Cancel and Escape dismiss the dialog. Use Cancel when
 reviewing dialogs against hosted data; confirmation performs real mutations.
 
+With two or more rows selected, Share in the row context menu, `Share items` in
+the selection toolbar's `Actions` menu, or `Share items` in the command menu
+opens `Share N items`. One item still opens the full Share dialog. `Share N
+items` takes the Share dialog's place, size, and form: an 800px card near the
+top of the window with the selected items under its title, then the To row, the
+optional message, and Cancel and Share. On phones it is the Share drawer
+instead: the title row ends in Share, the selected items sit under it, and the
+To box wraps its chips, followed by `Send As Group Message`, an `Access:` row,
+and the message. Focus starts in `To: Email or group`, which lists people and
+channels with more than two members. With two or more people and no channel,
+`Send As Group Message` is on and sends one group message; turned off, each
+person gets their own message. The access selector at the end of the To row
+(`can` and a level once a recipient is picked; the `Access:` row on phones)
+sets the access level for items you own. It starts at the lowest default among
+them: Edit for markdown documents, Comment for PDFs, and View for anything
+else, ignoring view-only items such as email threads. A selection that includes
+a form offers no Comment level. Each recipient gets a message with the optional
+text above the item chips, and the items also appear under the channel's
+Attachments tab. Sharing sends real messages.
+
+The first Share locks the form. If a message fails, the dialog stays open and
+names what each recipient missed, such as `jacob did not get Q3 launch plan and
+Pricing notes`. `Retry` (Cmd/Ctrl+Enter) repeats only what failed and reuses
+the same message IDs, so no recipient gets a duplicate. `Close` after a partial
+share also clears the selection, because someone already has the items. A share
+to one channel ends with a `Shared with <channel>` toast and `View in channel`;
+several recipients get `Shared with N recipients`. Finishing clears the
+selection and returns focus to the row. `Cancel` keeps the selection. Before
+the first Share, Escape cancels too, but not while focus is in the To field or
+the message, as in the Share dialog; press Tab in the To field first. The phone
+drawer has no Cancel or Close: dismissing it cancels, or finishes after a
+partial share. Its title-row button reads Retry while something can be retried
+and Done once nothing can.
+
 Email snoozing uses a command menu with quick or typed times, **If no reply** /
 **Regardless**, and **Remove reminder**. Saving waits for confirmation and shows
 retry errors inline. See [Email reminders](reminders.md).

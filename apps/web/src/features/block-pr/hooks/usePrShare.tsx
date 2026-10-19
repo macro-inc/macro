@@ -1,3 +1,4 @@
+import { toShareItem } from '@app/features/sharing/share-delivery/share-delivery';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { ForwardToChannel } from '@core/component/ForwardToChannel';
@@ -9,7 +10,7 @@ import { Dialog } from '@kobalte/core/dialog';
 import CopyIcon from '@phosphor/copy.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button, Panel } from '@ui';
-import { type Accessor, createSignal, Show } from 'solid-js';
+import { type Accessor, createMemo, createSignal, Show } from 'solid-js';
 
 interface PrShareModalProps {
   foreignEntityId: string;
@@ -24,6 +25,14 @@ function prShareUrl(foreignEntityId: string): string {
 
 function PrShareModal(props: PrShareModalProps) {
   const copyEntityLink = useCopyLink();
+  const shareItem = createMemo(() =>
+    toShareItem({
+      id: props.foreignEntityId,
+      kind: 'foreign',
+      name: props.name,
+      canGrant: false,
+    })
+  );
 
   const copyLink = createCallback(() => {
     fireAndForget(
@@ -58,13 +67,8 @@ function PrShareModal(props: PrShareModalProps) {
               </div>
               <div class="border-b border-edge-muted mb-2" />
               <ForwardToChannel
-                entity={{
-                  entity_type: 'foreign_entity',
-                  entity_id: props.foreignEntityId,
-                }}
-                name={props.name}
+                item={shareItem()}
                 onSubmit={() => props.onOpenChange(false)}
-                submitPermissionInfo={undefined}
               />
               <div class="px-4 py-3 border-t border-edge-muted">
                 <Button variant="outline" onClick={copyLink}>
@@ -95,14 +99,9 @@ function PrShareModal(props: PrShareModalProps) {
                 </Panel.Header>
                 <Panel.Body>
                   <ForwardToChannel
-                    entity={{
-                      entity_type: 'foreign_entity',
-                      entity_id: props.foreignEntityId,
-                    }}
-                    name={props.name}
+                    item={shareItem()}
                     onSubmit={() => props.onOpenChange(false)}
                     onCancel={() => props.onOpenChange(false)}
-                    submitPermissionInfo={undefined}
                   />
                 </Panel.Body>
               </Panel>

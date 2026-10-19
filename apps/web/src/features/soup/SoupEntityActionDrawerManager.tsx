@@ -1,6 +1,6 @@
 import { ProjectAssignmentDialog } from '@app/features/projects/projects';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { getShareDrawerRecipientInput } from '@core/component/TopBar/ShareButton';
+import { getShareDrawerRecipientInput } from '@core/component/TopBar/ShareDrawer';
 import { triggerFocusInput } from '@core/directive/focusInput';
 import { isMobile } from '@core/mobile/isMobile';
 import {

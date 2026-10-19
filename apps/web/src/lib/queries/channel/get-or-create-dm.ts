@@ -1,5 +1,6 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
+import type { Span } from '@macro-inc/observability';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import {
   type GetOrCreateChannelResponse,
@@ -12,6 +13,8 @@ type GetOrCreateDmResponse = GetOrCreateChannelResponse;
 
 type GetOrCreateDirectMessageParams = {
   recipient_id: string;
+  /** The mutation awaits before its request, so a caller's span is passed in. */
+  trace?: Pick<Span, 'run'>;
 };
 
 /**
@@ -28,11 +31,13 @@ export function useGetOrCreateDirectMessageMutation(
   return useMutation(() => ({
     gcTime: 0,
     mutationFn: async (vars: GetOrCreateDirectMessageParams) => {
-      return await throwOnErr(async () =>
-        storageServiceClient.getOrCreateDirectMessage({
-          recipient_id: vars.recipient_id,
-        })
-      );
+      const request = () =>
+        throwOnErr(async () =>
+          storageServiceClient.getOrCreateDirectMessage({
+            recipient_id: vars.recipient_id,
+          })
+        );
+      return await (vars.trace ? vars.trace.run(request) : request());
     },
     ...withCallbacks<
       GetOrCreateDmResponse,
@@ -54,6 +59,8 @@ export function useGetOrCreateDirectMessageMutation(
 
 type GetOrCreatePrivateChannelParams = {
   recipients: string[];
+  /** The mutation awaits before its request, so a caller's span is passed in. */
+  trace?: Pick<Span, 'run'>;
 };
 
 /**
@@ -70,11 +77,13 @@ export function useGetOrCreatePrivateChannelMutation(
   return useMutation(() => ({
     gcTime: 0,
     mutationFn: async (vars: GetOrCreatePrivateChannelParams) => {
-      return await throwOnErr(async () =>
-        storageServiceClient.getOrCreatePrivateChannel({
-          recipients: vars.recipients,
-        })
-      );
+      const request = () =>
+        throwOnErr(async () =>
+          storageServiceClient.getOrCreatePrivateChannel({
+            recipients: vars.recipients,
+          })
+        );
+      return await (vars.trace ? vars.trace.run(request) : request());
     },
     ...withCallbacks<
       GetOrCreateChannelResponse,

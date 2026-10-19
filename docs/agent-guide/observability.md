@@ -66,8 +66,8 @@ trace context — timestamps + service are the only join for those.
 - Log lines from events outside spans (startup, pollers) have no trace_id; in-span events do
   (structured metadata), so prefer erroring *handlers* as log entry points.
 - Most frontend spans stop at the fetch: websocket-delivered results such as AI edits
-  applying and message fan-out remain untraced. Call joining now has a user-action
-  trace; see below.
+  applying and message fan-out remain untraced. Call joining and sharing now have
+  user-action traces; see below.
 
 ## Account WebSocket sessions
 
@@ -115,6 +115,41 @@ boundaries. Capture each request's `traceparent` as described above and inspect
 the backend trace as well. For the join request, compare `create_room`,
 `prepare_meeting_call`, and `join_invitation`; `start_meeting_media` runs in the
 background and must not be added to the time spent waiting for credentials.
+
+## Sharing
+
+Press **Share** in an item's Share dialog after adding recipients, or **Share**
+or **Retry** in `Share N items` for selected rows (see
+[Entity action dialogs](navigation.md#entity-action-dialogs)). Search Tempo for
+`{ name="share.submit" }`; `{ name="share.submit" && span.entity.ids = "<item id>" }`
+finds the shares of one item, and `{ span.message.id = "<message id>" }` the
+share that sent one message. Each press is one browser trace:
+
+| Span | What it measures |
+| --- | --- |
+| `share.submit` | One attempt across every recipient. |
+| `share.target` | One recipient or channel: finding its channel, sending its message, and granting access. |
+| `share.find_channel` | Finding or creating the direct message or group for people, around `http POST /dss/channels/get_or_create_dm` or `get_or_create_private`. |
+| `share.send_message` | One message, around `http POST /dss/messages/channel/<channel.id>`. |
+| `http …` under `share.target` | One channel access grant, such as `http PATCH /dss/documents/<id>`. |
+
+Each `http …` span continues into the backend trace. The root records
+`share.location` (`forward_to_channel` for one item's Share dialog, `bulk_share`
+for selected rows), `entity.ids`, the `share.items` and `share.targets` counts,
+`share.retry` for a press after a partial share, and the outcome
+(`share.complete`, `share.retryable`). Each `share.target` records
+`channel.id`, its planned `share.messages` and `share.pending_grants`,
+`share.recipients` when it finds or creates a direct message or group,
+`share.sent`, and `share.grant_errors`. Each `share.send_message` records
+`message.id`, the id the server stores the message under, and its
+`share.items`. When no channel resolves or a message is not sent, that phase
+and its target are marked failed; the root is marked failed when a recipient's
+work throws. Never add item names, message text, or recipient emails to these
+spans.
+
+With bearer-token auth, each request waits for a token first and lands in a
+separate trace. Match those by `channel.id` in `/messages/channel/<channel.id>`,
+the item id in the grant path, and time.
 
 ## Agent sessions
 

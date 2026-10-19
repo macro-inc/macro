@@ -192,7 +192,7 @@ export function createDriveHostActions(options: {
     },
 
     shareFolder: (folder) => {
-      fireAndForget(share.execute(folder), 'drive-view');
+      fireAndForget(share.execute([folder]), 'drive-view');
     },
 
     uploadFiles: () =>

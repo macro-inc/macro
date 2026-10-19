@@ -587,10 +587,10 @@ From the repository root, the existing scanner invocation can be scoped to a fea
 bunx --yes @ast-grep/cli@0.44.1 scan apps/web/src/features/activity
 ```
 
-These rules currently have warning severity and their `files` lists cover
-activity and the three email features. They do not automatically enforce every
-feature directory, resolve the whole transitive import graph, or prove that a
-component is presentational.
+These rules have warning severity and cover only the feature paths registered
+in their `files` lists. They do not automatically enforce every feature
+directory, resolve the whole transitive import graph, or prove that a component
+is presentational.
 Passing the scan is supporting evidence, not a complete architecture review.
 The current rules also do not enforce separation of production composition or
 the dependency inversion between primitives and query adapters. Those remain
