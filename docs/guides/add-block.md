@@ -252,15 +252,15 @@ was moved onto `crates/docx_engine` the next day; start with a crate.
   `codegen-units = 1`). Add it to the wasm-safe exclusion list in
   `.config/hakari.toml`, then run `just hakari` and commit
   `crates/workspace-hack` and `.github/workspace-dep-closures.json`.
-- **Build recipes** in `apps/web/justfile`: `build-<x>-engine-wasm` (wasm-pack
-  into `src/lib/core/<x>-engine/wasm`) and `ensure-<x>-engine-wasm` (rebuild only
-  when the crate, or a crate it depends on such as `fig_engine`, is newer than
-  the output). Add the build recipe to `build-wasm`, which CI's web build and
-  the release builds run, and the ensure recipe to `dev:prepare` in
+- **Build entry** in `apps/web/wasm-packages.json`: the crate, its output
+  directory (`src/lib/core/<x>-engine/wasm`), target directory, and profile.
+  `just build-wasm`, the Tauri builds, and the Nix desktop release all build
+  every entry, and the desktop bundle check fails a bundle missing one. Add a
+  `build-<x>-engine-wasm` recipe (`bun scripts/wasm-packages.ts build <x>_engine`)
+  and an `ensure-<x>-engine-wasm` recipe (rebuild only when the crate, or a
+  crate it depends on such as `fig_engine`, is newer than the output) to
+  `apps/web/justfile`, and add the ensure recipe to `dev:prepare` in
   `apps/web/package.json` and to `apps/web/tests/native/build.sh`.
-  `build-tauri-dev`, which builds iOS PR previews, lists its wasm recipes
-  separately and builds no engines today; add yours there if the block must
-  work in those previews.
 - **Output stays out of git.** Put a `.gitignore` containing `wasm/` in
   `src/lib/core/<x>-engine/`. If the crate has a Rust module named `build`,
   un-ignore it in the root `.gitignore`; `**/build` silently drops its files.

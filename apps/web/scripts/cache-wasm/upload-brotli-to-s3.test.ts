@@ -50,12 +50,16 @@ describe('cache WASM S3 upload', () => {
   });
 
   it('keeps sidecars in web delivery but excludes them from native/OTA packaging', () => {
+    const tauriFrontendBuild = readFileSync(
+      resolve(import.meta.dirname, '../build-tauri-frontend.sh'),
+      'utf8'
+    );
+    expect(tauriFrontendBuild).toMatch(
+      /package-dist --dist dist\n\s*bun scripts\/cache-wasm\/cli\.ts remove-sidecar --dist dist/
+    );
     const webJustfile = readFileSync(
       resolve(import.meta.dirname, '../../justfile'),
       'utf8'
-    );
-    expect(webJustfile).toMatch(
-      /build-tauri:[\s\S]*package-dist --dist dist\n\s+bun scripts\/cache-wasm\/cli\.ts remove-sidecar --dist dist/
     );
     expect(webJustfile).toContain(
       `zip -qr "$TARGET" . -x '*cache_wasm_bg*.wasm.br'`

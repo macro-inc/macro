@@ -9,7 +9,7 @@
     "dev:server": "vite -c vite.config.ts",
     "dev:billing": "vite -c vite.config.ts --open /billing-lab.html",
     "build": "vite build -c vite.config.ts && bun run postbuild:semver && bun run postbuild:bundle-manifest",
-    "postbuild:semver": "echo $npm_package_version+$(git rev-parse --short HEAD) > ./dist/semver.txt",
+    "postbuild:semver": "echo $npm_package_version+${MACRO_GIT_SHA:-$(git rev-parse --short HEAD)} > ./dist/semver.txt",
     "postbuild:bundle-manifest": "bun ./scripts/write-bundle-manifest.mjs",
     "test": "bunx vitest run --fsModuleCache",
     "test:functional": "just test-functional",

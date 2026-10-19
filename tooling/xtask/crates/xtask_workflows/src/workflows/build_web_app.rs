@@ -79,19 +79,26 @@ pub fn checkout() -> Step<Use> {
 
 /// Build identical across dev/prod up to `MODE` (`just build-<env>`).
 fn build() -> Step<Run> {
-    Step::new("Build")
-        .run("just build-${{ inputs.environment }}")
-        .working_directory(xtask_paths::repo_dir!("apps/web"))
-        .add_env(Env::new("VITE_SEGMENT_WRITE_KEY", vars::SEGMENT_WRITE_KEY))
-        .add_env(Env::new("VITE_POSTHOG_API_KEY", vars::POSTHOG_API_KEY))
-        .add_env(Env::new(
-            "VITE_OTEL_EXPORTER_URL",
-            "${{ inputs.environment == 'prod' && 'https://macro-prox-prod.macroverse.workers.dev/i/otlp/v1/traces' || 'https://macro-prox-dev.macroverse.workers.dev/i/otlp/v1/traces' }}",
-        ))
-        .add_env(Env::new(
-            "VITE_OTEL_ENV",
-            "${{ inputs.environment == 'prod' && 'prod' || 'development' }}",
-        ))
+    let development = vars::web_build_env("development");
+    vars::web_build_env("production").into_iter().fold(
+        Step::new("Build")
+            .run("just build-${{ inputs.environment }}")
+            .working_directory(xtask_paths::repo_dir!("apps/web"))
+            .add_env(Env::new("VITE_SEGMENT_WRITE_KEY", vars::SEGMENT_WRITE_KEY))
+            .add_env(Env::new("VITE_POSTHOG_API_KEY", vars::POSTHOG_API_KEY)),
+        |step, (name, production)| {
+            let (_, development) = development
+                .iter()
+                .find(|(other, _)| *other == name)
+                .expect("build-env.json modes should define the same names");
+            step.add_env(Env::new(
+                name,
+                format!(
+                    "${{{{ inputs.environment == 'prod' && '{production}' || '{development}' }}}}"
+                ),
+            ))
+        },
+    )
 }
 
 fn upload_dist() -> Step<Use> {

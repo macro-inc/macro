@@ -22,6 +22,7 @@ mod build_web_app;
 mod cancel_stuck_cloud_storage_deploys;
 mod cargo_deny;
 mod cargo_workspace_dependency_check;
+mod check_desktop_bundle_nix;
 mod check_generated;
 mod check_node_modules_nix;
 mod cla;
@@ -363,6 +364,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
                 reusable_preview_service::patch,
             )
         },
+    },
+    WorkflowFile {
+        slug: "check_desktop_bundle_nix",
+        file_name: "check_desktop_bundle_nix.yml",
+        render_yaml: || render_gh_workflow(check_desktop_bundle_nix::check_desktop_bundle_nix)(),
     },
     WorkflowFile {
         slug: "check_node_modules_nix",

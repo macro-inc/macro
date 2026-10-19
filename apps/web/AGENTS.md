@@ -10,6 +10,11 @@
 - The app does not register a service worker. Keep `public/sw.js` as a retirement
   endpoint for existing installations; see the [startup bundle rule](../../.agents/rules/web/startup-bundle.md).
   Loro uses async WASM loading and HTML preloads independently of service workers.
+- Register a new WASM package in `wasm-packages.json` and new public
+  build-time `VITE_*` values in `build-env.json`. `just build-tauri` and the Nix
+  desktop release both read them through `scripts/build-tauri-frontend.sh`,
+  whose bundle check fails on anything missing; a Vite build alone succeeds
+  without them and breaks at runtime.
 
 ## Verifying a change in a real browser
 
