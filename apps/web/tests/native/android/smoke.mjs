@@ -430,7 +430,7 @@ try {
     results.nativeUpload = { exactBytes: true, checksumHeader: true };
     console.log('Native streaming PUT and checksum passed');
   } finally {
-    receiver.stop(true);
+    await receiver.stop(true);
   }
   assert.equal((await pendingShares())[0].token, first[0].token);
   await adbRun(

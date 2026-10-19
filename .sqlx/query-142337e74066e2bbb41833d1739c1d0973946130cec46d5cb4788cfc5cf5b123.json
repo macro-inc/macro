@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT c.time_zone,c.default_reminders,a.provider FROM calendars c JOIN calendar_accounts a ON a.id=c.account_id WHERE c.id=$1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "time_zone",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "default_reminders",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 2,
+        "name": "provider",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "142337e74066e2bbb41833d1739c1d0973946130cec46d5cb4788cfc5cf5b123"
+}

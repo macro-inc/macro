@@ -110,6 +110,9 @@ where
                 // Bounded by MAX_DRAFT_ATTACHMENTS_BYTES, well inside i32.
                 size: sourced.bytes.len() as i32,
                 s3_key,
+                upload_pending: false,
+                content_id: None,
+                is_inline: false,
             };
             self.repo
                 .insert_draft_attachment(link.id, &record)

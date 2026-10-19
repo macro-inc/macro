@@ -141,6 +141,16 @@ must never enter the saved scene. When opening a canvas, image nodes show a
 loads; this also applies to read-only embeds. Failed image requests display
 “Media unavailable” instead of an indefinite skeleton.
 
+Canvas object snapping is enabled by default. Drag a shape or selection near
+another object's edge or center to align it; dashed guides show the matched axes.
+Axis-aligned resize handles also snap. The tolerance stays six screen pixels at
+any zoom, and objects more than 160 screen pixels away on the perpendicular axis
+are ignored. In **Zoom options**, toggle **Snap to objects** independently of
+**No grid snapping**, **Snap to px**, or **Auto snapping**. Object alignment takes
+priority over grid snapping on the matched axis. Verify dragging with snapping
+on/off, resizing, Shift-constrained movement, zoom changes, and undo. Rotated
+resize frames retain their existing local-axis resizing behavior.
+
 Canvas embeds are read-only: **Select** selects shapes without moving them,
 and **Hand** pans the canvas. The toolbar contains only those two tools; property
 inspector details and drawing/editing controls are absent. Check toolbar clicks,
@@ -293,6 +303,60 @@ closes it. Typing a value the rule does not allow
 shows the rule's message in the footer, and a "stop" rule keeps the previous value.
 A red corner marks a cell with a note; selecting the cell shows the note, and any
 input message, beside it.
+
+To make a table, select a cell in the records (or the records with their header
+row) and choose **Format and data → Convert to table** (or **Convert to table**
+in the cell menu, or ⌘/Ctrl+Alt+T). It converts at once, with no dialog: one cell
+converts the block of filled cells around it, an empty cell becomes a blank table
+headed **Column1**–**Column4**, and the table is named `Table1`, `Table2`….
+Blank or repeated headers are renamed (`Column3`, `Amount2`) and columns take the
+type their values suggest. While the active cell or the pointer is in a table,
+its name shows as a tab above the header row (as an icon in the column header
+bar for a table in row 1), a button named
+**Table Table1 menu** whose menu has **Rename table** and **Adjust table range…**
+(dialogs with **Table name** or **Range** and **Save**), a **Table color**
+radio group of ten swatches, **Formatting** checkboxes (**Alternating colors**,
+**Banded columns**, **Bold first column**, **Bold last column**, **Footer row
+with totals**), **Group by view…**, **Clear all filters** when filtered,
+**Convert to range** (cells keep the table's look) and **Delete table** (removes
+its cells too). In a table cell, **Table options** in the cell menu or **Format
+and data** opens the same menu.
+
+Each header cell has a button (**Region column menu**; a filtered column's ends
+in **, filtered** and shows a funnel) whose menu shows the column's type, a
+**Column type** submenu (**None**, **Text**, **Number**, **Percent**,
+**Currency**, **Date**, **Date time**, **Time**, **Checkbox**, **Dropdown**,
+**People**), **Sort A → Z**, **Sort Z → A**, **Filter…**, **Clear filter** when
+filtered, **Group by this column**, and **Insert column left**, **Insert column
+right** and **Delete column**. A type formats the column's data cells; checkbox
+makes blanks unchecked boxes and dropdown offers the column's values as colored
+chips. A cell whose value does not fit shows an orange corner and a tooltip such
+as "Expected a number". **Filter…** opens **Filter "Region"**: a **Condition**
+select (**Text contains**, **Greater than**, **Is between**…) with **Value** (and
+**To**) fields, and **By values** with **Search values**, **Select all**,
+**Clear** and a checkbox per value; **OK** applies it and hides whole sheet rows.
+**Group by view…** opens **Group by view · Table1** with **Group by**,
+**Summarize** and **As** selects and a table of groups with their row counts and
+summary; choosing a group filters the table to it and **Show all rows** clears
+that filter.
+
+With **Footer row with totals** on, selecting a footer cell shows its arrow
+(**Choose a value for B5**) listing **None**, **Sum**, **Average**, **Min**,
+**Max**, **Count**, **Count numbers**, **Empty**, **Unique**, **Percent
+filled**, **Percent empty**, **Percent unique**, **Standard deviation** and
+**Variance**; the cell shows the aggregate's name beside its value. Typing a value
+directly below the table (without a footer) or directly to its right grows the
+table; a new row takes the formatting, dropdowns and calculated formulas of the
+row above. Formulas use structured references such as `=SUM(Table1[Amount])`,
+`=[@Qty]*[@Price]` and `=ROWS(Table1)`; typing `Table1[` suggests its columns.
+Renaming a header rewrites formulas that use the old name, and references to a
+missing table or column show `#REF!`. Scrolling past a table's header row shows
+its column names in the column headers. Agents create tables, with optional
+`columnTypes`, through `EditSpreadsheet`'s `create_table` operation, and
+`ReadSpreadsheet` lists each sheet's tables with their columns and types. Excel
+tables with a header row import with their names, styles, totals and value or
+condition filters and download as Excel tables; a table without a header row
+imports as ordinary cells, with its references converted to cell ranges.
 
 To add checkboxes, select the cells and choose **Checkbox** in the toolbar's
 **Insert chart, image or checkbox** menu (chart icon), or **Insert checkbox** in
@@ -697,11 +761,12 @@ waits for acknowledgement. A failed save leaves the draft editable and supports
 retry, without opening an empty chat. This path needs the updated native-document
 backend, just like Share.
 
-The AI can use **ReadSpreadsheet** to inspect sheet names, used ranges, raw inputs,
-formulas, typed results, errors, and formatting. **CalculateSpreadsheet** evaluates
-scratch formulas and what-if inputs without changing the workbook.
+The AI can use **ReadSpreadsheet** to inspect sheet names, used ranges, tables,
+raw inputs, formulas, typed results, errors, and formatting. **CalculateSpreadsheet**
+evaluates scratch formulas and what-if inputs without changing the workbook.
 **EditSpreadsheet** applies a validated batch of cell/formula/format edits, fill,
-row additions, column resizing, and sheet creation/rename/duplication/deletion.
+row additions, column resizing, dropdowns, checkboxes, table creation, and sheet
+creation/rename/duplication/deletion.
 `format_cells` shows dates in any Excel date code with
 `{ "format": "date", "numberFormat": "mmm yyyy" }`.
 Edits require a revision from a fresh read; a concurrent change rejects the entire
@@ -714,6 +779,20 @@ check both source/formula and displayed result in the sheet and another connecte
 client. A viewer's edit must fail; a concurrent manual edit must force a fresh
 read. These tool calls require the updated AI backend, AI editing worker, and sync
 service; the frontend alone cannot test their hosted path.
+
+## Desktop file drops
+
+In a rebuilt macOS desktop app, drag a PNG and a PDF from Finder into a
+disposable Markdown document, then into channel and AI chat attachment inputs.
+Check that each drop shows the upload feedback and adds each file once, with
+images rendered inline in Markdown and attachments visible in the composers.
+Try multiple files and a second drop after the first completes. Discard unsent
+drafts after checking. Also check that the file picker still attaches files.
+
+Use an actual Finder drag for this check: synthetic browser events bypass
+Tauri's native interception and cannot verify the desktop window configuration.
+The setting and native rebuild requirement are documented in the
+[web agent guide](../../apps/web/AGENTS.md#desktop-file-drops).
 
 ## Folder uploads
 
@@ -2225,7 +2304,9 @@ table cells is preserved in paragraphs when the editor opens the document.
 
 `@` opens the mention menu wherever the caret starts a word, including directly
 in front of existing text — the menu opens empty there instead of searching for
-the word ahead of the caret. Typed inside a word (`he@llo`) it stays literal text.
+the word ahead of the caret. It also opens immediately after a soft line break:
+type a word, press Shift+Enter, then type `@` and a name to filter the menu.
+Typed inside a word (`he@llo`) it stays literal text.
 On Android, verify this with the software keyboard: tap `@`, type a name to
 filter, and tap a result to insert a single mention. The menu should remain
 visible above the keyboard while typing.
@@ -2469,8 +2550,9 @@ trash button. Deleting a comment's first message deletes the whole discussion �
 the confirmation reads `Delete comment`, the replies under it go too, and an
 anchored comment's highlight clears from the document. Deleting a reply removes
 only that reply. On mobile, the new-comment composer is docked above the navigation bar,
-replacing Ask AI and New when commenting is available in documents and tasks.
-When the comment composer is unavailable, the default Ask AI row appears instead.
+replacing New when commenting is available in documents and tasks.
+When the comment composer is unavailable, New remains available; these views
+have no floating Ask AI input.
 Tap `Leave a comment...`
 to expand the channel-style input; use Send comment to submit (Enter inserts a
 newline on mobile). Submitting clears and unfocuses the mobile input, returning

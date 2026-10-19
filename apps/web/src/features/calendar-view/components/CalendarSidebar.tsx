@@ -14,6 +14,7 @@ import {
   useUpcomingTeamOoo,
 } from '@app/features/calendar/hooks/use-team-ooo';
 import { TEAM_OOO_SOURCE_ID } from '@app/features/calendar/types';
+import { CalendarSchedulingActions } from '@app/features/scheduling/calendar-actions';
 import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { UserIcon } from '@core/component/UserIcon';
 import { enableCalendarTeamOoo } from '@core/constant/featureFlags';
@@ -324,6 +325,9 @@ export function CalendarSidebar() {
       </ViewSidebar.Primary>
       <ViewSidebar.Content class="pt-2">
         <CalendarMiniCalendar />
+        <Show when={shell.breakpoints.narrow?.()}>
+          <CalendarSchedulingActions sidebar />
+        </Show>
         <UpcomingEventsSection />
         <CalendarSourcesSection />
         <ShowFeatureFlag flag={enableCalendarTeamOoo}>

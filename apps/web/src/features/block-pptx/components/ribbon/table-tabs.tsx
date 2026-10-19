@@ -4,6 +4,7 @@
  */
 
 import type { ShapeOutline, TableStyleInfo } from '@core/pptx-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import AlignBottom from '@phosphor/align-bottom.svg';
 import AlignCenterVertical from '@phosphor/align-center-vertical.svg';
 import AlignTop from '@phosphor/align-top.svg';
@@ -96,7 +97,10 @@ export function TableDesignTab(props: TableTabProps) {
         disabled={ro() || !c.setTableStyle}
         checked={style()?.[key] ?? false}
         onChange={(e) =>
-          void c.setTableStyle({ [key]: e.currentTarget.checked })
+          fireAndForget(
+            c.setTableStyle({ [key]: e.currentTarget.checked }),
+            'pptx-editor'
+          )
         }
       />
       {label}
@@ -133,7 +137,10 @@ export function TableDesignTab(props: TableTabProps) {
                       icon={<TableStyleSwatch name={s.name} />}
                       onClick={() => {
                         close();
-                        void c.setTableStyle({ style: s.id });
+                        fireAndForget(
+                          c.setTableStyle({ style: s.id }),
+                          'pptx-editor'
+                        );
                       }}
                     />
                   )}
@@ -157,7 +164,7 @@ export function TableDesignTab(props: TableTabProps) {
               noneLabel="No fill"
               onPick={(v) => {
                 close();
-                void c.fillCells(v);
+                fireAndForget(c.fillCells(v), 'pptx-editor');
               }}
             />
           )}
@@ -177,7 +184,7 @@ export function TableDesignTab(props: TableTabProps) {
                     icon={<BorderIcon edges={edges} />}
                     onClick={() => {
                       close();
-                      void c.borderCells(edges);
+                      fireAndForget(c.borderCells(edges), 'pptx-editor');
                     }}
                   />
                 )}
@@ -187,7 +194,7 @@ export function TableDesignTab(props: TableTabProps) {
                 icon={<BorderIcon edges="none" />}
                 onClick={() => {
                   close();
-                  void c.borderCells('all', true);
+                  fireAndForget(c.borderCells('all', true), 'pptx-editor');
                 }}
               />
               <PopoverLabel>Pen</PopoverLabel>
@@ -318,21 +325,21 @@ export function TableLayoutTab(props: TableTabProps) {
                 label="Delete columns"
                 onClick={() => {
                   close();
-                  void c.deleteColumns();
+                  fireAndForget(c.deleteColumns(), 'pptx-editor');
                 }}
               />
               <PopoverItem
                 label="Delete rows"
                 onClick={() => {
                   close();
-                  void c.deleteRows();
+                  fireAndForget(c.deleteRows(), 'pptx-editor');
                 }}
               />
               <PopoverItem
                 label="Delete table"
                 onClick={() => {
                   close();
-                  void c.deleteTable();
+                  fireAndForget(c.deleteTable(), 'pptx-editor');
                 }}
               />
             </div>
@@ -342,7 +349,7 @@ export function TableLayoutTab(props: TableTabProps) {
           label="Insert above"
           disabled={ro()}
           data-testid="pptx-insert-row-above"
-          onClick={() => void c.insertRows('above')}
+          onClick={() => fireAndForget(c.insertRows('above'), 'pptx-editor')}
         >
           Insert above
         </RibbonTextButton>
@@ -350,14 +357,14 @@ export function TableLayoutTab(props: TableTabProps) {
           label="Insert below"
           disabled={ro()}
           data-testid="pptx-insert-row-below"
-          onClick={() => void c.insertRows('below')}
+          onClick={() => fireAndForget(c.insertRows('below'), 'pptx-editor')}
         >
           Insert below
         </RibbonTextButton>
         <RibbonTextButton
           label="Insert left"
           disabled={ro()}
-          onClick={() => void c.insertColumns('left')}
+          onClick={() => fireAndForget(c.insertColumns('left'), 'pptx-editor')}
         >
           Insert left
         </RibbonTextButton>
@@ -365,7 +372,7 @@ export function TableLayoutTab(props: TableTabProps) {
           label="Insert right"
           disabled={ro()}
           data-testid="pptx-insert-col-right"
-          onClick={() => void c.insertColumns('right')}
+          onClick={() => fireAndForget(c.insertColumns('right'), 'pptx-editor')}
         >
           Insert right
         </RibbonTextButton>
@@ -375,14 +382,14 @@ export function TableLayoutTab(props: TableTabProps) {
           label="Merge cells"
           disabled={ro() || !c.canMerge()}
           data-testid="pptx-merge-cells"
-          onClick={() => void c.mergeCells()}
+          onClick={() => fireAndForget(c.mergeCells(), 'pptx-editor')}
         >
           Merge cells
         </RibbonTextButton>
         <RibbonTextButton
           label="Split cells"
           disabled={ro() || !c.canSplit()}
-          onClick={() => void c.splitCells()}
+          onClick={() => fireAndForget(c.splitCells(), 'pptx-editor')}
         >
           Split cells
         </RibbonTextButton>
@@ -395,7 +402,7 @@ export function TableLayoutTab(props: TableTabProps) {
           min={4}
           max={2000}
           disabled={ro()}
-          onCommit={(h) => void c.setCellSize({ h })}
+          onCommit={(h) => fireAndForget(c.setCellSize({ h }), 'pptx-editor')}
         />
         <NumberField
           label="Column width"
@@ -404,19 +411,19 @@ export function TableLayoutTab(props: TableTabProps) {
           min={4}
           max={2000}
           disabled={ro()}
-          onCommit={(w) => void c.setCellSize({ w })}
+          onCommit={(w) => fireAndForget(c.setCellSize({ w }), 'pptx-editor')}
         />
         <RibbonTextButton
           label="Distribute rows"
           disabled={ro()}
-          onClick={() => void c.distributeRows()}
+          onClick={() => fireAndForget(c.distributeRows(), 'pptx-editor')}
         >
           Distribute rows
         </RibbonTextButton>
         <RibbonTextButton
           label="Distribute columns"
           disabled={ro()}
-          onClick={() => void c.distributeColumns()}
+          onClick={() => fireAndForget(c.distributeColumns(), 'pptx-editor')}
         >
           Distribute columns
         </RibbonTextButton>
@@ -426,7 +433,7 @@ export function TableLayoutTab(props: TableTabProps) {
           label="Align left"
           tooltip="Align left"
           disabled={ro()}
-          onClick={() => void c.alignCells('left')}
+          onClick={() => fireAndForget(c.alignCells('left'), 'pptx-editor')}
         >
           <TextAlignLeft />
         </RibbonButton>
@@ -434,7 +441,7 @@ export function TableLayoutTab(props: TableTabProps) {
           label="Center"
           tooltip="Center"
           disabled={ro()}
-          onClick={() => void c.alignCells('center')}
+          onClick={() => fireAndForget(c.alignCells('center'), 'pptx-editor')}
         >
           <TextAlignCenter />
         </RibbonButton>
@@ -442,7 +449,7 @@ export function TableLayoutTab(props: TableTabProps) {
           label="Align right"
           tooltip="Align right"
           disabled={ro()}
-          onClick={() => void c.alignCells('right')}
+          onClick={() => fireAndForget(c.alignCells('right'), 'pptx-editor')}
         >
           <TextAlignRight />
         </RibbonButton>
@@ -450,7 +457,7 @@ export function TableLayoutTab(props: TableTabProps) {
           label="Align top"
           tooltip="Align top"
           disabled={ro()}
-          onClick={() => void c.anchorCells('top')}
+          onClick={() => fireAndForget(c.anchorCells('top'), 'pptx-editor')}
         >
           <AlignTop />
         </RibbonButton>
@@ -458,7 +465,7 @@ export function TableLayoutTab(props: TableTabProps) {
           label="Center vertically"
           tooltip="Center vertically"
           disabled={ro()}
-          onClick={() => void c.anchorCells('middle')}
+          onClick={() => fireAndForget(c.anchorCells('middle'), 'pptx-editor')}
         >
           <AlignCenterVertical />
         </RibbonButton>
@@ -466,7 +473,7 @@ export function TableLayoutTab(props: TableTabProps) {
           label="Align bottom"
           tooltip="Align bottom"
           disabled={ro()}
-          onClick={() => void c.anchorCells('bottom')}
+          onClick={() => fireAndForget(c.anchorCells('bottom'), 'pptx-editor')}
         >
           <AlignBottom />
         </RibbonButton>
@@ -474,7 +481,9 @@ export function TableLayoutTab(props: TableTabProps) {
           current={c.textDirection()}
           disabled={ro()}
           testId="pptx-cell-text-direction"
-          onPick={(direction) => void c.setTextDirection(direction)}
+          onPick={(direction) =>
+            fireAndForget(c.setTextDirection(direction), 'pptx-editor')
+          }
           onMore={() => env.openFormatPane('text')}
         />
       </RibbonGroup>

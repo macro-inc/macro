@@ -9,6 +9,7 @@ import type {
   ShapeOutline,
   SlideOutline,
 } from '@core/pptx-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowDown from '@phosphor/arrow-down.svg';
 import ArrowUp from '@phosphor/arrow-up.svg';
 import Clock from '@phosphor/clock.svg';
@@ -99,7 +100,10 @@ export function AnimationPane(props: {
           onClick={() => {
             const i = anim.picked();
             if (i !== undefined)
-              void c.moveAnimation(i, -1).then(() => anim.pick(i - 1));
+              fireAndForget(
+                c.moveAnimation(i, -1).then(() => anim.pick(i - 1)),
+                'pptx-editor'
+              );
           }}
         >
           <ArrowUp />
@@ -117,7 +121,10 @@ export function AnimationPane(props: {
           onClick={() => {
             const i = anim.picked();
             if (i !== undefined)
-              void c.moveAnimation(i, 1).then(() => anim.pick(i + 1));
+              fireAndForget(
+                c.moveAnimation(i, 1).then(() => anim.pick(i + 1)),
+                'pptx-editor'
+              );
           }}
         >
           <ArrowDown />
@@ -149,7 +156,10 @@ export function AnimationPane(props: {
                 }}
                 onKeyDown={(e) => {
                   if ((e.key === 'Delete' || e.key === 'Backspace') && !ro())
-                    void c.removeAnimations([i()]).then(() => anim.pick());
+                    fireAndForget(
+                      c.removeAnimations([i()]).then(() => anim.pick()),
+                      'pptx-editor'
+                    );
                 }}
               >
                 <span class="w-4 shrink-0 text-right text-ink-muted tabular-nums">
@@ -173,7 +183,10 @@ export function AnimationPane(props: {
                     data-testid="pptx-animation-remove"
                     onClick={(e) => {
                       e.stopPropagation();
-                      void c.removeAnimations([i()]).then(() => anim.pick());
+                      fireAndForget(
+                        c.removeAnimations([i()]).then(() => anim.pick()),
+                        'pptx-editor'
+                      );
                     }}
                   >
                     <Trash class="size-3" />

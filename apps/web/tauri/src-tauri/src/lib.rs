@@ -112,6 +112,10 @@ static ALLOWED_DOMAINS: &[&str] = &[
     "http://localhost:3009",
 ];
 
+/// Third-party pages the SPA renders in an iframe. Keep in sync with
+/// `CONNECT_UI_URL` in `apps/web/src/lib/core/pipedream/connect-ui.ts`.
+static EMBEDDED_DOCUMENTS: &[&str] = &["https://pipedream.com/_static/connect.html"];
+
 /// hosts whose `/app` urls are Macro app links. Main-frame navigations to
 /// these are routed through the SPA router instead of loading the remote
 /// site in the webview. Keep in parity with the deep-link hosts in
@@ -174,7 +178,9 @@ pub fn run() {
     };
     let navigation = MacroNavigationPlugin::new(ALLOWED_DOMAINS)
         .expect("Domains must be valid urls")
-        .with_app_link_hosts(APP_LINK_HOSTS);
+        .with_app_link_hosts(APP_LINK_HOSTS)
+        .with_embedded_documents(EMBEDDED_DOCUMENTS)
+        .expect("Embedded documents must be valid urls");
     let mut builder = tauri::Builder::default();
 
     #[cfg(desktop)]

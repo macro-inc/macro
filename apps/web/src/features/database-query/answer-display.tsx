@@ -5,6 +5,7 @@ import {
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { useDatabasesQuery } from '@queries/storage/databases';
 import { type JSX, Show } from 'solid-js';
 import {
@@ -44,7 +45,12 @@ function AnswerRowLink(props: AnswerRow) {
         <button
           type="button"
           class="max-w-full truncate text-left text-accent hover:underline"
-          onClick={() => void open(target().databaseId, target().tableId)}
+          onClick={() =>
+            fireAndForget(
+              open(target().databaseId, target().tableId),
+              'database-query'
+            )
+          }
         >
           {props.label}
         </button>

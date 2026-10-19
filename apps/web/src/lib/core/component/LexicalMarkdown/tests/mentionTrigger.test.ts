@@ -204,6 +204,30 @@ function paragraphWithCaret(text: string, offset: number) {
 }
 
 describe('@ trigger position', () => {
+  test.each([true, false])(
+    'opens and filters after a soft line break (software keyboard: %s)',
+    (softwareKeyboard) => {
+      const harness = setup(paragraphWithCaret('hello', 5));
+      harness.editor.update(
+        () => {
+          const selection = $getSelection();
+          if ($isRangeSelection(selection)) selection.insertLineBreak();
+        },
+        { discrete: true }
+      );
+
+      harness.type('@jo', softwareKeyboard);
+
+      expect(harness.opened()).toBe(1);
+      expect(harness.searchTerms.at(-1)).toBe('jo');
+      expect(harness.children()).toEqual([
+        'text:hello',
+        'linebreak:\n',
+        'inline-search:@jo',
+      ]);
+    }
+  );
+
   test('opens and filters from software-keyboard input without an @ keydown', () => {
     const harness = setup(paragraphWithCaret('hello ', 6));
 
@@ -212,6 +236,28 @@ describe('@ trigger position', () => {
     expect(harness.opened()).toBe(1);
     expect(harness.searchTerms.at(-1)).toBe('jo');
     expect(harness.children()).toEqual(['text:hello ', 'inline-search:@jo']);
+  });
+
+  test('leaves the following word intact after a soft line break', () => {
+    const harness = setup(paragraphWithCaret('helloworld', 5));
+    harness.editor.update(
+      () => {
+        const selection = $getSelection();
+        if ($isRangeSelection(selection)) selection.insertLineBreak();
+      },
+      { discrete: true }
+    );
+
+    harness.type('@jo');
+
+    expect(harness.opened()).toBe(1);
+    expect(harness.searchTerms.at(-1)).toBe('jo');
+    expect(harness.children()).toEqual([
+      'text:hello',
+      'linebreak:\n',
+      'inline-search:@jo',
+      'text:world',
+    ]);
   });
 
   test('keeps software-keyboard @ literal inside a word', () => {
@@ -360,6 +406,30 @@ describe.each([
   { name: 'snippets', symbol: ';', plugin: snippetsPlugin },
   { name: 'tags', symbol: '#', plugin: tagsPlugin },
 ])('$name menu input', ({ symbol, plugin }) => {
+  test.each([true, false])(
+    'opens after a soft line break (software keyboard: %s)',
+    (softwareKeyboard) => {
+      const harness = setup(paragraphWithCaret('hello', 5), plugin);
+      harness.editor.update(
+        () => {
+          const selection = $getSelection();
+          if ($isRangeSelection(selection)) selection.insertLineBreak();
+        },
+        { discrete: true }
+      );
+
+      harness.type(`${symbol}test`, softwareKeyboard);
+
+      expect(harness.opened()).toBe(1);
+      expect(harness.searchTerms.at(-1)).toBe('test');
+      expect(harness.children()).toEqual([
+        'text:hello',
+        'linebreak:\n',
+        `inline-search:${symbol}test`,
+      ]);
+    }
+  );
+
   test.each([true, false])(
     'opens once and filters (software keyboard: %s)',
     (softwareKeyboard) => {

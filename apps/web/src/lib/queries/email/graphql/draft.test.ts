@@ -68,6 +68,9 @@ describe('optimistic draft saves', () => {
       hasAttachments: true,
       attachmentsDraft: [
         {
+          uploadPending: false,
+          contentId: null,
+          isInline: false,
           __typename: 'GraphqlSoupEmailDraftAttachment' as const,
           id: 'attachment',
           draftId: String(args.draftId),
@@ -316,7 +319,8 @@ it('editing an older draft keeps the later received preview and discarding resto
     mailAllPreview: received,
     mailSentPreview: sent,
     latestInboundMessageTs: null,
-    sortTs: '2026-02-01T00:00:00Z',
+    latestNonSpamMessageTs: '2026-02-01T00:00:00Z',
+    latestOutboundMessageTs: '2026-01-31T00:00:00Z',
     messages: [],
   });
   expect(removed.mailDraftState?.baseline.hasCalendarAttachment).toBe(true);

@@ -2,6 +2,7 @@
  * The Home tab: clipboard, slides, font, paragraph, drawing, and editing.
  */
 
+import { fireAndForget } from '@core/util/fireAndForget';
 import AlignBottom from '@phosphor/align-bottom.svg';
 import AlignCenterHorizontal from '@phosphor/align-center-horizontal.svg';
 import AlignCenterVertical from '@phosphor/align-center-vertical.svg';
@@ -231,7 +232,12 @@ export function OutlineMenu(props: { close: () => void }) {
         standard={env.standardColors}
         noneLabel="No outline"
         onPick={(v) =>
-          run(() => void c.setLine(v ? { color: v } : { none: true }))
+          run(() =>
+            fireAndForget(
+              c.setLine(v ? { color: v } : { none: true }),
+              'pptx-editor'
+            )
+          )
         }
       />
       <PopoverLabel>Weight</PopoverLabel>
@@ -241,7 +247,9 @@ export function OutlineMenu(props: { close: () => void }) {
             <button
               type="button"
               class="flex h-6 items-center gap-1 rounded-md px-1 text-xs hover:bg-ink/5"
-              onClick={() => run(() => void c.setLine({ width: w }))}
+              onClick={() =>
+                run(() => fireAndForget(c.setLine({ width: w }), 'pptx-editor'))
+              }
             >
               <span
                 class="w-5 bg-ink"
@@ -271,7 +279,9 @@ export function OutlineMenu(props: { close: () => void }) {
               type="button"
               title={dash}
               class="flex h-6 items-center justify-center rounded-md px-1 hover:bg-ink/5"
-              onClick={() => run(() => void c.setLine({ dash }))}
+              onClick={() =>
+                run(() => fireAndForget(c.setLine({ dash }), 'pptx-editor'))
+              }
             >
               <svg viewBox="0 0 28 4" class="h-1 w-7">
                 <line
@@ -305,7 +315,11 @@ export function OutlineMenu(props: { close: () => void }) {
               type="button"
               title={label}
               class="flex h-6 items-center justify-center rounded-md hover:bg-ink/5"
-              onClick={() => run(() => void c.setLine({ head, tail }))}
+              onClick={() =>
+                run(() =>
+                  fireAndForget(c.setLine({ head, tail }), 'pptx-editor')
+                )
+              }
             >
               <svg viewBox="0 0 28 8" class="h-2 w-7">
                 <line
@@ -360,7 +374,7 @@ export function FillMenu(props: { close: () => void }) {
         testId="pptx-fill-colors"
         onPick={(v) => {
           props.close();
-          void env.commands.fillColor(v);
+          fireAndForget(env.commands.fillColor(v), 'pptx-editor');
         }}
       />
       <PopoverItem
@@ -410,12 +424,13 @@ export function HomeTab() {
           disabled={ro() || env.selection().length === 0}
           active={env.formatPainter.active()}
           data-testid="pptx-format-painter"
-          onClick={() =>
-            env.formatPainter.active()
-              ? env.formatPainter.cancel()
-              : void env.formatPainter.arm(false)
+          onClick={() => {
+            if (env.formatPainter.active()) env.formatPainter.cancel();
+            else fireAndForget(env.formatPainter.arm(false), 'pptx-editor');
+          }}
+          onDblClick={() =>
+            fireAndForget(env.formatPainter.arm(true), 'pptx-editor')
           }
-          onDblClick={() => void env.formatPainter.arm(true)}
         >
           <PaintBrush />
         </RibbonButton>
@@ -426,7 +441,7 @@ export function HomeTab() {
           tooltip="New slide (⌘M)"
           disabled={ro()}
           data-testid="pptx-new-slide"
-          onClick={() => void c.addSlide()}
+          onClick={() => fireAndForget(c.addSlide(), 'pptx-editor')}
         >
           <Plus />
           New slide
@@ -446,7 +461,7 @@ export function HomeTab() {
                     label={layout.name}
                     onClick={() => {
                       close();
-                      void c.addSlide(layout.name);
+                      fireAndForget(c.addSlide(layout.name), 'pptx-editor');
                     }}
                   />
                 )}
@@ -468,7 +483,7 @@ export function HomeTab() {
                     active={layout.name === env.slide()?.layout}
                     onClick={() => {
                       close();
-                      void c.setLayout(layout.name);
+                      fireAndForget(c.setLayout(layout.name), 'pptx-editor');
                     }}
                   />
                 )}
@@ -481,7 +496,7 @@ export function HomeTab() {
           label="Duplicate slide"
           tooltip="Duplicate slide"
           disabled={ro()}
-          onClick={() => void c.duplicateSlide()}
+          onClick={() => fireAndForget(c.duplicateSlide(), 'pptx-editor')}
         >
           <CopySimple />
         </RibbonButton>
@@ -491,7 +506,7 @@ export function HomeTab() {
           disabled={ro() || (env.deck()?.slides.length ?? 0) <= 1}
           onClick={() => {
             const s = env.slide();
-            if (s) void c.deleteSlides([s.id]);
+            if (s) fireAndForget(c.deleteSlides([s.id]), 'pptx-editor');
           }}
         >
           <Trash />
@@ -503,18 +518,18 @@ export function HomeTab() {
           disabled={!text()}
           recent={env.recentFonts()}
           themeFonts={env.deck()?.themeFonts}
-          onPick={(font) => void c.setFont(font)}
+          onPick={(font) => fireAndForget(c.setFont(font), 'pptx-editor')}
         />
         <FontSizePicker
           value={text() ? f().size : undefined}
           disabled={!text()}
-          onPick={(size) => void c.setFontSize(size)}
+          onPick={(size) => fireAndForget(c.setFontSize(size), 'pptx-editor')}
         />
         <RibbonButton
           label="Increase font size"
           tooltip="Increase font size (⇧⌘>)"
           disabled={!text()}
-          onClick={() => void c.stepSize(1)}
+          onClick={() => fireAndForget(c.stepSize(1), 'pptx-editor')}
         >
           <span class="font-semibold text-[13px] leading-none">
             A<sup>+</sup>
@@ -524,7 +539,7 @@ export function HomeTab() {
           label="Decrease font size"
           tooltip="Decrease font size (⇧⌘<)"
           disabled={!text()}
-          onClick={() => void c.stepSize(-1)}
+          onClick={() => fireAndForget(c.stepSize(-1), 'pptx-editor')}
         >
           <span class="font-semibold text-[11px] leading-none">
             A<sup>−</sup>
@@ -534,7 +549,7 @@ export function HomeTab() {
           label="Clear formatting"
           tooltip="Clear all formatting"
           disabled={!text()}
-          onClick={() => void c.clearFormatting()}
+          onClick={() => fireAndForget(c.clearFormatting(), 'pptx-editor')}
         >
           <Eraser />
         </RibbonButton>
@@ -544,7 +559,7 @@ export function HomeTab() {
           data-testid="pptx-bold"
           disabled={!text()}
           active={text() && f().bold}
-          onClick={() => void c.toggle('bold')}
+          onClick={() => fireAndForget(c.toggle('bold'), 'pptx-editor')}
         >
           <TextB />
         </RibbonButton>
@@ -553,7 +568,7 @@ export function HomeTab() {
           tooltip="Italic (⌘I)"
           disabled={!text()}
           active={text() && f().italic}
-          onClick={() => void c.toggle('italic')}
+          onClick={() => fireAndForget(c.toggle('italic'), 'pptx-editor')}
         >
           <TextItalic />
         </RibbonButton>
@@ -562,7 +577,7 @@ export function HomeTab() {
           tooltip="Underline (⌘U)"
           disabled={!text()}
           active={text() && f().underline}
-          onClick={() => void c.toggle('underline')}
+          onClick={() => fireAndForget(c.toggle('underline'), 'pptx-editor')}
         >
           <TextUnderline />
         </RibbonButton>
@@ -571,7 +586,7 @@ export function HomeTab() {
           tooltip="Strikethrough"
           disabled={!text()}
           active={text() && f().strike}
-          onClick={() => void c.toggle('strike')}
+          onClick={() => fireAndForget(c.toggle('strike'), 'pptx-editor')}
         >
           <TextStrikethrough />
         </RibbonButton>
@@ -580,7 +595,9 @@ export function HomeTab() {
           tooltip="Superscript (⇧⌘=)"
           disabled={!text()}
           active={text() && (f().baseline ?? 0) > 0}
-          onClick={() => void c.toggleBaseline('super')}
+          onClick={() =>
+            fireAndForget(c.toggleBaseline('super'), 'pptx-editor')
+          }
         >
           <TextSuperscript />
         </RibbonButton>
@@ -589,7 +606,7 @@ export function HomeTab() {
           tooltip="Subscript (⌘=)"
           disabled={!text()}
           active={text() && (f().baseline ?? 0) < 0}
-          onClick={() => void c.toggleBaseline('sub')}
+          onClick={() => fireAndForget(c.toggleBaseline('sub'), 'pptx-editor')}
         >
           <TextSubscript />
         </RibbonButton>
@@ -610,7 +627,7 @@ export function HomeTab() {
               noneLabel="No color"
               onPick={(v) => {
                 close();
-                void c.setHighlight(v);
+                fireAndForget(c.setHighlight(v), 'pptx-editor');
               }}
             />
           )}
@@ -632,7 +649,7 @@ export function HomeTab() {
               standard={env.standardColors}
               onPick={(v) => {
                 close();
-                if (v) void c.setTextColor(v);
+                if (v) fireAndForget(c.setTextColor(v), 'pptx-editor');
               }}
             />
           )}
@@ -653,7 +670,7 @@ export function HomeTab() {
                     testId={`pptx-char-spacing-${s.value}`}
                     onClick={() => {
                       close();
-                      void c.setCharSpacing(s.value);
+                      fireAndForget(c.setCharSpacing(s.value), 'pptx-editor');
                     }}
                   />
                 )}
@@ -670,7 +687,9 @@ export function HomeTab() {
                   precision={1}
                   width="4.5rem"
                   testId="pptx-char-spacing-custom"
-                  onCommit={(v) => void c.setCharSpacing(v)}
+                  onCommit={(v) =>
+                    fireAndForget(c.setCharSpacing(v), 'pptx-editor')
+                  }
                 />
               </div>
             </div>
@@ -683,7 +702,7 @@ export function HomeTab() {
           tooltip="Bullets"
           disabled={!text()}
           active={text() && f().bullet}
-          onClick={() => void c.toggleBullets()}
+          onClick={() => fireAndForget(c.toggleBullets(), 'pptx-editor')}
         >
           <ListBullets />
         </RibbonButton>
@@ -698,7 +717,7 @@ export function HomeTab() {
                 label="None"
                 onClick={() => {
                   close();
-                  void c.setBullets({ kind: 'none' });
+                  fireAndForget(c.setBullets({ kind: 'none' }), 'pptx-editor');
                 }}
               />
               <For each={BULLETS}>
@@ -708,7 +727,10 @@ export function HomeTab() {
                     icon={<span class="text-sm">{b.char}</span>}
                     onClick={() => {
                       close();
-                      void c.setBullets({ kind: 'char', char: b.char });
+                      fireAndForget(
+                        c.setBullets({ kind: 'char', char: b.char }),
+                        'pptx-editor'
+                      );
                     }}
                   />
                 )}
@@ -720,7 +742,7 @@ export function HomeTab() {
           label="Numbering"
           tooltip="Numbering"
           disabled={!text()}
-          onClick={() => void c.toggleNumbering()}
+          onClick={() => fireAndForget(c.toggleNumbering(), 'pptx-editor')}
         >
           <ListNumbers />
         </RibbonButton>
@@ -738,11 +760,14 @@ export function HomeTab() {
                     icon={<span class="text-[10px]">{n.sample}</span>}
                     onClick={() => {
                       close();
-                      void c.setBullets({
-                        kind: 'number',
-                        scheme: n.scheme,
-                        start: 1,
-                      });
+                      fireAndForget(
+                        c.setBullets({
+                          kind: 'number',
+                          scheme: n.scheme,
+                          start: 1,
+                        }),
+                        'pptx-editor'
+                      );
                     }}
                   />
                 )}
@@ -754,7 +779,7 @@ export function HomeTab() {
           label="Decrease list level"
           tooltip="Decrease list level (⇧Tab)"
           disabled={!text()}
-          onClick={() => void c.indent(-1)}
+          onClick={() => fireAndForget(c.indent(-1), 'pptx-editor')}
         >
           <TextOutdent />
         </RibbonButton>
@@ -762,7 +787,7 @@ export function HomeTab() {
           label="Increase list level"
           tooltip="Increase list level (Tab)"
           disabled={!text()}
-          onClick={() => void c.indent(1)}
+          onClick={() => fireAndForget(c.indent(1), 'pptx-editor')}
         >
           <TextIndent />
         </RibbonButton>
@@ -779,7 +804,7 @@ export function HomeTab() {
                     label={n.toFixed(n % 1 === 0 ? 1 : 2)}
                     onClick={() => {
                       close();
-                      void c.lineSpacing(n);
+                      fireAndForget(c.lineSpacing(n), 'pptx-editor');
                     }}
                   />
                 )}
@@ -810,7 +835,7 @@ export function HomeTab() {
               tooltip={label}
               disabled={!text()}
               active={text() && f().align === value}
-              onClick={() => void c.align(value)}
+              onClick={() => fireAndForget(c.align(value), 'pptx-editor')}
             >
               <Icon />
             </RibbonButton>
@@ -838,7 +863,7 @@ export function HomeTab() {
                     icon={<Icon />}
                     onClick={() => {
                       close();
-                      void c.body({ anchor });
+                      fireAndForget(c.body({ anchor }), 'pptx-editor');
                     }}
                   />
                 )}
@@ -850,7 +875,9 @@ export function HomeTab() {
           current={c.textDirection()}
           disabled={!text()}
           testId="pptx-text-direction"
-          onPick={(direction) => void c.setTextDirection(direction)}
+          onPick={(direction) =>
+            fireAndForget(c.setTextDirection(direction), 'pptx-editor')
+          }
           onMore={() => env.openFormatPane('text')}
         />
       </RibbonGroup>
@@ -866,7 +893,7 @@ export function HomeTab() {
               load={env.presetPaths}
               onPick={(preset) => {
                 close();
-                void c.insertShape(preset);
+                fireAndForget(c.insertShape(preset), 'pptx-editor');
               }}
             />
           )}

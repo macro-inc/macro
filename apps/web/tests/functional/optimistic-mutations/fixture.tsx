@@ -3,6 +3,7 @@ import { PosthogProvider } from '@app/lib/analytics/posthog';
 import { createUrqlQuery } from '@app/lib/urql-solid/create-urql-query';
 import { disableBrowserTursoCache } from '@core/constant/featureFlags';
 import { UserContextProvider } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { normalizedCacheResultMetadata } from '@graphql-cache/exchange/normalized-cache-exchange';
 import { TagSetsProvider } from '@property/tags/tag-sets-context';
 import { useDocTags, useSoupDocTags } from '@property/tags/useDocTags';
@@ -210,17 +211,48 @@ function Readers() {
   }
   return (
     <>
-      <button onClick={() => void edit(rename)}>Rename task</button>
-      <button onClick={() => void edit(renameByField)}>
+      <button
+        onClick={() =>
+          fireAndForget(edit(rename), 'optimistic-mutations-fixture')
+        }
+      >
+        Rename task
+      </button>
+      <button
+        onClick={() =>
+          fireAndForget(edit(renameByField), 'optimistic-mutations-fixture')
+        }
+      >
         Rename task by field
       </button>
-      <button onClick={() => void edit(() => tags.applyTag('user', DOCS_TAG))}>
+      <button
+        onClick={() =>
+          fireAndForget(
+            edit(() => tags.applyTag('user', DOCS_TAG)),
+            'optimistic-mutations-fixture'
+          )
+        }
+      >
         Add docs
       </button>
-      <button onClick={() => void edit(() => tags.applyTag('user', BLUE_TAG))}>
+      <button
+        onClick={() =>
+          fireAndForget(
+            edit(() => tags.applyTag('user', BLUE_TAG)),
+            'optimistic-mutations-fixture'
+          )
+        }
+      >
         Add blue
       </button>
-      <button onClick={() => void edit(() => tags.removeTag('user', DOCS_TAG))}>
+      <button
+        onClick={() =>
+          fireAndForget(
+            edit(() => tags.removeTag('user', DOCS_TAG)),
+            'optimistic-mutations-fixture'
+          )
+        }
+      >
         Remove docs
       </button>
       <button onClick={() => setShowMirror((value) => !value)}>

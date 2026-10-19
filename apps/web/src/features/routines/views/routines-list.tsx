@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { Accessor } from 'solid-js';
 import { RoutinesList } from '../components/routines-list';
 import type { RoutineListSource } from '../context/routine-sources';
@@ -25,7 +26,7 @@ export function RoutinesListView(props: {
       rows={rows()}
       loading={props.source.loading()}
       error={props.source.error()}
-      onRetry={() => void props.source.refresh()}
+      onRetry={() => fireAndForget(props.source.refresh(), 'routines')}
       onCreate={props.onCreate}
       onOpen={props.onOpen}
       pendingId={props.source.pendingId()}

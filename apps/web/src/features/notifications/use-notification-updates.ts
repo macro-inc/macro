@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { refreshSharedAccess } from '@queries/access-requests/requests';
 import { queryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
@@ -20,9 +21,15 @@ function refreshSoupEntity(
   notification: UnifiedNotification,
   entityType: Parameters<typeof refetchSoupEntity>[1]
 ) {
-  void refetchSoupEntity(notification.entity_id, entityType);
+  fireAndForget(
+    refetchSoupEntity(notification.entity_id, entityType),
+    'notifications'
+  );
   invalidateSoupEntity(notification.entity_id);
-  void invalidateEntityNotifications(notification.entity_id);
+  fireAndForget(
+    invalidateEntityNotifications(notification.entity_id),
+    'notifications'
+  );
 }
 
 function refreshChannel(
@@ -33,17 +40,28 @@ function refreshChannel(
 
   if (!threadId) return;
 
-  void refetchSoupEntity(threadId, 'channelThread');
+  fireAndForget(refetchSoupEntity(threadId, 'channelThread'), 'notifications');
   invalidateSoupEntity(threadId);
-  void invalidateEntityNotifications(threadId);
+  fireAndForget(invalidateEntityNotifications(threadId), 'notifications');
 }
 
 function refreshEmailThread(notification: UnifiedNotification) {
-  void refetchSoupEntity(notification.entity_id, 'emailThread');
+  fireAndForget(
+    refetchSoupEntity(notification.entity_id, 'emailThread'),
+    'notifications'
+  );
   invalidateSoupEntity(notification.entity_id);
-  void queryClient.invalidateQueries({
+  queryClient.invalidateQueries({
     queryKey: emailKeys.threadMessages(notification.entity_id).queryKey,
   });
+}
+
+async function refreshDeliveredEmailReminder(threadId: string) {
+  try {
+    await refreshEmailFollowup(threadId);
+  } catch (error) {
+    console.warn('Failed to refresh delivered email reminder', error);
+  }
 }
 
 /**
@@ -90,9 +108,12 @@ export function handleNotificationUpdate(notification: UnifiedNotification) {
         messageKeys.messagesByIds,
         messageKeys.threadReplies,
       ]) {
-        void queryClient.invalidateQueries({ queryKey: [...key._def, parent] });
+        queryClient.invalidateQueries({ queryKey: [...key._def, parent] });
       }
-      void invalidateEntityNotifications(notification.entity_id);
+      fireAndForget(
+        invalidateEntityNotifications(notification.entity_id),
+        'notifications'
+      );
     })
     .with({ tag: 'commented_on_document' }, () => {
       refreshSoupEntity(notification, 'document');
@@ -107,9 +128,12 @@ export function handleNotificationUpdate(notification: UnifiedNotification) {
         messageKeys.messagesByIds,
         messageKeys.threadReplies,
       ]) {
-        void queryClient.invalidateQueries({ queryKey: [...key._def, parent] });
+        queryClient.invalidateQueries({ queryKey: [...key._def, parent] });
       }
-      void invalidateEntityNotifications(notification.entity_id);
+      fireAndForget(
+        invalidateEntityNotifications(notification.entity_id),
+        'notifications'
+      );
     })
     .with({ tag: 'channel_invite' }, () => {
       refreshChannel(notification);
@@ -126,19 +150,18 @@ export function handleNotificationUpdate(notification: UnifiedNotification) {
     .with({ tag: 'new_email' }, () => {
       refreshEmailThread(notification);
     })
-    .with({ tag: 'reminder' }, async () => {
+    .with({ tag: 'reminder' }, () => {
       if (notification.entity_type !== 'email_thread') return;
-      try {
-        await refreshEmailFollowup(notification.entity_id);
-      } catch (error) {
-        console.warn('Failed to refresh delivered email reminder', error);
-      }
+      fireAndForget(
+        refreshDeliveredEmailReminder(notification.entity_id),
+        'notifications'
+      );
     })
     .with({ tag: 'inbox_reauth_required' }, () => {
       invalidateEmailLinks();
     })
     .with({ tag: 'invite_to_team' }, () => {
-      void queryClient.invalidateQueries({
+      queryClient.invalidateQueries({
         queryKey: teamKeys.userInvites.queryKey,
       });
     })

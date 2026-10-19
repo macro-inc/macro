@@ -17,6 +17,7 @@ import {
   trimWhitespace,
 } from '@core/component/LexicalMarkdown/utils';
 import { blockNameToDefaultFile } from '@core/constant/allBlocks';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createRenameDssEntityMutation } from '@entity';
 import { mergeRegister } from '@lexical/utils';
 import { useDocTags } from '@property/tags';
@@ -225,7 +226,10 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
         insertTags: false,
         onCreateTag: (tag) => {
           if (!canEdit()) return;
-          void documentTags.applyTag(tag.scope, tag.optionId);
+          fireAndForget(
+            documentTags.applyTag(tag.scope, tag.optionId),
+            'document-tags'
+          );
         },
       })
     )

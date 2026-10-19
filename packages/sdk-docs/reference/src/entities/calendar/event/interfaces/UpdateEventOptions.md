@@ -8,7 +8,7 @@ Fields to change on an event; omitted fields are left untouched.
 | ------ | ------ | ------ |
 | <a id="property-attendees"></a> `attendees?` | [`CalendarAttendeeInputBody`](../../../../../generated/calendar/types.gen/type-aliases/CalendarAttendeeInputBody.md)[] | Replacement attendee list. |
 | <a id="property-calendar"></a> `calendar?` | [`Calendar`](../../calendar/classes/Calendar.md) | Calendar whose copy of the event is patched, for a multi-calendar event. Omit to patch the canonical copy. |
-| <a id="property-conference"></a> `conference?` | [`ConferenceChange`](../../../../../generated/calendar/types.gen/type-aliases/ConferenceChange.md) | `google_meet` attaches a fresh Meet, `none` detaches; omit to leave the conference untouched. |
+| <a id="property-conference"></a> `conference?` | [`ConferenceChange`](../../../../../generated/calendar/types.gen/type-aliases/ConferenceChange.md) | Provider conference change; omit to retain it. Outlook removal requires a separately confirmed replacement via prepareReplacement(). |
 | <a id="property-description"></a> `description?` | `string` | Replacement description; an empty string clears it. |
 | <a id="property-location"></a> `location?` | `string` | Replacement location; an empty string clears it. |
 | <a id="property-outofoffice"></a> `outOfOffice?` | [`OutOfOfficeProperties`](../../../../../generated/calendar/types.gen/type-aliases/OutOfOfficeProperties.md) | Replacement out-of-office properties, applied only to an event that is already out-of-office. |

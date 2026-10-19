@@ -1,6 +1,7 @@
 import { clearMcpAuthAttempts } from '@app/features/settings/mcp-auth-attempt';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { SERVER_HOSTS } from '@core/constant/servers';
+import { clearPipedreamCallbacks } from '@core/pipedream/connect-callback';
 import { syncLoginStorage } from '@core/util/cookies';
 import { isTauri } from '@core/util/platform';
 import { clearPostLoginRedirect } from '@core/util/postLoginRedirect';
@@ -18,6 +19,7 @@ import { resetGraphqlSoupDoneSession } from '@queries/soup/graphql/done-session'
 import { clearDocumentQueryCache } from '@queries/storage/document-cache';
 import { clearOfflineDocumentContexts } from '@queries/storage/documentLoad/offline-context-runtime';
 import { authServiceClient } from '@service-auth/client';
+import { setGraphqlSoupSessionActive } from '@service-storage/graphql-soup';
 import { raceTimeout } from '@solid-primitives/promise';
 import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
@@ -44,6 +46,7 @@ const unauthenticatedUserInfo: UserInfoData = {
 };
 
 export async function clearLocalAuthSession() {
+  clearPipedreamCallbacks();
   document.cookie =
     'login=false; expires=Thu, 01 Jan 1970 00:00:00 UTC; max-age=0; path=/; SameSite=Lax';
   syncLoginStorage(false);
@@ -61,6 +64,8 @@ export async function clearLocalAuthSession() {
   if (results.some((result) => result.status === 'rejected')) {
     await rotateCacheScope();
   }
+  // Only after the wipes: clearing the cache needs its registered host.
+  setGraphqlSoupSessionActive(false);
   resetGraphqlSoupDoneSession();
   queryClient.setQueryData(authKeys.userInfo.queryKey, unauthenticatedUserInfo);
   clearMcpAuthAttempts();

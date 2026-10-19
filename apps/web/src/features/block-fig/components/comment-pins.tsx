@@ -5,6 +5,7 @@
  * The thread and the composer inside the cards are the comment store's.
  */
 
+import { fireAndForget } from '@core/util/fireAndForget';
 import CheckCircle from '@phosphor/check-circle.svg';
 import X from '@phosphor/x.svg';
 import { For, type JSX, Show } from 'solid-js';
@@ -136,7 +137,10 @@ export function CommentPins(props: {
             c.setOpenThread(undefined);
             return;
           }
-          void c.placeAt(screenToPage(props.camera, local(e)));
+          fireAndForget(
+            c.placeAt(screenToPage(props.camera, local(e))),
+            'fig-comments'
+          );
         }}
       />
       <For each={shownPins()}>
@@ -235,7 +239,10 @@ export function CommentPins(props: {
                             : 'fig-comment-resolve'
                         }
                         onClick={() =>
-                          void store.setResolved(threadId, !thread()?.resolved)
+                          fireAndForget(
+                            store.setResolved(threadId, !thread()?.resolved),
+                            'fig-comments'
+                          )
                         }
                       >
                         <CheckCircle class="size-3.5" />

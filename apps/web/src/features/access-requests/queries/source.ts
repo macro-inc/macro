@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { accessRequestKeys } from '@queries/access-requests/keys';
 import {
@@ -92,7 +93,7 @@ export function createSharingSource(
         setOffset(0);
     },
     onError: (_error, change) => {
-      void invalidateAccessRequests(change.target);
+      fireAndForget(invalidateAccessRequests(change.target), 'access-requests');
     },
   }));
   const mutate = (action: Action) => {

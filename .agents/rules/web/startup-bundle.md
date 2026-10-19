@@ -30,3 +30,7 @@ alwaysApply: false
   caches, and unregister; it must not intercept requests.
 - The build fails if any emitted file exceeds CloudFront's 10 MB compression
   limit; split it rather than raising the limit.
+- The build also fails if a chunk has no source map or a map exceeds PostHog's
+  25 MB symbolication limit. `startupChunks()` in `vite.base.ts` splits the
+  code the entry loads into `app`, `vendor`, and `api-schemas` chunks so each
+  map stays under it; it moves only modules the entry already imports.

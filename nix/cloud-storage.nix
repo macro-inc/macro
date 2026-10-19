@@ -925,7 +925,9 @@
           cargo-nextest
           cargo-expand
           binaryen
-          wasm-bindgen-cli
+          # Match Cargo.lock so parallel wasm-pack builds do not race to
+          # install a replacement CLI into their shared cache.
+          wasm-bindgen-cli_0_2_126
           wasm-pack
           pkg-config
           bacon

@@ -30,6 +30,7 @@ import {
   Permissions,
 } from '@core/component/SharePermissions';
 import { openLoginModal } from '@core/component/TopBar/LoginButton';
+import { fireAndForget } from '@core/util/fireAndForget';
 import DownloadIcon from '@phosphor/download-simple.svg';
 import Printer from '@phosphor/printer.svg';
 import { useSearchParams } from '@solidjs/router';
@@ -60,10 +61,13 @@ function PdfDetailContent(props: {
       label: 'Print',
       icon: Printer,
       action: () => {
-        void printPdfDocument({
-          ...auth(),
-          documentProxy: pdf.documentProxy(),
-        });
+        fireAndForget(
+          printPdfDocument({
+            ...auth(),
+            documentProxy: pdf.documentProxy(),
+          }),
+          'drive-view'
+        );
       },
     },
     {
@@ -71,14 +75,17 @@ function PdfDetailContent(props: {
       label: 'Download',
       icon: DownloadIcon,
       action: () => {
-        void downloadPdfDocument({
-          ...auth(),
-          documentProxy: pdf.documentProxy(),
-          hasModifications: hasModificationData(),
-          hasComments: hasComments(),
-          documentId: pdf.documentId(),
-          fileName,
-        });
+        fireAndForget(
+          downloadPdfDocument({
+            ...auth(),
+            documentProxy: pdf.documentProxy(),
+            hasModifications: hasModificationData(),
+            hasComments: hasComments(),
+            documentId: pdf.documentId(),
+            fileName,
+          }),
+          'drive-view'
+        );
       },
     },
     ...(props.data.documentMetadata.fileType === 'docx'
@@ -88,11 +95,14 @@ function PdfDetailContent(props: {
             label: 'Download DOCX',
             icon: DownloadIcon,
             action: () => {
-              void downloadDocxDocument({
-                ...auth(),
-                documentId: pdf.documentId(),
-                fileName,
-              });
+              fireAndForget(
+                downloadDocxDocument({
+                  ...auth(),
+                  documentId: pdf.documentId(),
+                  fileName,
+                }),
+                'drive-view'
+              );
             },
           },
         ]

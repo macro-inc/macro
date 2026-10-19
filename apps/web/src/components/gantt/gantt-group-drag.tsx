@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type CollisionDetector,
   createDraggable,
@@ -136,7 +137,7 @@ export function GanttGroupDrag(
   const finish = () => {
     const move = request();
     if (!cancelled && move && canDrag(move.id) && props.canDrop(move)) {
-      void saveMove(move);
+      fireAndForget(saveMove(move), 'gantt-group-drag');
     }
     setActive(undefined);
     setTarget(undefined);

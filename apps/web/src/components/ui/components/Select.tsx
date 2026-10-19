@@ -24,14 +24,18 @@ export type SelectTriggerProps = KobalteSelectTriggerProps & {
   children?: JSX.Element;
 };
 
+/** Shared appearance for select and searchable-combobox triggers. */
+export function selectTriggerClasses(className?: string): string {
+  return cn(
+    'flex h-8 w-full items-center justify-between gap-2 rounded-full border border-edge-frame bg-control px-2 text-left text-ink-muted outline-none data-expanded:overlay-active data-expanded:text-ink focus-visible:ring-2 focus-visible:ring-edge-muted aria-invalid:border-failure data-invalid:border-failure',
+    className
+  );
+}
 function SelectTrigger(props: SelectTriggerProps) {
   const [local, rest] = splitProps(props, ['class']);
   return (
     <KobalteSelect.Trigger
-      class={cn(
-        'flex h-8 w-full items-center justify-between gap-2 rounded-full border border-edge-frame bg-control px-2 text-left text-ink-muted outline-none data-expanded:overlay-active data-expanded:text-ink focus-visible:ring-2 focus-visible:ring-edge-muted aria-invalid:border-failure data-invalid:border-failure',
-        local.class
-      )}
+      class={selectTriggerClasses(local.class)}
       {...rest}
     />
   );

@@ -512,9 +512,8 @@ fn build_query(
         builder.push("t.viewed_at,");
     }
 
-    // The is_important output column reflects Gmail's IMPORTANT label — a
-    // different notion from the Importance filter, which reads the
-    // denormalized email_threads.is_signal heuristic.
+    // Provider attention is evidence. The Importance filter separately uses
+    // Macro Signal, including the user's overrides.
     builder.push(
         r#"
             t.project_id,
@@ -533,11 +532,8 @@ fn build_query(
                     SELECT EXISTS (
                         SELECT 1
                         FROM email_messages m_imp
-                        JOIN email_message_labels ml ON m_imp.id = ml.message_id
-                        JOIN email_labels l ON ml.label_id = l.id
-                        WHERE m_imp.thread_id = t.id
-                          AND l.name = 'IMPORTANT'
-                          AND l.link_id = t.link_id
+                        JOIN email_message_mailbox_facts mf ON mf.id = m_imp.id
+                        WHERE m_imp.thread_id = t.id AND mf.is_present AND NOT mf.in_trash AND mf.provider_is_important
                     )
                 )
             END AS is_important,

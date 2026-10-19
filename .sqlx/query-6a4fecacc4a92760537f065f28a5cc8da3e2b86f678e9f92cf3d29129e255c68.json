@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id,resource_key,desired,revision>completed_revision AS \"pending!\" FROM email_mailbox_settings_work WHERE link_id=$1 AND kind='sender_block'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "resource_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "desired",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "pending!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "6a4fecacc4a92760537f065f28a5cc8da3e2b86f678e9f92cf3d29129e255c68"
+}

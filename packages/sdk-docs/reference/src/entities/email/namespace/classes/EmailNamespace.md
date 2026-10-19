@@ -84,6 +84,18 @@ A handle to an email thread by id.
 
 ***
 
+### connectionProviders()
+
+> **connectionProviders**(): `Promise`\<[`EmailConnectionProviders`](../../../../../generated/auth/types.gen/type-aliases/EmailConnectionProviders.md)\>
+
+Providers the server currently permits this caller to connect.
+
+#### Returns
+
+`Promise`\<[`EmailConnectionProviders`](../../../../../generated/auth/types.gen/type-aliases/EmailConnectionProviders.md)\>
+
+***
+
 ### createLabel()
 
 > **createLabel**(`name`): `Promise`\<[`Label`](../../label/classes/Label.md)\>
@@ -213,6 +225,25 @@ A handle to an email message by id.
 #### Returns
 
 [`EmailMessage`](../../message/classes/EmailMessage.md)
+
+***
+
+### recoverDraftTransfer()
+
+> **recoverDraftTransfer**(`operationId`): `Promise`\<[`TransferRecoveryResponse`](../../../../../generated/email/types.gen/type-aliases/TransferRecoveryResponse.md)\>
+
+Recover a draft move using its original operation UUID; never starts a new move.
+An empty committed result fences the old move so it cannot commit later.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `operationId` | `string` |
+
+#### Returns
+
+`Promise`\<[`TransferRecoveryResponse`](../../../../../generated/email/types.gen/type-aliases/TransferRecoveryResponse.md)\>
 
 ***
 

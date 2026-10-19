@@ -1,4 +1,5 @@
 import { SidePanel } from '@components/app/side-panel';
+import { fireAndForget } from '@core/util/fireAndForget';
 import ListIcon from '@phosphor/list-bullets.svg';
 import { Button } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
@@ -47,8 +48,8 @@ export function CompanyListsSection(props: { companyId: string }) {
               variant="ghost"
               size="xs"
               onClick={() => {
-                void team.refetch();
-                void lists.query.refetch();
+                fireAndForget(team.refetch(), 'crm');
+                fireAndForget(lists.query.refetch(), 'crm');
               }}
             >
               Retry
@@ -127,7 +128,10 @@ export function CompanyListsSection(props: { companyId: string }) {
                           const included = event.currentTarget.checked;
                           event.currentTarget.checked =
                             list.config.companyIds.includes(props.companyId);
-                          void setMembership(list.id, included);
+                          fireAndForget(
+                            setMembership(list.id, included),
+                            'crm'
+                          );
                         }}
                       />
                       <span class="min-w-0 truncate" title={list.name}>

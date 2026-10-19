@@ -1,4 +1,5 @@
 import { pickNativePhotoLibraryMedia } from '@core/mobile/nativePhotoLibrary';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { isPlatform } from '@core/util/platform';
 import PaperclipIcon from '@phosphor/paperclip.svg';
 import FormatIcon from '@phosphor/text-aa.svg';
@@ -32,7 +33,7 @@ export function AttachFilesAction(
     const files = Array.from(event.currentTarget.files ?? []);
     event.currentTarget.value = '';
     if (files.length === 0) return;
-    void commands.attachFiles(files);
+    fireAndForget(commands.attachFiles(files), 'channel-input');
   };
 
   return (
@@ -77,7 +78,7 @@ export function AttachNativeMediaAction() {
     const files = Array.from(event.currentTarget.files ?? []);
     event.currentTarget.value = '';
     if (files.length === 0) return;
-    void commands.attachFiles(files);
+    fireAndForget(commands.attachFiles(files), 'channel-input');
   };
 
   const onAttachMedia = async () => {
@@ -107,7 +108,7 @@ export function AttachNativeMediaAction() {
       />
       <InputActionButton
         label="Attach photos or videos"
-        onClick={() => void onAttachMedia()}
+        onClick={() => fireAndForget(onAttachMedia(), 'channel-input')}
       >
         <PaperclipIcon />
       </InputActionButton>

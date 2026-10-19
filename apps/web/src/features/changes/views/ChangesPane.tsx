@@ -12,6 +12,7 @@ import {
 } from '@app/components/diff-view';
 import { Resize } from '@core/component/Resize';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fireAndForget } from '@core/util/fireAndForget';
 import * as Dialog from '@kobalte/core/dialog';
 import ArrowsClockwiseIcon from '@phosphor/arrows-clockwise.svg';
 import CircleNotchIcon from '@phosphor/circle-notch.svg';
@@ -67,7 +68,7 @@ function CaptureBanners() {
           <CaptureBanner
             tone="failure"
             text={message()}
-            onRefresh={() => void model.refresh()}
+            onRefresh={() => fireAndForget(model.refresh(), 'changes')}
             refreshing={model.refreshing()}
           />
         )}
@@ -80,7 +81,7 @@ function CaptureBanners() {
           <CaptureBanner
             tone="failure"
             text={`The last capture failed: ${current().message}`}
-            onRefresh={() => void model.refresh()}
+            onRefresh={() => fireAndForget(model.refresh(), 'changes')}
             refreshing={model.refreshing()}
           />
         )}
@@ -159,7 +160,7 @@ function ChangesControls(props: { narrow: boolean; drawerOpen: boolean }) {
         size="icon-sm"
         label="Refresh pull request changes"
         disabled={refreshing()}
-        onClick={() => void model.refresh()}
+        onClick={() => fireAndForget(model.refresh(), 'changes')}
       >
         <ArrowsClockwiseIcon class={cn(refreshing() && 'animate-spin')} />
       </Button>
@@ -451,7 +452,7 @@ function ChangesNotices() {
             icon={<WarningCircleIcon />}
             title="The changes could not be loaded"
             detail="The changes service did not answer. Try again in a moment."
-            onRefresh={() => void model.refresh()}
+            onRefresh={() => fireAndForget(model.refresh(), 'changes')}
             refreshing={model.refreshing()}
           />
         </Match>
@@ -460,7 +461,7 @@ function ChangesNotices() {
             <ChangesNotice
               title="Pull request changes unavailable"
               detail={current().message}
-              onRefresh={() => void model.refresh()}
+              onRefresh={() => fireAndForget(model.refresh(), 'changes')}
               refreshing={model.refreshing()}
             />
           )}
@@ -469,7 +470,7 @@ function ChangesNotices() {
           <ChangesNotice
             title="No pull request changes loaded"
             detail="Link a GitHub pull request, then refresh to review its changes."
-            onRefresh={() => void model.refresh()}
+            onRefresh={() => fireAndForget(model.refresh(), 'changes')}
             refreshing={model.refreshing()}
           />
         </Match>
@@ -479,7 +480,7 @@ function ChangesNotices() {
               icon={<WarningCircleIcon />}
               title="The changes could not be captured"
               detail={current().message}
-              onRefresh={() => void model.refresh()}
+              onRefresh={() => fireAndForget(model.refresh(), 'changes')}
               refreshing={model.refreshing()}
             />
           )}
@@ -499,7 +500,7 @@ function ChangesNotices() {
                 ? `Nothing differs between ${range()}.`
                 : 'The pull request has no changed files.'
             }
-            onRefresh={() => void model.refresh()}
+            onRefresh={() => fireAndForget(model.refresh(), 'changes')}
             refreshing={model.refreshing()}
           />
         </Match>

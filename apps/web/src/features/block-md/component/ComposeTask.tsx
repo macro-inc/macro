@@ -27,8 +27,10 @@ import type { PortalScope } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { mergeRegister } from '@lexical/utils';
+import { Telemetry } from '@macro-inc/observability';
 import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
 import ArrowsOutIcon from '@phosphor/arrows-out.svg';
 import PaperclipIcon from '@phosphor/paperclip.svg';
@@ -664,7 +666,10 @@ export function ComposeTask(props: ComposeTaskProps) {
       if (props.onSuccess) {
         props.onSuccess({ documentId, title: taskTitle, content: taskContent });
       } else {
-        showTaskCreatedToast(documentId, initialSnapshot);
+        fireAndForget(
+          showTaskCreatedToast(documentId, initialSnapshot),
+          'compose-task'
+        );
       }
       props.onCreateTask?.(taskTitle, taskContent);
       return;
@@ -695,7 +700,10 @@ export function ComposeTask(props: ComposeTaskProps) {
     if (props.onSuccess) {
       props.onSuccess({ documentId, title: taskTitle, content: taskContent });
     } else {
-      showTaskCreatedToast(documentId, initialSnapshot);
+      fireAndForget(
+        showTaskCreatedToast(documentId, initialSnapshot),
+        'compose-task'
+      );
     }
     props.onCreateTask?.(taskTitle, taskContent);
   };
@@ -848,7 +856,9 @@ export function ComposeTask(props: ComposeTaskProps) {
     scopeId: composeHotkeyScope,
     description: 'Create task',
     keyDownHandler: () => {
-      handleCreateTask();
+      handleCreateTask().catch((error) =>
+        Telemetry.error(error, { surface: 'compose-task' })
+      );
       return true;
     },
     runWithInputFocused: true,
@@ -861,7 +871,10 @@ export function ComposeTask(props: ComposeTaskProps) {
       applyTargetLabel: 'Task',
       isApplied: (tag) => composerTags.isApplied(tag.optionId),
       onCreate: (tag) => {
-        void composerTags.applyTag(tag.scope, tag.optionId);
+        fireAndForget(
+          composerTags.applyTag(tag.scope, tag.optionId),
+          'compose-task'
+        );
       },
     })
     .withEmojis()
@@ -951,7 +964,10 @@ export function ComposeTask(props: ComposeTaskProps) {
             }}
             onTagSelected={(tag) => {
               setTagLayoutMode('title');
-              void composerTags.applyTag(tag.scope, tag.optionId);
+              fireAndForget(
+                composerTags.applyTag(tag.scope, tag.optionId),
+                'compose-task'
+              );
             }}
             onDeleteTagsAtStart={deleteTitleTagsAtStart}
             portalScope={portalScope()}

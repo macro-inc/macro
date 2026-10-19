@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { BucketConfig } from '../MentionsMenuController';
 
 type Frontier = {
@@ -39,6 +40,6 @@ export function createMentionPageLoader() {
     )
       return;
     lastRequested = { bucketId: bucket.id, query, selectedIndex, itemCount };
-    void bucket.loadMore?.();
+    fireAndForget(bucket.loadMore?.(), 'mentions-menu');
   };
 }

@@ -10,6 +10,7 @@ import type {
   LegendPosition,
   ShapeOutline,
 } from '@core/pptx-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import Plus from '@phosphor/plus.svg';
 import TableIcon from '@phosphor/table.svg';
 import Trash from '@phosphor/trash.svg';
@@ -568,7 +569,7 @@ export function ChartDataEditor(props: {
             disabled={
               props.readonly || busy() || (chart() ? !chart()!.editable : false)
             }
-            onClick={() => void apply()}
+            onClick={() => fireAndForget(apply(), 'pptx-editor')}
           >
             Apply
           </Button>
@@ -627,7 +628,7 @@ export function ChartDesignTab(props: {
                 label="None"
                 onClick={() => {
                   close();
-                  void c.formatChart({ title: '' });
+                  fireAndForget(c.formatChart({ title: '' }), 'pptx-editor');
                 }}
               />
               <form
@@ -636,7 +637,10 @@ export function ChartDesignTab(props: {
                   e.preventDefault();
                   const value = new FormData(e.currentTarget).get('title');
                   close();
-                  void c.formatChart({ title: String(value ?? '') });
+                  fireAndForget(
+                    c.formatChart({ title: String(value ?? '') }),
+                    'pptx-editor'
+                  );
                 }}
               >
                 <input
@@ -668,7 +672,10 @@ export function ChartDesignTab(props: {
                     active={(chart()?.legend ?? 'none') === pos}
                     onClick={() => {
                       close();
-                      void c.formatChart({ legend: pos });
+                      fireAndForget(
+                        c.formatChart({ legend: pos }),
+                        'pptx-editor'
+                      );
                     }}
                   />
                 )}
@@ -682,7 +689,10 @@ export function ChartDesignTab(props: {
           aria-pressed={!!chart()?.dataLabels}
           disabled={ro()}
           onClick={() =>
-            void c.formatChart({ dataLabels: !chart()?.dataLabels })
+            fireAndForget(
+              c.formatChart({ dataLabels: !chart()?.dataLabels }),
+              'pptx-editor'
+            )
           }
         >
           Data labels
@@ -716,12 +726,15 @@ export function ChartDesignTab(props: {
                     onClick={() => {
                       close();
                       const n = chart()?.series.length ?? 0;
-                      void c.formatChart({
-                        seriesColors: Array.from({ length: n }, (_, i) => ({
-                          series: i,
-                          color: p.colors[i % p.colors.length],
-                        })),
-                      });
+                      fireAndForget(
+                        c.formatChart({
+                          seriesColors: Array.from({ length: n }, (_, i) => ({
+                            series: i,
+                            color: p.colors[i % p.colors.length],
+                          })),
+                        }),
+                        'pptx-editor'
+                      );
                     }}
                   >
                     <span class="flex gap-px">
@@ -771,7 +784,10 @@ export function ChartDesignTab(props: {
               current={chart()}
               onPick={(choice) => {
                 close();
-                void c.setChartType(choice.kind, choice.grouping);
+                fireAndForget(
+                  c.setChartType(choice.kind, choice.grouping),
+                  'pptx-editor'
+                );
               }}
             />
           )}

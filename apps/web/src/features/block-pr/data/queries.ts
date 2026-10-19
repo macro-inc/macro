@@ -23,7 +23,7 @@ export function prForeignEntityQueryKey(id: string): string[] {
 
 /** Refetch one PR detail after it was merged. */
 export function invalidatePrForeignEntity(id: string): void {
-  void queryClient.invalidateQueries({ queryKey: prForeignEntityQueryKey(id) });
+  queryClient.invalidateQueries({ queryKey: prForeignEntityQueryKey(id) });
 }
 
 function prForeignEntityDataFromStored(

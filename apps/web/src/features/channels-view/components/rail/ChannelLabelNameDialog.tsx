@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   Button,
   Dialog,
@@ -63,7 +64,10 @@ function LabelNameDialog(
       visibleScrim
     >
       <Surface depth={2} class="rounded-xl text-ink">
-        <form onSubmit={(event) => void submit(event)} aria-busy={pending()}>
+        <form
+          onSubmit={(event) => fireAndForget(submit(event), 'channels-view')}
+          aria-busy={pending()}
+        >
           <div class="flex flex-col gap-3 px-5 py-4">
             <div class="flex flex-col gap-1">
               <Dialog.Title class="text-base font-semibold">

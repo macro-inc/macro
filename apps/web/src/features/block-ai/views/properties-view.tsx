@@ -11,6 +11,7 @@ import {
   type Info,
   type Paint,
 } from '@core/ai-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type PanelModel,
   type PanelPaint,
@@ -160,7 +161,7 @@ export function PropertiesView(props: {
       await fonts.ensure(family, style, text.text);
     }
     await editor.setText(patch, live);
-    void fonts.refresh();
+    fireAndForget(fonts.refresh(), 'ai-editor');
   };
 
   return (
@@ -173,59 +174,80 @@ export function PropertiesView(props: {
         ],
         googleFamilies: fonts.families().map((f) => f.family),
         preview: fonts.preview,
-        onOpen: () => void fonts.loadCatalog(),
+        onOpen: () => fireAndForget(fonts.loadCatalog(), 'ai-editor'),
       }}
       actions={{
-        onBounds: (patch, live) => void editor.setBounds(patch, live),
-        onRotation: (degrees, live) => void editor.setRotation(degrees, live),
+        onBounds: (patch, live) =>
+          fireAndForget(editor.setBounds(patch, live), 'ai-editor'),
+        onRotation: (degrees, live) =>
+          fireAndForget(editor.setRotation(degrees, live), 'ai-editor'),
         onFlip: (vertical) => {
           const box = viewer.selectionBounds();
           if (box)
-            void editor.transformSelection(
-              scaleAbout(vertical ? 1 : -1, vertical ? -1 : 1, center(box))
+            fireAndForget(
+              editor.transformSelection(
+                scaleAbout(vertical ? 1 : -1, vertical ? -1 : 1, center(box))
+              ),
+              'ai-editor'
             );
         },
         onFill: (hex, live) =>
-          void editor.setFill(
-            hex === null ? null : (solidPaint(hex) ?? null),
-            live
+          fireAndForget(
+            editor.setFill(
+              hex === null ? null : (solidPaint(hex) ?? null),
+              live
+            ),
+            'ai-editor'
           ),
         onStroke: (hex, live) => {
           if (hex === null) {
-            void editor.setStroke(null, live);
+            fireAndForget(editor.setStroke(null, live), 'ai-editor');
             return;
           }
           const paint = solidPaint(hex);
-          if (paint) void editor.updateStroke({ paint }, live);
+          if (paint)
+            fireAndForget(editor.updateStroke({ paint }, live), 'ai-editor');
         },
-        onStrokeProps: (patch, live) => void editor.updateStroke(patch, live),
+        onStrokeProps: (patch, live) =>
+          fireAndForget(editor.updateStroke(patch, live), 'ai-editor'),
         onOpacity: (value, live) =>
-          void editor.setNodes({ opacity: value }, viewer.selected(), live),
+          fireAndForget(
+            editor.setNodes({ opacity: value }, viewer.selected(), live),
+            'ai-editor'
+          ),
         onBlend: (mode) => {
           if (isBlendMode(mode))
-            void editor.setNodes({ blend: mode }, viewer.selected());
+            fireAndForget(
+              editor.setNodes({ blend: mode }, viewer.selected()),
+              'ai-editor'
+            );
         },
-        onText: (patch, live) => void changeText(patch, live),
-        onAlign: (how) => void editor.align(how),
-        onDistribute: (axis) => void editor.distribute(axis),
-        onBoolean: (mode) => void editor.booleanOp(mode),
-        onArrange: (how) => void editor.arrange(how),
-        onGroup: () => void editor.group(),
-        onUngroup: () => void editor.ungroup(),
-        onClip: () => void editor.makeClip(),
-        onRelease: () => void editor.releaseClip(),
-        onOutline: () => void editor.createOutlines(),
+        onText: (patch, live) =>
+          fireAndForget(changeText(patch, live), 'ai-editor'),
+        onAlign: (how) => fireAndForget(editor.align(how), 'ai-editor'),
+        onDistribute: (axis) =>
+          fireAndForget(editor.distribute(axis), 'ai-editor'),
+        onBoolean: (mode) => fireAndForget(editor.booleanOp(mode), 'ai-editor'),
+        onArrange: (how) => fireAndForget(editor.arrange(how), 'ai-editor'),
+        onGroup: () => fireAndForget(editor.group(), 'ai-editor'),
+        onUngroup: () => fireAndForget(editor.ungroup(), 'ai-editor'),
+        onClip: () => fireAndForget(editor.makeClip(), 'ai-editor'),
+        onRelease: () => fireAndForget(editor.releaseClip(), 'ai-editor'),
+        onOutline: () => fireAndForget(editor.createOutlines(), 'ai-editor'),
         onArtboard: (patch) => {
           const art = viewer.activeArtboard();
           if (!art) return;
-          void editor.apply([
-            {
-              op: 'setArtboard',
-              id: art.id,
-              name: patch.name,
-              rect: patch.rect && toEdges(patch.rect),
-            },
-          ]);
+          fireAndForget(
+            editor.apply([
+              {
+                op: 'setArtboard',
+                id: art.id,
+                name: patch.name,
+                rect: patch.rect && toEdges(patch.rect),
+              },
+            ]),
+            'ai-editor'
+          );
         },
       }}
     />

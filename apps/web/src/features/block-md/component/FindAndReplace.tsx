@@ -155,7 +155,7 @@ export function FindAndReplace(props: { hotkeyScope?: string } = {}) {
 
   // Search
 
-  const _performSearch = createCallback(async (jump: boolean) => {
+  const _performSearch = createCallback((jump: boolean) => {
     const query: string = findAndReplaceStore.searchInputText;
     if (!query) {
       setFindAndReplaceStore('listOffset', []);

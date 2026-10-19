@@ -8,6 +8,7 @@ import { zoomLabel } from '@app/features/block-fig/core/camera';
 import { controlOwnsKey } from '@app/features/block-fig/core/shortcuts';
 import type { EdgeRect } from '@core/ai-engine/types';
 import { IS_MAC } from '@core/constant/isMac';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   createEffect,
   createSignal,
@@ -118,10 +119,13 @@ export function AiEditorView() {
   let root!: HTMLDivElement;
 
   onMount(() => {
-    void (async () => {
-      await viewer.load();
-      await fonts.loadDocumentFonts();
-    })();
+    fireAndForget(
+      (async () => {
+        await viewer.load();
+        await fonts.loadDocumentFonts();
+      })(),
+      'ai-editor'
+    );
     if (document.activeElement === document.body)
       root.focus({ preventScroll: true });
   });
@@ -146,7 +150,7 @@ export function AiEditorView() {
   // ---- actions --------------------------------------------------------------
 
   const setTool = (tool: Tool) => {
-    if (editor.penPoints()) void editor.penFinish(false);
+    if (editor.penPoints()) fireAndForget(editor.penFinish(false), 'ai-editor');
     if (tool !== 'artboard') viewer.setArtboard(undefined);
     viewer.setTool(tool);
   };
@@ -154,7 +158,7 @@ export function AiEditorView() {
   /** Escape: finish the pen, drop the artboard or selection, then the tool. */
   const onEscape = () => {
     if (editor.penPoints()) {
-      void editor.penFinish(false);
+      fireAndForget(editor.penFinish(false), 'ai-editor');
       return;
     }
     if (viewer.artboard() !== undefined) {
@@ -178,10 +182,10 @@ export function AiEditorView() {
   const deleteKey = () => {
     const board = viewer.artboard();
     if (viewer.tool() === 'artboard' && board !== undefined) {
-      void editor.deleteArtboard(board);
+      fireAndForget(editor.deleteArtboard(board), 'ai-editor');
       return;
     }
-    void editor.deleteSelection();
+    fireAndForget(editor.deleteSelection(), 'ai-editor');
   };
 
   const run = (action: EditorAction) =>
@@ -199,35 +203,52 @@ export function AiEditorView() {
       .with('tool-artboard', () => setTool('artboard'))
       .with('tool-hand', () => setTool('hand'))
       .with('tool-zoom', () => setTool('zoom'))
-      .with('undo', () => void editor.undo())
-      .with('redo', () => void editor.redo())
-      .with('group', () => void editor.group())
-      .with('ungroup', () => void editor.ungroup())
-      .with('make-clip', () => void editor.makeClip())
-      .with('release-clip', () => void editor.releaseClip())
-      .with('bring-forward', () => void editor.arrange('forward'))
-      .with('send-backward', () => void editor.arrange('backward'))
-      .with('bring-to-front', () => void editor.arrange('front'))
-      .with('send-to-back', () => void editor.arrange('back'))
-      .with('duplicate', () => void editor.duplicate())
+      .with('undo', () => fireAndForget(editor.undo(), 'ai-editor'))
+      .with('redo', () => fireAndForget(editor.redo(), 'ai-editor'))
+      .with('group', () => fireAndForget(editor.group(), 'ai-editor'))
+      .with('ungroup', () => fireAndForget(editor.ungroup(), 'ai-editor'))
+      .with('make-clip', () => fireAndForget(editor.makeClip(), 'ai-editor'))
+      .with('release-clip', () =>
+        fireAndForget(editor.releaseClip(), 'ai-editor')
+      )
+      .with('bring-forward', () =>
+        fireAndForget(editor.arrange('forward'), 'ai-editor')
+      )
+      .with('send-backward', () =>
+        fireAndForget(editor.arrange('backward'), 'ai-editor')
+      )
+      .with('bring-to-front', () =>
+        fireAndForget(editor.arrange('front'), 'ai-editor')
+      )
+      .with('send-to-back', () =>
+        fireAndForget(editor.arrange('back'), 'ai-editor')
+      )
+      .with('duplicate', () => fireAndForget(editor.duplicate(), 'ai-editor'))
       .with('delete', deleteKey)
       .with('copy', () => editor.copy())
-      .with('cut', () => void editor.cut())
-      .with('paste', () => void editor.paste())
+      .with('cut', () => fireAndForget(editor.cut(), 'ai-editor'))
+      .with('paste', () => fireAndForget(editor.paste(), 'ai-editor'))
       .with('select-all', () => viewer.selectAll())
       .with('deselect', () => viewer.select([]))
       .with('toggle-outline', () => viewer.setOutlineView((o) => !o))
-      .with('create-outlines', () => void editor.createOutlines())
+      .with('create-outlines', () =>
+        fireAndForget(editor.createOutlines(), 'ai-editor')
+      )
       .with('zoom-in', () => viewer.zoomStep(1))
       .with('zoom-out', () => viewer.zoomStep(-1))
       .with('zoom-fit', () => viewer.fitArtboard())
       .with('zoom-fit-all', () => viewer.fitAll())
       .with('zoom-100', () => viewer.zoomTo(1))
-      .with('default-colors', () => void editor.defaultColors())
-      .with('swap-colors', () => void editor.swapColors())
+      .with('default-colors', () =>
+        fireAndForget(editor.defaultColors(), 'ai-editor')
+      )
+      .with('swap-colors', () =>
+        fireAndForget(editor.swapColors(), 'ai-editor')
+      )
       .with('escape', onEscape)
       .with('enter', () => {
-        if (editor.penPoints()) void editor.penFinish(false);
+        if (editor.penPoints())
+          fireAndForget(editor.penFinish(false), 'ai-editor');
         else {
           const only = viewer.infos();
           if (only.length === 1 && only[0].kind === 'text' && editor.enabled())
@@ -245,7 +266,7 @@ export function AiEditorView() {
         'nudge-down-10',
         (a) => {
           const o = nudgeOffset(a);
-          if (o) void editor.nudge(o.dx, o.dy);
+          if (o) fireAndForget(editor.nudge(o.dx, o.dy), 'ai-editor');
         }
       )
       .exhaustive();
@@ -336,11 +357,11 @@ export function AiEditorView() {
       f.type.startsWith('image/')
     );
     if (files.length === 0) {
-      void editor.paste();
+      fireAndForget(editor.paste(), 'ai-editor');
       return;
     }
     const v = viewer.visibleRect();
-    void editor.placeImages(files, center(v));
+    fireAndForget(editor.placeImages(files, center(v)), 'ai-editor');
   };
 
   // ---- menus --------------------------------------------------------------------
@@ -415,17 +436,17 @@ export function AiEditorView() {
   const fileItems = (): (MenuItem | 'divider')[] => [
     {
       label: 'Download .ai',
-      onSelect: () => void downloadAi(),
+      onSelect: () => fireAndForget(downloadAi(), 'ai-editor'),
       testId: 'ai-menu-download',
     },
     {
       label: 'Export artboard as PNG',
-      onSelect: () => void exportPng(1),
+      onSelect: () => fireAndForget(exportPng(1), 'ai-editor'),
       testId: 'ai-menu-export-png',
     },
     {
       label: 'Export artboard as PNG @2x',
-      onSelect: () => void exportPng(2),
+      onSelect: () => fireAndForget(exportPng(2), 'ai-editor'),
       testId: 'ai-menu-export-png-2x',
     },
     'divider',
@@ -444,17 +465,21 @@ export function AiEditorView() {
 
   const setStrokePaint = (hex: string | null, live: boolean) => {
     if (hex === null) {
-      void editor.setStroke(null, live);
+      fireAndForget(editor.setStroke(null, live), 'ai-editor');
       return;
     }
     const paint = solidPaint(hex);
     if (!paint) return;
-    if (viewer.infos().length > 0) void editor.updateStroke({ paint }, live);
+    if (viewer.infos().length > 0)
+      fireAndForget(editor.updateStroke({ paint }, live), 'ai-editor');
     else {
       const current = editor.appearance().stroke;
-      void editor.setStroke(
-        current ? { ...current, paint } : strokeOf(paint, 1),
-        live
+      fireAndForget(
+        editor.setStroke(
+          current ? { ...current, paint } : strokeOf(paint, 1),
+          live
+        ),
+        'ai-editor'
       );
     }
   };
@@ -539,18 +564,25 @@ export function AiEditorView() {
             onFill={
               editor.enabled()
                 ? (hex, live) =>
-                    void editor.setFill(
-                      hex === null ? null : (solidPaint(hex) ?? null),
-                      live
+                    fireAndForget(
+                      editor.setFill(
+                        hex === null ? null : (solidPaint(hex) ?? null),
+                        live
+                      ),
+                      'ai-editor'
                     )
                 : undefined
             }
             onStroke={editor.enabled() ? setStrokePaint : undefined}
             onSwap={
-              editor.enabled() ? () => void editor.swapColors() : undefined
+              editor.enabled()
+                ? () => fireAndForget(editor.swapColors(), 'ai-editor')
+                : undefined
             }
             onDefault={
-              editor.enabled() ? () => void editor.defaultColors() : undefined
+              editor.enabled()
+                ? () => fireAndForget(editor.defaultColors(), 'ai-editor')
+                : undefined
             }
           />
           <div class="pointer-events-none absolute top-3 left-1/2 z-10 flex -translate-x-1/2 flex-col items-center gap-2">
@@ -584,8 +616,8 @@ export function AiEditorView() {
             saveState={editor.saveState()}
             canUndo={editor.canUndo()}
             canRedo={editor.canRedo()}
-            onUndo={() => void editor.undo()}
-            onRedo={() => void editor.redo()}
+            onUndo={() => fireAndForget(editor.undo(), 'ai-editor')}
+            onRedo={() => fireAndForget(editor.redo(), 'ai-editor')}
             zoomLabel={zoomLabel(viewer.camera().zoom)}
             zoomItems={viewItems()}
             mac={IS_MAC}

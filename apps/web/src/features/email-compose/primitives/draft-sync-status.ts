@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type Accessor,
   createEffect,
@@ -26,7 +27,7 @@ export function createDraftSyncStatus(options: {
   );
   createEffect(() => {
     const unsubscribe = options.drafts.watchDrafts?.(() => {
-      void refetch();
+      fireAndForget(refetch(), 'email-compose');
     });
     onCleanup(() => unsubscribe?.());
   });
@@ -117,18 +118,21 @@ export function createDraftSyncStatus(options: {
         ? 'Unable to read local draft status. Retry to check the saved draft.'
         : undefined),
     retry: () => {
-      void run(
-        saved.error
-          ? async () => {
-              await refetch();
-            }
-          : deletePending()
-            ? options.discard
-            : options.retry
+      fireAndForget(
+        run(
+          saved.error
+            ? async () => {
+                await refetch();
+              }
+            : deletePending()
+              ? options.discard
+              : options.retry
+        ),
+        'email-compose'
       );
     },
     keepEditing: () => {
-      void run(options.retry);
+      fireAndForget(run(options.retry), 'email-compose');
     },
   };
 }

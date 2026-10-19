@@ -239,7 +239,7 @@ describe('createBuilder column writes under concurrent edits', () => {
       });
 
       // Add a multiple-choice question; its column is still being created.
-      void builder.addQuestion(multipleChoice);
+      const added = builder.addQuestion(multipleChoice);
       const questionId = builder.selectedId()!;
       const columnId = 'minted-2';
       const firstOptionId = 'minted-1';
@@ -251,9 +251,11 @@ describe('createBuilder column writes under concurrent edits', () => {
       });
 
       // Title, first option and a second option, all before anything lands.
-      void builder.renameQuestion(questionId, 'Will you attend?');
-      void builder.updateOption(questionId, firstOptionId, { label: 'Yes' });
-      void builder.addOption(questionId, 'No');
+      const edits = [
+        builder.renameQuestion(questionId, 'Will you attend?'),
+        builder.updateOption(questionId, firstOptionId, { label: 'Yes' }),
+        builder.addOption(questionId, 'No'),
+      ];
       builder.updateQuestion(questionId, { required: true });
       const shown = () => builder.column(columnId);
       expect(shown()?.name).toBe('Will you attend?');
@@ -302,6 +304,7 @@ describe('createBuilder column writes under concurrent edits', () => {
       server.readsInFlight.shift()!();
       await builder.settled();
       await vi.advanceTimersByTimeAsync(1000);
+      await Promise.all([added, ...edits]);
 
       expect(shown()).toEqual({
         id: columnId,
@@ -340,8 +343,8 @@ describe('createBuilder column writes under concurrent edits', () => {
         notify: { success: () => {}, failure: () => {} },
         mintId: () => 'minted',
       });
-      void builder.renameQuestion('q-name', 'Attending');
-      void builder.changeType('q-name', multipleChoice);
+      const renamed = builder.renameQuestion('q-name', 'Attending');
+      const changed = builder.changeType('q-name', multipleChoice);
       expect(builder.column(NAME_COLUMN)?.name).toBe('Attending');
       expect(builder.column(NAME_COLUMN)?.kind).toEqual({
         type: 'select',
@@ -360,6 +363,7 @@ describe('createBuilder column writes under concurrent edits', () => {
       server.readsInFlight.shift()!();
       await builder.settled();
       await vi.advanceTimersByTimeAsync(1000);
+      await Promise.all([renamed, changed]);
       expect(builder.column(NAME_COLUMN)?.name).toBe('Attending');
       expect(builder.layout()?.sections[0].questions[0].widget).toBe('choice');
       dispose();
@@ -385,7 +389,7 @@ describe('createBuilder column writes under concurrent edits', () => {
         },
         mintId: () => 'minted',
       });
-      void builder.changeType('q-name', shortAnswer);
+      const changed = builder.changeType('q-name', shortAnswer);
       const renamed = builder.renameQuestion('q-name', 'Full name');
       void builder.updateQuestion('q-name', { helpText: 'First and last' });
       expect(server.writesInFlight.map((write) => write.call)).toEqual([
@@ -397,6 +401,7 @@ describe('createBuilder column writes under concurrent edits', () => {
       expect(notices).toEqual(['The question couldn’t be renamed: Refused']);
       server.readsInFlight.shift()!();
       await builder.settled();
+      await changed;
       expect(builder.layout()?.sections[0].questions[0].helpText).toBe(
         'First and last'
       );

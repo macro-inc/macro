@@ -3,6 +3,7 @@ import { buildPostMessageSendPayload } from '@channel/Input/message-payload';
 import { useMessageBotMentionUsers } from '@channel/use-channel-bot-mention-users';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { useUserId } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { thrownResultErrorHasCode } from '@core/util/result';
 import CaretDown from '@phosphor/caret-down.svg';
 import CaretRight from '@phosphor/caret-right.svg';
@@ -126,8 +127,9 @@ export function EntityConversation(props: {
             <Show when={query.isError || unavailable()}>
               <button
                 onClick={() => {
-                  void query.refetch();
-                  if (props.targetId) void target.refetch();
+                  fireAndForget(query.refetch(), 'entity-conversation');
+                  if (props.targetId)
+                    fireAndForget(target.refetch(), 'entity-conversation');
                 }}
               >
                 Could not load comments. Retry
@@ -137,7 +139,9 @@ export function EntityConversation(props: {
               <button
                 class="text-xs"
                 disabled={query.isFetching}
-                onClick={() => void query.fetchNextPage()}
+                onClick={() =>
+                  fireAndForget(query.fetchNextPage(), 'entity-conversation')
+                }
               >
                 Load earlier comments
               </button>
@@ -162,7 +166,12 @@ export function EntityConversation(props: {
               <button
                 class="text-xs"
                 disabled={query.isFetching}
-                onClick={() => void query.fetchPreviousPage()}
+                onClick={() =>
+                  fireAndForget(
+                    query.fetchPreviousPage(),
+                    'entity-conversation'
+                  )
+                }
               >
                 Load newer comments
               </button>

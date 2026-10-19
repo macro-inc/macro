@@ -1,0 +1,47 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT t.message_id,COALESCE(t.provider_id,m.provider_id) AS provider_id,t.pending,\n            COALESCE((d.state IN ('pending','running') AND d.synced_revision=0) OR (m.provider_id IS NULL AND d.state<>'deleted'),false) AS \"awaiting_draft!\",\n            (COALESCE(d.delete_requested,false) OR COALESCE(d.state='deleted',false) OR COALESCE((m.mailbox_state->>'provider_missing')::bool,false)\n                OR EXISTS(SELECT 1 FROM email_draft_transfers transfer WHERE transfer.source_id=m.id AND transfer.state<>'preparing')) AS \"retired!\"\n            FROM email_mailbox_command_targets t JOIN email_messages m ON m.id=t.message_id AND m.link_id=$2\n            LEFT JOIN email_mailbox_drafts d ON d.message_id=m.id\n            WHERE t.command_id=$1 AND t.status='pending' ORDER BY t.message_id LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "provider_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "pending",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "awaiting_draft!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "retired!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "f211a86603b4de66749df896cbf5fa581f604a64c70875709370c1f6278a2721"
+}

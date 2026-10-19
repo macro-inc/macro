@@ -4,6 +4,7 @@ import { UserIcon } from '@core/component/UserIcon';
 import { enableEmailSignatures } from '@core/constant/featureFlags';
 import { useSettingsTabs } from '@core/constant/settingsTabsConfig';
 import { useEmail, useUserId } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { isRealNamePart, useOwnUserName } from '@queries/auth/user-name-self';
 import { Show, Suspense } from 'solid-js';
 import { useMobileSettings } from './context/mobile-settings';
@@ -52,7 +53,7 @@ export function MobileSettings() {
       onClose={settings.close}
       onNavigate={settings.selectPage}
       onLogout={() => {
-        void logout();
+        fireAndForget(logout(), 'logout');
       }}
       renderPage={(page) => <SettingsTabContent tab={page} />}
     />

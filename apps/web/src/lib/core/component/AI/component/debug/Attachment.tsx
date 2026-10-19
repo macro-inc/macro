@@ -1,5 +1,5 @@
 import type { Attachment, Model } from '@core/component/AI/types';
-
+import { fireAndForget } from '@core/util/fireAndForget';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import type { ChatMessageStream } from '@service-connection/stream';
 import { subscribe } from '@service-connection/stream';
@@ -201,7 +201,7 @@ function RequestDebugger(props: {
   };
 
   createEffect(() => {
-    if (props.go() > 0) makeRequest();
+    if (props.go() > 0) fireAndForget(makeRequest(), 'ai-debug');
   });
 
   return (
@@ -209,7 +209,7 @@ function RequestDebugger(props: {
       <Button
         variant="accent"
         onClick={() => {
-          makeRequest();
+          fireAndForget(makeRequest(), 'ai-debug');
         }}
       >
         Send

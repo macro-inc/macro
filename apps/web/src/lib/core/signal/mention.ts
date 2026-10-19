@@ -1,8 +1,8 @@
 import { ENABLE_MENTION_TRACKING } from '@core/constant/featureFlags';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { queryClient } from '@queries/client';
 import { refreshCrmAssociatedSoupQueries } from '@queries/soup/crm-association';
 import { attachmentReferencesKeys } from '@queries/storage/keys';
-
 import { type ItemType, storageServiceClient } from '@service-storage/client';
 import { getPermissionToken } from './token';
 
@@ -41,7 +41,8 @@ export async function trackMention(
   queryClient.invalidateQueries({
     queryKey: attachmentReferencesKeys.list(targetType, targetId).queryKey,
   });
-  if (isCrmTarget(targetType)) void refreshCrmAssociatedSoupQueries();
+  if (isCrmTarget(targetType))
+    fireAndForget(refreshCrmAssociatedSoupQueries(), 'mention-tracking');
   return response.value?.id;
 }
 
@@ -72,5 +73,6 @@ export async function untrackMention(
   queryClient.invalidateQueries({
     queryKey: attachmentReferencesKeys.list._def,
   });
-  if (isCrmTarget(targetType)) void refreshCrmAssociatedSoupQueries();
+  if (isCrmTarget(targetType))
+    fireAndForget(refreshCrmAssociatedSoupQueries(), 'mention-tracking');
 }

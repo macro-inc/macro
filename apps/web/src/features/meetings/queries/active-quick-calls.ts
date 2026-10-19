@@ -1,4 +1,5 @@
 import { getMeetingUrl } from '@channel/Call/call-link';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { thrownResultErrorHasCode } from '@core/util/result';
 import { useActiveMeetingsQuery } from '@queries/call/meetings';
 import type { Accessor } from 'solid-js';
@@ -24,7 +25,7 @@ export function useActiveQuickCallsSource(
     error: () =>
       userId() && query.isError ? 'Could not load active calls.' : undefined,
     refresh: () => {
-      void query.refetch();
+      fireAndForget(query.refetch(), 'meetings');
     },
   };
 }

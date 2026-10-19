@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import type { storageServiceClient } from '@service-storage/client';
 import type { ImportPage } from '@service-storage/generated/schemas/importPage';
@@ -156,7 +157,7 @@ export function slackImportMutationOptions(
 ): ImportMutationOptions {
   function updated(_: unknown, scope: ImportScope): void {
     // Cache work must not turn a successful write into a failed command.
-    void invalidateSlackImport(cache, scope);
+    fireAndForget(invalidateSlackImport(cache, scope), 'slack-import');
   }
   return {
     create: {

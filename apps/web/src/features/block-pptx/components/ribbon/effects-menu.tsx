@@ -9,6 +9,7 @@ import type {
   GlowSpec,
   ShadowSpec,
 } from '@core/pptx-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import CaretRight from '@phosphor/caret-right.svg';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import {
@@ -658,7 +659,7 @@ export function ShapeEffectsMenu(props: {
                   testPrefix="pptx-effect-shadow"
                   onPick={(shadow) => {
                     close();
-                    void c.setShapeEffects({ shadow });
+                    fireAndForget(c.setShapeEffects({ shadow }), 'pptx-editor');
                   }}
                   onOptions={options(close)}
                 />
@@ -681,7 +682,10 @@ export function ShapeEffectsMenu(props: {
                   testPrefix="pptx-effect-reflection"
                   onPick={(reflection) => {
                     close();
-                    void c.setShapeEffects({ reflection });
+                    fireAndForget(
+                      c.setShapeEffects({ reflection }),
+                      'pptx-editor'
+                    );
                   }}
                   onOptions={options(close)}
                 />
@@ -699,7 +703,7 @@ export function ShapeEffectsMenu(props: {
                   testPrefix="pptx-effect-glow"
                   onPick={(glow) => {
                     close();
-                    void c.setShapeEffects({ glow });
+                    fireAndForget(c.setShapeEffects({ glow }), 'pptx-editor');
                   }}
                   onOptions={options(close)}
                 />
@@ -722,9 +726,12 @@ export function ShapeEffectsMenu(props: {
                   testPrefix="pptx-effect-soft-edge"
                   onPick={(size) => {
                     close();
-                    void c.setShapeEffects({
-                      softEdge: size === 'none' ? 'none' : { sizePt: size },
-                    });
+                    fireAndForget(
+                      c.setShapeEffects({
+                        softEdge: size === 'none' ? 'none' : { sizePt: size },
+                      }),
+                      'pptx-editor'
+                    );
                   }}
                   onOptions={options(close)}
                 />
@@ -787,7 +794,7 @@ export function TextEffectsMenu() {
                   testPrefix="pptx-text-effect-shadow"
                   onPick={(shadow) => {
                     close();
-                    void c.setTextEffects({ shadow });
+                    fireAndForget(c.setTextEffects({ shadow }), 'pptx-editor');
                   }}
                 />
               ),
@@ -805,7 +812,7 @@ export function TextEffectsMenu() {
                   testPrefix="pptx-text-effect-glow"
                   onPick={(glow) => {
                     close();
-                    void c.setTextEffects({ glow });
+                    fireAndForget(c.setTextEffects({ glow }), 'pptx-editor');
                   }}
                 />
               ),

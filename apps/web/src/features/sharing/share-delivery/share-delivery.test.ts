@@ -211,6 +211,34 @@ describe('useShareForm', () => {
     expect(result?.open).toBe(navigate);
   });
 
+  it('posts a pull request as a foreign entity and grants nothing', async () => {
+    mocks.sendToChannel.mockResolvedValue({
+      channelId: 'channel-1',
+      navigateToChannel: vi.fn(),
+    });
+    const form = mountForm(
+      [
+        toShareItem({
+          id: 'pr-1',
+          kind: 'foreign',
+          name: 'Fix the menu',
+          canGrant: false,
+        }),
+      ],
+      'forward_to_channel'
+    );
+    form.setRecipients([channel('channel-1')]);
+
+    expect(form.level()).toBeUndefined();
+
+    await form.submit();
+
+    expect(
+      mocks.sendToChannel.mock.calls.map(([message]) => message.attachments)
+    ).toEqual([[{ entity_type: 'foreign_entity', entity_id: 'pr-1' }]]);
+    expect(mocks.changeChannelAccess).not.toHaveBeenCalled();
+  });
+
   it('runs each request in the span of its phase', async () => {
     const ranIn: Record<string, string | undefined> = {};
     mocks.resolvePeopleChannel.mockImplementation(async (_userIds, trace) => {

@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended('email.outlook.mutation-claims',0))",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "locked",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "1d14b1adaee1153aceb10500dbae64e59b9758cbf373c03bc54d5d2aed3f9dc3"
+}

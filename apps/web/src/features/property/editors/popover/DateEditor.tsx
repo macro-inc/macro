@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createSignal, Show } from 'solid-js';
 import { useProperty } from '../../core/context';
 import type { DateProperty } from '../../types';
@@ -44,7 +45,7 @@ function DateEditorBody() {
         property={property}
         selectedDate={selectedDate()}
         onSelectDate={(date) => {
-          commit(date);
+          fireAndForget(commit(date), 'property-editor');
         }}
         onClose={() => ctx.closeEditor()}
       />

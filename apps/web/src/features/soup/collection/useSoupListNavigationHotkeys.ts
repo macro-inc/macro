@@ -2,6 +2,7 @@ import type { ListController, ListDataSource } from '@app/components/list';
 import { isListViewID, type ListView } from '@app/constants/list-views';
 import type { SplitHandle } from '@components/app/split-layout/layoutManager';
 import { registerHotkey } from '@core/hotkey/hotkeys';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { EntityData } from '@entity';
 import { registerListNavigationSource } from './list-navigation-source';
 import type { SoupRow } from './types';
@@ -71,7 +72,7 @@ export function useSoupListNavigationHotkeys<TEntity extends EntityData>(
       options.dataSource.hasMore() &&
       !options.dataSource.isLoadingMore()
     ) {
-      void options.dataSource.loadMore();
+      fireAndForget(options.dataSource.loadMore(), 'soup-list-navigation');
     }
 
     return true;

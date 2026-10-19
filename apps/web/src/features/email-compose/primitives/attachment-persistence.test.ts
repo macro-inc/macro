@@ -20,6 +20,7 @@ function setup(
     const services = {
       uploadAttachments: vi.fn(uploadAttachments),
       addForwardedAttachments: vi.fn(async () => {}),
+      completeAttachment: async () => {},
       removeAttachment: vi.fn(async () => {}),
       removeForwardedAttachment: vi.fn(async () => {}),
     };
@@ -99,8 +100,10 @@ describe('draft attachment persistence', () => {
     };
     state.form.attachments.add(local);
     state.form.attachments.add(forwarded);
-    state.persistence.remove(local);
-    state.persistence.remove(forwarded);
+    const removals = [
+      state.persistence.remove(local),
+      state.persistence.remove(forwarded),
+    ];
     expect(state.form.attachments.list()).toEqual([]);
     expect(state.services.removeAttachment).toHaveBeenCalledWith({
       draftId: 'draft',
@@ -112,7 +115,7 @@ describe('draft attachment persistence', () => {
       attachmentId: 'forwarded',
       inboxId: 'secondary-inbox',
     });
-    await Promise.resolve();
+    await Promise.all(removals);
   });
 
   it('re-uploads files after detach and ignores late callbacks from the obsolete upload', async () => {

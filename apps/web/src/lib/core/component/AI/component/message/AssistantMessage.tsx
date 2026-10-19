@@ -4,6 +4,7 @@ import { replaceCitations } from '@core/component/LexicalMarkdown/citationsUtils
 import { ENABLE_TTFT } from '@core/constant/featureFlags';
 import { createMarkdownFile } from '@core/util/create';
 import { PulsingStar } from '@entity/components/PulsingStar';
+import { Telemetry } from '@macro-inc/observability';
 import WideFileMd from '@phosphor/file.svg';
 import CheckIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid';
 import ClipboardIcon from '@phosphor-icons/core/bold/clipboard-bold.svg?component-solid';
@@ -185,7 +186,13 @@ export function AssistantMessage(props: {
                       : 'Edit assistant response in Notes'
                   }
                   onClick={() => {
-                    !isLoading() && handleEditInMarkdown();
+                    if (isLoading()) return;
+                    handleEditInMarkdown().catch((error) => {
+                      setIsLoading(false);
+                      Telemetry.error(error, {
+                        surface: 'assistant-message-edit-in-notes',
+                      });
+                    });
                   }}
                 >
                   <Show

@@ -13,6 +13,7 @@
  */
 
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   subscribeAgentSessionQueue,
   subscribeSocketSessionStarted,
@@ -89,7 +90,7 @@ export function createQueueController(options: {
     on(options.sessionId, () => {
       socketAuthoritative = false;
       setQueued([]);
-      void baseline();
+      fireAndForget(baseline(), 'agent-queue');
     })
   );
 
@@ -108,7 +109,7 @@ export function createQueueController(options: {
   onCleanup(
     subscribeSocketSessionStarted(() => {
       socketAuthoritative = false;
-      baseline();
+      fireAndForget(baseline(), 'agent-queue');
     })
   );
 

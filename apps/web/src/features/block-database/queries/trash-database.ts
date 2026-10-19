@@ -49,10 +49,10 @@ export function trashDatabase(
           (previous: ListedDatabase[] | undefined) =>
             previous?.filter(({ database }) => database.id !== databaseId)
         );
-        void queryClient.invalidateQueries({
+        queryClient.invalidateQueries({
           queryKey: databasesKeys.list.queryKey,
         });
-        void queryClient.invalidateQueries({
+        queryClient.invalidateQueries({
           queryKey: databasesKeys.detail(databaseId).queryKey,
           refetchType: 'none',
         });

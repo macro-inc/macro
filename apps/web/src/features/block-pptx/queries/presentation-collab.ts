@@ -5,6 +5,7 @@
  * The editor runs over it with `openCollaborativePresentation`.
  */
 
+import { fireAndForget } from '@core/util/fireAndForget';
 import { schema } from '@loro-mirror/core';
 import { createAwareness } from '@macro-inc/collaboration/collab/awareness';
 import type { Chatter } from '@macro-inc/collaboration/collab/chatter';
@@ -227,7 +228,7 @@ export function createPresentationCollabSession(
       started = true;
     }
     setState({ t: 'ready', doc: manager.doc });
-    if (options.canEdit()) void wal.flush();
+    if (options.canEdit()) fireAndForget(wal.flush(), 'pptx-collab');
   }
 
   async function accept(initial: InitialSync) {

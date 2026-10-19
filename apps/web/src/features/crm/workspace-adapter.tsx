@@ -2,6 +2,7 @@ import { usePreference } from '@app/preferences/use-preference';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { idToDisplayName } from '@core/user/util';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { type EntityData, isCrmCompanyEntity } from '@entity';
 import { COMPANY_STAGE_OPTIONS } from '@entity/utils/task-properties';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
@@ -313,11 +314,14 @@ export function createCrmWorkspace(
       focus: () => panel.panelRef()?.focus(),
       captureEntryState: () => panel.handle.captureEntryState(),
       openCompany: (entity, newSplit) => {
-        void openEntityInSplitFromUnifiedList(entity, {
-          openInNewSplit: newSplit,
-          splitHandle: panel.handle,
-          referredFrom: 'companies',
-        });
+        fireAndForget(
+          openEntityInSplitFromUnifiedList(entity, {
+            openInNewSplit: newSplit,
+            splitHandle: panel.handle,
+            referredFrom: 'companies',
+          }),
+          'open-entity-in-split'
+        );
       },
       openSettings: () => openSettings('CRM'),
       openTeamSettings: () => openSettings('Team'),

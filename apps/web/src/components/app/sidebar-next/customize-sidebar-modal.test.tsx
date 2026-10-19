@@ -44,6 +44,7 @@ function Modal() {
       onOpenChange={() => {}}
       gates={{
         showCalendar: true,
+        showScheduling: true,
         showCustomers: true,
         showCalls: true,
         showReviews: true,
@@ -130,5 +131,40 @@ describe('sidebar customization drag sorting', () => {
         })
       ).checked
     ).toBe(true);
+  });
+
+  it('keeps Scheduling hidden for existing preferences until explicitly enabled', async () => {
+    localStorage.setItem(
+      'macro:sidebar:prefs',
+      JSON.stringify({ hidden: ['reviews'], order: ['tasks', 'mail'] })
+    );
+    const mount = () =>
+      render(() => (
+        <SidebarPrefsProvider>
+          <Modal />
+        </SidebarPrefsProvider>
+      ));
+    mount();
+    const scheduling = await screen.findByRole<HTMLInputElement>('checkbox', {
+      name: 'Scheduling',
+    });
+    expect(scheduling.checked).toBe(false);
+    expect(
+      screen.getByRole<HTMLInputElement>('checkbox', { name: 'Calls' }).checked
+    ).toBe(true);
+    fireEvent.click(scheduling);
+    expect(scheduling.checked).toBe(true);
+    cleanup();
+    mount();
+    expect(
+      (
+        await screen.findByRole<HTMLInputElement>('checkbox', {
+          name: 'Scheduling',
+        })
+      ).checked
+    ).toBe(true);
+    const stored = JSON.parse(localStorage.getItem('macro:sidebar:prefs')!);
+    expect(stored.order).toEqual(['tasks', 'mail']);
+    expect(stored.hidden).toEqual(['reviews']);
   });
 });

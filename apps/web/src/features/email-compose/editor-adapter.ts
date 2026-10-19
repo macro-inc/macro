@@ -10,6 +10,7 @@ import {
   isFileUploadEntry,
   type UploadInput,
 } from '@core/util/upload';
+import { Telemetry } from '@macro-inc/observability';
 import { type FocusableElement, tabbable } from 'tabbable';
 import type { ComposeBodyActions } from './context/editor-capabilities';
 import { makeAttachmentPublic } from './make-attachment-public';
@@ -83,7 +84,7 @@ export function createComposeBodyActions(): ComposeBodyActions {
           ),
           onVideos
         )
-      );
+      ).catch((error) => Telemetry.error(error, { surface: 'email-compose' }));
     },
   };
 }

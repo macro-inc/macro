@@ -48,6 +48,7 @@ export type {
   ShapeKind,
   SurfaceItem,
 } from './model';
+export type { ObjectSnapStats, SnapGuide } from './object-snapping';
 export {
   isSortKey,
   type LayerPosition,

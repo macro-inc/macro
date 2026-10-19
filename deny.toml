@@ -91,6 +91,11 @@ ignore = [
   { id = "RUSTSEC-2026-0258", reason = "h2 0.3 (via Stripe 0.41's hyper-0.14 client) has no patched release; the hyper 1.x line is bumped to the patched 0.4.16" },
   { id = "RUSTSEC-2026-0346", reason = "Temporarily accepted for rustls 0.21 pinned by Stripe 0.41; other consumers use patched rustls 0.23.46" },
   { id = "RUSTSEC-2026-0349", reason = "Temporarily accepted for rustls 0.21 pinned by Stripe 0.41; other consumers use patched rustls 0.23.46" },
+  # zip 3.0.0 remains only as a utoipa-swagger-ui 9 build-dependency; workspace crates use patched zip 9.
+  # Revisit: drop these when a released utoipa-swagger-ui depends on zip >= 9 (juhaku/utoipa#1645).
+  { id = "RUSTSEC-2026-0367", reason = "zip 3.0.0 is a utoipa-swagger-ui build-dependency that reads its vendored Swagger UI archive entry by entry and never calls extract(); no release uses patched zip >= 9" },
+  { id = "RUSTSEC-2026-0368", reason = "zip 3.0.0 is a utoipa-swagger-ui build-dependency that reads its vendored Swagger UI archive entry by entry and never calls extract(); no release uses patched zip >= 9" },
+  { id = "RUSTSEC-2026-0369", reason = "zip 3.0.0 is a utoipa-swagger-ui build-dependency that reads its vendored Swagger UI archive entry by entry and never calls extract(); no release uses patched zip >= 9" },
   #{ id = "RUSTSEC-0000-0000", reason = "you can specify a reason the advisory is ignored" },
   #"a-crate-that-is-yanked@0.1.1", # you can also ignore yanked crate versions if you wish
   #{ crate = "a-crate-that-is-yanked@0.1.1", reason = "you can specify why you are ignoring the yanked crate" },

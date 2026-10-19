@@ -1,4 +1,5 @@
 import { SLACK_CONNECT_SLUG } from '@core/pipedream/slugs';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { connectPipedreamApp } from '@queries/pipedream-connectors';
 import { Button } from '@ui';
 import { createSignal, onCleanup, onMount, Show } from 'solid-js';
@@ -38,7 +39,7 @@ export function SlackChannelImportFlow(props: {
     }
   }
   onMount(() => {
-    if (!props.connected) void connect();
+    if (!props.connected) fireAndForget(connect(), 'slack-import');
   });
 
   return (
@@ -66,7 +67,7 @@ export function SlackChannelImportFlow(props: {
             <Button
               variant="accent"
               disabled={busy()}
-              onClick={() => void connect()}
+              onClick={() => fireAndForget(connect(), 'slack-import')}
             >
               {busy() ? 'Connecting Slack…' : 'Connect Slack to continue'}
             </Button>

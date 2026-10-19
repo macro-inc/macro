@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM email_mailbox_lifecycle_outbox WHERE link_id=$1 AND payload->>'kind' IN ('gmail_history','gmail_backfill')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "606719b961b2ab1264bcd2f0bfc564dd7fa34dffe8a050abdca48a6ef337f444"
+}

@@ -31,7 +31,7 @@
 //! `IOS_RELEASE_DOPPLER_TOKEN` secret), shared with the release workflow.
 //!
 //! The `skip-ios-update` label bypasses the gate for tauri changes that don't
-//! break the native/web contract; the `iOS Native Check Label` workflow
+//! break the native/web contract; the `Native Check Label` workflow
 //! re-runs this job when that label is added or removed. The labels are read
 //! through the API at run time, not from `github.event`: a re-run keeps the
 //! payload of the event that started the run, so the event's label list is
@@ -118,10 +118,15 @@ fn cache_wasm_version_bump() -> Step<Run> {
             set -euo pipefail
             manifest=crates/client/cache-wasm/Cargo.toml
             version() { git show "$1:$manifest" 2>/dev/null | sed -n 's/^version *= *"\([^"]*\)".*/\1/p' | head -1 | grep . || echo none; }
-            git fetch -q --depth=1 origin "$BASE_BRANCH"
-            base=$(version "origin/$BASE_BRANCH")
+            # The merge commit's first parent is the main this merge result was
+            # built on; a fresh fetch of main could be newer and misattribute
+            # its bumps to the PR.
+            base_sha=$(git cat-file -p HEAD | sed -n 's/^parent //p' | head -1)
+            git fetch -q --depth=1 origin "$base_sha"
+            echo "base_sha=${base_sha}" >> "$GITHUB_OUTPUT"
+            base=$(version "$base_sha")
             head=$(version HEAD)
-            echo "cache-wasm version: base ${base}, merge result ${head}"
+            echo "cache-wasm version: base ${base} (${base_sha:0:10}), merge result ${head}"
             if [[ "$base" != "$head" ]]; then
               echo "bumped=true" >> "$GITHUB_OUTPUT"
               echo "The client cache wasm version moved; the native app compiles that cache, so this counts as a native change."
@@ -131,7 +136,6 @@ fn cache_wasm_version_bump() -> Step<Run> {
         "#})
         .id("cache-wasm")
         .shell("bash")
-        .add_env(("BASE_BRANCH", "${{ github.base_ref }}"))
 }
 
 /// The PR's labels as they are now. `github.event.pull_request.labels` is
@@ -170,16 +174,11 @@ fn setup_bun() -> Step<Use> {
 
 fn verify_bump() -> Step<Run> {
     Step::new("Verify iOS release numbers were bumped")
-        .run(indoc::indoc! {r#"
-            set -euo pipefail
-            git fetch --depth=1 origin "$BASE_BRANCH"
-            bun scripts/ios-verify-native-bump.mjs
-        "#})
+        .run("bun scripts/ios-verify-native-bump.mjs")
         .if_condition(gated())
-        .shell("bash")
         .working_directory(xtask_paths::repo_dir!("apps/web"))
-        .add_env(("BASE_BRANCH", "${{ github.base_ref }}"))
-        .add_env(("BASE_REF", "origin/${{ github.base_ref }}"))
+        // The base the merge result was built on (fetched by the cache-wasm step).
+        .add_env(("BASE_REF", "${{ steps.cache-wasm.outputs.base_sha }}"))
 }
 
 /// Exports `APPLE_API_KEY` / `APPLE_API_ISSUER` via `GITHUB_ENV` and writes
@@ -204,6 +203,7 @@ fn require_live_version() -> Step<Run> {
     Step::new("Require the App Store release to be live")
         .run(concat!(
             include_str!("../scripts/ios_native_tree.sh"),
+            include_str!("../scripts/pr_merge_commit.sh"),
             include_str!("../scripts/ios_native_check_live.sh")
         ))
         .if_condition(gated())

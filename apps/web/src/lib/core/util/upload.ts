@@ -21,6 +21,7 @@ import {
   blockAcceptsFileExtension,
 } from '@core/constant/allBlocks';
 import { heicConversionService } from '@core/heic/service';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { holdAutomaticReload } from '@core/util/reloadForNewerBuild';
 import {
   createStaticUploadFile,
@@ -115,7 +116,7 @@ function openUploadPicker(
     cleanup();
     // Only call onSelect if there are files selected
     if (files.length > 0) {
-      void onSelect(files);
+      fireAndForget(onSelect(files), 'file-upload');
     }
   };
 
@@ -622,9 +623,12 @@ export async function handleFileFolderDrop(
   ]);
 
   if (folderEntries.length > 0) {
-    toast.promise(resultPromise, {
-      loading: 'Preparing folder upload...',
-    });
+    fireAndForget(
+      toast.promise(resultPromise, {
+        loading: 'Preparing folder upload...',
+      }),
+      'file-upload'
+    );
   }
 
   const results = await resultPromise;
@@ -664,9 +668,12 @@ export async function handleFolderSelect(
   const resultPromise = Promise.allSettled(zipEntryPromises);
 
   if (zipEntryPromises.length > 0) {
-    toast.promise(resultPromise, {
-      loading: 'Preparing folder upload...',
-    });
+    fireAndForget(
+      toast.promise(resultPromise, {
+        loading: 'Preparing folder upload...',
+      }),
+      'file-upload'
+    );
   }
 
   const results = await resultPromise;

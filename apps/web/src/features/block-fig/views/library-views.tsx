@@ -5,6 +5,7 @@
  */
 
 import type { PublishedAsset } from '@core/fig-engine/library-types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowsClockwise from '@phosphor/arrows-clockwise.svg';
 import BookOpen from '@phosphor/book-open.svg';
 import { createSignal, For, Show } from 'solid-js';
@@ -33,7 +34,7 @@ export function LibrariesButton(props: {
   const openDialog = () => {
     setOpen(true);
     libs.watchStatus(true);
-    void libs.refresh();
+    fireAndForget(libs.refresh(), 'fig-libraries');
   };
   const closeDialog = () => {
     setOpen(false);
@@ -78,7 +79,9 @@ export function LibrariesButton(props: {
           enabled={libs.uses().enabled}
           loaded={libs.loaded()}
           canEdit={libs.canEdit()}
-          onToggle={(library, on) => void libs.setEnabled(library, on)}
+          onToggle={(library, on) =>
+            fireAndForget(libs.setEnabled(library, on), 'fig-libraries')
+          }
           onPublish={() => setPublishing('open')}
           detached={detachedCopies(libs.uses(), libs.published())}
           onClose={closeDialog}
@@ -89,7 +92,7 @@ export function LibrariesButton(props: {
           <PublishDialog
             status={status()}
             publishing={publishing() === 'busy'}
-            onPublish={(note) => void publish(note)}
+            onPublish={(note) => fireAndForget(publish(note), 'fig-libraries')}
             onClose={() => setPublishing(undefined)}
           />
         )}
@@ -132,8 +135,15 @@ export function LibrarySections(props: {
             canEdit={libs.canEdit()}
             hasSelection={props.hasSelection}
             thumbnail={(a) => libs.assetThumbnail(library.id, a.id)}
-            onInsert={(a) => void libs.insertComponent(library.id, a)}
-            onApply={(a) => void apply(library.id, a)}
+            onInsert={(a) =>
+              fireAndForget(
+                libs.insertComponent(library.id, a),
+                'fig-libraries'
+              )
+            }
+            onApply={(a) =>
+              fireAndForget(apply(library.id, a), 'fig-libraries')
+            }
           />
         );
       }}
@@ -166,7 +176,7 @@ export function LibraryUpdates(props: { libraries: FigLibraries }) {
           updating={libs.updating()}
           before={(u) => libs.copyThumbnail(u.copyId)}
           after={(u) => libs.assetThumbnail(u.library, u.assetId)}
-          onUpdate={(list) => void update(list)}
+          onUpdate={(list) => fireAndForget(update(list), 'fig-libraries')}
           onClose={() => libs.setReviewing(false)}
         />
       </Show>

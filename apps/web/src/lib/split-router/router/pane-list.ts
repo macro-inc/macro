@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { match } from 'ts-pattern';
 import type { OpenTarget, Placement } from '../panes/types';
 import { canonicalRoute, type SplitRoutesManifest } from '../routes/manifest';
@@ -276,18 +277,21 @@ export function createPaneList(options: {
     },
 
     move(pane: PaneId, to: number): void {
-      void runner.act(undefined, () => {
-        runner.commitNow({
-          cause: 'navigate',
-          targets: [],
-          apply: () => {
-            const moved = panes.move(pane, to);
-            if (moved) url.write('push');
+      fireAndForget(
+        runner.act(undefined, () => {
+          runner.commitNow({
+            cause: 'navigate',
+            targets: [],
+            apply: () => {
+              const moved = panes.move(pane, to);
+              if (moved) url.write('push');
 
-            return committed(pane);
-          },
-        });
-      });
+              return committed(pane);
+            },
+          });
+        }),
+        'split-router'
+      );
     },
   };
 }

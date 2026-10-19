@@ -3,6 +3,7 @@ import { SidePanel } from '@components/app/side-panel';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { AgentSessionMentionLabel } from '@core/component/LexicalMarkdown/component/decorator/AgentSessionMentionLabel';
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import PlusIcon from '@phosphor/plus.svg';
 import XIcon from '@phosphor/x.svg';
 import { useAgentSessionMentionPreview } from '@queries/agent-session/mentions';
@@ -168,7 +169,7 @@ export function PrAgentSessionsSection(props: {
           <Button
             variant="ghost"
             size="xs"
-            onClick={() => void sessions.refetch()}
+            onClick={() => fireAndForget(sessions.refetch(), 'pr-side-panel')}
           >
             Retry
           </Button>

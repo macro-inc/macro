@@ -3,6 +3,7 @@ import {
   type NativeStagedUploadSource,
   uploadNativeStagedFileToPresignedUrl,
 } from '@core/mobile/nativeStagedUpload';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { invalidateUserQuota } from '@queries/auth';
 import { staticFileClient } from '@service-static-files/client';
 import { contentHash } from './hash';
@@ -71,7 +72,7 @@ export async function createStaticUploadFile(
     file_name: file.name,
     content_type: contentType,
   });
-  invalidateUserQuota();
+  fireAndForget(invalidateUserQuota(), 'file-upload');
   if (result.isErr()) throw new Error('Failed to upload file');
 
   const { upload_url, id } = result.value;

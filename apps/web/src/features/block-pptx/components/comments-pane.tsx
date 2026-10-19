@@ -9,6 +9,7 @@ import type {
   CommentOutline,
   CommentReplyOutline,
 } from '@core/pptx-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { Popover } from '@kobalte/core/popover';
 import ChatText from '@phosphor/chat-text.svg';
 import CheckCircle from '@phosphor/check-circle.svg';
@@ -116,7 +117,7 @@ function CommentBox(props: {
       data-testid={props.submitTestId}
       onClick={(e: MouseEvent) => {
         e.stopPropagation();
-        void submit();
+        fireAndForget(submit(), 'pptx-editor');
       }}
     >
       <PaperPlaneRight />
@@ -149,7 +150,7 @@ function CommentBox(props: {
           e.stopPropagation();
           if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
             e.preventDefault();
-            void submit();
+            fireAndForget(submit(), 'pptx-editor');
           } else if (e.key === 'Escape') {
             e.preventDefault();
             props.onCancel?.();
@@ -335,7 +336,7 @@ export function CommentsPane(props: {
                 testId="pptx-comment-delete"
                 onClick={() => {
                   close();
-                  void c.remove(t().id);
+                  fireAndForget(c.remove(t().id), 'pptx-editor');
                 }}
               />
               <Show when={!t().legacy}>
@@ -349,7 +350,10 @@ export function CommentsPane(props: {
                   }
                   onClick={() => {
                     close();
-                    void c.resolve(t().id, !t().resolved);
+                    fireAndForget(
+                      c.resolve(t().id, !t().resolved),
+                      'pptx-editor'
+                    );
                   }}
                 />
               </Show>
@@ -388,7 +392,7 @@ export function CommentsPane(props: {
                         testId="pptx-comment-delete"
                         onClick={() => {
                           close();
-                          void c.remove(reply.id);
+                          fireAndForget(c.remove(reply.id), 'pptx-editor');
                         }}
                       />
                     </>

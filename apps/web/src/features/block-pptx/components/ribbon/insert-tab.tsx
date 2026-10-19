@@ -3,6 +3,7 @@
  * boxes, links.
  */
 
+import { fireAndForget } from '@core/util/fireAndForget';
 import ChatText from '@phosphor/chat-text.svg';
 import FilmStrip from '@phosphor/film-strip.svg';
 import Graph from '@phosphor/graph.svg';
@@ -88,7 +89,7 @@ export function InsertTab(props: {
         <RibbonTextButton
           label="New slide"
           disabled={ro()}
-          onClick={() => void c.addSlide()}
+          onClick={() => fireAndForget(c.addSlide(), 'pptx-editor')}
         >
           <Plus />
           New slide
@@ -106,7 +107,7 @@ export function InsertTab(props: {
                     label={layout.name}
                     onClick={() => {
                       close();
-                      void c.addSlide(layout.name);
+                      fireAndForget(c.addSlide(layout.name), 'pptx-editor');
                     }}
                   />
                 )}
@@ -127,7 +128,7 @@ export function InsertTab(props: {
             <TableGridPicker
               onPick={(rows, cols) => {
                 close();
-                void c.insertTable(rows, cols);
+                fireAndForget(c.insertTable(rows, cols), 'pptx-editor');
               }}
             />
           )}
@@ -151,7 +152,8 @@ export function InsertTab(props: {
           onChange={(e) => {
             const file = e.currentTarget.files?.[0];
             e.currentTarget.value = '';
-            if (file) void c.insertImage(file, file.name);
+            if (file)
+              fireAndForget(c.insertImage(file, file.name), 'pptx-editor');
           }}
         />
       </RibbonGroup>
@@ -167,7 +169,7 @@ export function InsertTab(props: {
               load={env.presetPaths}
               onPick={(preset) => {
                 close();
-                void c.insertShape(preset);
+                fireAndForget(c.insertShape(preset), 'pptx-editor');
               }}
             />
           )}
@@ -234,7 +236,8 @@ export function InsertTab(props: {
           onChange={(e) => {
             const file = e.currentTarget.files?.[0];
             e.currentTarget.value = '';
-            if (file) void c.insertMedia(file, 'video');
+            if (file)
+              fireAndForget(c.insertMedia(file, 'video'), 'pptx-editor');
           }}
         />
         <input
@@ -246,7 +249,8 @@ export function InsertTab(props: {
           onChange={(e) => {
             const file = e.currentTarget.files?.[0];
             e.currentTarget.value = '';
-            if (file) void c.insertMedia(file, 'audio');
+            if (file)
+              fireAndForget(c.insertMedia(file, 'audio'), 'pptx-editor');
           }}
         />
       </RibbonGroup>
@@ -267,7 +271,7 @@ export function InsertTab(props: {
           label="Text box"
           disabled={ro()}
           data-testid="pptx-insert-textbox"
-          onClick={() => void c.insertTextBox()}
+          onClick={() => fireAndForget(c.insertTextBox(), 'pptx-editor')}
         >
           <TextT />
           Text box

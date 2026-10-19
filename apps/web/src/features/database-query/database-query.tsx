@@ -1,6 +1,7 @@
 import { useHasPaidAccess } from '@core/auth';
 import { databaseModelForPlan } from '@core/component/AI/constant';
 import { isFeatureEnabled, showDatabaseSql } from '@core/constant/featureFlags';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { refreshInBackground } from '@queries/database-sql/create-database-sql-query';
 import { useDatabaseQueryDefinition } from '@queries/storage/database-queries';
 import {
@@ -140,7 +141,7 @@ function AskQuestion(props: {
     <>
       <ChooseQuestionSource
         initial={{ ...props.source, sql: props.sql ?? '' }}
-        onSave={(next) => void save(next)}
+        onSave={(next) => fireAndForget(save(next), 'database-query')}
         saveOnGenerate={!!props.source.queryId}
         saving={saving()}
       />
@@ -186,7 +187,9 @@ function EditSavedQuestion(props: {
           <p role="alert">This question could not be loaded.</p>
           <button
             class="mt-2 rounded px-2 py-1 hover:bg-hover"
-            onClick={() => void definition.refetch()}
+            onClick={() =>
+              fireAndForget(definition.refetch(), 'database-query')
+            }
           >
             Retry
           </button>

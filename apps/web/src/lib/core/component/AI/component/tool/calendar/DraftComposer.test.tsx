@@ -117,6 +117,14 @@ const calendar = (id: string): VisibleCalendar => ({
   isPrimary: true,
   isWritable: true,
   isSubscription: false,
+  provider: 'google',
+  capabilities: {
+    autoDecline: true,
+    emailReminders: true,
+    customRecurrence: false,
+    removeConference: false,
+    resetRsvp: false,
+  },
   defaultReminders: [],
 });
 
@@ -293,7 +301,7 @@ describe('AI calendar draft Macro calls', () => {
   it('executes the tool with addMacroCall when the user picks a Macro call', async () => {
     showDraft(undefined, {
       attendees: [{ email: 'guest@example.com' }],
-      addGoogleMeet: false,
+      addConference: false,
     });
     expect(screen.getByLabelText('Conference').textContent).toBe('none');
     await fireEvent.click(
@@ -304,7 +312,7 @@ describe('AI calendar draft Macro calls', () => {
     expect(mocks.execute).toHaveBeenCalledWith(
       expect.objectContaining({
         addMacroCall: true,
-        addGoogleMeet: false,
+        addConference: false,
         attendees: [{ email: 'guest@example.com' }],
       })
     );

@@ -14,6 +14,7 @@ import { ShareOptions } from '@core/component/TopBar/ShareButton';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
+import { fireAndForget } from '@core/util/fireAndForget';
 import PaperPlaneTilt from '@phosphor/paper-plane-tilt.svg';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import { Button, Hotkey } from '@ui';
@@ -83,7 +84,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
       // Holding the shortcut repeats keydown; swallow the repeats so one press
       // sends one share, but keep capturing them so none reaches the composer.
       if (event?.repeat) return true;
-      void handleSubmit();
+      fireAndForget(handleSubmit(), 'forward-to-channel');
       return true;
     },
   });
@@ -205,7 +206,9 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
                     form.recipients().length === 0 ||
                     form.status().t === 'sending'
                   }
-                  onClick={() => void handleSubmit()}
+                  onClick={() =>
+                    fireAndForget(handleSubmit(), 'forward-to-channel')
+                  }
                 >
                   <PaperPlaneTilt class="size-4" />
                   Share

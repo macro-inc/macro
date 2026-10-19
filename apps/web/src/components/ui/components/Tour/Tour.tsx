@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   autoUpdate,
   computePosition,
@@ -300,39 +301,42 @@ function PopoverCard(props: TourPopoverProps) {
       : 'bottom-end';
     const reference = target ?? restingPoint(boundary);
     follow(reference, element, () => {
-      void computePosition(reference, element, {
-        strategy: 'fixed',
-        placement,
-        middleware: [
-          offset(target ? (props.gutter ?? EDGE) : 0),
-          flip({
-            boundary: clip,
-            padding: EDGE,
-            fallbackPlacements: ['left-start', 'bottom-start', 'top-start'],
-          }),
-          shift({ boundary: clip, padding: EDGE, crossAxis: true }),
-          size({
-            boundary: clip,
-            padding: EDGE,
-            apply: ({ availableWidth, availableHeight }) => {
-              setPosition((p) => ({
-                ...p,
-                maxWidth: availableWidth,
-                maxHeight: availableHeight,
-              }));
-            },
-          }),
-          // Only an anchored card follows its target out of view.
-          ...(target ? [hide({ boundary: clip })] : []),
-        ],
-      }).then(({ x, y, middlewareData }) =>
-        setPosition((p) => ({
-          ...p,
-          x,
-          y,
-          placed: true,
-          hidden: !!middlewareData.hide?.referenceHidden,
-        }))
+      fireAndForget(
+        computePosition(reference, element, {
+          strategy: 'fixed',
+          placement,
+          middleware: [
+            offset(target ? (props.gutter ?? EDGE) : 0),
+            flip({
+              boundary: clip,
+              padding: EDGE,
+              fallbackPlacements: ['left-start', 'bottom-start', 'top-start'],
+            }),
+            shift({ boundary: clip, padding: EDGE, crossAxis: true }),
+            size({
+              boundary: clip,
+              padding: EDGE,
+              apply: ({ availableWidth, availableHeight }) => {
+                setPosition((p) => ({
+                  ...p,
+                  maxWidth: availableWidth,
+                  maxHeight: availableHeight,
+                }));
+              },
+            }),
+            // Only an anchored card follows its target out of view.
+            ...(target ? [hide({ boundary: clip })] : []),
+          ],
+        }).then(({ x, y, middlewareData }) =>
+          setPosition((p) => ({
+            ...p,
+            x,
+            y,
+            placed: true,
+            hidden: !!middlewareData.hide?.referenceHidden,
+          }))
+        ),
+        'tour'
       );
     });
   });
@@ -515,15 +519,18 @@ function TourHint(props: TourHintProps) {
     const entry = tour.entry();
     if (!element || !entry) return;
     follow(entry, element, () => {
-      void computePosition(entry, element, {
-        strategy: 'fixed',
-        placement: props.placement ?? 'right',
-        middleware: [
-          offset(12),
-          flip({ padding: EDGE, fallbackPlacements: ['bottom', 'top'] }),
-          shift({ padding: EDGE }),
-        ],
-      }).then(({ x, y }) => setPosition({ x, y }));
+      fireAndForget(
+        computePosition(entry, element, {
+          strategy: 'fixed',
+          placement: props.placement ?? 'right',
+          middleware: [
+            offset(12),
+            flip({ padding: EDGE, fallbackPlacements: ['bottom', 'top'] }),
+            shift({ padding: EDGE }),
+          ],
+        }).then(({ x, y }) => setPosition({ x, y })),
+        'tour'
+      );
     });
   });
   return (

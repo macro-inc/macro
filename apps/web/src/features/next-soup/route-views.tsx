@@ -7,12 +7,18 @@ import {
   withAuth,
 } from '@components/app/split-layout/split-router/app-route-shell';
 import { useUserContext } from '@core/context/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { lazy, Show } from 'solid-js';
 import type { SetPredicatesInput } from './filters/filter-store/predicates-store';
 import type { Query } from './filters/filter-store/types';
 import { getViewPreset } from './sidebar/soup-filter-presets';
 import { foldersTour } from './tour';
 import { useRecentViewFlag } from './use-recent-view-flag';
+
+const MobileSearchResults = lazy(async () => ({
+  default: (await import('@app/features/command/mobile/MobileSearchResults'))
+    .MobileSearchResults,
+}));
 
 const CallsView = lazy(async () => ({
   default: (await import('@app/features/calls-view/views/calls-view'))
@@ -94,13 +100,20 @@ export const SearchRouteView = withAuth(() => {
   usePageViewTracking('search');
   const preset = getViewPreset('search');
   return (
-    <SoupView
-      viewName="Search"
-      initialFilters={params().initialFilters ?? preset?.filters}
-      initialClientFilters={
-        params().initialClientFilters ?? preset?.clientFilters
+    <Show
+      when={isTouchDevice()}
+      fallback={
+        <SoupView
+          viewName="Search"
+          initialFilters={params().initialFilters ?? preset?.filters}
+          initialClientFilters={
+            params().initialClientFilters ?? preset?.clientFilters
+          }
+          initialSearchText={params().initialQuery}
+        />
       }
-      initialSearchText={params().initialQuery}
-    />
+    >
+      <MobileSearchResults />
+    </Show>
   );
 });

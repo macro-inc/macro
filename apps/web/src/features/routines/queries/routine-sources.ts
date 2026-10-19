@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { ScheduledAction } from '@service-scheduled-action/generated/schemas';
 import type { Accessor } from 'solid-js';
 import { createMemo, onMount } from 'solid-js';
@@ -84,7 +85,7 @@ export function createRoutineDetailSource(
   });
   const history = useScheduleHistoryQuery(id, () => Boolean(raw()));
   onMount(() => {
-    void invalidateSchedules();
+    fireAndForget(invalidateSchedules(), 'routines');
   });
   return {
     routine,

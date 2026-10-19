@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import KanbanIcon from '@phosphor/kanban.svg';
 import PlusIcon from '@phosphor/plus.svg';
@@ -188,7 +189,10 @@ export function DatabaseToolbar(props: DatabaseToolbarProps) {
                         }}
                         onRenameInput={viewRename.setDraft}
                         onRenameSave={(restoreFocus) =>
-                          void viewRename.save(restoreFocus)
+                          fireAndForget(
+                            viewRename.save(restoreFocus),
+                            'database'
+                          )
                         }
                         onRenameCancel={() => viewRename.cancel(true)}
                         onSelect={() => props.onSelectView(view().id)}
@@ -230,14 +234,18 @@ export function DatabaseToolbar(props: DatabaseToolbarProps) {
                 </Dropdown.Trigger>
                 <Dropdown.Content class="min-w-40">
                   <Dropdown.Item
-                    onSelect={() => void createView('table')}
+                    onSelect={() =>
+                      fireAndForget(createView('table'), 'database')
+                    }
                     disabled={creating()}
                   >
                     <TableIcon class="size-4" />
                     Table
                   </Dropdown.Item>
                   <Dropdown.Item
-                    onSelect={() => void createView('board')}
+                    onSelect={() =>
+                      fireAndForget(createView('board'), 'database')
+                    }
                     disabled={creating()}
                   >
                     <KanbanIcon class="size-4" />

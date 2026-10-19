@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { GraphicsEditor } from '@macro-inc/graphics';
 import { debounce } from '@solid-primitives/scheduled';
 import {
@@ -132,12 +133,15 @@ export default function CanvasNextDocument(
                 if (props.isNested) return;
                 clearTimeout(viewTimer);
                 viewTimer = setTimeout(() => {
-                  void saveCanvasViewLocation(documentId, camera);
+                  fireAndForget(
+                    saveCanvasViewLocation(documentId, camera),
+                    'canvas-persistence'
+                  );
                 }, 500);
               });
               const flush = () => {
                 if (canEdit()) finishText();
-                void saving.flush();
+                fireAndForget(saving.flush(), 'canvas-persistence');
               };
               const beforeUnload = (event: BeforeUnloadEvent) => {
                 flush();

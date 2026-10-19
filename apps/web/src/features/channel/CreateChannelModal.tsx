@@ -6,6 +6,7 @@ import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import { recipientEntityMapper, type WithCustomUserInput } from '@core/user';
 import { useFocusLock } from '@core/util/createControlledOpenSignal';
 import { getDestinationFromOptions } from '@core/util/destination';
+import { fireAndForget } from '@core/util/fireAndForget';
 import HashIcon from '@phosphor/hash.svg';
 import InfoIcon from '@phosphor/info.svg';
 import LockIcon from '@phosphor/lock.svg';
@@ -101,7 +102,7 @@ export function CreateChannelModal() {
     )
       return;
     if (step() === 'invite' && visibility() === 'team') {
-      void finishInvites(false);
+      fireAndForget(finishInvites(false), 'create-channel');
       return;
     }
     resetAndClose();
@@ -225,7 +226,7 @@ export function CreateChannelModal() {
     }
 
     if (step() === 'visibility') {
-      void createChannel();
+      fireAndForget(createChannel(), 'create-channel');
       return;
     }
 
@@ -452,7 +453,8 @@ export function CreateChannelModal() {
                 <Button
                   type={step() === 'invite' ? 'button' : 'submit'}
                   onClick={() => {
-                    if (step() === 'invite') void finishInvites();
+                    if (step() === 'invite')
+                      fireAndForget(finishInvites(), 'create-channel');
                   }}
                   variant="strong"
                   disabled={

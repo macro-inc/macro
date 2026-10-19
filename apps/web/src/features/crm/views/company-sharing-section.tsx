@@ -1,4 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { CrmCompanyEntity } from '@entity';
 import { cn, InlineCheckbox } from '@ui';
 import { Show } from 'solid-js';
@@ -88,7 +89,12 @@ export function CompanySharingSection(props: {
                   role="checkbox"
                   aria-checked={isShared()}
                   disabled={shareDisabled()}
-                  onClick={() => void handleToggleShare(company(), !isShared())}
+                  onClick={() =>
+                    fireAndForget(
+                      handleToggleShare(company(), !isShared()),
+                      'crm'
+                    )
+                  }
                   class={cn(TOGGLE_BUTTON_CLASS)}
                 >
                   <InlineCheckbox checked={isShared()} />
@@ -108,7 +114,10 @@ export function CompanySharingSection(props: {
                 aria-checked={isSyncing()}
                 disabled={syncDisabled()}
                 onClick={() =>
-                  void handleToggleEmailSync(company(), !isSyncing())
+                  fireAndForget(
+                    handleToggleEmailSync(company(), !isSyncing()),
+                    'crm'
+                  )
                 }
                 class={cn(
                   TOGGLE_BUTTON_CLASS,

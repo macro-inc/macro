@@ -66,10 +66,15 @@ async fn subscription_responses_from(
         sender.send(patch).await.unwrap();
     }
     drop(sender);
-    let list_loader = graphql_soup::soup_item_loader(replica.clone(), Arc::new(NoOpEmailService));
+    let list_loader = graphql_soup::soup_item_loader(
+        replica.clone(),
+        Arc::new(NoOpEmailService),
+        NoOpEntityAccessService,
+    );
     let hydration_loader = graphql_soup::SoupUpdateHydrationLoader(graphql_soup::soup_item_loader(
         primary,
         Arc::new(NoOpEmailService),
+        NoOpEntityAccessService,
     ));
     let schema: RealtimeSchema = build_schema_with_services(
         replica,
@@ -368,7 +373,11 @@ impl MutationEffectsQuery {
 async fn mutation_effects_share_non_nullable_hydration_and_omit_misses() {
     let soup = CountingSoupService::default();
     soup.set_raw_response(vec![soup_document(Uuid::from_u128(1))]);
-    let loader = graphql_soup::soup_item_loader(soup.clone(), Arc::new(NoOpEmailService));
+    let loader = graphql_soup::soup_item_loader(
+        soup.clone(),
+        Arc::new(NoOpEmailService),
+        NoOpEntityAccessService,
+    );
     let schema = Schema::build(MutationEffectsQuery, EmptyMutation, EmptySubscription)
         .data(loader)
         .data(entity_mutation::EntityMutationActor {

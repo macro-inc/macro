@@ -27,7 +27,7 @@ export function canvasReferenceSource(sourceId: string): CanvasReferenceSource {
           permission
         )
       );
-      void queryClient.invalidateQueries({
+      queryClient.invalidateQueries({
         queryKey: attachmentReferencesKeys.list('document', targetId).queryKey,
       });
       return mention.id;
@@ -45,7 +45,7 @@ export function canvasReferenceSource(sourceId: string): CanvasReferenceSource {
         )
       )
         await throwOnErr(async () => response);
-      void queryClient.invalidateQueries({
+      queryClient.invalidateQueries({
         queryKey: attachmentReferencesKeys.list._def,
       });
     },

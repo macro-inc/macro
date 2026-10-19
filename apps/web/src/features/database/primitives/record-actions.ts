@@ -38,6 +38,8 @@ export type RecordCreation = {
   titleColumn?: string;
   open: boolean;
   intentId?: string;
+  /** A label among `values` that the write may add as a new option. */
+  option?: string;
 };
 
 /**
@@ -268,7 +270,11 @@ export function createRecordActions(options: {
       values[titleField.id] = creation.title;
     const saved = await controller.save(
       { kind: 'create', values },
-      { label: 'new record', createIntentId: creation.intentId }
+      {
+        label: 'new record',
+        createIntentId: creation.intentId,
+        option: creation.option,
+      }
     );
     if (saved.isErr()) return false;
     const rowId = saved.value.insertedRowIds[0];

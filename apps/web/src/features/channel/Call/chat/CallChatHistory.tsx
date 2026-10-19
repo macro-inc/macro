@@ -1,5 +1,6 @@
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { MessageThread, threadListItem } from '@core/messages/MessageThread';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { Show, Suspense } from 'solid-js';
 import { buildCallMessageLink } from './build-call-message-link';
 import { useCallChat } from './queries/use-call-chat';
@@ -45,7 +46,7 @@ function CallChatHistoryContent(props: CallChatHistoryProps) {
           <button
             type="button"
             class="mt-2 text-sm text-accent"
-            onClick={() => void chat.refresh()}
+            onClick={() => fireAndForget(chat.refresh(), 'channel-call')}
           >
             Retry
           </button>

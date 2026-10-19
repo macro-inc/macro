@@ -6,6 +6,7 @@ import {
   subscribeToMeetingInvitationResolutions,
 } from '@channel/Call/meeting-invitation-resolution';
 import { useUserId } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { usePlatformNotificationState } from '@notifications';
 import { DefaultUserNameResolver } from '@notifications/notification-resolvers';
 import { invalidateActiveMeetings } from '@queries/call/meetings';
@@ -70,13 +71,14 @@ function IncomingMeetingInvitationsReceiver() {
       if (disposed) return;
       incoming.receive(event);
       const recipientId = userId();
-      if (recipientId) void invalidateActiveMeetings(recipientId);
+      if (recipientId)
+        fireAndForget(invalidateActiveMeetings(recipientId), 'meetings');
     },
     onAnswered: (event) => {
       if (disposed) return;
       incoming.answered(event);
       if (event.userId === userId())
-        void invalidateActiveMeetings(event.userId);
+        fireAndForget(invalidateActiveMeetings(event.userId), 'meetings');
     },
   });
   return (

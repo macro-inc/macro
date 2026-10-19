@@ -4,6 +4,7 @@ import type {
   GoalSeekResult,
 } from '@macro-inc/spreadsheet/goal-seek';
 import type { SheetPivotLayout } from '@macro-inc/spreadsheet/pivot-layout';
+import type { WorkbookTable } from '@macro-inc/spreadsheet/structured-references';
 import type { WorkbookSheetMetadata } from '@macro-inc/spreadsheet/workbook-metadata';
 import type {
   AxisChange,
@@ -36,6 +37,8 @@ export type CalculationSheetPatch = {
   >;
   /** Where its pivot tables show their values, for GETPIVOTDATA. */
   pivots?: SheetPivotLayout[];
+  /** Its tables and their column names, for structured references. */
+  tables?: WorkbookTable[];
   /** Every input, replacing the worker's copy of the sheet. */
   cells?: CalculationCells;
   /** Changed inputs; null removes a cell. */

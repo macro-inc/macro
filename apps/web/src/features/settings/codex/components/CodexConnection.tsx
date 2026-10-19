@@ -1,4 +1,5 @@
 import OpenAiIcon from '@core/component/AI/assets/openai.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
 import { Button, confirmDialog } from '@ui';
 import { createSignal, Show } from 'solid-js';
@@ -268,7 +269,7 @@ export function CodexConnection(props: {
                 class="shrink-0"
                 aria-label="Disconnect ChatGPT"
                 disabled={props.pending}
-                onClick={() => void disconnect()}
+                onClick={() => fireAndForget(disconnect(), 'codex-settings')}
               >
                 Disconnect
               </Button>

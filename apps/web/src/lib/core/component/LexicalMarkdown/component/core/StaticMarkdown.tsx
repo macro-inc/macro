@@ -79,6 +79,7 @@ import {
   ENABLE_STATIC_DOCUMENT_CARDS,
   ENABLE_SVG_PREVIEW,
 } from '@core/constant/featureFlags';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { MarkNode } from '@lexical/mark';
 import type { SearchMatchNode } from '@macro-inc/lexical-core/nodes/SearchMatchNode';
 import { theme as baseTheme, createTheme } from '../../theme';
@@ -1261,7 +1262,7 @@ export function StaticMarkdown(props: {
         console.error('Failed to resolve markdown citations', error);
       }
     };
-    void renderCitations();
+    fireAndForget(renderCitations(), 'static-markdown');
   });
 
   const domTree = createMemo(() => {

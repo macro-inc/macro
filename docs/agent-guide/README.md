@@ -19,7 +19,7 @@ verified live against a local stack (`just run_local`).
 | [reminders.md](reminders.md) | Email snoozing, the reminder command menu, delivery, and safe failure verification |
 | [home.md](home.md) | Home and the mobile Notifications inbox |
 | [email.md](email.md) | Mail: threads, read state, trash, cached filtering, reminders |
-| [calendar.md](calendar.md) | Calendar views, events, and invitations in email |
+| [calendar.md](calendar.md) | Calendar views, Scheduling workspace, booking links, events, and invitations in email |
 | [search.md](search.md) | Search |
 | [files.md](files.md) | Files (Drive) |
 | [calls.md](calls.md) | Calls, call links, guests, and sharing |

@@ -14,6 +14,7 @@ import {
 import { fastModeEnabled } from '@core/component/AI/signal/speed';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserId } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { uploadFile } from '@core/util/upload';
 import { useAgentCapabilitiesQuery } from '@queries/agents/capabilities';
 import type { PromptAttachment } from '@service-agent-harness/generated/schemas';
@@ -214,12 +215,15 @@ export function NewChatPage(props: {
     });
   });
   const attachFiles = (files: File[]) =>
-    void uploadInputAttachments({
-      files,
-      tracker: attachmentTracker(),
-      uploadFile: (file) =>
-        uploadFile(file, 'static', { hideProgressIndicator: true }),
-    });
+    fireAndForget(
+      uploadInputAttachments({
+        files,
+        tracker: attachmentTracker(),
+        uploadFile: (file) =>
+          uploadFile(file, 'static', { hideProgressIndicator: true }),
+      }),
+      'agents-view'
+    );
 
   const send = (prompt: string, attachments: InputAttachmentData[]) => {
     const persona = selected();

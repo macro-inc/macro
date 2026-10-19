@@ -15,6 +15,7 @@ import type {
   LayoutAids,
 } from '@core/fig-engine/handoff-types';
 import type { NodeInfo, Rect } from '@core/fig-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createEffect, createSignal, on } from 'solid-js';
 import type {
   DraggedGuide,
@@ -76,7 +77,9 @@ export function createLayoutAids(options: {
   };
   // The engine is an external system: read it again after every edit.
   createEffect(
-    on([viewer.page, viewer.editVersion, viewer.layout], () => void load())
+    on([viewer.page, viewer.editVersion, viewer.layout], () =>
+      fireAndForget(load(), 'fig-layout-aids')
+    )
   );
 
   let spacingRequest = 0;
@@ -115,7 +118,7 @@ export function createLayoutAids(options: {
         setSpacing(undefined);
         return;
       }
-      void loadSpacing(info);
+      fireAndForget(loadSpacing(info), 'fig-layout-aids');
     })
   );
 

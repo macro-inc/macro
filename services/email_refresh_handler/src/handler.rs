@@ -14,6 +14,8 @@ use sqlx::{Pool, Postgres, Type};
 #[sqlx(type_name = "email_user_provider_enum", rename_all = "UPPERCASE")]
 pub enum DbUserProvider {
     Gmail,
+    /// Microsoft Outlook and Microsoft 365.
+    Outlook,
 }
 
 #[tracing::instrument(skip(ctx, _event))]

@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { notificationServiceClient } from '@service-notification/client';
 import type { UserUnsubscribe } from '@service-notification/generated/schemas/userUnsubscribe';
@@ -113,7 +114,10 @@ export function useMuteItemMutation() {
       else removeUnsubscribe(item);
     },
     onSettled: () => {
-      void invalidateUnsubscribesWhenIdle();
+      fireAndForget(
+        invalidateUnsubscribesWhenIdle(),
+        'notification-unsubscribes'
+      );
     },
   }));
 }
@@ -138,7 +142,10 @@ export function useUnmuteItemMutation() {
       if (context?.previous) addUnsubscribe(context.previous);
     },
     onSettled: () => {
-      void invalidateUnsubscribesWhenIdle();
+      fireAndForget(
+        invalidateUnsubscribesWhenIdle(),
+        'notification-unsubscribes'
+      );
     },
   }));
 }

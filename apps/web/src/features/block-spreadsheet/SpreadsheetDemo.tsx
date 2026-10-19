@@ -12,6 +12,7 @@ import {
 } from '@components/app/split-layout/components/SplitLabel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { downloadFile } from '@filesystem/download';
 import IconShared from '@icon/share.svg';
 import { Button, Dialog } from '@ui';
@@ -128,8 +129,8 @@ export default function SpreadsheetDemo() {
         <SpreadsheetDraftMenu
           open={menuOpen()}
           onOpenChange={setMenuOpen}
-          onAsk={() => void actions.ask()}
-          onShare={() => void actions.share()}
+          onAsk={() => fireAndForget(actions.ask(), 'spreadsheet-draft')}
+          onShare={() => fireAndForget(actions.share(), 'spreadsheet-draft')}
           onRename={
             canRename()
               ? () => {
@@ -148,7 +149,7 @@ export default function SpreadsheetDemo() {
             class="bg-surface"
             disabled={!!actions.pending()}
             aria-busy={actions.pending() === 'ask'}
-            onClick={() => void actions.ask()}
+            onClick={() => fireAndForget(actions.ask(), 'spreadsheet-draft')}
           >
             <ChatWithAgentIcon />
             Ask Macro
@@ -159,7 +160,7 @@ export default function SpreadsheetDemo() {
             class="bg-surface"
             disabled={!!actions.pending()}
             aria-busy={actions.pending() === 'share'}
-            onClick={() => void actions.share()}
+            onClick={() => fireAndForget(actions.share(), 'spreadsheet-draft')}
           >
             <IconShared />
             {actions.pending() === 'share' ? 'Saving…' : 'Share'}

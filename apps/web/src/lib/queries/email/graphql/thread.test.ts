@@ -73,7 +73,6 @@ const cachedPage: EmailThreadPageQuery = {
       isSignal: false,
       isImportant: false,
       isFavorited: false,
-      sortTs: '2026-08-06T12:00:00Z',
       viewedAt: null,
       frecencyScore: null,
       mailAllPreview: null,
@@ -92,6 +91,8 @@ const cachedPage: EmailThreadPageQuery = {
       isRead: false,
       projectId: null,
       latestInboundMessageTs: '2026-08-06T12:00:00Z',
+      latestOutboundMessageTs: null,
+      latestNonSpamMessageTs: null,
       reminderReturnedAt: null,
       createdAt: '2026-08-01T00:00:00Z',
       updatedAt: '2026-08-06T12:02:00Z',
@@ -108,6 +109,7 @@ const cachedPage: EmailThreadPageQuery = {
 function threadMessages(offset: number, count: number) {
   return Array.from({ length: count }, (_, i) => ({
     __typename: 'GraphqlSoupEmailMessage' as const,
+    operationStatus: null,
     id: `message-${offset + i}`,
     threadId: 'thread-1',
     linkId: 'link-1',

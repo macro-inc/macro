@@ -2,6 +2,7 @@ import type { GanttCreation } from '@app/components/gantt/create-gantt-creation'
 import { Gantt } from '@app/components/gantt/gantt';
 import { deriveGanttRange } from '@app/components/gantt/gantt-date';
 import { UserIcon } from '@core/component/UserIcon';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   getPropertyOptionLabel,
   getTaskStatusOptionId,
@@ -69,11 +70,11 @@ export function TaskGanttView(props: {
     if (row.kind !== 'load-more') return;
 
     if (row.groupId !== undefined) {
-      void props.source.loadMoreGroup(row.groupId);
+      fireAndForget(props.source.loadMoreGroup(row.groupId), 'tasks-view');
       return;
     }
 
-    void props.source.loadMore?.();
+    fireAndForget(props.source.loadMore?.(), 'tasks-view');
   };
 
   return (
@@ -93,7 +94,11 @@ export function TaskGanttView(props: {
             class="flex flex-1 flex-col items-center justify-center gap-3 text-sm text-ink-muted"
           >
             Tasks couldn’t be loaded.
-            <Button onClick={() => void props.source.refresh?.()}>
+            <Button
+              onClick={() =>
+                fireAndForget(props.source.refresh?.(), 'tasks-view')
+              }
+            >
               Try again
             </Button>
           </div>
@@ -356,7 +361,12 @@ export function TaskGanttView(props: {
                           size="sm"
                           variant="ghost"
                           disabled={props.source.isLoadingMore?.()}
-                          onClick={() => void props.source.loadMore?.()}
+                          onClick={() =>
+                            fireAndForget(
+                              props.source.loadMore?.(),
+                              'tasks-view'
+                            )
+                          }
                         >
                           <Show when={props.source.isLoadingMore?.()}>
                             <SpinnerIcon class="size-3 animate-spin" />
@@ -372,7 +382,9 @@ export function TaskGanttView(props: {
                         size="sm"
                         variant="ghost"
                         disabled={props.source.isLoadingMore?.()}
-                        onClick={() => void props.source.loadMore?.()}
+                        onClick={() =>
+                          fireAndForget(props.source.loadMore?.(), 'tasks-view')
+                        }
                       >
                         <Show when={props.source.isLoadingMore?.()}>
                           <SpinnerIcon class="size-3 animate-spin" />

@@ -2,6 +2,7 @@ import { useSharedAccessUpdates } from '@app/features/access-requests/access-req
 import { shareEntity } from '@app/features/access-requests/core/types';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import type { OwnedBlockHandle } from '@core/orchestrator';
+import { Telemetry } from '@macro-inc/observability';
 import { useQueryClient } from '@queries/client';
 import { blockNameToItemType } from '@service-storage/client';
 import type { AccessLevel as UserAccessLevel } from '@service-storage/generated/schemas/accessLevel';
@@ -70,18 +71,31 @@ export function BlockLoader<
   const analytics = useAnalytics();
   const currentSharedAccess = useSharedAccessUpdates(
     () => shareEntity(blockNameToItemType(props.definition.name), props.id),
-    (level) => {
+    (level, previous) => {
+      const data = blockDataSignal.get();
+      const hasLoadedPermissions =
+        data != null && typeof data === 'object' && 'userAccessLevel' in data;
+      // Lightweight loaders (e.g. email) supply no permissions. Their initial
+      // fallback is not a confirmed access change that requires a remount.
+      const accessChanged = hasLoadedPermissions
+        ? blockUserAccessSignal.get() !== level
+        : previous !== undefined && previous !== level;
       if (level === null) {
         clearLoadedDocument();
         setError('UNAUTHORIZED');
       } else if (
-        (blockDataSignal.get() != null &&
-          blockUserAccessSignal.get() !== level) ||
+        (data != null && accessChanged) ||
         blockErrorSignal.get() === 'UNAUTHORIZED'
       ) {
         clearLoadedDocument();
         setError(undefined);
         blockLoadRetrySignal.set((count) => (count ?? 0) + 1);
+      } else if (
+        data != null &&
+        !hasLoadedPermissions &&
+        !blockErrorSignal.get()
+      ) {
+        setUserAccess(level);
       }
     }
   );
@@ -185,13 +199,20 @@ Check that the load function does not return a preload source when the intent is
     if (!isNested && data && props.definition.openTrackingEnabled !== false) {
       const trackOpened = () => {
         // we need to pass in a client accessor since the mutation is dynamically imported outside a query context provider
-        import('./trackBlockOpened').then(({ track }) => {
-          track({
-            itemId: props.id,
-            blockName: data.__block,
-            client: useQueryClient,
-          });
-        });
+        import('./trackBlockOpened')
+          .then(({ track }) => {
+            track({
+              itemId: props.id,
+              blockName: data.__block,
+              client: useQueryClient,
+            });
+          })
+          .catch((error) =>
+            Telemetry.error(error, {
+              surface: 'track-block-opened',
+              blockName: data.__block,
+            })
+          );
 
         analytics.pageView(data.__block);
         analytics.track('open_entity', {
@@ -207,7 +228,9 @@ Check that the load function does not return a preload source when the intent is
     setFile(() => (data && 'dssFile' in data ? data.dssFile : undefined));
     setText((text) => (data && 'text' in data ? data.text : text));
     setUserAccess<UserAccessLevel>(() =>
-      data && 'userAccessLevel' in data ? data.userAccessLevel : 'view'
+      data && 'userAccessLevel' in data
+        ? data.userAccessLevel
+        : (untrack(currentSharedAccess) ?? 'view')
     );
     setDocumentMetadata(() => {
       if (data && 'projectMetadata' in data) {

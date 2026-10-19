@@ -1,6 +1,7 @@
 import { SidePanel } from '@components/app/side-panel';
 import { EntityMetadata } from '@components/app/side-panel/EntityMetadata';
 import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { PropertyValuePill } from '@property/component/PropertyValuePill';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { EntityPropertiesSection } from '@property/side-panel/properties/EntityPropertiesSection';
@@ -116,8 +117,11 @@ export function ProjectWorkspace(props: {
                       ariaLabel="Project name"
                       class="w-full text-2xl"
                       onRename={(name) =>
-                        void run(() =>
-                          props.commands.rename(props.project.id, name)
+                        fireAndForget(
+                          run(() =>
+                            props.commands.rename(props.project.id, name)
+                          ),
+                          'projects'
                         )
                       }
                     />

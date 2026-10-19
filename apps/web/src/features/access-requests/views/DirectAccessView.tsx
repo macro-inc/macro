@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { OwnerLabel } from '@entity/owner/owner-display';
 import { Button } from '@ui';
 import { For, Show } from 'solid-js';
@@ -36,14 +37,18 @@ export function DirectAccessView(props: {
                 ),
               ]}
               disabled={!props.source.state()?.canReview || props.source.busy()}
-              onChange={(level) => void change(grant.userId, level)}
+              onChange={(level) =>
+                fireAndForget(change(grant.userId, level), 'access-requests')
+              }
             />
             <Show when={props.source.state()?.canReview}>
               <Button
                 variant="ghost"
                 size="sm"
                 disabled={props.source.busy()}
-                onClick={() => void change(grant.userId, null)}
+                onClick={() =>
+                  fireAndForget(change(grant.userId, null), 'access-requests')
+                }
               >
                 Remove access
               </Button>

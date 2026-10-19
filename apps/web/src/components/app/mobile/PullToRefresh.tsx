@@ -2,6 +2,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { hapticImpact } from '@core/mobile/haptics';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { nativeNetworkStatus } from '@core/mobile/native-network-status';
+import { fireAndForget } from '@core/util/fireAndForget';
 import Spinner from '@phosphor-icons/core/bold/spinner-bold.svg';
 import { cn } from '@ui';
 import {
@@ -87,9 +88,12 @@ export function PullToRefresh(props: {
       () => 'failed' as const
     );
     attempt = started;
-    void started.then(() => {
-      if (attempt === started) attempt = undefined;
-    });
+    fireAndForget(
+      started.then(() => {
+        if (attempt === started) attempt = undefined;
+      }),
+      'pull-to-refresh'
+    );
     return started;
   };
 
@@ -110,8 +114,8 @@ export function PullToRefresh(props: {
     // gesture's own target element out from under it.
     const pending = attempt ?? startRefresh();
 
-    void Promise.all([Promise.race([pending, cap]), minSpin]).then(
-      ([outcome]) => {
+    fireAndForget(
+      Promise.all([Promise.race([pending, cap]), minSpin]).then(([outcome]) => {
         // Report a failure only when nothing reached the wire. A refresh
         // still running at the cap says nothing either way, so it stays
         // quiet unless the native monitor is certain there is no path out
@@ -125,7 +129,8 @@ export function PullToRefresh(props: {
           toast.failure("You're offline");
         }
         retract();
-      }
+      }),
+      'pull-to-refresh'
     );
   };
 

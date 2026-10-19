@@ -10,6 +10,7 @@ import {
 } from '@app/lib/graphql-cache';
 import { createUrqlQuery } from '@app/lib/urql-solid';
 import { createBrowserOfflineSignal } from '@core/util/connectivity';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { isTransientRequestError } from '@core/util/request-error';
 import { Telemetry } from '@macro-inc/observability';
 import type { GroupByField } from '@queries/soup/grouped/types';
@@ -148,10 +149,13 @@ export function createGraphqlGroupedSoupAstItemsQuery(
         const version = ++networkResultVersion;
         setNetworkRevision(undefined);
         if (result.error || result.data == null || result.hasNext) return;
-        void acknowledgeNetworkResult(
-          metadata.persistence ?? Promise.resolve(metadata.revision),
-          queryInput,
-          version
+        fireAndForget(
+          acknowledgeNetworkResult(
+            metadata.persistence ?? Promise.resolve(metadata.revision),
+            queryInput,
+            version
+          ),
+          'soup-grouped-items'
         );
       },
       // Associate cached data with its filters without remapping live rows.

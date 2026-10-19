@@ -153,7 +153,8 @@ export class MessageStore {
       () => {
         // Another importer deleted/replaced this session. Never revive the old owner.
         this.retired = true;
-        void this.database.close();
+        // A retired store has no caller left to report a close failure to.
+        this.database.close().catch(() => undefined);
       }
     );
   }

@@ -27,8 +27,20 @@ State ownership, reactivity, and async error handling.
   by oxlint `promise/prefer-await-to-then` — `bun run lint:oxlint` from the
   repository root.
 - **FE-13** Extract multi-step async coordination into named helper functions,
-  and make intentionally-unawaited promises explicit — no bare floating
-  promises.
+  and never leave a promise floating: `await` or `return` it, or start a
+  deliberate fire-and-forget with `fireAndForget(promise, surface)` from
+  `@core/util/fireAndForget`, which reports a rejection through
+  `Telemetry.error`. When a failure needs recovery (reset state, show the
+  feature's existing toast), catch it where the work starts instead. `void`
+  never marks a promise as handled, because whether a promise can reject isn't
+  visible in its type. Call the TanStack `QueryClient` methods that can't reject
+  without `throwOnError` (`cancelQueries`, `invalidateQueries`,
+  `refetchQueries`, `resetQueries`, `prefetchQuery`, `prefetchInfiniteQuery`)
+  bare. Enforced as errors by type-aware oxlint
+  `typescript/no-floating-promises` with `ignoreVoid: false` (`bun run
+  lint:oxlint` from the repository root, `just check`, and CI) and by the
+  ast-grep rule `ts-no-expression-void`, which bans `void` outside a statement
+  (`() => void p()`), where the lint can't see the promise.
 - **FE-14** Keep neverthrow `Result`/`ResultAsync` intact end-to-end — use the
   existing helpers (`ResultAsync`, `throwOnErr` in `queryFn`, `catchToResult`)
   instead of ad hoc `Promise <-> Result` conversions.

@@ -1,5 +1,6 @@
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fireAndForget } from '@core/util/fireAndForget';
 import SmileyIcon from '@phosphor/smiley.svg';
 import { cn } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
@@ -43,11 +44,14 @@ export function Reactions(props: ReactionsProps) {
                 selected={didCurrentUserReact()}
                 interactive={canReact()}
                 onClick={(event) => {
-                  void actions?.onReact?.({
-                    message: message(),
-                    event,
-                    emoji: reaction.emoji,
-                  });
+                  fireAndForget(
+                    actions?.onReact?.({
+                      message: message(),
+                      event,
+                      emoji: reaction.emoji,
+                    }),
+                    'channel-message-actions'
+                  );
                 }}
               />
             );
@@ -60,10 +64,13 @@ export function Reactions(props: ReactionsProps) {
             open={emojiMenuOpen()}
             onOpenChange={setEmojiMenuOpen}
             onEmojiSelect={(emoji) => {
-              void actions?.onReact?.({
-                message: message(),
-                emoji,
-              });
+              fireAndForget(
+                actions?.onReact?.({
+                  message: message(),
+                  emoji,
+                }),
+                'channel-message-actions'
+              );
             }}
             trigger={renderIcon(SmileyIcon)}
             triggerProps={{

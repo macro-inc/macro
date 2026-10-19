@@ -28,8 +28,12 @@ function memoryStorage() {
   const map = new Map<string, string>();
   return {
     getItem: (key: string) => map.get(key) ?? null,
-    setItem: (key: string, value: string) => void map.set(key, value),
-    removeItem: (key: string) => void map.delete(key),
+    setItem: (key: string, value: string) => {
+      map.set(key, value);
+    },
+    removeItem: (key: string) => {
+      map.delete(key);
+    },
   };
 }
 

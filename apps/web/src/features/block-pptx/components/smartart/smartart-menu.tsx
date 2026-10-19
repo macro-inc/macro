@@ -8,6 +8,7 @@ import {
   MenuItem,
   SubTrigger,
 } from '@core/component/ContextMenu';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import ArrowCounterClockwise from '@phosphor/arrow-counter-clockwise.svg';
 import Palette from '@phosphor/palette.svg';
@@ -77,7 +78,9 @@ export function SmartArtMenuItems(props: {
           {(a) => (
             <MenuItem
               text={a.text}
-              onClick={() => void s().addNode(a.position)}
+              onClick={() =>
+                fireAndForget(s().addNode(a.position), 'pptx-editor')
+              }
             />
           )}
         </For>
@@ -94,7 +97,9 @@ export function SmartArtMenuItems(props: {
               selectorType="radio"
               value={layout.short}
               groupValue={shortId(outline()?.layout.id ?? '')}
-              onClick={() => void s().setLayout(layout.short)}
+              onClick={() =>
+                fireAndForget(s().setLayout(layout.short), 'pptx-editor')
+              }
             />
           )}
         </For>
@@ -118,7 +123,9 @@ export function SmartArtMenuItems(props: {
                     selectorType="radio"
                     value={item.short}
                     groupValue={shortId(outline()?.colors ?? '')}
-                    onClick={() => void s().setColors(item.short)}
+                    onClick={() =>
+                      fireAndForget(s().setColors(item.short), 'pptx-editor')
+                    }
                   />
                 )}
               </For>
@@ -130,19 +137,19 @@ export function SmartArtMenuItems(props: {
         text="Reset Graphic"
         icon={ArrowCounterClockwise}
         disabled={ro() || !supported()}
-        onClick={() => void s().reset()}
+        onClick={() => fireAndForget(s().reset(), 'pptx-editor')}
       />
       <MenuItem
         text="Convert to Shapes"
         icon={Swap}
         disabled={ro()}
-        onClick={() => void s().convert('shapes')}
+        onClick={() => fireAndForget(s().convert('shapes'), 'pptx-editor')}
       />
       <MenuItem
         text="Convert to Text"
         icon={TextAa}
         disabled={ro()}
-        onClick={() => void s().convert('text')}
+        onClick={() => fireAndForget(s().convert('text'), 'pptx-editor')}
       />
     </>
   );

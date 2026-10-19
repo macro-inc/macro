@@ -118,7 +118,7 @@ pub(super) async fn labels_by_message_ids(
         DbMessageLabelRow,
         r#"
         SELECT
-            ml.message_id,
+            ml.message_id AS "message_id!",
             l.id,
             l.link_id,
             l.provider_label_id,
@@ -127,7 +127,7 @@ pub(super) async fn labels_by_message_ids(
             l.message_list_visibility as "message_list_visibility: _",
             l.label_list_visibility as "label_list_visibility: _",
             l.type as "type_: _"
-        FROM email_message_labels ml
+        FROM email_effective_message_labels ml
         JOIN email_labels l ON ml.label_id = l.id
         WHERE ml.message_id = ANY($1)
         ORDER BY ml.message_id, l.name
@@ -165,10 +165,16 @@ pub(super) async fn attachments_by_message_ids(
             ea.mime_type,
             ea.size_bytes,
             eas.sfs_id as "sfs_id?",
-            ea.content_id
+            ea.content_id, ea.reference_url
         FROM email_attachments ea
+        JOIN email_messages message ON message.id = ea.message_id
         LEFT JOIN email_attachments_sfs eas ON ea.id = eas.attachment_id
         WHERE ea.message_id = ANY($1)
+            AND (message.is_sent OR (
+                NOT EXISTS (SELECT 1 FROM email_draft_attachment_removals r WHERE r.message_id = message.id AND (r.provider_id = ea.provider_attachment_id OR trim(both '<>' from r.content_id) = trim(both '<>' from ea.content_id)))
+                AND NOT EXISTS (SELECT 1 FROM email_attachments_drafts d WHERE d.draft_id = message.id AND trim(both '<>' from ea.content_id) = COALESCE(trim(both '<>' from d.content_id),d.id::text || '@attachments.macro.com'))
+                AND NOT EXISTS (SELECT 1 FROM email_attachments_fwd f JOIN email_attachments original ON original.id = f.attachment_id
+                    WHERE f.message_id = message.id AND (trim(both '<>' from ea.content_id) = f.attachment_id::text || '@attachments.macro.com' OR trim(both '<>' from ea.content_id) = trim(both '<>' from original.content_id)))))
         ORDER BY ea.message_id, ea.filename NULLS LAST
         "#,
         message_ids,
@@ -197,7 +203,7 @@ pub(super) async fn draft_attachments_by_message_ids(
     let rows = sqlx::query_as!(
         DbDraftAttachmentRow,
         r#"
-        SELECT id, draft_id, file_name, content_type, sha, size, s3_key
+        SELECT id, draft_id, file_name, content_type, sha, size, s3_key, upload_pending, content_id, is_inline
         FROM email_attachments_drafts
         WHERE draft_id = ANY($1)
         ORDER BY draft_id, file_name ASC
@@ -300,6 +306,7 @@ pub(crate) async fn get_simple_message(
         DbSimpleMessageRow,
         r#"
         SELECT
+            m.provider_id,
             m.id,
             m.link_id,
             m.thread_id,
@@ -331,6 +338,7 @@ pub(crate) async fn get_draft_replying_to(
         DbSimpleMessageRow,
         r#"
         SELECT
+            m.provider_id,
             m.id,
             m.link_id,
             m.thread_id,
@@ -341,16 +349,20 @@ pub(crate) async fn get_draft_replying_to(
         FROM email_messages m
         WHERE m.link_id = $1
           AND m.is_draft = true
-          AND jsonb_path_exists(
+          AND NOT m.is_sent
+          AND NOT COALESCE((m.mailbox_state->>'provider_missing')::boolean,false)
+          AND NOT EXISTS(SELECT 1 FROM email_mailbox_drafts d WHERE d.message_id=m.id AND d.delete_requested)
+          AND NOT EXISTS(SELECT 1 FROM email_draft_transfers t WHERE t.source_id=m.id AND t.state<>'preparing')
+          AND (m.replying_to_id=$2::uuid OR jsonb_path_exists(
               m.headers_jsonb,
               '$[*] ? (@."Macro-In-Reply-To" == $macro_uuid)'::jsonpath,
-              jsonb_build_object('macro_uuid', $2::text)
-          )
+              jsonb_build_object('macro_uuid', $2::uuid::text)
+          ))
         ORDER BY m.created_at DESC
         LIMIT 1
         "#,
         link_id,
-        replying_to_id.to_string(),
+        replying_to_id,
     )
     .fetch_optional(pool)
     .await?;
@@ -370,8 +382,16 @@ pub(crate) async fn delete_draft_message(
     message_id: Uuid,
     thread_db_id: Uuid,
     link_ids: &[Uuid],
+    actor: Option<&str>,
 ) -> Result<Option<DraftDeletion>, sqlx::Error> {
     let mut tx = pool.begin().await?;
+
+    let outlook = sqlx::query!(r#"
+        SELECT l.id,l.sync_generation FROM email_links l JOIN email_messages m ON m.link_id = l.id
+        WHERE m.id = $1 AND m.thread_id = $2 AND l.id = ANY($3) AND l.provider = 'OUTLOOK'
+            AND ($4::text = l.macro_id OR EXISTS (SELECT 1 FROM macro_user_links u WHERE u.link_id = l.id AND u.primary_macro_id = $4))
+        FOR UPDATE OF l
+    "#,message_id,thread_db_id,link_ids,actor).fetch_optional(&mut *tx).await?;
 
     // Sender migration must not delete a draft whose delivery was committed
     // after the service's initial validation. Match the shared lock order.
@@ -382,10 +402,66 @@ pub(crate) async fn delete_draft_message(
     .fetch_optional(&mut *tx)
     .await?;
 
+    let retired=sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM email_draft_transfers WHERE source_id=$1 AND state<>'preparing') AS "retired!""#,message_id).fetch_one(&mut *tx).await?;
+    if retired {
+        return Ok(None);
+    }
+
+    let operation = sqlx::query!("SELECT state,error_code,checkpoint->>'stage' AS stage,lease_until FROM email_mailbox_drafts WHERE message_id=$1 FOR UPDATE",message_id)
+        .fetch_optional(&mut *tx).await?;
+    if operation.as_ref().is_some_and(|operation| {
+        operation
+            .lease_until
+            .is_some_and(|until| until > chrono::Utc::now())
+            || matches!(
+                operation.stage.as_deref(),
+                Some("submitting" | "confirming")
+            )
+            || operation.error_code.as_deref() == Some("send_unknown")
+    }) {
+        return Ok(None);
+    }
+    sqlx::query!(r#"
+        INSERT INTO email_draft_object_cleanup (object_key,available_at)
+        SELECT a.s3_key,now() + interval '1 day' FROM email_attachments_drafts a JOIN email_messages m ON m.id = a.draft_id
+        WHERE m.id = $1 AND m.thread_id = $2 AND m.link_id = ANY($3) AND m.is_draft AND NOT m.is_sent
+            AND NOT EXISTS (SELECT 1 FROM email_scheduled_messages s WHERE s.message_id = m.id)
+        ON CONFLICT DO NOTHING
+    "#,message_id,thread_db_id,link_ids).execute(&mut *tx).await?;
+
+    if let Some(link) = outlook {
+        let queued = sqlx::query!(r#"
+            INSERT INTO email_mailbox_drafts (message_id,link_id,generation,actor_id,desired_content,base_version,provider_id,delete_requested)
+            SELECT m.id,m.link_id,$3,$4,
+                jsonb_build_object('db_id',m.id,'thread_db_id',m.thread_id,'subject',COALESCE(m.subject,''),'to','[]'::jsonb,'cc','[]'::jsonb,'bcc','[]'::jsonb),
+                m.provider_version,m.provider_id,true
+            FROM email_messages m WHERE m.id = $1 AND m.link_id = $2 AND m.is_draft AND NOT m.is_sent
+                AND NOT EXISTS (SELECT 1 FROM email_scheduled_messages WHERE message_id = m.id)
+            ON CONFLICT (message_id) DO UPDATE SET delete_requested = true,actor_id = EXCLUDED.actor_id,
+                state = 'pending',
+                checkpoint = CASE WHEN email_mailbox_drafts.checkpoint->>'stage'='creating' THEN email_mailbox_drafts.checkpoint ELSE NULL END,
+                error_code = NULL,lease_id=NULL,lease_until=NULL,
+                available_at = now(),updated_at = now()
+            RETURNING message_id
+        "#,message_id,link.id,link.sync_generation,actor).fetch_optional(&mut *tx).await?;
+        if queued.is_none() {
+            return Ok(None);
+        }
+        sqlx::query!("UPDATE email_messages SET mailbox_state = COALESCE(mailbox_state,'{}'::jsonb) || '{\"provider_missing\":true}'::jsonb WHERE id = $1",message_id).execute(&mut *tx).await?;
+        super::thread::update_thread_metadata(&mut tx, thread_db_id, link.id).await?;
+        let payload = serde_json::json!({"kind":"organization","thread_id":thread_db_id});
+        sqlx::query!("INSERT INTO email_projection_outbox (id,link_id,generation,payload) VALUES ($1,$2,$3,$4)",macro_uuid::generate_uuid_v7(),link.id,link.sync_generation,payload).execute(&mut *tx).await?;
+        tx.commit().await?;
+        return Ok(Some(DraftDeletion {
+            thread_deleted: false,
+        }));
+    }
+
     let deleted_link_id = sqlx::query_scalar!(
         r#"
         DELETE FROM email_messages
         WHERE id = $1 AND thread_id = $2 AND link_id = ANY($3) AND is_draft = true AND is_sent = false
+          AND EXISTS (SELECT 1 FROM email_links l WHERE l.id = email_messages.link_id AND l.provider = 'GMAIL')
           AND NOT EXISTS (SELECT 1 FROM email_scheduled_messages WHERE message_id = $1 AND link_id = email_messages.link_id)
         RETURNING link_id
         "#,

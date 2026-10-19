@@ -6,6 +6,7 @@ import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context
 import { useApplyPreset } from '@app/features/next-soup/soup-view/soup-view-tabs';
 import { VIEW_TAB_LISTS } from '@app/features/next-soup/soup-view/tab-lists';
 import { usePreference } from '@app/preferences/use-preference';
+import { fireAndForget } from '@core/util/fireAndForget';
 import BuildingsIcon from '@phosphor/buildings.svg';
 import GlobeIcon from '@phosphor/globe.svg';
 import HashIcon from '@phosphor/hash.svg';
@@ -133,7 +134,7 @@ export function CallsSidebar(props: { onNavigate: () => void }) {
       view.source.hasNextPage() &&
       !view.source.isFetching()
     ) {
-      void view.source.fetchNextPage();
+      fireAndForget(view.source.fetchNextPage(), 'calls-view');
     }
   });
 

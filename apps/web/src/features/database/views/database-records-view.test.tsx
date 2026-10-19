@@ -210,7 +210,10 @@ function columnOrderFixture() {
   };
 }
 
+let createdRecord: Promise<boolean> | undefined;
+
 beforeEach(() => {
+  createdRecord = undefined;
   const style = document.createElement('style');
   style.textContent =
     '[role="menu"], [role="dialog"] { animation-name: none; }';
@@ -1491,7 +1494,12 @@ describe('database table view', () => {
           stored={false}
           addColumn={() => null}
           renderToolbar={(actions) => (
-            <button type="button" onClick={() => void actions.createRecord()}>
+            <button
+              type="button"
+              onClick={() => {
+                createdRecord = actions.createRecord();
+              }}
+            >
               New record
             </button>
           )}
@@ -1527,6 +1535,7 @@ describe('database table view', () => {
           false
         )
       );
+      await createdRecord;
     }
   );
 
@@ -1720,7 +1729,12 @@ describe('database table view', () => {
         boardPositions={unplacedCards}
         addColumn={() => <button type="button">Add property</button>}
         renderToolbar={(actions) => (
-          <button type="button" onClick={() => void actions.createRecord()}>
+          <button
+            type="button"
+            onClick={() => {
+              createdRecord = actions.createRecord();
+            }}
+          >
             New record
           </button>
         )}
@@ -1751,6 +1765,7 @@ describe('database table view', () => {
       )
     );
     expect(screen.queryByRole('dialog')).toBeNull();
+    await createdRecord;
   });
 
   it('creates a card without writing a read-only string title', async () => {
@@ -1984,7 +1999,9 @@ describe('database table view', () => {
           <button
             type="button"
             disabled={actions.pending()}
-            onClick={() => void actions.createRecord()}
+            onClick={() => {
+              createdRecord = actions.createRecord();
+            }}
           >
             Create from toolbar
           </button>
@@ -2022,6 +2039,7 @@ describe('database table view', () => {
         false
       )
     );
+    await createdRecord;
   });
 
   it('persists menu moves past the neighboring column in both directions', async () => {
@@ -2422,7 +2440,12 @@ describe('database table view', () => {
         stored={false}
         addColumn={() => <button type="button">Add column</button>}
         renderToolbar={(actions) => (
-          <button type="button" onClick={() => void actions.createRecord()}>
+          <button
+            type="button"
+            onClick={() => {
+              createdRecord = actions.createRecord();
+            }}
+          >
             New record
           </button>
         )}
@@ -2465,5 +2488,6 @@ describe('database table view', () => {
       1,
       false
     );
+    await createdRecord;
   });
 });

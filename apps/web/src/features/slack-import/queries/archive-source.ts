@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   createSlackImportWorker,
   disposeSlackImportWorker,
@@ -59,7 +60,7 @@ export function createArchiveSource(
       worker.onmessage = (event: MessageEvent<ArchiveWorkerResponse>) => {
         if (disposed || event.data.sessionId !== sessionId) return;
         queue.push(event.data);
-        void drain();
+        fireAndForget(drain(), 'slack-import');
       };
       worker.onerror = () => rejectPending?.(new ArchiveError('invalid_zip'));
       return new Promise((resolve, reject) => {

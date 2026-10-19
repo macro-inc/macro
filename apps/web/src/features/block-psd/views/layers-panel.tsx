@@ -14,6 +14,7 @@ import {
   type LayerPatch,
   type LayerRow as Row,
 } from '@core/psd-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowsOutCardinal from '@phosphor/arrows-out-cardinal.svg';
 import Checkerboard from '@phosphor/checkerboard.svg';
 import CircleHalf from '@phosphor/circle-half.svg';
@@ -117,7 +118,8 @@ export function LayersPanel(props: {
 
   const setLayer = (patch: LayerPatch, key?: string) => {
     const ids = editor.selected();
-    if (ids.length > 0) void editor.apply([patchOp(ids, patch)], key);
+    if (ids.length > 0)
+      fireAndForget(editor.apply([patchOp(ids, patch)], key), 'psd-editor');
   };
 
   const choose = (row: Row, e: MouseEvent) => {
@@ -155,7 +157,10 @@ export function LayersPanel(props: {
     e.preventDefault();
     const placement = dropPlacement(editor.layers(), dragged, row, state.zone);
     if (placement)
-      void editor.apply([{ op: 'move', ids: dragged, ...placement }]);
+      fireAndForget(
+        editor.apply([{ op: 'move', ids: dragged, ...placement }]),
+        'psd-editor'
+      );
   };
 
   const layerMenu = (): MenuEntry[] => {
@@ -248,18 +253,21 @@ export function LayersPanel(props: {
   const newMenu = (): MenuEntry[] => [
     {
       label: 'Solid Color…',
-      onSelect: () => void commands.run.newFill('solid'),
+      onSelect: () =>
+        fireAndForget(commands.run.newFill('solid'), 'psd-editor'),
       testId: 'psd-new-fill-solid',
     },
     {
       label: 'Gradient…',
-      onSelect: () => void commands.run.newFill('gradient'),
+      onSelect: () =>
+        fireAndForget(commands.run.newFill('gradient'), 'psd-editor'),
     },
     'divider',
     ...ADJUSTMENT_TYPES.map((type) => ({
       label: ADJUSTMENT_LABELS[type],
       testId: `psd-new-adjustment-${type}`,
-      onSelect: () => void commands.run.newAdjustment(type),
+      onSelect: () =>
+        fireAndForget(commands.run.newAdjustment(type), 'psd-editor'),
     })),
   ];
 
@@ -428,16 +436,27 @@ export function LayersPanel(props: {
                 onChoose={(e) => choose(row, e)}
                 onChooseMask={() => editor.chooseLayers([row.id], 'mask')}
                 onToggleVisible={() =>
-                  void editor.apply([
-                    patchOp([row.id], { visible: !row.visible }),
-                  ])
+                  fireAndForget(
+                    editor.apply([
+                      patchOp([row.id], { visible: !row.visible }),
+                    ]),
+                    'psd-editor'
+                  )
                 }
                 onToggleOpen={() =>
-                  void editor.apply([patchOp([row.id], { open: !row.open })])
+                  fireAndForget(
+                    editor.apply([patchOp([row.id], { open: !row.open })]),
+                    'psd-editor'
+                  )
                 }
-                onToggleEffects={() => void toggleEffects(row.id)}
+                onToggleEffects={() =>
+                  fireAndForget(toggleEffects(row.id), 'psd-editor')
+                }
                 onRename={(name) =>
-                  void editor.apply([patchOp([row.id], { name })])
+                  fireAndForget(
+                    editor.apply([patchOp([row.id], { name })]),
+                    'psd-editor'
+                  )
                 }
                 onContextMenu={(e) => {
                   if (!editor.selected().includes(row.id))

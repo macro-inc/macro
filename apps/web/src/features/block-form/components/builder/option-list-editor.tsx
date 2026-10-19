@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { Popover } from '@kobalte/core/popover';
 import Palette from '@phosphor/palette.svg';
 import X from '@phosphor/x.svg';
@@ -93,9 +94,9 @@ export function OptionListEditor(props: {
           onKeyDown={(event) => {
             if (event.isComposing || event.key !== 'Enter') return;
             event.preventDefault();
-            void addDraft();
+            fireAndForget(addDraft(), 'form-builder');
           }}
-          onBlur={() => void addDraft()}
+          onBlur={() => fireAndForget(addDraft(), 'form-builder')}
         />
       </li>
     </ul>

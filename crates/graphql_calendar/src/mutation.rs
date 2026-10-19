@@ -1,5 +1,9 @@
 use async_graphql::{Context, ErrorExtensions, Object};
-use calendar_events::domain::{changes::CalendarEventChange, ports::CalendarMutationError};
+use calendar_events::domain::{
+    changes::CalendarEventChange,
+    meeting_links::{CreateEventWithMacroCallError, MeetingLinkError},
+    ports::CalendarMutationError,
+};
 use graphql_common::require_authenticated_user;
 use uuid::Uuid;
 
@@ -39,15 +43,27 @@ impl CalendarMutationRoot {
         let viewer = require_authenticated_user(ctx)?.as_ref().to_owned();
         let writes = &ctx.data::<CalendarGraphqlMutationContext>()?.writes;
         let request = input.into_request().map_err(invalid_input)?;
-        let event = writes
-            .create_event(
-                viewer.clone(),
-                request.email_link_id,
-                request.calendar_id,
-                request.draft,
-            )
-            .await
-            .map_err(mutation_error)?;
+        let event = if request.macro_call {
+            writes
+                .create_event_with_macro_call(
+                    viewer.clone(),
+                    request.email_link_id,
+                    request.calendar_id,
+                    request.draft,
+                )
+                .await
+                .map_err(macro_call_error)?
+        } else {
+            writes
+                .create_event(
+                    viewer.clone(),
+                    request.email_link_id,
+                    request.calendar_id,
+                    request.draft,
+                )
+                .await
+                .map_err(mutation_error)?
+        };
         committed_state(writes.as_ref(), viewer, event.id, None).await
     }
 
@@ -207,6 +223,28 @@ pub(crate) fn mutation_error(error: CalendarMutationError) -> async_graphql::Err
         extensions.set("code", code);
         extensions.set("retryable", retryable);
     })
+}
+
+/// Map a failure creating an event together with its Macro call. A meeting
+/// that could not be minted leaves the calendar untouched, so the client may
+/// retry the same create.
+fn macro_call_error(error: CreateEventWithMacroCallError) -> async_graphql::Error {
+    match error {
+        CreateEventWithMacroCallError::Calendar(error) => mutation_error(error),
+        CreateEventWithMacroCallError::MeetingLink(MeetingLinkError::InvalidInput(message)) => {
+            invalid_input(async_graphql::Error::new(message))
+        }
+        CreateEventWithMacroCallError::MeetingLink(error) => {
+            tracing::error!(error = ?error, "calendar event macro call creation failed");
+            async_graphql::Error::new(
+                "the Macro call for the event could not be created; the event was not saved",
+            )
+            .extend_with(|_, extensions| {
+                extensions.set("code", "macro_call_failed");
+                extensions.set("retryable", true);
+            })
+        }
+    }
 }
 
 /// Tag a malformed input with the same `invalid_input` code the calendar

@@ -1211,6 +1211,17 @@ export class Model {
         }
     }
     /**
+     * MACRO: describes the host's filtered tables, whose hidden rows
+     * SUBTOTAL(1-11) leaves out, from the next evaluation on.
+     * @param {FilteredRange[]} ranges
+     */
+    setFilteredRanges(ranges) {
+        const ret = wasm.model_setFilteredRanges(this.__wbg_ptr, ranges);
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
+    }
+    /**
      * @param {number} sheet
      * @param {number} count
      */

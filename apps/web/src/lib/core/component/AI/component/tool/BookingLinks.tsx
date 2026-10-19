@@ -1,6 +1,8 @@
+import { refreshBookingLinkResult } from '@app/features/scheduling/queries/agent-sync';
+import { fireAndForget } from '@core/util/fireAndForget';
 import Link from '@phosphor-icons/core/regular/link.svg';
 import type { BookingLinkResult } from '@service-cognition/generated/tools/types';
-import { createSignal, For } from 'solid-js';
+import { createEffect, createSignal, For } from 'solid-js';
 import { BaseTool } from './BaseTool';
 import { Tool } from './Tool';
 import { createToolRenderer, type RenderContext } from './ToolRenderer';
@@ -77,8 +79,16 @@ export const listBookingLinksHandler = createToolRenderer({
 function mutationHandler(name: 'CreateBookingLink' | 'EditBookingLink') {
   return createToolRenderer({
     name,
+    handleResponse: (ctx) => refreshBookingLinkResult(ctx.tool.data),
     render: (ctx) => {
       const saved = () => ctx.response?.data;
+      // Agent sessions render folded tool results without the legacy stream callback.
+      // Synchronize the external query cache too; revision checks skip old history.
+      createEffect(() => {
+        const result = saved();
+        if (result)
+          fireAndForget(refreshBookingLinkResult(result), 'ai-booking-links');
+      });
       return (
         <LinkCard
           label={

@@ -4,6 +4,7 @@ import {
   clearPendingConnectApp,
   pendingConnectApp,
 } from '@core/pipedream/pendingConnect';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { connectPipedreamApp } from '@queries/pipedream-connectors';
 import { Button } from '@ui';
 import { createEffect, createSignal, on, Show, Suspense } from 'solid-js';
@@ -52,7 +53,10 @@ function ConnectionsContent(props: { onOpenMacroMcp: () => void }) {
         setImportSlackChannels(true);
         return;
       }
-      void connectRequestedApp(requested.appSlug);
+      fireAndForget(
+        connectRequestedApp(requested.appSlug),
+        'connections-settings'
+      );
     })
   );
   async function connectRequestedApp(appSlug: string) {

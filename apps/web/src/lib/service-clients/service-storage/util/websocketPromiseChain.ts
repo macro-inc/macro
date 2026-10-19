@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { ResultError } from '@core/util/result';
 import type { MinimalWebSocket } from '@macro-inc/collaboration/websocket/platform/minimal-websocket';
 import { err, ok, type Result } from 'neverthrow';
@@ -70,9 +71,12 @@ export function createWebsocketPromiseChain<
         }
       }, timeoutMs);
     }) as PromiseHandler;
-    promise.finally(() => {
-      promise.resolved = true;
-    });
+    fireAndForget(
+      promise.finally(() => {
+        promise.resolved = true;
+      }),
+      'docx-upload'
+    );
 
     return Object.assign(promise, {
       resolve: resolvePromise!,
@@ -133,10 +137,13 @@ export function createWebsocketPromiseChain<
 
     ws.addEventListener('message', messageHandler);
     ws.addEventListener('close', closeHandler);
-    Promise.allSettled(results).then(() => {
-      ws.removeEventListener('message', messageHandler);
-      ws.removeEventListener('close', closeHandler);
-    });
+    fireAndForget(
+      Promise.allSettled(results).then(() => {
+        ws.removeEventListener('message', messageHandler);
+        ws.removeEventListener('close', closeHandler);
+      }),
+      'docx-upload'
+    );
 
     let maybeInputData = getInputData(...args);
     if (!(maybeInputData instanceof Promise)) {

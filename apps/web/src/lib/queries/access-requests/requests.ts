@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { accessRequestsClient } from '@service-storage/access-requests';
 import type { ShareEntity } from '@service-storage/generated/schemas/shareEntity';
@@ -46,42 +47,48 @@ export function invalidateAccessRequests(entity: ShareEntity) {
   });
 }
 export function refreshSharedAccess(entity: ShareEntity) {
-  void invalidateAccessRequests(entity);
+  fireAndForget(invalidateAccessRequests(entity), 'access-requests');
   // Permissions change list membership even when the item was never cached.
   invalidateAllSoup();
-  void refreshActiveGraphqlSoupQueries();
+  fireAndForget(refreshActiveGraphqlSoupQueries(), 'access-requests');
   const includesDescendants = entity.entityType === 'project';
-  void refreshActiveGraphqlPreviewQueries(
-    includesDescendants ? undefined : entity.entityId
+  fireAndForget(
+    refreshActiveGraphqlPreviewQueries(
+      includesDescendants ? undefined : entity.entityId
+    ),
+    'access-requests'
   );
-  void revalidateActivityQueries(
-    getGraphqlSoupClient(),
-    includesDescendants ? null : new Set([entity.entityId])
+  fireAndForget(
+    revalidateActivityQueries(
+      getGraphqlSoupClient(),
+      includesDescendants ? null : new Set([entity.entityId])
+    ),
+    'access-requests'
   );
   if (entity.entityType === 'database') {
-    void queryClient.invalidateQueries({
+    queryClient.invalidateQueries({
       queryKey: databasesKeys.detail(entity.entityId).queryKey,
     });
-    void queryClient.invalidateQueries({
+    queryClient.invalidateQueries({
       queryKey: databasesKeys.list.queryKey,
     });
   }
   if (entity.entityType === 'call')
-    void queryClient.invalidateQueries({ queryKey: callKeys._def });
+    queryClient.invalidateQueries({ queryKey: callKeys._def });
   if (entity.entityType === 'agent_session')
-    void queryClient.invalidateQueries({
+    queryClient.invalidateQueries({
       queryKey: agentSessionKeys.detail(entity.entityId).queryKey,
     });
   if (entity.entityType === 'project') {
     // A folder grant changes effective access on its descendants too.
-    void queryClient.invalidateQueries({ queryKey: accessRequestKeys._def });
-    void queryClient.invalidateQueries({ queryKey: entityKeys._def });
+    queryClient.invalidateQueries({ queryKey: accessRequestKeys._def });
+    queryClient.invalidateQueries({ queryKey: entityKeys._def });
   }
   if (entity.entityType === 'document') {
-    void queryClient.invalidateQueries({
+    queryClient.invalidateQueries({
       queryKey: entityKeys.documentMetadata(entity.entityId).queryKey,
     });
-    void queryClient.invalidateQueries({
+    queryClient.invalidateQueries({
       queryKey: entityKeys.documentAccessLevel(entity.entityId).queryKey,
     });
   }

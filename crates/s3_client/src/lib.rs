@@ -13,6 +13,32 @@ pub struct S3 {
 }
 
 impl S3 {
+    /// Returns the stored size and SHA-256 checksum without downloading the body.
+    pub async fn verified_metadata(
+        &self,
+        bucket: &str,
+        key: &str,
+    ) -> anyhow::Result<(i64, Option<String>)> {
+        use base64::Engine;
+        let response = self
+            .inner
+            .head_object()
+            .bucket(bucket)
+            .key(key)
+            .checksum_mode(aws_sdk_s3::types::ChecksumMode::Enabled)
+            .send()
+            .await?;
+        let sha = response
+            .checksum_sha256()
+            .map(|checksum| {
+                base64::engine::general_purpose::STANDARD
+                    .decode(checksum)
+                    .map(hex::encode)
+            })
+            .transpose()?;
+        Ok((response.content_length().unwrap_or_default(), sha))
+    }
+
     pub fn new(inner: aws_sdk_s3::Client) -> Self {
         Self { inner }
     }

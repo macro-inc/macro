@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { $isListItemNode } from '@lexical/list';
 import { $createDocumentMentionNode } from '@macro-inc/lexical-core';
 import {
@@ -143,7 +144,10 @@ function registerCheckboxToTaskPlugin(
         return false;
       }
 
-      processCheckboxes(editor, checkboxes, options, pluginOptions);
+      fireAndForget(
+        processCheckboxes(editor, checkboxes, options, pluginOptions),
+        'checkbox-to-task'
+      );
 
       return true;
     },

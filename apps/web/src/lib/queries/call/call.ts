@@ -1,5 +1,6 @@
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { ThrownResultError, throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
 import { type CallRecord, callServiceClient } from '@service-call/client';
@@ -120,7 +121,7 @@ function _useJoinCallMutation() {
     mutationFn: async (channelId: string) =>
       await throwOnErr(() => callServiceClient.getOrCreateCall(channelId)),
     onSuccess() {
-      invalidateActiveCallQueries();
+      fireAndForget(invalidateActiveCallQueries(), 'call-membership');
     },
     onError(error: Error) {
       if (
@@ -160,7 +161,7 @@ export function useLeaveCallMutation() {
       }
     },
     onSuccess() {
-      invalidateActiveCallQueries();
+      fireAndForget(invalidateActiveCallQueries(), 'call-membership');
     },
     onError(error: Error) {
       console.error('failed to leave call', error);
@@ -254,14 +255,16 @@ function patchCachedCallTeamShare(
 export function setCallRecordTeamShareCache(callId: string, shared: boolean) {
   const queryKey = callKeys.record(callId).queryKey;
   // Drop in-flight GETs so a slower record response cannot overwrite this write.
-  void queryClient.cancelQueries({ queryKey });
+  queryClient.cancelQueries({ queryKey });
   queryClient.setQueryData<CallRecord>(queryKey, (prev) =>
     prev ? patchCachedCallTeamShare(prev, shared) : prev
   );
 }
 
 function invalidateCallRecord(callId: string) {
-  queryClient.invalidateQueries({ queryKey: callKeys.record(callId).queryKey });
+  queryClient.invalidateQueries({
+    queryKey: callKeys.record(callId).queryKey,
+  });
 }
 
 /**

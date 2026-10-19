@@ -8,6 +8,7 @@ import { getDisplayNameParts, tryMacroId } from '@core/user';
 import { compareDateDesc, type DateValue } from '@core/util/date';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { formatRelativeTimestamp } from '@entity';
+import { Telemetry } from '@macro-inc/observability';
 import {
   isAccessiblePreviewItem,
   type PreviewItem,
@@ -257,7 +258,7 @@ export function References(props: ReferenceProps) {
       {
         preferNewSplit: true,
       }
-    );
+    ).catch((error) => Telemetry.error(error, { surface: 'references' }));
   };
 
   const navigateToGenericReference = (

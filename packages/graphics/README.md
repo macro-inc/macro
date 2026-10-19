@@ -85,7 +85,7 @@ individual shapes. This does not change hit testing for unselected shapes.
 
 Editors accept `snapUnit` in their options, with `getSnapUnit()` and
 `setSnapUnit(unit)` for local configuration. Any positive finite scene-unit
-interval is supported, including fractions; `undefined` disables snapping.
+interval is supported, including fractions; `undefined` disables grid snapping.
 It is independent of camera zoom, document serialization and backend choice.
 Changing the unit cancels active drawing/transform previews without adding history.
 `CommandContext.snapUnit` and the pure `snapValue`, `snapPoint`, and
@@ -100,6 +100,20 @@ aspect ratio; center resizing keeps its center. Image boundaries, connector
 bindings and angle/axis constraints take priority over the grid. Freehand samples,
 rotation, equal distribution and exact alignment retain their own semantics.
 Snapping does not round existing documents on load or remote updates.
+
+Object snapping is a separate opt-in editor option (`objectSnapping`, default
+`false`) controlled by `setObjectSnapping(enabled)` and exposed in the session.
+Canvas enables it by default. Moves align the selection's combined world bounds'
+edges and centers; axis-aligned resize handles align their moving edges. Rotated
+resize frames keep local-axis behavior, and image surfaces do not object-snap.
+The index caches sorted anchors and perpendicular interval trees per immutable
+scene snapshot, with O(n log n) construction and a constant number of spatially
+pruned anchor queries per pointer update. Selected objects and their ancestors /
+descendants are excluded. Tolerance is six screen pixels; perpendicular reach is
+160 screen pixels. Object matches override grid values on matched axes without
+breaking axis or aspect constraints. `transform.snapGuides` drives the Solid
+overlay and `transform.snapStats` exposes aggregate query work to host telemetry.
+Changing the setting cancels active transforms without adding history.
 
 The Solid surface's dot grid is camera-aware presentation: scene-unit intervals
 1, 4, 16, 64, 256, etc. appear progressively as zoom increases. Fine dots fade in

@@ -2,6 +2,15 @@
 
 ## Calendar — `/app/calendar/<month-or-week-or-day>`
 
+Microsoft calendars use the same editor and calendar views after calendar consent.
+Conference choices follow the selected calendar's capabilities: Microsoft Teams
+where supported and Google Meet for Google calendars. Selecting a calendar that
+cannot create a requested conference shows an error until the request is resolved;
+editing an existing meeting preserves its conference. Email reminders are sent to
+the connected calendar mailbox. Outlook out-of-office automatic replies show an
+uncertainty notice if a provider response cannot be confirmed; a reconnect must
+not resend an already attempted automatic reply.
+
 Event composer dropdown triggers and date/time inputs use the theme control
 surface, so they blend with the dialog instead of using the darker page fill.
 Their menus stay inside the composer's portal scope. Verify that calendar,
@@ -104,22 +113,13 @@ the event details without sending a response.
 Calendar scheduling is on by default in dev. Production uses the PostHog flag
 `enable-calendar-scheduling` and stays off unless enabled remotely. Set
 `VITE_ENABLE_CALENDAR_SCHEDULING=false` to test the disabled state locally.
-While off, the Calendar settings tab and calendar booking shortcuts are hidden;
+While off, the Scheduling workspace and calendar booking shortcuts are hidden;
 public booking and receipt links show an unavailable page without fetching
 scheduling data. When enabling a production rollout, include anonymous visitors
 so invitees can open those links. A public booking link stays available when
 the flag request gets no answer, for example when a browser blocks it.
 
 Calendar connections live in **Settings → Calendar** (`/app/settings/calendar`).
-Scheduling lives in the separate **Settings → Booking links** item
-(`/app/settings/booking-links`). Use the owner menu at the top right to choose
-**Personal** or **Team · team name**,
-then use **Links**, **Availability**, **Booking page**, **Bookings**, or **Insights**.
-Every section and creation action applies to that selected owner. The default is
-Personal. **Manage teams** in that menu opens team settings. The calendar toolbar’s booking
-actions open Booking links; connection shortcuts continue to open Calendar.
-**New booking link** and **New schedule** create for the selected owner and open
-inline editors. Save changes or Cancel returns to that owner's list.
 Connected calendars offers Connect account (the existing Google consent flow),
 Connect calendar for accounts missing calendar permission, and Disconnect with
 confirmation. Disconnect removes calendar access/data, not the Gmail connection.
@@ -131,58 +131,27 @@ swatch, or enter a three- or six-digit hex value. Arrow keys adjust the focused
 color field (Shift makes larger steps). **Reset to default** clears the override.
 Visibility and colors share the calendar sidebar's browser-local preferences,
 survive reload, and do not change the Google calendar or booking conflict checks.
-Booking status filters use the same segmented control as the CRM sidebar.
-In Availability, each weekday has an enable switch, time ranges, an add button,
-and a copy-hours menu; select target days and Apply before saving the schedule.
-Date overrides and the searchable timezone picker sit below the weekly hours.
-The header shows the selected owner; team owners have an explicit **Team** label.
-Links and availability use flat rows, with actions beside each item.
-Booking pages, bookings, and insights show only the selected owner. Search filters
-that owner’s links and clears when switching owners. Any team member can edit
-team links. Hosts can cancel or reschedule the meetings they host; team
-owners/admins can also manage teammates’ bookings and approve pending ones.
-`Links` creates, edits, pauses,
-duplicates, previews, and copies booking links. Event settings include a
-video choice. New links default to a Macro call, which is created when
-someone books and attached to the calendar invitation. Google Meet and no
-video link remain available. Event settings also include
-weekly availability, collective/all-host or round-robin/one-host assignment,
-notice, buffers, booking horizon, daily limits, and custom questions. New event
-types stay paused until `Accept bookings` is selected and changes are saved.
-`Availability` manages named weekly schedules and date overrides in an IANA time
-zone. Set a default schedule for new event types; a schedule cannot be deleted
-until its event types use another one. Collective and round-robin team meetings
-respect each host’s personal default hours when configured, plus busy calendars.
-**Manage teams** opens team settings, where the member roster lives. Choose hosts
-for a team booking link inside its editor.
-`Booking page` edits the public name and description. `Bookings` shows
-upcoming, unconfirmed, past, and cancelled meetings; admins can confirm requests,
-reschedule, or cancel them. Choose From/Through dates to load bookings (initially 30 days before and after today), then search by guest/title/email and filter by event type. Dates use your browser time zone; shorten the range if more than 5,000 bookings match.
-Cancellation asks for confirmation. After a confirmed meeting ends, an assigned
-host or team admin can mark attendance or a host/guest no-show. Pending requests
-from older configurations appear under Unconfirmed. New approval-only links are disabled;
-new links use automatic confirmation and provider calendar invitations. Existing approval
-links must switch to automatic confirmation before accepting new bookings.
 
-`Insights` reports the selected personal/team owner with 7/30/90-day or custom
-ranges, event/host filters, previous-period comparisons, event trends, meeting
-hours, no-shows, popular events, and host counts. Download exports the filtered
-bookings to CSV. Metrics use booking start dates in the default schedule’s time
-zone; failed/processing requests are excluded. Completed means ended confirmed
-bookings excluding recorded no-shows. Rescheduled counts bookings with recorded
-reschedule history. Ratings/CSAT are not shown because no survey data is collected.
-Oversized result sets return an error instead of silently truncating insights.
-
-The calendar header includes `Copy booking link` and `Open calendar scheduling
-settings`. Copy opens settings when no active personal link exists. Public
-`/app/book/:profile/:slug?` pages accept bookings without Macro sign-in. The website
-opens them in its own dialog; framed there, a booking page and its receipt drop their
-Macro heading and footer, and the booking page tells the website when a booking is
-made. Only macro.com can frame them. Uncertain
-calendar writes retain the booking and show its private receipt while automatic recovery runs.
+The calendar header has a `Booking links` dropdown. Select an active link to
+copy it. The `Manage booking links` footer opens the Scheduling workspace, even
+while links load or when none are active. At narrow desktop pane widths, the
+dropdown moves from the header into the calendar sidebar above `Upcoming events`
+and its menu matches the trigger's width. Phones retain the header dropdown
+because they do not expose that sidebar. The calendar automatically sets up a
+default personal link for a new profile. Public
+`/app/book/:profile/:slug?` pages accept bookings without Macro sign-in. Guests
+choose an event on the profile landing page, then choose their timezone, date,
+and time before entering attendee details. Date & time and Your details steps
+show progress; the event summary and selected time stay visible. Choose another
+time preserves attendee input. All meetings returns to the profile chooser when
+multiple events exist, but is disabled while a booking response is unresolved.
+The private confirmation shows the meeting, date, timezone, location, and guest.
+Public URLs and booking behavior remain unchanged. The website can frame the
+booking page and receipt without duplicate Macro branding. A completed booking
+notifies the same-origin parent page; other sites cannot frame these routes.
+Uncertain calendar writes retain the booking and show its private receipt while automatic recovery runs.
 After a network response cannot be verified, `Check booking status` retries the original request;
-do not create a replacement booking. Receipt pages poll while the calendar update is pending. Visitors
-choose their time zone, date, time, and required details. The private
+do not create a replacement booking. Receipt pages poll while the calendar update is pending. The private
 `/app/booking/:id#token` receipt supports cancellation and rescheduling; preserve
 that private link. Rescheduling dates are labelled in the availability schedule's
 time zone. Calendar provider failures show an error; they never report a
@@ -209,8 +178,9 @@ is feature-gated and lists teammates with 24px avatars; its header has the same
 14px checkbox before the title, which shows or hides the grid overlay and is saved
 with the calendar visibility preferences. The teammate rows have no checkboxes and
 stay listed while the overlay is hidden. Clicking a teammate's row navigates to that
-date, opens read-only event details, and marks the row active. The icon-only
-`Calendar settings` control fills the sidebar footer.
+date, opens read-only event details, and marks the row active. The left-aligned
+`Settings` control with a gear icon fills the sidebar footer; booking management
+lives in the `Booking links` dropdown rather than a separate footer shortcut.
 An account checkbox toggles its calendars together in one update. The checkbox
 responds immediately; the upcoming list and each grid page refresh on deferred
 tasks rather than re-rendering all pages during the click.
@@ -363,12 +333,15 @@ Failed calendar or account queries show `Could not load your calendars.` with
 `New event` opens the compact composer with All day in the date/time fields.
 The meeting-link selector lists `Macro call`, `Google Meet`, then `No meeting link`
 for new events, defaulting to `Macro call` when quick calls are enabled. Keeping
-that selection creates and attaches a Macro call after the event saves. Selecting
+that selection creates the Macro call together with the event in one save, so the
+invitation attendees receive already carries the link; if the call cannot be
+created, nothing is saved and Save retries the whole create. Selecting
 `Google Meet` or `No meeting link` skips the Macro call. Out-of-office entries do
 not create calls. There is no separate call toggle or Scheduled Call menu option.
 All-day events get an untimed call link, so setup does not display a misleading midnight time.
-A failed link attachment keeps the composer open with a retry message; Save reuses
-the saved event and call instead of creating duplicates. The invitation includes
+Adding a call to an existing event attaches it after the update; a failed
+attachment keeps the composer open with a retry message, and Save reuses the same
+call instead of creating duplicates. The invitation includes
 the call link in its description and, when no location was entered, its location.
 Event details show a plain icon row with a standard gray `Join Macro call` button
 and `Copy call link`, without an enclosing border or the full URL.
@@ -464,12 +437,525 @@ Every calendar mention's hover card shows the schedule, location, organizer and 
 count, plus the first lines of the event description (its links open), and no last-updated
 byline.
 
+## Scheduling — `/app/scheduling`
+
+Booking management has a dedicated **More → Scheduling** workspace at
+`/app/scheduling`. Its sidebar is titled **Scheduling** and separates
+Booking links, Availability, Bookings, Insights, and Booking page without a
+Calendar/Booking links switcher. The sidebar lists **Personal** first, then each team by
+name as vertical, single-selection rows matching Email's inbox list. The active
+row has a checkmark; the list scrolls when more teams are present. Selecting
+a row switches the owner for the entire workspace; ownership badges appear only
+in the top header, not on cards or tab content. Owner changes discard link/schedule drafts and stay disabled during saves.
+Each tab's heading appears in the main topbar, with its description available
+through an info tooltip rather than a separate large header. Booking links uses the
+shared ViewShell search bar below the topbar, with **New** on the same
+row at the far right. New opens the manual editor; a separate **Create with
+agent** button sits beside it. On touch devices, the header has separate
+sparkle and plus buttons for agent and manual creation. Create with agent opens an editable,
+unsent request in an agent conversation and carries the selected Personal/team
+owner privately. The agent reads current settings and asks for approval before
+saving; opening the conversation does not create a link. If a booking-page draft
+is still unsaved, resolve its Save/Discard prompt first. Keep editing cancels
+the launch without creating an agent session. Successful create/edit
+tool results refresh the matching profile when its cached revision is older.
+Read-only owners do
+not offer creation actions. Link rows use the full pane width with the same rounded
+list-hover treatment as Drive and Email: acceptance switch, link icon, name,
+description, then larger task-style URL-path, duration, and scheduling-type pills
+with matching surfaces. Scheduling type reflects the saved link mode: Individual,
+Collective, or Round robin, with a corresponding icon. Pills wrap on narrow panes
+and align with the title on touch devices. Row content has no hover tooltips.
+Paused links appear dimmed but remain editable. The URL pill offers Copy link and
+Open in new tab. Desktop More and right-click menus share Copy link, Preview,
+Edit, Duplicate, and Delete. Touch rows hide More; hold a row to open the shared
+mobile action-drawer style, headed by the link title and a circular close button.
+The action list scrolls independently while its heading remains visible.
+Focus the title and press Shift+F10 or the Menu key for keyboard access to the same
+actions. Escape restores title focus; choosing Edit or Duplicate closes the
+action surface before opening the editor. Editing actions remain available to every team member.
+Open the URL-pill dropdown with a pointer. Enter/Space opening currently loops in
+nested scroll containers; avoid keyboard opening for that dropdown.
+Clicking a link's name or description opens **Booking link details**, a summary-only
+dialog that reuses the create/edit Review contents. Title and Description are
+stacked labeled values, followed by a Link field with the copy action beside its
+URL. Active links offer Copy; the footer contains only Edit for authorized owners.
+On touch devices, details use a content-sized drawer capped at 80% of the viewport.
+Only the summary scrolls; the heading, circular close control, and Edit footer
+stay visible. Opening Edit first dismisses the details drawer.
+Close details with the header close button, Escape, or outside dismissal.
+Paused links still show their details. Legacy links requiring confirmation show
+Paused without Copy because they cannot accept bookings. Read-only viewers can view details
+without an Edit action or status toggle. Team members can choose **Edit
+booking link** in the dialog footer or Edit in either row menu. Closing details
+restores focus to the row; editing opens the unchanged five-step flow, including
+Review. Viewing details does not save changes or fetch another copy of the profile.
+Narrow panes wrap properties below the link text.
+Booking date filters remain below the topbar. Tab content aligns with the left
+content gutter instead of using automatic horizontal margins. The selected tab and
+owner survive reload through route search state (`tab` and `owner` in the
+`scheduling` namespace). Desktop tab and owner navigation stays in the sidebar.
+On touch devices, Scheduling uses the same horizontally scrollable pill strip as
+Drive. The leading island contains the Personal/team owner selector and the New
+plus button when permitted, followed by the separate Booking links, Availability,
+Bookings, Insights, and Booking page pills. Booking links also retains its
+Create with agent action in the leading island. The owner drawer restores focus
+to its trigger after selection, Escape, or outside dismissal. Long owner names
+truncate while the control's accessible label retains the full name.
+The main Scheduling view has no header Back button. During schedule editing,
+a separate **Back to availability** pill sits beside the editor-title pill, while
+owner and creation controls hide. Back or the editor footer's Cancel returns without saving.
+The content and editor footer clear the floating
+header and bottom dock. Calendar's booking actions open this workspace.
+Date fields in Availability, Bookings filters, custom Insights ranges, and rescheduling
+open a shared mini-calendar instead of the browser's native picker. Use the month
+heading or arrows to navigate, then select a day; arrow keys move the focused day.
+**Today** selects the current local date. Optional fields also offer **Clear**.
+Date limits disable out-of-range days. Escape closes only the mini-calendar and
+returns focus to the date field, preserving the surrounding draft.
+**Booking page** is a full-width, height-filling public-page canvas, with no
+centered workspace width cap or separate details panel. **Edit** and **Preview**
+mode tabs float at the top-left of the canvas; the accent **Save** action floats
+at the top-right in Edit mode only. **Revert** appears beside Save when the name or
+introduction differs from the saved page, and restores both saved values. Both
+controls are disabled while saving. The controls overlay the canvas without a
+separate header bar, divider, or reserved header height.
+Edit mode places outlined Display name and Introduction inputs where guests see
+the heading and description.
+The outlines sit four pixels outside the text boxes, adding visual padding without
+changing text positions or moving the meeting cards. Introduction grows with its
+text and uses the preview's typography. Preview mode removes the inputs, outlines,
+and Save/Revert actions, showing the draft with the real public-page layout.
+Switching modes keeps edits; return to Edit to save. Switching workspace tabs or
+owners with edits opens **Save booking page changes?**: **Save** persists before
+continuing, **Discard** restores saved values, and **Keep editing** cancels the
+navigation. A failed save keeps the draft and displays the error for retry. The
+split-router leave guard protects navigation away and closing the split. Browser
+refresh/close uses the browser's native unsaved-changes warning. Browser Back and
+Forward also show the same prompt when they change the Scheduling tab or owner.
+The canvas scrolls
+behind the floating controls. Its branding, published meeting cards, and empty
+state reuse the public page's components. Meeting cards are
+display-only, so editing cannot start a real booking. Above the canvas, **Copy
+link** copies the saved page URL without displaying it or opening the guest page.
+After copying, the icon briefly fades to a green check without shifting the
+button, then returns. Failed copies keep the copy icon and report the error.
+Feedback respects reduced motion. Sharing remains disabled until the page is saved.
+There is no extra owner badge above the canvas,
+but the workspace topbar still identifies Personal or the selected team.
+Fields stay disabled while saving or for read-only viewers. Every team member
+can edit a team's page. Drafts remain separate for each owner, saving
+updates only the selected owner, and failed saves retain edits for retry. There
+is no separate Booking settings shortcut or Settings → Booking links page.
+Public booking URLs remain unchanged. Calendar connections and integration
+shortcuts continue to open Settings → Calendar.
+Booking status filters use the same segmented control as the CRM sidebar.
+In Availability, the topbar reads **Availability** and shows the selected owner.
+The shared toolbar contains **Search schedules** (name or time zone) and **New**
+(**New schedule**); on touch devices, New moves into the header island.
+Schedule cards show the default badge, time zone, a Monday-first
+week preview, grouped hours, and booking-link/date-exception counts. **Preview**
+uses an eye icon and opens all weekly hours and date exceptions without editing,
+including for read-only users. Empty weekly hours say **Not set**; empty date
+exceptions say **Unavailable**. Unsaved time-off annotations appear in the draft
+only. The actions menu offers **Set as default**, **Copy schedule**, and
+**Delete**. On touch devices, hold a schedule card to open these actions in a
+drawer; the desktop More button is hidden. Shift+F10 or the Menu key on the
+schedule name opens the same actions. The drawer uses the schedule name as its
+heading, with a circular close button and an independently scrolling action list.
+Closing restores focus to the card; Copy schedule and Delete wait for the drawer
+to close before opening the editor or confirmation.
+Delete opens the shared confirmation dialog; schedules used by booking
+links instead explain that those links must move first. Cancelling restores focus
+without changing the schedule. While a delete is saving, focus returns to the
+schedule list rather than a disabled action. Returning from a copied-schedule
+editor restores focus to the card's name on touch or its desktop action button.
+Long names/hours have tooltips and remain contained at narrow widths.
+
+**New schedule** opens **Create schedule**; the title or **Edit schedule** opens
+**Edit schedule**. Both hide the list toolbar and show the editor title with
+**Back to availability**. The editor follows the stored schedule model rather than
+treating the calendar as a drawing surface: **Schedule details**,
+**Weekly hours**, and **Date exceptions** remain visible. Weekly rules open inline;
+date exceptions open in a shared dialog over the calendar. The large transparent
+schedule title is directly editable. The aligned time-zone field and browser-local
+**12h / 24h** display preference sit beneath it. Changing the time format does not
+change stored hours.
+
+**Weekly hours** lists all seven weekdays with their available hours, explicit time
+off, or **Not set**. Each row's Add/Edit action opens that weekday's complete hours
+inline. **Add hours** starts at the last row's end and extends one hour; the first
+range starts at 09:00. The inline hours list has its own bounded scroll area;
+Add hours and Apply/Cancel remain outside it. Adding scrolls only the list to the
+new range. Each range has an **Available / Unavailable** choice, exact
+start/end times, **All day**, and removal. All day sits beside the time inputs when
+space allows. It disables the inputs and displays the saved **00:00–23:59** bounds;
+turning it off restores the previously entered times. Add hours scrolls the new
+range into view. It is disabled while any range is all-day, while the last range
+is invalid, or when a full hour cannot fit before midnight. For breaks, turn off
+All day and use separate time ranges. **Apply weekly hours** replaces that
+weekday's two interval sets without changing other weekdays or date exceptions.
+Removing a range moves focus to a surviving range or Add hours, not
+another Remove action.
+
+The **Calendar preview** stays on the right at wide sizes; narrow layouts stack it
+below weekly hours. It has square date cells, month navigation, and a current-date
+highlight without a Today label. Available hours use accent bars and draft time
+off uses gray bars. Only available windows persist; all other times are non-bookable.
+The weekday headings open weekly hours. Clicking a date or any of its bars opens that date's
+complete hours in the date-exception dialog without expanding the calendar layout.
+Dragging across dates selects an inclusive range. Keyboard users focus a date and
+press Enter or Space; focus moves into the dialog and returns on Apply, Cancel, or
+Escape. Escape closes a nested date picker before the exception dialog. Dragging
+at the viewport edge scrolls the calendar or its surrounding content. Release,
+Escape, and pointer cancellation stop scrolling.
+
+**Add exception** opens the same dialog with a shared date picker.
+Changing its date while unchanged loads that date's existing effective hours. A
+multi-date selection shows natural-language dates instead of a date picker. Shared
+hours prefill the range list; different hours never copy the first date's values or
+invent defaults. Only the range list scrolls; the dialog heading, date controls,
+**Add hours**, and action footer stay fixed. The footer uses larger action buttons:
+**Clear selected hours** on the left and **Cancel** / **Apply** on the right
+(wrapping on narrow screens). Add hours explicitly sets
+a replacement for every selected date, or choose an individual date with
+**Dates to edit**. **Apply exception** / **Apply to N dates** replaces the complete
+day's draft hours atomically. Invalid times, overnight ranges, overlapping
+available/time-off ranges, and excessive intervals
+or dates are rejected before changing the draft schedule.
+
+Date exceptions replace weekly hours, rather than adding to them. **Clear selected
+hours** creates an empty exception: that date remains non-bookable and does not
+inherit weekly hours. Exception rows spell out the date and saved available hours.
+Their Remove action removes the entire exception and restores weekly inheritance.
+Saving sends only available windows using the existing backend contract. Time-off
+annotations are local to the draft and disappear after saving/reloading; unset and
+explicit time off are not stored as separate states. Timed exceptions show only
+their stored available hours in the editor; empty exceptions show all-day unavailability.
+There is no separate stamp mode or single-range conflict-replacement flow; edit
+whole-day rules directly instead.
+
+Changed editor fields protect the draft from date selection, month navigation,
+and switching weekday rows until Apply or Cancel. An unchanged exception dialog
+can dismiss on an outside click; changed exception drafts require Apply, Cancel,
+or Escape. Reverting to the original values unlocks navigation. Opening an editor
+alone does not change the schedule. Apply updates the local schedule draft, never
+the server. Finish or cancel the editor before **Save schedule**, which is the only
+persistence action. **Clear schedule** beside the title clears all weekly hours,
+date exceptions, and pending editor work while preserving the name and time zone.
+**Back to availability** or the footer's **Cancel** discards the entire draft. All action buttons use shared Button.
+Schedule-card **Copy schedule** still opens a new draft without changing the
+original. Leave the editor to discard verification drafts instead of modifying
+hosted data.
+The selected Personal or Team owner appears in the workspace header, not on link or schedule cards.
+Search booking links by title, description, or slug within the selected owner.
+Every team member can edit team links, schedules, and the booking page. The standard
+**New booking link** action opens a dialog without saving anything, including when no
+schedule exists. It grows to 42rem wide and retains an 8px gutter on narrow screens.
+Editing steps stay at 36rem when space permits. Review can grow with its content.
+Both are capped for the viewport, safe areas, and virtual keyboard. The header and
+footer stay fixed; content scrolls when it reaches the height limit.
+Header, content, and footer use matching 24px horizontal padding on wider screens.
+The fixed header has no bottom divider. The active step heading sits on the left,
+with a compact continuous progress bar on the right. Its accent fill extends
+through the current step. The current step number sits before the heading and
+matches its typography and color, without a visible button frame. Click it to open
+a dropdown listing all five steps, with the current step checked.
+Earlier steps open directly; forward jumps validate all earlier steps and focus
+the first invalid field if needed. The step menu supports keyboard navigation
+and locks while saving. Footer and section dividers use contrast-aware border tokens
+in light and dark themes. Field and section subheadings use smaller,
+normal-weight, muted text, while entered values retain their normal contrast.
+The footer keeps Cancel at the far left; Back sits beside Next and is absent on
+the first step. Step content has no separate tabs. Inputs use consistent styling
+and rounded pill presets whose selected accent or unselected muted text stays
+unchanged on hover.
+The screen-reader-only title identifies New personal booking link, New team booking
+link, or Edit booking link. It has five steps:
+Details, Location & availability, Questions, Booking rules, and Review.
+Details contains title, description, and duration.
+Next validates required values without saving; Back preserves the draft and
+control state and returns to the preceding step even if external schedule changes
+invalidate earlier values. Next and Back move between steps and focus the active
+content. Step content uses compact top padding below the header.
+Review sections have no dividers and share a fixed left icon column. Headings and
+all section content align in an indented content column. Title and Description
+are stacked label/value fields, followed by the Link URL and its copy-link icon.
+There are no Review Edit actions; use Back to change values. Icons appear beside
+section headings, not individual values. Values sit closely below their plain
+labels. For saved links, the Link field shows and copies the persisted booking URL
+without saving pending edits. New and duplicated links show their draft URL and
+have no copy action until saved. Meeting buffers combines nonzero before/after values and shows
+No buffers when both are zero.
+On Review, the warning-triangle action sits closely beside Questions and opens a bounded help popover
+explaining that name and email are always collected. The note stays hidden until opened.
+Existing links show an Enabled section with a power icon after Booking rules.
+Only the switch appears below the heading; its accessible label is Enabled.
+Pausing or reactivating changes only the draft until Save changes. The control disables while
+saving. New links retain their active default; duplicates retain their paused default.
+Use automatic confirmation updates a legacy link's draft without saving or leaving
+Review. Reset team settings restores the default hosts and scheduling type in the
+draft and stays on Location & availability.
+The footer primary action is Next until Review, then Create link (Save changes
+for existing links), with a plus icon for Create link. Save draft is not available.
+Cancel, Escape, and clicking outside request closing. If saved values differ from
+the initial draft, a Discard changes? confirmation offers Keep editing or Discard
+changes. Keeping the draft restores focus. Discard waits for confirmation teardown
+before closing the editor and returning focus to its booking-list opener, without
+saving. Unchanged or reverted drafts, step navigation, and empty question
+placeholders do not prompt.
+Validation errors return to the relevant step, outline affected controls, and appear
+immediately beneath those controls. Correcting a field clears its error without
+another Next click.
+Submitting with Enter or Next focuses the first invalid control and scrolls its
+message into view. Live edits clear errors without moving focus to another control.
+Save failures appear beneath the action that attempted the write, not in a banner.
+The progress indicator exposes Step X of 5 and the active heading to assistive
+technology. It updates on each step. Stepper animates the body
+while retaining controls. Back and Next remain text-only. Saving disables
+navigation and editor actions.
+Description sits below the title/link area. Neither description nor duration has
+an info icon. Duration always shows a slider with numeric hours/minutes fields
+sharing a compact frame on the right. Both parts stay visible, including `0 hours`
+and `0 mins`; the unit labels are fixed, with no selector, presets, or minus/plus
+buttons. Excess minutes normalize into hours on blur. Errors appear below the
+slider and say “Duration must be between 5 mins and 8 hours.” Min/max labels appear
+above both ends. The slider uses 15-minute adjustments with a 5-minute lower limit;
+Ctrl enables one-minute pointer or keyboard adjustments. The shared Tooltip component
+shows each slider's current value on hover, focus, and drag, anchored to its thumb.
+Duration tooltips show hours and minutes for longer durations.
+Pressing a thumb without moving it preserves exact values, including values beyond
+the displayed scale. Duration dragging reaches the full 480-minute maximum.
+Saved exact values stay unchanged until an explicit input or slider movement.
+The pencil icon beside the URL opens an optional custom-link popover. A blank
+custom link uses a unique automatic URL based on the meeting title. New title-based
+links receive a suffix when another link already uses that URL. Renaming a saved
+link preserves its URL; only explicit custom-link edits or Reset to title change it.
+Only entered custom links validate their format; Reset to title generates a unique
+URL for the current title.
+Escape closes the popover without closing the editor and returns focus to the pencil
+icon.
+Location offers Macro call, Google Meet, and Custom presets. New links default
+to Macro call; booking creates a call and adds its join link to the invitation.
+The selected option uses a subtle accent tint, accent text, and an accent border.
+Custom shows an address or URL input; either video option shows joining
+instructions. Switching presets preserves the entered location/instructions. Availability keeps its
+schedule picker without an extra Availability schedule heading. The selected schedule's
+weekly hours and timezone appear directly beneath the picker. This summary does not show
+live calendar free/busy or date overrides. First-time links use the default draft schedule
+until saved. Calendar busy-time exclusions appear in the help popover beside
+Availability. Team links group Scheduling type and Team hosts under Team scheduling
+in Location & availability. Collective and Round robin use pill selectors above
+Team hosts. The header's icon-only Reset team
+settings action restores the default mode and hosts, and is disabled at those defaults.
+A warning icon to the right of Team hosts opens the connected-calendar requirement.
+Collective requires all selected hosts; Round robin assigns one available host.
+Team hosts uses a compact searchable, virtualized multi-select that opens downward
+outside the dialog so its bounds do not clip the options, with avatars and selected
+checkboxes. Selected hosts appear first when the dropdown opens; toggling hosts
+keeps the current row order. Search matches names and emails; selections stay in
+the draft until saved. Escape closes only the host dropdown and restores its
+trigger focus.
+Selected former members remain visible for removal, and validation requires at
+least one current host. Personal links remain Individual and omit team controls.
+New links show two optional question fields immediately; existing questions keep
+their values and Required options. Blank or whitespace-only rows never block
+navigation and are omitted from Review and saved configuration. The name/email
+explanation appears with a warning triangle above the fixed footer on Questions;
+Review puts it in its help
+popover. Each question has no inset card or padding, and shows Required and an
+icon-only Remove control beside its label, above the input. There is no bulk
+Remove questions action. Removing an
+individual question focuses the next question, the previous question after removing
+the last one, or Add a question if none remain. Booking rules has no outer
+disclosure or Remove action.
+Booking rules shows a Booking range heading and click-open info popover above one
+two-handle slider. The short popover explains how soon a meeting can start after
+booking and how many days ahead guests can book. Exact
+current-value inputs replace the static scale endpoints above the track: earliest
+on the left and latest on the right, including on narrow screens. There are no
+visible question labels, unit menus, or section divider lines. Both offsets are
+measured from now, not from one another. These rules restrict meeting start times,
+not when the link is active. The scale gives hours and days more room, with visible
+landmarks at 1 hour, 4 hours, 1 day, 7 days, and 14 days, ending at 30 days.
+Values above thirty days remain at the right edge without changing their exact
+stored value; the latest input accepts up to 365 days. At that edge, increase keys
+and End preserve the exact value; a decrease key moves back below the displayed
+limit. Moving one handle changes only that endpoint. Earliest gestures use
+15-minute steps below 2 hours,
+30-minute steps below 4 hours, hourly steps below 1 day, and daily steps beyond.
+Ctrl enables minute-level pointer/arrow adjustments, including stationary clicks;
+latest arrows step in days. Earliest PageDown at one day returns to 23 hours.
+Horizontal arrows follow the reading direction. Slider
+gestures keep the endpoints ordered; exact inputs preserve equal/reversed values
+and show existing cross-field validation instead of silently changing the other end.
+Earliest supports 0–10,080 minutes; latest supports 1–365 days. Latest must extend
+beyond earliest. Invalid ranges block Next/save and focus the affected input.
+Time-slot interval uses preset pills for 5, 10, 15, 20, 30, 45, and 60 mins,
+plus Custom. Custom reveals a compact exact input supporting 5–480 minutes.
+Daily booking limit uses No limit, 1, 3, 5, 10, and 20 preset pills, plus Custom.
+Its exact input supports 0–100 bookings; zero saves as null. Both pill rows wrap
+on narrow screens. Selecting Custom focuses its input without changing the value.
+Typing a preset value manually keeps Custom selected. Selecting a preset hides the
+exact input. The frequency controls have no sliders.
+Time between meetings appears last, with separate before/after number inputs and no
+sliders. Booking range, time-slot interval, daily booking limit, and Time between
+meetings have 32px vertical gaps between sections.
+Other sliders display min/max labels above their ends; Booking range displays
+editable current values instead.
+Enter in any exact input never advances the step or saves the link. Validation,
+field bounds, unit conversion, draft retention, save, and discard behavior remain
+unchanged. Errors stay below controls; stored fractions stay visible until corrected.
+Booking range displays earliest as whole hours and minutes, such as `1 h 30 m`;
+its thumb tooltip uses the same format. The earliest textbox accepts `1 h 30 m`,
+`1h 30m`, or `90 m`; a bare number means minutes. Partial text stays local until
+it parses, and blur restores the last valid draft in hours/minutes format. The
+latest input and tooltip use days only, never weeks. Neither endpoint has a unit
+menu. Other number/unit controls use NumberUnitInput on Kobalte NumberField and
+retain their unit menus. Exact input frames stay visible above, beside, or below
+sliders; no slider/input control shows minus/plus buttons. Duration fields accept
+whole hours and minutes, preserve exact minute values, and normalize on blur.
+Other controls keep booking counts and minute/day units whole.
+Parsed out-of-range duration and notice values remain visible in the draft;
+validation blocks Next/save with an error until corrected. Blank or non-parsable
+time text stays local; blur restores the last parsed draft value. Other number/unit
+inputs restore their last valid values after blank or out-of-range input.
+Explicit unit choices replace the previous preference. Saved values remain whole
+minutes or days. Slider movement never overwrites another endpoint or a clipped
+exact value. No limit and zero save as null, preserving the backend contract.
+Questions are booking-specific text answers with labels and Required checkboxes,
+not forms. Only Create link or Save changes persists the draft.
+Configured options remain visible when editing. **Create link** uses shared primary
+action styling and activates a fresh link. Closing an edited link requests discard
+confirmation. The first link and any default
+working-hours schedule are saved together. Existing links can still be edited,
+toggled, duplicated, deleted, previewed, and copied. Editing an inactive link does
+not activate it. Duplicated links stay paused on Create link; only fresh New
+booking link drafts activate by default.
+Booking-link card options use the shared Dropdown menu with padded Groups and
+standard icon/text items; Delete sits in its own separated group. Immediate activation
+switches use the shared accent-colored ToggleSwitch without custom color overrides.
+Changing workspace sections or owners, including browser history, dismisses and
+clears unsaved link/availability editors instead of reopening stale drafts. UI
+navigation stays disabled during saving; hidden owners cannot retain open dialogs.
+`Availability` manages named weekly schedules and date overrides in an IANA time
+zone. Set a default schedule for new event types; a schedule cannot be deleted
+until its event types use another one. Collective and round-robin team meetings
+respect each host’s personal default hours when configured, plus busy calendars.
+Team membership remains in team settings. Team-host selection and collective
+or round-robin assignment live in the link dialog. Booking-page identity is
+configured in the Scheduling workspace's Booking page tab. `Bookings` uses the
+shared view search bar and redesigned meeting cards grouped by date in the selected
+display time zone. Cards span the pane. Their left column stacks status above
+weekday, date, and year. The right-hand details group includes a clock icon with
+the time range, a timer icon with duration, and host/location metadata. Metadata
+items wrap as whole groups before their text wraps; long values wrap only when
+wider than the available row.
+Time ranges keep each clock value intact and wrap only between endpoints on narrow
+cards. A shared timezone stays beside the range when space allows; overnight bookings
+show an explicit end date, and daylight-saving changes retain both timezone labels. Borderless
+status tabs show Upcoming, Unconfirmed, Past, Cancelled, and Needs attention when
+calendar synchronization needs help. The filter button immediately right of
+search groups the booking-link filter, display-timezone selector, and date range.
+Touch uses the shared circular filter button and mobile filter drawer, with
+collapsible **Booking links**, **Time zone**, and **Date range** sections. Options
+are selectable rows, longer lists include search, and dates edit inline. The
+close button restores focus; Clear all resets the selected booking-link filter.
+Desktop uses a popover. Status tabs remain outside the filter surface.
+The main card column gives the larger title a text-align-left
+icon, followed by the guest name with a person icon and an icon-free email aligned
+under the name. The name and email have a compact 4px gap; other detail groups use
+consistent 16px gaps, independent of the date column's height. Card status uses
+a colored dot and label without a pill outline or padding;
+details keep the property-style badge. More sits immediately to the left of
+Join meeting or Confirm on desktop, aligned with the metadata row on wide cards.
+Actions retain their full size; narrow cards place them below the metadata.
+On touch devices, More is hidden; hold a booking card to open its action drawer.
+Shift+F10 or the Menu key on the card also opens the actions. The drawer uses the
+booking title as its heading and has a circular close button above its scrolling
+action list. Closing restores card focus; Details, Reschedule, and Cancel/Decline
+first dismiss the drawer before opening their destination.
+Cancelled cards are dimmed. Click a
+card's main content to open Booking details, including host names,
+location, the guest's time zone, and question responses. Status sits beside the meeting
+title. Permitted footer actions stay grouped in Cancel/Decline, Reschedule, and
+Join meeting (or Confirm for a request) order. Cancel and Decline use destructive styling.
+More and right-click menus provide the same permitted actions as the details dialog.
+Team owners/admins can confirm requests and manage any booking. Assigned hosts can
+reschedule or cancel their own future confirmed bookings without admin access. Cancellation asks for confirmation before releasing the
+reserved time. The confirmation appears above the details; Cancel/Decline scrolls it
+into view and focuses Keep booking. Keep booking returns focus to Cancel/Decline. After a confirmed meeting ends, an assigned host or team admin can
+record attendance or a host/guest no-show in its details.
+Open **Filters**, then the date-range control to choose From/Through dates and
+Apply dates (initially 30 days before and after today). On touch, Cancel discards
+the date draft and closes the filter drawer. Closing without applying keeps the
+loaded range. Escape closes an open date picker first, then the filter drawer,
+including when a closed date field has focus.
+Loading dates use your browser time zone; changing the display
+time zone only changes card grouping and displayed times. Shorten the range if more
+than 5,000 bookings match.
+Pending requests from older configurations appear under Unconfirmed. New approval-only links are disabled;
+new links use automatic confirmation and provider calendar invitations. Existing approval
+links must switch to automatic confirmation before accepting new bookings.
+
+`Insights` reports the selected personal/team owner with 7/30/90-day or custom
+ranges, event/host filters, previous-period comparisons, event trends, meeting
+hours, no-shows, popular events, and host counts. Download exports the filtered
+bookings to CSV. Metrics use booking start dates in the default schedule’s time
+zone; failed/processing requests are excluded. Completed means ended confirmed
+bookings excluding recorded no-shows. Rescheduled counts bookings with recorded
+reschedule history. Ratings/CSAT are not shown because no survey data is collected.
+Oversized result sets return an error instead of silently truncating insights.
+The top toolbar places the filter button beside **Download**. Touch uses the
+shared circular filter button and mobile filter drawer, with collapsible
+**Booking links**, **Hosts**, and **Date range** sections. Selectable rows replace
+nested dropdowns, and the date section includes presets and inline custom dates.
+Desktop uses a popover with event-type, host, and date-range selectors.
+Clear all resets event and host filters. Closing and reopening keeps selected
+filters; nested menus and date pickers dismiss before the filter surface.
+Closing the drawer restores its trigger.
+The desktop host filter uses Tasks' Assignee submenu search header, compact rows, and small
+avatars, but selects one host at a time. The selected host has a trailing checkmark,
+not a leading checkbox, and stays pinned first on reopening. Its searchable,
+virtualized list is capped at 240px tall. Rows show names without email subtitles;
+search still matches names and emails. Screen readers announce emails to distinguish
+names.
+Choices include the signed-in user, team members, booking-link
+hosts, and hosts from loaded bookings, without duplicate IDs or a display limit.
+Historical hosts absent from the member directory remain available as Former member.
+A selected historical host stays selected and visible after date-range changes,
+even when the new range has no bookings for that host. Select All hosts to remove
+the host filter. On desktop, Custom range opens a submenu with Start date and
+End date fields, with Clear on the left and Apply dates on the right. Touch shows
+these fields directly in the Date range section. Draft changes do not alter the
+report until applied. Clear empties both date fields
+and removes validation errors without changing the report; Escape discards drafts.
+The Events card includes an outcome donut with one slice per booking outcome:
+Completed, Upcoming, Cancelled, Pending approval, Host no-show, or Guest no-show.
+Rescheduled remains a separate metric because a rescheduled booking also has an
+outcome. The outcome rows show counts by default. Use the # / % buttons above the
+rows to switch between counts and percentages. Focus or hover a slice to read
+both values. The donut total remains a booking count. Event trends and
+Popular booking times use lazily loaded Observable Plot; the donut uses D3.
+Popular event types and Bookings by host use simple name/count rows with progress
+bars relative to the highest count. Toggle trend series in the legend, or focus
+the trend chart and use left/right arrows to read dates. Each Plot chart also
+offers a data table. Performance retains separate time and no-show metrics rather
+than putting different units on one scale.
+Insights fills the available content width. Wide panes stack Popular event types,
+Popular booking times, and Bookings by host in a column beside the metrics and
+event trend. Narrow panes move the same stack below the metrics and event trend.
+Layout responds to the pane width, including split views, rather than only the window width.
+Scroll the report to reach every metric, chart, and table; the report owns its
+vertical scrolling without clipping the lower sections.
+
 ## Calendar invitations in email
 
 In `/app/component/mail`, open an invitation message; the same card appears in
 `/app/email/:threadId`. Saved details appear below the sender without waiting for calendar
 sync. Expand guests and descriptions with their explicit controls. `View original email`
-is an accessible disclosure that starts closed; attachments remain below it.
+is an accessible disclosure that starts closed and stays open across unchanged
+permission refreshes and window refocus on desktop and mobile; attachments remain below it.
 ICS attachments show a calendar icon in the attachment pill and file headers on
 desktop and mobile, including when the email uses `application/ics` or a
 parameterized `text/calendar` MIME type. Opening the attachment still shows the
@@ -505,3 +991,16 @@ action is unavailable.
 focus to its trigger. Busy overlapping events are labeled, while cancelled, declined,
 and free events do not count as conflicts. Calendar 12/24-hour preferences apply to
 already-open invitation cards as well as the calendar view.
+
+For a writable Outlook event you organize, the editor's `Replace event…` action
+can reset guest RSVPs or remove its online meeting. Save or discard ordinary edits
+first. Choose the entire series or only this occurrence, review the saved event,
+and check the cancellation/reinvitation acknowledgement before `Replace event`.
+The old invitation is cancelled after the replacement is prepared; guests receive
+a new invitation and must respond again. `Check progress` and `Continue replacement`
+resume that saved operation after an interrupted response. Recovery continues when
+the dialog closes. A conflict offers links to review both copies in Outlook; do
+not create another copy while the existing operation is unresolved. Events with
+native details that cannot be safely copied are rejected before any invitations.
+For an Outlook invitation you attend, `Open in Outlook` below the RSVP controls
+opens the actual occurrence so you can clear your own response there.

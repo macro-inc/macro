@@ -3,10 +3,10 @@ use std::sync::{Arc, Mutex};
 use calendar_events::domain::{
     changes::{CalendarChangeQueryService, CalendarChangesPage, CalendarWatermark},
     models::{
-        CalendarEvent, CalendarMentionPreview, CalendarMentionRequestItem, CalendarOccurrence,
-        CalendarOccurrenceCursor, CalendarSyncStatus, EventReminders, EventStatus, EventTime,
-        EventTransparency, EventType, EventVisibility, OccurrenceException, OccurrenceListing,
-        OccurrenceRange, TeamOutOfOffice, VisibleCalendar,
+        CalendarCapabilities, CalendarEvent, CalendarMentionPreview, CalendarMentionRequestItem,
+        CalendarOccurrence, CalendarOccurrenceCursor, CalendarProvider, CalendarSyncStatus,
+        EventReminders, EventStatus, EventTime, EventTransparency, EventType, EventVisibility,
+        OccurrenceException, OccurrenceListing, OccurrenceRange, TeamOutOfOffice, VisibleCalendar,
     },
     ports::CalendarOccurrenceService,
 };
@@ -103,6 +103,8 @@ impl CalendarOccurrenceService for RecordingCalendarReads {
             is_writable: true,
             is_subscription: false,
             sync_error: None,
+            provider: CalendarProvider::Google,
+            capabilities: CalendarCapabilities::google(),
             default_reminders: Vec::new(),
         }])
     }
@@ -285,6 +287,19 @@ impl calendar_events::domain::ports::CalendarMutationService for RecordingCalend
         _requester_id: &str,
         _email_link_id: Uuid,
     ) -> Result<(), calendar_events::domain::ports::CalendarMutationError> {
+        unreachable!("only deletion is exercised")
+    }
+}
+
+impl calendar_events::domain::ports::CalendarMacroCallService for RecordingCalendarMutations {
+    async fn create_event_with_macro_call(
+        &self,
+        _requester_id: &str,
+        _email_link_id: Option<Uuid>,
+        _calendar_id: Option<Uuid>,
+        _draft: calendar_events::domain::models::CalendarEventDraft,
+    ) -> Result<CalendarEvent, calendar_events::domain::meeting_links::CreateEventWithMacroCallError>
+    {
         unreachable!("only deletion is exercised")
     }
 }

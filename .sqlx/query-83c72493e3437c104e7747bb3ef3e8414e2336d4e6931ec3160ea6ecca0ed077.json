@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT provider_calendar_id,access_role,is_primary FROM calendars WHERE id=$1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "provider_calendar_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "access_role",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "is_primary",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "83c72493e3437c104e7747bb3ef3e8414e2336d4e6931ec3160ea6ecca0ed077"
+}

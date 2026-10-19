@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type Accessor,
   createEffect,
@@ -59,7 +60,7 @@ export function advanceEmptyAliasPages(options: {
       ([scope, enabled, ready, hasItems, hasNextPage, busy, failed]) => {
         if (failure() && failure()?.scope !== scope) setFailure(undefined);
         if (enabled && ready && !hasItems && hasNextPage && !busy && !failed) {
-          untrack(() => void advance(scope));
+          untrack(() => fireAndForget(advance(scope), 'email-view'));
         }
       }
     )

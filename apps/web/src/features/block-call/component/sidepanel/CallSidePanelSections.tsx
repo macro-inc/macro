@@ -6,6 +6,7 @@ import { EntityMetadata } from '@components/app/side-panel/EntityMetadata';
 import { References } from '@core/component/References';
 import { useUserId } from '@core/context/user';
 import { type DateValue, formatDate } from '@core/util/date';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   isCallSharedWithTeam,
   useSetCallRecordTeamShareMutation,
@@ -155,7 +156,7 @@ function SharingSectionContent(props: { record: CallRecord }) {
         aria-checked={isShared()}
         aria-readonly={!canEdit()}
         disabled={isDisabled()}
-        onClick={() => void handleChange(!isShared())}
+        onClick={() => fireAndForget(handleChange(!isShared()), 'call-sharing')}
         class={cn(
           'inline-flex items-center gap-2 rounded-md h-7 px-2.5 text-xs select-none w-fit',
           'border border-ink-muted/[0.08] bg-ink-muted/[0.025]',

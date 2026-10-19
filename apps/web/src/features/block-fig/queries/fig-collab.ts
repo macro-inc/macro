@@ -5,6 +5,7 @@
  * `.fig` stays the base every person opens.
  */
 
+import { fireAndForget } from '@core/util/fireAndForget';
 import { schema } from '@loro-mirror/core';
 import { createAwareness } from '@macro-inc/collaboration/collab/awareness';
 import type { Chatter } from '@macro-inc/collaboration/collab/chatter';
@@ -252,7 +253,7 @@ export function createDesignCollabSession(
       started = true;
     }
     setState({ t: 'ready', doc: manager.doc });
-    if (options.canEdit()) void wal.flush();
+    if (options.canEdit()) fireAndForget(wal.flush(), 'fig-collab');
   }
 
   async function accept(initial: InitialSync) {
@@ -298,7 +299,8 @@ export function createDesignCollabSession(
     setConnection(opened);
     opened.source.listen((event) => {
       for (const listener of liveListeners) listener(event);
-      if (event.type === 'reconnect') void resync(event);
+      if (event.type === 'reconnect')
+        fireAndForget(resync(event), 'fig-collab');
     });
     if (peerId !== undefined) opened.source.registerPeerId(peerId);
     const initial = await opened.doInitialSync();
@@ -332,7 +334,7 @@ export function createDesignCollabSession(
         setState({ t: 'error', message: 'Unable to share this design.' });
     }
   }
-  void open();
+  fireAndForget(open(), 'fig-collab');
 
   onCleanup(() => {
     disposed = true;

@@ -1,4 +1,5 @@
 import { InspectorSelect } from './inspector-select';
+
 /**
  * Figma's color picker: a saturation and brightness square, hue and
  * opacity sliders, the eyedropper (where the browser has one), the value
@@ -7,6 +8,7 @@ import { InspectorSelect } from './inspector-select';
  * one drag is one undo step. Presentational.
  */
 
+import { fireAndForget } from '@core/util/fireAndForget';
 import { Slider } from '@kobalte/core/slider';
 import Eyedropper from '@phosphor/eyedropper.svg';
 import { createSignal, For, Index, Show } from 'solid-js';
@@ -199,7 +201,7 @@ export function ColorPicker(props: {
             title="Eyedropper"
             data-testid="fig-color-eyedropper"
             class="rounded p-1 text-ink-muted hover:bg-hover hover:text-ink"
-            onClick={() => void pickFromScreen()}
+            onClick={() => fireAndForget(pickFromScreen(), 'fig-editor')}
           >
             <Eyedropper class="size-4" />
           </button>

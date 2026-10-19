@@ -1,4 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { getWebOrigin } from '@core/util/webOrigin';
 import CheckIcon from '@phosphor/check.svg';
 import LinkIcon from '@phosphor/link.svg';
@@ -78,7 +79,7 @@ export function ChannelJoinLinkButton(props: {
       size={props.iconOnly ? 'icon-md' : 'sm'}
       label={buttonLabel()}
       disabled={getJoinLinkMutation.isPending}
-      onClick={() => void copyJoinLink()}
+      onClick={() => fireAndForget(copyJoinLink(), 'channel-invite')}
     >
       <Show
         when={!getJoinLinkMutation.isPending}

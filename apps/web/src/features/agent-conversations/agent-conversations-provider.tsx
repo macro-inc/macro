@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { queryReadyGate } from '@queries/gate';
 import type { ParentProps } from 'solid-js';
 import { AgentConversationsContext } from './context';
@@ -22,7 +23,7 @@ export function AgentConversationsProvider(
         // until the next poll succeeds.
         conversations: () =>
           props.hasAgents && queryReadyGate(query) ? query.data : undefined,
-        refresh: () => void query.refetch(),
+        refresh: () => fireAndForget(query.refetch(), 'agent-conversations'),
       }}
     >
       {props.children}

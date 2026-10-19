@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   createLoroManager,
   type LoroManager,
@@ -111,7 +112,10 @@ function startSnapshotIngest(
       })
     : ingest();
 
-  void recordSnapshotResult(parentSpan, source, operation);
+  fireAndForget(
+    recordSnapshotResult(parentSpan, source, operation),
+    'markdown-editor'
+  );
 }
 
 async function ingestLocalSnapshot(

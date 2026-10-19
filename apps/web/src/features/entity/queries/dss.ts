@@ -41,7 +41,7 @@ import { BulkDeleteFailure } from './bulk-delete-result';
 
 function invalidateDeletedDssItems(entities: EntityData[]): void {
   if (entities.some((e) => e.type === 'call')) {
-    void queryClient.invalidateQueries({ queryKey: callKeys._def });
+    queryClient.invalidateQueries({ queryKey: callKeys._def });
   }
   if (entities.some((e) => e.type === 'routine')) {
     const deletedIds = new Set(
@@ -56,7 +56,7 @@ function invalidateDeletedDssItems(entities: EntityData[]): void {
         );
       }
     );
-    void queryClient.invalidateQueries({
+    queryClient.invalidateQueries({
       queryKey: scheduledActionKeys.list.queryKey,
     });
     for (const scheduleId of deletedIds) {
@@ -433,10 +433,10 @@ export function createBulkCopyDssEntityMutation() {
 
     onMutate: async () => {
       // For copy, no optimistic update — new IDs unknown until server
-      queryClient.cancelQueries({
+      await queryClient.cancelQueries({
         queryKey: soupKeys.items._def,
       });
-      queryClient.cancelQueries({
+      await queryClient.cancelQueries({
         queryKey: soupKeys.astItems._def,
       });
     },

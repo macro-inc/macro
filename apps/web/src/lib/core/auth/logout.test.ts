@@ -32,9 +32,6 @@ vi.mock('@queries/email/local-drafts', () => ({
 vi.mock('@core/constant/servers', () => ({
   SERVER_HOSTS: { 'auth-logout': 'https://auth.example.com/oauth2/logout' },
 }));
-vi.mock('@core/mobile/isNativeMobilePlatform', () => ({
-  isNativeMobilePlatform: vi.fn(() => false),
-}));
 vi.mock('@core/util/platform', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@core/util/platform')>()),
   isTauri,
@@ -42,6 +39,9 @@ vi.mock('@core/util/platform', async (importOriginal) => ({
 vi.mock('@core/util/cookies', () => ({ syncLoginStorage: vi.fn() }));
 vi.mock('@graphql-cache/lifecycle', () => ({
   clearRegisteredCaches: vi.fn(async () => {}),
+}));
+vi.mock('@service-storage/graphql-soup', () => ({
+  setGraphqlSoupSessionActive: vi.fn(),
 }));
 vi.mock('@queries/auth/user-info', () => ({
   authKeys: {
@@ -59,14 +59,33 @@ vi.mock('./push-registration-lifecycle', () => ({
   unregisterPushRegistrationsForLogout: vi.fn(async () => {}),
 }));
 
+import { clearRegisteredCaches } from '@graphql-cache/lifecycle';
 import {
   clearLocalDrafts,
   flushLocalDrafts,
   listLocalDrafts,
 } from '@queries/email/local-drafts';
 import { authServiceClient } from '@service-auth/client';
+import { setGraphqlSoupSessionActive } from '@service-storage/graphql-soup';
 import { confirmDialog } from '@ui';
 import { clearLocalAuthSession, useLogout } from './logout';
+
+describe('logout GraphQL session teardown', () => {
+  it('ends the GraphQL session only after the cache wipe', async () => {
+    client.current = new QueryClient();
+    const order: string[] = [];
+    vi.mocked(clearRegisteredCaches).mockImplementationOnce(async () => {
+      order.push('wipe');
+    });
+    vi.mocked(setGraphqlSoupSessionActive).mockImplementationOnce(() => {
+      order.push('teardown');
+    });
+    await clearLocalAuthSession();
+    expect(order).toEqual(['wipe', 'teardown']);
+    expect(setGraphqlSoupSessionActive).toHaveBeenCalledWith(false);
+    client.current.clear();
+  });
+});
 
 describe('logout notification cache isolation', () => {
   it('retires pending Done buckets and rotates the display-intent session', async () => {

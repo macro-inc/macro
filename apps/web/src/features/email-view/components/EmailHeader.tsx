@@ -48,11 +48,24 @@ export function EmailViewBreadcrumbItem() {
   );
 }
 
-export function EmailTopBar() {
+export function EmailTopBar(props: {
+  /** Beside a reading pane the reader shows the trail; the list shows its tab. */
+  tabOnly?: boolean;
+}) {
+  const { state } = useEmailView();
+  const tabTitle = () =>
+    EMAIL_TABS.find((tab) => tab.id === state.tab)?.label ?? 'Email';
   return (
     <ViewShell.TopBar>
       <div class="flex min-w-0 flex-1 items-baseline gap-2">
-        <ViewBreadcrumbs.Outlet aria-label="Email location" />
+        <Show
+          when={props.tabOnly}
+          fallback={<ViewBreadcrumbs.Outlet aria-label="Email location" />}
+        >
+          <h2 class="truncate px-1 text-sm font-medium text-ink">
+            {tabTitle()}
+          </h2>
+        </Show>
         <EmailInboxFilter class="@max-[720px]/view-shell:hidden" />
       </div>
     </ViewShell.TopBar>

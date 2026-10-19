@@ -1,4 +1,5 @@
 import { CollapsibleSection, ViewSidebar } from '@app/components/view-shell';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { isResponseFreeNetworkError } from '@core/util/request-error';
 import PlusIcon from '@phosphor/plus.svg';
 import StackIcon from '@phosphor/stack.svg';
@@ -97,7 +98,9 @@ export function ProjectsSidebar(props: ProjectsSidebarProps) {
               </p>
               <ViewSidebar.Item
                 disabled={pending()}
-                onClick={() => void readProjects('refresh')}
+                onClick={() =>
+                  fireAndForget(readProjects('refresh'), 'projects')
+                }
               >
                 Try again
               </ViewSidebar.Item>
@@ -114,7 +117,7 @@ export function ProjectsSidebar(props: ProjectsSidebarProps) {
             <Show when={source.hasMore() && !failed()}>
               <ViewSidebar.Item
                 disabled={pending() || source.loadingMore()}
-                onClick={() => void readProjects('more')}
+                onClick={() => fireAndForget(readProjects('more'), 'projects')}
               >
                 {pending() || source.loadingMore()
                   ? 'Loading…'

@@ -245,3 +245,36 @@ async fn fetch_forwarded_attachments_in_bulk_excludes_drafts_without_attachments
 
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("forwarded_attachments"))
+)]
+async fn cross_inbox_forward_keeps_the_source_inbox_for_provider_download(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    let source = Uuid::parse_str("00000000-0000-0000-0000-000000000f01")?;
+    let destination = Uuid::parse_str("00000000-0000-0000-0000-000000000f02")?;
+    let draft = Uuid::parse_str("00000000-0000-0000-0000-00000000f501")?;
+    sqlx::query!(
+        "UPDATE email_messages SET link_id = $1 WHERE id = $2",
+        destination,
+        draft
+    )
+    .execute(&pool)
+    .await?;
+    let attachments = fetch_forwarded_attachments_by_draft_id(&pool, destination, draft).await?;
+    assert_eq!(attachments.len(), 2);
+    assert!(
+        attachments
+            .iter()
+            .all(|attachment| attachment.source_link_id == source)
+    );
+    assert_eq!(attachments[0].message_provider_id, "gmail-original-msg-001");
+    assert!(
+        fetch_forwarded_attachments_by_draft_id(&pool, source, draft)
+            .await?
+            .is_empty()
+    );
+    Ok(())
+}

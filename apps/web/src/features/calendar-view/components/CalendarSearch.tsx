@@ -19,6 +19,7 @@ import { IS_MAC } from '@core/constant/isMac';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { debouncedDependent } from '@core/util/debounce';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { openExternalUrl } from '@core/util/url';
 import EmptyStateCalendarSearchGraphic from '@design/empty-state-calendar-search.svg';
 import type { EntityData, WithSearch } from '@entity';
@@ -534,11 +535,14 @@ function CalendarSearchControl(props: {
 
     if (range && isCalendarRangeSupported(range)) {
       setOpen(false);
-      void openCalendarEventSplit({
-        eventId: event.id,
-        occurrenceKey: event.occurrenceKey,
-        time: event.occurrenceKey ? undefined : event.time,
-      });
+      fireAndForget(
+        openCalendarEventSplit({
+          eventId: event.id,
+          occurrenceKey: event.occurrenceKey,
+          time: event.occurrenceKey ? undefined : event.time,
+        }),
+        'calendar-view'
+      );
       return;
     }
 

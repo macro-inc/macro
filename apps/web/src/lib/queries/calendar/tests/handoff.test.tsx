@@ -70,6 +70,15 @@ const updatedData = {
 };
 const calendar: CalendarFieldsFragment = {
   __typename: 'GraphqlCalendar',
+  provider: 'GOOGLE',
+  capabilities: {
+    autoDecline: true,
+    conferenceProvider: 'GOOGLE_MEET',
+    customRecurrence: true,
+    emailReminders: true,
+    removeConference: true,
+    resetRsvp: true,
+  },
   id: 'calendar-1',
   linkId: 'link-1',
   emailAddress: 'me@example.com',

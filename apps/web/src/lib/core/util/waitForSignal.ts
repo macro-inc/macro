@@ -1,29 +1,35 @@
-import { type Accessor, createEffect } from 'solid-js';
+import { err, ok, type Result } from 'neverthrow';
+import { type Accessor, createEffect, createRoot } from 'solid-js';
+
+export type WaitForSignalTimeout = { kind: 'timeout' };
 
 /**
- * Waits until the given signal satisfies a condition, then resolves the Promise.
- * By default, it waits until the signal value is "truthy."
- * Times out after specified time (ms) or default of 3 seconds.
+ * Waits until the given signal satisfies a condition (truthy by default).
+ * Settles with a timeout error after `timeout` ms instead of rejecting, so a
+ * wait that is started and abandoned never surfaces as an unhandled rejection.
  *
  * Usage:
- *   const ready = createSignal(false);
- *   // somewhere else: await waitForSignal(ready);
+ *   const ready = await waitForSignal(isReady);
+ *   if (ready.isErr()) return;
  */
 export function waitForSignal<T>(
   signal: Accessor<T>,
   condition: (val: T) => boolean = Boolean,
   timeout: number = 3000
-): Promise<T> {
-  return new Promise((resolve, reject) => {
-    createEffect(() => {
-      setTimeout(() => {
-        reject(new Error('timed out'));
+): Promise<Result<T, WaitForSignalTimeout>> {
+  return new Promise((resolve) => {
+    createRoot((dispose) => {
+      const timer = setTimeout(() => {
+        dispose();
+        resolve(err({ kind: 'timeout' }));
       }, timeout);
-
-      const value = signal();
-      if (condition(value)) {
-        resolve(value);
-      }
+      createEffect(() => {
+        const value = signal();
+        if (!condition(value)) return;
+        clearTimeout(timer);
+        dispose();
+        resolve(ok(value));
+      });
     });
   });
 }

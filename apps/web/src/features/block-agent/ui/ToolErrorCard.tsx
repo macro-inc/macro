@@ -8,6 +8,7 @@
  * tokens and Tailwind.
  */
 
+import { fireAndForget } from '@core/util/fireAndForget';
 import Check from '@phosphor/check.svg';
 import Copy from '@phosphor/copy.svg';
 import Prohibit from '@phosphor/prohibit.svg';
@@ -111,7 +112,7 @@ export function ToolErrorCard(props: ToolErrorCardProps) {
           onMouseDown={(event) => event.preventDefault()}
           onClick={(event) => {
             event.stopPropagation();
-            void copy();
+            fireAndForget(copy(), 'agent-tool-error');
           }}
         >
           <Show when={copied()} fallback={<Copy class="size-3.5" />}>

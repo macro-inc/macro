@@ -214,13 +214,14 @@ inside a sentence preserves Text.
 
 ### Select options
 
-A select or multi-select cell opens a compact option picker with its search field
-focused (**Search or create…**). Typing filters the options; when the typed name is
+A select or multi-select cell opens an option picker at least as wide as the cell,
+with its search field focused (**Search or create…**) as a borderless row above a
+divider. Typing filters the options; when the typed name is
 not an option yet, a **Create “…”** row adds it, picks it, and keeps focus (on the
 cell for a single select, in the search for a multi-select, which stays open). Arrow
-keys move through the rows and Enter picks. The **Clear value** Button sits on the
-right of a separate, bottom-padded footer below the option list. It sizes to its
-label and empties the cell; it stays available while searching.
+keys move through the rows and Enter picks. **Clear value** is a full-width row
+below a divider at the bottom, aligned with the options. It empties the cell and
+stays available while searching.
 From a freshly opened picker, Down starts at the first option and Up starts at the
 last. With no search text, Down after the last option focuses **Clear value** when present; Enter clears.
 From that button, Up returns to the last option and Down returns to the first.
@@ -259,7 +260,9 @@ toast. A database's only table cannot be deleted: the item is disabled there.
 An editable empty row always follows the records. Enter a value in any of its
 cells to create a record; the next empty row appears immediately. Merely focusing
 or tabbing through an empty row does not save an empty record.
-Click a cell to edit, or focus it with the arrow keys and start typing. Enter
+Click a cell to edit, or focus it with the arrow keys and start typing. The
+whole cell takes the click, including the space below its value when wrapped
+pills make the row taller; values sit vertically centered in such rows. Enter
 saves and immediately edits the same column in the next row, including the empty
 new-record row. Typing there starts the next record without waiting for the
 previous save. Shift+Enter moves up. Both place the typing cursor at the end of

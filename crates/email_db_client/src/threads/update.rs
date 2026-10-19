@@ -1,74 +1,7 @@
 #[cfg(test)]
 mod test;
 
-use crate::messages::get::fetch_messages_metadata;
-
-use chrono::{DateTime, Utc};
-use models_email::email::service::message::{is_inbound, is_outbound, is_spam_or_trash};
-use models_email::service;
-use models_email::service::message::is_macro_draft;
 use sqlx::types::Uuid;
-
-/// Updates a thread's metadata
-///
-/// Skips the write entirely when the recomputed values match the stored row,
-/// so redundant recomputations (e.g. redelivered backfill work) don't produce
-/// dead tuples and WAL for zero semantic change.
-#[expect(clippy::too_many_arguments, reason = "too annoying to fix right now")]
-#[tracing::instrument(skip(tx), err)]
-async fn update_db_thread_metadata(
-    tx: &mut sqlx::PgConnection,
-    thread_id: Uuid,
-    link_id: Uuid,
-    inbox_visible: bool,
-    is_read: bool,
-    latest_inbound_message_ts: Option<DateTime<Utc>>,
-    latest_outbound_message_ts: Option<DateTime<Utc>>,
-    latest_non_spam_message_ts: Option<DateTime<Utc>>,
-) -> anyhow::Result<()> {
-    sqlx::query!(
-        r#"
-        WITH effective AS (
-            SELECT id AS thread_id, $1 OR (reminder_returned_at IS NOT NULL AND EXISTS (
-                SELECT 1 FROM email_messages fm
-                JOIN email_message_labels fml ON fml.message_id = fm.id
-                JOIN email_labels fl ON fl.id = fml.label_id
-                WHERE fm.thread_id = email_threads.id AND fl.provider_label_id = 'INBOX'
-                  AND NOT EXISTS (
-                      SELECT 1 FROM email_message_labels blocked
-                      JOIN email_labels bl ON bl.id = blocked.label_id
-                      WHERE blocked.message_id = fm.id AND bl.provider_label_id IN ('TRASH', 'SPAM')
-                  )
-            )) AS inbox_visible
-            FROM email_threads
-            WHERE id = $6 AND link_id = $7
-        )
-        UPDATE email_threads t
-        SET
-            inbox_visible = effective.inbox_visible,
-            is_read = $2,
-            latest_inbound_message_ts = $3,
-            latest_outbound_message_ts = $4,
-            latest_non_spam_message_ts = $5,
-            updated_at = NOW()
-        FROM effective
-        WHERE t.id = effective.thread_id
-            AND (t.inbox_visible, t.is_read, t.latest_inbound_message_ts, t.latest_outbound_message_ts, t.latest_non_spam_message_ts)
-                IS DISTINCT FROM (effective.inbox_visible, $2, $3, $4, $5)
-        "#,
-        inbox_visible,
-        is_read,
-        latest_inbound_message_ts,
-        latest_outbound_message_ts,
-        latest_non_spam_message_ts,
-        thread_id,
-        link_id,
-    )
-    .execute(tx)
-    .await?;
-
-    Ok(())
-}
 
 // updates a thread's archived status to the passed boolean without performing checks
 #[tracing::instrument(skip(conn), err)]
@@ -202,192 +135,83 @@ pub async fn sync_thread_calendar_flag(
 #[tracing::instrument(skip(tx), err)]
 pub async fn sync_thread_signal_flag(
     tx: &mut sqlx::PgConnection,
-    thread_db_id: Uuid,
+    thread_id: Uuid,
 ) -> anyhow::Result<()> {
-    sqlx::query!(
-        r#"
-        UPDATE email_threads t
-        SET is_signal = calc.sig
-        FROM (
-            SELECT EXISTS (
-                SELECT 1
-                FROM email_messages m
-                WHERE m.thread_id = $1
-                  AND NOT EXISTS (
-                      SELECT 1 FROM email_message_labels ml
-                      JOIN email_labels l ON ml.label_id = l.id
-                      WHERE ml.message_id = m.id AND l.name = 'TRASH'
-                  )
-                  AND NOT EXISTS (
-                      SELECT 1 FROM email_contacts sender_c
-                      WHERE sender_c.id = m.from_contact_id
-                        AND LOWER(SPLIT_PART(sender_c.email_address, '@', 2)) = $2
-                  )
-                  AND (
-                      (
-                          EXISTS (
-                              SELECT 1
-                              FROM email_contacts sender_c
-                              JOIN email_filters ef
-                                ON ef.link_id = m.link_id
-                               AND ef.email_address IS NOT NULL
-                               AND LOWER(ef.email_address) = LOWER(sender_c.email_address)
-                              WHERE sender_c.id = m.from_contact_id
-                                AND ef.is_important = TRUE
-                          )
-                          OR EXISTS (
-                              SELECT 1
-                              FROM email_contacts sender_c
-                              JOIN email_filters ef
-                                ON ef.link_id = m.link_id
-                               AND ef.email_domain IS NOT NULL
-                               AND LOWER(ef.email_domain) = LOWER(SPLIT_PART(sender_c.email_address, '@', 2))
-                              WHERE sender_c.id = m.from_contact_id
-                                AND ef.is_important = TRUE
-                                AND NOT EXISTS (
-                                    SELECT 1 FROM email_filters ef_addr
-                                    WHERE ef_addr.link_id = m.link_id
-                                      AND ef_addr.email_address IS NOT NULL
-                                      AND LOWER(ef_addr.email_address) = LOWER(sender_c.email_address)
-                                      AND ef_addr.is_important = FALSE
-                                )
-                          )
-                      )
-                      OR (
-                          NOT (
-                              EXISTS (
-                                  SELECT 1
-                                  FROM email_contacts sender_c
-                                  JOIN email_filters ef
-                                    ON ef.link_id = m.link_id
-                                   AND ef.email_address IS NOT NULL
-                                   AND LOWER(ef.email_address) = LOWER(sender_c.email_address)
-                                  WHERE sender_c.id = m.from_contact_id
-                                    AND ef.is_important = FALSE
-                              )
-                              OR EXISTS (
-                                  SELECT 1
-                                  FROM email_contacts sender_c
-                                  JOIN email_filters ef
-                                    ON ef.link_id = m.link_id
-                                   AND ef.email_domain IS NOT NULL
-                                   AND LOWER(ef.email_domain) = LOWER(SPLIT_PART(sender_c.email_address, '@', 2))
-                                  WHERE sender_c.id = m.from_contact_id
-                                    AND ef.is_important = FALSE
-                                    AND NOT EXISTS (
-                                        SELECT 1 FROM email_filters ef_addr
-                                        WHERE ef_addr.link_id = m.link_id
-                                          AND ef_addr.email_address IS NOT NULL
-                                          AND LOWER(ef_addr.email_address) = LOWER(sender_c.email_address)
-                                          AND ef_addr.is_important = TRUE
-                                    )
-                              )
-                          )
-                          AND (
-                              m.is_draft = TRUE
-                              OR EXISTS (
-                                  SELECT 1 FROM email_message_labels ml
-                                  JOIN email_labels l ON ml.label_id = l.id
-                                  WHERE ml.message_id = m.id
-                                    AND l.name IN ('CATEGORY_PERSONAL', 'SENT', 'DRAFT')
-                              )
-                              OR NOT EXISTS (
-                                  SELECT 1 FROM email_message_labels ml
-                                  JOIN email_labels l ON ml.label_id = l.id
-                                  WHERE ml.message_id = m.id
-                                    AND l.name IN ('CATEGORY_UPDATES', 'CATEGORY_PROMOTIONS', 'CATEGORY_SOCIAL', 'CATEGORY_FORUMS')
-                              )
-                          )
-                      )
-                  )
-            ) AS sig
-        ) calc
-        WHERE t.id = $1
-          AND t.is_signal IS DISTINCT FROM calc.sig
-        "#,
-        thread_db_id,
-        email_utils::MACRO_NOTIFICATION_SENDER_DOMAIN,
-    )
-    .execute(tx)
-    .await?;
-
+    recompute_signal(tx, thread_id).await?;
     Ok(())
 }
 
-// Updates a thread's metadata (archived status, latest_timestamps)
-#[tracing::instrument(skip(tx), err)]
+/// Recomputes importance from normalized provider evidence and sender overrides.
+/// Exact address policy overrides domain policy; trash and Macro notification
+/// senders remain excluded for both providers.
+pub async fn recompute_signal(
+    tx: &mut sqlx::PgConnection,
+    thread_id: Uuid,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(r#"
+        UPDATE email_threads t SET is_signal = calc.signal
+        FROM (SELECT EXISTS (
+            SELECT 1 FROM email_messages m
+            JOIN email_message_mailbox_facts facts ON facts.id = m.id
+            LEFT JOIN email_contacts c ON c.id = m.from_contact_id
+            CROSS JOIN LATERAL (
+                SELECT COALESCE(bool_or(f.is_important) FILTER (WHERE lower(f.email_address) = lower(c.email_address)),false) AS address_true,
+                    COALESCE(bool_or(NOT f.is_important) FILTER (WHERE lower(f.email_address) = lower(c.email_address)),false) AS address_false,
+                    COALESCE(bool_or(f.is_important) FILTER (WHERE lower(f.email_domain) = lower(split_part(c.email_address,'@',2))),false) AS domain_true,
+                    COALESCE(bool_or(NOT f.is_important) FILTER (WHERE lower(f.email_domain) = lower(split_part(c.email_address,'@',2))),false) AS domain_false
+                FROM email_filters f WHERE f.link_id = m.link_id
+            ) rules
+            WHERE m.thread_id = $1 AND facts.is_present AND NOT facts.in_trash
+                AND lower(split_part(c.email_address,'@',2)) IS DISTINCT FROM $2
+                AND (rules.address_true OR (rules.domain_true AND NOT rules.address_false)
+                    OR (NOT (rules.address_false OR (rules.domain_false AND NOT rules.address_true)) AND facts.provider_is_primary))
+        ) AS signal) calc
+        WHERE t.id = $1 AND t.is_signal IS DISTINCT FROM calc.signal
+    "#,thread_id,email_utils::MACRO_NOTIFICATION_SENDER_DOMAIN).execute(tx).await?;
+    Ok(())
+}
+
+/// Shared thread projection for Gmail labels, Outlook folders, and local drafts.
+pub async fn recompute_thread_metadata(
+    tx: &mut sqlx::PgConnection,
+    thread_id: Uuid,
+    link_id: Uuid,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(r#"
+        WITH facts AS (
+            SELECT m.*, f.in_inbox,f.in_trash,f.in_junk,f.in_sent,
+                m.is_draft AND m.provider_id IS NULL AS local_draft,
+                EXISTS (SELECT 1 FROM email_message_recipients r WHERE r.message_id = m.id AND r.contact_id = m.from_contact_id) AS sender_is_recipient
+            FROM email_messages m JOIN email_message_mailbox_facts f ON f.id = m.id
+            WHERE m.thread_id = $1 AND m.link_id = $2 AND f.is_present
+        ), aggregate AS (
+            SELECT COALESCE(bool_or((in_inbox AND NOT in_sent) OR local_draft),false) AS inbox_visible,
+                COALESCE(bool_or(in_inbox AND NOT in_trash AND NOT in_junk),false) AS has_inbox,
+                COALESCE(bool_and(is_read),true) AS is_read,
+                greatest(max(internal_date_ts) FILTER (WHERE in_inbox AND (NOT (is_draft OR is_sent) OR sender_is_recipient)),max(updated_at) FILTER (WHERE local_draft)) AS inbound_ts,
+                max(internal_date_ts) FILTER (WHERE is_sent AND NOT in_trash) AS outbound_ts,
+                greatest(max(internal_date_ts) FILTER (WHERE NOT in_trash AND NOT in_junk),max(updated_at) FILTER (WHERE local_draft)) AS all_ts
+            FROM facts
+        ), effective AS (
+            SELECT a.*, a.inbox_visible OR (t.reminder_returned_at IS NOT NULL AND a.has_inbox) AS visible
+            FROM aggregate a JOIN email_threads t ON t.id = $1 AND t.link_id = $2
+        )
+        UPDATE email_threads t SET inbox_visible = a.visible,is_read = a.is_read,
+            latest_inbound_message_ts = a.inbound_ts,latest_outbound_message_ts = a.outbound_ts,
+            latest_non_spam_message_ts = a.all_ts,updated_at = now()
+        FROM effective a WHERE t.id = $1 AND t.link_id = $2
+            AND (t.inbox_visible,t.is_read,t.latest_inbound_message_ts,t.latest_outbound_message_ts,t.latest_non_spam_message_ts)
+                IS DISTINCT FROM (a.visible,a.is_read,a.inbound_ts,a.outbound_ts,a.all_ts)
+    "#,thread_id,link_id).execute(&mut *tx).await?;
+    recompute_signal(tx, thread_id).await
+}
+
+/// Compatibility entry point used by existing ingestion callers.
 pub async fn update_thread_metadata(
     tx: &mut sqlx::PgConnection,
-    thread_db_id: Uuid,
+    thread_id: Uuid,
     link_id: Uuid,
 ) -> anyhow::Result<()> {
-    let messages = fetch_messages_metadata(&mut *tx, thread_db_id).await?;
-
-    // if any non-sent message in the thread has the INBOX label, the thread is visible in the inbox
-    let inbox_visible = messages.iter().any(|message| {
-        let has_inbox = message
-            .labels
-            .iter()
-            .any(|label| label.provider_label_id == service::label::system_labels::INBOX);
-        let has_sent = message
-            .labels
-            .iter()
-            .any(|label| label.provider_label_id == service::label::system_labels::SENT);
-
-        (has_inbox && !has_sent) || is_macro_draft(message)
-    });
-
-    // if any message in the thread is unread, the thread is considered unread in the FE
-    let is_read = !messages.iter().any(|message| !message.is_read);
-
-    let latest_draft_ts = messages
-        .iter()
-        .filter(|msg| is_macro_draft(msg))
-        .map(|msg| msg.updated_at)
-        .max();
-
-    let latest_inbound_timestamp_ts = messages
-        .iter()
-        .find(|msg| is_inbound(msg))
-        .map(|msg| msg.internal_date_ts)
-        .unwrap_or_else(|| None);
-
-    let latest_inbound_or_draft_ts = [latest_inbound_timestamp_ts, latest_draft_ts]
-        .into_iter()
-        .flatten()
-        .max();
-
-    let latest_outbound_message_ts = messages
-        .iter()
-        .find(|msg| is_outbound(msg))
-        .map(|msg| msg.internal_date_ts)
-        .unwrap_or_else(|| None);
-
-    // latest non-spam message timestamp is the latest macro draft or provider message
-    let latest_provider_message_ts = messages
-        .iter()
-        .find(|msg| !is_spam_or_trash(msg))
-        .map(|msg| msg.internal_date_ts)
-        .unwrap_or_else(|| None);
-
-    let latest_non_spam_message_ts = [latest_provider_message_ts, latest_draft_ts]
-        .into_iter()
-        .flatten()
-        .max();
-
-    update_db_thread_metadata(
-        &mut *tx,
-        thread_db_id,
-        link_id,
-        inbox_visible,
-        is_read,
-        latest_inbound_or_draft_ts,
-        latest_outbound_message_ts,
-        latest_non_spam_message_ts,
-    )
-    .await?;
-
-    sync_thread_signal_flag(&mut *tx, thread_db_id).await?;
-
+    recompute_thread_metadata(tx, thread_id, link_id).await?;
     Ok(())
 }

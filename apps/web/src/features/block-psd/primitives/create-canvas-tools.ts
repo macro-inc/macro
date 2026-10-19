@@ -13,6 +13,7 @@
 
 import type { Point } from '@app/features/block-fig/core/camera';
 import type { IRect, Op, SelectMode, Target } from '@core/psd-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createSignal } from 'solid-js';
 import { brushFor, newStrokeId, type PaintingTool } from '../core/brush';
 import { twoColorGradient } from '../core/gradient';
@@ -288,7 +289,7 @@ export function createCanvasTools(options: CanvasToolsOptions) {
       }
       if (s.buffer.length > 0 || s.done) flushStroke();
     };
-    void send();
+    fireAndForget(send(), 'block-psd');
   };
 
   let frame: number | undefined;
@@ -391,7 +392,7 @@ export function createCanvasTools(options: CanvasToolsOptions) {
       g.inFlight = false;
       flushMove();
     };
-    void run();
+    fireAndForget(run(), 'block-psd');
   };
 
   /** The layers a Move drag takes: the one under the pointer, or the chosen. */
@@ -431,9 +432,12 @@ export function createCanvasTools(options: CanvasToolsOptions) {
     if (rows.length === 0 || rows.some((r) => !movable(r))) return;
     clearTimeout(nudgeTimer);
     nudgeTimer = setTimeout(() => nudgeKey++, 800);
-    void editor.apply(
-      [{ op: 'translate', ids: rows.map((r) => r.id), dx, dy }],
-      gestureKey('nudge', nudgeKey)
+    fireAndForget(
+      editor.apply(
+        [{ op: 'translate', ids: rows.map((r) => r.id), dx, dy }],
+        gestureKey('nudge', nudgeKey)
+      ),
+      'block-psd'
     );
   };
 
@@ -685,27 +689,30 @@ export function createCanvasTools(options: CanvasToolsOptions) {
         if (!poly) {
           setPolygon({ points: [p.at], mode });
         } else if (closesPolygon(poly.points, p.at, CLOSE_SLOP / zoom())) {
-          void finishPolygon(true);
+          fireAndForget(finishPolygon(true), 'block-psd');
         } else setPolygon({ ...poly, points: [...poly.points, p.at] });
         refreshOverlay();
         return;
       }
       case 'wand':
-        void editor.select({
-          type: 'wand',
-          x: Math.floor(p.at.x),
-          y: Math.floor(p.at.y),
-          tolerance: view.toolOptions().tolerance,
-          contiguous: view.toolOptions().contiguous,
-          antialias: view.toolOptions().antialias,
-          sampleAll: view.toolOptions().sampleAll,
-          layer: editor.active() ?? null,
-          mode,
-        });
+        fireAndForget(
+          editor.select({
+            type: 'wand',
+            x: Math.floor(p.at.x),
+            y: Math.floor(p.at.y),
+            tolerance: view.toolOptions().tolerance,
+            contiguous: view.toolOptions().contiguous,
+            antialias: view.toolOptions().antialias,
+            sampleAll: view.toolOptions().sampleAll,
+            layer: editor.active() ?? null,
+            mode,
+          }),
+          'block-psd'
+        );
         return;
       case 'eyedropper':
         gesture = { kind: 'eyedropper' };
-        void sampleColor(p);
+        fireAndForget(sampleColor(p), 'block-psd');
         return;
       case 'brush':
       case 'pencil':
@@ -715,21 +722,24 @@ export function createCanvasTools(options: CanvasToolsOptions) {
       case 'bucket': {
         const t = fillTarget();
         if (!t) return;
-        void editor.apply([
-          {
-            op: 'bucket',
-            id: t.id,
-            target: t.target,
-            x: Math.floor(p.at.x),
-            y: Math.floor(p.at.y),
-            color: view.foreground(),
-            opacity: 1,
-            tolerance: view.toolOptions().tolerance,
-            contiguous: view.toolOptions().contiguous,
-            antialias: view.toolOptions().antialias,
-            sampleAll: view.toolOptions().sampleAll,
-          },
-        ]);
+        fireAndForget(
+          editor.apply([
+            {
+              op: 'bucket',
+              id: t.id,
+              target: t.target,
+              x: Math.floor(p.at.x),
+              y: Math.floor(p.at.y),
+              color: view.foreground(),
+              opacity: 1,
+              tolerance: view.toolOptions().tolerance,
+              contiguous: view.toolOptions().contiguous,
+              antialias: view.toolOptions().antialias,
+              sampleAll: view.toolOptions().sampleAll,
+            },
+          ]),
+          'block-psd'
+        );
         return;
       }
       case 'gradient':
@@ -739,7 +749,7 @@ export function createCanvasTools(options: CanvasToolsOptions) {
         return;
       case 'type':
         options.onTypeStart?.();
-        void typeAt(p);
+        fireAndForget(typeAt(p), 'block-psd');
         return;
       case 'rectangle':
       case 'ellipse':
@@ -812,7 +822,7 @@ export function createCanvasTools(options: CanvasToolsOptions) {
         g.current = p.at;
         break;
       case 'eyedropper':
-        void sampleColor(p);
+        fireAndForget(sampleColor(p), 'block-psd');
         return;
       case 'crop-draw': {
         const r = marqueeRect(g.start, p.at, {
@@ -874,66 +884,80 @@ export function createCanvasTools(options: CanvasToolsOptions) {
         const rect = marqueeFor({ ...g, current: p.at });
         if (!g.dragged || rect.w < 1 || rect.h < 1) {
           // A click deselects (unless it adds to or subtracts from it).
-          if (g.mode === 'replace') void editor.select({ type: 'none' });
+          if (g.mode === 'replace')
+            fireAndForget(editor.select({ type: 'none' }), 'block-psd');
           break;
         }
-        void editor.select({
-          type: g.shape,
-          ...rect,
-          mode: g.mode,
-          feather: view.toolOptions().feather,
-          ...(g.shape === 'ellipse'
-            ? { antialias: view.toolOptions().antialias }
-            : {}),
-        });
+        fireAndForget(
+          editor.select({
+            type: g.shape,
+            ...rect,
+            mode: g.mode,
+            feather: view.toolOptions().feather,
+            ...(g.shape === 'ellipse'
+              ? { antialias: view.toolOptions().antialias }
+              : {}),
+          }),
+          'block-psd'
+        );
         break;
       }
       case 'lasso':
         if (g.points.length >= 3)
-          void editor.select({
-            type: 'polygon',
-            points: toPairs(g.points),
-            mode: g.mode,
-            feather: view.toolOptions().feather,
-            antialias: view.toolOptions().antialias,
-          });
-        else if (g.mode === 'replace') void editor.select({ type: 'none' });
+          fireAndForget(
+            editor.select({
+              type: 'polygon',
+              points: toPairs(g.points),
+              mode: g.mode,
+              feather: view.toolOptions().feather,
+              antialias: view.toolOptions().antialias,
+            }),
+            'block-psd'
+          );
+        else if (g.mode === 'replace')
+          fireAndForget(editor.select({ type: 'none' }), 'block-psd');
         break;
       case 'gradient': {
         const t = fillTarget();
         if (!t) break;
         const to = p.shift ? snapLine(g.from, p.at) : p.at;
         if (Math.hypot(to.x - g.from.x, to.y - g.from.y) < 1) break;
-        void editor.apply([
-          {
-            op: 'gradient',
-            id: t.id,
-            target: t.target,
-            gradient: {
-              ...twoColorGradient(
-                view.foreground(),
-                view.background(),
-                'Foreground to Background',
-                view.toolOptions().gradientMethod
-              ),
-              kind: view.toolOptions().gradient,
+        fireAndForget(
+          editor.apply([
+            {
+              op: 'gradient',
+              id: t.id,
+              target: t.target,
+              gradient: {
+                ...twoColorGradient(
+                  view.foreground(),
+                  view.background(),
+                  'Foreground to Background',
+                  view.toolOptions().gradientMethod
+                ),
+                kind: view.toolOptions().gradient,
+              },
+              from: [g.from.x, g.from.y],
+              to: [to.x, to.y],
+              opacity: 1,
             },
-            from: [g.from.x, g.from.y],
-            to: [to.x, to.y],
-            opacity: 1,
-          },
-        ]);
+          ]),
+          'block-psd'
+        );
         break;
       }
       case 'shape': {
         const rect = shapeRectFor({ ...g, current: p.at });
         if (rect.w < 2 || rect.h < 2) break;
-        void editor.apply([
-          newLayerOp(
-            editor.activeRow(),
-            shapeLayer(g.shape, rect, view.foreground())
-          ),
-        ]);
+        fireAndForget(
+          editor.apply([
+            newLayerOp(
+              editor.activeRow(),
+              shapeLayer(g.shape, rect, view.foreground())
+            ),
+          ]),
+          'block-psd'
+        );
         break;
       }
       case 'paint':
@@ -966,18 +990,19 @@ export function createCanvasTools(options: CanvasToolsOptions) {
 
   const doubleClick = (p: CanvasPointer) => {
     if (polygon()) {
-      void finishPolygon(true);
+      fireAndForget(finishPolygon(true), 'block-psd');
       return;
     }
     if (transform()) {
-      void finishTransform(true);
+      fireAndForget(finishTransform(true), 'block-psd');
       return;
     }
     if (view.tool() === 'crop' && crop()) {
-      void finishCrop(true);
+      fireAndForget(finishCrop(true), 'block-psd');
       return;
     }
-    if (view.tool() === 'move' && editable()) void editTextAt(p);
+    if (view.tool() === 'move' && editable())
+      fireAndForget(editTextAt(p), 'block-psd');
   };
 
   /** Double-click with the Move tool on text edits it. */
@@ -1026,15 +1051,15 @@ export function createCanvasTools(options: CanvasToolsOptions) {
   /** Enter: commits Free Transform, the crop, or a polygon. */
   const commit = (): boolean => {
     if (transform()) {
-      void finishTransform(true);
+      fireAndForget(finishTransform(true), 'block-psd');
       return true;
     }
     if (crop() && view.tool() === 'crop') {
-      void finishCrop(true);
+      fireAndForget(finishCrop(true), 'block-psd');
       return true;
     }
     if (polygon()) {
-      void finishPolygon(true);
+      fireAndForget(finishPolygon(true), 'block-psd');
       return true;
     }
     return false;
@@ -1043,15 +1068,15 @@ export function createCanvasTools(options: CanvasToolsOptions) {
   /** Escape: cancels them. */
   const cancel = (): boolean => {
     if (transform()) {
-      void finishTransform(false);
+      fireAndForget(finishTransform(false), 'block-psd');
       return true;
     }
     if (crop()) {
-      void finishCrop(false);
+      fireAndForget(finishCrop(false), 'block-psd');
       return true;
     }
     if (polygon()) {
-      void finishPolygon(false);
+      fireAndForget(finishPolygon(false), 'block-psd');
       return true;
     }
     return false;
@@ -1059,9 +1084,11 @@ export function createCanvasTools(options: CanvasToolsOptions) {
 
   /** The tool changed: boxes that belong to the previous one end. */
   const toolChanged = (tool: Tool) => {
-    if (tool !== 'crop' && crop()) void finishCrop(false);
+    if (tool !== 'crop' && crop())
+      fireAndForget(finishCrop(false), 'block-psd');
     if (tool === 'crop' && editable()) startCrop();
-    if (tool !== 'polygonLasso' && polygon()) void finishPolygon(false);
+    if (tool !== 'polygonLasso' && polygon())
+      fireAndForget(finishPolygon(false), 'block-psd');
     refreshOverlay();
   };
 

@@ -48,12 +48,13 @@ export function usePasteNode(props: PasteNodeDecoratorProps) {
     });
   };
 
-  const copyText = () => {
+  const copyText = async () => {
     try {
-      navigator.clipboard.writeText(props.content);
+      await navigator.clipboard.writeText(props.content);
       toast.success(`Copied ${origin()} text to clipboard`);
     } catch (e) {
       console.error('Failed to copy pasted text to clipboard', e);
+      toast.failure('Could not copy text');
     }
   };
 

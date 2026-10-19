@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import CopyIcon from '@phosphor/copy.svg';
 import TrashIcon from '@phosphor/trash-simple.svg';
 import { databaseWebhookUrl } from '@service-storage/databases';
@@ -166,7 +167,9 @@ export function WebhooksDialog(props: {
                         variant="ghost"
                         size="icon-sm"
                         label="Delete webhook"
-                        onClick={() => void remove(webhook)}
+                        onClick={() =>
+                          fireAndForget(remove(webhook), 'database-webhooks')
+                        }
                       >
                         <TrashIcon class="size-4" />
                       </Button>
@@ -183,7 +186,7 @@ export function WebhooksDialog(props: {
                 type="button"
                 variant="accent"
                 disabled={pending()}
-                onClick={() => void create()}
+                onClick={() => fireAndForget(create(), 'database-webhooks')}
               >
                 {pending() ? 'Creating…' : 'Create webhook'}
               </Button>

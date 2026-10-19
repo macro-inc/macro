@@ -19,6 +19,7 @@ import {
   uploadInputAttachments,
 } from '@channel/Input';
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { uploadFile } from '@core/util/upload';
 import type { AgentAction } from '@service-agent-harness/generated/schemas';
 import { type Component, createSignal, For, Show } from 'solid-js';
@@ -157,12 +158,15 @@ export function AgentComposer(props: {
   const attachmentTracker = createSessionAttachmentTracker(sessionId);
   const attachFiles = (files: File[]) => {
     if (readOnly()) return;
-    void uploadInputAttachments({
-      files,
-      tracker: attachmentTracker,
-      uploadFile: (file) =>
-        uploadFile(file, 'static', { hideProgressIndicator: true }),
-    });
+    fireAndForget(
+      uploadInputAttachments({
+        files,
+        tracker: attachmentTracker,
+        uploadFile: (file) =>
+          uploadFile(file, 'static', { hideProgressIndicator: true }),
+      }),
+      'agent-composer'
+    );
   };
   // Attachments ride the prompt action itself, so they take the same path as
   // the text: issued once, speculated by the fold, and queued server-side
@@ -200,9 +204,9 @@ export function AgentComposer(props: {
     const prompt = [markdown, notes]
       .filter((part) => part.length > 0)
       .join('\n\n');
-    void act(
-      promptActionOf(prompt, attachments),
-      'The message could not be sent'
+    fireAndForget(
+      act(promptActionOf(prompt, attachments), 'The message could not be sent'),
+      'agent-composer'
     );
     attachmentTracker.clearAttachments();
   };
@@ -261,10 +265,12 @@ export function AgentComposer(props: {
               items={queuedItems()}
               disabled={readOnly()}
               onEdit={(actionId, prompt) => {
-                if (!readOnly()) void queue.edit(actionId, prompt);
+                if (!readOnly())
+                  fireAndForget(queue.edit(actionId, prompt), 'agent-composer');
               }}
               onRemove={(actionId) => {
-                if (!readOnly()) void queue.remove(actionId);
+                if (!readOnly())
+                  fireAndForget(queue.remove(actionId), 'agent-composer');
               }}
               onSteer={
                 busy() &&
@@ -336,9 +342,14 @@ export function AgentComposer(props: {
         // into, but not sent from, until the id lands.
         disabled={loadFailed() || pending() || readOnly() || configuring()}
         commands={() => metadata()?.availableCommands ?? []}
-        onSend={(markdown, attachments) => void send(markdown, attachments)}
+        onSend={(markdown, attachments) =>
+          fireAndForget(send(markdown, attachments), 'agent-composer')
+        }
         onStop={() =>
-          void act({ type: 'stop' }, 'The agent could not be stopped')
+          fireAndForget(
+            act({ type: 'stop' }, 'The agent could not be stopped'),
+            'agent-composer'
+          )
         }
         onSendNext={() => {
           if (!readOnly()) sendNext();
@@ -378,7 +389,9 @@ export function AgentComposer(props: {
                 configuring() ||
                 changingEffort() !== undefined
               }
-              onSelect={(model) => void chooseModel(model)}
+              onSelect={(model) =>
+                fireAndForget(chooseModel(model), 'agent-composer')
+              }
               modelRow={(row) => (
                 <AgentModelMenuItem
                   {...row}
@@ -392,7 +405,10 @@ export function AgentComposer(props: {
                       : undefined
                   }
                   onSelectEffort={(selection) =>
-                    void chooseModel(row.option.id, selection)
+                    fireAndForget(
+                      chooseModel(row.option.id, selection),
+                      'agent-composer'
+                    )
                   }
                 />
               )}

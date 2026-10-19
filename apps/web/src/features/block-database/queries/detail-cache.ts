@@ -32,7 +32,7 @@ export async function patchDetail(
     // Never restore a snapshot over a newer edit or server read.
     if (previous && queryClient.getQueryData(queryKey) === optimistic)
       queryClient.setQueryData(queryKey, previous);
-    void queryClient.invalidateQueries({ queryKey });
+    queryClient.invalidateQueries({ queryKey });
   };
 }
 

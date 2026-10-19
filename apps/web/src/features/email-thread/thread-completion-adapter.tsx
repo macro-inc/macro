@@ -13,6 +13,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { enableGraphqlSoup } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { compositeEntity, setDoneOverride } from '@notifications';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import {
@@ -34,7 +35,6 @@ import {
   mapApiSoupItemToEntity,
 } from '@queries/soup/transform-utils';
 import type { Accessor } from 'solid-js';
-
 import type {
   ArchiveThreadOptions,
   EmailThreadCommands,
@@ -85,9 +85,12 @@ export function createThreadCompletionAdapter(
               label: 'Undo',
               icon: ArrowCounterClockwise,
               onClick: () => {
-                handle.undo({
-                  onError: () => toast.failure('Failed to undo'),
-                });
+                fireAndForget(
+                  handle.undo({
+                    onError: () => toast.failure('Failed to undo'),
+                  }),
+                  'email-thread'
+                );
               },
             },
           ],
@@ -113,7 +116,10 @@ export function createThreadCompletionAdapter(
         }
         if (!graphqlSoup().enabled && disposition() !== 'queued') {
           if (!nowArchived) {
-            void refetchSoupEntity(params.threadId, 'emailThread');
+            fireAndForget(
+              refetchSoupEntity(params.threadId, 'emailThread'),
+              'email-thread'
+            );
           }
           invalidateAllSoup();
         }
@@ -183,10 +189,13 @@ export function createThreadCompletionAdapter(
         : undefined);
 
     if (entity && markNotDoneAction.canExecute(entity)) {
-      void trackExternalThreadArchive(
-        thread.db_id,
-        markNotDoneAction.execute([entity]),
-        false
+      fireAndForget(
+        trackExternalThreadArchive(
+          thread.db_id,
+          markNotDoneAction.execute([entity]),
+          false
+        ),
+        'email-thread'
       );
     } else {
       // No soup entity to drive the action from — the mark-done removal
@@ -235,7 +244,10 @@ export function createThreadCompletionAdapter(
             // GraphQL owns its normalized write and durable revalidation;
             // keep the legacy REST Soup reconciliation on the REST path only.
             if (!graphqlSoup().enabled && disposition !== 'queued') {
-              void refetchSoupEntity(threadId, 'emailThread');
+              fireAndForget(
+                refetchSoupEntity(threadId, 'emailThread'),
+                'email-thread'
+              );
               invalidateAllSoup();
             }
           },
@@ -281,31 +293,40 @@ export function createThreadCompletionAdapter(
     if (!entity) return false;
 
     if (opts?.navigate !== false && soup && selectedRow) {
-      void trackExternalThreadArchive(
-        thread.db_id,
-        markAsDoneAction.executeWithSoup(
-          [entity],
-          soup,
-          ({ entity: nextEntity }) => {
-            const splitHandle = splitPanel?.handle;
-            if (!splitHandle) return;
-            if (!nextEntity) {
-              return;
-            }
+      fireAndForget(
+        trackExternalThreadArchive(
+          thread.db_id,
+          markAsDoneAction.executeWithSoup(
+            [entity],
+            soup,
+            ({ entity: nextEntity }) => {
+              const splitHandle = splitPanel?.handle;
+              if (!splitHandle) return;
+              if (!nextEntity) {
+                return;
+              }
 
-            void openEntityInSplitFromUnifiedList(nextEntity, {
-              splitHandle,
-              mergeHistory: !isTouchDevice(),
-              referredFrom: splitHandle.referredFrom(),
-            });
-          },
-          markDoneOpts
-        )
+              fireAndForget(
+                openEntityInSplitFromUnifiedList(nextEntity, {
+                  splitHandle,
+                  mergeHistory: !isTouchDevice(),
+                  referredFrom: splitHandle.referredFrom(),
+                }),
+                'email-thread'
+              );
+            },
+            markDoneOpts
+          )
+        ),
+        'email-thread'
       );
     } else {
-      void trackExternalThreadArchive(
-        thread.db_id,
-        markAsDoneAction.execute([entity], undefined, markDoneOpts)
+      fireAndForget(
+        trackExternalThreadArchive(
+          thread.db_id,
+          markAsDoneAction.execute([entity], undefined, markDoneOpts)
+        ),
+        'email-thread'
       );
     }
 

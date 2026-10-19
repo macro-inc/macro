@@ -47,7 +47,7 @@ export function useCreateCheckoutSessionMutation() {
     onError: () => {
       // The rejected offer is no longer confirmed. Clear it before refetching,
       // and never retry an advertised trial as an immediate charge.
-      void queryClient.resetQueries({
+      queryClient.resetQueries({
         queryKey: authKeys.trialEligibility.queryKey,
       });
     },

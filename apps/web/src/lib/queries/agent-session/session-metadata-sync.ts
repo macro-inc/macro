@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { queryClient } from '@queries/client';
 import { refreshActiveGraphqlPreviewQueries } from '../preview/active-queries';
 import { agentSessionKeys } from './keys';
@@ -15,8 +16,14 @@ export function handleAgentSessionRenamed(
   event: AgentSessionRenamedEvent
 ): void {
   for (const listener of renameListeners) listener(event);
-  void refreshActiveGraphqlPreviewQueries(event.agentSessionId);
-  void refreshAgentSessionLists(event.agentSessionId);
+  fireAndForget(
+    refreshActiveGraphqlPreviewQueries(event.agentSessionId),
+    'agent-session-lists'
+  );
+  fireAndForget(
+    refreshAgentSessionLists(event.agentSessionId),
+    'agent-session-lists'
+  );
 }
 
 /** Follow name changes while a session-scoped view is mounted. */

@@ -1,6 +1,7 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { getWebOrigin } from '@core/util/webOrigin';
 import { openEntityInSplitFromUnifiedList } from '../next-soup/utils';
@@ -51,7 +52,10 @@ export function createAppCrmNavigation(): ReturnType<
       layout.replaceOrInsertSplit({ type: 'component', id: 'companies' });
     },
     openEntity: (entity) => {
-      void openEntityInSplitFromUnifiedList(entity, {});
+      fireAndForget(
+        openEntityInSplitFromUnifiedList(entity, {}),
+        'open-entity-in-split'
+      );
     },
   };
 }

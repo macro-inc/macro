@@ -4,6 +4,7 @@ import { inboxIconProps } from '@core/component/inboxIcon';
 import { UserIcon, type UserIconSize } from '@core/component/UserIcon';
 import { enableMultiInbox } from '@core/constant/featureFlags';
 import { useAddInboxFlow } from '@core/email-link';
+import { fireAndForget } from '@core/util/fireAndForget';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
 import PlusIcon from '@phosphor/plus.svg';
@@ -74,7 +75,7 @@ function useInboxSelection() {
     visible: () => multiInboxFlag().enabled || options().length > 0,
     hasMultipleInboxes,
     canAddInbox: () => multiInboxFlag().enabled,
-    addInbox: () => void addInbox(),
+    addInbox: () => fireAndForget(addInbox(), 'add-inbox'),
     isAll,
     isSelected,
     selectedOption,

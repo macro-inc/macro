@@ -1,5 +1,6 @@
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
 import DatabaseIcon from '@phosphor/database.svg';
 import {
@@ -128,8 +129,8 @@ export function DocumentDatabase(props: {
         )
           return;
         event.preventDefault();
-        if (event.shiftKey) void undo.redo();
-        else void undo.undo();
+        if (event.shiftKey) fireAndForget(undo.redo(), 'database-view');
+        else fireAndForget(undo.undo(), 'database-view');
       }}
     >
       <div class="flex min-w-0 flex-wrap items-center gap-2 px-3 py-2">
@@ -138,15 +139,12 @@ export function DocumentDatabase(props: {
           <DatabaseTitle
             name={name()}
             canEdit={canEdit() && !props.collapsed}
-            onRename={(next) =>
-              void renameDatabase(
-                getEntityGraphqlClient(),
-                databaseId,
-                next
-              ).mapErr((failure) =>
-                toast.failure(databaseEntityMessage(failure, 'rename'))
-              )
-            }
+            onRename={(next) => {
+              renameDatabase(getEntityGraphqlClient(), databaseId, next).mapErr(
+                (failure) =>
+                  toast.failure(databaseEntityMessage(failure, 'rename'))
+              );
+            }}
           />
         </div>
         <Show when={detail.isSuccess && !canEdit()}>
@@ -175,7 +173,9 @@ export function DocumentDatabase(props: {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => void detail.refetch()}
+                  onClick={() =>
+                    fireAndForget(detail.refetch(), 'database-view')
+                  }
                 >
                   Retry
                 </Button>
@@ -203,7 +203,11 @@ export function DocumentDatabase(props: {
                         onChangeView={changeView}
                         onCreateRecord={
                           canEdit()
-                            ? () => void recordActions()?.createRecord()
+                            ? () =>
+                                fireAndForget(
+                                  recordActions()?.createRecord(),
+                                  'database-view'
+                                )
                             : undefined
                         }
                         canCreateRecord={!!recordActions()}

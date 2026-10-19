@@ -19,6 +19,7 @@ import X from '@phosphor/x.svg';
 import { Button, type ButtonProps } from '@ui/components/Button';
 import { Show } from 'solid-js';
 import type { SpreadsheetMentions } from '../context/spreadsheet-mentions';
+import type { TableReferences } from '../core/formula-completion';
 import type {
   FormulaReferenceSpan,
   FormulaTextSelection,
@@ -327,6 +328,7 @@ export function FormulaBar(props: {
   readonly: boolean;
   editing?: boolean;
   complete: CompleteFormula;
+  tableReferences?: () => TableReferences | undefined;
   selectionRequest?: FormulaTextSelection;
   references?: FormulaReferenceSpan[];
   pickingReference?: boolean;
@@ -384,6 +386,7 @@ export function FormulaBar(props: {
         mentions={props.mentions}
         label="Formula bar"
         complete={props.complete}
+        tableReferences={props.tableReferences}
         selectionRequest={props.selectionRequest}
         references={props.references}
         pickingReference={props.pickingReference}

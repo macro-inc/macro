@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type Accessor,
   createEffect,
@@ -168,7 +169,7 @@ export function createIncomingMeetingInvitations(
       stopRing,
       timeout: setTimeout(() => remove(invitation), durationMs),
     });
-    void notify(invitation);
+    fireAndForget(notify(invitation), 'meetings');
   }
 
   function answered(event: { meetingId: string; userId: string }) {

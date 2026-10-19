@@ -50,6 +50,48 @@ Delete the event (or a scoped part of a recurring series) at its provider.
 
 ***
 
+### prepareReplacement()
+
+> **prepareReplacement**(`options`): `Promise`\<[`CalendarReplacement`](../../replacement/classes/CalendarReplacement.md)\>
+
+Preview an organizer replacement without cancelling or sending invitations.
+Review replacement.status() before explicitly calling replacement.confirm().
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `options` | \{ `calendar?`: [`Calendar`](../../calendar/classes/Calendar.md); `recurrenceId?`: `string`; `removeConference`: `boolean`; \} |
+| `options.calendar?` | [`Calendar`](../../calendar/classes/Calendar.md) |
+| `options.recurrenceId?` | `string` |
+| `options.removeConference` | `boolean` |
+
+#### Returns
+
+`Promise`\<[`CalendarReplacement`](../../replacement/classes/CalendarReplacement.md)\>
+
+***
+
+### providerUrl()
+
+> **providerUrl**(`options?`): `Promise`\<`string` \| `undefined`\>
+
+Open this calendar copy in its provider for actions unavailable through its API.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `options?` | \{ `calendar?`: [`Calendar`](../../calendar/classes/Calendar.md); `recurrenceId?`: `string`; \} |
+| `options.calendar?` | [`Calendar`](../../calendar/classes/Calendar.md) |
+| `options.recurrenceId?` | `string` |
+
+#### Returns
+
+`Promise`\<`string` \| `undefined`\>
+
+***
+
 ### record()
 
 > **record**(): `Promise`\<[`CalendarEvent`](../../../../../generated/calendar/types.gen/type-aliases/CalendarEvent.md)\>

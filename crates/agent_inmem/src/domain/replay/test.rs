@@ -251,6 +251,50 @@ fn a_logged_turn_replays_as_the_history_the_live_agent_recorded() {
 }
 
 #[test]
+fn mcp_calls_replay_their_canonical_names_instead_of_display_titles() {
+    let input = serde_json::json!({"query": "standup"});
+    let output = serde_json::json!({"hits": 1});
+    let history = replay_history(vec![
+        prompt_frame("search Slack"),
+        update_frame(SessionUpdate::ToolCall(
+            AcpToolCall::new("call-1", "Search Slack")
+                .status(ToolCallStatus::InProgress)
+                .raw_input(input.clone())
+                .meta(serde_json::Map::from_iter([(
+                    "macro".to_owned(),
+                    serde_json::json!({"toolName": "mcp__slack__search"}),
+                )])),
+        )),
+        update_frame(SessionUpdate::ToolCallUpdate(ToolCallUpdate::new(
+            "call-1",
+            ToolCallUpdateFields::new()
+                .status(ToolCallStatus::Completed)
+                .raw_output(output.clone()),
+        ))),
+        answer("search Slack", "end_turn"),
+    ]);
+
+    let [HistoryEntry::User { .. }, HistoryEntry::Assistant(parts)] = history.as_slice() else {
+        panic!("one tool turn should replay, got {history:#?}");
+    };
+    assert_eq!(
+        parts,
+        &[
+            AssistantMessagePart::ToolCall {
+                name: "mcp__slack__search".to_owned(),
+                json: input,
+                id: "call-1".to_owned(),
+            },
+            AssistantMessagePart::ToolCallResponseJson {
+                name: "mcp__slack__search".to_owned(),
+                json: output,
+                id: "call-1".to_owned(),
+            },
+        ]
+    );
+}
+
+#[test]
 fn a_compact_that_cleared_the_context_before_summaries_still_clears_it() {
     let history = replay_history(vec![
         prompt_frame("remember this"),

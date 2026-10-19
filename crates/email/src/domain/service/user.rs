@@ -28,6 +28,13 @@ where
             .iter()
             .find(|link| link.id == link_id)
             .ok_or(EmailErr::InboxNotFound)?;
+        if link.provider == crate::domain::models::UserProvider::Outlook {
+            return Ok(vec![crate::domain::senders::SendAsAddress {
+                email_address: link.email_address.clone(),
+                display_name: None,
+                verified: true,
+            }]);
+        }
         self.sender_provider
             .send_as(link, false)
             .await

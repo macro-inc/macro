@@ -4,16 +4,20 @@
  * email_service
  * OpenAPI spec version: 0.1.0
  */
+import type { ApiAttachmentDraftContentId } from './apiAttachmentDraftContentId';
 
 /**
  * API representation of a draft attachment on a message.
  */
 export interface ApiAttachmentDraft {
+  content_id?: ApiAttachmentDraftContentId;
   content_type: string;
   draft_id: string;
   file_name: string;
   id: string;
+  is_inline: boolean;
   s3_key: string;
   sha: string;
   size: number;
+  upload_pending: boolean;
 }

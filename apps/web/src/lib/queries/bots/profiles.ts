@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { storageServiceClient } from '@service-storage/client';
 import type { BotOwnerProfile } from '@service-storage/generated/schemas/botOwnerProfile';
@@ -70,7 +71,7 @@ class BotProfileLoader {
         existing.push({ resolve, reject });
       } else {
         this.pendingRequests.set(botId, [{ resolve, reject }]);
-        this.batcher.addItem(botId);
+        fireAndForget(this.batcher.addItem(botId), 'bot-profiles');
       }
     });
   }

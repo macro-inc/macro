@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { autoUpdate, computePosition, hide } from '@floating-ui/dom';
 import type { LexicalEditor } from 'lexical';
 import type { Accessor, JSX } from 'solid-js';
@@ -41,7 +42,7 @@ export function glueToElement(
     if (animationFrame !== undefined) return;
     animationFrame = requestAnimationFrame(() => {
       animationFrame = undefined;
-      void updatePosition();
+      fireAndForget(updatePosition(), 'glue-to-element');
     });
   };
 

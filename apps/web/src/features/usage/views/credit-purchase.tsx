@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { thrownResultErrorHasCode } from '@core/util/result';
 import { createSignal } from 'solid-js';
 import { CreditPurchaseDialog } from '../components/credit-purchase-dialog';
@@ -68,7 +69,7 @@ export function CreditPurchaseView(props: {
       onCustomAmount={setCustomAmount}
       onClose={props.onClose}
       onRestoreFocus={props.onRestoreFocus}
-      onCheckout={() => void checkout()}
+      onCheckout={() => fireAndForget(checkout(), 'usage')}
       onViewPlans={
         (props.context.summary()?.billingAccess === 'free' && !previewing()) ||
         subscriptionRequired()

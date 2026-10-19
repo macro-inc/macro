@@ -55,6 +55,7 @@ Real files live in `.agents/`; tool-specific directories only symlink to it.
 | SQLx queries, migrations, DB tests, or cache errors | [Database development](docs/development/database.md) |
 | Web frontend | [Web agent guide](apps/web/AGENTS.md) |
 | iOS App Store releases, breaking Tauri changes, native build floors | [iOS releases](apps/web/docs/ios-releases.md) |
+| Android Play releases from pull requests | [Android development](docs/development/android.md) |
 | Email body rendering or snapshots | [Standalone renderer](packages/email-renderer/README.md) |
 | Running the frontend or backend on a local machine | [Running locally](docs/development/running-locally.md) |
 | Giving the user a local preview link | `local-preview` skill |

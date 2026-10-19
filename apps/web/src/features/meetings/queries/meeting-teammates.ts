@@ -1,4 +1,5 @@
 import { macroIdToEmail, tryMacroId } from '@core/user/macroId';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import * as EmailValidator from 'email-validator';
 import { type Accessor, createMemo } from 'solid-js';
@@ -47,7 +48,7 @@ export function useMeetingTeammatesSource(
         ? 'Could not load your teammates. Please try again.'
         : undefined,
     refresh: () => {
-      if (userId()) void query.refetch();
+      if (userId()) fireAndForget(query.refetch(), 'meetings');
     },
   };
 }

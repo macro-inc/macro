@@ -1,6 +1,7 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import type { RemoteFlag } from '@core/constant/featureFlags';
 import { createAssertedContextProvider } from '@core/context/createContext';
+import { Telemetry } from '@macro-inc/observability';
 import type { JsonType } from 'posthog-js';
 import {
   type Accessor,
@@ -48,7 +49,7 @@ export const [PosthogProvider, usePosthog] = createAssertedContextProvider(
         }
         setFlagsUnreachable(ctx?.errorsLoading === true);
         setFlagsLoaded(true);
-      });
+      }).catch((error) => Telemetry.error(error, { surface: 'feature-flags' }));
     });
 
     onCleanup(unsub);

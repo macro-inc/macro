@@ -6,6 +6,7 @@ import {
 import { FavoriteContextMenu } from '@app/features/favorites/FavoriteContextMenu';
 import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
 import { useFavoriteDisplayName } from '@app/util/favorites';
+import { fireAndForget } from '@core/util/fireAndForget';
 import FolderIcon from '@phosphor/folder.svg';
 import SearchIcon from '@phosphor/magnifying-glass.svg';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
@@ -163,7 +164,9 @@ export function DriveSidebarContent(props: { onNavigate?: () => void }) {
                       Folders couldn’t be loaded.
                       <Button
                         variant="ghost"
-                        onClick={() => void sidebar.retryFolders()}
+                        onClick={() =>
+                          fireAndForget(sidebar.retryFolders(), 'drive-view')
+                        }
                       >
                         Try again
                       </Button>

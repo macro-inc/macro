@@ -4,6 +4,7 @@ import { useSettingsState } from '@core/constant/SettingsState';
 import { useSettingsTabAvailable } from '@core/constant/settingsTabsConfig';
 import { useUserId } from '@core/context/user';
 import { useEmailLinks } from '@core/email-link';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { Button } from '@ui';
 import { For, Show, Suspense } from 'solid-js';
 import { EmailCard } from './Email';
@@ -107,7 +108,10 @@ function EmailSignatures() {
       fallback={
         <SettingsCard>
           <SettingsRow label="Couldn't load signatures">
-            <Button variant="outline" onClick={() => void query.refetch()}>
+            <Button
+              variant="outline"
+              onClick={() => fireAndForget(query.refetch(), 'email-settings')}
+            >
               Try again
             </Button>
           </SettingsRow>

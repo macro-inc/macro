@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   createCalendarOccurrenceQueryRange,
   useCalendarOccurrencesQuery,
@@ -127,7 +128,8 @@ export function useUpcomingCalendarEventsSource(options: SourceOptions) {
         ? 'Could not load upcoming events.'
         : undefined,
     refresh: () => {
-      for (const { query } of activeWindows()) void query.refetch();
+      for (const { query } of activeWindows())
+        fireAndForget(query.refetch(), 'meetings');
     },
   };
 }

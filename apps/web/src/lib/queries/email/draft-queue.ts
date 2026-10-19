@@ -3,6 +3,7 @@ import {
   enableGraphqlSoup,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   readRecordsByKeys,
   selectRecords,
@@ -208,7 +209,7 @@ function rejection(
     markThreadDraftSaved(threadId);
     invalidateSoupEntity(threadId);
     void refetchSoupEntity(threadId, 'emailThread').catch(reportError);
-    void fetchAndCacheThread(threadId);
+    fireAndForget(fetchAndCacheThread(threadId), 'email-draft-queue');
   } else {
     toast.failure(message);
     reportError(new Error(`${message}: ${code}`));
@@ -322,7 +323,7 @@ export async function saveEmailDraftQueued(input: {
         reportError
       );
     }
-    void queryClient.invalidateQueries({ queryKey: emailKeys.previews._def });
+    queryClient.invalidateQueries({ queryKey: emailKeys.previews._def });
     if (!input.completingThread) {
       void refetchSoupEntity(outcome.threadId, 'emailThread').catch(
         reportError
@@ -376,7 +377,7 @@ export async function deleteEmailDraftQueued(input: {
   }
   try {
     markThreadDraftSaved(input.threadId);
-    void queryClient.invalidateQueries({ queryKey: emailKeys.previews._def });
+    queryClient.invalidateQueries({ queryKey: emailKeys.previews._def });
     if (!input.completingThread) {
       void refetchSoupEntity(input.threadId, 'emailThread').catch(reportError);
       invalidateAllSoup();

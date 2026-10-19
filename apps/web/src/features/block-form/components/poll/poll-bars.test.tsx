@@ -47,6 +47,26 @@ it('is one tab stop: arrows move between options, Space votes, and the note says
   expect(screen.queryByText('Results are hidden.')).toBeNull();
 });
 
+it('keeps 0% and 100% on one line each so the percent column does not wrap', () => {
+  render(() => (
+    <PollBars
+      question="Tried it?"
+      bars={[
+        { optionId: 'no', label: 'No', count: 0, percent: 0, mine: false },
+        { optionId: 'yes', label: 'Yes', count: 4, percent: 100, mine: false },
+      ]}
+      showResults
+      hiddenNote=""
+      multi={false}
+      disabled={false}
+      summary="4 votes · one vote each"
+      onVote={() => {}}
+    />
+  ));
+  expect(screen.getByText('0%').textContent).toBe('0%');
+  expect(screen.getByText('100%').textContent).toBe('100%');
+});
+
 it('keeps the focused option mounted when live counts and the saved vote refresh', async () => {
   const [pending, setPending] = createSignal(false);
   const [options, setOptions] = createSignal([

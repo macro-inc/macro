@@ -18,14 +18,11 @@ export type MobileDockView = {
   /** Phosphor glyph for this view. */
   icon: MobileDockIcon;
   iconActive?: MobileDockIcon;
-  /** When set, the scope pill renders icon-only with this icon. */
-  pillIcon?: MobileDockIcon;
 };
 
 /**
- * Shared navigation order for the dock and search scope pills. The dock shows
- * as many views as fit and puts the remainder in More. All and Settings are
- * added by their respective surfaces.
+ * Dock navigation order. Views that do not fit go in More; Settings is
+ * added by its own surface.
  */
 const MOBILE_DOCK_VIEWS: readonly MobileDockView[] = [
   {
@@ -33,14 +30,12 @@ const MOBILE_DOCK_VIEWS: readonly MobileDockView[] = [
     label: 'Notifications',
     icon: BellIcon,
     iconActive: BellFillIcon,
-    pillIcon: BellIcon,
   },
   {
     id: 'calendar',
     label: 'Calendar',
     icon: getIconConfig('calendar').icon,
     iconActive: CalendarFillIcon,
-    pillIcon: getIconConfig('calendar').icon,
   },
   {
     id: 'mail',
@@ -54,13 +49,13 @@ const MOBILE_DOCK_VIEWS: readonly MobileDockView[] = [
     icon: getIconConfig('channel').icon,
     iconActive: ChannelFillIcon,
   },
+  { id: 'agents', label: 'Agents', icon: getIconConfig('agent').icon },
   {
     id: 'documents',
     label: 'Files',
     icon: getIconConfig('files').icon,
     iconActive: FilesFillIcon,
   },
-  { id: 'agents', label: 'Agents', icon: getIconConfig('agent').icon },
   { id: 'tasks', label: 'Tasks', icon: getIconConfig('task').icon },
   { id: 'calls', label: 'Calls', icon: getIconConfig('call').icon },
   { id: 'companies', label: 'CRM', icon: getIconConfig('company').icon },

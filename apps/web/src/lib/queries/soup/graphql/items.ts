@@ -113,12 +113,13 @@ export function createGraphqlSoupAstItemsQuery(
       const id = instructionsId();
       const sort = sortMethod();
       const showSupportedForeignEntities = showForeign();
-      const item = mapGraphqlSoupItem(record);
+      const view = { emailView: input()?.emailView };
+      const item = mapGraphqlSoupItem(record, view);
       const fetchedItem =
         fetched === record
           ? item
           : fetched
-            ? mapGraphqlSoupItem(fetched)
+            ? mapGraphqlSoupItem(fetched, view)
             : undefined;
       return {
         key: soupItemKey(record),

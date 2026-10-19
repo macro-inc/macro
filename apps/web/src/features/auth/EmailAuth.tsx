@@ -11,7 +11,9 @@ import { useEmailLinks } from '@core/email-link';
 import { consumeInboxLinkReturn } from '@core/email-link/return-layout';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { whenSettled } from '@core/util/whenSettled';
+import { Telemetry } from '@macro-inc/observability';
 import SpinnerIcon from '@phosphor/spinner-gap.svg';
 import {
   invalidateAllAfterLogin,
@@ -76,7 +78,9 @@ function EmailSignupCallback(props: Pick<EmailAuthParams, 'successPath'>) {
     query,
     async () => {
       const onSuccess = () => {
-        onSuccessfulAuth();
+        onSuccessfulAuth().catch((error) =>
+          Telemetry.error(error, { surface: 'email-auth' })
+        );
         navigateToSuccess();
       };
 
@@ -113,8 +117,8 @@ const POST_LINK_FALLBACK_ROUTE = `${DEFAULT_ROUTE}/~/settings/${settingsTabToSlu
  * inbox via /link/gmail. Reads `link_id` from the query string and invokes init to
  * provision the second `email_links` row. Falls back to a toast on failure.
  *
- * Consent runs as a full page navigation, so the split layout — which lives in
- * the URL — is gone by the time this mounts. The add-inbox flow stashed it
+ * Web consent navigates the page; desktop returns from the system browser via
+ * a deep link. Both replace the split layout URL. The add-inbox flow stashed it
  * against this `link_id`; restoring it is what keeps enabling calendar (or
  * adding an inbox) from clobbering whatever the user had open.
  */
@@ -139,8 +143,8 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
   const userInfoQuery = useUserInfoQuery();
 
   // Return to the layout the flow left from, if this callback belongs to a
-  // flow that stashed one. Consent replaced the page, so nothing in memory
-  // survived — the stash is the only record of what the user had open.
+  // flow that stashed one. The callback replaced the layout URL, so the stash
+  // records what the user had open before consent.
   // Reports true when it navigated, so callers can fall through otherwise.
   const restoreLayoutBeforeConsent = (linkId: string) => {
     const stored = consumeInboxLinkReturn(linkId);
@@ -201,6 +205,13 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
             });
             return;
           }
+          if (err.tag === 'PaymentRequired') {
+            toast.failure(
+              'A professional subscription is required to add another inbox.'
+            );
+            navigateAfterLink(linkId);
+            return;
+          }
           if (err.tag === 'NoGmailGrant') {
             toast.failure(
               'Gmail access was not granted. Please allow all requested permissions and try again.'
@@ -232,7 +243,7 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
       return;
     }
 
-    void runInit(linkId, false);
+    fireAndForget(runInit(linkId, false), 'email-auth');
   });
 
   return (
@@ -283,7 +294,7 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
           onShare={() => {
             const linkId = c().linkId;
             setConflict(null);
-            void runInit(linkId, true);
+            fireAndForget(runInit(linkId, true), 'email-auth');
           }}
         />
       )}

@@ -117,7 +117,7 @@ describe('createWorkFeed', () => {
     fake.queries[0].resolve(workFeedPage([docA]));
     await flush();
 
-    void feed.refetch();
+    const refetching = feed.refetch();
     await flush();
     const read = fake.queries.at(-1);
     expect(read?.context.requestPolicy).toBe(NETWORK_ONLY);
@@ -128,6 +128,7 @@ describe('createWorkFeed', () => {
 
     read?.resolve(workFeedPage([docA, docB]));
     await flush();
+    await refetching;
     expect(fake.writes).toHaveLength(1);
     expect(itemIds()).toEqual([
       'document:doc-a',

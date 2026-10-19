@@ -1,5 +1,6 @@
 import { ENABLE_DOCUMENT_MENTION_NOTIFICATIONS } from '@core/constant/featureFlags';
 import type { Entity } from '@core/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { muteItemForRef } from '@entity/utils/notification';
 import { createSocketEffect } from '@macro-inc/collaboration/websocket';
 import { updateSoupForNotification } from '@queries/notification/notification-soup';
@@ -330,7 +331,7 @@ export function createNotificationSource(
     if (usesGraphql()) return;
     if (!notificationsQuery.data) return;
     if (notificationsQuery.hasNextPage && !notificationsQuery.isFetching) {
-      notificationsQuery.fetchNextPage();
+      fireAndForget(notificationsQuery.fetchNextPage(), 'notifications');
     }
   });
 
@@ -366,7 +367,10 @@ export function createNotificationSource(
           n.notification_event_type === 'document_mention' && n.state !== 'done'
       );
       if (toDiscard.length === 0) return;
-      void discardDocumentMentions(toDiscard.map((n) => n.id));
+      fireAndForget(
+        discardDocumentMentions(toDiscard.map((n) => n.id)),
+        'notifications'
+      );
     });
   }
 
@@ -411,7 +415,7 @@ export function createNotificationSource(
     graphqlRefetchScheduled = true;
     queueMicrotask(() => {
       graphqlRefetchScheduled = false;
-      void runGraphqlNotificationRefetch();
+      fireAndForget(runGraphqlNotificationRefetch(), 'notifications');
     });
   };
 

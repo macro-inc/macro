@@ -31,7 +31,7 @@ export function TopBar(props: { onShare: () => void }) {
   const downloadDocument = createCallback(async () => {
     try {
       const blob = await getBlob();
-      downloadFile(blob, downloadName());
+      await downloadFile(blob, downloadName());
     } catch (e) {
       console.error('error downloading file', e);
       toast.failure('Error downloading file');

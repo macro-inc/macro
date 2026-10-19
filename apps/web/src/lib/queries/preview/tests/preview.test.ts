@@ -309,8 +309,8 @@ describe('preview transport facade', () => {
     expect(setQueryDataMock).not.toHaveBeenCalled();
   });
 
-  it('invalidates only active REST fallbacks under the GraphQL flag', () => {
-    invalidatePreview('doc-1');
+  it('invalidates only active REST fallbacks under the GraphQL flag', async () => {
+    await invalidatePreview('doc-1');
 
     const options = invalidateQueriesMock.mock.calls[0]?.[0];
     expect(options.queryKey).toContain('doc-1');

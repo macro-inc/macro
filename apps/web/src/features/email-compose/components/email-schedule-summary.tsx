@@ -1,5 +1,6 @@
 import type { EmailScheduleState } from '@app/features/email-compose/primitives/email-send-schedule';
 import { formatTimeZoneAbbreviation } from '@core/util/date';
+import { fireAndForget } from '@core/util/fireAndForget';
 import ClockIcon from '@phosphor/clock.svg';
 import { Button, cn } from '@ui';
 import { format } from 'date-fns/format';
@@ -55,7 +56,7 @@ function describeSchedule(
     detail: undefined,
     actionLabel: 'Cancel',
     accessibleActionLabel: 'Cancel scheduled send',
-    action: () => void props.onCancelSchedule(),
+    action: () => fireAndForget(props.onCancelSchedule(), 'email-compose'),
   };
 }
 

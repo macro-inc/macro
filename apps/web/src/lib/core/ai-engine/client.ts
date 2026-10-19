@@ -10,6 +10,7 @@
  * memory never shrinks while a worker lives).
  */
 
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { AiRequest, AiResponse, QueryMethod } from './protocol';
 import type {
   EdgeRect,
@@ -233,7 +234,7 @@ export class AiEngine {
         helper.terminate();
       }
     };
-    void start();
+    fireAndForget(start(), 'ai-engine');
   }
 
   /** Every worker besides the primary, opened or still opening. */
@@ -419,10 +420,12 @@ export class AiEngine {
     try {
       r = await request(this.primary);
     } catch (error) {
-      for (const { h, done } of fanned) void this.dropIf(h, done, true);
+      for (const { h, done } of fanned)
+        fireAndForget(this.dropIf(h, done, true), 'ai-engine');
       throw error;
     }
-    for (const { h, done } of fanned) void this.dropIf(h, done, false);
+    for (const { h, done } of fanned)
+      fireAndForget(this.dropIf(h, done, false), 'ai-engine');
     if (r.kind !== 'edit') throw new Error('unexpected response');
     return JSON.parse(r.json) as EditResult;
   }
@@ -503,7 +506,10 @@ export class AiEngine {
    */
   async enableCollab(session: number, seed: boolean): Promise<EntryChange[]> {
     for (const h of this.others())
-      void ignore(h.request({ kind: 'enableCollab', session, seed }));
+      fireAndForget(
+        ignore(h.request({ kind: 'enableCollab', session, seed })),
+        'ai-engine'
+      );
     const r = await this.primary.request({
       kind: 'enableCollab',
       session,
@@ -531,11 +537,14 @@ export class AiEngine {
   ): Promise<RegisteredFace[]> {
     for (const h of this.others()) {
       const copy = bytes.slice(0);
-      void ignore(
-        h.request(
-          { kind: 'registerFont', bytes: copy, family: family ?? null },
-          [copy]
-        )
+      fireAndForget(
+        ignore(
+          h.request(
+            { kind: 'registerFont', bytes: copy, family: family ?? null },
+            [copy]
+          )
+        ),
+        'ai-engine'
       );
     }
     const copy = bytes.slice(0);
@@ -564,7 +573,7 @@ export class AiEngine {
    */
   retain(work: Promise<unknown>) {
     this.holds.add(work);
-    void this.release(work);
+    fireAndForget(this.release(work), 'ai-engine');
   }
 
   private async release(work: Promise<unknown>) {
@@ -582,7 +591,7 @@ export class AiEngine {
     this.closed = true;
     const primary = this.primary;
     if (this.holds.size === 0) primary.terminate();
-    else void this.terminateWhenFree(primary);
+    else fireAndForget(this.terminateWhenFree(primary), 'ai-engine');
     for (const h of this.helpers) h.terminate();
     for (const h of this.starting) h.terminate();
     this.helpers.length = 0;

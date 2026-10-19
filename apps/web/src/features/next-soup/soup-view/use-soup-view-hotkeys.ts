@@ -20,7 +20,9 @@ import {
   filterValidNotifications,
   isSearchEntity,
   isWithNotification,
+  type SearchLocation,
 } from '@entity';
+import { Telemetry } from '@macro-inc/observability';
 import { openSingleStackNotification } from '@notifications';
 import { type Accessor, onCleanup } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
@@ -30,6 +32,9 @@ import {
   useVisibleViewTabs,
   VIEW_TAB_LISTS,
 } from './soup-view-tabs';
+
+const reportSoupViewError = (error: unknown) =>
+  Telemetry.error(error, { surface: 'soup-view' });
 
 type UseSoupViewHotkeysOptions = {
   onOpenProject?: (id: string) => void;
@@ -150,6 +155,25 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     return didOpen;
   };
 
+  const openEntityFromList = async (
+    entity: EntityData,
+    openOptions: { location?: SearchLocation; openInNewSplit?: boolean }
+  ) => {
+    markCalendarNotificationSeenOnOpen(entity, notificationSource);
+    await openEntityInSplitFromUnifiedList(entity, {
+      ...openOptions,
+      splitHandle,
+      referredFrom: currentView(),
+      notificationSource,
+    });
+  };
+
+  const loadMoreInGroup = async (groupKey: string, index: number) => {
+    await fetchNextGroupPage(groupKey);
+    soup.navigate.toIndex(index);
+    virtualizerHandle()?.scrollToIndex(index, { align: 'nearest' });
+  };
+
   // enter - Open entity in split, toggle group, or load more
   registerHotkey({
     hotkey: ['enter'],
@@ -176,13 +200,9 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
 
       // If focused on a load more row, trigger load more and stay at same index
       if (focusedRow.getIsLoadMore() && focusedRow.group) {
-        const currentIndex = focusedRow.index;
-        fetchNextGroupPage(focusedRow.group.key).then(() => {
-          soup.navigate.toIndex(currentIndex);
-          virtualizerHandle()?.scrollToIndex(currentIndex, {
-            align: 'nearest',
-          });
-        });
+        loadMoreInGroup(focusedRow.group.key, focusedRow.index).catch(
+          reportSoupViewError
+        );
         return true;
       }
 
@@ -204,13 +224,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
       const location =
         contentHitData?.length === 1 ? contentHitData[0]?.location : undefined;
 
-      markCalendarNotificationSeenOnOpen(entity, notificationSource);
-      openEntityInSplitFromUnifiedList(entity, {
-        splitHandle,
-        location,
-        referredFrom: currentView(),
-        notificationSource,
-      });
+      openEntityFromList(entity, { location }).catch(reportSoupViewError);
       return true;
     },
     displayPriority: 4,
@@ -323,13 +337,9 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
 
       const entity = soup.focus.item();
       if (!entity) return false;
-      markCalendarNotificationSeenOnOpen(entity, notificationSource);
-      openEntityInSplitFromUnifiedList(entity, {
-        splitHandle,
-        openInNewSplit: true,
-        referredFrom: currentView(),
-        notificationSource,
-      });
+      openEntityFromList(entity, { openInNewSplit: true }).catch(
+        reportSoupViewError
+      );
       return true;
     },
     hide: true,

@@ -39,11 +39,8 @@ pub(crate) async fn other_inbox_preview_cursor(
                 SELECT EXISTS (
                     SELECT 1
                     FROM email_messages m_imp
-                    JOIN email_message_labels ml ON m_imp.id = ml.message_id
-                    JOIN email_labels l ON ml.label_id = l.id
-                    WHERE m_imp.thread_id = t.id
-                      AND l.link_id = t.link_id
-                      AND l.name = 'IMPORTANT'
+                    JOIN email_message_mailbox_facts mf ON mf.id = m_imp.id
+                    WHERE m_imp.thread_id = t.id AND mf.is_present AND NOT mf.in_trash AND mf.provider_is_important
                 )
             ) AS "is_important!",
             c.email_address AS "sender_email?",
@@ -76,14 +73,13 @@ pub(crate) async fn other_inbox_preview_cursor(
               AND t.latest_non_spam_message_ts IS NOT NULL
               -- Inclusion Criteria: Must have a category label.
               AND EXISTS (
-                  SELECT 1 FROM email_messages m JOIN email_message_labels ml ON m.id = ml.message_id JOIN email_labels l ON ml.label_id = l.id
-                  WHERE m.thread_id = t.id AND l.link_id = t.link_id AND l.name IN ('CATEGORY_PROMOTIONS', 'CATEGORY_SOCIAL', 'CATEGORY_FORUMS')
+                  SELECT 1 FROM email_messages m JOIN email_message_mailbox_facts mf ON mf.id = m.id
+                  WHERE m.thread_id = t.id AND mf.is_present AND mf.provider_is_other
               )
-              -- ****** CORRECTED EXCLUSION CRITERIA ******
-              -- This now matches the logic of your original query, which did NOT filter out 'INBOX' or 'IMPORTANT'.
+              -- Preserve the view exclusion of junk, trash, and drafts.
               AND NOT EXISTS (
-                  SELECT 1 FROM email_messages m JOIN email_message_labels ml ON m.id = ml.message_id JOIN email_labels l ON ml.label_id = l.id
-                  WHERE m.thread_id = t.id AND l.link_id = t.link_id AND l.name IN ('SPAM', 'TRASH', 'DRAFT')
+                  SELECT 1 FROM email_messages m JOIN email_message_mailbox_facts mf ON mf.id = m.id
+                  WHERE m.thread_id = t.id AND mf.is_present AND (mf.in_junk OR mf.in_trash OR m.is_draft)
               )
               
               AND (($3::timestamptz IS NULL) OR (
@@ -107,10 +103,7 @@ pub(crate) async fn other_inbox_preview_cursor(
             FROM email_messages m
             WHERE m.thread_id = t.id
               AND m.is_draft = FALSE
-            AND NOT EXISTS (
-                SELECT 1 FROM email_message_labels ml JOIN email_labels l ON ml.label_id = l.id
-                WHERE ml.message_id = m.id AND l.link_id = t.link_id AND l.name IN ('SPAM', 'TRASH')
-            )
+            AND EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND mf.is_present AND NOT mf.in_trash AND NOT mf.in_junk)
             ORDER BY m.internal_date_ts DESC
             LIMIT 1
         ) AS lmp

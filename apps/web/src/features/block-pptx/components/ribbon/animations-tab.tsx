@@ -9,6 +9,7 @@ import type {
   AnimationOutline,
   AnimationStart,
 } from '@core/pptx-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowDown from '@phosphor/arrow-down.svg';
 import ArrowUp from '@phosphor/arrow-up.svg';
 import ListNumbers from '@phosphor/list-numbers.svg';
@@ -195,7 +196,10 @@ export function AnimationsTab() {
               testId="pptx-animation-gallery-panel"
               onPick={(cls, effect) => {
                 close();
-                void c.animate(cls, effect, 'replace', anim.picked());
+                fireAndForget(
+                  c.animate(cls, effect, 'replace', anim.picked()),
+                  'pptx-editor'
+                );
               }}
             />
           )}
@@ -226,9 +230,12 @@ export function AnimationsTab() {
                           data-testid={`pptx-animation-option-${o.value}`}
                           onClick={() => {
                             close();
-                            void c.updateAnimations(indexes(), {
-                              direction: o.value,
-                            });
+                            fireAndForget(
+                              c.updateAnimations(indexes(), {
+                                direction: o.value,
+                              }),
+                              'pptx-editor'
+                            );
                           }}
                         >
                           {o.label}
@@ -248,7 +255,10 @@ export function AnimationsTab() {
                       data-testid="pptx-animation-sequence-object"
                       onClick={() => {
                         close();
-                        void c.setSequence(shape(), false);
+                        fireAndForget(
+                          c.setSequence(shape(), false),
+                          'pptx-editor'
+                        );
                       }}
                     >
                       As One Object
@@ -259,7 +269,10 @@ export function AnimationsTab() {
                       data-testid="pptx-animation-sequence-paragraph"
                       onClick={() => {
                         close();
-                        void c.setSequence(shape(), true);
+                        fireAndForget(
+                          c.setSequence(shape(), true),
+                          'pptx-editor'
+                        );
                       }}
                     >
                       By Paragraph
@@ -285,7 +298,7 @@ export function AnimationsTab() {
               testId="pptx-animation-add-panel"
               onPick={(cls, effect) => {
                 close();
-                void c.animate(cls, effect, 'add');
+                fireAndForget(c.animate(cls, effect, 'add'), 'pptx-editor');
               }}
             />
           )}
@@ -310,9 +323,12 @@ export function AnimationsTab() {
             disabled={ro() || !current()}
             value={current()?.start ?? 'onClick'}
             onChange={(e) =>
-              void c.updateAnimations(indexes(), {
-                start: e.currentTarget.value as AnimationStart,
-              })
+              fireAndForget(
+                c.updateAnimations(indexes(), {
+                  start: e.currentTarget.value as AnimationStart,
+                }),
+                'pptx-editor'
+              )
             }
           >
             <For each={Object.entries(START_LABELS)}>
@@ -333,9 +349,12 @@ export function AnimationsTab() {
           disabled={ro() || !current() || current()!.durationMs === 0}
           testId="pptx-animation-duration"
           onCommit={(v) =>
-            void c.updateAnimations(indexes(), {
-              durationMs: Math.round(v * 1000),
-            })
+            fireAndForget(
+              c.updateAnimations(indexes(), {
+                durationMs: Math.round(v * 1000),
+              }),
+              'pptx-editor'
+            )
           }
         />
         <span class="text-ink-muted text-xs">Delay</span>
@@ -351,9 +370,12 @@ export function AnimationsTab() {
           disabled={ro() || !current()}
           testId="pptx-animation-delay"
           onCommit={(v) =>
-            void c.updateAnimations(indexes(), {
-              delayMs: Math.round(v * 1000),
-            })
+            fireAndForget(
+              c.updateAnimations(indexes(), {
+                delayMs: Math.round(v * 1000),
+              }),
+              'pptx-editor'
+            )
           }
         />
         <RibbonButton
@@ -364,7 +386,10 @@ export function AnimationsTab() {
           onClick={() => {
             const i = anim.current();
             if (i === undefined) return;
-            void c.moveAnimation(i, -1).then(() => anim.pick(i - 1));
+            fireAndForget(
+              c.moveAnimation(i, -1).then(() => anim.pick(i - 1)),
+              'pptx-editor'
+            );
           }}
         >
           <ArrowUp />
@@ -381,7 +406,10 @@ export function AnimationsTab() {
           onClick={() => {
             const i = anim.current();
             if (i === undefined) return;
-            void c.moveAnimation(i, 1).then(() => anim.pick(i + 1));
+            fireAndForget(
+              c.moveAnimation(i, 1).then(() => anim.pick(i + 1)),
+              'pptx-editor'
+            );
           }}
         >
           <ArrowDown />

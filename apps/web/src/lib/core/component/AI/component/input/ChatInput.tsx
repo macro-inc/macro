@@ -30,6 +30,7 @@ import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { handleFileFolderDrop } from '@core/util/upload';
 import PaperclipIcon from '@phosphor/paperclip.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
@@ -192,7 +193,7 @@ export function ChatInput(props: ChatInputComponentProps) {
     !isEmptyInput();
 
   const sendMessage = createCallback(
-    async (opts?: { modelOverride?: Model; metaKey?: boolean }) => {
+    (opts?: { modelOverride?: Model; metaKey?: boolean }) => {
       if (!canSendMessage()) return;
 
       if (isNativeMobilePlatform() && !hasConsent()) {
@@ -221,9 +222,12 @@ export function ChatInput(props: ChatInputComponentProps) {
           toast.failure('Folder upload not supported here');
           return;
         }
-        handleFileFolderDrop(files, directories, (entries) => {
-          uploadQueue.upload(entries.map((e) => e.file));
-        });
+        fireAndForget(
+          handleFileFolderDrop(files, directories, (entries) => {
+            uploadQueue.upload(entries.map((e) => e.file));
+          }),
+          'chat-input'
+        );
       },
     })
     .onEnter((e) => {

@@ -13,6 +13,7 @@ import {
   hasPermissions,
   Permissions,
 } from '@core/component/SharePermissions';
+import { fireAndForget } from '@core/util/fireAndForget';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
@@ -107,7 +108,7 @@ export function FileDetailLoadGate<
   const reload = () => {
     // Dispose the old editor and its sync source before loading a new token.
     mutate(undefined);
-    void refetch();
+    fireAndForget(refetch(), 'drive-view');
   };
   const sharedAccess = useSharedAccessUpdates(
     () => shareEntity('document', props.documentId),
@@ -143,7 +144,7 @@ export function FileDetailLoadGate<
               label={props.label}
               error={error()}
               actionLabel="Try again"
-              onAction={() => void refetch()}
+              onAction={() => fireAndForget(refetch(), 'drive-view')}
             />
           )}
         </Match>

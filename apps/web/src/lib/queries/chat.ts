@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { createConnectionWebsocketEffect } from '@service-connection/websocket';
@@ -50,6 +51,6 @@ export function useChatRenameWebsocketSync() {
     queryClient.invalidateQueries({ queryKey: soupKeys.items._def });
     queryClient.invalidateQueries({ queryKey: soupKeys.astItems._def });
     queryClient.invalidateQueries({ queryKey: soupKeys.search._def });
-    invalidatePreview(data.chat_id);
+    fireAndForget(invalidatePreview(data.chat_id), 'chat-rename-sync');
   });
 }

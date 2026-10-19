@@ -4,6 +4,7 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { invalidateContacts } from '@core/user/contactService';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { Span } from '@macro-inc/observability';
 import { invalidateListChannels } from '@queries/channel/channels';
 import {
@@ -74,8 +75,8 @@ export function useSendMessageToPeople() {
     if (!sent) return;
     const messageId = sent.id;
 
-    invalidateListChannels();
-    invalidateContacts();
+    fireAndForget(invalidateListChannels(), 'messages');
+    fireAndForget(invalidateContacts(), 'messages');
 
     const navigateToChannel = async () => {
       replaceSplit({

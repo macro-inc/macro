@@ -273,6 +273,8 @@ it('keeps rendering and attachment identities while excluding transport metadata
           content_type: 'text/plain',
           file_name: 'notes.txt',
           s3_key: 'notes',
+          upload_pending: false,
+          is_inline: false,
           sha: 'sha',
           size: 42,
         },

@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT (EXISTS(SELECT 1 FROM in_progress_user_link WHERE id = $1\n                AND macro_user_id = $2 AND email_provider = 'OUTLOOK') OR\n                EXISTS(SELECT 1 FROM email_link_initializations WHERE attempt_id = $1 AND actor_id = $3)) AS \"recognized!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "recognized!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "8c338bfbc62cccd7012029a9f9106561c299833f3377422f478b79732860ff8f"
+}

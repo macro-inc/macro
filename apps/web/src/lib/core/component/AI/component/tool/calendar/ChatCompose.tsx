@@ -11,6 +11,7 @@
 import { useChatContext } from '@core/component/AI/context';
 import type { AssistantMessagePart } from '@core/component/AI/types';
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { invalidateCalendarOccurrences } from '@queries/calendar/occurrences';
 import { useChatQuery } from '@queries/chat';
 import { cognitionApiServiceClient } from '@service-cognition/client';
@@ -145,7 +146,10 @@ export function CalendarChatCompose(props: CalendarChatComposeProps) {
     });
     return persistenceQueue;
   }
-  const debouncedUpdate = debounce(() => void enqueueUpdate(), 150);
+  const debouncedUpdate = debounce(
+    () => fireAndForget(enqueueUpdate(), 'ai-calendar-compose'),
+    150
+  );
 
   function updateLocalResponse(
     response: CreateCalendarEventResponse,
@@ -197,7 +201,7 @@ export function CalendarChatCompose(props: CalendarChatComposeProps) {
       }
       finalized = true;
       updateLocalResponse(result.value as CreateCalendarEventResponse, args);
-      void invalidateCalendarOccurrences();
+      fireAndForget(invalidateCalendarOccurrences(), 'ai-calendar-compose');
       toast.success('Calendar event created', {
         actions: [
           { label: 'Open', onClick: () => openToolCalendarEvent(event) },

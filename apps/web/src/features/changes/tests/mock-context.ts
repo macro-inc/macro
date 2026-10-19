@@ -111,13 +111,19 @@ export function createMockChangesContext(
   const host: ChangesHost & { agent: ChangesAgent } = {
     scopeKey: () => options.sessionId ?? 'session-1',
     agent: {
-      send: (markdown) => void sent.push(markdown),
+      send: (markdown) => {
+        sent.push(markdown);
+      },
       canSend: () => options.canSend ?? true,
     },
     pullRequestUrl,
-    openExternal: (url) => void opened.push(url),
+    openExternal: (url) => {
+      opened.push(url);
+    },
     copyText: async () => true,
-    notify: (message, tone) => void notified.push({ message, tone }),
+    notify: (message, tone) => {
+      notified.push({ message, tone });
+    },
   };
   return {
     source,

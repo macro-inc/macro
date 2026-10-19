@@ -42,6 +42,9 @@
 //   bun scripts/ios-app-store.mjs status [--require-live] [--require-unused-build]
 //   bun scripts/ios-app-store.mjs release-info
 //   bun scripts/ios-app-store.mjs withdraw --pr <number>
+//   bun scripts/ios-app-store.mjs prepare-signing
+//     Installs profiles for APPLE_DISTRIBUTION_CERTIFICATE_PATH and selects
+//     manual export; ios-release.sh backs up/restores the project settings.
 //
 // release-info prints JSON for ios-bump-version.mjs: the highest build number
 // App Store Connect has seen (any version, TestFlight included), whether the
@@ -74,6 +77,7 @@ import os from "node:os";
 import path from "node:path";
 import { exit } from "node:process";
 import { fileURLToPath } from "node:url";
+import { prepareSigning } from "./ios-signing.mjs";
 
 const API_BASE = "https://api.appstoreconnect.apple.com";
 const POLL_INTERVAL_MS = 30_000;
@@ -165,9 +169,9 @@ function parseArgs(argv) {
 }
 
 const [command, ...rest] = process.argv.slice(2);
-if (!["wait-build", "submit", "status", "release-info", "withdraw"].includes(command ?? "")) {
+if (!["wait-build", "submit", "status", "release-info", "withdraw", "prepare-signing"].includes(command ?? "")) {
   console.error(
-    "Usage: ios-app-store.mjs <wait-build|submit|status|release-info|withdraw> [flags]",
+    "Usage: ios-app-store.mjs <wait-build|submit|status|release-info|withdraw|prepare-signing> [flags]",
   );
   exit(2);
 }
@@ -320,6 +324,11 @@ async function api(pathname, { method = "GET", body, onError } = {}) {
     exit(1);
   }
   return response.status === 204 ? null : response.json();
+}
+
+if (command === "prepare-signing") {
+  await prepareSigning(api, appDir);
+  exit(0);
 }
 
 const apps = await api(`/v1/apps?filter[bundleId]=${encodeURIComponent(bundleId)}`);
@@ -619,7 +628,10 @@ async function inFlightVersionForPr(pr) {
 /// code changed after the release, so that build must never go live).
 /// GITHUB_OUTPUT gets withdrawn=true|false and, if the PR's version is past
 /// the point of withdrawal — approved by Apple or already shipped —
-/// live=<version> (<build>) so the caller can warn loudly.
+/// live=<version> (<build>) so the caller can warn loudly. With
+/// --unless-tree <hash> (the watcher's drift check) a build whose stamp still
+/// matches the PR's native code is left alone in every state, in-flight or
+/// live: nothing drifted, so nothing to withdraw or warn about.
 async function withdraw() {
   const pr = args.pr ?? releasePr;
   if (!pr) {
@@ -666,6 +678,13 @@ async function withdraw() {
     const stamp = await buildStamp(attached.data.id);
     if (stamp?.pr === String(pr)) {
       const live = `${record.attributes.versionString} (${attached.data.attributes.version})`;
+      if (args["unless-tree"] && stamp.tree === args["unless-tree"]) {
+        console.log(
+          `PR #${pr}'s version ${live} is live on the App Store, built from native tree ` +
+            `${stamp.tree}, which is still the PR's; nothing to withdraw.`,
+        );
+        return;
+      }
       console.log(`PR #${pr}'s version ${live} is already live on the App Store.`);
       setGitHubOutput("live", live);
       return;

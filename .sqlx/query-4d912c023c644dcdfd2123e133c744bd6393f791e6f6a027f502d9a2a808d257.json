@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS(SELECT 1 FROM email_draft_transfer_cancellations WHERE id=$1) AS \"cancelled!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "cancelled!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "4d912c023c644dcdfd2123e133c744bd6393f791e6f6a027f502d9a2a808d257"
+}

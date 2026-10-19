@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE microsoft_oauth_grant_versions g SET refresh_token_ciphertext = $5, encrypted_data_key = $6,\n                nonce = $7, encryption_version = $8, kms_key_id = $9, scopes = $10,\n                revision = revision + 1, refresh_lease_id = NULL, refresh_lease_until = NULL,\n                updated_at = now(), last_refreshed_at = now()\n            WHERE grant_id = $1 AND generation = $2 AND revision = $3 AND refresh_lease_id = $4\n                AND revoked_at IS NULL AND refresh_lease_until > now()\n                AND EXISTS(SELECT 1 FROM email_links l WHERE l.grant_id=g.grant_id AND l.grant_generation=g.generation\n                    AND l.fusionauth_user_id=g.fusionauth_user_id AND lower(l.email_address)=g.email_address\n                    AND l.provider='OUTLOOK' AND (l.is_sync_active OR l.disconnect_requested_at IS NOT NULL))\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8",
+        "Int8",
+        "Uuid",
+        "Bytea",
+        "Bytea",
+        "Bytea",
+        "Int4",
+        "Text",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "788105aad74948f603dcf0faa02c3ff25f0576988ecfdf853ffe6e35c1d5a66a"
+}

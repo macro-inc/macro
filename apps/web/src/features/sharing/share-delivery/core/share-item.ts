@@ -8,7 +8,8 @@ export type ShareKind =
   | 'initiative'
   | 'call'
   | 'form'
-  | 'crm_pipeline';
+  | 'crm_pipeline'
+  | 'foreign';
 
 export const CHANNEL_ACCESS_LEVELS = ['view', 'comment', 'edit'] as const;
 
@@ -74,6 +75,8 @@ const KIND_POLICY = {
   initiative: { grant: 'before-send', maxLevel: 'edit', send: 'restricted' },
   crm_pipeline: { grant: 'before-send', maxLevel: 'edit', send: 'restricted' },
   call: { grant: 'message-only', maxLevel: 'view', send: 'anyone' },
+  // A pull request's access follows GitHub, so sharing one only sends it.
+  foreign: { grant: 'message-only', maxLevel: 'view', send: 'anyone' },
 } as const satisfies Record<ShareKind, KindPolicy>;
 
 export type RestrictedKind = {

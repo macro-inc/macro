@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH candidate AS (\n                SELECT c.object_key FROM email_draft_object_cleanup c\n                WHERE c.available_at <= now() AND (c.lease_until IS NULL OR c.lease_until < now())\n                    AND NOT EXISTS (SELECT 1 FROM email_attachments_drafts a WHERE a.s3_key = c.object_key)\n                    AND NOT EXISTS (SELECT 1 FROM email_attachment_blobs b WHERE b.object_key = c.object_key)\n                    AND NOT EXISTS (SELECT 1 FROM email_mailbox_drafts d WHERE d.state NOT IN ('sent','deleted')\n                        AND d.desired_content @> jsonb_build_object('_attachments',jsonb_build_object('uploads',jsonb_build_array(jsonb_build_object('s3_key',c.object_key)))))\n                    AND NOT EXISTS (SELECT 1 FROM email_mailbox_drafts d WHERE d.state NOT IN ('sent','deleted')\n                        AND d.checkpoint @> jsonb_build_object('prepared',jsonb_build_object('files',jsonb_build_array(jsonb_build_object('source',jsonb_build_object('kind','uploaded','key',c.object_key))))))\n                    AND NOT EXISTS (SELECT 1 FROM email_mailbox_drafts d WHERE d.state NOT IN ('sent','deleted') AND d.lease_until > now()\n                        AND d.claimed_content @> jsonb_build_object('_attachments',jsonb_build_object('uploads',jsonb_build_array(jsonb_build_object('s3_key',c.object_key)))))\n                ORDER BY c.available_at LIMIT 1 FOR UPDATE OF c SKIP LOCKED\n            ) UPDATE email_draft_object_cleanup c SET lease_id = $1,lease_until = now() + interval '5 minutes'\n                FROM candidate WHERE c.object_key = candidate.object_key RETURNING c.object_key\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "object_key",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "f4b294cb3d9bcaba2bced73ee53124f403457e498686a1cda75be03eeed749e7"
+}

@@ -28,6 +28,7 @@ import {
   ROUTINE_DETAIL_ROUTE_ID,
   ROUTINES_ROUTE_ID,
 } from '@app/features/routines/routine-navigation';
+import { bookingLinksSearch } from '@app/features/scheduling/booking-links-search';
 import { defineRoute, type Entry, routeParams } from '@app/lib/split-router';
 import { callDetailSearch } from '@block-call/call-route';
 import { URL_PARAMS as CALL_URL_PARAMS } from '@block-call/constants';
@@ -568,6 +569,11 @@ export const reviewsSplitRoute = defineRoute({
   search: [reviewsTabSearch.namespace],
 });
 
+export const bookingLinksRoute = defineRoute({
+  id: 'view-booking-links',
+  path: 'scheduling',
+  search: [bookingLinksSearch.namespace],
+});
 export const calendarSplitRoute = defineRoute({
   id: CALENDAR_ROUTE_ID,
   path: 'calendar/:period',

@@ -4,11 +4,8 @@ import type { DatabaseDetail } from '@service-storage/generated/schemas/database
 import type { TableDetail } from '@service-storage/generated/schemas/tableDetail';
 import { errAsync, ok, okAsync } from 'neverthrow';
 import { describe, expect, it, vi } from 'vitest';
-import {
-  exportDatabaseTableCsv,
-  exportedValue,
-  importDatabaseTable,
-} from './transfer';
+import { exportedValue } from '../../database/core/csv';
+import { exportDatabaseTableCsv, importDatabaseTable } from './transfer';
 
 const mocks = vi.hoisted(() => ({
   read: vi.fn(),

@@ -13,6 +13,7 @@ import {
 } from '@components/app/split-layout/layoutUtils';
 import { enableGantt, enableProjects } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { usePropertyUserDisplay } from '@property/hooks/usePropertyUserDisplay';
 import { queryClient } from '@queries/client';
 import {
@@ -188,12 +189,15 @@ function ProjectsCollectionHost(props: {
           globalSplitManager()?.canAppendSplit() ?? false
         }
         onCopyLink={(id) =>
-          void copyLink.executeByBlock(
-            projectRouteId({ id, section: 'overview' }),
-            'component'
+          fireAndForget(
+            copyLink.executeByBlock(
+              projectRouteId({ id, section: 'overview' }),
+              'component'
+            ),
+            'projects'
           )
         }
-        onCopyId={(id) => void copyId.executeById(id)}
+        onCopyId={(id) => fireAndForget(copyId.executeById(id), 'projects')}
         onShare={(projectId) => setSharing(projectId)}
       />
       <Show when={sharing()} keyed>

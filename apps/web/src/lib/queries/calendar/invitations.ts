@@ -25,7 +25,7 @@ export function invalidateCalendarInvitations() {
 
 /** A loaded thread's saved invitations changed: revalidate its calendar state. */
 export function invalidateInvitationScheduling(threadId: string) {
-  void queryClient.invalidateQueries({
+  queryClient.invalidateQueries({
     queryKey: calendarKeys.invitations(threadId).queryKey,
   });
 }

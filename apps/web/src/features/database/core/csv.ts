@@ -3,6 +3,9 @@ import { err, ok, type Result } from 'neverthrow';
 import Papa from 'papaparse';
 import { match } from 'ts-pattern';
 import type { ResultError } from '../../../lib/core/util/result';
+import { relatedRowIds } from './database-relations';
+import type { DatabaseCellValue, DatabaseViewColumn } from './database-view';
+import { formatCellValue } from './table';
 
 export type DatabaseCsv = {
   columns: string[];
@@ -132,4 +135,22 @@ export function encodeDatabaseCsv(
       escapeFormulae: /^[\s]*[=+\-@\t\r]/,
     }
   );
+}
+
+/**
+ * A cell as the CSV carries it: what the grid shows, except where its display
+ * drops data. Dates keep their stored moment (the grid shows the day) and
+ * numbers every digit (the grid rounds). Relation cells have no row names
+ * loaded here, so they keep the related rows' ids rather than claiming those
+ * rows are unavailable.
+ */
+export function exportedValue(
+  column: DatabaseViewColumn,
+  value: DatabaseCellValue
+): string {
+  if (column.relation) return relatedRowIds(value).join(', ');
+  if (column.dataType === 'DATE' && typeof value === 'string') return value;
+  if (column.dataType === 'NUMBER' && typeof value === 'number')
+    return String(value);
+  return formatCellValue(column, value);
 }

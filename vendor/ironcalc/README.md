@@ -88,6 +88,10 @@ Host hooks in the WebAssembly package:
   conditional format in one call.
 - `setPivotTables(layouts)` describes the workbook's pivot tables for
   GETPIVOTDATA (`PivotLayout` in `types.ts`).
+- `setFilteredRanges(ranges)` describes the host's filtered tables, which the
+  engine does not hold: SUBTOTAL(1-11) leaves out the rows hidden in them, as
+  it leaves out rows an Excel table's filter hides (`FilteredRange` in
+  `functions/subtotal.rs` and `types.ts`).
 - `getCellNumber` reads a number result without formatting it, and
   `getCellNumberFormat` a cell's number format without serializing its whole
   style (`user_model/common.rs`): reading a large workbook's results no longer

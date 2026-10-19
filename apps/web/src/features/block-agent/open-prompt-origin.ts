@@ -8,6 +8,7 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { toast } from '@core/component/Toast/Toast';
 import { COMMENT_LINK_PARAM } from '@core/messages/comment-link';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { openExternalUrl } from '@core/util/url';
 import { getItemPreview, isAccessiblePreviewItem } from '@queries/preview';
 import { ResultAsync } from 'neverthrow';
@@ -56,18 +57,24 @@ export function useOpenPromptOrigin(): (
       .with({ kind: 'channel_message' }, (target) => {
         const orchestrator = globalSplitManager()?.getOrchestrator();
         if (target.messageId && orchestrator) {
-          void navigateToChannelMessage(
-            orchestrator,
-            target.channelId,
-            target.messageId,
-            target.threadId
+          fireAndForget(
+            navigateToChannelMessage(
+              orchestrator,
+              target.channelId,
+              target.messageId,
+              target.threadId
+            ),
+            'agent-prompt-origin'
           );
           return;
         }
         layout.openWithSplit({ type: 'channel', id: target.channelId });
       })
       .with({ kind: 'document' }, ({ documentId, commentId }) => {
-        void openDocumentComment(documentId, commentId);
+        fireAndForget(
+          openDocumentComment(documentId, commentId),
+          'agent-prompt-origin'
+        );
       })
       .with({ kind: 'project' }, ({ projectId, commentId }) =>
         openProject(layout, projectId, { discussionId: commentId })

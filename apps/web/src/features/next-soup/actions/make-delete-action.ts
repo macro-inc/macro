@@ -2,6 +2,7 @@ import { openBulkEditModal } from '@app/features/entity/bulk-edit/BulkEditEntity
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { globalRemoveFromSplitHistory } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { type EmailEntity, type EntityData, isEmailEntity } from '@entity';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import type { SoupRow } from '../create-soup-state';
@@ -212,7 +213,7 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
       soup.selection.clear();
       const next = nextSurvivingRow();
       if (next || hadPartialDeletion) soup.focus.set(next?.id);
-      restoreSoupFocus(next?.id);
+      fireAndForget(restoreSoupFocus(next?.id), 'entity-actions');
     };
 
     const trashEmailEntities = () => {
@@ -226,7 +227,7 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
 
       reportTrashedEmails(handle, emailEntities.length);
 
-      restoreSoupFocus(next?.id);
+      fireAndForget(restoreSoupFocus(next?.id), 'entity-actions');
     };
 
     if (nonEmailEntities.length > 0) {
@@ -267,7 +268,7 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
             firstRemaining?.id ??
             (hadPartialDeletion ? nextSurvivingRow()?.id : undefined);
           if (target || hadPartialDeletion) soup.focus.set(target);
-          restoreSoupFocus(target);
+          fireAndForget(restoreSoupFocus(target), 'entity-actions');
         },
       });
     } else if (emailEntities.length > 0) {

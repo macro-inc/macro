@@ -10,6 +10,11 @@ import {
   validNotes,
 } from './sheet-rules';
 import {
+  MAX_SHEET_TABLES,
+  type SheetTable,
+  validSheetTable,
+} from './sheet-tables';
+import {
   parseCellAddress,
   SPREADSHEET_MAX_COLUMNS,
   SPREADSHEET_MAX_ROWS,
@@ -43,6 +48,8 @@ export type WorkbookSheetMetadata = {
   drawings?: SheetDrawing[];
   /** Excel pivot tables, kept so export writes them back. */
   pivotTables?: SheetPivotTable[];
+  /** Named tables of the sheet's cells (Excel tables). */
+  tables?: SheetTable[];
 };
 
 /**
@@ -175,6 +182,7 @@ export function parseWorkbookMetadata(
             'conditionalFormats',
             'drawings',
             'pivotTables',
+            'tables',
           ].includes(key)
       )
     )
@@ -261,6 +269,18 @@ export function parseWorkbookMetadata(
         Array.isArray(value.pivotTables) &&
         value.pivotTables.length <= MAX_SHEET_PIVOT_TABLES &&
         value.pivotTables.every(validPivotTable)
+      )
+    )
+      return;
+    if (
+      value.tables !== undefined &&
+      !(
+        Array.isArray(value.tables) &&
+        value.tables.length <= MAX_SHEET_TABLES &&
+        value.tables.every(validSheetTable) &&
+        new Set(
+          value.tables.map((table: SheetTable) => table.name.toLowerCase())
+        ).size === value.tables.length
       )
     )
       return;

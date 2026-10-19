@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   clearDraft: vi.fn(),
   source: vi.fn(),
   composeOptions: vi.fn<(options: EmailComposeContextOptions) => void>(),
+  started: [] as Promise<void>[],
 }));
 vi.mock('@property/tags', () => ({ InlineFetchedEntityTagsPill: () => null }));
 vi.mock('@queries/email/thread', () => ({ useThreadQuery: mocks.query }));
@@ -62,8 +63,12 @@ vi.mock('./views/email-thread-surface', () => ({
         <span data-testid="body">
           {source.thread()?.messages[0]?.body_text}
         </span>
-        <button onClick={() => void source.fetchOlder()}>Older</button>
-        <button onClick={() => void source.refresh()}>Refresh</button>
+        <button onClick={() => mocks.started.push(source.fetchOlder())}>
+          Older
+        </button>
+        <button onClick={() => mocks.started.push(source.refresh())}>
+          Refresh
+        </button>
       </div>
     );
   },
@@ -72,10 +77,11 @@ vi.mock('./views/email-thread-surface', () => ({
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  mocks.started.length = 0;
 });
 
 describe('email thread query ownership', () => {
-  it('renders and observes the load gate source without starting another query', () => {
+  it('renders and observes the load gate source without starting another query', async () => {
     mocks.query.mockImplementation(() => {
       throw new Error('Duplicate thread query');
     });
@@ -121,5 +127,6 @@ describe('email thread query ownership', () => {
     expect(refresh).toHaveBeenCalledOnce();
     view.unmount();
     expect(mocks.clearDraft).toHaveBeenCalledWith('thread');
+    await Promise.all(mocks.started);
   });
 });

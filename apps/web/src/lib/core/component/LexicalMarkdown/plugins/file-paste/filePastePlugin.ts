@@ -3,6 +3,7 @@ import {
   shouldUseMobileClipboardImageRecovery,
 } from '@core/mobile/mobileClipboardImageRecovery';
 import { extractFileSystemEntries } from '@core/util/dataTransfer';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { mergeRegister } from '@lexical/utils';
 import {
   COMMAND_PRIORITY_NORMAL,
@@ -38,13 +39,16 @@ function registerFilePastePlugin(
           shouldUseMobileClipboardImageRecovery(data)
         ) {
           event.preventDefault();
-          void recoverMobileClipboardImageEntries().then((entries) => {
-            if (entries.length > 0) {
-              props.onPasteFilesAndDirs(entries, []);
-            } else if (fileEntries.length > 0) {
-              props.onPasteFilesAndDirs(fileEntries, []);
-            }
-          });
+          fireAndForget(
+            recoverMobileClipboardImageEntries().then((entries) => {
+              if (entries.length > 0) {
+                props.onPasteFilesAndDirs(entries, []);
+              } else if (fileEntries.length > 0) {
+                props.onPasteFilesAndDirs(fileEntries, []);
+              }
+            }),
+            'markdown-file-paste'
+          );
           return true;
         }
 

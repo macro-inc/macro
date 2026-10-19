@@ -17,7 +17,7 @@ fn complete(s: &str) -> Email {
 /// here. Lets tests exercise the fast (`m.from_contact_id = $uuid`) path
 /// without spinning up a DB.
 fn resolved_with(emails: &[(&str, Uuid)]) -> ResolvedFilters {
-    let mut r = ResolvedFilters::empty().with_trash(Uuid::new_v4());
+    let mut r = ResolvedFilters::empty();
     for (e, id) in emails {
         r = r.with_contact(e.to_lowercase(), *id);
     }
@@ -508,7 +508,7 @@ fn test_build_view_message_filter_important() {
     let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Important);
     let result = build_view_message_filter(&view);
     let debug = result.to_debug_sql();
-    assert!(debug.contains("IMPORTANT"));
+    assert!(debug.contains("provider_is_important"));
     assert!(debug.contains("m.is_draft = TRUE"));
     assert!(debug.contains("EXISTS"));
 }
@@ -1407,22 +1407,18 @@ fn test_matching_threads_cte_body_and_of_conjuncts_uses_combined_predicate_form(
 }
 
 #[test]
-fn test_matching_threads_cte_body_uses_resolved_trash_label_id() {
-    // With a resolved trash label, the per-branch TRASH check is a direct
-    // ml.label_id probe rather than a name+link_id join.
+fn test_matching_threads_cte_body_uses_normalized_visibility() {
+    // Provider-neutral visibility applies to each address branch.
     let contact_id = Uuid::new_v4();
-    let trash_id = Uuid::new_v4();
     let expr = Expr::Literal(EmailLiteral::Sender(complete("a@b.com")));
-    let resolved = ResolvedFilters::empty()
-        .with_contact("a@b.com", contact_id)
-        .with_trash(trash_id);
+    let resolved = ResolvedFilters::empty().with_contact("a@b.com", contact_id);
     let body = build_matching_threads_ctes(&expr, &resolved, None).expect("body present");
     let debug = body.to_debug_sql();
 
-    assert!(debug.contains("ml.label_id = "));
     assert!(!debug.contains("l.name = 'TRASH'"));
     assert!(!debug.contains("JOIN email_labels"));
-    assert!(body.has_bind_uuid(&trash_id));
+    assert!(debug.contains("email_message_mailbox_facts"));
+    assert!(debug.contains("mf.is_present AND NOT mf.in_trash"));
 }
 
 #[test]
@@ -1441,9 +1437,7 @@ fn test_full_query_emits_matching_threads_cte_and_in_reference() {
     let contact_id = Uuid::new_v4();
     let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox);
     let expr = Expr::Literal(EmailLiteral::Sender(complete("a@b.com")));
-    let resolved = ResolvedFilters::empty()
-        .with_contact("a@b.com", contact_id)
-        .with_trash(Uuid::new_v4());
+    let resolved = ResolvedFilters::empty().with_contact("a@b.com", contact_id);
     let sql = super::query::debug_build_query_sql_with_resolved(&view, &expr, resolved);
 
     assert!(

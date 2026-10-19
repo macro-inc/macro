@@ -18,6 +18,7 @@ import type {
   SmartArtPreviewPath,
   SmartArtPreviewSpec,
 } from '@core/pptx-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { type Accessor, createSignal } from 'solid-js';
 import { newNodeId, nodeAt } from '../core/smartart';
 
@@ -84,13 +85,16 @@ export function createSmartArt(deps: SmartArtDeps) {
   const loadCatalog = () => {
     if (!catalogLoading && deps.catalog) {
       catalogLoading = true;
-      void (async () => {
-        try {
-          setCatalog(await deps.catalog?.());
-        } catch {
-          catalogLoading = false;
-        }
-      })();
+      fireAndForget(
+        (async () => {
+          try {
+            setCatalog(await deps.catalog?.());
+          } catch {
+            catalogLoading = false;
+          }
+        })(),
+        'pptx-editor'
+      );
     }
     return catalog();
   };
@@ -105,16 +109,19 @@ export function createSmartArt(deps: SmartArtDeps) {
       const [value, setValue] = createSignal<PreviewState>();
       state = value;
       previewCache.set(key, state);
-      void (async () => {
-        try {
-          const [paths] = (await deps.previews?.([{ ...spec, theme }])) ?? [
-            null,
-          ];
-          setValue(paths ?? null);
-        } catch {
-          setValue(null);
-        }
-      })();
+      fireAndForget(
+        (async () => {
+          try {
+            const [paths] = (await deps.previews?.([{ ...spec, theme }])) ?? [
+              null,
+            ];
+            setValue(paths ?? null);
+          } catch {
+            setValue(null);
+          }
+        })(),
+        'pptx-editor'
+      );
     }
     return state();
   };

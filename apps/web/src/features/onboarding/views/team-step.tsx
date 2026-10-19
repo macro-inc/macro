@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createMemo, Match, Show, Switch } from 'solid-js';
 import { ContinueButton, SkipButton } from '../components/controls';
 import {
@@ -67,7 +68,7 @@ export function TeamStep(props: {
             <InvitesPanel
               invites={invites()}
               joining={team.joining() || props.finishing}
-              onJoin={(id) => void team.join(id)}
+              onJoin={(id) => fireAndForget(team.join(id), 'onboarding')}
               onSkip={props.onSkip}
             />
           )}
@@ -137,7 +138,7 @@ function TeamForm(props: {
                 : 'Create team'
         }
         disabled={!form.canCreate() || props.finishing}
-        onClick={() => void form.create()}
+        onClick={() => fireAndForget(form.create(), 'onboarding')}
       />
       <SkipButton
         disabled={form.pending() || props.finishing}

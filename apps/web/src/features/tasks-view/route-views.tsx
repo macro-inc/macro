@@ -26,6 +26,7 @@ import {
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { enableProjects } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { onMount, Show } from 'solid-js';
 import { TasksDetailView } from './components/TasksDetailView';
 import { projectDetailSearch } from './project-detail-search';
@@ -86,14 +87,17 @@ export function ProjectTaskRouteView() {
             event?.altKey
           )
             return false;
-          navigate({
-            route: projectTaskRoute,
-            params: {
-              projectId: params.projectId,
-              section: params.section,
-              taskId: task.id,
-            },
-          });
+          fireAndForget(
+            navigate({
+              route: projectTaskRoute,
+              params: {
+                projectId: params.projectId,
+                section: params.section,
+                taskId: task.id,
+              },
+            }),
+            'tasks-view'
+          );
           return true;
         }}
       >

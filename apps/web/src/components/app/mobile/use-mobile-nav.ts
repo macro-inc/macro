@@ -17,7 +17,12 @@ import { isMobileNavViewId, type MobileNavViewId } from './mobile-nav-views';
  * only reachable through the Views menu or the dynamic nav button (folders,
  * companies, …).
  */
-export type MobileDockNavId = ListView | 'calendar' | 'reviews' | 'settings';
+export type MobileDockNavId =
+  | ListView
+  | 'calendar'
+  | 'reviews'
+  | 'booking-links'
+  | 'settings';
 
 function mobileNavContent(id: Exclude<MobileDockNavId, 'settings'>) {
   if (id === 'documents') {

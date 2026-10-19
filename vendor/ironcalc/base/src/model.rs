@@ -259,6 +259,9 @@ pub struct Model<'a> {
     pub(crate) shared_formula_lookup: Vec<SharedFormulaLookup>,
     /// MACRO: the pivot tables GETPIVOTDATA reads, as the host describes them.
     pub(crate) pivot_tables: Vec<crate::functions::PivotLayout>,
+    /// MACRO: cells of the host's filtered tables, whose hidden rows
+    /// SUBTOTAL(1-11) treats as filtered.
+    pub(crate) filtered_ranges: Vec<crate::functions::FilteredRange>,
 }
 
 /// Formula text to index in `Worksheet::shared_formulas`, for one sheet.
@@ -1787,7 +1790,8 @@ impl<'a> Model<'a> {
             evaluation: Evaluation::default(),
             cf_cache: HashMap::new(),
             links: HashMap::new(),
-            pivot_tables: Vec::new(), // MACRO
+            pivot_tables: Vec::new(),    // MACRO
+            filtered_ranges: Vec::new(), // MACRO
         };
 
         model.parse_formulas();

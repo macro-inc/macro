@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO email_attachment_blobs(attachment_id,object_key,sha256,size_bytes) VALUES($1,$2,$3,$4) ON CONFLICT(attachment_id) DO UPDATE SET object_key=EXCLUDED.object_key,sha256=EXCLUDED.sha256,size_bytes=EXCLUDED.size_bytes",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ba9c62071f074c94d5b9c39bc7db81ff222d89abffa872ea8416bf115a0f5e7e"
+}

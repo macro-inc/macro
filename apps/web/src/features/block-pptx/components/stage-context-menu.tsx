@@ -10,6 +10,7 @@ import {
   MenuSeparator,
   SubTrigger,
 } from '@core/component/ContextMenu';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import AlignBottom from '@phosphor/align-bottom.svg';
 import AlignCenterHorizontal from '@phosphor/align-center-horizontal.svg';
@@ -200,8 +201,11 @@ function LinkItems(props: { a: StageMenuActions }) {
               text="Copy link"
               icon={CopyIcon}
               onClick={() =>
-                void navigator.clipboard.writeText(
-                  link().replace(/^mailto:/i, '')
+                fireAndForget(
+                  navigator.clipboard.writeText(
+                    link().replace(/^mailto:/i, '')
+                  ),
+                  'block-pptx'
                 )
               }
             />
@@ -283,13 +287,13 @@ function ArrangeItems(props: { a: StageMenuActions }) {
           text="Group"
           shortcut="cmd+g"
           disabled={props.a.selectionCount < 2}
-          onClick={() => void c().group()}
+          onClick={() => fireAndForget(c().group(), 'block-pptx')}
         />
         <MenuItem
           text="Ungroup"
           shortcut="cmd+shift+g"
           disabled={!props.a.isGroup}
-          onClick={() => void c().ungroup()}
+          onClick={() => fireAndForget(c().ungroup(), 'block-pptx')}
         />
       </Sub>
       <Sub
@@ -449,7 +453,9 @@ export function StageMenuItems(props: {
                   <MenuItem
                     text={layout}
                     icon={layout === a().currentLayout ? CheckIcon : undefined}
-                    onClick={() => void c().setLayout(layout)}
+                    onClick={() =>
+                      fireAndForget(c().setLayout(layout), 'block-pptx')
+                    }
                   />
                 )}
               </For>
@@ -529,13 +535,20 @@ export function StageMenuItems(props: {
           >
             <MenuItem
               text="None"
-              onClick={() => void c().setBullets({ kind: 'none' })}
+              onClick={() =>
+                fireAndForget(c().setBullets({ kind: 'none' }), 'block-pptx')
+              }
             />
             <For each={['•', '○', '▪', '➢', '✓', '–']}>
               {(char) => (
                 <MenuItem
                   text={`${char}  Bullet`}
-                  onClick={() => void c().setBullets({ kind: 'char', char })}
+                  onClick={() =>
+                    fireAndForget(
+                      c().setBullets({ kind: 'char', char }),
+                      'block-pptx'
+                    )
+                  }
                 />
               )}
             </For>
@@ -543,7 +556,9 @@ export function StageMenuItems(props: {
           <Sub text="Numbering" disabled={ro()}>
             <MenuItem
               text="None"
-              onClick={() => void c().setBullets({ kind: 'none' })}
+              onClick={() =>
+                fireAndForget(c().setBullets({ kind: 'none' }), 'block-pptx')
+              }
             />
             <For
               each={[
@@ -558,7 +573,10 @@ export function StageMenuItems(props: {
                 <MenuItem
                   text={label}
                   onClick={() =>
-                    void c().setBullets({ kind: 'number', scheme, start: 1 })
+                    fireAndForget(
+                      c().setBullets({ kind: 'number', scheme, start: 1 }),
+                      'block-pptx'
+                    )
                   }
                 />
               )}
@@ -580,36 +598,44 @@ export function StageMenuItems(props: {
             <MenuItem
               text="Insert rows above"
               icon={Rows}
-              onClick={() => void c().insertRows('above')}
+              onClick={() =>
+                fireAndForget(c().insertRows('above'), 'block-pptx')
+              }
             />
             <MenuItem
               text="Insert rows below"
               icon={Rows}
-              onClick={() => void c().insertRows('below')}
+              onClick={() =>
+                fireAndForget(c().insertRows('below'), 'block-pptx')
+              }
             />
             <MenuItem
               text="Insert columns left"
               icon={Columns}
-              onClick={() => void c().insertColumns('left')}
+              onClick={() =>
+                fireAndForget(c().insertColumns('left'), 'block-pptx')
+              }
             />
             <MenuItem
               text="Insert columns right"
               icon={Columns}
-              onClick={() => void c().insertColumns('right')}
+              onClick={() =>
+                fireAndForget(c().insertColumns('right'), 'block-pptx')
+              }
             />
           </Sub>
           <Sub text="Delete" icon={<Trash class="size-4" />} disabled={ro()}>
             <MenuItem
               text="Delete rows"
-              onClick={() => void c().deleteRows()}
+              onClick={() => fireAndForget(c().deleteRows(), 'block-pptx')}
             />
             <MenuItem
               text="Delete columns"
-              onClick={() => void c().deleteColumns()}
+              onClick={() => fireAndForget(c().deleteColumns(), 'block-pptx')}
             />
             <MenuItem
               text="Delete table"
-              onClick={() => void c().deleteTable()}
+              onClick={() => fireAndForget(c().deleteTable(), 'block-pptx')}
             />
           </Sub>
           <Sub text="Select" icon={<TableIcon class="size-4" />}>
@@ -623,12 +649,12 @@ export function StageMenuItems(props: {
           <MenuItem
             text="Merge cells"
             disabled={ro() || !c().canMerge()}
-            onClick={() => void c().mergeCells()}
+            onClick={() => fireAndForget(c().mergeCells(), 'block-pptx')}
           />
           <MenuItem
             text="Split cells"
             disabled={ro() || !c().canSplit()}
-            onClick={() => void c().splitCells()}
+            onClick={() => fireAndForget(c().splitCells(), 'block-pptx')}
           />
           <MenuSeparator />
           <ColorSub
@@ -637,7 +663,7 @@ export function StageMenuItems(props: {
             swatches={a().swatches}
             noneLabel="No fill"
             disabled={ro()}
-            onPick={(v) => void c().fillCells(v)}
+            onPick={(v) => fireAndForget(c().fillCells(v), 'block-pptx')}
           />
           <Sub text="Borders" disabled={ro()}>
             <For
@@ -658,58 +684,74 @@ export function StageMenuItems(props: {
               {([edges, label]) => (
                 <MenuItem
                   text={label}
-                  onClick={() => void c().borderCells(edges)}
+                  onClick={() =>
+                    fireAndForget(c().borderCells(edges), 'block-pptx')
+                  }
                 />
               )}
             </For>
             <MenuSeparator />
             <MenuItem
               text="No border"
-              onClick={() => void c().borderCells('all', true)}
+              onClick={() =>
+                fireAndForget(c().borderCells('all', true), 'block-pptx')
+              }
             />
           </Sub>
           <Sub text="Align text" disabled={ro()}>
             <MenuItem
               text="Left"
               icon={AlignLeft}
-              onClick={() => void c().alignCells('left')}
+              onClick={() =>
+                fireAndForget(c().alignCells('left'), 'block-pptx')
+              }
             />
             <MenuItem
               text="Center"
               icon={AlignCenterHorizontal}
-              onClick={() => void c().alignCells('center')}
+              onClick={() =>
+                fireAndForget(c().alignCells('center'), 'block-pptx')
+              }
             />
             <MenuItem
               text="Right"
               icon={AlignRight}
-              onClick={() => void c().alignCells('right')}
+              onClick={() =>
+                fireAndForget(c().alignCells('right'), 'block-pptx')
+              }
             />
             <MenuSeparator />
             <MenuItem
               text="Top"
               icon={AlignTop}
-              onClick={() => void c().anchorCells('top')}
+              onClick={() =>
+                fireAndForget(c().anchorCells('top'), 'block-pptx')
+              }
             />
             <MenuItem
               text="Middle"
               icon={AlignCenterVertical}
-              onClick={() => void c().anchorCells('middle')}
+              onClick={() =>
+                fireAndForget(c().anchorCells('middle'), 'block-pptx')
+              }
             />
             <MenuItem
               text="Bottom"
               icon={AlignBottom}
-              onClick={() => void c().anchorCells('bottom')}
+              onClick={() =>
+                fireAndForget(c().anchorCells('bottom'), 'block-pptx')
+              }
             />
           </Sub>
           <MenuItem
             text="Distribute rows"
             disabled={ro()}
-            onClick={() => void c().distributeRows()}
+            onClick={() => fireAndForget(c().distributeRows(), 'block-pptx')}
           />
           <MenuItem
             text="Distribute columns"
             disabled={ro()}
-            onClick={() => void c().distributeColumns()}
+            onClick={() => fireAndForget(c().distributeColumns(), 'block-pptx')}
           />
           <MenuSeparator />
           <ArrangeItems a={a()} />
@@ -753,7 +795,9 @@ export function StageMenuItems(props: {
             icon={Trash}
             shortcut="delete"
             disabled={ro()}
-            onClick={() => void a().commands.deleteSelection()}
+            onClick={() =>
+              fireAndForget(a().commands.deleteSelection(), 'block-pptx')
+            }
           />
         </Match>
         <Match when={props.target.kind === 'smartArt'}>
@@ -773,7 +817,9 @@ export function StageMenuItems(props: {
             icon={Trash}
             shortcut="delete"
             disabled={ro()}
-            onClick={() => void a().commands.deleteSelection()}
+            onClick={() =>
+              fireAndForget(a().commands.deleteSelection(), 'block-pptx')
+            }
           />
         </Match>
         <Match when={props.target.kind === 'shapes'}>
@@ -783,7 +829,9 @@ export function StageMenuItems(props: {
             icon={CopySimple}
             shortcut="cmd+d"
             disabled={ro()}
-            onClick={() => void c().duplicateSelection()}
+            onClick={() =>
+              fireAndForget(c().duplicateSelection(), 'block-pptx')
+            }
           />
           <MenuSeparator />
           <Show
@@ -833,7 +881,7 @@ export function StageMenuItems(props: {
             swatches={a().swatches}
             noneLabel="No fill"
             disabled={ro()}
-            onPick={(v) => void c().fillColor(v)}
+            onPick={(v) => fireAndForget(c().fillColor(v), 'block-pptx')}
           />
           <ColorSub
             text="Outline"
@@ -841,7 +889,12 @@ export function StageMenuItems(props: {
             swatches={a().swatches}
             noneLabel="No outline"
             disabled={ro()}
-            onPick={(v) => void c().setLine(v ? { color: v } : { none: true })}
+            onPick={(v) =>
+              fireAndForget(
+                c().setLine(v ? { color: v } : { none: true }),
+                'block-pptx'
+              )
+            }
           />
           <MenuItem
             text="Size and position…"
@@ -869,7 +922,7 @@ export function StageMenuItems(props: {
             icon={Trash}
             shortcut="delete"
             disabled={ro()}
-            onClick={() => void c().deleteSelection()}
+            onClick={() => fireAndForget(c().deleteSelection(), 'block-pptx')}
           />
         </Match>
       </Switch>

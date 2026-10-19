@@ -98,3 +98,5 @@ verify the conversation is in the newest time group without reloading. Repeat
 with an older conversation, a sent-only conversation, and a backgrounded tab.
 Also verify reply cancellation, caller isolation, multiple concurrent set
 requests, filtered pagination, desktop keyboard interaction, and a narrow viewport.
+On a phone (touch, about 320–390px wide) the menu's footer keeps the If no reply
+/ Regardless control on one line beside Cancel, with no keyboard hint.

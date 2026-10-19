@@ -44,8 +44,8 @@ per-group `Load More` rows. A failed continuation stops automatic requests and s
 The sidebar has no Tags section: filter by tag from the `Tags` group of the `Filter` menu,
 and switching tabs clears it like any other filter. On mobile, the tabs
 are pills and the leading sliders button opens one drawer containing Sort, Group, and
-Filters (including Tags). The mobile bottom dock has the Ask AI input, a separate **+ Task**
-button, and Search.
+Filters (including Tags). The mobile bottom dock has **+ Task** and Search,
+with no floating Ask AI input.
 Mobile does not show the separate layout, sort, group, and filter toolbar.
 Use the compact sliders drawer for task-list controls; project task lists use the
 same drawer. Mobile supports List only. Opening a Board or Gantt link, or

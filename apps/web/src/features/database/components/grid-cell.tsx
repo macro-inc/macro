@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { Popover } from '@kobalte/core/popover';
 import { Tooltip } from '@kobalte/core/tooltip';
 import CaretDownIcon from '@phosphor/caret-down.svg';
@@ -53,6 +54,8 @@ export type DatabaseMentionPickerProps = {
   onSearchChange?: (search: string) => void;
   onSelect: (mention: DatabaseMention, direction?: 1 | -1) => void;
   onClose: (restoreFocus?: boolean) => void;
+  /** Where the picker mounts in place of the page body. */
+  mount?: HTMLElement;
 };
 
 export type DatabaseTextEditorProps = CellTextEditorProps & {
@@ -69,6 +72,8 @@ export type GridCellProps = GridCellEditorOptions & {
   renderTextValue?: (value: string) => JSX.Element;
   renderMentionPicker?: (props: DatabaseMentionPickerProps) => JSX.Element;
   renderMentionValue?: (id: string, type: DatabaseEntityType) => JSX.Element;
+  /** Where the cell's popups mount in place of the page body, such as inside a modal dialog. */
+  popupMount?: HTMLElement;
   onMention?: (mention: DatabaseMention) => Promise<boolean>;
   /** Click and Enter open the cell's mention instead of editing it; F2 and typing still edit. */
   onOpenMention?: (id: string, type: DatabaseEntityType) => void;
@@ -265,7 +270,7 @@ export function GridCell(props: GridCellProps) {
     setSelectedMention(preview);
     setEditing(false);
     setMentionOpen(false);
-    void writeMention(onMention, preview);
+    fireAndForget(writeMention(onMention, preview), 'database');
     if (direction && props.onNavigate?.(direction)) return;
     queueMicrotask(() => {
       if (direction) focusAdjacent(trigger, direction);
@@ -346,7 +351,7 @@ export function GridCell(props: GridCellProps) {
   );
 
   return (
-    <div ref={cell} class="relative min-w-0" style={editorStyle()}>
+    <div ref={cell} class="relative grid min-w-0" style={editorStyle()}>
       <Switch>
         <Match when={cellKind() === 'editing'}>{renderEditor()}</Match>
         <Match when={cellKind() === 'boolean'}>
@@ -397,9 +402,10 @@ export function GridCell(props: GridCellProps) {
           </div>
         </Match>
         <Match when={cellKind() === 'text'}>
-          <div class="relative">
+          <div class="relative grid">
             {/* Keep the resolved label and its subscription alive while picking. */}
             <div
+              class="grid"
               inert={isEntity() && editing()}
               classList={{
                 invisible: isEntity() && editing() && draft() !== '',
@@ -423,7 +429,7 @@ export function GridCell(props: GridCellProps) {
                 onBeginEdit={beginEdit}
                 onClear={() => {
                   setSelectedMention(undefined);
-                  void write(null);
+                  fireAndForget(write(null), 'database');
                 }}
               />
             </div>
@@ -448,6 +454,9 @@ export function GridCell(props: GridCellProps) {
           },
           get search() {
             return mentionSearch();
+          },
+          get mount() {
+            return props.popupMount;
           },
           onSearchChange: (value) => {
             setMentionSearch(value);
@@ -509,12 +518,14 @@ function BooleanCell(props: {
       class="flex min-h-9 items-center px-3 outline-none focus-visible:ring-2 focus-visible:ring-ink/50"
       checked={Boolean(props.value)}
       disabled={!props.editable}
-      onChange={(checked) => void props.onWrite(checked ? 1 : 0)}
+      onChange={(checked) =>
+        fireAndForget(props.onWrite(checked ? 1 : 0), 'database')
+      }
       onKeyDown={(event: KeyboardEvent) => {
         if (props.editable && isClearCellKey(event)) {
           event.preventDefault();
           event.stopPropagation();
-          void props.onWrite(null);
+          fireAndForget(props.onWrite(null), 'database');
           return;
         }
         if (!isComposingKey(event)) navigateOnTab(event, props.onNavigate);
@@ -727,7 +738,7 @@ function InlineEditor(props: {
     }
     finishing = true;
     props.onClose(restoreFocus);
-    void props.onWrite(value);
+    fireAndForget(props.onWrite(value), 'database');
     return true;
   }
   const onKeyDown = (event: KeyboardEvent) => {
@@ -947,14 +958,17 @@ function SelectCell(props: GridCellProps) {
     event.preventDefault();
     event.stopPropagation();
     if (chosen !== undefined && chosen !== label())
-      void props.onWrite(withOption(chosen));
+      fireAndForget(props.onWrite(withOption(chosen)), 'database');
     keys.leave(event.shiftKey ? -1 : 1);
   }
   function pick(option: string) {
     if (props.column.isMultiSelect)
-      void props.onWrite(withOption(option, !selected().includes(option)));
+      fireAndForget(
+        props.onWrite(withOption(option, !selected().includes(option))),
+        'database'
+      );
     else {
-      void props.onWrite(option);
+      fireAndForget(props.onWrite(option), 'database');
       setOpen(false);
     }
   }
@@ -990,7 +1004,7 @@ function SelectCell(props: GridCellProps) {
       if (isClearCellKey(event)) {
         event.preventDefault();
         event.stopPropagation();
-        void props.onWrite(null);
+        fireAndForget(props.onWrite(null), 'database');
         return;
       }
       if (
@@ -1010,7 +1024,15 @@ function SelectCell(props: GridCellProps) {
       <Show
         when={label()}
         fallback={
-          <span class="text-xs text-ink-placeholder opacity-40">—</span>
+          <span
+            class="text-ink-placeholder opacity-40"
+            classList={{
+              'text-xs': !props.emptyLabel,
+              'text-[13px] leading-5': !!props.emptyLabel,
+            }}
+          >
+            {props.emptyLabel || '—'}
+          </span>
         }
       >
         <span class="flex min-w-0 flex-wrap gap-1">
@@ -1051,9 +1073,9 @@ function SelectCell(props: GridCellProps) {
         gutter={4}
       >
         <Popover.Trigger {...trigger}>{shown()}</Popover.Trigger>
-        <Popover.Portal>
+        <Popover.Portal mount={props.popupMount}>
           <Popover.Content
-            class="menu-surface z-action-menu p-1 outline-none"
+            class="menu-surface z-action-menu min-w-[var(--kb-popper-anchor-width)] max-w-[min(32rem,calc(100vw-16px))] p-1.5 outline-none"
             onOpenAutoFocus={(event) => {
               event.preventDefault();
               searchInput?.focus();
@@ -1070,10 +1092,10 @@ function SelectCell(props: GridCellProps) {
               }}
               onPick={pick}
               onClear={() => {
-                void props.onWrite(null);
+                fireAndForget(props.onWrite(null), 'database');
                 setOpen(false);
               }}
-              onCreate={(value) => void create(value)}
+              onCreate={(value) => fireAndForget(create(value), 'database')}
               onKeyDown={tabAway}
               editing={editing}
               inputRef={(element) => {
@@ -1137,7 +1159,7 @@ function DateCell(props: GridCellProps) {
       if (isClearCellKey(event)) {
         event.preventDefault();
         event.stopPropagation();
-        void props.onWrite(null);
+        fireAndForget(props.onWrite(null), 'database');
       } else if (
         event.key.length === 1 &&
         !event.ctrlKey &&
@@ -1202,7 +1224,10 @@ function DateCell(props: GridCellProps) {
             selectedDate={fromCellDate(props.value)}
             initialQuery={query()}
             onSelectDate={(date) =>
-              void props.onWrite(date ? toCellDate(date) : null)
+              fireAndForget(
+                props.onWrite(date ? toCellDate(date) : null),
+                'database'
+              )
             }
             onClose={() => setOpen(false)}
           />

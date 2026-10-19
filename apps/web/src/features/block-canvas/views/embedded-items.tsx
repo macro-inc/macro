@@ -1,9 +1,7 @@
 import { DocumentPreviewContent } from '@core/component/DocumentPreview';
 import { DocumentPreviewSkeleton } from '@core/component/DocumentPreviewSkeleton';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import { staticFileIdEndpoint } from '@core/constant/servers';
 import type { ShapeViewProps } from '@macro-inc/graphics/solid';
-import { useBinaryDocumentQuery } from '@queries/storage/binary-document';
 import { Card } from '@ui';
 import { type Component, ErrorBoundary, Show, Suspense } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -13,6 +11,7 @@ import {
   CanvasMediaSkeleton,
 } from '../components/media-content';
 import { canEmbedDocument } from '../core/document-display';
+import { useCanvasMediaSource } from '../queries/media';
 
 export function CanvasMediaView(
   props: ShapeViewProps<'image' | 'video'> & {
@@ -20,17 +19,7 @@ export function CanvasMediaView(
     onStop: () => void;
   }
 ) {
-  const source = () => props.item.geometry.source;
-  const query = useBinaryDocumentQuery(() => {
-    const s = source();
-    return s.type === 'document' ? s.id : '';
-  });
-  const url = () => {
-    const value = source();
-    if (value.type === 'url') return value.url;
-    if (value.type === 'static') return staticFileIdEndpoint(value.id);
-    return query.isSuccess ? query.data : undefined;
-  };
+  const source = useCanvasMediaSource(() => props.item.geometry.source);
   return (
     <div
       data-canvas-media={props.item.type}
@@ -44,10 +33,10 @@ export function CanvasMediaView(
     >
       <Suspense fallback={<CanvasMediaSkeleton />}>
         <CanvasMediaContent
-          url={url()}
+          url={source.url()}
           type={props.item.type}
           name={props.item.geometry.name}
-          unavailable={query.isError}
+          unavailable={source.unavailable()}
           playing={props.playing}
           onStop={props.onStop}
         />

@@ -11,13 +11,13 @@ import { channelKeys } from './keys';
 
 /** Refresh active pictures after reconnecting, including changes missed offline. */
 export function invalidateChannelPictures() {
-  void queryClient.invalidateQueries({ queryKey: channelKeys.picture._def });
+  queryClient.invalidateQueries({ queryKey: channelKeys.picture._def });
 }
 
 /** Picture events carry only the channel ID; previews still enforce read access. */
 export function handleChannelPictureChanged(payload: { channel_id: string }) {
   if (!payload || typeof payload.channel_id !== 'string') return;
-  void queryClient.invalidateQueries({
+  queryClient.invalidateQueries({
     queryKey: channelKeys.picture(payload.channel_id).queryKey,
   });
 }

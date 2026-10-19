@@ -9,6 +9,19 @@ import {
 } from './sheet-rules';
 import { parseCellAddress } from './spreadsheet-document';
 
+// Document colors, light enough for dark chip text. New choices take them in turn.
+export const DROPDOWN_CHOICE_COLORS = [
+  { value: '#bfdbfe', name: 'Blue' },
+  { value: '#bbf7d0', name: 'Green' },
+  { value: '#fef08a', name: 'Yellow' },
+  { value: '#fecaca', name: 'Red' },
+  { value: '#e9d5ff', name: 'Purple' },
+  { value: '#fed7aa', name: 'Orange' },
+  { value: '#99f6e4', name: 'Teal' },
+  { value: '#fbcfe8', name: 'Pink' },
+  { value: '#e5e7eb', name: 'Gray' },
+] as const;
+
 /** Excel rejects a literal list longer than this, quotes included. */
 export const MAX_LIST_FORMULA_LENGTH = 255;
 export const MAX_LIST_ITEMS = 1_000;

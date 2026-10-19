@@ -15,6 +15,7 @@ import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 import { useChannelsContext } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import { isTabFocused } from '@core/signal/tabFocus';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { declineCall, fetchCallRecord } from '@queries/call/call';
 import {
   type Accessor,
@@ -96,7 +97,7 @@ export function dismissIncomingCallEverywhere(
     publishCallResolution({ type: 'declined', callId, declinedBy });
   }
   if (!call || isDebugIncomingCall(call)) return;
-  void declineOnOtherDevices(call.callId);
+  fireAndForget(declineOnOtherDevices(call.callId), 'incoming-call');
 }
 
 // Best-effort: the local dismissal already happened, and a lost request only
@@ -259,7 +260,10 @@ export function IncomingCallEvents() {
     if (!currentUserId) return;
     if (typeof navigator !== 'undefined' && !navigator.onLine) return;
     for (const call of reconcilableCalls()) {
-      void reconcileIncomingCall(call, currentUserId);
+      fireAndForget(
+        reconcileIncomingCall(call, currentUserId),
+        'incoming-call'
+      );
     }
   };
 

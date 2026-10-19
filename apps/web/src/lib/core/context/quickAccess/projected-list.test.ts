@@ -511,12 +511,12 @@ describe('Quick Access local projection', () => {
   });
 
   it('searches only materializable buckets before applying the limit', async () => {
-    const emailHits = Array.from({ length: 500 }, (_, i) =>
-      document(`email-${i}`, 'email')
+    const unsupportedHits = Array.from({ length: 500 }, (_, i) =>
+      document(`session-${i}`, 'agent_session')
     );
     const search = vi.fn(
       async (args: SearchCacheArgs): Promise<SearchCachePage> => ({
-        documents: [...emailHits, document('target')]
+        documents: [...unsupportedHits, document('target')]
           .filter((hit) => args.buckets?.includes(hit.bucket))
           .slice(0, args.limit),
         nextCursor: null,
@@ -535,7 +535,7 @@ describe('Quick Access local projection', () => {
       expect(list.items()).toEqual([{ id: 'GraphqlSoupDocument:target' }])
     );
     expect(search.mock.calls[0][0].buckets).not.toEqual(
-      expect.arrayContaining(['email'])
+      expect.arrayContaining(['agent_session'])
     );
     expect(search.mock.calls[0][0].buckets).toEqual(
       expect.arrayContaining(['crm_company'])
@@ -550,7 +550,7 @@ describe('Quick Access local projection', () => {
     const list = root(() =>
       createProjectedList({
         host: { search },
-        buckets: ['email', 'person', 'agent_session'],
+        buckets: ['person', 'agent_session'],
         revision: () => 0,
         materialize,
       })

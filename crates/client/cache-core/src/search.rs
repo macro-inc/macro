@@ -132,7 +132,7 @@ pub enum SearchError {
 
 /// Revision of the derived Quick Access rows. Storage adapters rebuild existing
 /// rows when this changes; normalized records and pending writes remain valid.
-pub const QUICK_ACCESS_PROJECTION_VERSION: u32 = 2;
+pub const QUICK_ACCESS_PROJECTION_VERSION: u32 = 3;
 
 /// Normalized entity types used by the Quick Access projection. Storage rebuilds
 /// restrict decoding to this set so unrelated payloads do not delay readiness.
@@ -204,7 +204,7 @@ fn quick_access_fields<'a>(
         "GraphqlSoupProject" => ("project", &["projectName", "name"]),
         "GraphqlSoupEmailThread" => (
             "email",
-            &["emailName", "name", "senderName", "senderEmail", "snippet"],
+            &["emailName", "name", "senderName", "senderEmail", "senders"],
         ),
         "GraphqlSoupChannel" => (channel_bucket(record), &["channelName", "name"]),
         "GraphqlSoupCrmCompany" => ("crm_company", &["crmCompanyName", "name", "domains"]),

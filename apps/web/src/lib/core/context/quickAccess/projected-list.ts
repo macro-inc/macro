@@ -1,8 +1,10 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import type {
   CacheHost,
   SearchCursor,
   SearchDocumentWire,
 } from '@graphql-cache/index';
+import { Telemetry } from '@macro-inc/observability';
 import {
   type Accessor,
   createEffect,
@@ -22,6 +24,7 @@ const PROJECTED_BUCKETS: ReadonlySet<Bucket> = new Set([
   'skill',
   'chat',
   'project',
+  'email',
   'channel',
   'dm',
   'crm_company',
@@ -78,7 +81,7 @@ export function createProjectedList<T extends { id: string }>(options: {
     if (request.refreshPending) {
       // Publish the completed window before replaying changes received during
       // search/materialization (or a load-more operation).
-      void fetchPages(request, request.pages, false);
+      fireAndForget(fetchPages(request, request.pages, false), 'quick-access');
     } else {
       setLoading('idle');
     }
@@ -107,17 +110,36 @@ export function createProjectedList<T extends { id: string }>(options: {
     let foundNewRow = false;
     let cursor = append ? request.cursor : undefined;
     let pages = append ? request.pages : 0;
+    const span = Telemetry.span('quick_access.search');
+    span.setAttr('search.buckets', request.buckets.join(','));
+    span.setAttr('search.query_length', request.query.length);
+    span.setAttr('search.append', append);
     try {
       do {
-        const page = await options.host.search({
-          profile: 'quick-access-v1',
-          buckets: request.buckets,
-          query: request.query,
-          limit: request.query ? SEARCH_LIMIT : BROWSE_PAGE_SIZE,
-          ...(cursor ? { cursor } : {}),
-        });
+        const page = await span.span(
+          'quick_access.search_page',
+          async (span) => {
+            span.setAttr('search.buckets', request.buckets.join(','));
+            span.setAttr('search.query_length', request.query.length);
+            const result = await options.host.search({
+              profile: 'quick-access-v1',
+              buckets: request.buckets,
+              query: request.query,
+              limit: request.query ? SEARCH_LIMIT : BROWSE_PAGE_SIZE,
+              ...(cursor ? { cursor } : {}),
+            });
+            span.setAttr('search.result_count', result.documents.length);
+            return result;
+          }
+        );
         if (current !== request) return;
-        const materialized = await options.materialize(page.documents);
+        const materialized = await span.span(
+          'quick_access.materialize',
+          async (span) => {
+            span.setAttr('search.result_count', page.documents.length);
+            return options.materialize(page.documents);
+          }
+        );
         if (current !== request) return;
         for (const item of materialized) {
           merged.set(item.id, item);
@@ -139,6 +161,7 @@ export function createProjectedList<T extends { id: string }>(options: {
       setItems([...merged.values()]);
       setHasMore(cursor !== undefined);
     } catch (error) {
+      span.error('Quick Access cache search failed');
       if (current !== request) return;
       // Rows and their continuation are a committed window. A failed replay
       // (or append) must leave both intact so normal pagination can retry.
@@ -146,6 +169,7 @@ export function createProjectedList<T extends { id: string }>(options: {
       setHasMore(request.cursor !== undefined);
       console.warn('Quick Access cache search failed', error);
     } finally {
+      span.end();
       finishRequest(request);
     }
   };
@@ -165,7 +189,11 @@ export function createProjectedList<T extends { id: string }>(options: {
       // A cache revision is not a new search. Replacing an in-flight request
       // here starves results when hydration is faster than cache reads.
       if (previous.busy) previous.refreshPending = true;
-      else void fetchPages(previous, previous.pages, false);
+      else
+        fireAndForget(
+          fetchPages(previous, previous.pages, false),
+          'quick-access'
+        );
       return;
     }
 
@@ -195,7 +223,7 @@ export function createProjectedList<T extends { id: string }>(options: {
       refreshPending: false,
     };
     current = request;
-    void fetchPages(request, request.pages, false);
+    fireAndForget(fetchPages(request, request.pages, false), 'quick-access');
   });
 
   return {

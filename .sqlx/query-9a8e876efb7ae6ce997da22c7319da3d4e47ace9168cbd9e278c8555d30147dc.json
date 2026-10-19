@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM calendar_accounts WHERE email_link_id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9a8e876efb7ae6ce997da22c7319da3d4e47ace9168cbd9e278c8555d30147dc"
+}

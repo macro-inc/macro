@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { Button, Dialog, Panel } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 
@@ -120,7 +121,7 @@ export function CrmListDialog(props: {
                 <Button
                   variant="ghost"
                   disabled={pending()}
-                  onClick={() => void remove()}
+                  onClick={() => fireAndForget(remove(), 'crm')}
                 >
                   Delete list
                 </Button>

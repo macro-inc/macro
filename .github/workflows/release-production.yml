@@ -11,28 +11,6 @@ env:
   MODE: "production"
 
 jobs:
-  release-android:
-    name: Queue Android release
-    needs: [deploy, deploy-sync-service, deploy-ai-editing-worker]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    permissions:
-      contents: read
-      actions: write
-    steps:
-      - name: Dispatch independent Android workflow
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-        run: |
-          set -euo pipefail
-          # Do not wait for the native build: it must not hold this workflow's
-          # production concurrency lock or delay cancellation of this run.
-          gh workflow run release-android.yml --repo "$GITHUB_REPOSITORY" --ref main \
-            -f operation=release -f release_tag="$RELEASE_TAG"
-          printf 'Queued Android release for `%s`. Check the Release Android App Bundle workflow for build and publishing results.\n' \
-            "$RELEASE_TAG" >> "$GITHUB_STEP_SUMMARY"
-
   deploy-cloud-storage:
     if: github.event_name == 'release'
     name: Deploy Cloud Storage Services

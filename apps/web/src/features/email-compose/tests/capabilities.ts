@@ -74,6 +74,11 @@ export function createComposeContext(): EmailComposeContext & {
       reportError: vi.fn(),
     },
     drafts: {
+      transferDraft: vi.fn(async () => ({
+        draftId: 'moved-draft',
+        threadId: 'moved-thread',
+        attachments: [],
+      })),
       saveDraft: vi.fn(async () => ({
         draftId: 'draft',
         threadId: 'thread',
@@ -96,6 +101,7 @@ export function createComposeContext(): EmailComposeContext & {
     attachmentStorage: {
       uploadAttachments: vi.fn(async () => {}),
       addForwardedAttachments: vi.fn(async () => {}),
+      completeAttachment: async () => {},
       removeAttachment: vi.fn(async () => {}),
       removeForwardedAttachment: vi.fn(async () => {}),
     },

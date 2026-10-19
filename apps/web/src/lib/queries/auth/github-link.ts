@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { ThrownResultError, throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
 import { invalidateAllSoup } from '@queries/soup/normalized-cache';
@@ -111,7 +112,7 @@ export function useDeleteGithubLinkMutation() {
     mutationFn: async () =>
       await throwOnErr(() => authServiceClient.deleteGithubLink()),
     onSuccess: () => {
-      invalidateGithubLinkStatus();
+      fireAndForget(invalidateGithubLinkStatus(), 'github-link');
       invalidateAllSoup();
     },
   }));

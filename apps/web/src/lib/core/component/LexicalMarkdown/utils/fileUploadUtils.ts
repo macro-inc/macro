@@ -5,6 +5,7 @@ import {
   fileTypeToBlockName,
 } from '@core/constant/allBlocks';
 import { HEIC_EXTENSIONS } from '@core/heic';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   forceDssRuleset,
   isFileUploadEntry,
@@ -12,7 +13,6 @@ import {
   uploadFiles,
 } from '@core/util/upload';
 import { Telemetry } from '@macro-inc/observability';
-
 import { fileExtension } from '@service-storage/util/filename';
 import type { LexicalEditor } from 'lexical';
 import {
@@ -144,13 +144,16 @@ async function onFilesReady(
           continue;
         }
         uploadedItemIds.push(item.id);
-        handleBasicMention(item, {
-          editor,
-          blockName: parentBlockName,
-          blockId,
-          onDocumentMention: () => {},
-          disableMentionTracking: false,
-        });
+        fireAndForget(
+          handleBasicMention(item, {
+            editor,
+            blockName: parentBlockName,
+            blockId,
+            onDocumentMention: () => {},
+            disableMentionTracking: false,
+          }),
+          'file-upload'
+        );
       }
     } else if (result.type === 'folder') {
       const item = await documentUploadToItem(result);
@@ -160,13 +163,16 @@ async function onFilesReady(
         continue;
       }
       uploadedItemIds.push(item.id);
-      handleBasicMention(item, {
-        editor,
-        blockName: parentBlockName,
-        blockId,
-        onDocumentMention: () => {},
-        disableMentionTracking: false,
-      });
+      fireAndForget(
+        handleBasicMention(item, {
+          editor,
+          blockName: parentBlockName,
+          blockId,
+          onDocumentMention: () => {},
+          disableMentionTracking: false,
+        }),
+        'file-upload'
+      );
     }
   }
 

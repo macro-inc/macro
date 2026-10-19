@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE calendar_accounts SET sync_status=$2,last_sync_error=$3 WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "247d0aeb5b47473270159925ded571c4f2283388ef4bd8b63c87349352955242"
+}

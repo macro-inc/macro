@@ -54,14 +54,14 @@ describe('memory history', () => {
     expect(history.entries().map((entry) => entry.path)).toEqual(['/a', '/c']);
   });
 
-  it('reports traversal and reverts it', () => {
+  it('reports traversal and reverts it', async () => {
     const history = createMemoryHistory('/a');
     history.write(at('/b'), { mode: 'push' });
     const changes: ExternalChange[] = [];
     history.subscribe((change) => changes.push(change));
     history.back();
     expect(changes.map((change) => change.location.path)).toEqual(['/a']);
-    changes[0]!.revert();
+    await changes[0]!.revert();
     expect(history.read().path).toBe('/b');
   });
 

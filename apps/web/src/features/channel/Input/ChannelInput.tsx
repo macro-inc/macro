@@ -24,6 +24,7 @@ import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { createMessageComposer } from '@core/messages/create-message-composer';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { IUser } from '@core/user/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { isPlatform } from '@core/util/platform';
 import {
   chatRuleset,
@@ -331,13 +332,16 @@ export function ChannelInput(props: ChannelInputProps) {
     onEnter: () => {
       if (isTouchDevice()) return false;
       typingTracker.stop();
-      void commands.send();
+      fireAndForget(commands.send(), 'channel-input');
       return true;
     },
-    sendMessage: () => void commands.send(),
+    sendMessage: () => fireAndForget(commands.send(), 'channel-input'),
     onPasteFilesAndDirs: (files, directories) => {
-      void handleFileFolderDrop(files, directories, (entries) =>
-        inputState.commands.attachFiles(entries.map((entry) => entry.file))
+      fireAndForget(
+        handleFileFolderDrop(files, directories, (entries) =>
+          inputState.commands.attachFiles(entries.map((entry) => entry.file))
+        ),
+        'channel-input'
       );
     },
     onAttachFromDisk: (files) => inputState.commands.attachFiles(files),
@@ -361,7 +365,7 @@ export function ChannelInput(props: ChannelInputProps) {
   const actionContext: ActionContext = {
     sourceBlockName: groupMentions ? 'channel' : undefined,
   };
-  const sendFromAction = () => void commands.send();
+  const sendFromAction = () => fireAndForget(commands.send(), 'channel-input');
   const slashAction = (id: string) =>
     [...ACTIONS, ...channelComposerActions(sendFromAction)].find(
       (action) => action.id === id
@@ -477,15 +481,18 @@ export function ChannelInput(props: ChannelInputProps) {
                   onSelect: () =>
                     runInEditor(
                       (editor) => {
-                        void handleUserMention(macro, {
-                          editor,
-                          blockName: groupMentions ? 'channel' : undefined,
-                        }).then(() =>
-                          editor.update(() => {
-                            const selection = $getSelection();
-                            if ($isRangeSelection(selection))
-                              selection.insertText(' ');
-                          })
+                        fireAndForget(
+                          handleUserMention(macro, {
+                            editor,
+                            blockName: groupMentions ? 'channel' : undefined,
+                          }).then(() =>
+                            editor.update(() => {
+                              const selection = $getSelection();
+                              if ($isRangeSelection(selection))
+                                selection.insertText(' ');
+                            })
+                          ),
+                          'channel-input'
                         );
                       },
                       { focus: true }
@@ -768,7 +775,7 @@ export function ChannelInput(props: ChannelInputProps) {
           leadingAction={addMenu(true)}
           onOpen={collapsedInput.expand}
           trailingAction={<DictationButton dictation={dictation} />}
-          onSend={() => void commands.send()}
+          onSend={() => fireAndForget(commands.send(), 'channel-input')}
         />
       </Show>
       <Dynamic

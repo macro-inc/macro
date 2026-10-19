@@ -6,6 +6,7 @@
  */
 
 import type { IssueResult } from '@core/agent-session/AgentSession';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { TurnState } from '@service-agent-fold/generated/types';
 import type {
   AgentAction,
@@ -47,9 +48,12 @@ export function createSendNext(session: {
     const head = session.entries()[0];
     if (!head) return;
     const action = actionForQueuedEntry(head);
-    void session.issue({ type: 'stop' })?.then((result) => {
-      if (result.isErr()) session.retract(head.actionId);
-    });
+    fireAndForget(
+      session.issue({ type: 'stop' })?.then((result) => {
+        if (result.isErr()) session.retract(head.actionId);
+      }),
+      'agent-queue'
+    );
     if (action) session.expect(head.actionId, action);
   };
 }

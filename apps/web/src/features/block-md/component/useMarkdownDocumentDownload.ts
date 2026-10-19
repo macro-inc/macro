@@ -3,6 +3,7 @@ import {
   getSaveState,
 } from '@core/component/LexicalMarkdown/utils';
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { downloadFile } from '@filesystem/download';
 import { createCallback } from '@solid-primitives/rootless';
 import { useMarkdownDocument } from '../context/markdown-document-context';
@@ -19,7 +20,10 @@ export function useDownloadDocumentAsMarkdownText() {
     const markdownString = editorStateAsMarkdown(editor, 'external');
 
     const blob = new Blob([markdownString], { type: 'text/markdown' });
-    downloadFile(blob, fileNameWithExtension);
+    fireAndForget(
+      downloadFile(blob, fileNameWithExtension),
+      'markdown-download'
+    );
   });
 }
 
@@ -56,6 +60,9 @@ export function useDownloadDocumentAsJson() {
     const blob = new Blob([JSON.stringify(json, null, 2)], {
       type: 'application/json',
     });
-    downloadFile(blob, fileNameWithExtension);
+    fireAndForget(
+      downloadFile(blob, fileNameWithExtension),
+      'markdown-download'
+    );
   });
 }

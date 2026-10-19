@@ -65,7 +65,7 @@ export class AgentSessionNamespace {
 
   /** Replace the caller's coding preferences. */
   setCodingPreferences(
-    preferences: CodingPreferencesBody
+    preferences: CodingPreferencesBody,
   ): Promise<CodingPreferencesBody> {
     return AgentSession.setCodingPreferences(this.client, preferences);
   }

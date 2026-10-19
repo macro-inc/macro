@@ -42,6 +42,36 @@ Add a label to this message.
 
 ***
 
+### completeDraftAttachment()
+
+> **completeDraftAttachment**(`attachmentId`): `Promise`\<`void`\>
+
+Verify an uploaded draft attachment before it can be sent.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `attachmentId` | `string` |
+
+#### Returns
+
+`Promise`\<`void`\>
+
+***
+
+### operationStatus()
+
+> **operationStatus**(): `Promise`\<[`MessageOperationResponse`](../../../../../generated/email/types.gen/type-aliases/MessageOperationResponse.md)\>
+
+Read the draft's durable send, upload, or conflict status without retrying it.
+
+#### Returns
+
+`Promise`\<[`MessageOperationResponse`](../../../../../generated/email/types.gen/type-aliases/MessageOperationResponse.md)\>
+
+***
+
 ### removeLabel()
 
 > **removeLabel**(`label`): `Promise`\<`void`\>
@@ -53,6 +83,25 @@ Remove a label from this message.
 | Parameter | Type |
 | ------ | ------ |
 | `label` | [`Label`](../../label/classes/Label.md) |
+
+#### Returns
+
+`Promise`\<`void`\>
+
+***
+
+### resolveOperation()
+
+> **resolveOperation**(`request`): `Promise`\<`void`\>
+
+Resolve the displayed operation revision after the user chooses an action.
+Retrying an uncertain send requires explicit duplicate-risk acceptance.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `request` | [`ResolveMessageOperationRequest`](../../../../../generated/email/types.gen/type-aliases/ResolveMessageOperationRequest.md) |
 
 #### Returns
 
@@ -88,6 +137,26 @@ The thread this message belongs to.
 #### Inherited from
 
 [`MacroEntity`](../../../entity/classes/MacroEntity.md).[`toJSON`](../../../entity/classes/MacroEntity.md#tojson)
+
+***
+
+### transferDraft()
+
+> **transferDraft**(`request`): `Promise`\<[`TransferDraftResponse`](../../../../../generated/email/types.gen/type-aliases/TransferDraftResponse.md)\>
+
+Move a draft to another inbox using a caller-persisted operation UUID.
+Continue editing the returned message_id; the original identity is retired.
+On an interrupted response, use email.recoverDraftTransfer(operation_id).
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `request` | [`TransferDraftRequest`](../../../../../generated/email/types.gen/type-aliases/TransferDraftRequest.md) |
+
+#### Returns
+
+`Promise`\<[`TransferDraftResponse`](../../../../../generated/email/types.gen/type-aliases/TransferDraftResponse.md)\>
 
 ***
 

@@ -16,8 +16,10 @@ import { isMobile } from '@core/mobile/isMobile';
 import type { ChannelWithParticipants, IUser } from '@core/user';
 import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
 import { debouncedDependent } from '@core/util/debounce';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import type { EmailEntity } from '@entity';
+import { Telemetry } from '@macro-inc/observability';
 import type { HistoryItem as Item } from '@queries/history/history';
 import { Key } from '@solid-primitives/keyed';
 import { createLazyMemo } from '@solid-primitives/memo';
@@ -87,6 +89,8 @@ type MentionsMenuProps = {
   /** whether the menu checks against block boundary in floating middleware. uses floating-ui default if false. */
   useBlockBoundary?: boolean;
   portalScope?: PortalScope;
+  /** Mounts the menu here instead of by `portalScope`. */
+  portalMount?: HTMLElement;
   block?: BlockName;
   anchor?: HTMLElement | null;
   onUserMention?: (mention: UserMentionRecord) => void;
@@ -546,7 +550,12 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     onSelect: () => {
       const selectedItem = controller.selectedItem();
       if (selectedItem) {
-        itemAction(selectedItem);
+        itemAction(selectedItem).catch((error) =>
+          Telemetry.error(error, {
+            surface: 'mentions-menu',
+            itemKind: selectedItem.kind,
+          })
+        );
       } else {
         closeMenu();
       }
@@ -691,7 +700,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
 
   return (
     <Show when={menuOpen()}>
-      <ScopedPortal scope={props.portalScope}>
+      <ScopedPortal scope={props.portalScope} mount={props.portalMount}>
         <div
           class="w-96 max-w-[calc(100cqw-1rem-2px)] cursor-default select-none z-modal-content"
           classList={{ 'menu-open-animation': props.animate !== false }}
@@ -804,7 +813,10 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                   activeViewAllBucket()?.isLoadingMore?.() ?? false
                 }
                 onEndReached={() => {
-                  void activeViewAllBucket()?.loadMore?.();
+                  fireAndForget(
+                    activeViewAllBucket()?.loadMore?.(),
+                    'mentions-menu'
+                  );
                 }}
               />
             </Show>

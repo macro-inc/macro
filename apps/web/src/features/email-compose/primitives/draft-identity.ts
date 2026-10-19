@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createEffect, createMemo, on, onCleanup } from 'solid-js';
 import type {
   EmailComposeFeedback,
@@ -116,50 +117,57 @@ function observeAvailableDraftIdentity(
   };
   const unsubscribe = watch((settlement) => {
     const epoch = session.epoch();
-    void (async () => {
-      if (
-        settlement?.failed &&
-        settlement.mutationUuid &&
-        (await rejected(settlement))
-      ) {
-        if (disposed || session.isStale(epoch) || !session.draftId()) return;
-        const code = settlement.code ?? 'INTERNAL';
-        if (code !== 'DRAFT_ALREADY_SENT' && !session.autosaveAllowed()) return;
-        session.dispatch({ type: 'rejected', epoch, code });
-        if (code === 'DRAFT_ALREADY_SENT') {
-          dismissRejectionNotice();
-          onAlreadySent();
+    fireAndForget(
+      (async () => {
+        if (
+          settlement?.failed &&
+          settlement.mutationUuid &&
+          (await rejected(settlement))
+        ) {
+          if (disposed || session.isStale(epoch) || !session.draftId()) return;
+          const code = settlement.code ?? 'INTERNAL';
+          if (code !== 'DRAFT_ALREADY_SENT' && !session.autosaveAllowed())
+            return;
+          session.dispatch({ type: 'rejected', epoch, code });
+          if (code === 'DRAFT_ALREADY_SENT') {
+            dismissRejectionNotice();
+            onAlreadySent();
+            return;
+          }
+          notices.reportError(
+            new Error('The server rejected the queued draft save')
+          );
+          // Durable drafts expose recovery beside the composer actions.
+          if (durableRecovery) return;
+          rejectionNotice = notices.feedback.failure(
+            'Draft could not be saved',
+            {
+              subtext:
+                'Your edits are still in this editor. Save them as a new draft before closing.',
+              persistent: true,
+              actions: [
+                {
+                  label: 'Save as new draft',
+                  onClick: () => {
+                    if (
+                      disposed ||
+                      session.isStale(epoch) ||
+                      session.autosaveAllowed()
+                    )
+                      return;
+                    recover();
+                  },
+                },
+              ],
+            }
+          );
           return;
         }
-        notices.reportError(
-          new Error('The server rejected the queued draft save')
-        );
-        // Durable drafts expose recovery beside the composer actions.
-        if (durableRecovery) return;
-        rejectionNotice = notices.feedback.failure('Draft could not be saved', {
-          subtext:
-            'Your edits are still in this editor. Save them as a new draft before closing.',
-          persistent: true,
-          actions: [
-            {
-              label: 'Save as new draft',
-              onClick: () => {
-                if (
-                  disposed ||
-                  session.isStale(epoch) ||
-                  session.autosaveAllowed()
-                )
-                  return;
-                recover();
-              },
-            },
-          ],
-        });
-        return;
-      }
-      if (disposed || session.isStale(epoch)) return;
-      await refresh();
-    })();
+        if (disposed || session.isStale(epoch)) return;
+        await refresh();
+      })(),
+      'email-compose'
+    );
   });
   // Session accessors read the whole state signal. Compare their values so
   // unrelated updates do not dismiss rejection notices or reread storage.
@@ -174,7 +182,7 @@ function observeAvailableDraftIdentity(
   );
   createEffect(
     on(draftId, () => {
-      void refresh();
+      fireAndForget(refresh(), 'email-compose');
     })
   );
   onCleanup(() => {

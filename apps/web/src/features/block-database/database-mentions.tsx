@@ -49,6 +49,7 @@ export function DatabaseMentionPicker(props: DatabaseMentionPickerProps) {
           animate={false}
           menu={operations}
           anchor={anchor()}
+          portalMount={props.mount}
           {...databaseMentionScope(props.specificEntityType)}
           includeContacts={false}
           showOpenTabs={false}

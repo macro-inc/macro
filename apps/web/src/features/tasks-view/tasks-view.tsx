@@ -7,6 +7,7 @@ import { projectDetailRoute } from '@app/routes/routes';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import {
   createSignal,
@@ -54,13 +55,16 @@ function TasksViewBreadcrumbs(props: ParentProps) {
       onChange={(next) => {
         if (next === 'tasks-view') closeTask();
         else if (params.projectId && next === `initiative:${params.projectId}`)
-          navigate({
-            route: projectDetailRoute,
-            params: {
-              projectId: params.projectId,
-              section: params.section ?? 'overview',
-            },
-          });
+          fireAndForget(
+            navigate({
+              route: projectDetailRoute,
+              params: {
+                projectId: params.projectId,
+                section: params.section ?? 'overview',
+              },
+            }),
+            'tasks-view'
+          );
       }}
     >
       <TaskViewBreadcrumbItem />
@@ -141,10 +145,13 @@ function TasksViewRoot() {
                           });
                           return;
                         }
-                        navigate({
-                          route: projectDetailRoute,
-                          params: { projectId: id, section: 'overview' },
-                        });
+                        fireAndForget(
+                          navigate({
+                            route: projectDetailRoute,
+                            params: { projectId: id, section: 'overview' },
+                          }),
+                          'tasks-view'
+                        );
                       }}
                     />
                   </Show>

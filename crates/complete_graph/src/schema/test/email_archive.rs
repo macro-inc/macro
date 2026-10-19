@@ -5,8 +5,8 @@ async fn ordinary_email_queries_use_the_replica_while_mutations_reload_from_prim
     let harness = harness();
     let id = Uuid::from_u128(44);
     harness
-        .soup_service
-        .set_raw_response(vec![soup_email_thread(id)]);
+        .thread_reader
+        .set_threads(vec![soup_email_thread(id)]);
     let query = format!(
         r#"{{ user {{ emailThread(input: {{threadId: "{id}"}}) {{isRead inboxVisible}} }} }}"#
     );
@@ -15,7 +15,7 @@ async fn ordinary_email_queries_use_the_replica_while_mutations_reload_from_prim
     let before = before.data.into_json().unwrap();
     assert_eq!(before["user"]["emailThread"]["isRead"], false);
     assert_eq!(before["user"]["emailThread"]["inboxVisible"], true);
-    assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(harness.thread_reads.load(Ordering::SeqCst), 1);
 
     let mutation = harness.execute_authenticated_mutation(&format!(
         r#"mutation {{
@@ -28,13 +28,13 @@ async fn ordinary_email_queries_use_the_replica_while_mutations_reload_from_prim
     assert_eq!(mutation["seen"]["isRead"], true);
     assert_eq!(mutation["archived"]["isRead"], true);
     assert_eq!(mutation["archived"]["inboxVisible"], false);
-    // Neither mutation consulted the lagging Soup reader.
-    assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 1);
+    // Neither mutation consulted the lagging replica reader.
+    assert_eq!(harness.thread_reads.load(Ordering::SeqCst), 1);
 
     let after = harness.execute(&query).await;
     assert!(after.errors.is_empty(), "{:?}", after.errors);
     assert_eq!(after.data.into_json().unwrap(), before);
-    assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 2);
+    assert_eq!(harness.thread_reads.load(Ordering::SeqCst), 2);
 
     // Normal reads catch up only when the replica does, not by silently
     // escalating their pool after a mutation.
@@ -43,8 +43,8 @@ async fn ordinary_email_queries_use_the_replica_while_mutations_reload_from_prim
     };
     replica.thread.inbox_visible = false;
     harness
-        .soup_service
-        .set_raw_response(vec![SoupItem::EmailThread(replica)]);
+        .thread_reader
+        .set_threads(vec![SoupItem::EmailThread(replica)]);
     let caught_up = harness.execute(&query).await;
     assert!(caught_up.errors.is_empty(), "{:?}", caught_up.errors);
     let caught_up = caught_up.data.into_json().unwrap();
@@ -75,8 +75,8 @@ async fn archive_undo_and_redo_return_primary_state_without_reading_the_soup_rep
     let thread_id = Uuid::from_u128(44);
     // The replica never changes during these writes.
     harness
-        .soup_service
-        .set_raw_response(vec![soup_email_thread(thread_id)]);
+        .thread_reader
+        .set_threads(vec![soup_email_thread(thread_id)]);
     for archived in [true, false, true] {
         let response = harness.execute_authenticated_mutation(&format!(
             r#"mutation {{ setEmailThreadArchived(input: {{threadId: "{thread_id}", archived: {archived}}}) {{__typename id inboxVisible}} }}"#
@@ -88,7 +88,7 @@ async fn archive_undo_and_redo_return_primary_state_without_reading_the_soup_rep
         assert_eq!(thread["id"], thread_id.to_string());
         assert_eq!(thread["inboxVisible"], !archived);
     }
-    assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(harness.thread_reads.load(Ordering::SeqCst), 0);
     assert_eq!(
         *harness.email_service.archive_mutation_calls.lock().unwrap(),
         [true, false, true].map(|archived| (

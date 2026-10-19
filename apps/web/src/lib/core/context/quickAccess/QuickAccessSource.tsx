@@ -12,6 +12,7 @@ import {
   enableCrm,
   enableDatabases,
   enableForms,
+  enableGraphqlSoup,
 } from '@core/constant/featureFlags';
 import {
   useChannelsContext,
@@ -23,6 +24,7 @@ import {
   useIsConnectedSecondaryInbox,
 } from '@core/user';
 import type { DateValue } from '@core/util/date';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type {
   ChannelEntity,
   CrmCompanyEntity,
@@ -37,6 +39,7 @@ import {
   type CachedGraphqlChannel,
   materializeCachedGraphqlChannels,
 } from '@queries/channel/graphql';
+import { materializeCachedEmailItems } from '@queries/email/quick-access';
 import { queryReadyGate } from '@queries/gate';
 import { materializeCachedGraphqlHistoryItems } from '@queries/history/graphql';
 import { type HistoryItem, useHistoryQuery } from '@queries/history/history';
@@ -378,6 +381,7 @@ function sortIndexEntries(entries: IndexEntry[]): IndexEntry[] {
 /** Builds Quick Access from history and its supporting entity sources. */
 export function createQuickAccessValue(): QuickAccessContextValue {
   const crmFlag = useFeatureFlag(enableCrm);
+  const graphqlFlag = useFeatureFlag(enableGraphqlSoup);
   // queries
   const historyQuery = useHistoryQuery();
   const { channels, isLoading: channelsLoading } = useChannelsContext();
@@ -391,6 +395,9 @@ export function createQuickAccessValue(): QuickAccessContextValue {
   // Access falls back to the REST channel list instead of the dead host. The
   // memo keeps the subscription below until the host itself changes.
   const cacheHost = createMemo(() => {
+    // The host getter reads PostHog imperatively; retry when the remote flag
+    // arrives after mount, while leaving cache lifetime decisions to the getter.
+    graphqlFlag();
     const graphqlCacheHost = getGraphqlSoupCacheHost();
     return graphqlCacheHost?.disabled ? undefined : graphqlCacheHost;
   });
@@ -1174,11 +1181,13 @@ export function createQuickAccessValue(): QuickAccessContextValue {
                 cachedChannelItems,
                 cachedCompanies,
                 cachedContacts,
+                cachedEmails,
               ] = await Promise.all([
                 materializeCachedGraphqlHistoryItems(projectionHost, missing),
                 materializeCachedGraphqlChannels(projectionHost, missing),
                 materializeCachedGraphqlCrmCompanies(projectionHost, missing),
                 materializeCachedGraphqlCrmContacts(projectionHost, missing),
+                materializeCachedEmailItems(projectionHost, documents),
               ]);
               const historyById = new Map(
                 historyItems.map((item) => [item.id, item])
@@ -1192,8 +1201,15 @@ export function createQuickAccessValue(): QuickAccessContextValue {
               const contactsById = new Map(
                 cachedContacts.map((contact) => [contact.id, contact])
               );
+              const emailsById = new Map(
+                cachedEmails.map((item) => [item.id, item])
+              );
               return documents.flatMap((document): QuickAccessItem[] => {
                 const id = idOf(document.recordKey);
+                if (document.bucket === 'email') {
+                  const email = emailsById.get(id);
+                  return email ? [email] : [];
+                }
                 const cached = itemCache.get(id)?.item;
                 if (cached) return [cached];
                 const historyItem = historyById.get(id);
@@ -1300,17 +1316,19 @@ export function createQuickAccessValue(): QuickAccessContextValue {
   const refresh = () => {
     if (cacheHost()) {
       setManualRefreshRevision((revision) => revision + 1);
-      void cachedChannelsQuery.refetch();
+      fireAndForget(cachedChannelsQuery.refetch(), 'quick-access');
     }
-    historyQuery.refetch();
-    crmCompaniesQuery.refetch();
-    crmContactsQuery.refetch();
-    snippetsQuery.refetch();
-    skillsQuery.refetch();
-    void agentSessionsQuery.refetch();
-    if (databasesFlag().enabled) void databasesQuery.refetch();
-    if (formsFlag().enabled) void formsQuery.refetch();
-    initiativesQuery.refetch();
+    fireAndForget(historyQuery.refetch(), 'quick-access');
+    fireAndForget(crmCompaniesQuery.refetch(), 'quick-access');
+    fireAndForget(crmContactsQuery.refetch(), 'quick-access');
+    fireAndForget(snippetsQuery.refetch(), 'quick-access');
+    fireAndForget(skillsQuery.refetch(), 'quick-access');
+    fireAndForget(agentSessionsQuery.refetch(), 'quick-access');
+    if (databasesFlag().enabled)
+      fireAndForget(databasesQuery.refetch(), 'quick-access');
+    if (formsFlag().enabled)
+      fireAndForget(formsQuery.refetch(), 'quick-access');
+    fireAndForget(initiativesQuery.refetch(), 'quick-access');
   };
 
   return {

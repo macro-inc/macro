@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type Accessor,
   batch,
@@ -245,7 +246,7 @@ export function createPredicateQuery<T extends object>(options: {
             /* Host may have retired. */
           }
         };
-        void release();
+        fireAndForget(release(), 'soup-predicate-query');
       });
     })
   );

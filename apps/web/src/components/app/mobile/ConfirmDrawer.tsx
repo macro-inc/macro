@@ -18,6 +18,8 @@ export function ConfirmDrawer(props: ConfirmDialogProps) {
       side="bottom"
       open={props.open}
       onOpenChange={(open) => !open && close()}
+      onFinalFocus={props.onCloseAutoFocus}
+      restoreFocus={!!props.onCloseAutoFocus}
       closeOnOutsidePointer={!props.pending}
       closeOnEscapeKeyDown={!props.pending}
     >

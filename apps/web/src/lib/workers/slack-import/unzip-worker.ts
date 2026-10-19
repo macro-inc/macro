@@ -161,10 +161,14 @@ export function installArchiveWorker(port: ArchiveWorkerPort): void {
   port.onmessage = ({ data }) => {
     match(data)
       .with({ type: 'discover' }, (request) => {
-        void discover(request);
+        discover(request).catch((error: unknown) =>
+          reportError(request.sessionId, error)
+        );
       })
       .with({ type: 'read_history' }, (request) => {
-        void readHistory(request);
+        readHistory(request).catch((error: unknown) =>
+          reportError(request.sessionId, error)
+        );
       })
       .with({ type: 'ack_part' }, (request) => {
         if (

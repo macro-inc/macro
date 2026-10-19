@@ -72,10 +72,11 @@ export function TopBar(props: {
         : undefined,
     };
   });
-  const rename = (next: string) =>
-    void renameDatabase(getEntityGraphqlClient(), databaseId, next).mapErr(
+  const rename = (next: string) => {
+    renameDatabase(getEntityGraphqlClient(), databaseId, next).mapErr(
       (failure) => toast.failure(databaseEntityMessage(failure, 'rename'))
     );
+  };
 
   return (
     <>

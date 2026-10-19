@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE calendar_outlook_work SET lease_id=NULL,lease_until=NULL,last_error=$2,attempts=attempts+1,\n            next_run_at=now()+make_interval(secs=>LEAST(900,30*power(2,LEAST(attempts,5)))::int) WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9c1a8a7f2c9e36f81c4be94b80a2e2ec68d3c9971aecbfd9be288b0fbc982970"
+}

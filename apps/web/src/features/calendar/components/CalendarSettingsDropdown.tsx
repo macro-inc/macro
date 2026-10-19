@@ -1,8 +1,10 @@
+import { ViewSidebar } from '@app/components/view-shell';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { enableMultiInbox } from '@core/constant/featureFlags';
 import { useAddInboxFlow } from '@core/email-link';
 import { isMobile } from '@core/mobile/isMobile';
+import { fireAndForget } from '@core/util/fireAndForget';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
 import GearIcon from '@phosphor/gear.svg';
@@ -111,16 +113,26 @@ function createCalendarSettingsControls(isNarrow: () => boolean) {
     calendarView.closeEventDetails();
     match(account.action)
       .with('enable', () => {
-        void startAddInbox({
-          scopes: account.consentScopes,
-          emailAddress: account.emailAddress,
-        });
+        fireAndForget(
+          startAddInbox({
+            scopes: account.consentScopes,
+            provider: account.provider,
+            reconnectLinkId: account.linkId,
+            emailAddress: account.emailAddress,
+          }),
+          'add-inbox'
+        );
       })
       .with('reconnect', () => {
-        void startAddInbox({
-          scopes: account.consentScopes,
-          emailAddress: account.emailAddress,
-        });
+        fireAndForget(
+          startAddInbox({
+            scopes: account.consentScopes,
+            provider: account.provider,
+            reconnectLinkId: account.linkId,
+            emailAddress: account.emailAddress,
+          }),
+          'add-inbox'
+        );
       })
       .with('turnOff', () => {
         setTurnOffTarget({
@@ -134,7 +146,10 @@ function createCalendarSettingsControls(isNarrow: () => boolean) {
   // A brand-new account needs the mailbox scopes alongside calendar.
   const connectAnotherAccount = () => {
     calendarView.closeEventDetails();
-    startAddInbox({ scopes: 'gmail_and_calendar' });
+    fireAndForget(
+      startAddInbox({ scopes: 'gmail_and_calendar' }),
+      'calendar-settings'
+    );
   };
 
   return {
@@ -175,12 +190,17 @@ function DesktopCalendarSettings(props: {
         size={props.sidebar ? 'md' : 'icon-lg'}
         class={
           props.sidebar
-            ? 'w-full border-transparent bg-transparent'
+            ? 'h-(--sidebar-row-height) w-full justify-start gap-(--sidebar-label-gap) rounded-lg border-transparent bg-transparent px-(--sidebar-item-inset) text-left font-normal touch:h-11'
             : 'shrink-0 border-transparent bg-transparent'
         }
         aria-label="Calendar settings"
       >
-        <GearIcon class="size-5" />
+        <Show when={props.sidebar} fallback={<GearIcon class="size-5" />}>
+          <ViewSidebar.Icon>
+            <GearIcon />
+          </ViewSidebar.Icon>
+          <span class="min-w-0 truncate">Settings</span>
+        </Show>
       </Dropdown.Trigger>
       <Dropdown.Content class="w-60 max-w-[calc(100vw-1rem)]">
         <Show when={controls.showCalendarVisibility()}>
@@ -354,10 +374,19 @@ function MobileCalendarSettings(props: {
         as={Button}
         variant="ghost"
         size={props.sidebar ? 'md' : 'icon-lg'}
-        class={props.sidebar ? 'w-full rounded-full' : 'shrink-0 rounded-full'}
+        class={
+          props.sidebar
+            ? 'h-(--sidebar-row-height) w-full justify-start gap-(--sidebar-label-gap) rounded-lg px-(--sidebar-item-inset) text-left font-normal touch:h-11'
+            : 'shrink-0 rounded-full'
+        }
         aria-label="Calendar settings"
       >
-        <GearIcon class="size-6" />
+        <Show when={props.sidebar} fallback={<GearIcon class="size-6" />}>
+          <ViewSidebar.Icon>
+            <GearIcon />
+          </ViewSidebar.Icon>
+          <span class="min-w-0 truncate">Settings</span>
+        </Show>
       </MobileDrawer.Trigger>
 
       <MobileDrawer.Portal>

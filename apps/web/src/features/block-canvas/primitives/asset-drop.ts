@@ -1,4 +1,5 @@
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { isEntityDragEvent } from '@entity';
 import type { Point } from '@macro-inc/graphics';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
@@ -31,7 +32,7 @@ export function createCanvasAssetDrop(
       const position = point(coordinates.x, coordinates.y);
       const kind = fileTypeToBlockName(asset.fileType);
       if (kind === 'image' || kind === 'video')
-        void assets.media(asset, position);
+        fireAndForget(assets.media(asset, position), 'canvas-assets');
       else assets.document(asset, position);
     });
   }

@@ -241,6 +241,8 @@ export function CanvasViewControls(
     onGrid: (visible: boolean) => void;
     snapMode: CanvasSnapMode;
     onSnapMode: (mode: CanvasSnapMode) => void;
+    snapToObjects: boolean;
+    onSnapToObjects: (enabled: boolean) => void;
   }
 ) {
   return (
@@ -257,10 +259,18 @@ export function CanvasViewControls(
         </CanvasViewCheckboxItem>
       </Dropdown.Group>
       <Dropdown.Group>
+        <CanvasViewCheckboxItem
+          checked={props.snapToObjects}
+          onChange={props.onSnapToObjects}
+        >
+          Snap to objects
+        </CanvasViewCheckboxItem>
+      </Dropdown.Group>
+      <Dropdown.Group>
         <For
           each={
             [
-              { mode: 'none', label: 'No snapping' },
+              { mode: 'none', label: 'No grid snapping' },
               { mode: 'pixel', label: 'Snap to px' },
               { mode: 'auto', label: 'Auto snapping' },
             ] as const

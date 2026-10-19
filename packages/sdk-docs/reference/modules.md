@@ -27,6 +27,7 @@
 - [src/entities/calendar/calendar](src/entities/calendar/calendar/README.md)
 - [src/entities/calendar/event](src/entities/calendar/event/README.md)
 - [src/entities/calendar/namespace](src/entities/calendar/namespace/README.md)
+- [src/entities/calendar/replacement](src/entities/calendar/replacement/README.md)
 - [src/entities/calls/call-record](src/entities/calls/call-record/README.md)
 - [src/entities/calls/message](src/entities/calls/message/README.md)
 - [src/entities/calls/namespace](src/entities/calls/namespace/README.md)

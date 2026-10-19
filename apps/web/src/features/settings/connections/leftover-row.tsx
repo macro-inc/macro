@@ -1,6 +1,7 @@
 import { toast } from '@core/component/Toast/Toast';
 import { PipedreamConnectorIcon } from '@core/pipedream/ConnectorIcon';
 import { createPipedreamCatalogConnect } from '@core/pipedream/catalog';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   useDeletePipedreamConnectionMutation,
   useUpdatePipedreamConnectionMutation,
@@ -202,7 +203,7 @@ export function LeftoverRow(props: { leftover: Leftover }) {
           startAuth();
         })
         .with({ kind: 'pipedream' }, () => {
-          void connectPipedream();
+          fireAndForget(connectPipedream(), 'connections-settings');
         })
         .exhaustive();
     },

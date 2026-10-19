@@ -1,4 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { cn, InlineCheckbox } from '@ui';
 import { Show } from 'solid-js';
 import type { CrmContact as CrmContactResponse } from '../core/contact';
@@ -48,7 +49,9 @@ export function ContactSharingSection(props: { contact?: CrmContactResponse }) {
                 role="checkbox"
                 aria-checked={isShared()}
                 disabled={hiddenMutation.isPending}
-                onClick={() => void handleToggle(contact(), !isShared())}
+                onClick={() =>
+                  fireAndForget(handleToggle(contact(), !isShared()), 'crm')
+                }
                 class={cn(TOGGLE_BUTTON_CLASS)}
               >
                 <InlineCheckbox checked={isShared()} />

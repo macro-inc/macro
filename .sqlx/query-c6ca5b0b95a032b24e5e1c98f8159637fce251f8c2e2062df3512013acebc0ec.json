@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO email_attachment_blobs(attachment_id,object_key,sha256,size_bytes)\n            SELECT DISTINCT ON(a.id) a.id,b.object_key,b.sha256,b.size_bytes FROM email_attachments a\n                JOIN email_attachments_fwd f ON f.message_id=a.message_id JOIN email_attachments original ON original.id=f.attachment_id\n                JOIN email_attachment_blobs b ON b.attachment_id=original.id\n            WHERE a.message_id=$1 AND (trim(both '<>' from a.content_id)=trim(both '<>' from original.content_id) OR trim(both '<>' from a.content_id)=f.attachment_id::text||'@attachments.macro.com')\n            ORDER BY a.id,original.id\n            ON CONFLICT(attachment_id) DO UPDATE SET object_key=EXCLUDED.object_key,sha256=EXCLUDED.sha256,size_bytes=EXCLUDED.size_bytes",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c6ca5b0b95a032b24e5e1c98f8159637fce251f8c2e2062df3512013acebc0ec"
+}

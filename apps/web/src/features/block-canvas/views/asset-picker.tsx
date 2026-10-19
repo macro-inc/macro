@@ -5,6 +5,7 @@ import type { MentionItem } from '@core/component/LexicalMarkdown/utils/mentions
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { fileDrop } from '@core/directive/fileDrop';
 import { debouncedDependent } from '@core/util/debounce';
+import { fireAndForget } from '@core/util/fireAndForget';
 import SearchIcon from '@phosphor/magnifying-glass.svg';
 import UploadIcon from '@phosphor/upload-simple.svg';
 import { Button } from '@ui/components/Button';
@@ -243,7 +244,7 @@ export function CanvasAssetPicker(props: {
             type="button"
             class="w-full rounded px-3 py-2 text-xs text-ink-muted hover:bg-hover disabled:opacity-50"
             disabled={loading()}
-            onClick={() => void source.loadMore()}
+            onClick={() => fireAndForget(source.loadMore(), 'canvas-assets')}
           >
             Load more
           </button>

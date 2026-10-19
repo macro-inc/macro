@@ -25,6 +25,7 @@ import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import type { WithCustomUserInput } from '@core/user';
 import { invalidateContacts } from '@core/user/contactService';
 import { getDestinationFromOptions } from '@core/util/destination';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   chatRuleset,
   handleFileFolderDrop,
@@ -54,7 +55,6 @@ import {
   onMount,
   Show,
 } from 'solid-js';
-
 import { createNativeShareSend } from './createNativeShareSend';
 import { uploadPendingShareAttachment } from './uploadPendingShareAttachment';
 
@@ -168,10 +168,14 @@ function NativeShareSheetComposer(props: { handleCancel: () => void }) {
     }
   };
   onMount(() => {
-    void uploadSharedFiles(
-      (shareTarget?.pendingShareFiles() ?? []).filter(
-        (file) => !file.isSharedText && normalizedSharedText(file).length === 0
-      )
+    fireAndForget(
+      uploadSharedFiles(
+        (shareTarget?.pendingShareFiles() ?? []).filter(
+          (file) =>
+            !file.isSharedText && normalizedSharedText(file).length === 0
+        )
+      ),
+      'native-share-sheet'
     );
   });
 
@@ -212,8 +216,8 @@ function NativeShareSheetComposer(props: { handleCancel: () => void }) {
 
   const sendShare = createNativeShareSend<InputSnapshot>({
     clear: async () => {
-      invalidateListChannels();
-      invalidateContacts();
+      fireAndForget(invalidateListChannels(), 'native-share-sheet');
+      fireAndForget(invalidateContacts(), 'native-share-sheet');
       await shareTarget?.clearPendingShareFiles(batchTokens);
     },
     send: async (snapshot) => {
@@ -278,12 +282,15 @@ function NativeShareSheetComposer(props: { handleCancel: () => void }) {
     },
     onEnter: () => {
       if (isMobile()) return false;
-      void inputState.commands.send();
+      fireAndForget(inputState.commands.send(), 'native-share-sheet');
       return true;
     },
     onPasteFilesAndDirs: (files, directories) => {
-      void handleFileFolderDrop(files, directories, (entries) =>
-        inputState.commands.attachFiles(entries.map((entry) => entry.file))
+      fireAndForget(
+        handleFileFolderDrop(files, directories, (entries) =>
+          inputState.commands.attachFiles(entries.map((entry) => entry.file))
+        ),
+        'native-share-sheet'
       );
     },
     onAttachFromDisk: (files) => inputState.commands.attachFiles(files),
@@ -335,7 +342,12 @@ function NativeShareSheetComposer(props: { handleCancel: () => void }) {
             <Button
               variant="ghost"
               disabled={uploading()}
-              onClick={() => void uploadSharedFiles(failedFiles())}
+              onClick={() =>
+                fireAndForget(
+                  uploadSharedFiles(failedFiles()),
+                  'native-share-sheet'
+                )
+              }
             >
               {uploading() ? 'Retrying…' : 'Retry'}
             </Button>
@@ -457,7 +469,7 @@ export function NativeShareSheet() {
 
   const handleCancel = () => {
     setConfirmDiscard(false);
-    void shareTarget?.clearPendingShareFiles();
+    fireAndForget(shareTarget?.clearPendingShareFiles(), 'native-share-sheet');
   };
 
   return (

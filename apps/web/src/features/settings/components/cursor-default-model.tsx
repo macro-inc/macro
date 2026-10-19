@@ -1,6 +1,7 @@
 import { ModelCatalogPicker } from '@core/component/AI/component/input/ModelCatalogPicker';
 import { isLargeModelCatalog } from '@core/component/AI/component/input/modelCatalog';
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { ThrownResultError } from '@core/util/result';
 import { useAgentModelsQuery } from '@queries/agents/models';
 import {
@@ -77,7 +78,7 @@ export function CursorDefaultModel(props: { triggerClass?: string }) {
           options={[]}
           placeholder="Loading models…"
           triggerClass={props.triggerClass}
-          onChange={(id) => void changeModel(id)}
+          onChange={(id) => fireAndForget(changeModel(id), 'cursor-connect')}
           disabled
         />
       }
@@ -91,7 +92,9 @@ export function CursorDefaultModel(props: { triggerClass?: string }) {
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => void cursorModels.refetch()}
+              onClick={() =>
+                fireAndForget(cursorModels.refetch(), 'cursor-connect')
+              }
             >
               Retry
             </Button>
@@ -115,14 +118,18 @@ export function CursorDefaultModel(props: { triggerClass?: string }) {
                 value={selectedModelId()}
                 triggerClass={props.triggerClass}
                 disabled={setDefaultModel.isPending}
-                onChange={(id) => void changeModel(id)}
+                onChange={(id) =>
+                  fireAndForget(changeModel(id), 'cursor-connect')
+                }
               />
             }
           >
             <ModelCatalogPicker
               value={selectedModelId()}
               options={catalogOptions()}
-              onSelect={(id) => void changeModel(id)}
+              onSelect={(id) =>
+                fireAndForget(changeModel(id), 'cursor-connect')
+              }
               disabled={setDefaultModel.isPending}
               ariaLabel="Default model"
               triggerClass={

@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO email_attachments_drafts (id,draft_id,file_name,content_type,sha,size,s3_key,upload_pending,upload_expires_at,content_id,is_inline)\n                    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,CASE WHEN $8 THEN now()+interval '1 day' ELSE NULL END,$9,$10)\n                    ON CONFLICT (id) DO UPDATE SET upload_expires_at=CASE WHEN email_attachments_drafts.upload_pending THEN now()+interval '1 day' ELSE NULL END\n                    WHERE email_attachments_drafts.draft_id=EXCLUDED.draft_id AND email_attachments_drafts.sha=EXCLUDED.sha AND email_attachments_drafts.size=EXCLUDED.size AND email_attachments_drafts.file_name=EXCLUDED.file_name AND email_attachments_drafts.content_type=EXCLUDED.content_type AND email_attachments_drafts.s3_key=EXCLUDED.s3_key",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Int4",
+        "Text",
+        "Bool",
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "601bfe32bcfafa2b933de57a6fa2ce3af5d7ce28f3099fc5b49233bb86f8dbdf"
+}

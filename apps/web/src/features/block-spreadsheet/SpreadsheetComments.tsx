@@ -10,6 +10,7 @@ import { useUserId } from '@core/context/user';
 import { EntityDiscussion } from '@core/messages/EntityDiscussion';
 import { scrollToRenderedTarget } from '@core/messages/scroll-to-rendered-target';
 import { useCanComment, useIsDocumentOwner } from '@core/signal/permissions';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import ChatIcon from '@phosphor/chat-circle.svg';
 import XIcon from '@phosphor/x.svg';
@@ -400,7 +401,9 @@ export function SpreadsheetComments(props: {
                   Could not load comments.{' '}
                   <button
                     class="underline"
-                    onClick={() => void query.refetch()}
+                    onClick={() =>
+                      fireAndForget(query.refetch(), 'spreadsheet-comments')
+                    }
                   >
                     Try again
                   </button>

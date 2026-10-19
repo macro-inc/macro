@@ -243,12 +243,12 @@ describe('stacked panes', () => {
     expectAll();
   });
 
-  it('moves the pane holding a claim to the front when a router open lands on it', () => {
+  it('moves the pane holding a claim to the front when a router open lands on it', async () => {
     const { router, manager, shown, active } = setup('/home');
     manager.openWithSplit(settings);
     manager.openWithSplit(documents);
 
-    router.open('/settings', { newPane: true });
+    await router.open('/settings', { newPane: true });
     expect(shown()).toEqual(['home', 'documents', 'settings']);
     expect(active()).toBe('settings');
   });

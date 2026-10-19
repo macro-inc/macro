@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        DELETE FROM email_messages\n        WHERE id = $1 AND thread_id = $2 AND link_id = ANY($3) AND is_draft = true AND is_sent = false\n          AND EXISTS (SELECT 1 FROM email_links l WHERE l.id = email_messages.link_id AND l.provider = 'GMAIL')\n          AND NOT EXISTS (SELECT 1 FROM email_scheduled_messages WHERE message_id = $1 AND link_id = email_messages.link_id)\n        RETURNING link_id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "link_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "8ea72c405d2acf06b309b5f6b01f83e0e6684d18a29655a2f780230b94901949"
+}

@@ -43,8 +43,8 @@ export function validateReviewDraft(
     const end = Date.parse(time.kind === 'timed' ? time.endsAt : time.endDate);
     if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start)
       return 'The event must end after it starts.';
-    if (draft.addMacroCall && draft.addGoogleMeet)
-      return 'Choose either a Macro call or Google Meet.';
+    if (draft.addMacroCall && draft.addConference)
+      return 'Choose either a Macro call or a video meeting.';
     if (
       (draft.attendees ?? []).some(
         (guest) => !EmailValidator.validate(guest.email)

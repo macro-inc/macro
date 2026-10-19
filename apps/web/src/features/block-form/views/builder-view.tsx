@@ -1,4 +1,5 @@
 import { DocumentOutline } from '@app/components/DocumentOutline';
+import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
 import CalendarCheck from '@phosphor/calendar-check.svg';
 import Database from '@phosphor/database.svg';
@@ -145,7 +146,7 @@ export function BuilderView(props: BuilderViewProps) {
   );
   context.followTable(
     () => props.detail.form.databaseId,
-    () => void props.source.refetch()
+    () => fireAndForget(props.source.refetch(), 'form-builder')
   );
   const columnWrites = createMemo(() =>
     context.columns(props.detail.form.databaseId, props.detail.form.tableId)
@@ -414,7 +415,10 @@ function BuilderCanvas(
       return id;
     },
     dropNewQuestion: (type, placement) =>
-      void insertQuestion(questionChoice(type), placement),
+      fireAndForget(
+        insertQuestion(questionChoice(type), placement),
+        'form-builder'
+      ),
     describe,
     describePlacement: (questionId, placement) =>
       placementDescription(layout(), questionId, placement),
@@ -664,7 +668,9 @@ function BuilderCanvas(
                 <ConversionNotice
                   message={pending().message}
                   label={pending().label}
-                  onConvert={() => void builder.convertQuestion()}
+                  onConvert={() =>
+                    fireAndForget(builder.convertQuestion(), 'form-builder')
+                  }
                   onDismiss={builder.dismissConversion}
                 />
               )}
@@ -720,7 +726,11 @@ function BuilderCanvas(
                       }
                       onDelete={() => {
                         const current = section();
-                        if (current) void confirmRemoveSection(current);
+                        if (current)
+                          fireAndForget(
+                            confirmRemoveSection(current),
+                            'form-builder'
+                          );
                       }}
                     />
                   );
@@ -925,13 +935,16 @@ function BuilderCanvas(
                                       afterMenuClose = () => {
                                         dialogReturnFocus =
                                           sectionAddTriggers.get(sectionId);
-                                        void insertQuestion(
-                                          choice,
-                                          {
-                                            sectionId,
-                                            index: current().questions.length,
-                                          },
-                                          relation
+                                        fireAndForget(
+                                          insertQuestion(
+                                            choice,
+                                            {
+                                              sectionId,
+                                              index: current().questions.length,
+                                            },
+                                            relation
+                                          ),
+                                          'form-builder'
                                         );
                                       };
                                     }}
@@ -1150,10 +1163,13 @@ function BuilderCanvas(
                         onClick={() => {
                           const current = pending();
                           setPendingRelation(undefined);
-                          void insertQuestion(
-                            current.choice,
-                            current.placement,
-                            relation
+                          fireAndForget(
+                            insertQuestion(
+                              current.choice,
+                              current.placement,
+                              relation
+                            ),
+                            'form-builder'
                           );
                         }}
                       >
@@ -1256,7 +1272,10 @@ function BuilderCanvas(
               const at = placement();
               if (!at) return;
               dialogReturnFocus = trigger;
-              void insertQuestion(choice, at, relation);
+              fireAndForget(
+                insertQuestion(choice, at, relation),
+                'form-builder'
+              );
             };
           }}
           onAddColumn={(columnId) => {
@@ -1324,7 +1343,10 @@ function BuilderCanvas(
                     editors={editors(itemProps.sectionId, current().id)}
                     onSelect={() => builder.select(current().id)}
                     onRename={(name) =>
-                      void builder.renameQuestion(current().id, name)
+                      fireAndForget(
+                        builder.renameQuestion(current().id, name),
+                        'form-builder'
+                      )
                     }
                     onHelpText={(helpText) =>
                       builder.updateQuestion(current().id, { helpText })
@@ -1358,10 +1380,13 @@ function BuilderCanvas(
                           tables={relationTables()}
                           disabled={builder.isColumnBusy(columnFacts().id)}
                           onChoose={(choice, relation) =>
-                            void builder.changeType(
-                              current().id,
-                              choice,
-                              relation
+                            fireAndForget(
+                              builder.changeType(
+                                current().id,
+                                choice,
+                                relation
+                              ),
+                              'form-builder'
                             )
                           }
                         />
@@ -1403,17 +1428,26 @@ function BuilderCanvas(
                             builder.addOption(current().id, label)
                           }
                           onRename={(optionId, label) =>
-                            void builder.updateOption(current().id, optionId, {
-                              label,
-                            })
+                            fireAndForget(
+                              builder.updateOption(current().id, optionId, {
+                                label,
+                              }),
+                              'form-builder'
+                            )
                           }
                           onRecolor={(optionId, color) =>
-                            void builder.updateOption(current().id, optionId, {
-                              color,
-                            })
+                            fireAndForget(
+                              builder.updateOption(current().id, optionId, {
+                                color,
+                              }),
+                              'form-builder'
+                            )
                           }
                           onDelete={(optionId) =>
-                            void builder.deleteOption(current().id, optionId)
+                            fireAndForget(
+                              builder.deleteOption(current().id, optionId),
+                              'form-builder'
+                            )
                           }
                         />
                       </Show>
@@ -1432,7 +1466,10 @@ function BuilderCanvas(
                           builder.updateQuestion(current().id, { required })
                         }
                         onDuplicate={() =>
-                          void builder.duplicateQuestion(current().id)
+                          fireAndForget(
+                            builder.duplicateQuestion(current().id),
+                            'form-builder'
+                          )
                         }
                         onRemove={() => builder.removeQuestion(current().id)}
                         onMoveUp={() => moveByStep(current().id, 'up')}
@@ -1441,9 +1478,9 @@ function BuilderCanvas(
                           moveToSection(current().id, sectionId)
                         }
                         onDeleteColumn={() =>
-                          void confirmDeleteColumn(
-                            current().id,
-                            columnFacts().id
+                          fireAndForget(
+                            confirmDeleteColumn(current().id, columnFacts().id),
+                            'form-builder'
                           )
                         }
                       />

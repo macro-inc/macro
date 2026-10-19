@@ -4,6 +4,7 @@
  * Design ▸ Slide Size; and Home ▸ Section.
  */
 
+import { fireAndForget } from '@core/util/fireAndForget';
 import CalendarBlank from '@phosphor/calendar-blank.svg';
 import Hash from '@phosphor/hash.svg';
 import { Show } from 'solid-js';
@@ -185,7 +186,7 @@ export function SectionMenu() {
                   testId="pptx-section-add"
                   onClick={() => {
                     close();
-                    void s.add();
+                    fireAndForget(s.add(), 'pptx-editor');
                   }}
                 />
                 <PopoverItem

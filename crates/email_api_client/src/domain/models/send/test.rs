@@ -31,6 +31,8 @@ fn mime_contains_recipients_threading_bodies_and_attachments() {
             body_html: Some("<strong>HTML body</strong>".to_string()),
             body_macro: None,
             attachments: Some(vec![AttachmentToSend {
+                content_id: None,
+                is_inline: false,
                 file_name: "notes.txt".to_string(),
                 content_type: "text/plain".to_string(),
                 data: b"attachment contents".to_vec(),

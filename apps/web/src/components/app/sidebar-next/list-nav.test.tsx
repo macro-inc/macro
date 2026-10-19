@@ -442,12 +442,13 @@ describe('ListNav', () => {
     );
     const [first, second] = router.panes();
     const entry = router.entry(first!);
-    void router.navigatePane(second!, '/agents');
+    const navigation = router.navigatePane(second!, '/agents');
     expect(router.pending(second!)).toBeDefined();
 
     press('Home');
     finishPreload();
     await router.settled();
+    await navigation;
 
     expect(router.entry(first!)).toBe(entry);
     expect(router.entry(second!)?.location.route.matches.at(-1)?.id).toBe(
@@ -475,7 +476,7 @@ describe('ListNav', () => {
     expectSelection('Home');
   });
 
-  it('does not reclaim the highlight when Settings becomes active again', () => {
+  it('does not reclaim the highlight when Settings becomes active again', async () => {
     const { router, history } = setup('/settings');
     expectSelection();
     press('Agents');
@@ -483,7 +484,7 @@ describe('ListNav', () => {
     expectSelection('Agents');
 
     // Settings opens from outside the rail list (the gear, a hotkey).
-    router.navigatePane(router.panes()[0]!, '/settings');
+    await router.navigatePane(router.panes()[0]!, '/settings');
     expect(history.read().path).toBe('/settings');
     expectSelection();
   });

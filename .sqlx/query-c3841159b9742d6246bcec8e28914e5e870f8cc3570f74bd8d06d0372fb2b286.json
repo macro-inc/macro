@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_sync_streams SET attachments_rechecked=true WHERE link_id=$1 AND generation=$2 AND kind='mail_folder'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c3841159b9742d6246bcec8e28914e5e870f8cc3570f74bd8d06d0372fb2b286"
+}

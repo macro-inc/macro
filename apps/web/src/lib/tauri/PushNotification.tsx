@@ -4,6 +4,7 @@ import {
   syncPushRegistrations,
 } from '@core/auth/push-registration-lifecycle';
 import { hasLoginCookie } from '@core/util/cookies';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type {
   NotificationEvent,
   NotificationRegistrationResult,
@@ -285,7 +286,7 @@ function usePushNotifications(
     disposed = true;
     ++registrationEpoch;
     clearTimeout(watchRetryTimeout);
-    void stopWatch();
+    fireAndForget(stopWatch(), 'push-notifications');
   });
 
   async function stopWatch() {
@@ -300,7 +301,7 @@ function usePushNotifications(
   // current user (covering both a token rotation and an account switch since
   // the last launch). The lifecycle sync also clears state when the OS
   // permission was revoked; only the cases it skips are handled here.
-  void reconcileOnLaunch();
+  fireAndForget(reconcileOnLaunch(), 'push-notifications');
 
   async function reconcileOnLaunch() {
     const epoch = registrationEpoch;
@@ -321,7 +322,7 @@ function usePushNotifications(
     // Delivered notifications can be tapped before APNs registration finishes
     // or when registration fails. Attach the listener so native buffered taps
     // can navigate independently of acquiring a token for future pushes.
-    void startWatch();
+    fireAndForget(startWatch(), 'push-notifications');
   });
 
   function startWatch() {
@@ -338,14 +339,17 @@ function usePushNotifications(
       if (deviceType === 'android' && !hasLoginCookie())
         await configureRecipient(null, epoch);
       await api.watch((event) => {
-        void handlePushEvent(event);
+        fireAndForget(handlePushEvent(event), 'push-notifications');
       });
       if (disposed) await api.unwatch();
     } catch (error) {
       notificationWatch = undefined;
       console.error('failed to watch push notifications', error);
       if (!disposed) {
-        watchRetryTimeout = setTimeout(() => void startWatch(), 1000);
+        watchRetryTimeout = setTimeout(
+          () => fireAndForget(startWatch(), 'push-notifications'),
+          1000
+        );
       }
     }
   }

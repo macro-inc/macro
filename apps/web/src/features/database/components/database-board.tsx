@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import OpenIcon from '@phosphor/arrows-out-simple.svg';
 import CheckIcon from '@phosphor/check.svg';
 import EmptyIcon from '@phosphor/circle-dashed.svg';
@@ -90,6 +91,8 @@ type DatabaseBoardProps = {
     intentId: string,
     options?: { open: true }
   ) => Promise<boolean>;
+  /** Starts a record in `lane` in the host's form in place of an inline card. */
+  onCompose?: (lane: LaneKey) => void;
   onAddGroup?: (label: string) => Promise<DatabaseGroupAdded>;
   /** Hands the host a way to start a card, as the toolbar's New record does. */
   controlsRef?: (controls: DatabaseBoardControls) => void;
@@ -177,6 +180,10 @@ export function DatabaseBoard(props: DatabaseBoardProps) {
     setDrafts((drafts) => drafts.filter((draft) => draft.id !== id));
   };
   function startDraft(lane: string) {
+    if (props.onCompose) {
+      props.onCompose(laneOf(lane));
+      return;
+    }
     const open = laneDrafts(lane).find(
       (draft) => !isSaving(draft) && !draft.title.trim()
     );
@@ -321,7 +328,7 @@ export function DatabaseBoard(props: DatabaseBoardProps) {
                   onStartDraft={() => startDraft(group().key)}
                   onDraftInput={(id, title) => updateDraft(id, { title })}
                   onSubmitDraft={(id, submission) =>
-                    void submitDraft(id, submission)
+                    fireAndForget(submitDraft(id, submission), 'database')
                   }
                   onCancelDraft={cancelDraft}
                   draftRef={(id, element) => {

@@ -202,16 +202,8 @@ export type AppEvents = {
   channel_message_sent: Record<string, unknown>;
   channel_messages_load: {
     channelId: string;
-    path: 'catch_up' | 'full';
-    reason:
-      | 'watermark'
-      | 'list_ahead'
-      | 'no_cache'
-      | 'cache_not_at_latest'
-      | 'load_around'
-      | 'delta_overflow'
-      | 'catch_up_error';
-    after?: string;
+    path: 'full';
+    reason: 'no_cache' | 'cache_not_at_latest' | 'load_around' | 'revalidate';
   };
   channel_reaction: {
     emoji: string;

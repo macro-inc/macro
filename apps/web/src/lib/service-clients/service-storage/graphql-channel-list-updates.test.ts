@@ -186,7 +186,7 @@ describe('channel unread edge revalidation', () => {
         { document: ChannelUnreadPresenceDocument, variables: { input: {} } },
       ])
     );
-    handler.onPatch(newNotification);
+    await handler.onPatch(newNotification);
     await vi.advanceTimersByTimeAsync(100);
     expect(query).toHaveBeenCalledTimes(2);
     expect(query.mock.calls.map(([document]) => document)).toEqual([
@@ -199,10 +199,10 @@ describe('channel unread edge revalidation', () => {
 
   it('coalesces new notifications with pending deletions', async () => {
     const { handler, query } = setup();
-    handler.onPatch(deleted);
+    await handler.onPatch(deleted);
     await vi.advanceTimersByTimeAsync(50);
     expect(query).not.toHaveBeenCalled();
-    handler.onPatch(newNotification);
+    await handler.onPatch(newNotification);
     await vi.advanceTimersByTimeAsync(50);
     expect(query).toHaveBeenCalledOnce();
     await vi.advanceTimersByTimeAsync(1000);
@@ -216,10 +216,10 @@ describe('channel unread edge revalidation', () => {
       finish = () => resolve({ data: {} });
     });
     query.mockImplementationOnce(() => ({ toPromise: () => pending }));
-    handler.onPatch(newNotification);
+    await handler.onPatch(newNotification);
     await vi.advanceTimersByTimeAsync(100);
-    handler.onPatch(newNotification);
-    handler.onPatch(deleted);
+    await handler.onPatch(newNotification);
+    await handler.onPatch(deleted);
     await vi.advanceTimersByTimeAsync(1000);
     expect(query).toHaveBeenCalledOnce();
     finish?.();
@@ -232,7 +232,7 @@ describe('channel unread edge revalidation', () => {
   it('keeps new-notification refreshes deferred while hidden', async () => {
     const { handler, query } = setup();
     vi.spyOn(document, 'hidden', 'get').mockReturnValue(true);
-    handler.onPatch(newNotification);
+    await handler.onPatch(newNotification);
     await vi.advanceTimersByTimeAsync(1000);
     expect(query).not.toHaveBeenCalled();
     vi.spyOn(document, 'hidden', 'get').mockReturnValue(false);
@@ -272,8 +272,8 @@ describe('channel unread edge revalidation', () => {
   });
   it('coalesces updates into bounded-query refreshes, never full history', async () => {
     const { handler, query } = setup();
-    handler.onPatch(deleted);
-    handler.onPatch(deleted);
+    await handler.onPatch(deleted);
+    await handler.onPatch(deleted);
     handler.reconnect();
     await vi.advanceTimersByTimeAsync(301);
     expect(query).toHaveBeenCalledOnce();
@@ -287,7 +287,7 @@ describe('channel unread edge revalidation', () => {
   it('defers hidden-tab work and cancels scheduled work on client disposal', async () => {
     const { handler, query, client } = setup();
     vi.spyOn(document, 'hidden', 'get').mockReturnValue(true);
-    handler.onPatch(deleted);
+    await handler.onPatch(deleted);
     await vi.advanceTimersByTimeAsync(1000);
     expect(query).not.toHaveBeenCalled();
     vi.spyOn(document, 'hidden', 'get').mockReturnValue(false);

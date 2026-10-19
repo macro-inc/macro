@@ -1,7 +1,12 @@
-import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
+import {
+  useViewShell,
+  ViewBreadcrumbs,
+  ViewShell,
+} from '@app/components/view-shell';
 import { ViewTour } from '@app/features/tours/ViewTour';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { SplitRouter } from '@app/lib/split-router';
+import { usePreference } from '@app/preferences/use-preference';
 import { type PillTabItem, PillTabs } from '@components/app/mobile/PillTabs';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
@@ -13,6 +18,7 @@ import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import {
   createSignal,
+  type JSX,
   onMount,
   type ParentProps,
   Show,
@@ -25,11 +31,14 @@ import {
   EmailViewBreadcrumbItem,
 } from './components/EmailHeader';
 import { EmailList } from './components/EmailList';
+import { EmailReader } from './components/EmailReader';
 import { EmailSidebar } from './components/EmailSidebar';
 import { EMAIL_TABS } from './constants';
 import { EmailViewProvider, useEmailView } from './email-view-context';
+import type { EmailListPane } from './reader-pane';
 import { emailTour } from './tour';
 import type { EmailTab, EmailViewStateOptions } from './types';
+import { useReadingPaneHotkey } from './use-reading-pane-hotkey';
 
 export type EmailViewProps = {
   /** Explicit navigation state. When present, it wins over entry restoration. */
@@ -64,33 +73,98 @@ function EmailListFallback() {
   );
 }
 
-function EmailDesktopLayout(
-  props: ParentProps<{ onSearchEscape: () => void }>
-) {
-  const list = () => (
+function EmailPanes(props: {
+  list: JSX.Element;
+  focusList: () => void;
+  setListPane: (pane: EmailListPane | undefined) => void;
+  onListWidthChange: (width: number) => void;
+}) {
+  const shell = useViewShell();
+  const listColumn = (beside?: 'reader') => (
     <>
-      <EmailTopBar />
+      <EmailTopBar tabOnly={beside === 'reader'} />
       <ViewShell.Header>
-        <EmailHeader onSearchEscape={props.onSearchEscape} />
+        <EmailHeader onSearchEscape={props.focusList} />
       </ViewShell.Header>
       <ViewTour tour={emailTour} />
-      <ViewShell.Content>{props.children}</ViewShell.Content>
+      <ViewShell.Content>{props.list}</ViewShell.Content>
     </>
   );
+
+  // Without room for both, the reading pane folds away and a thread
+  // replaces the list, as it does with the pane turned off.
+  return (
+    <Show
+      when={shell.detail.placement() === 'inline'}
+      fallback={
+        <ViewShell.Main>
+          <SplitRouter.Outlet fallback={() => listColumn()} />
+        </ViewShell.Main>
+      }
+    >
+      <ViewShell.Main onWidthChangeEnd={props.onListWidthChange}>
+        {listColumn('reader')}
+      </ViewShell.Main>
+      <ViewShell.Detail class="border-l border-edge-muted">
+        <EmailReader
+          focusList={props.focusList}
+          setListPane={props.setListPane}
+        />
+      </ViewShell.Detail>
+    </Show>
+  );
+}
+
+/** The list column's width beside the reading pane, in pixels. */
+const LIST_WIDTH = { default: 440, min: 340, max: 720 };
+
+function EmailDesktopLayout(props: {
+  list: JSX.Element;
+  focusList: () => void;
+  setListPane: (pane: EmailListPane | undefined) => void;
+}) {
+  const { readingPane } = useEmailView();
+  const [storedListWidth, setListWidth] = usePreference(
+    'macro:pref:email:reading-pane-list-width',
+    { default: LIST_WIDTH.default }
+  );
+  // A stored width from an older layout still fits the current bounds.
+  const listWidth = () =>
+    Math.min(LIST_WIDTH.max, Math.max(LIST_WIDTH.min, storedListWidth()));
 
   return (
     <ViewShell.Root
       asidePreferenceKey="email"
       resizable
       aside={{ preserveDuringResize: false }}
-      main={{ preferredWidth: 640 }}
+      main={
+        readingPane()
+          ? {
+              preferredWidth: 640,
+              width: listWidth(),
+              min: LIST_WIDTH.min,
+              max: LIST_WIDTH.max,
+            }
+          : { preferredWidth: 640 }
+      }
+      detail={{
+        width: 640,
+        initialWidth: 'auto',
+        min: 440,
+        max: 4000,
+        whenNarrow: 'hide',
+      }}
+      detailOpen={readingPane()}
     >
       <ViewShell.Aside>
         <EmailSidebar />
       </ViewShell.Aside>
-      <ViewShell.Main>
-        <SplitRouter.Outlet fallback={list} />
-      </ViewShell.Main>
+      <EmailPanes
+        list={props.list}
+        focusList={props.focusList}
+        setListPane={props.setListPane}
+        onListWidthChange={setListWidth}
+      />
     </ViewShell.Root>
   );
 }
@@ -139,13 +213,23 @@ function EmailMobileLayout(props: ParentProps) {
 
 function EmailViewRoot() {
   const panel = useSplitPanelOrThrow();
+  const { readingPane, setReadingPane } = useEmailView();
   const [listElement, setListElement] = createSignal<HTMLDivElement>();
+  const [listPane, setListPane] = createSignal<EmailListPane>();
+  const focusList = () => listElement()?.focus();
 
   onMount(() => panel.handle.setDisplayName('Email'));
 
+  useReadingPaneHotkey({
+    scopeId: panel.splitHotkeyScope,
+    enabled: () => panel.isPanelActive() && !isTouchDevice(),
+    readingPane,
+    setReadingPane,
+  });
+
   const list = () => (
     <Suspense fallback={<EmailListFallback />}>
-      <EmailList ref={setListElement} />
+      <EmailList ref={setListElement} pane={listPane()} />
     </Suspense>
   );
 
@@ -156,9 +240,11 @@ function EmailViewRoot() {
           <Show
             when={isTouchDevice()}
             fallback={
-              <EmailDesktopLayout onSearchEscape={() => listElement()?.focus()}>
-                {list()}
-              </EmailDesktopLayout>
+              <EmailDesktopLayout
+                list={list()}
+                focusList={focusList}
+                setListPane={setListPane}
+              />
             }
           >
             <EmailMobileLayout>{list()}</EmailMobileLayout>

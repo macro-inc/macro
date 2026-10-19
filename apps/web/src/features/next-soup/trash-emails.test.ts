@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-// updateThreadLabel returns a Result (an HTTP failure resolves to Err rather
+// updateThreadState returns a Result (an HTTP failure resolves to Err rather
 // than rejecting), so the mock mirrors that shape; trashEmails wraps it in
 // throwOnErr.
 type ResultLike = {
@@ -24,10 +24,10 @@ const operationMocks = vi.hoisted(() => ({
   invalidateSoupEntity: vi.fn(async () => {}),
   setQueryData: vi.fn(),
   refreshGraphqlSoup: vi.fn(async () => {}),
-  updateThreadLabel: vi.fn(
+  updateThreadState: vi.fn(
     async (_args: {
       thread_id: string;
-      label_id: string;
+      field: 'trashed';
       value: boolean;
     }): Promise<ResultLike> => ({ isErr: () => false, value: undefined })
   ),
@@ -96,42 +96,27 @@ vi.mock('@service-email/client', () => ({
   emailClient: {
     flagArchived: vi.fn(async () => {}),
     getUserLabels: vi.fn(async () => ({ labels: [] })),
-    updateThreadLabel: operationMocks.updateThreadLabel,
+    updateThreadState: operationMocks.updateThreadState,
   },
 }));
 
 import { trashEmails } from './utils';
 
-const trashLabels = [
-  {
-    id: 'trash-a',
-    linkId: 'link-a',
-    providerLabelId: 'TRASH',
-  },
-  {
-    id: 'trash-b',
-    linkId: 'link-b',
-    providerLabelId: 'TRASH',
-  },
-];
-
 afterEach(() => {
   vi.clearAllMocks();
-  operationMocks.fetchQuery.mockResolvedValue({ labels: trashLabels });
   operationMocks.getQueriesData.mockReturnValue([]);
   operationMocks.getQueryData.mockReturnValue(undefined);
-  operationMocks.updateThreadLabel.mockImplementation(async () => okResult);
+  operationMocks.updateThreadState.mockImplementation(async () => okResult);
   operationMocks.fetchAndCacheThread.mockReset();
 });
 
 describe('trashEmails', () => {
   it('revalidates mounted GraphQL Soup membership after trash succeeds', async () => {
-    operationMocks.fetchQuery.mockResolvedValue({ labels: trashLabels });
     const handle = trashEmails([{ id: 'thread-a', linkId: 'link-a' }]);
     await handle.done;
-    expect(operationMocks.updateThreadLabel).toHaveBeenCalledWith({
+    expect(operationMocks.updateThreadState).toHaveBeenCalledWith({
       thread_id: 'thread-a',
-      label_id: 'trash-a',
+      field: 'trashed',
       value: true,
     });
     expect(
@@ -141,14 +126,13 @@ describe('trashEmails', () => {
   });
 
   it('revalidates mounted GraphQL Soup membership after trash undo succeeds', async () => {
-    operationMocks.fetchQuery.mockResolvedValue({ labels: trashLabels });
     const handle = trashEmails([{ id: 'thread-b', linkId: 'link-b' }]);
     await handle.done;
     operationMocks.refreshGraphqlSoup.mockClear();
     await handle.undo();
-    expect(operationMocks.updateThreadLabel).toHaveBeenLastCalledWith({
+    expect(operationMocks.updateThreadState).toHaveBeenLastCalledWith({
       thread_id: 'thread-b',
-      label_id: 'trash-b',
+      field: 'trashed',
       value: false,
     });
     expect(
@@ -157,9 +141,7 @@ describe('trashEmails', () => {
     ).toHaveBeenCalled();
   });
 
-  it('uses and undoes the TRASH label for each inbox independently', async () => {
-    operationMocks.fetchQuery.mockResolvedValue({ labels: trashLabels });
-
+  it('trashes and restores threads across providers independently', async () => {
     const handle = trashEmails([
       { id: 'thread-a', linkId: 'link-a' },
       { id: 'thread-b', linkId: 'link-b' },
@@ -167,96 +149,74 @@ describe('trashEmails', () => {
 
     await handle.done;
 
-    expect(operationMocks.updateThreadLabel).toHaveBeenCalledTimes(2);
-    expect(operationMocks.updateThreadLabel).toHaveBeenCalledWith({
+    expect(operationMocks.updateThreadState).toHaveBeenCalledTimes(2);
+    expect(operationMocks.updateThreadState).toHaveBeenCalledWith({
       thread_id: 'thread-a',
-      label_id: 'trash-a',
+      field: 'trashed',
       value: true,
     });
-    expect(operationMocks.updateThreadLabel).toHaveBeenCalledWith({
+    expect(operationMocks.updateThreadState).toHaveBeenCalledWith({
       thread_id: 'thread-b',
-      label_id: 'trash-b',
+      field: 'trashed',
       value: true,
     });
     expect(operationMocks.fetchAndCacheThread).not.toHaveBeenCalled();
 
     await handle.undo();
 
-    expect(operationMocks.updateThreadLabel).toHaveBeenCalledTimes(4);
-    expect(operationMocks.updateThreadLabel).toHaveBeenCalledWith({
+    expect(operationMocks.updateThreadState).toHaveBeenCalledTimes(4);
+    expect(operationMocks.updateThreadState).toHaveBeenCalledWith({
       thread_id: 'thread-a',
-      label_id: 'trash-a',
+      field: 'trashed',
       value: false,
     });
-    expect(operationMocks.updateThreadLabel).toHaveBeenCalledWith({
+    expect(operationMocks.updateThreadState).toHaveBeenCalledWith({
       thread_id: 'thread-b',
-      label_id: 'trash-b',
+      field: 'trashed',
       value: false,
     });
   });
 
-  it('fetches the thread through queries when multi-inbox linkId is missing', async () => {
-    operationMocks.fetchQuery.mockResolvedValue({ labels: trashLabels });
-    operationMocks.fetchAndCacheThread.mockResolvedValueOnce({
-      isErr: () => false,
-      value: { thread: { link_id: 'link-b' } },
-    });
-
+  it('lets the server resolve the owning inbox when linkId is missing', async () => {
     const handle = trashEmails([{ id: 'thread-b' }]);
     await handle.done;
-
-    expect(operationMocks.fetchAndCacheThread).toHaveBeenCalledWith('thread-b');
-    expect(operationMocks.updateThreadLabel).toHaveBeenCalledWith({
-      thread_id: 'thread-b',
-      label_id: 'trash-b',
-      value: true,
-    });
-  });
-
-  it('falls back to the sole TRASH label only when the inbox is unknown', async () => {
-    operationMocks.fetchQuery.mockResolvedValue({ labels: [trashLabels[0]] });
-
-    const handle = trashEmails([{ id: 'thread-x' }]);
-    await handle.done;
-
-    // A single inbox needs no thread fetch to disambiguate.
     expect(operationMocks.fetchAndCacheThread).not.toHaveBeenCalled();
-    expect(operationMocks.updateThreadLabel).toHaveBeenCalledWith({
-      thread_id: 'thread-x',
-      label_id: 'trash-a',
+    expect(operationMocks.fetchQuery).not.toHaveBeenCalled();
+    expect(operationMocks.updateThreadState).toHaveBeenCalledWith({
+      thread_id: 'thread-b',
+      field: 'trashed',
       value: true,
     });
   });
 
-  it('fails without trashing when a known inbox has no matching label', async () => {
-    operationMocks.fetchQuery.mockResolvedValue({ labels: trashLabels });
-
-    const handle = trashEmails([{ id: 'thread-c', linkId: 'link-c' }]);
-
-    await expect(handle.done).rejects.toThrow();
-    // The mismatch is caught before any label is applied, so nothing is trashed
-    // into the wrong inbox.
-    expect(operationMocks.updateThreadLabel).not.toHaveBeenCalled();
+  it('works for Outlook without Gmail system labels', async () => {
+    operationMocks.fetchQuery.mockResolvedValue({ labels: [] });
+    const handle = trashEmails([{ id: 'outlook-thread', linkId: 'outlook' }]);
+    await handle.done;
+    expect(operationMocks.fetchQuery).not.toHaveBeenCalled();
+    expect(operationMocks.updateThreadState).toHaveBeenCalledWith({
+      thread_id: 'outlook-thread',
+      field: 'trashed',
+      value: true,
+    });
   });
 
   it('surfaces an API failure and rejects done', async () => {
-    operationMocks.fetchQuery.mockResolvedValue({ labels: trashLabels });
-    operationMocks.updateThreadLabel.mockImplementation(async () => errResult);
+    operationMocks.updateThreadState.mockImplementation(async () => errResult);
 
     const handle = trashEmails([{ id: 'thread-a', linkId: 'link-a' }]);
 
     await expect(handle.done).rejects.toThrow();
     // A failed trash must not silently look like a success (throwOnErr).
-    expect(operationMocks.updateThreadLabel).toHaveBeenCalledWith({
+    expect(operationMocks.updateThreadState).toHaveBeenCalledWith({
       thread_id: 'thread-a',
-      label_id: 'trash-a',
+      field: 'trashed',
       value: true,
     });
   });
 
   it('reverts threads that trashed when a sibling fails', async () => {
-    operationMocks.fetchQuery.mockResolvedValue({ labels: trashLabels });
-    operationMocks.updateThreadLabel.mockImplementation(async (args) =>
+    operationMocks.updateThreadState.mockImplementation(async (args) =>
       args.thread_id === 'thread-b' && args.value === true
         ? errResult
         : okResult
@@ -271,14 +231,14 @@ describe('trashEmails', () => {
 
     // thread-a trashed, thread-b failed -> thread-a is reverted so the server
     // matches the rolled-back UI, and undo has nothing left to restore.
-    expect(operationMocks.updateThreadLabel).toHaveBeenCalledWith({
+    expect(operationMocks.updateThreadState).toHaveBeenCalledWith({
       thread_id: 'thread-a',
-      label_id: 'trash-a',
+      field: 'trashed',
       value: false,
     });
 
     await handle.undo();
-    expect(operationMocks.updateThreadLabel).not.toHaveBeenCalledWith(
+    expect(operationMocks.updateThreadState).not.toHaveBeenCalledWith(
       expect.objectContaining({ value: false, thread_id: 'thread-b' })
     );
   });

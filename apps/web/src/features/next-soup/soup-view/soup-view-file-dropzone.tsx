@@ -2,6 +2,7 @@ import { useHandleFileUpload } from '@app/util/handleFileUpload';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { handleFileFolderDrop } from '@core/util/upload';
+import { Telemetry } from '@macro-inc/observability';
 import { createSignal, type FlowComponent, Show } from 'solid-js';
 
 false && fileFolderDrop;
@@ -23,7 +24,13 @@ export const SoupViewFileDropzone: FlowComponent<{ projectId?: string }> = (
       class="relative flex flex-col size-full"
       use:fileFolderDrop={{
         onDrop: (fileEntries, folderEntries) => {
-          handleFileFolderDrop(fileEntries, folderEntries, handleFileUpload);
+          handleFileFolderDrop(
+            fileEntries,
+            folderEntries,
+            handleFileUpload
+          ).catch((error) =>
+            Telemetry.error(error, { surface: 'file-upload' })
+          );
         },
         onDragStart: () => {
           setIsValidDrag(true);

@@ -5,6 +5,7 @@ import {
 import { triggerFocusInput } from '@core/directive/focusInput';
 import type { MessageActions, MessageData } from '@core/messages/types';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fireAndForget } from '@core/util/fireAndForget';
 import ReplyIcon from '@phosphor/arrow-bend-up-left.svg';
 import { type ParentProps, Show, useContext } from 'solid-js';
 import { getMessageReplyPreviewTexts } from './browser-selection';
@@ -55,10 +56,13 @@ export function MaybeSwipeToReplyRow(
         `[data-input-id="thread-reply-input-${threadId}"] [contenteditable]`
       )
     );
-    void onReply({
-      message: props.message,
-      ...getMessageReplyPreviewTexts(props.message.id),
-    });
+    fireAndForget(
+      onReply({
+        message: props.message,
+        ...getMessageReplyPreviewTexts(props.message.id),
+      }),
+      'channel-message-actions'
+    );
   };
 
   return (

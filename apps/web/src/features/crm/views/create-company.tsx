@@ -1,16 +1,14 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { ThrownResultError } from '@core/util/result';
 import EnvelopeIcon from '@phosphor/envelope.svg';
 import GlobeIcon from '@phosphor/globe.svg';
 import XIcon from '@phosphor/x.svg';
 import { Button, Dialog, EntityComposer, Panel } from '@ui';
 import { createMemo, createSignal, Show } from 'solid-js';
+import { isCompanyDomain } from '../core/pipeline-record';
 import { useCreateCompanyMutation } from './use-crm';
 
-// Light client-side check for a bare domain like "acme.com"; the server
-// enforces the real rules (no scheme/path/@, not a generic email provider).
-const DOMAIN_PATTERN = /^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$/i;
-
-function createErrorMessage(cause: unknown): string {
+export function companyCreationError(cause: unknown): string {
   if (cause instanceof ThrownResultError) {
     if (cause.errors.some((e) => e.code === 'CONFLICT')) {
       return 'A company with this domain already exists.';
@@ -62,7 +60,7 @@ export function CreateCompanyModal(props: {
       setError('Enter a company name');
       return;
     }
-    if (!DOMAIN_PATTERN.test(companyDomain())) {
+    if (!isCompanyDomain(companyDomain())) {
       setError('Enter a valid domain like acme.com');
       return;
     }
@@ -77,7 +75,7 @@ export function CreateCompanyModal(props: {
       props.onCreated(id);
     } catch (cause) {
       console.error('Failed to create company', cause);
-      setError(createErrorMessage(cause));
+      setError(companyCreationError(cause));
     }
   }
 
@@ -90,7 +88,7 @@ export function CreateCompanyModal(props: {
             aria-label="New company"
             onSubmit={(event) => {
               event.preventDefault();
-              void submit();
+              fireAndForget(submit(), 'crm');
             }}
             onKeyDown={(event) => {
               if (
@@ -100,7 +98,7 @@ export function CreateCompanyModal(props: {
               ) {
                 event.preventDefault();
                 event.stopPropagation();
-                void submit();
+                fireAndForget(submit(), 'crm');
               }
             }}
           >

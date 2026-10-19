@@ -53,8 +53,10 @@ import {
 } from '@core/signal/blockElement';
 import { blockHandleSignal } from '@core/signal/load';
 import { useCanEdit } from '@core/signal/permissions';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { markMessageSent } from '@core/util/message-send-motion';
 import { createRenameDssEntityMutation } from '@entity';
+import { Telemetry } from '@macro-inc/observability';
 import { invalidateUserQuota } from '@queries/auth';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { createCallback } from '@solid-primitives/rootless';
@@ -174,7 +176,7 @@ function ChatInner(props: {
   // Sync isGenerating from controller phase
   createEffect(() => {
     input.setIsGenerating(chat.isGenerating());
-    if (chat.isGenerating()) invalidateUserQuota();
+    if (chat.isGenerating()) fireAndForget(invalidateUserQuota(), 'chat-quota');
   });
 
   const blockHandle = blockHandleSignal.get;
@@ -238,7 +240,7 @@ function ChatInner(props: {
     }
 
     chat.dispatch({ type: 'stream_connected', stream: result.stream, owner });
-    invalidateUserQuota();
+    fireAndForget(invalidateUserQuota(), 'chat-quota');
   });
 
   const onStop = async () => {
@@ -266,7 +268,7 @@ function ChatInner(props: {
 
   createMethodRegistration(blockHandle, {
     sendMessage: async (sendRequest: SendBuilder) => {
-      onSend({
+      await onSend({
         content: sendRequest.userRequest,
         model: sendRequest.model ?? input.model(),
         attachments: sendRequest.attachments ?? [],
@@ -287,7 +289,9 @@ function ChatInner(props: {
       speed: pendingSend.speed,
       attachments: pendingSend.attachments ?? [],
       toolset: { type: 'all' },
-    });
+    }).catch((error) =>
+      Telemetry.error(error, { surface: 'chat-pending-send' })
+    );
   }
 
   registerScopeSignalHotkey(scopeId, {
@@ -307,7 +311,7 @@ function ChatInner(props: {
     description: 'Stop AI response',
     condition: () => chat.isGenerating(),
     keyDownHandler: () => {
-      void onStop();
+      fireAndForget(onStop(), 'chat-stop');
       return true;
     },
     hotkeyToken: TOKENS.chat.stop,

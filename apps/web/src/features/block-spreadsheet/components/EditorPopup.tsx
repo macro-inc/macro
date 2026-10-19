@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   autoUpdate,
   computePosition,
@@ -56,7 +57,7 @@ export function EditorPopup(props: {
         });
     };
     const cleanup = autoUpdate(props.anchor, element, () => {
-      void update();
+      fireAndForget(update(), 'spreadsheet-editor');
     });
     onCleanup(() => {
       alive = false;

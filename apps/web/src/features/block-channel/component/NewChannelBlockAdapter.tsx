@@ -75,6 +75,7 @@ import { isMobile } from '@core/mobile/isMobile';
 import { createMethodRegistration } from '@core/orchestrator';
 import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import { blockHandleSignal } from '@core/signal/load';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { buildEntityData, canEditChannelIdentity } from '@entity';
 import PictureIcon from '@phosphor/image.svg';
 import RenameIcon from '@phosphor/pencil-line.svg';
@@ -219,7 +220,7 @@ function NewTop(props: { channelId: string }) {
               action: () => {
                 const entity = askMacroEntity();
                 if (!entity) return;
-                void openChatWithAgent(entity);
+                fireAndForget(openChatWithAgent(entity), 'channel-header');
               },
               // Desktop gets a header button instead (see below).
               condition: () => isMobile() && !!askMacroEntity(),
@@ -232,7 +233,7 @@ function NewTop(props: { channelId: string }) {
               action: () => {
                 const entity = channelEntity();
                 if (!entity) return;
-                void renameAction.execute([entity]);
+                fireAndForget(renameAction.execute([entity]), 'channel-header');
               },
               condition: () => {
                 const entity = channelEntity();

@@ -123,8 +123,8 @@ export function trashForm(
       response.data?.trashEntities.results[0]
     );
     if (outcome.isOk()) {
-      void queryClient.invalidateQueries({ queryKey: formsKeys.list.queryKey });
-      void queryClient.invalidateQueries({
+      queryClient.invalidateQueries({ queryKey: formsKeys.list.queryKey });
+      queryClient.invalidateQueries({
         queryKey: formsKeys.forDatabase._def,
       });
     }

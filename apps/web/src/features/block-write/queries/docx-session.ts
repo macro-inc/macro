@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createAwareness } from '@macro-inc/collaboration/collab/awareness';
 import type { Chatter } from '@macro-inc/collaboration/collab/chatter';
 import { createSyncEngine } from '@macro-inc/collaboration/collab/engine';
@@ -224,7 +225,7 @@ export function createDocxSession(options: DocxSessionOptions): DocxSession {
       started = true;
     }
     setState({ t: 'ready', doc: manager.doc });
-    if (options.canComment()) void wal.flush();
+    if (options.canComment()) fireAndForget(wal.flush(), 'docx-session');
   }
 
   async function accept(initial: InitialSync) {

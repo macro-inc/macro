@@ -1,5 +1,6 @@
 import { getHighlightsFromSelection } from '@block-pdf/util/pdfjsUtils';
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { batch } from 'solid-js';
 import { usePdfDocument } from '../context/pdf-document-context';
 import { Highlight, type IHighlight } from '../model/Highlight';
@@ -71,6 +72,7 @@ export function useRemoveHighlight() {
     }
     // Supersede the reload the discussion delete started, which can
     // otherwise land after the highlight is gone and restore it.
-    if (rootId) void pdf.annotations.commands.refetchAnchors();
+    if (rootId)
+      fireAndForget(pdf.annotations.commands.refetchAnchors(), 'pdf-comments');
   };
 }

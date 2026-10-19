@@ -1,5 +1,6 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
+import { Telemetry } from '@macro-inc/observability';
 import {
   useCreateInstructionsMd,
   useInstructionsMdIdQuery,
@@ -33,11 +34,16 @@ export function useOpenInstructionsMd() {
 
     // needs to be created
     if (id === null) {
-      createInstructionsMd().then((id) => {
-        const success = open(id);
-        if (success) return;
-        showFailToast();
-      });
+      createInstructionsMd()
+        .then((id) => {
+          const success = open(id);
+          if (success) return;
+          showFailToast();
+        })
+        .catch((error) => {
+          Telemetry.error(error, { surface: 'ai-instructions' });
+          showFailToast();
+        });
       return;
     }
 

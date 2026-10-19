@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_mailbox_folders SET catalog_generation = 0 WHERE link_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "eb6bd9a07e321715c6130329d4b9317b1f329f2e86a3a1882035901b43150a09"
+}

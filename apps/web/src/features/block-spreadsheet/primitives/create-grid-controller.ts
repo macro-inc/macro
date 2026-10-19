@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   deleteCellEdits,
   insertCheckboxEdits,
@@ -605,16 +606,19 @@ export function createGridController(source: GridSource) {
 
   function fillDirection(direction: 'down' | 'right') {
     const { top, bottom, left, right } = selectionBounds(selection());
-    fill(
-      {
-        anchor: { row: top, column: left },
-        focus: {
-          row: direction === 'down' ? top : bottom,
-          column: direction === 'down' ? right : left,
+    fireAndForget(
+      fill(
+        {
+          anchor: { row: top, column: left },
+          focus: {
+            row: direction === 'down' ? top : bottom,
+            column: direction === 'down' ? right : left,
+          },
         },
-      },
-      selection(),
-      'copy'
+        selection(),
+        'copy'
+      ),
+      'spreadsheet-grid'
     );
   }
 
@@ -645,7 +649,10 @@ export function createGridController(source: GridSource) {
             `Pasted ${range.cells.length * range.cells[0].length} cells`
           );
         } else
-          void applyCopies(rangeCopies(range, start), { anchor: start, focus });
+          fireAndForget(
+            applyCopies(rangeCopies(range, start), { anchor: start, focus }),
+            'spreadsheet-grid'
+          );
         return;
       }
       if (text.length > 1_000_000)

@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { CardPosition } from '@service-storage/generated/schemas/cardPosition';
 import { ResultAsync } from 'neverthrow';
 import { createSignal } from 'solid-js';
@@ -39,13 +40,16 @@ export function createBoardEngine() {
   function load() {
     const current = ++attempt;
     setState({ kind: 'loading' });
-    void ResultAsync.fromPromise(loadDatabaseSqlWasm(), engineFailure).match(
-      (engine) => {
-        if (current === attempt) setState({ kind: 'ready', engine });
-      },
-      (failure) => {
-        if (current === attempt) setState({ kind: 'failed', failure });
-      }
+    fireAndForget(
+      ResultAsync.fromPromise(loadDatabaseSqlWasm(), engineFailure).match(
+        (engine) => {
+          if (current === attempt) setState({ kind: 'ready', engine });
+        },
+        (failure) => {
+          if (current === attempt) setState({ kind: 'failed', failure });
+        }
+      ),
+      'database'
     );
   }
   load();

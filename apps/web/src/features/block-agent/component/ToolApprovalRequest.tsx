@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { ToolApprovalAnswerDto } from '@service-agent-harness/generated/schemas';
 import { useOptionalAgentSession } from '../context/AgentSessionContext';
 import type { HeldToolApproval } from '../primitives/create-tool-approval-controller';
@@ -29,7 +30,10 @@ export function ToolApprovalRequest(props: { request: HeldToolApproval }) {
       ? describeStandingApproval(server(), props.request.toolName, whose())
       : undefined;
   const answer = (value: ToolApprovalAnswerDto) =>
-    void approvals()?.answer(props.request.approvalId, value);
+    fireAndForget(
+      approvals()?.answer(props.request.approvalId, value),
+      'agent-interactions'
+    );
   return (
     <ToolApprovalCard
       action={action()}

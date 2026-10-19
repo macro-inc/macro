@@ -117,7 +117,9 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
       })}
       markdownNamespace={`thread-reply-input-${props.threadId}-markdown`}
       onReady={onReady}
-      onChange={(snapshot) => void props.setReplyInputState(snapshot)}
+      onChange={(snapshot) => {
+        props.setReplyInputState(snapshot);
+      }}
       onStartTyping={() =>
         typingMutation.mutate({
           parent: props.parent,

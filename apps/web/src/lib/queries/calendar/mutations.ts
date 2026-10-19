@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
@@ -328,7 +329,7 @@ export function useRsvpCalendarEventMutation(callbacks?: RsvpCallbacks) {
           if (queryClient.isMutating({ mutationKey: RSVP_MUTATION_KEY }) > 1) {
             return;
           }
-          void invalidateCalendarInvitations();
+          fireAndForget(invalidateCalendarInvitations(), 'calendar-mutations');
           invalidateCalendarEventPreviews(args.eventId);
           return invalidateCalendarOccurrences();
         },
@@ -461,7 +462,7 @@ export function useDeleteCalendarEventMutation(callbacks?: DeleteCallbacks) {
           patchOccurrenceCaches((items) => applyDeletion(items, args)),
         onError: (_error, _args, context) => context?.rollback(),
         onSettled: (_data, _error, args) => {
-          void invalidateCalendarInvitations();
+          fireAndForget(invalidateCalendarInvitations(), 'calendar-mutations');
           invalidateCalendarEventPreviews(args.eventId);
           return invalidateCalendarOccurrences();
         },
@@ -598,7 +599,7 @@ export function useUpdateCalendarEventMutation(callbacks?: UpdateCallbacks) {
         },
         onError: (_error, _args, context) => context?.rollback(),
         onSettled: (_data, _error, args) => {
-          void invalidateCalendarInvitations();
+          fireAndForget(invalidateCalendarInvitations(), 'calendar-mutations');
           invalidateCalendarEventPreviews(args.eventId);
           return invalidateCalendarOccurrences();
         },

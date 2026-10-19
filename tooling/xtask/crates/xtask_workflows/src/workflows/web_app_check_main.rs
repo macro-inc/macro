@@ -2,8 +2,7 @@
 //! Generated into `web-app-check-main.yml`.
 
 use gh_workflow::{
-    Concurrency, Event, Expression, Job, Level, Permissions, PullRequest, PullRequestType, Run,
-    Step, Use, Workflow,
+    Concurrency, Event, Expression, Job, PullRequest, PullRequestType, Run, Step, Use, Workflow,
 };
 
 use crate::workflows::{
@@ -12,6 +11,7 @@ use crate::workflows::{
     vars,
 };
 
+mod android_native_check;
 mod ios_native_check;
 #[cfg(test)]
 mod test;
@@ -49,7 +49,7 @@ pub fn web_app_check_main() -> Workflow {
             .cancel_in_progress(true),
         )
         .add_job("path-check", path_check())
-        .add_job("android-version", android_version())
+        .add_job(android_native_check::JOB_ID, android_native_check())
         .add_job("typescript", typescript())
         .add_job("generated-code", generated_code())
         .add_job("biome-check", biome_check())
@@ -62,33 +62,8 @@ pub fn web_app_check_main() -> Workflow {
 
 /// Always run so the required collector can distinguish a successful native
 /// check from a cancelled or skipped one, including frontend/backend-only PRs.
-fn android_version() -> Job {
-    Job::default()
-        .name("Android Version Code")
-        .runs_on(runners::Runner::TinyNoCache.to_string())
-        .permissions(Permissions::default().contents(Level::Read))
-        // Shallow: only the merge result and the base commit are needed.
-        .add_step(checkout("Checkout PR merge commit", false))
-        .add_step(
-            Step::new("Setup Bun")
-                .uses(
-                    "oven-sh",
-                    "setup-bun",
-                    "0c5077e51419868618aeaa5fe8019c62421857d6",
-                ) // v2.2.0
-                .add_with(("bun-version", "1.3.13")),
-        )
-        .add_step(
-            Step::new("Require an Android version bump for native changes")
-                .run(indoc::indoc! {r#"
-                    set -euo pipefail
-                    git fetch -q --depth=1 origin "$BASE_SHA"
-                    bun scripts/android-version-check.mjs "$BASE_SHA"
-                "#})
-                .shell("bash")
-                .working_directory(xtask_paths::repo_dir!("apps/web"))
-                .add_env(("BASE_SHA", "${{ github.event.pull_request.base.sha }}")),
-        )
+fn android_native_check() -> Job {
+    android_native_check::job()
 }
 
 fn path_check() -> Job {
@@ -120,6 +95,7 @@ fn typescript() -> Job {
         .add_step(steps::setup_reqs_web("Setup Prereqs", false))
         .add_step(check_dynamic_ui_schema())
         .add_step(check_types())
+        .add_step(check_floating_promises())
         .add_step(check_functional_test_types())
         .add_step(check_collaboration_types())
         .add_step(check_lexical_service_types())
@@ -259,7 +235,7 @@ fn status_check() -> Job {
         .cond(Expression::new("always()"))
         .needs(vec![
             "path-check".to_string(),
-            "android-version".to_string(),
+            android_native_check::JOB_ID.to_string(),
             "typescript".to_string(),
             "generated-code".to_string(),
             "biome-check".to_string(),
@@ -394,6 +370,12 @@ fn check_types() -> Step<Run> {
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 
+/// Type-aware oxlint over all of `apps/web`; `no-floating-promises` is an
+/// error and needs type information to run at all.
+fn check_floating_promises() -> Step<Run> {
+    Step::new("Check Floating Promises").run("bun run lint:oxlint --quiet")
+}
+
 fn check_functional_test_types() -> Step<Run> {
     Step::new("Check Functional Test Types")
         .run("bun run --bun --silent tsc --project tests/functional/tsconfig.json")
@@ -492,7 +474,7 @@ fn run_build() -> Step<Run> {
 fn check_job_results() -> Step<Run> {
     Step::new("Check job results").run(indoc::indoc! {r#"
         echo "path-check: ${{ needs.path-check.result }}"
-        echo "android-version: ${{ needs.android-version.result }}"
+        echo "android-native-check: ${{ needs.android-native-check.result }}"
         echo "typescript: ${{ needs.typescript.result }}"
         echo "generated-code: ${{ needs.generated-code.result }}"
         echo "biome-check: ${{ needs.biome-check.result }}"
@@ -503,7 +485,7 @@ fn check_job_results() -> Step<Run> {
 
         # Fail if any job failed (skipped and success are both OK). The iOS
         # gate is the merge gate, so a cancelled gate is not OK either.
-        if [[ "${{ needs.android-version.result }}" != "success" ]] || \
+        if [[ "${{ needs.android-native-check.result }}" != "success" ]] || \
            [[ "${{ needs.path-check.result }}" == "failure" ]] || \
            [[ "${{ needs.typescript.result }}" == "failure" ]] || \
            [[ "${{ needs.generated-code.result }}" == "failure" ]] || \

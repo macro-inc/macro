@@ -1,4 +1,5 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { useKeyPressed } from '@core/util/useKeyPressed';
 import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
 import SearchIcon from '@phosphor/magnifying-glass.svg';
@@ -206,7 +207,7 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
   const handleSelectableItem = (idx: number, event?: KeyboardEvent) => {
     const item = selectableItems()[idx];
     if (item?.type === 'add') {
-      handleAddOption(event);
+      fireAndForget(handleAddOption(event), 'property-editor');
     } else if (item?.type === 'clear') {
       props.clearOption?.onClear();
       if (shouldCloseAfterSelect(event) && props.onClose) {

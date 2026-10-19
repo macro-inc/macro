@@ -1,0 +1,1 @@
+DROP TABLE email_draft_transfer_cancellations;

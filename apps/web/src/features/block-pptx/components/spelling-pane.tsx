@@ -4,6 +4,7 @@
  * out like PowerPoint's; ends with "Spell check complete".
  */
 
+import { fireAndForget } from '@core/util/fireAndForget';
 import X from '@phosphor/x.svg';
 import { Button } from '@ui/components/Button';
 import { For, Show } from 'solid-js';
@@ -67,7 +68,7 @@ export function SpellingPane(props: {
               variant="outline"
               disabled={noAction()}
               data-testid="pptx-spelling-ignore-once"
-              onClick={() => void p.ignoreOnce()}
+              onClick={() => fireAndForget(p.ignoreOnce(), 'pptx-spelling')}
             >
               Ignore Once
             </Button>
@@ -76,7 +77,7 @@ export function SpellingPane(props: {
               variant="outline"
               disabled={noAction()}
               data-testid="pptx-spelling-ignore-all"
-              onClick={() => void p.ignoreAll()}
+              onClick={() => fireAndForget(p.ignoreAll(), 'pptx-spelling')}
             >
               Ignore All
             </Button>
@@ -85,7 +86,7 @@ export function SpellingPane(props: {
               variant="outline"
               disabled={noAction()}
               data-testid="pptx-spelling-add"
-              onClick={() => void p.add()}
+              onClick={() => fireAndForget(p.add(), 'pptx-spelling')}
             >
               Add
             </Button>
@@ -121,7 +122,7 @@ export function SpellingPane(props: {
                   onClick={() => p.setChoice(s)}
                   onDblClick={() => {
                     p.setChoice(s);
-                    void p.change();
+                    fireAndForget(p.change(), 'pptx-spelling');
                   }}
                 >
                   {s}
@@ -135,7 +136,7 @@ export function SpellingPane(props: {
               variant="accent"
               disabled={noAction() || !p.choice()}
               data-testid="pptx-spelling-change"
-              onClick={() => void p.change()}
+              onClick={() => fireAndForget(p.change(), 'pptx-spelling')}
             >
               Change
             </Button>
@@ -144,7 +145,7 @@ export function SpellingPane(props: {
               variant="outline"
               disabled={noAction() || !p.choice()}
               data-testid="pptx-spelling-change-all"
-              onClick={() => void p.changeAll()}
+              onClick={() => fireAndForget(p.changeAll(), 'pptx-spelling')}
             >
               Change All
             </Button>

@@ -57,6 +57,7 @@ import { isMobile } from '@core/mobile/isMobile';
 import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import { blockEditPermissionEnabledSignal } from '@core/signal/load';
 import { useIsDocumentOwner } from '@core/signal/permissions';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { ResultError } from '@core/util/result';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { useCopyLink } from '@core/util/useCopyLink';
@@ -727,9 +728,12 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
                       if (accessLevel === null) {
                         props.removeChannelAccess(recipient.channel_id);
                       } else if (accessLevel !== recipient.access_level) {
-                        props.setChannelPermissions(
-                          recipient.channel_id,
-                          accessLevel
+                        fireAndForget(
+                          props.setChannelPermissions(
+                            recipient.channel_id,
+                            accessLevel
+                          ),
+                          'share-modal'
                         );
                       }
                     }}
@@ -856,11 +860,14 @@ export function ShareModal(props: ShareModalProps) {
 
   const copyLink = createCallback(() => {
     if (props.copyLink) return props.copyLink();
-    copyEntityLink(shareUrl(props.blockAlias, props.id), {
-      subtext: isSendRestricted(props.itemType)
-        ? undefined
-        : SHARE_LINK_SUBTEXT,
-    });
+    fireAndForget(
+      copyEntityLink(shareUrl(props.blockAlias, props.id), {
+        subtext: isSendRestricted(props.itemType)
+          ? undefined
+          : SHARE_LINK_SUBTEXT,
+      }),
+      'share-modal'
+    );
   });
 
   const [channelNamesResource] = createResource(
@@ -950,7 +957,7 @@ export function ShareModal(props: ShareModalProps) {
       });
       return;
     }
-    refetch();
+    fireAndForget(refetch(), 'share-modal');
     toast.success(`Removed ${noun} access`, {
       subtext: CHANNEL_REMOVED_SUBTEXT[props.itemType],
     });
@@ -971,7 +978,7 @@ export function ShareModal(props: ShareModalProps) {
         });
         return;
       }
-      refetch();
+      fireAndForget(refetch(), 'share-modal');
       toast.success('Changed channel access level', {
         subtext: accessLevelText(accessLevel),
       });
@@ -1063,7 +1070,7 @@ export function ShareModal(props: ShareModalProps) {
         return;
       }
 
-      refetch();
+      fireAndForget(refetch(), 'share-modal');
       const scope = getTeamShareScope(sharePermission.teamShareAccessLevel);
       if (props.itemType === 'call') {
         setCallRecordTeamShareCache(props.id, shared);
@@ -1152,7 +1159,7 @@ export function ShareModal(props: ShareModalProps) {
         return;
       }
 
-      refetch();
+      fireAndForget(refetch(), 'share-modal');
       if (scope === 'NONE') {
         toast.success(`Disabled link sharing for this ${entityLabel}`, {
           subtext: getLinkShareScopeCopy('NONE').description,
@@ -1419,13 +1426,19 @@ export function ShareModal(props: ShareModalProps) {
                               permissions={recipient.access_level}
                               setPermissions={(accessLevel) => {
                                 if (accessLevel === null) {
-                                  removeChannelAccess(recipient.channel_id);
+                                  fireAndForget(
+                                    removeChannelAccess(recipient.channel_id),
+                                    'share-modal'
+                                  );
                                 } else if (
                                   accessLevel !== recipient.access_level
                                 ) {
-                                  setChannelPermissions(
-                                    recipient.channel_id,
-                                    accessLevel
+                                  fireAndForget(
+                                    setChannelPermissions(
+                                      recipient.channel_id,
+                                      accessLevel
+                                    ),
+                                    'share-modal'
                                   );
                                 }
                               }}

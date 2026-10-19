@@ -1,5 +1,6 @@
 import { getCallJoinTab } from '@channel/Call/call-tabs';
 import { useCall } from '@channel/Call/use-call';
+import { fireAndForget } from '@core/util/fireAndForget';
 import PhoneIcon from '@phosphor/phone-call.svg';
 import { useActiveCallQuery } from '@queries/call/call';
 import { Button } from '@ui';
@@ -87,7 +88,7 @@ export function ActiveCallMessage(props: { channelId: string }) {
                     variant="success"
                     size="sm"
                     class="shrink-0"
-                    onClick={() => void handleJoin()}
+                    onClick={() => fireAndForget(handleJoin(), 'channel-call')}
                   >
                     <PhoneIcon class="size-3.5" />
                     Join

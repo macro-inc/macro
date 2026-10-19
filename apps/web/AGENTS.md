@@ -5,6 +5,7 @@
 - `bun run lint`: lint with biome 
 - `bun run format`: format changes with biome 
 - `bun run knip`: to check for dead code
+- `bun run lint:oxlint` (repository root): type-aware oxlint. `typescript/no-floating-promises` is an error with no suppressions and `ignoreVoid: false` (FE-13), enforced in `just check` and CI; start detached work with `fireAndForget` from `@core/util/fireAndForget`, not `void`. Plain `oxlint` without `--type-aware` skips that rule silently. The ast-grep rule `ts-no-expression-void` covers `() => void p()`, which the lint can't see.
 - Email rendering is isolated in `packages/email-renderer` at the repository root. Run `just test-email-rendering` for its Node and Chromium suites. Add fixtures under `packages/email-renderer/tests/fixtures`, run `just test-email-rendering-update`, and review changed images. These are renderer tests, not inbox e2e.
 - The app does not register a service worker. Keep `public/sw.js` as a retirement
   endpoint for existing installations; see the [startup bundle rule](../../.agents/rules/web/startup-bundle.md).
@@ -65,14 +66,42 @@ Then trigger the interaction and read `window.__inst.log`. `'1,2,3' → '' → '
 
 ## Development Patterns
 
+### Pipedream native authorization
+
+Keep native Pipedream consent in the system browser: the desktop navigation
+plugin redirects external popups and breaks the embedded iframe's return path.
+`pipedream-connect.html` is a separate Vite entry, served at
+`/app/pipedream-connect.html`, without a Macro browser login. The Connect token
+and one-time state travel only in its URL fragment, which the page removes on
+load. Its **Return to Macro** link is consumed by the Tauri navigation bridge
+without changing the active route. Backend registration still verifies account
+ownership. Cancel, logout, and the ten-minute timeout retire pending callbacks.
+
 ### General
+- Disable GraphQL cache sessions and clear login hints on confirmed auth 401s,
+  even with retained user data; preserve session state on transient failures.
+- Mobile dock search owns transient category/mode state in `features/command/mobile`; reuse the shared entity source and explicit full-text adapter rather than overlaying the dock query on view tabs or saved facets. See `docs/agent-guide/search.md` at the repository root.
+- Keep Quick Access cache availability reactive to the GraphQL rollout flag; it can arrive after the provider mounts, and email has no legacy source fallback.
+- Virtualize mobile name results like desktop Command Menu; local Quick Access sources are unbounded, and mounting them all stalls iOS keyboard focus during layout. Load additional search pages near the scroll end instead of reserving a paging bar.
+- Reconcile mobile full-text rows by entity ID so appending a page preserves DOM rows and scroll position.
+- Reserve only the safe-area inset above mobile Search and Channels; their hidden split headers must not leave a blank strip or extend the top fade.
+- Show only the Recent conversation feed in mobile Channels, without view tabs or a persisted mobile tab selection.
+- Mount the mobile search input before focusing it inside the dock tap; keep navigation in that handler so focus does not trigger a second navigation or lose iOS keyboard activation.
+- Preserve focused chrome editors during deferred split insertion/removal autofocus; explicit return-focus commands may still focus the pane.
+- Reconcile global focus when focused DOM subtrees are removed; iOS can omit blur events, otherwise floating creation actions stay hidden after search or editor teardown.
+- Mount the floating mobile AI composer only on the Agents view; other views keep their New action or their own reply/comment composer.
 - All API/network calls live in service-clients.
+- Keep desktop Gmail and Outlook inbox consent in the system browser with a
+  `macro:///inbox-link-callback` return; webview origins are not desktop callbacks.
 - Draft autosaves preserve active email thread messages; evict inactive legacy
   caches on save and the active cache on thread exit. Revalidate GraphQL thread
   pages only when a save cannot patch the message list (missing snapshot or a
   move between inboxes).
 - Shared server-state queries and mutations live in `src/lib/queries`; keep
   feature-specific query orchestration with its owning feature.
+- Preserve loaded block content on initial access confirmation when its loader
+  supplies no permissions; reload only on a later confirmed permission change.
+  Apply shared access in place only after a successful permissionless load.
 - Reactive GraphQL reads use `createLiveQuery` for a document and
   `useSoupAstItemsQuery` (backed by `createSoupLiveQuery`) for Soup lists; see
   [choosing a reactive read](docs/graphql-normalized-cache-plan.md#choosing-a-reactive-read).
@@ -100,6 +129,24 @@ the startup bundle, and Lexical nodes.
 ## Notes
 - Don't shy away from pulling good examples into context. In the case of solid-primtiives/kobalte try reading documentation, or just temp clone into /tmp to reference
 
+## iOS release signing
+
+Follow [`docs/ios-releases.md`](docs/ios-releases.md) for App Store signing and
+provisioning, including both extensions. The release script temporarily selects
+manual export when a distribution certificate path is supplied.
+
+## Desktop file drops
+
+Keep `app.windows[].dragDropEnabled` false in `tauri/src-tauri/tauri.macos.conf.json`.
+Markdown editors and attachment inputs use browser events through `fileFolderDrop`
+and `fileDrop`; Tauri's native handler intercepts Finder drops before those handlers
+receive them. This config change requires a rebuilt macOS app; a frontend bundle
+update alone does not apply it.
+
+Tauri replaces arrays when merging platform configuration. Keep the other macOS
+window settings aligned with `tauri/src-tauri/tauri.conf.json` when changing the
+shared window. Verify with the [Finder-drop walkthrough](../../docs/agent-guide/documents.md#desktop-file-drops).
+
 ## Subscription offers
 
 Use `useTrialEligibilityQuery` for trial copy and checkout terms in Billing,
@@ -109,6 +156,9 @@ and keep Pro checkout disabled while eligibility is unknown. Refresh the offer
 on focus/reconnect; route existing subscriptions to billing management. Keep
 known management access through refetch failures, but hide unconfirmed trials.
 Reset rejected checkout offers before refetching eligibility.
+
+## macOS desktop gotcha: third-party iframes
+WKWebView asks the desktop navigation plugin about iframe loads as well as page loads, and the plugin cannot tell them apart. A third-party iframe is classified as external: its load is cancelled and the page opens in the browser, leaving an empty frame in the app. List a third-party page the app frames in `EMBEDDED_DOCUMENTS` in `tauri/src-tauri/src/lib.rs`.
 
 ## iOS gotcha: Web Workers must be lazy
 On iOS WKWebView, eagerly constructing an ES module Web Worker (`new Worker(url, { type: 'module' })`) whose script is served via the `tauri://` custom URL scheme **deadlocks the WebContent process**. The worker thread parks in WebKit's sync module loader waiting for an IPC response that never wakes it; JS execution silently stops after that point.

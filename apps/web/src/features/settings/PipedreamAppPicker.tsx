@@ -3,6 +3,7 @@ import {
   createPipedreamCatalogConnect,
   createPipedreamCatalogSearch,
 } from '@core/pipedream/catalog';
+import { fireAndForget } from '@core/util/fireAndForget';
 import SpinnerIcon from '@phosphor/spinner-gap.svg';
 import XIcon from '@phosphor/x.svg';
 import type { PipedreamCatalogEntryResponse } from '@service-cognition/client';
@@ -117,7 +118,12 @@ export function PipedreamAppPicker(props: {
                   size="sm"
                   depth={3}
                   disabled={catalog.query.isFetchingNextPage}
-                  onClick={() => void catalog.query.fetchNextPage()}
+                  onClick={() =>
+                    fireAndForget(
+                      catalog.query.fetchNextPage(),
+                      'agent-settings'
+                    )
+                  }
                 >
                   {catalog.query.isFetchingNextPage ? 'Loading…' : 'Load more'}
                 </Button>
@@ -239,7 +245,7 @@ function SelectedAppRow(props: {
         <ConnectAction
           label="Connect"
           loading={busy()}
-          onClick={() => void connect()}
+          onClick={() => fireAndForget(connect(), 'agent-settings')}
         />
       </Show>
       <Button

@@ -1,5 +1,6 @@
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
+import { Telemetry } from '@macro-inc/observability';
 import type { MessageListItem } from '@service-storage/messages';
 import type { Accessor } from 'solid-js';
 import type { MessageActions, MessageData } from '../Message';
@@ -7,6 +8,9 @@ import { getMessageReplyPreviewTexts } from '../Message/browser-selection';
 import { isBotMessage } from '../Thread/utils/message-actions';
 import type { MessageSelection } from './create-message-selection';
 import type { ThreadListNavigation } from './ThreadList';
+
+const reportMessageActionError = (error: unknown) =>
+  Telemetry.error(error, { surface: 'channel-hotkeys' });
 
 type CreateChannelHotkeysOptions = {
   selection: MessageSelection;
@@ -121,10 +125,12 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
       const msg = getSelectedMessage();
       if (!msg) return false;
       const actions = options.getMessageActions(msg);
-      actions?.onReply?.({
-        message: msg,
-        ...getMessageReplyPreviewTexts(msg.id),
-      });
+      Promise.resolve(
+        actions?.onReply?.({
+          message: msg,
+          ...getMessageReplyPreviewTexts(msg.id),
+        })
+      ).catch(reportMessageActionError);
       return true;
     },
   });
@@ -147,7 +153,9 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
       const msg = getSelectedMessage();
       if (!msg) return false;
       const actions = options.getMessageActions(msg);
-      actions?.onEdit?.({ message: msg });
+      Promise.resolve(actions?.onEdit?.({ message: msg })).catch(
+        reportMessageActionError
+      );
       return true;
     },
   });
@@ -183,7 +191,9 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
       const msg = getSelectedMessage();
       if (!msg) return false;
       const actions = options.getMessageActions(msg);
-      actions?.onDelete?.({ message: msg });
+      Promise.resolve(actions?.onDelete?.({ message: msg })).catch(
+        reportMessageActionError
+      );
       return true;
     },
   });

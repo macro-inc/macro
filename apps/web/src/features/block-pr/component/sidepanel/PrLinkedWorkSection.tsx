@@ -2,6 +2,7 @@ import { SidePanel } from '@components/app/side-panel';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import type { SplitContent } from '@components/app/split-layout/layoutManager';
 import { useChannelName } from '@core/context/channels';
+import { fireAndForget } from '@core/util/fireAndForget';
 import BuildingsIcon from '@phosphor/buildings.svg';
 import HashIcon from '@phosphor/hash.svg';
 import { Button, cn } from '@ui';
@@ -108,7 +109,11 @@ export function PrLinkedWorkSection(props: {
         </Match>
         <Match when={query.isError()}>
           <div class="text-ink-placeholder">Linked work couldn’t be loaded</div>
-          <Button variant="ghost" size="xs" onClick={() => void query.retry()}>
+          <Button
+            variant="ghost"
+            size="xs"
+            onClick={() => fireAndForget(query.retry(), 'pr-side-panel')}
+          >
             Retry
           </Button>
         </Match>

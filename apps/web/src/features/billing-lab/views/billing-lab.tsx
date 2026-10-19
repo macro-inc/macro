@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowClockwiseIcon from '@phosphor/arrow-clockwise.svg';
 import ArrowRightIcon from '@phosphor/arrow-right.svg';
 import CalendarIcon from '@phosphor/calendar-blank.svg';
@@ -132,7 +133,11 @@ export function BillingLabView(props: {
               <span class="size-1.5 rounded-full bg-success" />
               Local simulation
             </span>
-            <Button variant="ghost" size="sm" onClick={() => void copyLink()}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => fireAndForget(copyLink(), 'billing-lab')}
+            >
               {copied() ? 'Scenario link copied' : 'Copy scenario link'}
             </Button>
           </div>
@@ -578,7 +583,7 @@ export function BillingLabView(props: {
               <Button
                 variant="accent"
                 disabled={lab.pending()}
-                onClick={() => void completePayment()}
+                onClick={() => fireAndForget(completePayment(), 'billing-lab')}
               >
                 {lab.pending() ? 'Processing…' : 'Complete simulation'}
               </Button>

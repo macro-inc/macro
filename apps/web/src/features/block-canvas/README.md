@@ -42,14 +42,27 @@ Camera zoom limits still apply; padding decreases for small embedded viewports.
 Ctrl/Meta-wheel zoom is pointer-anchored, with a continuous 0.002 exponential rate
 per normalized wheel pixel and an exponent cap of 0.2 per event (about 22% zoom-in).
 Plain wheel input pans at its existing speed.
-The Canvas panel's zoom menu offers **No snapping** (the default for each session),
+The Canvas panel's zoom menu offers **No grid snapping** (the default grid mode for each session),
 **Snap to px** (1 canvas px at every zoom), and **Auto snapping** (the smallest
 currently visible dot-grid interval, including faint dots). Auto follows zoom;
 hiding the grid temporarily disables it. Drawing, moving, resizing, insertion, duplication, pasting, free
 connector endpoints and layout inspector values use the chosen interval; inspector
 scrubs preview the same snapped values they commit. Freehand and rotation keep
 their own precision, and connector bindings and aspect-ratio constraints stay exact.
-The preference is local editor state, not saved JSON or shared Loro data.
+The preferences are local editor state, not saved JSON or shared Loro data.
+**Snap to objects** is independently enabled by default. Moving selections snap
+their combined world bounds' edges and centers to nearby objects; axis-aligned
+resize handles snap their moving edges. Matching axes show dashed guides and
+prefer object alignment over grid snapping. The tolerance is six screen pixels,
+with a 160-screen-pixel perpendicular reach. Shift constraints and proportional /
+centered resizing remain intact; rotated resize frames retain local-axis behavior.
+The graphics engine caches sorted alignment anchors with perpendicular interval
+trees per immutable scene snapshot (O(n log n) construction). Each pointer update
+queries a constant number of selection anchors and prunes distant candidates,
+including long rows and columns, instead of comparing every selected object with
+every scene object. Selected objects, descendants, and ancestors are excluded.
+Gesture telemetry records query, candidate, and visited-index-node counts; its
+span measures the gesture, not cold index construction.
 The dot grid adapts to zoom, revealing 1, 4, 16, 64 px levels (and
 coarser levels at extreme zoom-out). Coarse dots remain steady while finer dots
 fade in gently; individual canvas pixels are faintly visible at 800%. Dots use
@@ -60,6 +73,10 @@ panel tokens; the dot-grid visibility toggle hides every level.
 The shared context menu exposes clipboard, grouping, layer ordering, select-all,
 and delete actions, with normal keyboard navigation and focus restoration. Active
 embedded editors and text editing retain their own context menus.
+With exactly one image selected, the context menu and inspector also offer
+**Copy image** and **Save image** for the original image, without canvas styling
+or transforms. These reuse the shared image actions (including native mobile
+sharing) and stay disabled while the image source or an action is pending.
 Selecting Arrow, Line, Connector, or Pencil repairs invisible drawing defaults:
 missing/transparent strokes use theme Ink, zero width uses 2 px, and zero opacity
 uses full opacity. Other style choices and existing shapes are preserved.

@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   handleFileFolderDrop,
   handleFolderSelect,
@@ -101,8 +102,11 @@ export function CreateFolder(props: {
           );
         }}
         onDrop={(files, folders) => {
-          void prepare(() =>
-            handleFileFolderDrop(files, folders, composer.addFiles)
+          fireAndForget(
+            prepare(() =>
+              handleFileFolderDrop(files, folders, composer.addFiles)
+            ),
+            'drive-view'
           );
         }}
       />

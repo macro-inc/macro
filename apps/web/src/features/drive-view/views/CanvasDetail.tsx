@@ -5,6 +5,7 @@ import {
   hasPermissions,
   Permissions,
 } from '@core/component/SharePermissions';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { downloadFile } from '@filesystem/download';
 import { useSearchParams } from '@solidjs/router';
 import type { Accessor, JSX } from 'solid-js';
@@ -32,7 +33,10 @@ function CanvasDetailContent(props: {
   );
   const operations = [
     downloadFileOperation(() => {
-      downloadFile(props.savedFile() ?? props.data.file, downloadName);
+      fireAndForget(
+        downloadFile(props.savedFile() ?? props.data.file, downloadName),
+        'drive-file-download'
+      );
       analytics.track('download', { blockType: 'canvas' });
     }),
   ];

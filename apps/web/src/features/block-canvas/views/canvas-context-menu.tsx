@@ -5,6 +5,7 @@ import {
   SubTrigger,
 } from '@core/component/ContextMenu';
 import { TOKENS } from '@core/hotkey/tokens';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { selectAllCommand } from '@macro-inc/graphics';
 import ArrowDown from '@phosphor/arrow-down.svg';
@@ -13,18 +14,25 @@ import ArrowLineUp from '@phosphor/arrow-line-up.svg';
 import ArrowUp from '@phosphor/arrow-up.svg';
 import Clipboard from '@phosphor/clipboard.svg';
 import Copy from '@phosphor/copy.svg';
+import DownloadSimple from '@phosphor/download-simple.svg';
 import Scissors from '@phosphor/scissors.svg';
 import SelectionAll from '@phosphor/selection-all.svg';
 import SelectionPlus from '@phosphor/selection-plus.svg';
 import SelectionSlash from '@phosphor/selection-slash.svg';
 import Stack from '@phosphor/stack.svg';
 import Trash from '@phosphor/trash.svg';
+import { Show } from 'solid-js';
 import type { CanvasClipboard } from '../clipboard';
 import type { CanvasState } from '../primitives/create-canvas-state';
 
 export function CanvasContextMenu(props: {
   state: CanvasState;
   clipboard: CanvasClipboard;
+  imageActions?: {
+    disabled: boolean;
+    onCopy: () => void;
+    onSave: () => void;
+  };
   onClose: () => void;
 }) {
   const selected = () => props.state.selection().length > 0;
@@ -43,26 +51,34 @@ export function CanvasContextMenu(props: {
           icon={Scissors}
           hotkeyToken={TOKENS.canvas.cut}
           disabled={!selected()}
-          onClick={() => void props.clipboard.cut()}
+          onClick={() =>
+            fireAndForget(props.clipboard.cut(), 'canvas-clipboard')
+          }
         />
         <MenuItem
           text="Copy"
           icon={Copy}
           hotkeyToken={TOKENS.canvas.copy}
           disabled={!selected()}
-          onClick={() => void props.clipboard.copy()}
+          onClick={() =>
+            fireAndForget(props.clipboard.copy(), 'canvas-clipboard')
+          }
         />
         <MenuItem
           text="Paste"
           icon={Clipboard}
           hotkeyToken={TOKENS.canvas.paste}
-          onClick={() => void props.clipboard.paste()}
+          onClick={() =>
+            fireAndForget(props.clipboard.paste(), 'canvas-clipboard')
+          }
         />
         <MenuItem
           text="Paste in place"
           icon={Clipboard}
           shortcut="shift+cmd+v"
-          onClick={() => void props.clipboard.paste(true)}
+          onClick={() =>
+            fireAndForget(props.clipboard.paste(true), 'canvas-clipboard')
+          }
         />
         <MenuItem
           text="Duplicate"
@@ -72,6 +88,25 @@ export function CanvasContextMenu(props: {
           onClick={props.state.duplicate}
         />
         <MenuSeparator />
+        <Show when={props.imageActions}>
+          {(actions) => (
+            <>
+              <MenuItem
+                text="Copy image"
+                icon={Copy}
+                disabled={actions().disabled}
+                onClick={() => actions().onCopy()}
+              />
+              <MenuItem
+                text="Save image"
+                icon={DownloadSimple}
+                disabled={actions().disabled}
+                onClick={() => actions().onSave()}
+              />
+              <MenuSeparator />
+            </>
+          )}
+        </Show>
         <MenuItem
           text="Group"
           icon={SelectionPlus}

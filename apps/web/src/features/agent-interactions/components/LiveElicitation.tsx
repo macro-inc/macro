@@ -13,6 +13,7 @@
 
 import { CalendarDraftComposer } from '@core/component/AI/component/tool/calendar/DraftComposer';
 import { EmailDraftComposer } from '@core/component/AI/component/tool/email/DraftComposer';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type {
   ElicitationRequest,
   ElicitationSchema,
@@ -200,7 +201,7 @@ export function QuestionActions(props: {
 }) {
   const respond = (answer: ElicitationAnswer) => {
     if (props.locked) return;
-    void props.onRespond(answer);
+    fireAndForget(props.onRespond(answer), 'agent-interactions');
   };
   const submit = (draft: FormDraft) => {
     const content = draft.content();
@@ -233,7 +234,9 @@ export function QuestionActions(props: {
             variant="cta"
             size="xs"
             disabled={props.locked}
-            onClick={() => void open(question().url)}
+            onClick={() =>
+              fireAndForget(open(question().url), 'agent-interactions')
+            }
           >
             Open
           </Button>
@@ -377,7 +380,12 @@ export function UserToolComposer(props: {
             size="xs"
             variant="ghost"
             disabled={locked()}
-            onClick={() => void props.review.respond({ action: 'decline' })}
+            onClick={() =>
+              fireAndForget(
+                props.review.respond({ action: 'decline' }),
+                'agent-interactions'
+              )
+            }
           >
             Dismiss request
           </Button>
@@ -403,7 +411,12 @@ export function UserToolComposer(props: {
                 variant="ghost"
                 size="xs"
                 disabled={locked()}
-                onClick={() => void props.review.respond({ action: 'decline' })}
+                onClick={() =>
+                  fireAndForget(
+                    props.review.respond({ action: 'decline' }),
+                    'agent-interactions'
+                  )
+                }
               >
                 Cancel
               </Button>

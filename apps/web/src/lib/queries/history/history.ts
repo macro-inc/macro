@@ -306,7 +306,7 @@ async function _insertProjectIntoHistory(projectId: string) {
   const newData: HistoryItem[] = [];
   const ids = [projectId];
 
-  storageServiceClient.upsertItemToUserHistory({
+  await storageServiceClient.upsertItemToUserHistory({
     itemId: projectId,
     itemType: 'project',
   });

@@ -1,3 +1,3 @@
 # Type Alias: UserProvider
 
-> **UserProvider** = `"GMAIL"`
+> **UserProvider** = `"GMAIL"` \| `"OUTLOOK"`

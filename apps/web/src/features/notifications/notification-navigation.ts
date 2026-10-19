@@ -98,7 +98,9 @@ function openSplitIfNotOpen(
     reportImmediateResult(result);
   }
   if (options.params && type !== 'component') {
-    goToLocationInSplit(layoutManager, type, id, options.params);
+    goToLocationInSplit(layoutManager, type, id, options.params).catch(
+      (error) => Telemetry.error(error, { surface: 'notification-navigation' })
+    );
   }
 }
 

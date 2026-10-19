@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
 import CopyIcon from '@phosphor/copy.svg';
@@ -163,7 +164,10 @@ export function DatabaseTable(props: DatabaseTableProps) {
     indicatorLeft: (boundary) =>
       boundary - gridElement.getBoundingClientRect().left,
     onDrop: (columnId, targetId, edge) =>
-      void props.onReorderColumn?.(columnId, targetId, edge),
+      fireAndForget(
+        props.onReorderColumn?.(columnId, targetId, edge),
+        'database'
+      ),
   });
   const headerRenames = new Map<string, () => void>();
   let requestedHeader: string | undefined;
@@ -376,7 +380,7 @@ export function DatabaseTable(props: DatabaseTableProps) {
       if (!row || !column || !canEditCell(column)) return;
       event.preventDefault();
       event.stopPropagation();
-      void props.onClearCells([row.id], [column.id]);
+      fireAndForget(props.onClearCells([row.id], [column.id]), 'database');
       return;
     }
     if (
@@ -721,7 +725,7 @@ export function DatabaseTable(props: DatabaseTableProps) {
                                 )}
                                 aria-colindex={columnIndex() + 2}
                                 tabindex={-1}
-                                class="relative min-w-0 border-r border-edge-muted/40 px-0.5 py-0.5 outline-none focus-within:ring-1 focus-within:ring-inset focus-within:ring-ink/30 focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ink/30"
+                                class="relative grid min-w-0 border-r border-edge-muted/40 px-0.5 py-0.5 outline-none focus-within:ring-1 focus-within:ring-inset focus-within:ring-ink/30 focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ink/30"
                                 classList={{
                                   'bg-accent/15 ring-1 ring-inset ring-accent/50':
                                     selection.contains(index(), columnIndex()),
@@ -878,7 +882,10 @@ export function DatabaseTable(props: DatabaseTableProps) {
                       disabled={props.pending}
                       onClick={() =>
                         deferAction(() => {
-                          void props.onDuplicate?.(contextRowId());
+                          fireAndForget(
+                            props.onDuplicate?.(contextRowId()),
+                            'database'
+                          );
                         })
                       }
                     />

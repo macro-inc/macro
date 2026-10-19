@@ -30,6 +30,7 @@ import {
 } from '@components/app/split-layout/layoutUtils';
 import { useChannelsContext } from '@core/context/channels';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type EntityData,
   EntitySelectionToolbar,
@@ -130,10 +131,13 @@ export function HomeList(props: HomeListProps) {
       controller: list,
       handle: panel.handle,
       openEntityInSplit: (entity, options) => {
-        void openEntityInSplitFromUnifiedList(entity, {
-          splitHandle: panel.handle,
-          ...options,
-        });
+        fireAndForget(
+          openEntityInSplitFromUnifiedList(entity, {
+            splitHandle: panel.handle,
+            ...options,
+          }),
+          'open-entity-in-split'
+        );
       },
     });
   });
@@ -169,10 +173,13 @@ export function HomeList(props: HomeListProps) {
       return;
     }
 
-    void openEntity(sourceRow.entity, {
-      event: metadata?.event,
-      newSplit,
-    });
+    fireAndForget(
+      openEntity(sourceRow.entity, {
+        event: metadata?.event,
+        newSplit,
+      }),
+      'home'
+    );
   }
 
   function markEntitySeen(entity: WithNotification<EntityData>) {
@@ -346,7 +353,7 @@ export function HomeList(props: HomeListProps) {
 
         if (distanceFromEnd > 3) return;
 
-        void source.loadMore();
+        fireAndForget(source.loadMore(), 'home');
       },
     },
     activation: {
@@ -475,7 +482,7 @@ export function HomeList(props: HomeListProps) {
     const distance =
       container.scrollHeight - container.scrollTop - container.clientHeight;
     if (distance < 300) {
-      void source.loadMore();
+      fireAndForget(source.loadMore(), 'home');
     }
   }
 
@@ -512,7 +519,7 @@ export function HomeList(props: HomeListProps) {
               <button
                 type="button"
                 class="underline"
-                onClick={() => void source.refresh()}
+                onClick={() => fireAndForget(source.refresh(), 'home')}
               >
                 Retry
               </button>
@@ -540,7 +547,7 @@ export function HomeList(props: HomeListProps) {
               if (!action) return;
 
               focusActionRow(row);
-              void action.onClick();
+              fireAndForget(action.onClick(), 'home');
             }}
           >
             <Switch>
@@ -567,7 +574,7 @@ export function HomeList(props: HomeListProps) {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => void source.refresh()}
+                    onClick={() => fireAndForget(source.refresh(), 'home')}
                   >
                     Try again
                   </Button>

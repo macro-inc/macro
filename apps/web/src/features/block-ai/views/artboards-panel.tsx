@@ -5,6 +5,7 @@
  */
 
 import { isCommitKey } from '@app/features/block-fig/core/shortcuts';
+import { fireAndForget } from '@core/util/fireAndForget';
 import FrameCorners from '@phosphor/frame-corners.svg';
 import Plus from '@phosphor/plus.svg';
 import Trash from '@phosphor/trash.svg';
@@ -31,7 +32,7 @@ export function ArtboardsPanel(props: { viewer: AiViewer; editor: AiEditor }) {
     setRenaming(undefined);
     const trimmed = name?.trim();
     if (!trimmed || trimmed === old) return;
-    void editor.renameArtboard(id, trimmed);
+    fireAndForget(editor.renameArtboard(id, trimmed), 'ai-editor');
   };
 
   /** A new artboard the size of the last, to its right. */
@@ -40,7 +41,10 @@ export function ArtboardsPanel(props: { viewer: AiViewer; editor: AiEditor }) {
     const last = list[list.length - 1];
     const r = last ? toRect(last.rect) : { x: 0, y: 0, w: 1920, h: 1080 };
     const right = Math.max(...list.map((a) => a.rect.x1), r.x + r.w);
-    void editor.newArtboard({ x: right + GAP, y: r.y, w: r.w, h: r.h });
+    fireAndForget(
+      editor.newArtboard({ x: right + GAP, y: r.y, w: r.w, h: r.h }),
+      'ai-editor'
+    );
   };
 
   return (
@@ -115,7 +119,9 @@ export function ArtboardsPanel(props: { viewer: AiViewer; editor: AiEditor }) {
                   aria-label={`Delete ${a.name}`}
                   data-testid="ai-artboard-delete"
                   class="invisible rounded p-0.5 text-ink-muted hover:text-ink group-hover:visible"
-                  onClick={() => void editor.deleteArtboard(a.id)}
+                  onClick={() =>
+                    fireAndForget(editor.deleteArtboard(a.id), 'ai-editor')
+                  }
                 >
                   <Trash class="size-3" />
                 </button>

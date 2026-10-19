@@ -2,11 +2,13 @@ import { analytics } from '@app/lib/analytics';
 import { DEFAULT_CHAT_NAME } from '@block-chat/definition';
 import type { CodeFileExtension } from '@block-code/util/languageSupport';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { Telemetry } from '@macro-inc/observability';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { invalidateUserQuota } from '@queries/auth';
 import { postNewHistoryItem } from '@queries/history/history';
 import { setPreviewOnCreate } from '@queries/preview/preview';
-import { refetchSoupEntity } from '@queries/soup/cache';
+import { refetchSoupEntity, type SoupEntityTag } from '@queries/soup/cache';
 import { seedDocumentLoadBundle } from '@queries/storage/documentLoad/documentLoadBundle';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import type { CreateChatRequest } from '@service-cognition/generated/schemas';
@@ -14,7 +16,6 @@ import { staticFileClient } from '@service-static-files/client';
 import { storageServiceClient } from '@service-storage/client';
 import { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { PropertyInput } from '@service-storage/generated/schemas/propertyInput';
-
 import { uploadToPresignedUrl } from '@service-storage/util/uploadToPresignedUrl';
 import { err, ok } from 'neverthrow';
 import { decodeBase64Bytes } from './base64';
@@ -26,6 +27,15 @@ import {
   isCodeEditorLanguageSupported,
 } from './languageQuery';
 import { resolveUploadContentType } from './uploadContentType';
+
+function refreshCreatedSoupEntity(entityId: string, entityType: SoupEntityTag) {
+  refetchSoupEntity(entityId, entityType, {
+    ownTouch: true,
+    refreshGraphql: true,
+  }).catch((error) =>
+    Telemetry.error(error, { surface: 'create-entity', entityType })
+  );
+}
 
 type CreateMarkdownFileArgs = {
   title?: string;
@@ -48,7 +58,7 @@ export async function createMarkdownFile(
     projectId: args?.projectId,
   });
 
-  invalidateUserQuota();
+  fireAndForget(invalidateUserQuota(), 'create-entity');
 
   if (result.isErr()) return;
 
@@ -66,10 +76,7 @@ export async function createMarkdownFile(
     name: args?.title ?? '',
     fileType: 'md',
   });
-  refetchSoupEntity(documentId, 'document', {
-    ownTouch: true,
-    refreshGraphql: true,
-  });
+  refreshCreatedSoupEntity(documentId, 'document');
 
   analytics.track('create_entity', {
     entityType: 'md',
@@ -150,7 +157,7 @@ async function createTaskResponse(args?: CreateTaskArgs) {
     propertyValues,
   });
 
-  invalidateUserQuota();
+  fireAndForget(invalidateUserQuota(), 'create-entity');
 
   if (result.isErr()) return;
 
@@ -170,10 +177,7 @@ async function createTaskResponse(args?: CreateTaskArgs) {
     subType: { type: 'task', is_completed: false },
   });
   if (args?.revalidateSoup !== false)
-    refetchSoupEntity(documentId, 'document', {
-      ownTouch: true,
-      refreshGraphql: true,
-    });
+    refreshCreatedSoupEntity(documentId, 'document');
 
   analytics.track('create_entity', {
     entityType: 'task',
@@ -219,7 +223,7 @@ export async function createSnippet(
     projectId: args?.projectId,
   });
 
-  invalidateUserQuota();
+  fireAndForget(invalidateUserQuota(), 'create-entity');
 
   if (result.isErr()) return;
 
@@ -232,10 +236,7 @@ export async function createSnippet(
     fileType: 'md',
     subType: { type: 'snippet' },
   });
-  refetchSoupEntity(documentId, 'document', {
-    ownTouch: true,
-    refreshGraphql: true,
-  });
+  refreshCreatedSoupEntity(documentId, 'document');
 
   analytics.track('create_entity', {
     entityType: 'snippet',
@@ -270,7 +271,7 @@ export async function createSkill(
     projectId: args?.projectId,
   });
 
-  invalidateUserQuota();
+  fireAndForget(invalidateUserQuota(), 'create-entity');
 
   if (result.isErr()) return;
 
@@ -283,10 +284,7 @@ export async function createSkill(
     fileType: 'md',
     subType: { type: 'skill' },
   });
-  refetchSoupEntity(documentId, 'document', {
-    ownTouch: true,
-    refreshGraphql: true,
-  });
+  refreshCreatedSoupEntity(documentId, 'document');
 
   analytics.track('create_entity', {
     entityType: 'skill',
@@ -357,7 +355,7 @@ export async function createCodeFileFromText({
     sha: sha,
   });
 
-  invalidateUserQuota();
+  fireAndForget(invalidateUserQuota(), 'create-entity');
 
   // TODO: this is kind of odd, since there's an actual code we could use for the paywall, 402 Payment Required
   if (maybeCode.isErr() && maybeCode.error[0].message.includes('403')) {
@@ -374,17 +372,17 @@ export async function createCodeFileFromText({
   });
   if (uploadResult.isErr())
     return err([{ code: 'SERVER_ERROR', message: 'Failed to upload file' }]);
-  postNewHistoryItem('document', document.metadata.documentId);
+  fireAndForget(
+    postNewHistoryItem('document', document.metadata.documentId),
+    'create-entity'
+  );
   setPreviewOnCreate({
     itemId: document.metadata.documentId,
     itemType: 'document',
     name: title ?? 'New Code File',
     fileType: finalExtension,
   });
-  refetchSoupEntity(document.metadata.documentId, 'document', {
-    ownTouch: true,
-    refreshGraphql: true,
-  });
+  refreshCreatedSoupEntity(document.metadata.documentId, 'document');
 
   analytics.track('create_entity', {
     entityType: 'code',
@@ -414,7 +412,7 @@ export async function createCanvasFileFromJsonString(args: {
     sha: sha,
     projectId,
   });
-  invalidateUserQuota();
+  fireAndForget(invalidateUserQuota(), 'create-entity');
   if (maybeCanvas.isErr()) return { error: 'Document creation failed.' };
   const canvas = maybeCanvas.value;
 
@@ -427,17 +425,17 @@ export async function createCanvasFileFromJsonString(args: {
 
   if (uploadResult.isErr()) return { error: 'Failed to upload file.' };
 
-  postNewHistoryItem('document', canvas.metadata.documentId);
+  fireAndForget(
+    postNewHistoryItem('document', canvas.metadata.documentId),
+    'create-entity'
+  );
   setPreviewOnCreate({
     itemId: canvas.metadata.documentId,
     itemType: 'document',
     name: title ?? 'New Canvas',
     fileType: 'canvas',
   });
-  refetchSoupEntity(canvas.metadata.documentId, 'document', {
-    ownTouch: true,
-    refreshGraphql: true,
-  });
+  refreshCreatedSoupEntity(canvas.metadata.documentId, 'document');
 
   analytics.track('create_entity', {
     entityType: 'canvas',
@@ -460,7 +458,7 @@ export async function createChat(
 
   const maybeChat = await cognitionApiServiceClient.createChat(args ?? {});
 
-  invalidateUserQuota();
+  fireAndForget(invalidateUserQuota(), 'create-entity');
   if (maybeChat.isErr()) {
     if (isPaymentError(maybeChat)) {
       showPaywall(PaywallKey.CHAT_LIMIT);
@@ -468,16 +466,13 @@ export async function createChat(
     return { error: 'Failed to create chat.' };
   }
   const chat = maybeChat.value;
-  postNewHistoryItem('chat', chat.id);
+  fireAndForget(postNewHistoryItem('chat', chat.id), 'create-entity');
   setPreviewOnCreate({
     itemId: chat.id,
     itemType: 'chat',
     name: args?.name ?? DEFAULT_CHAT_NAME,
   });
-  refetchSoupEntity(chat.id, 'chat', {
-    ownTouch: true,
-    refreshGraphql: true,
-  });
+  refreshCreatedSoupEntity(chat.id, 'chat');
 
   analytics.track('create_entity', {
     entityType: 'chat',
@@ -496,7 +491,7 @@ export async function createStaticFile(file: File): Promise<string> {
     file_name: file.name,
     content_type: contentType,
   });
-  invalidateUserQuota();
+  fireAndForget(invalidateUserQuota(), 'create-entity');
   if (result.isErr()) throw new Error('Failed to upload file');
 
   const { upload_url, id } = result.value;

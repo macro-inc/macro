@@ -50,6 +50,7 @@ import {
   setNativeEditMenuSuppressed,
 } from '@core/mobile/nativeEditMenu';
 import { debouncedDependent } from '@core/util/debounce';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { getScrollParentElement } from '@core/util/scrollParent';
 import type { NodeIdMappings } from '@macro-inc/lexical-core';
 import { $getId } from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
@@ -344,17 +345,20 @@ export function MarkdownPopup(props: {
     setAiEditRunning(true);
     // Fast mode: one model edits the whole document directly, no supervisor.
     // Apply ops locally so the edit lands in this client's undo stack.
-    void requestAiEditWithToast(
-      {
-        documentId: blockId,
-        prompt: `Request: ${instruction}\nUser is selecting nodes ${nodeIds.join(' ')}. Proceed with requested edit`,
-        mode: 'fast',
-        onOps: (ops) => applyAiOps(editor, props.lexicalMapping, ops),
-      },
-      () => {
-        setAiEditLocation(null);
-        setAiEditRunning(false);
-      }
+    fireAndForget(
+      requestAiEditWithToast(
+        {
+          documentId: blockId,
+          prompt: `Request: ${instruction}\nUser is selecting nodes ${nodeIds.join(' ')}. Proceed with requested edit`,
+          mode: 'fast',
+          onOps: (ops) => applyAiOps(editor, props.lexicalMapping, ops),
+        },
+        () => {
+          setAiEditLocation(null);
+          setAiEditRunning(false);
+        }
+      ),
+      'markdown-ai-edit'
     );
     setAiEditInput('');
     setAiEditDrawerOpen(false);
@@ -595,7 +599,7 @@ export function MarkdownPopup(props: {
             <Toolbar.Button
               size="icon-sm"
               depth={3}
-              onClick={() => void handleShare()}
+              onClick={() => fireAndForget(handleShare(), 'block-md')}
               tooltip="Copy link to snippet"
               label="Copy link to snippet"
             >
@@ -725,9 +729,9 @@ export function MarkdownPopup(props: {
             onConvertToTasks={handleConvertToTasks}
             onConvertListToTable={handleConvertListToTable}
             onOpenComment={handleShowComment}
-            onShare={() => void handleShare()}
+            onShare={() => fireAndForget(handleShare(), 'block-md')}
             onInsertComment={handleInsertComment}
-            onPaste={() => void handlePaste()}
+            onPaste={() => fireAndForget(handlePaste(), 'block-md')}
             onEditWithAi={handleOpenAiEditDrawer}
           />
         </GeneralizedPopup>

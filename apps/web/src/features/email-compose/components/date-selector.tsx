@@ -1,5 +1,6 @@
 import { DatePickerUI } from '@core/component/DatePicker/DatePickerUI';
 import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   Combobox,
   type ComboboxRootItemComponentProps,
@@ -141,7 +142,7 @@ export const DateSelector = (props: DateSelectorProps) => {
           return;
         }
         e.preventDefault();
-        void onChange(null);
+        fireAndForget(onChange(null), 'email-compose');
 
         break;
       }
@@ -251,10 +252,13 @@ export const DateSelector = (props: DateSelectorProps) => {
     if (!value || !value.trim().length) {
       const currentDate = selectedDate() ?? new Date();
 
-      void onChange({
-        type: 'custom',
-        date: startOfDay(currentDate),
-      });
+      fireAndForget(
+        onChange({
+          type: 'custom',
+          date: startOfDay(currentDate),
+        }),
+        'email-compose'
+      );
       return;
     }
 
@@ -271,7 +275,10 @@ export const DateSelector = (props: DateSelectorProps) => {
     currentDate = setHours(currentDate, Number(hours));
     currentDate = setMinutes(currentDate, Number(mins));
 
-    void onChange({ type: 'custom', date: currentDate });
+    fireAndForget(
+      onChange({ type: 'custom', date: currentDate }),
+      'email-compose'
+    );
   };
 
   return (
@@ -328,7 +335,10 @@ export const DateSelector = (props: DateSelectorProps) => {
             disableAfterDate={props.disableAfterDate}
             mode={mode()}
             onSelectDate={(date) => {
-              void onChange({ type: 'custom', date });
+              fireAndForget(
+                onChange({ type: 'custom', date }),
+                'email-compose'
+              );
               setInternalOpen(false);
             }}
           >
@@ -355,7 +365,7 @@ export const DateSelector = (props: DateSelectorProps) => {
                     showValue={props.showCurrentValue !== false}
                     clearable={props.clearable !== false}
                     onClear={() => {
-                      void onChange(null);
+                      fireAndForget(onChange(null), 'email-compose');
                     }}
                   />
                 )}

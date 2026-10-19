@@ -101,7 +101,7 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('settings entry points', () => {
-  it('routes desktop tab selections without prewriting entries and retains A-B-A history', () => {
+  it('routes desktop tab selections without prewriting entries and retains A-B-A history', async () => {
     mocks.mobile = false;
     mocks.hasSettingsSplit = true;
     const { state } = mountSettings();
@@ -123,16 +123,20 @@ describe('settings entry points', () => {
     const pane = router.panes()[0]!;
     const currentTab = () =>
       router.entry(pane)?.location.route.matches[0]?.params.tab;
+    const navigations: ReturnType<typeof router.navigatePane>[] = [];
     const navigateTab = (tab: string) => {
       expect(mocks.updateCurrentEntry).not.toHaveBeenCalled();
-      router.navigatePane(pane, `/settings/${tab.toLowerCase()}`);
+      navigations.push(
+        router.navigatePane(pane, `/settings/${tab.toLowerCase()}`)
+      );
     };
     state.selectTab('Appearance', navigateTab);
     state.selectTab('Account', navigateTab);
+    await Promise.all(navigations);
     expect(router.history(pane)?.entries).toHaveLength(3);
-    router.navigatePane(pane, -1);
+    await router.navigatePane(pane, -1);
     expect(currentTab()).toBe('appearance');
-    router.navigatePane(pane, -1);
+    await router.navigatePane(pane, -1);
     expect(currentTab()).toBe('account');
     router.dispose();
   });

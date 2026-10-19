@@ -47,6 +47,7 @@ import {
   type PeerIdValidator,
   peerIdPlugin,
 } from '@macro-inc/lexical-core';
+import { Telemetry } from '@macro-inc/observability';
 import { onElementConnect } from '@solid-primitives/lifecycle';
 import { debounce } from '@solid-primitives/scheduled';
 import type { EditorState } from 'lexical';
@@ -276,11 +277,16 @@ export function InstructionsEditor(props: {
   };
 
   const [fileArrayBuffer, setFileArrayBuffer] = createSignal<ArrayBuffer>();
+  const readFileArrayBuffer = async (file: Blob) => {
+    setFileArrayBuffer(await file.arrayBuffer());
+  };
   createEffect(() => {
     const source = documentSource();
     if (source.type !== 'dss') return;
 
-    source.file.arrayBuffer().then(setFileArrayBuffer);
+    readFileArrayBuffer(source.file).catch((error) =>
+      Telemetry.error(error, { surface: 'instructions-editor' })
+    );
   });
 
   createEffect(() => {

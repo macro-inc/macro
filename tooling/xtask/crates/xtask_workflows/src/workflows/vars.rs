@@ -12,6 +12,7 @@ macro_rules! secret {
 }
 
 secret!(APPETIZE_API_TOKEN);
+secret!(ANDROID_RELEASE_DOPPLER_TOKEN);
 secret!(AWS_ACCESS_KEY);
 secret!(AWS_SECRET_ACCESS_KEY);
 secret!(CLOUDFLARE_API_TOKEN);

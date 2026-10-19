@@ -140,12 +140,13 @@ describe('GraphQL Soup websocket retry policy', () => {
     vi.useFakeTimers();
     vi.spyOn(Math, 'random').mockReturnValue(1);
     const resolved = vi.fn();
-    void waitToRetryGraphqlSoupWebSocket(30).then(resolved);
+    const waiting = waitToRetryGraphqlSoupWebSocket(30).then(resolved);
 
     await vi.advanceTimersByTimeAsync(62_999);
     expect(resolved).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(1);
     expect(resolved).toHaveBeenCalledOnce();
+    await waiting;
     vi.mocked(Math.random).mockRestore();
   });
 
@@ -158,22 +159,26 @@ describe('GraphQL Soup websocket retry policy', () => {
     setVisibility('hidden');
     setNativeStatus('offline');
     const resolved = vi.fn();
-    void waitToRetryGraphqlSoupWebSocket(10).then(resolved);
+    const waiting = waitToRetryGraphqlSoupWebSocket(10).then(resolved);
     await vi.advanceTimersByTimeAsync(1_000);
     expect(resolved).not.toHaveBeenCalled();
 
     opportunity();
     await vi.advanceTimersByTimeAsync(0);
     expect(resolved).toHaveBeenCalledOnce();
+    await waiting;
     expect(nativeStatus.listeners.size).toBe(0);
   });
 
   it('does not treat the current native status as a reconnect opportunity', async () => {
     vi.useFakeTimers();
     const resolved = vi.fn();
-    void waitToRetryGraphqlSoupWebSocket(10).then(resolved);
+    const waiting = waitToRetryGraphqlSoupWebSocket(10).then(resolved);
     await vi.advanceTimersByTimeAsync(0);
     expect(resolved).not.toHaveBeenCalled();
+
+    dispatchEvent(new Event('online'));
+    await waiting;
   });
 });
 

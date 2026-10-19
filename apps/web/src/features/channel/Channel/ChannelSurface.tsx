@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   fetchResolvedChannelMessage,
   findThreadIdInMessageTimeline,
@@ -152,27 +153,30 @@ export function ChannelSurface(props: ParentProps<ChannelSurfaceProps>) {
         }
         setResolvedTarget(undefined);
         if (request.kind !== 'message') return;
-        void (async () => {
-          const resolved = await fetchResolvedChannelMessage(
-            { type: 'channel', id: channelId },
-            request.messageId
-          ).catch(() => undefined);
-          if (props.targetRequest !== request) return;
-          setResolvedTarget(
-            resolved?.kind === 'thread_reply'
-              ? {
-                  kind: 'message',
-                  request,
-                  targetMessageId: resolved.thread_id,
-                  targetMessageReplyId: request.messageId,
-                }
-              : {
-                  kind: 'message',
-                  request,
-                  targetMessageId: request.messageId,
-                }
-          );
-        })();
+        fireAndForget(
+          (async () => {
+            const resolved = await fetchResolvedChannelMessage(
+              { type: 'channel', id: channelId },
+              request.messageId
+            ).catch(() => undefined);
+            if (props.targetRequest !== request) return;
+            setResolvedTarget(
+              resolved?.kind === 'thread_reply'
+                ? {
+                    kind: 'message',
+                    request,
+                    targetMessageId: resolved.thread_id,
+                    targetMessageReplyId: request.messageId,
+                  }
+                : {
+                    kind: 'message',
+                    request,
+                    targetMessageId: request.messageId,
+                  }
+            );
+          })(),
+          'channel-surface'
+        );
       }
     )
   );

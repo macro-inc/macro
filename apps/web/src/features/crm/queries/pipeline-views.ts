@@ -71,7 +71,7 @@ export function createPipelineViews(
       .mapErr(([error]): DatabaseOpFailure => ({ kind: 'ops', error }))
       .orElse((failure) => {
         // A refusal shows what is stored instead of what was patched in.
-        void deps.client.invalidateQueries({ queryKey: key });
+        deps.client.invalidateQueries({ queryKey: key });
         return errAsync(failure);
       });
   const lastView = (results: OpResult[]) => {
@@ -160,7 +160,7 @@ export function createPipelineViews(
           .map((stored) => {
             upsert(stored);
             // The new column arrives with the table read.
-            void deps.client.invalidateQueries({ queryKey: key });
+            deps.client.invalidateQueries({ queryKey: key });
           })
       );
     },

@@ -1,4 +1,5 @@
 import type { BackgroundEffect } from '@core/media/background-effect';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createSignal, onCleanup } from 'solid-js';
 import type { MeetingLocalTracks } from '../context/meeting-session';
 
@@ -190,9 +191,9 @@ export function createMeetingMedia(
         ...current,
         [device]: `${device === 'camera' ? 'Camera' : 'Microphone'} disconnected. Select a device and turn it on to retry.`,
       }));
-      void refreshDevices();
+      fireAndForget(refreshDevices(), 'meeting-media');
     });
-    if (device === 'camera') void updatePreview();
+    if (device === 'camera') fireAndForget(updatePreview(), 'meeting-media');
   };
   const captureConstraints = (device: Device) => {
     const deviceId = selectedDevices()[device];
@@ -262,7 +263,7 @@ export function createMeetingMedia(
         return;
       }
       accept(device, stream);
-      void refreshDevices();
+      fireAndForget(refreshDevices(), 'meeting-media');
     } catch (error) {
       if (!isCurrent()) return;
       console.warn(`[meeting] ${device} request failed`, error);
@@ -281,7 +282,7 @@ export function createMeetingMedia(
   }
   const toggle = (device: Device, value: boolean) => {
     setEnabled(device, value);
-    if (value) void request(device);
+    if (value) fireAndForget(request(device), 'meeting-media');
     else stop(device);
   };
   const release = () => {
@@ -304,7 +305,7 @@ export function createMeetingMedia(
     backgroundError,
     setBackgroundEffect: (effect: BackgroundEffect) => {
       setBackground(effect);
-      void updatePreview();
+      fireAndForget(updatePreview(), 'meeting-media');
     },
     availableDevices,
     selectedDevices,
@@ -313,7 +314,8 @@ export function createMeetingMedia(
     refreshDevices,
     selectDevice: (device: Device | 'speaker', deviceId: string) => {
       setSelectedDevices((current) => ({ ...current, [device]: deviceId }));
-      if (device !== 'speaker' && enabled(device)) void request(device);
+      if (device !== 'speaker' && enabled(device))
+        fireAndForget(request(device), 'meeting-media');
     },
     cameraError: () => errors().camera,
     microphoneError: () => errors().microphone,
@@ -325,8 +327,10 @@ export function createMeetingMedia(
       ),
     prepare: async () => {
       const current = ++preparation;
-      watchingDevices ??= access?.onDeviceChange?.(() => void refreshDevices());
-      void refreshDevices();
+      watchingDevices ??= access?.onDeviceChange?.(() =>
+        fireAndForget(refreshDevices(), 'meeting-media')
+      );
+      fireAndForget(refreshDevices(), 'meeting-media');
       setErrors({});
       await runExclusive(async () => {
         for (const device of devices) {
@@ -334,7 +338,8 @@ export function createMeetingMedia(
           await acquire(device);
         }
       });
-      if (!disposed && current === preparation) void refreshDevices();
+      if (!disposed && current === preparation)
+        fireAndForget(refreshDevices(), 'meeting-media');
     },
     setMicrophoneEnabled: (value: boolean) => toggle('microphone', value),
     setCameraEnabled: (value: boolean) => toggle('camera', value),

@@ -81,3 +81,51 @@ test('contact pipeline preserves choices after a failed create', async ({
     page.getByRole('navigation', { name: 'CRM pipelines' })
   ).toContainText('Team');
 });
+
+test('export a pipeline and import a CSV into it', async ({ page }) => {
+  await page.routeWebSocket('**', (socket) => socket.close());
+  await page.route('https://**', (route) => route.abort());
+  await page.route('**/__macro_dev/**', (route) => route.abort());
+  await page.goto(fixture, { waitUntil: 'domcontentloaded' });
+  await page.getByRole('button', { name: 'New pipeline', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByRole('textbox', { name: 'Pipeline name' }).fill('Q4 Deals');
+  await dialog.getByRole('button', { name: 'Create pipeline' }).click();
+  await expect(dialog).not.toBeVisible();
+
+  await page.getByRole('button', { name: 'Pipeline actions' }).click();
+  const downloaded = page.waitForEvent('download');
+  await page.getByRole('menuitem', { name: 'Export CSV' }).click();
+  const download = await downloaded;
+  expect(download.suggestedFilename()).toMatch(
+    /^macro-q4-deals-\d{4}-\d{2}-\d{2}\.csv$/
+  );
+  const path = await download.path();
+  const { readFile } = await import('node:fs/promises');
+  expect((await readFile(path, 'utf8')).replace(/^\uFEFF/, '')).toBe(
+    'Company,Domain,Stage\nacme.com,acme.com,Lead'
+  );
+
+  await page.getByRole('button', { name: 'Pipeline actions' }).click();
+  await page.getByRole('menuitem', { name: 'Import CSV' }).click();
+  const importDialog = page.getByRole('dialog');
+  await importDialog.getByLabel('Pipeline CSV').setInputFiles({
+    name: 'deals.csv',
+    mimeType: 'text/csv',
+    buffer: Buffer.from(
+      'Company,Domain,Stage,Notes\nAcme,acme.com,Lead,\nBeta,https://beta.io,Won,hi\n'
+    ),
+  });
+  await expect(importDialog).toContainText('2 entries ready to import.');
+  await expect(importDialog).toContainText('Fills Stage.');
+  await expect(importDialog).toContainText(
+    "Skips columns this pipeline can't fill: Notes."
+  );
+  await importDialog
+    .getByRole('button', { name: 'Import', exact: true })
+    .click();
+  await expect(importDialog.getByRole('status')).toHaveText(
+    '1 entry added, 1 already in this pipeline.'
+  );
+  await expect(page.getByLabel('Pipeline entries')).toHaveText('2');
+});

@@ -4,6 +4,7 @@ import type {
   SplitManager,
 } from '@components/app/split-layout/layoutManager';
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type NotificationSource,
   openNotificationFromId,
@@ -83,34 +84,37 @@ export function usePendingNotificationNavigationEffect(
       setPendingNotificationNavigationId(undefined);
     };
 
-    void openNotificationFromId(
-      notificationId,
-      layoutManager,
-      notificationSource,
-      { canOpen: isCurrentAttempt, onApplied }
-    ).match(
-      () => {
-        if (!isCurrentAttempt()) return;
-        attempt.settled = true;
-        if (layoutManager.events() !== attempt.eventAtStart) {
-          setRetryRevision((revision) => revision + 1);
+    fireAndForget(
+      openNotificationFromId(
+        notificationId,
+        layoutManager,
+        notificationSource,
+        { canOpen: isCurrentAttempt, onApplied }
+      ).match(
+        () => {
+          if (!isCurrentAttempt()) return;
+          attempt.settled = true;
+          if (layoutManager.events() !== attempt.eventAtStart) {
+            setRetryRevision((revision) => revision + 1);
+          }
+        },
+        (error) => {
+          if (activeAttempt !== attempt) return;
+          activeAttempt = undefined;
+          if (error.tag === 'NavigationDeferredError') return;
+          if (
+            disposed ||
+            pendingNotificationNavigationId() !== notificationId ||
+            globalSplitManager() !== layoutManager ||
+            layoutManager.contentNavigationVersion() !== navigationVersion
+          ) {
+            return;
+          }
+          setPendingNotificationNavigationId(undefined);
+          toast.failure('Failed to open notification.');
         }
-      },
-      (error) => {
-        if (activeAttempt !== attempt) return;
-        activeAttempt = undefined;
-        if (error.tag === 'NavigationDeferredError') return;
-        if (
-          disposed ||
-          pendingNotificationNavigationId() !== notificationId ||
-          globalSplitManager() !== layoutManager ||
-          layoutManager.contentNavigationVersion() !== navigationVersion
-        ) {
-          return;
-        }
-        setPendingNotificationNavigationId(undefined);
-        toast.failure('Failed to open notification.');
-      }
+      ),
+      'notification-navigation'
     );
   });
 }

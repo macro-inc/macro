@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_mailbox_drafts SET checkpoint = $2,state = 'pending',error_code = NULL,actor_id = $3,available_at = now(),updated_at = now() WHERE message_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Jsonb",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "80c6d216651c39de33a6e30cb033e6c06628bc8f0a5de15bb68fbb614c5afeca"
+}

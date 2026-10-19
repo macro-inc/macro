@@ -124,6 +124,7 @@ fn oversized_attachment_metadata_is_truncated() {
         db_id: Uuid::now_v7(),
         provider_id: Some("a1".to_string()),
         data_url: None,
+        reference_url: None,
         filename: Some(format!(
             "{}.PDF",
             "f".repeat(column_limits::ATTACHMENT_FILENAME)

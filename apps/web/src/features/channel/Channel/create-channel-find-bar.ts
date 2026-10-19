@@ -2,6 +2,7 @@ import {
   createFindBarController,
   type FindBarController,
 } from '@core/component/createFindBarController';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { extractSearchTerms } from '@core/util/searchHighlight';
 import {
   type ChannelMessageEntity,
@@ -120,7 +121,7 @@ export function createChannelFindBar(
         if (idx === 0 || rs.length === 0) return;
         if (!searchQuery.hasNextPage || searchQuery.isFetchingNextPage) return;
         if (rs.length - idx <= FIND_BAR_PREFETCH_THRESHOLD) {
-          searchQuery.fetchNextPage();
+          fireAndForget(searchQuery.fetchNextPage(), 'channel-find-bar');
         }
       });
 

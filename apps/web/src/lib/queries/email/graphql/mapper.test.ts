@@ -7,6 +7,7 @@ import { mapGraphqlEmailThreadPage } from './mapper';
 
 const message: EmailThreadMessageFieldsFragment = {
   __typename: 'GraphqlSoupEmailMessage',
+  operationStatus: null,
   calendarInvitations: [],
   id: 'message-1',
   providerId: 'provider-message-1',
@@ -42,10 +43,14 @@ const message: EmailThreadMessageFieldsFragment = {
       sizeBytes: 10,
       sfsId: 'sfs-1',
       contentId: 'cid-1',
+      referenceUrl: 'https://outlook.office.com/mail/message',
     },
   ],
   attachmentsDraft: [
     {
+      uploadPending: false,
+      contentId: null,
+      isInline: false,
       __typename: 'GraphqlSoupEmailDraftAttachment',
       id: 'draft-attachment-1',
       draftId: 'message-1',
@@ -90,7 +95,6 @@ function thread(
     isSignal: false,
     isImportant: false,
     isFavorited: false,
-    sortTs: '2026-08-06T12:00:00Z',
     viewedAt: null,
     frecencyScore: null,
     mailAllPreview: null,
@@ -109,6 +113,8 @@ function thread(
     isRead: false,
     projectId: 'project-1',
     latestInboundMessageTs: '2026-08-06T12:00:00Z',
+    latestOutboundMessageTs: null,
+    latestNonSpamMessageTs: null,
     reminderReturnedAt: null,
     createdAt: '2026-08-01T00:00:00Z',
     updatedAt: '2026-08-06T12:02:00Z',
@@ -164,6 +170,7 @@ describe('mapGraphqlEmailThreadPage', () => {
           db_id: 'attachment-1',
           sfs_id: 'sfs-1',
           content_id: 'cid-1',
+          reference_url: 'https://outlook.office.com/mail/message',
         },
       ],
       attachments_draft: [{ id: 'draft-attachment-1', s3_key: 'draft-key' }],

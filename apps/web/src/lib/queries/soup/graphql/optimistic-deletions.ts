@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { skipToken, useMutationState, useQuery } from '@tanstack/solid-query';
 import { type Accessor, createMemo, createSignal } from 'solid-js';
 import { queryClient } from '../../client';
@@ -52,7 +53,7 @@ export function createGraphqlSoupDeletion(
       retryTimer = setTimeout(
         () => {
           retryTimer = undefined;
-          void revalidate(attempt + 1);
+          fireAndForget(revalidate(attempt + 1), 'soup-optimistic-deletions');
         },
         RETRY_DELAY_MS * 2 ** attempt
       );
@@ -68,7 +69,8 @@ export function createGraphqlSoupDeletion(
       if (successfulIds.length === 0) {
         release();
         // Reconcile uncertain failures without retaining a failed deletion.
-        if (ids.length > 0) void revalidate(0);
+        if (ids.length > 0)
+          fireAndForget(revalidate(0), 'soup-optimistic-deletions');
         return;
       }
       // A mutation observer can detach before the API finishes, starting its
@@ -79,7 +81,7 @@ export function createGraphqlSoupDeletion(
       );
       // Cleanup is independent of hung refresh promises and query lifetime.
       expiryTimer = setTimeout(release, GRAPHQL_SOUP_DELETE_RETENTION_MS);
-      void revalidate(0);
+      fireAndForget(revalidate(0), 'soup-optimistic-deletions');
     },
   };
 }

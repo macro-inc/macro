@@ -7,6 +7,7 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { trashDatabase } from '@block-database/queries/trash-database';
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { $createDocumentCardNode } from '@macro-inc/lexical-core';
 import ChartBar from '@phosphor/chart-bar.svg';
 import { createForm, onFormFirstQuestion } from '@queries/storage/forms';
@@ -117,7 +118,7 @@ function PollComposerDialog(
         <PollComposer
           pending={pending()}
           error={error()}
-          onPost={(draft) => void post(draft)}
+          onPost={(draft) => fireAndForget(post(draft), 'poll-composer')}
           onCancel={close}
         />
       </div>

@@ -1,4 +1,5 @@
 import AnthropicIcon from '@core/component/AI/assets/anthropic.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { Button, confirmDialog } from '@ui';
 import { createUniqueId, Show } from 'solid-js';
 import type { ClaudeConnectionStatus, ClaudeLogin } from '../core/connection';
@@ -78,7 +79,8 @@ export function ConnectionCard(props: ConnectionCardProps) {
                       props.failed
                         ? props.onRefresh
                         : props.status?.connected
-                          ? () => void disconnect()
+                          ? () =>
+                              fireAndForget(disconnect(), 'claude-connection')
                           : props.onBegin
                     }
                   >

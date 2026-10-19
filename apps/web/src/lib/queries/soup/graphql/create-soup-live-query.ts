@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
 import type { CombinedError } from '@urql/core';
 import {
@@ -281,9 +282,9 @@ export function createSoupLiveQuery(
       span.end();
       cacheGeneration += 1;
       invalidateGeneration();
-      void observeCurrentRevision();
+      fireAndForget(observeCurrentRevision(), 'soup-live-query');
     });
-    void observeCurrentRevision();
+    fireAndForget(observeCurrentRevision(), 'soup-live-query');
     onCleanup(() => {
       staleFallbackSpan?.end();
       staleFallbackSpan = undefined;
@@ -382,10 +383,13 @@ export function createSoupLiveQuery(
           });
           recordAuthority('network');
           finishStaleFallback('network');
-          void acknowledgeNetworkPage(
-            page.pageIndex,
-            pending,
-            metadata.persistence
+          fireAndForget(
+            acknowledgeNetworkPage(
+              page.pageIndex,
+              pending,
+              metadata.persistence
+            ),
+            'soup-live-query'
           );
           return;
         }
@@ -618,114 +622,117 @@ export function createSoupLiveQuery(
     localEvaluationRunning = true;
     localEvaluationPending = false;
 
-    void (async () => {
-      const span = Telemetry.span('graphql_cache.soup_local_evaluation');
-      let retryCount = 0;
-      let discarded = false;
-      let outcome: 'success' | 'incomplete' | 'error' = 'incomplete';
-      try {
-        for (let attempt = 0; attempt < 3; attempt += 1) {
-          if (requestId !== localRequest) {
-            discarded = true;
-            return;
-          }
-          let result = await host.entityFilter({
-            filters,
-            sortMethod,
-            sortDirection,
-            limit,
-            ...(mailView ? { mail: { view: mailView } } : { baseline }),
-          });
-          if (
-            mailView &&
-            (result.kind === 'unsupported' || result.kind === 'incomplete')
-          ) {
-            if (!baseline) return;
-            result = await host.entityFilter({
+    fireAndForget(
+      (async () => {
+        const span = Telemetry.span('graphql_cache.soup_local_evaluation');
+        let retryCount = 0;
+        let discarded = false;
+        let outcome: 'success' | 'incomplete' | 'error' = 'incomplete';
+        try {
+          for (let attempt = 0; attempt < 3; attempt += 1) {
+            if (requestId !== localRequest) {
+              discarded = true;
+              return;
+            }
+            let result = await host.entityFilter({
               filters,
               sortMethod,
               sortDirection,
               limit,
-              baseline,
+              ...(mailView ? { mail: { view: mailView } } : { baseline }),
             });
-          }
-          if (result.kind !== 'reconciled' && result.kind !== 'mail-page')
-            return;
-          if (requestId !== localRequest) {
-            discarded = true;
-            return;
-          }
-          const selected = await readSoupPage(host, {
-            page: result,
-            select:
-              result.kind === 'mail-page'
-                ? mailItemSelection
-                : definition.select,
-            baseline: result.kind === 'mail-page' ? [] : records,
-            mailView,
-          });
-          if (requestId !== localRequest) {
-            discarded = true;
-            return;
-          }
-          if (selected.kind === 'stale') {
-            discarded = true;
-            retryCount += 1;
-            setCurrentCacheRevision(selected.revision);
-            continue;
-          }
-          const reconciledRecords = selected.records;
-          batch(() => {
-            setLocalProjection({
-              input: definition.input,
-              generation: requestGeneration,
-              baselineKeys: new Set(
-                result.kind === 'mail-page' ? [] : records.map(soupItemKey)
-              ),
-              displayedKeys: new Set(reconciledRecords.map(soupItemKey)),
-              withoutEmail,
-              ...(result.kind === 'mail-page'
-                ? {
-                    mail: {
-                      nextCursor: result.nextCursor,
-                      revision: result.revision,
-                      optimistic: result.optimistic,
-                    },
-                  }
-                : {}),
-              records: reconciledRecords,
+            if (
+              mailView &&
+              (result.kind === 'unsupported' || result.kind === 'incomplete')
+            ) {
+              if (!baseline) return;
+              result = await host.entityFilter({
+                filters,
+                sortMethod,
+                sortDirection,
+                limit,
+                baseline,
+              });
+            }
+            if (result.kind !== 'reconciled' && result.kind !== 'mail-page')
+              return;
+            if (requestId !== localRequest) {
+              discarded = true;
+              return;
+            }
+            const selected = await readSoupPage(host, {
+              page: result,
+              select:
+                result.kind === 'mail-page'
+                  ? mailItemSelection
+                  : definition.select,
+              baseline: result.kind === 'mail-page' ? [] : records,
+              mailView,
             });
-            // The filter, fragments, and final revision agree. A newer coherent
-            // page is valid even if hydration advanced past the initial read.
-            // Publish both result kinds' watermarks: the Mail guard avoids a
-            // rescan, and reconnect cannot make an older network snapshot authoritative.
-            setCurrentCacheRevision(result.revision);
-          });
-          outcome = 'success';
-          recordAuthority('local');
-          finishStaleFallback('local');
-          span.setAttr(
-            'evaluation.retained_count',
-            result.kind === 'reconciled' ? result.retainedKeys.length : 0
-          );
-          return;
+            if (requestId !== localRequest) {
+              discarded = true;
+              return;
+            }
+            if (selected.kind === 'stale') {
+              discarded = true;
+              retryCount += 1;
+              setCurrentCacheRevision(selected.revision);
+              continue;
+            }
+            const reconciledRecords = selected.records;
+            batch(() => {
+              setLocalProjection({
+                input: definition.input,
+                generation: requestGeneration,
+                baselineKeys: new Set(
+                  result.kind === 'mail-page' ? [] : records.map(soupItemKey)
+                ),
+                displayedKeys: new Set(reconciledRecords.map(soupItemKey)),
+                withoutEmail,
+                ...(result.kind === 'mail-page'
+                  ? {
+                      mail: {
+                        nextCursor: result.nextCursor,
+                        revision: result.revision,
+                        optimistic: result.optimistic,
+                      },
+                    }
+                  : {}),
+                records: reconciledRecords,
+              });
+              // The filter, fragments, and final revision agree. A newer coherent
+              // page is valid even if hydration advanced past the initial read.
+              // Publish both result kinds' watermarks: the Mail guard avoids a
+              // rescan, and reconnect cannot make an older network snapshot authoritative.
+              setCurrentCacheRevision(result.revision);
+            });
+            outcome = 'success';
+            recordAuthority('local');
+            finishStaleFallback('local');
+            span.setAttr(
+              'evaluation.retained_count',
+              result.kind === 'reconciled' ? result.retainedKeys.length : 0
+            );
+            return;
+          }
+        } catch {
+          outcome = 'error';
+          // Unsupported, incomplete, validation, and storage failures retain
+          // the stale network/normalized-cache fallback already on screen.
+        } finally {
+          span.setAttr('evaluation.outcome', outcome);
+          span.setAttr('evaluation.retry_count', retryCount);
+          span.setAttr('evaluation.discarded', discarded);
+          span.end();
+          localEvaluationRunning = false;
+          if (localEvaluationPending) {
+            localEvaluationPending = false;
+            setLocalEvaluationTrigger((trigger) => trigger + 1);
+          }
         }
-      } catch {
-        outcome = 'error';
-        // Unsupported, incomplete, validation, and storage failures retain
-        // the stale network/normalized-cache fallback already on screen.
-      } finally {
-        span.setAttr('evaluation.outcome', outcome);
-        span.setAttr('evaluation.retry_count', retryCount);
-        span.setAttr('evaluation.discarded', discarded);
-        span.end();
-        localEvaluationRunning = false;
-        if (localEvaluationPending) {
-          localEvaluationPending = false;
-          setLocalEvaluationTrigger((trigger) => trigger + 1);
-        }
-      }
-    })();
+      })(),
+      'soup-live-query'
+    );
   });
 
   // Retain same-query rows across revisions and page additions, not across a

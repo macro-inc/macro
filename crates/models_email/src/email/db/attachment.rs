@@ -6,6 +6,9 @@ use uuid::Uuid;
 /// Attachments of a message, as sent to us by the provider.
 #[derive(FromRow, Debug, Clone, Serialize, Deserialize)]
 pub struct Attachment {
+    /// Cloud reference: open this provider page instead of downloading bytes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reference_url: Option<String>,
     pub id: Uuid,
     pub message_id: Uuid,
     // a different value is returned by the gmail API for this each time you fetch a message -
@@ -52,6 +55,15 @@ pub struct AttachmentDraft {
     pub size: i32,
     /// S3 object key where the attachment content is stored.
     pub s3_key: String,
+    /// Bytes have not yet been verified; sending must wait for completion.
+    #[serde(default)]
+    pub upload_pending: bool,
+    /// Original Content-ID retained when transferring a provider attachment.
+    #[serde(default)]
+    pub content_id: Option<String>,
+    /// Whether the attachment is referenced inline by the message body.
+    #[serde(default)]
+    pub is_inline: bool,
 }
 
 impl From<crate::service::attachment::AttachmentDraft> for AttachmentDraft {
@@ -64,6 +76,9 @@ impl From<crate::service::attachment::AttachmentDraft> for AttachmentDraft {
             sha: service.sha,
             size: service.size,
             s3_key: service.s3_key,
+            upload_pending: service.upload_pending,
+            content_id: service.content_id,
+            is_inline: service.is_inline,
         }
     }
 }

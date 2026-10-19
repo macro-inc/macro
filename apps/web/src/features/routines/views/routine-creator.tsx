@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import ClockIcon from '@phosphor/clock.svg';
 import XIcon from '@phosphor/x.svg';
 import { Button, EntityComposer, ToggleSwitch } from '@ui';
@@ -31,7 +32,7 @@ export function RoutineCreatorView(props: {
       onKeyDown={(event) => {
         if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
           event.preventDefault();
-          void create();
+          fireAndForget(create(), 'routines');
         }
       }}
     >
@@ -113,7 +114,7 @@ export function RoutineCreatorView(props: {
           aria-label={props.source.pending() ? 'Creating…' : 'Create routine'}
           hasContent={Boolean(draft().prompt.trim())}
           disabled={props.source.pending()}
-          onClick={() => void create()}
+          onClick={() => fireAndForget(create(), 'routines')}
         >
           {props.source.pending() ? 'Creating…' : 'Create routine'}
         </EntityComposer.Submit>

@@ -101,6 +101,9 @@ function Fixture() {
     externalEdit,
   };
 
+  const showError = (e: unknown) =>
+    setError(e instanceof Error ? e.message : String(e));
+
   async function open(bytes: ArrayBuffer, fileName: string) {
     engine()?.close();
     setEngine(undefined);
@@ -110,7 +113,7 @@ function Fixture() {
     try {
       setEngine(await openWorkerPresentation(bytes));
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      showError(e);
     }
   }
 
@@ -123,7 +126,7 @@ function Fixture() {
   }
 
   const initial = params.get('deck') ?? DECKS['Kitchen sink (financial)'];
-  void openCorpus(initial);
+  openCorpus(initial).catch(showError);
 
   const context = (e: PresentationEngine): PptxEditorContext => ({
     engine: e,
@@ -161,7 +164,7 @@ function Fixture() {
         <select
           data-testid="fixture-deck"
           class="rounded border border-edge-muted bg-input px-1 py-0.5"
-          onChange={(e) => void openCorpus(e.currentTarget.value)}
+          onChange={(e) => openCorpus(e.currentTarget.value).catch(showError)}
         >
           <For each={Object.entries(DECKS)}>
             {([label, path]) => (

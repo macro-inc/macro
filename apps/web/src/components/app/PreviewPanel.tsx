@@ -1,5 +1,6 @@
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import type { BlockOrchestrator } from '@core/orchestrator';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createContextProvider } from '@solid-primitives/context';
 import deepEqual from 'fast-deep-equal';
 import {
@@ -225,7 +226,7 @@ function PreviewBlock(
   createRenderEffect(
     on(navigation, ({ target }) => {
       if (!blockInstance()) return;
-      void locate(target);
+      fireAndForget(locate(target), 'preview-panel');
     })
   );
 

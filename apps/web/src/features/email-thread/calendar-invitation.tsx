@@ -1,4 +1,5 @@
 import { useAddInboxFlow } from '@core/email-link';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { openExternalUrl } from '@core/util/url';
 import {
   getCachedCalendarInvitations,
@@ -121,10 +122,13 @@ function ConnectedInvitation(
               : undefined;
           },
           retryCalendar: () => {
-            void query.refetch();
+            fireAndForget(query.refetch(), 'email-thread');
           },
           connectCalendar: () => {
-            void startAddInbox({ scopes: 'gmail_and_calendar' });
+            fireAndForget(
+              startAddInbox({ scopes: 'gmail_and_calendar' }),
+              'add-inbox'
+            );
           },
           openExternal: (url) => {
             openExternalUrl(url);

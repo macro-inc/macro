@@ -182,6 +182,10 @@ type ToolParserMap = {
     response: types.WordDocumentResponse;
   };
   ExecuteCode: { call: types.ExecuteCode; response: types.ExecutionReceipt };
+  ExportPipelineCsv: {
+    call: types.ExportPipelineCsv;
+    response: types.ExportPipelineCsvResponse;
+  };
   FindPipelineEntries: {
     call: types.FindPipelineEntries;
     response: types.FindPipelineEntriesResponse;
@@ -216,9 +220,17 @@ type ToolParserMap = {
     response: types.TeamAvailability;
   };
   GetThread: { call: types.GetThread; response: types.GetThreadResponse };
+  ImportCompaniesCsv: {
+    call: types.ImportCompaniesCsv;
+    response: types.ImportCompaniesCsvResponse;
+  };
   ImportNotionPage: {
     call: types.ImportNotionPage;
     response: types.ImportNotionPageResponse;
+  };
+  ImportPipelineCsv: {
+    call: types.ImportPipelineCsv;
+    response: types.ImportPipelineCsvResponse;
   };
   IssueBotCredential: {
     call: types.IssueBotCredential;
@@ -671,6 +683,10 @@ const toolParserMap = {
     call: schemas.ExecuteCode,
     response: schemas.ExecutionReceipt,
   },
+  ExportPipelineCsv: {
+    call: schemas.ExportPipelineCsv,
+    response: schemas.ExportPipelineCsvResponse,
+  },
   FindPipelineEntries: {
     call: schemas.FindPipelineEntries,
     response: schemas.FindPipelineEntriesResponse,
@@ -708,9 +724,17 @@ const toolParserMap = {
     response: schemas.TeamAvailability,
   },
   GetThread: { call: schemas.GetThread, response: schemas.GetThreadResponse },
+  ImportCompaniesCsv: {
+    call: schemas.ImportCompaniesCsv,
+    response: schemas.ImportCompaniesCsvResponse,
+  },
   ImportNotionPage: {
     call: schemas.ImportNotionPage,
     response: schemas.ImportNotionPageResponse,
+  },
+  ImportPipelineCsv: {
+    call: schemas.ImportPipelineCsv,
+    response: schemas.ImportPipelineCsvResponse,
   },
   IssueBotCredential: {
     call: schemas.IssueBotCredential,
@@ -1207,6 +1231,10 @@ type ToolDataMap = {
     response: types.WordDocumentResponse;
   };
   ExecuteCode: { call: types.ExecuteCode; response: types.ExecutionReceipt };
+  ExportPipelineCsv: {
+    call: types.ExportPipelineCsv;
+    response: types.ExportPipelineCsvResponse;
+  };
   FindPipelineEntries: {
     call: types.FindPipelineEntries;
     response: types.FindPipelineEntriesResponse;
@@ -1241,9 +1269,17 @@ type ToolDataMap = {
     response: types.TeamAvailability;
   };
   GetThread: { call: types.GetThread; response: types.GetThreadResponse };
+  ImportCompaniesCsv: {
+    call: types.ImportCompaniesCsv;
+    response: types.ImportCompaniesCsvResponse;
+  };
   ImportNotionPage: {
     call: types.ImportNotionPage;
     response: types.ImportNotionPageResponse;
+  };
+  ImportPipelineCsv: {
+    call: types.ImportPipelineCsv;
+    response: types.ImportPipelineCsvResponse;
   };
   IssueBotCredential: {
     call: types.IssueBotCredential;

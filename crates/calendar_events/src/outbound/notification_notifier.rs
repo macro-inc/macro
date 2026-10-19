@@ -9,7 +9,7 @@ use notification::domain::models::SendNotificationRequestBuilder;
 use notification::domain::service::NotificationIngress;
 use rootcause::Report;
 
-use crate::domain::models::{DueCalendarReminder, EventTime};
+use crate::domain::models::{DueCalendarReminder, EventTime, ReminderDeliveryMethod};
 use crate::domain::ports::CalendarReminderNotifier;
 
 /// Delivers due calendar reminders by handing them to the notification
@@ -58,23 +58,32 @@ impl<I: NotificationIngress> CalendarReminderNotifier for NotificationCalendarRe
             // out of their own notification, and a calendar reminder's only
             // recipient is the event's owner.
             sender_id: None,
-            recipient_ids: HashSet::from([owner_id]),
+            recipient_ids: HashSet::from([owner_id.clone()]),
         }
-        .into_request()
-        .with_apns()
-        .with_conn_gateway();
+        .into_request();
 
-        self.ingress
-            .send_notification(request)
-            .await
-            .map_err(|error| {
-                tracing::error!(
-                    error = ?error,
-                    event_id = %due.firing.event_id,
-                    "calendar reminder notification rejected"
-                );
-                rootcause::report!("failed to send calendar reminder notification").into_dynamic()
-            })?;
+        let result = match due.firing.method {
+            ReminderDeliveryMethod::Popup => {
+                self.ingress
+                    .send_notification(request.with_apns().with_conn_gateway())
+                    .await
+            }
+            ReminderDeliveryMethod::Email => {
+                let destination = MacroUserIdStr::try_from_email(&due.email_address)
+                    .map_err(|error| rootcause::report!(error).into_dynamic())?;
+                self.ingress
+                    .send_notification(request.with_email_destination(&owner_id, destination)?)
+                    .await
+            }
+        };
+        result.map_err(|error| {
+            tracing::error!(
+                error = ?error,
+                event_id = %due.firing.event_id,
+                "calendar reminder notification rejected"
+            );
+            rootcause::report!("failed to send calendar reminder notification").into_dynamic()
+        })?;
 
         Ok(())
     }

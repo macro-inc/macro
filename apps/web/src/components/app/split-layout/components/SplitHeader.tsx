@@ -14,6 +14,7 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { type EntityDragEvent, isEntityDragEvent } from '@entity';
 import CollapseIcon from '@phosphor/arrows-in.svg';
 import ExpandIcon from '@phosphor/arrows-out.svg';
@@ -306,12 +307,15 @@ function SoupNavigationButtons() {
     const next = soup.navigate.by(offset, { skipGroupHeaders: true });
     if (!next) return;
 
-    void openEntityInSplitFromUnifiedList(next.row.original, {
-      splitHandle: context.handle,
-      mergeHistory: true,
-      referredFrom: navigationReferredFrom(),
-      notificationSource,
-    });
+    fireAndForget(
+      openEntityInSplitFromUnifiedList(next.row.original, {
+        splitHandle: context.handle,
+        mergeHistory: true,
+        referredFrom: navigationReferredFrom(),
+        notificationSource,
+      }),
+      'open-entity-in-split'
+    );
   };
 
   return (
@@ -369,6 +373,14 @@ export function SplitHeader(props: {
     throw new Error('<SplitHeader> must be used within a <SplitLayout>');
   }
 
+  const hideMobileBack = () => {
+    const content = panel.handle.content();
+    return (
+      isListViewID(content.id) ||
+      (content.type === 'component' && content.id === 'booking-links')
+    );
+  };
+
   const droppableId = `split-header-${panel.handle.id}`;
   const droppable = createDroppable(droppableId, {
     type: 'split-header',
@@ -398,11 +410,14 @@ export function SplitHeader(props: {
     if (!next) return;
     if (current.type === next.type && current.id === next.id) return;
 
-    void openEntityInSplitFromUnifiedList(data, {
-      splitHandle: panel.handle,
-      allowDuplicate: true,
-      notificationSource,
-    });
+    fireAndForget(
+      openEntityInSplitFromUnifiedList(data, {
+        splitHandle: panel.handle,
+        allowDuplicate: true,
+        notificationSource,
+      }),
+      'open-entity-in-split'
+    );
   });
 
   return (
@@ -455,19 +470,17 @@ export function SplitHeader(props: {
               </div>
             }
           >
-            {/* Mobile back island. List views never render the back button
-                (their header hosts the filter pills instead), so the island
-                hides for them even when history allows going back. */}
+            {/* List views and Scheduling use navigation islands instead of Back. */}
             <HeaderIsland
               class={cn(
                 'relative gap-0 px-1',
                 ((!panel.handle.canGoBack() &&
                   !hasAgentsBackFallback(panel.handle.content())) ||
-                  isListViewID(panel.handle.content().id)) &&
+                  hideMobileBack()) &&
                   'hidden'
               )}
             >
-              <Show when={!isListViewID(panel.handle.content().id)}>
+              <Show when={!hideMobileBack()}>
                 <SplitBackButton />
               </Show>
             </HeaderIsland>

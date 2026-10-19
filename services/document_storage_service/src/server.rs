@@ -1594,7 +1594,7 @@ pub async fn run() -> anyhow::Result<()> {
         SoupImpl::new(
             PgSoupRepo::new(readonly_pool::ReadOnlyPool(readonly_db.clone())),
             frecency_service,
-            readonly_email_service,
+            readonly_email_service.clone(),
             ChannelListServiceImpl::new(
                 PgChannelsRepo::new(readonly_db.clone()),
                 PgChannelsRepo::new(readonly_db.clone()),
@@ -2094,12 +2094,14 @@ pub async fn run() -> anyhow::Result<()> {
             graphql_soup::soup_item_loader(
                 primary_entity_soup.clone(),
                 Arc::new(email_service.clone()),
+                entity_access_service.as_ref().clone(),
             ),
         ),
         graphql_agent_session_entity_loader: graphql_soup::AgentSessionEntityLoader(
             graphql_soup::soup_item_loader(
                 primary_entity_soup.clone(),
                 Arc::new(email_service.clone()),
+                entity_access_service.as_ref().clone(),
             ),
         ),
         graphql_soup_update_hydration_loader: graphql_soup::SoupUpdateHydrationLoader(
@@ -2108,6 +2110,14 @@ pub async fn run() -> anyhow::Result<()> {
                 Arc::new(email_service.clone()),
                 entity_access_service.as_ref().clone(),
             ),
+        ),
+        // Ordinary single-entity GraphQL reads use the replica-backed Soup
+        // and email readers. Subscription hydration and mutation replies
+        // above read the primary.
+        graphql_soup_item_loader: graphql_soup::soup_item_loader_with_team_access(
+            soup_service.clone(),
+            Arc::new(readonly_email_service),
+            entity_access_service.as_ref().clone(),
         ),
         graphql_crm_context: graphql_crm::CrmGraphqlContext::new(pipeline_service.clone()),
         graphql_initiative_context: graphql_initiative::InitiativeGraphqlContext::new(

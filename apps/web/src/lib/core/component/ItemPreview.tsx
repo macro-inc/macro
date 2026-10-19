@@ -72,7 +72,7 @@ export function useItemPreviewData(entity: Accessor<ItemEntity>) {
     }
   }
 
-  async function onPreviewClick(
+  function onPreviewClick(
     type: ItemType | undefined,
     id: string,
     fileType?: FileType,

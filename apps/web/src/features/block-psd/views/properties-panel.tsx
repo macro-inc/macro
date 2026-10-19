@@ -18,6 +18,7 @@ import type {
   TextLayer,
   TextStyle,
 } from '@core/psd-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import TextAlignCenter from '@phosphor/text-align-center.svg';
 import TextAlignLeft from '@phosphor/text-align-left.svg';
 import TextAlignRight from '@phosphor/text-align-right.svg';
@@ -105,7 +106,7 @@ export function PropertiesPanel(props: {
     field: string,
     done: boolean
   ) => {
-    void editor.apply([op], keys.key(field));
+    fireAndForget(editor.apply([op], keys.key(field)), 'psd-editor');
     if (done) keys.end();
   };
 
@@ -255,9 +256,12 @@ export function PropertiesPanel(props: {
                     checked={!mask().disabled}
                     disabled={!editable()}
                     onChange={(on) =>
-                      void editor.apply([
-                        { op: 'setMask', id: layer().id, disabled: !on },
-                      ])
+                      fireAndForget(
+                        editor.apply([
+                          { op: 'setMask', id: layer().id, disabled: !on },
+                        ]),
+                        'psd-editor'
+                      )
                     }
                   />
                 </Section>
@@ -271,13 +275,16 @@ export function PropertiesPanel(props: {
                     checked={effects().enabled}
                     disabled={!editable()}
                     onChange={(enabled) =>
-                      void editor.apply([
-                        {
-                          op: 'setEffects',
-                          id: layer().id,
-                          effects: { ...effects(), enabled },
-                        },
-                      ])
+                      fireAndForget(
+                        editor.apply([
+                          {
+                            op: 'setEffects',
+                            id: layer().id,
+                            effects: { ...effects(), enabled },
+                          },
+                        ]),
+                        'psd-editor'
+                      )
                     }
                   />
                   <For
@@ -296,13 +303,16 @@ export function PropertiesPanel(props: {
                           const list = (
                             effects()[entry.key] as { enabled: boolean }[]
                           ).map((e) => ({ ...e, enabled: on }));
-                          void editor.apply([
-                            {
-                              op: 'setEffects',
-                              id: layer().id,
-                              effects: { ...effects(), [entry.key]: list },
-                            },
-                          ]);
+                          fireAndForget(
+                            editor.apply([
+                              {
+                                op: 'setEffects',
+                                id: layer().id,
+                                effects: { ...effects(), [entry.key]: list },
+                              },
+                            ]),
+                            'psd-editor'
+                          );
                         }}
                       />
                     )}

@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { debounce } from '@solid-primitives/scheduled';
 import { type Accessor, createSignal, onCleanup } from 'solid-js';
 
@@ -42,13 +43,13 @@ export function createRoutineAutosave<T>(
     } finally {
       setSaving(false);
       // A newer edit may have finished debouncing during this request.
-      if (ready) void drain();
+      if (ready) fireAndForget(drain(), 'routines');
     }
   }
 
   const debouncedSave = debounce(() => {
     ready = true;
-    void drain();
+    fireAndForget(drain(), 'routines');
   }, 300);
 
   function queue(draft: T | undefined): void {
@@ -67,7 +68,7 @@ export function createRoutineAutosave<T>(
     setError(undefined);
     debouncedSave.clear();
     ready = true;
-    void drain();
+    fireAndForget(drain(), 'routines');
   }
 
   function cancel(): void {

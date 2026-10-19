@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
 import { createLoroManager } from '@macro-inc/collaboration/collab/manager';
 import type { RawUpdate } from '@macro-inc/collaboration/collab/shared';
@@ -135,50 +136,53 @@ export function createCollabSurfaceSession(
     }
   );
 
-  void (async () => {
-    // Load-or-create. Idempotent on the backend, so mounting the same
-    // surface in several places (or racing another client) is fine.
-    const ensured = await storageServiceClient.collabSurfaces.ensure({
-      id: surfaceId,
-      parentEntityType: opts.parent.entityType,
-      parentEntityId: opts.parent.entityId,
-      initialMarkdown: opts.initialMarkdown,
-    });
-    if (disposed) return;
-    if (ensured.isErr()) {
-      console.error('collab surface: ensure failed', ensured.error);
-      setConnectionError('failed to load or create the surface');
-      return;
-    }
+  fireAndForget(
+    (async () => {
+      // Load-or-create. Idempotent on the backend, so mounting the same
+      // surface in several places (or racing another client) is fine.
+      const ensured = await storageServiceClient.collabSurfaces.ensure({
+        id: surfaceId,
+        parentEntityType: opts.parent.entityType,
+        parentEntityId: opts.parent.entityId,
+        initialMarkdown: opts.initialMarkdown,
+      });
+      if (disposed) return;
+      if (ensured.isErr()) {
+        console.error('collab surface: ensure failed', ensured.error);
+        setConnectionError('failed to load or create the surface');
+        return;
+      }
 
-    const token = await getCollabSurfaceToken(surfaceId);
-    if (disposed) return;
-    if (!token) {
-      setConnectionError('failed to mint a sync connection token');
-      return;
-    }
+      const token = await getCollabSurfaceToken(surfaceId);
+      if (disposed) return;
+      if (!token) {
+        setConnectionError('failed to mint a sync connection token');
+        return;
+      }
 
-    const { source, doInitialSync } = createCollabSurfaceSource(
-      surfaceId,
-      token,
-      () => getCollabSurfaceToken(surfaceId)
-    );
-    if (disposed) {
-      source.cleanup();
-      return;
-    }
-    setSyncSource(source);
-
-    const sync = await doInitialSync();
-    if (sync.isErr()) {
-      console.error(
-        'collab surface: failed to receive initial sync',
-        sync.error
+      const { source, doInitialSync } = createCollabSurfaceSource(
+        surfaceId,
+        token,
+        () => getCollabSurfaceToken(surfaceId)
       );
-      return;
-    }
-    await loroManager.ingest({ kind: 'dss', snapshot: sync.value.snapshot });
-  })();
+      if (disposed) {
+        source.cleanup();
+        return;
+      }
+      setSyncSource(source);
+
+      const sync = await doInitialSync();
+      if (sync.isErr()) {
+        console.error(
+          'collab surface: failed to receive initial sync',
+          sync.error
+        );
+        return;
+      }
+      await loroManager.ingest({ kind: 'dss', snapshot: sync.value.snapshot });
+    })(),
+    'collab-surface'
+  );
 
   return {
     surfaceId,

@@ -1,3 +1,5 @@
+import { fireAndForget } from '@core/util/fireAndForget';
+import { isIgnorableError } from '@core/util/ignorableErrors';
 import { getPlatform, isTauri } from '@core/util/platform';
 import { recordBrowserTursoCacheNavigation } from '@graphql-cache/rollout-observability';
 import { Telemetry } from '@macro-inc/observability';
@@ -99,7 +101,7 @@ export async function initializeBrowserObservability(): Promise<void> {
       'macro.recording.id': desktop.identity.recordingId ?? undefined,
       'service.instance.id': desktop.identity.instanceId,
     });
-    void recording.start();
+    fireAndForget(recording.start(), 'desktop-memory-recording');
     import.meta.hot?.dispose(() => recording.dispose());
   }
   recordBrowserTursoCacheNavigation();
@@ -108,8 +110,13 @@ export async function initializeBrowserObservability(): Promise<void> {
     import.meta.hot?.dispose(disposeUiTelemetry);
   }
 
-  window.addEventListener('pagehide', () => void Telemetry.flush());
+  window.addEventListener('pagehide', () =>
+    fireAndForget(Telemetry.flush(), 'telemetry-flush')
+  );
   window.addEventListener('error', (event) => {
+    if (isIgnorableError({ message: event.message, source: event.filename })) {
+      return;
+    }
     Telemetry.error(event.error ?? event.message, {
       'error.source': 'window',
     });

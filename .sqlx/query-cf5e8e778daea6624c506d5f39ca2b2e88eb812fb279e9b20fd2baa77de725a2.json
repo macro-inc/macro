@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE email_threads t SET provider_id = $3\n            WHERE t.id = (SELECT thread_id FROM email_messages WHERE id = $1 AND link_id = $2)\n                AND t.provider_id IS NULL\n                AND NOT EXISTS (SELECT 1 FROM email_threads other WHERE other.link_id = $2 AND other.provider_id = $3 AND other.id <> t.id)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cf5e8e778daea6624c506d5f39ca2b2e88eb812fb279e9b20fd2baa77de725a2"
+}

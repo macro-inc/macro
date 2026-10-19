@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT actor_id,plan,state FROM email_draft_transfers WHERE id=$1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "actor_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "plan",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 2,
+        "name": "state",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "97519bf78261636ab861e58396dd748d5b6b5521208baa7333f4ee5b9a8865fd"
+}

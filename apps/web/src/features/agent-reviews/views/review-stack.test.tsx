@@ -16,6 +16,7 @@ const editor = vi.hoisted(() => ({
   ready: true,
   valid: true,
   submitReady: undefined as Promise<void> | undefined,
+  executed: undefined as Promise<boolean> | undefined,
 }));
 const mobile = vi.hoisted(() => ({ value: false }));
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => mobile.value }));
@@ -53,7 +54,9 @@ vi.mock('@core/component/AI/component/tool/email/DraftComposer', () => ({
         <button
           type="button"
           disabled={!props.sink.canAct()}
-          onClick={() => void props.sink.onExecute(read())}
+          onClick={() => {
+            editor.executed = props.sink.onExecute(read());
+          }}
         >
           Send draft
         </button>
@@ -78,6 +81,7 @@ beforeEach(() => {
   editor.ready = true;
   editor.valid = true;
   editor.submitReady = undefined;
+  editor.executed = undefined;
   mobile.value = false;
   motionStyles = document.createElement('style');
   motionStyles.textContent =
@@ -540,6 +544,7 @@ describe('review deck', () => {
     expect(
       screen.getByLabelText<HTMLTextAreaElement>('Draft body').disabled
     ).toBe(true);
+    await editor.executed;
   });
   it.each([false, true])(
     'searches and selects a draft with mobile=%s',

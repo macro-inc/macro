@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE calendar_outlook_work SET page_loaded=true,pending_ids=$2,next_page=$3,terminal_cursor=$4,\n                        visited_pages=array_append(visited_pages,COALESCE(page_cursor,'initial')) WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3e0f76d23326ca6fd8c179e55dc3f69073247abe14e9df015b0820c6b76c0ad1"
+}

@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE calendar_accounts a SET sync_status='pending',last_sync_error=NULL\n            FROM email_links l WHERE l.id=a.email_link_id AND a.provider='outlook' AND a.sync_status='reauth_required'\n            AND l.is_sync_active AND EXISTS(SELECT 1 FROM calendar_outlook_work w WHERE w.account_id=a.id\n                AND(w.sync_generation<>l.sync_generation OR w.grant_generation<>l.grant_generation))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "103497389cbd0274b13e12205fc73b891270e4a31b1c1ccbe7c9f37b67d3ec38"
+}

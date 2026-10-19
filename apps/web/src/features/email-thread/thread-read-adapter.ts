@@ -1,4 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   useMarkThreadAsSeenMutation,
   useMarkThreadAsUnreadMutation,
@@ -52,7 +53,10 @@ export function createThreadReadAdapter(
         onError: () => {
           setThreadMarkedUnread(false);
           toast.failure('Failed to mark as unread');
-          void refetchSoupEntity(threadId, 'emailThread');
+          fireAndForget(
+            refetchSoupEntity(threadId, 'emailThread'),
+            'email-thread'
+          );
         },
       }
     );
@@ -83,7 +87,10 @@ export function createThreadReadAdapter(
         onError: () => {
           setThreadMarkedUnread(true);
           toast.failure('Failed to mark as read');
-          void refetchSoupEntity(threadId, 'emailThread');
+          fireAndForget(
+            refetchSoupEntity(threadId, 'emailThread'),
+            'email-thread'
+          );
         },
       }
     );

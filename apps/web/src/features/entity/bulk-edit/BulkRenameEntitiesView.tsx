@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowRight from '@phosphor/arrow-right.svg';
 import { ActionDialogShell, Button, Tabs, TextField, Tooltip } from '@ui';
 import { createSignal, Show } from 'solid-js';
@@ -62,7 +63,7 @@ export const BulkRenameEntitiesView = (props: {
       class="flex min-h-0 flex-col"
       onSubmit={(event) => {
         event.preventDefault();
-        void finishEditing();
+        fireAndForget(finishEditing(), 'entity-rename');
       }}
     >
       <ActionDialogShell.Body>

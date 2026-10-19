@@ -66,6 +66,7 @@ const CHANNEL_GRANT_CLIENTS = {
       channelSharePermissions: [operation],
     }),
   call: undefined,
+  foreign: undefined,
 } satisfies Record<ShareKind, ChannelGrantClient | undefined>;
 
 function toOperation(change: ChannelAccessChange) {

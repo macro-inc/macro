@@ -3,8 +3,8 @@
 ## What it is
 
 Part of Calendar: owns the stable `CalendarEvent` entity — parsing from
-external sources (Google Calendar, email invitations), mutation, reminder
-dispatch, team availability, and Google/Postgres persistence.
+external sources (Google Calendar, Outlook, email invitations), mutation,
+reminder dispatch, team availability, and provider/Postgres persistence.
 
 ## Start here
 
@@ -14,12 +14,14 @@ dispatch, team availability, and Google/Postgres persistence.
   write paths — mutations, email invitations, and Macro-call meeting links.
 - `src/domain/team_availability.rs` + `src/domain/team.rs`: team sharing/availability.
 - `src/outbound/google.rs`, `src/outbound/pg.rs`: Google Calendar and Postgres adapters.
+- `src/outbound/pg/outlook.rs`: durable Outlook synchronization; preserve
+  provider-specific coverage on discovery.
 - `src/inbound/dispatch_worker.rs` + `src/outbound/sqs_dispatch_queue.rs`: reminder
   dispatch queue (feature `dispatch`/`dispatch-sqs`).
 
 ## Scope
 
-- Owns: the `CalendarEvent` entity, its Google/email/Postgres sources, recurrence
+- Owns: the `CalendarEvent` entity, its Google/Outlook/email sources, recurrence
   occurrences, reminder dispatch, and team calendar sharing/availability.
 - Not here: booking links, scheduling pages, and host/attendee booking policy →
   `crates/calendar_scheduling`; the calendar service's HTTP composition root →

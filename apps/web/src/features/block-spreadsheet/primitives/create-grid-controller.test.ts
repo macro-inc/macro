@@ -575,7 +575,7 @@ describe('formula-aware copy coordination', () => {
       });
       const view = setup({ A1: { value: '=B1' } }, () => pending);
       view.setRowCount(300);
-      view.grid.fill(
+      const filling = view.grid.fill(
         { anchor: { row: 0, column: 0 }, focus: { row: 0, column: 0 } },
         { anchor: { row: 0, column: 0 }, focus: { row: 299, column: 0 } }
       );
@@ -590,6 +590,7 @@ describe('formula-aware copy coordination', () => {
         focus: { row: 0, column: 0 },
       });
       expect(view.grid.notice()).toBe('');
+      await filling;
     }
   );
 

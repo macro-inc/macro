@@ -231,7 +231,44 @@ preview** for the visual key map.
 Appearance starts with visual **System**, **Light**, and **Dark** mode choices.
 The previews use the saved themes; System follows the device and exposes both
 per-mode theme selectors. Light or Dark shows its own theme selector. Each selector
-retains theme search, editing, copying, and custom theme creation.
+retains theme search, editing, copying, custom theme creation, and importing
+themes from the clipboard.
+
+### Theme mentions
+
+Agent replies can include clickable theme mentions that let users apply a theme
+with one click. The format is:
+
+```
+<m-theme-mention>{"name":"Theme Name","data":{...theme object...}}</m-theme-mention>
+```
+
+The `data` field must be a valid ThemeV3 object with these required fields:
+- `id`: a UUID string (generate a new one for each theme)
+- `name`: the display name
+- `version`: must be `3`
+- `mode`: `"light"` or `"dark"`
+- `colorTokens`: an object with OKLCH color values for these required tokens:
+  `surface-0` through `surface-4`, `content-0` through `content-4`, `edge`,
+  `edge-muted`, `accent`, and the palette colors (`red`, `orange`, `amber`,
+  `yellow`, `lime`, `green`, `teal`, `cyan`, `blue`, `violet`, `purple`, `pink`).
+
+Example of a complete theme mention:
+```
+<m-theme-mention>{"name":"Ocean Dark","data":{"id":"a1b2c3d4-e5f6-7890-abcd-ef1234567890","name":"Ocean Dark","version":3,"mode":"dark","colorTokens":{"surface-0":"oklch(0.15 0.02 230)","surface-1":"oklch(0.18 0.02 230)","surface-2":"oklch(0.21 0.02 230)","surface-3":"oklch(0.24 0.02 230)","surface-4":"oklch(0.27 0.02 230)","content-0":"oklch(0.95 0.01 230)","content-1":"oklch(0.85 0.01 230)","content-2":"oklch(0.70 0.01 230)","content-3":"oklch(0.55 0.01 230)","content-4":"oklch(0.40 0.01 230)","edge":"oklch(0.35 0.02 230)","edge-muted":"oklch(0.25 0.02 230)","accent":"oklch(0.65 0.15 220)","red":"oklch(0.65 0.2 25)","orange":"oklch(0.7 0.18 50)","amber":"oklch(0.75 0.16 75)","yellow":"oklch(0.85 0.15 95)","lime":"oklch(0.8 0.18 125)","green":"oklch(0.7 0.17 145)","teal":"oklch(0.7 0.12 175)","cyan":"oklch(0.75 0.12 200)","blue":"oklch(0.65 0.15 230)","violet":"oklch(0.6 0.18 280)","purple":"oklch(0.6 0.2 300)","pink":"oklch(0.7 0.18 340)"}}}</m-theme-mention>
+```
+
+When clicked, the theme is added to the user's custom themes (if not already
+present) and immediately applied, then Settings opens to Appearance. The theme
+chip renders inline with the theme's color swatches beside the name.
+
+### Importing themes
+
+**Import from clipboard** in the theme dropdown reads a theme JSON from the
+clipboard. Valid ThemeV3 (or legacy ThemeV2) JSON is imported as a custom theme
+and applied immediately. Copy a theme with the clipboard button beside any
+theme pill, then import it on another device or share it in a message for
+others to copy and import.
 
 Existing settings URLs remain valid; `connections` still opens Integrations,
 `agent-connections` opens Agent connections, and `harness` aliases Runtimes.
@@ -397,11 +434,18 @@ Profile, Behavior, Runtime, Connections, Channels, Share. Connections is a radio
 connected) or `Specific apps`, which reveals a `Search connectors` box over the whole
 Pipedream catalog (results are `option` rows; picking one adds it) and a row per picked app
 with a connected / not-connected dot for the *current viewer* plus an inline `Connect`
-that opens the Pipedream Connect flow inside the page. Unconnected picks never block
+that opens the Pipedream Connect flow inside the web page. Native apps open
+consent in the system browser; choose **Return to Macro** after authorization
+to save the connection in the waiting app. Unconnected picks never block
 saving; each teammate connects their own account. An agent session that calls a picked
 but unconnected app gets a tool result saying so, and the agent's reply renders a
 `Connect <app>` chip that opens Agents → Connections for that app. The same page
 is also available as Settings → Agent connections.
+
+Reference captures from an isolated browser fixture: [native waiting dialog](media/pipedream/native-waiting.png)
+and [browser return page](media/pipedream/browser-return.png). The fixture uses
+the real UI and iframe messaging with simulated provider consent and native IPC;
+it does not exercise a real provider account or the operating system's app launch.
 
 To change an agent's picture, open `Edit <name>`, choose an image with `Upload`,
 wait for `Uploading…` to finish, then click `Save changes`. Images up to 16 MB

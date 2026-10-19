@@ -22,13 +22,7 @@ pub(crate) async fn important_preview_cursor(
     sqlx::query_as!(
         ThreadPreviewCursorDbRow,
         r#"
-        WITH ApplicableLabelIDs AS (
-            SELECT id
-            FROM email_labels
-            WHERE link_id = ANY($1)
-              AND (name = 'INBOX')
-        ),
-        QualifyingMessages AS (
+        WITH QualifyingMessages AS (
             SELECT m.thread_id,
                    m.internal_date_ts,
                    m.created_at AS fallback_ts,
@@ -39,27 +33,9 @@ pub(crate) async fn important_preview_cursor(
                    m.from_name
             FROM email_messages m
             WHERE m.link_id = ANY($1)
-              AND NOT EXISTS (
-                  SELECT 1
-                  FROM email_message_labels ml
-                  JOIN email_labels l ON ml.label_id = l.id
-                  WHERE ml.message_id = m.id
-                    AND l.name = 'TRASH'
-                    AND l.link_id = m.link_id
-              )
-              AND EXISTS (
-                  SELECT 1
-                  FROM email_message_labels ml
-                  JOIN email_labels l ON ml.label_id = l.id
-                  WHERE ml.message_id = m.id
-                    AND l.name = 'IMPORTANT'
-              )
-              AND EXISTS (
-                  SELECT 1
-                  FROM email_message_labels ml
-                  JOIN ApplicableLabelIDs ali ON ml.label_id = ali.id
-                  WHERE ml.message_id = m.id
-              )
+              AND EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND mf.is_present AND NOT mf.in_trash)
+              AND EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND mf.provider_is_important)
+              AND EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND mf.in_inbox)
 
             UNION ALL
 
@@ -74,14 +50,7 @@ pub(crate) async fn important_preview_cursor(
             FROM email_messages m
             WHERE m.link_id = ANY($1)
               AND m.is_draft = TRUE
-              AND NOT EXISTS (
-                  SELECT 1
-                  FROM email_message_labels ml
-                  JOIN email_labels l ON ml.label_id = l.id
-                  WHERE ml.message_id = m.id
-                    AND l.name = 'TRASH'
-                    AND l.link_id = m.link_id
-              )
+              AND EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND mf.is_present AND NOT mf.in_trash)
         ),
         AllImportantThreads AS (
             -- From all qualifying messages, get the single most recent one per thread.

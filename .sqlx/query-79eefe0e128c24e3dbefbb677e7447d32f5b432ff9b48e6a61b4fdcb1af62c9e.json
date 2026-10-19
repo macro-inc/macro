@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM email_attachments_drafts WHERE draft_id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "79eefe0e128c24e3dbefbb677e7447d32f5b432ff9b48e6a61b4fdcb1af62c9e"
+}

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS(SELECT 1 FROM email_draft_transfers WHERE source_id=$1 AND state<>'preparing') AS \"retired!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "retired!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "a524b13993caef5f10abe75dace7f09de9a88982f706e9b1ac8a45d9a3760410"
+}

@@ -11,6 +11,10 @@ tools/HTTP/GraphQL surfaces over them.
 - `src/domain/service.rs`, `src/domain/pipelines.rs`: core use cases.
 - `src/domain/pipeline_workflows/`: pipeline entry/field/record ops built on
   the shared `databases` engine (Sales pipelines are a `databases` consumer).
+- `src/domain/crm_csv.rs`, `src/domain/crm_transfer.rs`: CSV import/export for
+  agents (companies, pipeline entries, pipeline exports). Writes go through the
+  pipeline workflows and `CrmService`; CSV files reach documents through the
+  `CsvFiles` port, implemented in `ai_tools::crm_csv_files`.
 - `src/inbound/axum_router.rs` (+ `axum_router/*.rs`): HTTP handlers.
 - `src/inbound/toolset.rs` (+ `toolset/*.rs`): AI tool definitions.
 - `src/outbound/companies_repo.rs`: the Postgres adapter for companies/contacts.

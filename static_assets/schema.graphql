@@ -274,6 +274,14 @@ type CompleteMutationRoot {
 	"""
 	markEmailThreadUnread(input: MarkEmailThreadUnreadInput!): GraphqlSoupEmailThread!
 	"""
+	Set provider-neutral mailbox state and return the authoritative thread.
+	"""
+	setEmailThreadState(input: SetEmailThreadStateInput!): GraphqlSoupEmailThread!
+	"""
+	Resolve an email write conflict and return the current canonical thread.
+	"""
+	resolveEmailMessageOperation(input: ResolveEmailMessageOperationInput!): GraphqlSoupEmailThread!
+	"""
 	Set archive-based Done and return the primary-backed canonical thread.
 	"""
 	setEmailThreadArchived(input: SetEmailThreadArchivedInput!): GraphqlSoupEmailThread!
@@ -446,6 +454,12 @@ input CreateCalendarEventInput {
 	"""
 	conference: GraphqlCalendarConferenceChange
 	"""
+	Mint a Macro call and write its join link into the description and
+	location before creating the event, so the invitation carries it.
+	Cannot be combined with `conference`.
+	"""
+	macroCall: Boolean! = false
+	"""
 	Present to create an out-of-office status event (primary calendar
 	only, timed, no attendees).
 	"""
@@ -556,6 +570,154 @@ input DuplicateEntityInput {
 }
 
 """
+Opaque versions let the server reject a resolution of an obsolete conflict.
+"""
+type EmailMessageOperation {
+	"""
+	The current synchronization or delivery state of this message operation.
+	"""
+	state: EmailMessageOperationState!
+	"""
+	The opaque local revision that a resolution must acknowledge.
+	"""
+	revision: String!
+	"""
+	The observed provider version required to resolve an external draft conflict.
+	"""
+	remoteVersion: String
+	"""
+	The reason the operation needs attention, when one is available.
+	"""
+	issue: EmailMessageOperationIssue
+}
+
+"""
+The decision needed from the user after a provider write could not complete.
+"""
+enum EmailMessageOperationIssue {
+	"""
+	The selected provider content is being loaded.
+	"""
+	ACCEPTING_REMOTE
+	"""
+	Local and provider edits conflict.
+	"""
+	DRAFT_CONFLICT
+	"""
+	Draft creation could not be confirmed.
+	"""
+	CREATION_UNKNOWN
+	"""
+	Attachment creation could not be confirmed.
+	"""
+	ATTACHMENT_UNKNOWN
+	"""
+	Delivery could not be confirmed; automatic resend is forbidden.
+	"""
+	SEND_UNKNOWN
+	"""
+	The provider definitively rejected delivery; a deliberate retry is safe.
+	"""
+	SEND_REJECTED
+	"""
+	The initiating user no longer has access.
+	"""
+	ACCESS_REVOKED
+	"""
+	The provider rejected the request.
+	"""
+	INVALID_CONTENT
+	"""
+	The old delivery identity is being retired.
+	"""
+	MOVE_PENDING
+	"""
+	The source draft changed before retirement.
+	"""
+	MOVE_CONFLICT
+	"""
+	The original was sent outside Macro.
+	"""
+	MOVE_SOURCE_SENT
+	"""
+	Source mailbox access must be restored.
+	"""
+	MOVE_REAUTHORIZATION
+	"""
+	Conditional cleanup is unavailable; the original remains in its mailbox.
+	"""
+	MOVE_ORIGINAL_REMAINS
+}
+
+"""
+Provider-independent progress for an email write or delivery attempt.
+"""
+enum EmailMessageOperationState {
+	"""
+	Changes are waiting to synchronize.
+	"""
+	PENDING
+	"""
+	The current revision is synchronized.
+	"""
+	SYNCHRONIZED
+	"""
+	The provider changed since the local edit began.
+	"""
+	CONFLICT
+	"""
+	A write may have succeeded and needs reconciliation.
+	"""
+	UNCERTAIN
+	"""
+	The send attempt has been recorded.
+	"""
+	SUBMITTING
+	"""
+	Provider acceptance is being reconciled with sent mail.
+	"""
+	CONFIRMING
+	"""
+	The sent copy was confirmed.
+	"""
+	SENT
+	"""
+	The draft deletion was confirmed.
+	"""
+	DELETED
+	"""
+	The operation was cancelled.
+	"""
+	CANCELLED
+	"""
+	The operation needs a correction before retry.
+	"""
+	FAILED
+}
+
+"""
+Domain-facing capability required by email thread mutations.
+"""
+enum EmailMessageResolutionAction {
+	"""
+	Apply local edits over the reviewed provider version.
+	"""
+	KEEP_LOCAL
+	"""
+	Replace the local editor content with the provider's current draft.
+	"""
+	USE_PROVIDER
+	"""
+	Reconcile the recorded uncertain operation again.
+	"""
+	RECHECK
+	"""
+	Deliberately retry delivery after acknowledging possible duplication.
+	"""
+	RETRY_SEND
+}
+
+"""
 Input for fetching one email thread by its canonical identifier.
 """
 input EmailThreadInput {
@@ -563,6 +725,28 @@ input EmailThreadInput {
 	The canonical email thread identifier.
 	"""
 	threadId: ID!
+}
+
+"""
+Semantic state fields shared by every mailbox provider.
+"""
+enum EmailThreadStateField {
+	"""
+	Read/unread state.
+	"""
+	READ
+	"""
+	Follow-up star/flag.
+	"""
+	STARRED
+	"""
+	Recoverable trash membership.
+	"""
+	TRASHED
+	"""
+	Junk membership.
+	"""
+	JUNK
 }
 
 """
@@ -1263,6 +1447,14 @@ type GraphqlCalendar {
 	"""
 	emailAddress: String!
 	"""
+	Calendar provider, for display and reconnect routing.
+	"""
+	provider: GraphqlCalendarProvider!
+	"""
+	Provider features available on this actual calendar.
+	"""
+	capabilities: GraphqlCalendarCapabilities!
+	"""
 	Provider display name.
 	"""
 	name: String!
@@ -1349,6 +1541,36 @@ enum GraphqlCalendarAttendeeResponseStatus {
 }
 
 """
+Actual provider capabilities used by calendar editors.
+"""
+type GraphqlCalendarCapabilities {
+	"""
+	Whether event-level automatic invitation declines are supported.
+	"""
+	autoDecline: Boolean!
+	"""
+	Conferencing system available when creating an online meeting.
+	"""
+	conferenceProvider: GraphqlCalendarConferenceProvider
+	"""
+	Whether arbitrary RFC 5545 recurrence properties can be written.
+	"""
+	customRecurrence: Boolean!
+	"""
+	Whether email reminders are delivered by the provider or Macro.
+	"""
+	emailReminders: Boolean!
+	"""
+	Whether an existing conference can be detached.
+	"""
+	removeConference: Boolean!
+	"""
+	Whether an attendee can reset their RSVP to unanswered.
+	"""
+	resetRsvp: Boolean!
+}
+
+"""
 One bounded page of calendar changes after a watermark.
 """
 type GraphqlCalendarChanges {
@@ -1390,6 +1612,10 @@ A change to an event's conference.
 """
 enum GraphqlCalendarConferenceChange {
 	"""
+	Generate a new Microsoft Teams conference and attach it.
+	"""
+	MICROSOFT_TEAMS
+	"""
 	Generate a new Google Meet conference and attach it.
 	"""
 	GOOGLE_MEET
@@ -1403,6 +1629,10 @@ enum GraphqlCalendarConferenceChange {
 Conferencing system backing an event's join URL.
 """
 enum GraphqlCalendarConferenceProvider {
+	"""
+	Microsoft Teams.
+	"""
+	MICROSOFT_TEAMS
 	"""
 	Google Meet.
 	"""
@@ -1944,6 +2174,20 @@ enum GraphqlCalendarOutOfOfficeAutoDeclineMode {
 	Decline only invitations that arrive after the event is created.
 	"""
 	DECLINE_ONLY_NEW_CONFLICTING_INVITATIONS
+}
+
+"""
+Provider selected from the persisted calendar account and email binding.
+"""
+enum GraphqlCalendarProvider {
+	"""
+	Google Calendar.
+	"""
+	GOOGLE
+	"""
+	Microsoft Outlook calendar.
+	"""
+	OUTLOOK
 }
 
 """
@@ -3483,6 +3727,10 @@ enum GraphqlEmailProvider {
 	Google Gmail.
 	"""
 	GMAIL
+	"""
+	Microsoft Outlook and Microsoft 365.
+	"""
+	OUTLOOK
 }
 
 """
@@ -7480,6 +7728,18 @@ type GraphqlSoupEmailDraftAttachment {
 	The storage key containing the uploaded attachment.
 	"""
 	s3Key: String!
+	"""
+	True until upload completion is verified.
+	"""
+	uploadPending: Boolean!
+	"""
+	Original inline attachment identity.
+	"""
+	contentId: String
+	"""
+	Whether the attachment belongs in the message body.
+	"""
+	isInline: Boolean!
 }
 
 """
@@ -7567,6 +7827,10 @@ type GraphqlSoupEmailMessage {
 	The unique message identifier.
 	"""
 	id: ID!
+	"""
+	Provider-neutral synchronization and delivery progress, including uncertainty.
+	"""
+	operationStatus: EmailMessageOperation
 	"""
 	The identifier assigned by the email provider.
 	"""
@@ -7689,6 +7953,10 @@ type GraphqlSoupEmailMessage {
 A provider-hosted attachment embedded in an email message.
 """
 type GraphqlSoupEmailMessageAttachment {
+	"""
+	Cloud-reference attachments open in the provider and have no binary download.
+	"""
+	referenceUrl: String
 	"""
 	The attachment's canonical database identifier.
 	"""
@@ -7948,6 +8216,16 @@ type GraphqlSoupEmailThread implements GraphqlSoupEntity {
 	Most recent explicit return from an email reminder.
 	"""
 	reminderReturnedAt: String
+	"""
+	Timestamp of the latest outbound message, in RFC 3339 format: the SENT
+	view's sort key.
+	"""
+	latestOutboundMessageTs: String
+	"""
+	Timestamp of the latest message that is not spam, in RFC 3339 format:
+	the sort key of every mail view except INBOX and SENT.
+	"""
+	latestNonSpamMessageTs: String
 	"""
 	Complete body-free metadata for local draft edits and discards.
 	"""
@@ -8925,6 +9203,32 @@ input ReorderFavoritesInput {
 }
 
 """
+Resolve exactly the message revision and provider version the user reviewed.
+"""
+input ResolveEmailMessageOperationInput {
+	"""
+	Stable Macro message ID.
+	"""
+	messageId: ID!
+	"""
+	Opaque revision returned by operationStatus.
+	"""
+	revision: String!
+	"""
+	Opaque provider version returned by operationStatus.
+	"""
+	remoteVersion: String
+	"""
+	Explicit recovery action.
+	"""
+	action: EmailMessageResolutionAction!
+	"""
+	Required only for RetrySend; never inferred from a timeout.
+	"""
+	acceptDuplicateRisk: Boolean! = false
+}
+
+"""
 Set the viewer's RSVP on an event.
 """
 input RespondToCalendarEventInput {
@@ -9129,6 +9433,24 @@ input SetEmailThreadArchivedInput {
 	True for Done; false for Mark Not Done or Undo.
 	"""
 	archived: Boolean!
+}
+
+"""
+Set one mailbox fact without looking up provider labels on the client.
+"""
+input SetEmailThreadStateInput {
+	"""
+	Accessible thread to change.
+	"""
+	threadId: ID!
+	"""
+	Semantic mailbox fact.
+	"""
+	field: EmailThreadStateField!
+	"""
+	Desired state.
+	"""
+	value: Boolean!
 }
 
 """

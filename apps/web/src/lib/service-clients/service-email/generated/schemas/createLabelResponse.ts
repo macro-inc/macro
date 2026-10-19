@@ -10,6 +10,6 @@ import type { Label } from './label';
  * The response returned from the create label endpoint
  */
 export interface CreateLabelResponse {
-  /** the thread, with messages inside */
+  /** Local label. Pending provider creation is reported by settings operations. */
   label: Label;
 }

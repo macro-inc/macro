@@ -4,6 +4,7 @@ import type { IUser } from '@core/user';
 import { idToDisplayName, idToEmail } from '@core/user/util';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { fuzzyFilter } from '@core/util/fuzzy';
 import {
   type ListNavActions,
@@ -235,9 +236,14 @@ export function PropertyEditorModal() {
         : count + ' entities'
     }`;
 
-    saveProperties(selectedEntities, targetProperty, value).then((success) => {
-      if (success) toast.success(message);
-    });
+    fireAndForget(
+      saveProperties(selectedEntities, targetProperty, value).then(
+        (success) => {
+          if (success) toast.success(message);
+        }
+      ),
+      'property-editor'
+    );
     if (!event?.shiftKey) closePropertyEditor();
   };
 
@@ -1103,7 +1109,7 @@ function TagAssignmentEditor(props: {
     event?: KeyboardEvent | MouseEvent
   ) => {
     if (row.type === 'clear') {
-      void clearAllTags(event);
+      fireAndForget(clearAllTags(event), 'property-editor');
       return;
     }
 
@@ -1112,7 +1118,7 @@ function TagAssignmentEditor(props: {
       return;
     }
 
-    void toggleTag(row.item, event);
+    fireAndForget(toggleTag(row.item, event), 'property-editor');
   };
 
   const listController = createCommandListController({

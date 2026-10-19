@@ -115,6 +115,28 @@ describe('active GraphQL Soup queries', () => {
     expect(list).toHaveBeenCalledTimes(2);
   });
 
+  it('coalesces refreshes requested while one is in flight into one follow-up', async () => {
+    const settle: Array<() => void> = [];
+    const refresh = vi.fn(
+      () => new Promise<void>((resolve) => settle.push(resolve))
+    );
+    register({ isEnabled: () => true, refresh });
+    const first = refreshActiveGraphqlSoupQueries();
+    const second = refreshActiveGraphqlSoupQueries();
+    const third = refreshActiveGraphqlSoupQueries();
+    expect(refresh).toHaveBeenCalledOnce();
+    settle[0]!();
+    await first;
+    await vi.waitFor(() => expect(refresh).toHaveBeenCalledTimes(2));
+    settle[1]!();
+    await Promise.all([second, third]);
+    expect(refresh).toHaveBeenCalledTimes(2);
+    const fourth = refreshActiveGraphqlSoupQueries();
+    expect(refresh).toHaveBeenCalledTimes(3);
+    settle[2]!();
+    await fourth;
+  });
+
   it('strict revalidation fails until every enabled reader succeeds', async () => {
     const consoleError = vi
       .spyOn(console, 'error')

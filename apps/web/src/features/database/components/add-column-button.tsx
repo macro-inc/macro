@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import PlusIcon from '@phosphor/plus.svg';
 import { Button } from '@ui/components/Button';
 import { createSignal, Show } from 'solid-js';
@@ -38,7 +39,7 @@ export function AddColumnButton(props: {
         size="sm"
         disabled={pending()}
         aria-label={props.label ?? 'Add column'}
-        onClick={() => void add()}
+        onClick={() => fireAndForget(add(), 'database')}
       >
         <PlusIcon class="size-3.5" />
         {props.label ?? 'Add column'}

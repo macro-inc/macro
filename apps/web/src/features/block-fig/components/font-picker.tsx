@@ -5,6 +5,7 @@
  * `preview`, which resolves to a CSS family to draw the name in.
  */
 
+import { fireAndForget } from '@core/util/fireAndForget';
 import { Popover } from '@kobalte/core/popover';
 import CaretDown from '@phosphor/caret-down.svg';
 import WarningCircle from '@phosphor/warning-circle.svg';
@@ -39,13 +40,16 @@ function Row(props: {
     const observer = new IntersectionObserver((entries) => {
       if (!entries.some((e) => e.isIntersecting)) return;
       observer.disconnect();
-      void (async () => {
-        try {
-          setFace(await preview(props.family));
-        } catch {
-          // No preview: the name shows in the panel's font.
-        }
-      })();
+      fireAndForget(
+        (async () => {
+          try {
+            setFace(await preview(props.family));
+          } catch {
+            // No preview: the name shows in the panel's font.
+          }
+        })(),
+        'fig-fonts'
+      );
     });
     observer.observe(el);
     onCleanup(() => observer.disconnect());

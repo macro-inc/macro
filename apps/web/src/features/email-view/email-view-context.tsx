@@ -6,7 +6,6 @@ import {
   listOwnedSlotName,
 } from '@app/components/list';
 import { setSidebarSectionCollapsed } from '@app/components/view-shell';
-import { useMobileSearchText } from '@app/features/command/mobile/use-mobile-search-text';
 import { normalizeFacetSelection } from '@app/features/soup';
 import { registerListNavigationSource } from '@app/features/soup/collection/list-navigation-source';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
@@ -16,6 +15,7 @@ import {
   useNavigate,
   useRouteParams,
 } from '@app/lib/split-router';
+import { usePreference } from '@app/preferences/use-preference';
 import { emailSplitRoute, emailThreadRoute } from '@app/routes/routes';
 import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
 import {
@@ -26,6 +26,7 @@ import { enableReminders } from '@core/constant/featureFlags';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { useTagSets, useTagSetsReady } from '@property/tags/tag-sets-context';
 import { useEmailLinksQuery } from '@queries/email/link';
 import type { ContextProviderProps } from '@solid-primitives/context';
@@ -33,7 +34,6 @@ import {
   type Accessor,
   createEffect,
   createMemo,
-  mergeProps,
   on,
   onCleanup,
 } from 'solid-js';
@@ -110,11 +110,17 @@ export type EmailViewContext = {
   /** Returns false when inline detail is unavailable so the caller opens a split instead. */
   openThread: (
     thread: EmailThreadTarget,
-    options?: EntityDetailNavigationOptions
+    options?: EntityDetailNavigationOptions & {
+      /** Replace the history entry, for opens that follow the list cursor. */
+      replace?: boolean;
+    }
   ) => boolean;
   closeThread: () => void;
   isSidebarSectionOpen: (id: string) => boolean;
   setSidebarSectionOpen: (id: string, open: boolean) => void;
+  /** Open threads beside the list instead of in its place (desktop). */
+  readingPane: Accessor<boolean>;
+  setReadingPane: (enabled: boolean) => void;
 };
 
 export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
@@ -157,15 +163,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
       restorePreferences: initial.collapsedSidebarSectionIds === undefined,
     })
   );
-  const searchText = useMobileSearchText(
-    () => persistedState.search,
-    panel.handle.isActive
-  );
-  const state = mergeProps(persistedState, {
-    get search() {
-      return searchText();
-    },
-  });
+  const state = persistedState;
 
   createEffect(
     on(
@@ -253,36 +251,44 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
       !(event?.shiftKey || event?.metaKey || event?.ctrlKey || event?.altKey)
     );
   };
-  const closeThread = () =>
-    navigate(
-      { route: emailSplitRoute, params: {} },
-      {
-        search: {
-          [emailTabSearch.namespace]: emailTabSearchCodec.serialize({
-            tab: state.tab,
-          }),
-        },
-      }
+  const closeThread = () => {
+    fireAndForget(
+      navigate(
+        { route: emailSplitRoute, params: {} },
+        {
+          search: {
+            [emailTabSearch.namespace]: emailTabSearchCodec.serialize({
+              tab: state.tab,
+            }),
+          },
+        }
+      ),
+      'email-view'
     );
+  };
   const openThread = (
     thread: EmailThreadTarget,
-    options?: EntityDetailNavigationOptions
+    options?: EntityDetailNavigationOptions & { replace?: boolean }
   ) => {
     if (!opensInline(options)) return false;
     const selection = { type: 'email' as const, id: thread.id };
     // The router may refuse a claimed destination. Check compatibility without
     // claiming it until the accepted route changes.
     if (!selectPreview.canSelect(selection)) return true;
-    navigate(
-      { route: emailThreadRoute, params: { threadId: thread.id } },
-      {
-        search: {
-          [emailDetailSearch.namespace]: {},
-          [emailTabSearch.namespace]: emailTabSearchCodec.serialize({
-            tab: state.tab,
-          }),
-        },
-      }
+    fireAndForget(
+      navigate(
+        { route: emailThreadRoute, params: { threadId: thread.id } },
+        {
+          replace: options?.replace,
+          search: {
+            [emailDetailSearch.namespace]: {},
+            [emailTabSearch.namespace]: emailTabSearchCodec.serialize({
+              tab: state.tab,
+            }),
+          },
+        }
+      ),
+      'email-view'
     );
     return true;
   };
@@ -294,31 +300,37 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
         : undefined;
       if (!selectPreview(selection)) {
         if (previous) {
-          navigate(
-            {
-              route: emailThreadRoute,
-              params: { threadId: previous.id },
-            },
-            {
-              replace: true,
-              search: {
-                [emailTabSearch.namespace]: emailTabSearchCodec.serialize({
-                  tab: state.tab,
-                }),
+          fireAndForget(
+            navigate(
+              {
+                route: emailThreadRoute,
+                params: { threadId: previous.id },
               },
-            }
+              {
+                replace: true,
+                search: {
+                  [emailTabSearch.namespace]: emailTabSearchCodec.serialize({
+                    tab: state.tab,
+                  }),
+                },
+              }
+            ),
+            'email-view'
           );
         } else {
-          navigate(
-            { route: emailSplitRoute, params: {} },
-            {
-              replace: true,
-              search: {
-                [emailTabSearch.namespace]: emailTabSearchCodec.serialize({
-                  tab: state.tab,
-                }),
-              },
-            }
+          fireAndForget(
+            navigate(
+              { route: emailSplitRoute, params: {} },
+              {
+                replace: true,
+                search: {
+                  [emailTabSearch.namespace]: emailTabSearchCodec.serialize({
+                    tab: state.tab,
+                  }),
+                },
+              }
+            ),
+            'email-view'
           );
         }
         return;
@@ -410,6 +422,11 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     );
   };
 
+  const [readingPane, setReadingPane] = usePreference(
+    'macro:pref:email:reading-pane',
+    { default: false }
+  );
+
   const isSidebarSectionOpen = (id: string) =>
     !state.collapsedSidebarSectionIds.includes(id);
 
@@ -435,5 +452,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     closeThread,
     isSidebarSectionOpen,
     setSidebarSectionOpen,
+    readingPane,
+    setReadingPane,
   };
 });

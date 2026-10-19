@@ -1,7 +1,8 @@
-// What "the Android native code" is, shared by the PR-time version check
-// (android-version-check.mjs) and the release-time build decision
-// (android-release-needed.mjs) so the two can never disagree: a PR that
-// passes the gate must not fail the release for the same question.
+// What "the Android native code" is, shared by the PR gate
+// (android-version-check.mjs), the Play release workflow's preconditions,
+// head guard and provenance stamp, the drift check and the watcher (all
+// through the `hash` CLI below) so they can never disagree about whether a
+// change is native.
 //
 // It is every tracked file under apps/web/tauri except what never reaches
 // the Android binary — iOS, macOS, Linux, Windows and desktop-only paths by
@@ -15,6 +16,8 @@
 // image, excluding Android-only paths instead.
 
 import { execFileSync } from 'node:child_process';
+import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 export const tauriPath = 'apps/web/tauri';
 export const cacheWasmManifest = 'crates/client/cache-wasm/Cargo.toml';
@@ -92,4 +95,24 @@ export function androidVersionCode(git, commit) {
   if (!Number.isInteger(code) || code < 1 || code > 2_100_000_000)
     throw new Error(`Invalid Android versionCode at ${commit}`);
   return code;
+}
+
+// CLI for the workflows' shell steps:
+//   bun scripts/android-native.mjs hash [commit]          the native hash
+//   bun scripts/android-native.mjs version-code [commit]  the versionCode
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(resolve(process.argv[1])).href
+) {
+  try {
+    const [command, commit = 'HEAD'] = process.argv.slice(2);
+    const git = gitIn(process.cwd());
+    const resolved = git(['rev-parse', '--verify', '--end-of-options', `${commit}^{commit}`]);
+    if (command === 'hash') console.log(androidNativeHash(git, resolved));
+    else if (command === 'version-code') console.log(androidVersionCode(git, resolved));
+    else throw new Error('Usage: android-native.mjs hash|version-code [commit]');
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : 'android-native failed');
+    process.exitCode = 1;
+  }
 }

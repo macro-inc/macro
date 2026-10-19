@@ -31,6 +31,8 @@ export interface BaseListEntityProps<E extends EntityData = EntityData>
   ref?: Ref<HTMLDivElement>;
   checked?: boolean;
   highlighted?: boolean;
+  /** The row open beside the list, marked while the cursor moves elsewhere. */
+  current?: boolean;
   hovered?: boolean;
   /** Caller-owned quick actions, revealed on pointer hover or keyboard focus. */
   actions?: JSX.Element;
@@ -105,7 +107,17 @@ export interface LayoutProps {
   showProject?: boolean;
 }
 
-export type NarrowLayoutVariant = 'standard' | 'condensed' | 'single-line';
+/**
+ * How rows render once the list is too narrow for columns. `inbox` gives
+ * email rows the compact stacked layout (sender, subject, snippet) on desktop,
+ * for lists that sit beside a reading pane; touch devices keep their own email
+ * rows, with the sender's picture.
+ */
+export type NarrowLayoutVariant =
+  | 'standard'
+  | 'condensed'
+  | 'single-line'
+  | 'inbox';
 
 interface ListLayoutContextValue {
   isWide: Accessor<boolean>;

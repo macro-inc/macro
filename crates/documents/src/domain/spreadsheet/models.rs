@@ -371,6 +371,64 @@ pub enum SpreadsheetOperation {
         /// A1 rectangle, for example D2:D50.
         range: String,
     },
+    /// Convert a rectangle to a named table (an Excel table). Its first row becomes the header
+    /// row; blank or repeated headers are named. Formulas can then use structured references
+    /// such as Table1[Amount], [@Amount] or Table1 for its data, and each header gets sort and
+    /// filter controls. Columns take the type their values suggest unless column_types says.
+    CreateTable {
+        /// Stable sheet ID or exact name.
+        sheet_id: String,
+        /// A1 rectangle including the header row, for example A1:D20. Must not overlap a table.
+        range: String,
+        /// Unique table name, such as Sales; spaces become underscores. Defaults to the next free
+        /// TableN.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        name: Option<String>,
+        /// Add a total row below the data, which must be empty. Defaults to false.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        totals_row: Option<bool>,
+        /// Column types by header name. A type formats the column's data cells; checkbox makes
+        /// them checkboxes and dropdown offers the column's values as colored choices.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        column_types: Option<Vec<SpreadsheetTableColumnType>>,
+    },
+}
+
+/// A table column's type, by its header name.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SpreadsheetTableColumnType {
+    /// Header name of the column, ignoring case.
+    pub column: String,
+    /// What the column holds.
+    #[serde(rename = "type")]
+    pub column_type: SpreadsheetColumnType,
+}
+
+/// What a table column holds, as Google Sheets types table columns.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum SpreadsheetColumnType {
+    /// Any text.
+    Text,
+    /// Numbers, shown with thousands separators.
+    Number,
+    /// Fractions shown as percentages.
+    Percent,
+    /// Amounts of money.
+    Currency,
+    /// Calendar dates.
+    Date,
+    /// Dates with a time of day.
+    Datetime,
+    /// Times of day.
+    Time,
+    /// TRUE or FALSE, shown as checkboxes.
+    Checkbox,
+    /// One of a list of choices, shown as colored chips.
+    Dropdown,
+    /// A mention of a person, which people type with @.
+    Person,
 }
 
 /// The deterministic spreadsheet execution request.
@@ -484,6 +542,29 @@ pub struct SpreadsheetSheetSummary {
     pub formula_cells: usize,
     /// Number of calculated errors.
     pub error_cells: usize,
+    /// Named tables on the sheet.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tables: Vec<SpreadsheetTableSummary>,
+}
+
+/// A named table (an Excel table) that formulas address with structured references.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SpreadsheetTableSummary {
+    /// Table name, as in Sales[Amount].
+    pub name: String,
+    /// A1 rectangle from the header row through the total row, if any.
+    pub range: String,
+    /// Column names, from the header row.
+    pub columns: Vec<String>,
+    /// Whether the last row is a total row.
+    pub totals_row: bool,
+    /// Columns whose filters currently hide rows.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub filtered_columns: Vec<String>,
+    /// Typed columns; untyped columns are left out.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub column_types: Vec<SpreadsheetTableColumnType>,
 }
 
 /// Addressed range with explicit truncation.

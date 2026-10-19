@@ -1,6 +1,7 @@
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useUserId } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { usePropertyUserDisplay } from '@property/hooks/usePropertyUserDisplay';
 import type { Accessor } from 'solid-js';
 import { toTaskBoardGrouping } from './core/task-board';
@@ -48,12 +49,18 @@ export function TasksBoard(props: { ref?: (element: HTMLDivElement) => void }) {
             return;
           }
 
-          void openEntityInSplitFromUnifiedList(entity, {
-            splitHandle: panel.handle,
-            referredFrom: 'tasks',
-            openInNewSplit:
-              event.shiftKey || event.metaKey || event.ctrlKey || event.altKey,
-          });
+          fireAndForget(
+            openEntityInSplitFromUnifiedList(entity, {
+              splitHandle: panel.handle,
+              referredFrom: 'tasks',
+              openInNewSplit:
+                event.shiftKey ||
+                event.metaKey ||
+                event.ctrlKey ||
+                event.altKey,
+            }),
+            'open-entity-in-split'
+          );
         }}
       />
     </div>

@@ -36,6 +36,9 @@ describe('shareAccess', () => {
     expect(shareAccess(item({ kind: 'call' }))).toEqual({
       t: 'view-via-message',
     });
+    expect(shareAccess(item({ kind: 'foreign' }))).toEqual({
+      t: 'view-via-message',
+    });
   });
 
   it('sets a level on an owned document after its message', () => {

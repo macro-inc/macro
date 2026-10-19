@@ -1,5 +1,6 @@
 import { openBulkEditModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { canEditChannelIdentity, type EntityData } from '@entity/types/entity';
 import { restoreSoupFocus } from '../utils';
 import type { EntityActionListState } from './entity-action-context';
@@ -57,13 +58,13 @@ export const makeRenameAction = (options: MakeRenameOptions) => {
         if (firstEntity) {
           soup.focus.set(firstEntity.id);
         }
-        restoreSoupFocus(firstEntity?.id);
+        fireAndForget(restoreSoupFocus(firstEntity?.id), 'entity-actions');
       },
       onCancel: () => {
         if (firstEntity) {
           soup.focus.set(firstEntity.id);
         }
-        restoreSoupFocus(firstEntity?.id);
+        fireAndForget(restoreSoupFocus(firstEntity?.id), 'entity-actions');
       },
     });
   };

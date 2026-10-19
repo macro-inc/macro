@@ -1,4 +1,5 @@
 import { useUserId } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { useClaudeConnectionSource } from '@queries/claude-auth/connection';
 import { Suspense } from 'solid-js';
 import { ConnectionCard } from './components/connection-card';
@@ -19,10 +20,14 @@ function ConnectedCard() {
       busy={connection.busy()}
       error={connection.error()}
       onCode={connection.setCode}
-      onBegin={() => void connection.begin()}
-      onComplete={() => void connection.complete()}
-      onDisconnect={() => void connection.disconnect()}
-      onRefresh={() => void connection.refresh()}
+      onBegin={() => fireAndForget(connection.begin(), 'claude-connection')}
+      onComplete={() =>
+        fireAndForget(connection.complete(), 'claude-connection')
+      }
+      onDisconnect={() =>
+        fireAndForget(connection.disconnect(), 'claude-connection')
+      }
+      onRefresh={() => fireAndForget(connection.refresh(), 'claude-connection')}
     />
   );
 }

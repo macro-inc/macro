@@ -20,6 +20,7 @@ export function forwardedAttachments(
   const shownInline = inlineContentIds(message.body_html_sanitized ?? '');
   const linked = staticFileIdsByContentId(message.attachments);
   return (message.attachments ?? []).filter((attachment) => {
+    if (attachment.reference_url) return false;
     if (!attachment.content_id) return true;
     const contentId = normalizeContentId(attachment.content_id);
     return !shownInline.has(contentId) || !linked.has(contentId);

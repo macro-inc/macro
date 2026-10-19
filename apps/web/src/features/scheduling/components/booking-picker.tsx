@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { Button } from '@ui';
 import {
   createEffect,
@@ -32,6 +33,7 @@ export function BookingPicker(props: {
   event: PublicEvent;
   source: BookingSource;
   onReceipt: (receipt: BookingReceipt) => void;
+  onChooseEvent?: () => void;
   /** Shows real availability but never books: an author's preview. */
   preview?: boolean;
 }) {
@@ -94,7 +96,7 @@ export function BookingPicker(props: {
     );
   const choose = (value: string) => {
     setDate(value);
-    void flow.chooseDate(event().id, value, zone());
+    fireAndForget(flow.chooseDate(event().id, value, zone()), 'scheduling');
   };
   const submit = async (e: SubmitEvent) => {
     e.preventDefault();
@@ -113,24 +115,47 @@ export function BookingPicker(props: {
   };
   return (
     <section class="@container overflow-hidden rounded-2xl border border-edge-muted bg-surface-1 text-ink">
-      <div class="grid @2xl:grid-cols-[280px_1fr]">
-        <aside class="border-b border-edge-muted p-5 @md:p-7 @2xl:border-r @2xl:border-b-0">
+      <div class="grid @3xl:grid-cols-[260px_minmax(0,1fr)]">
+        <aside class="border-b border-edge-muted bg-surface-0 p-5 @md:p-7 @3xl:border-r @3xl:border-b-0">
+          <Show when={props.onChooseEvent}>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              class="mb-5"
+              disabled={locked()}
+              onClick={props.onChooseEvent}
+            >
+              ← All meetings
+            </Button>
+          </Show>
           <p class="text-sm text-ink-muted">{props.profile.name}</p>
-          <h2 class="mt-3 text-2xl font-semibold">{event().title}</h2>
-          <p class="mt-5 text-sm">◷ {event().durationMinutes} minutes</p>
-          <p class="mt-3 text-sm">{meetingPlaceLabel(event())}</p>
-          <p class="mt-5 whitespace-pre-wrap text-sm leading-relaxed text-ink-muted">
-            {event().description}
-          </p>
+          <h2 class="mt-2 text-2xl font-semibold tracking-tight">
+            {event().title}
+          </h2>
+          <div class="mt-5 flex flex-wrap gap-x-4 gap-y-2 text-xs text-ink-muted @3xl:flex-col">
+            <p>{event().durationMinutes} minutes</p>
+            <p>{meetingPlaceLabel(event())}</p>
+          </div>
+          <Show when={event().description}>
+            <p class="mt-5 whitespace-pre-wrap text-sm leading-relaxed text-ink-muted">
+              {event().description}
+            </p>
+          </Show>
           <Show when={flow.selected()}>
             {(selected) => (
-              <p class="mt-5 text-sm font-medium">
-                {new Date(selected()).toLocaleString([], {
-                  timeZone: zone(),
-                  dateStyle: 'full',
-                  timeStyle: 'short',
-                })}
-              </p>
+              <div class="mt-6 rounded-lg bg-accent-bg p-3 text-sm">
+                <p class="text-xs font-medium text-ink-muted">
+                  Your selected time
+                </p>
+                <p class="mt-2 font-medium">
+                  {new Date(selected()).toLocaleString([], {
+                    timeZone: zone(),
+                    dateStyle: 'full',
+                    timeStyle: 'short',
+                  })}
+                </p>
+              </div>
             )}
           </Show>
           <div class="mt-6">
@@ -148,192 +173,247 @@ export function BookingPicker(props: {
             </Field>
           </div>
         </aside>
-        <div class="min-w-0 p-5 @md:p-7">
-          <Show when={flow.error()}>
-            <p
-              role="alert"
-              class="mb-4 rounded-lg border border-edge-muted p-3 text-sm text-failure"
-            >
-              {flow.error()}
-            </p>
-          </Show>
-          <Show
-            when={!flow.selected()}
-            fallback={
-              <form
-                class="flex flex-col gap-5"
-                onSubmit={(e) => void submit(e)}
-              >
-                <Button
-                  variant="ghost"
-                  class="self-start"
-                  onClick={flow.back}
-                  disabled={locked()}
-                >
-                  ← Choose another time
-                </Button>
-                <h3 class="text-lg font-semibold">Your details</h3>
-                <Field label="Name">
-                  <TextInput
-                    required
-                    disabled={locked()}
-                    autocomplete="name"
-                    value={name()}
-                    onInput={(e) => setName(e.currentTarget.value)}
-                  />
-                </Field>
-                <Field label="Email address">
-                  <TextInput
-                    type="email"
-                    disabled={locked()}
-                    required
-                    autocomplete="email"
-                    value={email()}
-                    onInput={(e) => setEmail(e.currentTarget.value)}
-                  />
-                </Field>
-                <For each={event().questions}>
-                  {(q) => (
-                    <Field label={`${q.label}${q.required ? ' *' : ''}`}>
-                      <TextArea
-                        disabled={locked()}
-                        required={q.required}
-                        value={answers()[q.id] ?? ''}
-                        onInput={(e) =>
-                          setAnswers({
-                            ...answers(),
-                            [q.id]: e.currentTarget.value,
-                          })
-                        }
-                      />
-                    </Field>
-                  )}
-                </For>
-                <Button
-                  type="submit"
-                  variant="strong"
-                  disabled={flow.submitting() || props.preview}
-                >
-                  {props.preview
-                    ? 'Booking is off in preview'
-                    : flow.submitting()
-                      ? 'Booking…'
-                      : flow.uncertain()
-                        ? 'Check booking status'
-                        : event().requiresConfirmation
-                          ? 'Request booking'
-                          : 'Confirm booking'}
-                </Button>
-                <p class="text-xs text-ink-muted">
-                  Your details are shared with the meeting hosts.
-                </p>
-              </form>
-            }
+        <div class="min-w-0">
+          <ol
+            aria-label="Booking progress"
+            class="flex items-center gap-5 border-b border-edge-muted px-5 py-4 text-xs @md:px-7"
           >
-            <h3 class="text-lg font-semibold">Select a date & time</h3>
-            <div class="mt-5 flex items-center justify-between">
-              <span class="font-medium">
-                {month().toLocaleDateString([], {
-                  timeZone: 'UTC',
-                  month: 'long',
-                  year: 'numeric',
-                })}
+            <li
+              aria-current={!flow.selected() ? 'step' : undefined}
+              class={
+                flow.selected() ? 'text-ink-muted' : 'font-medium text-ink'
+              }
+            >
+              <span aria-hidden="true" class="mr-2">
+                1.
               </span>
-              <div class="flex gap-1">
-                <Button
-                  variant="ghost"
-                  label="Previous month"
-                  disabled={month() <= currentMonth()}
-                  onClick={() => shiftMonth(-1)}
+              Date & time
+            </li>
+            <li
+              aria-current={flow.selected() ? 'step' : undefined}
+              class={
+                flow.selected() ? 'font-medium text-ink' : 'text-ink-muted'
+              }
+            >
+              <span aria-hidden="true" class="mr-2">
+                2.
+              </span>
+              Your details
+            </li>
+          </ol>
+          <div class="@container/booking-content p-5 @md:p-7">
+            <Show when={flow.error()}>
+              <p
+                role="alert"
+                class="mb-5 rounded-lg bg-surface-0 p-3 text-sm text-failure"
+              >
+                {flow.error()}
+              </p>
+            </Show>
+            <Show
+              when={!flow.selected()}
+              fallback={
+                <form
+                  class="mx-auto flex max-w-lg flex-col gap-5"
+                  onSubmit={(e) => fireAndForget(submit(e), 'scheduling')}
                 >
-                  ‹
-                </Button>
-                <Button
-                  variant="ghost"
-                  label="Next month"
-                  onClick={() => shiftMonth(1)}
-                >
-                  ›
-                </Button>
-              </div>
-            </div>
-            <div class="mt-3 grid grid-cols-7 gap-1">
-              <For each={['S', 'M', 'T', 'W', 'T', 'F', 'S']}>
-                {(day) => (
-                  <span class="py-2 text-center text-xs text-ink-muted">
-                    {day}
-                  </span>
-                )}
-              </For>
-              <For each={Array.from({ length: month().getUTCDay() })}>
-                {() => <span />}
-              </For>
-              <For each={days()}>
-                {(d) => (
                   <Button
-                    variant={date() === dateKey(d) ? 'strong' : 'ghost'}
-                    class="h-auto w-full aspect-square"
-                    disabled={dateKey(d) < today()}
-                    aria-label={d.toLocaleDateString([], {
-                      timeZone: 'UTC',
-                      dateStyle: 'full',
-                    })}
-                    onClick={() => choose(dateKey(d))}
-                  >
-                    {d.getUTCDate()}
-                  </Button>
-                )}
-              </For>
-            </div>
-            <Show when={date()}>
-              <div class="mt-6 border-t border-edge-muted pt-5">
-                <div class="mb-3 flex items-center justify-between">
-                  <h4 class="text-sm font-semibold">Available times</h4>
-                  <Button
-                    size="sm"
+                    type="button"
                     variant="ghost"
-                    onClick={() => choose(date())}
+                    class="self-start"
+                    onClick={flow.back}
+                    disabled={locked()}
                   >
-                    Refresh
+                    ← Choose another time
                   </Button>
-                </div>
-                <Show
-                  when={!flow.loading()}
-                  fallback={
-                    <p role="status" class="text-sm text-ink-muted">
-                      Checking calendars…
+                  <div>
+                    <h3 class="text-lg font-semibold">Your details</h3>
+                    <p class="mt-1 text-sm text-ink-muted">
+                      Tell the host who is joining.
                     </p>
-                  }
-                >
-                  <div class="grid grid-cols-2 gap-2">
-                    <For
-                      each={flow.slots()}
-                      fallback={
-                        <Show when={!flow.error()}>
-                          <p class="col-span-2 text-sm text-ink-muted">
-                            No times available. Please choose another date.
-                          </p>
-                        </Show>
-                      }
-                    >
-                      {(slot) => (
+                  </div>
+                  <Field label="Name">
+                    <TextInput
+                      required
+                      disabled={locked()}
+                      autocomplete="name"
+                      value={name()}
+                      onInput={(e) => setName(e.currentTarget.value)}
+                    />
+                  </Field>
+                  <Field label="Email address">
+                    <TextInput
+                      type="email"
+                      disabled={locked()}
+                      required
+                      autocomplete="email"
+                      value={email()}
+                      onInput={(e) => setEmail(e.currentTarget.value)}
+                    />
+                  </Field>
+                  <For each={event().questions}>
+                    {(q) => (
+                      <Field label={`${q.label}${q.required ? ' *' : ''}`}>
+                        <TextArea
+                          disabled={locked()}
+                          required={q.required}
+                          value={answers()[q.id] ?? ''}
+                          onInput={(e) =>
+                            setAnswers({
+                              ...answers(),
+                              [q.id]: e.currentTarget.value,
+                            })
+                          }
+                        />
+                      </Field>
+                    )}
+                  </For>
+                  <Button
+                    type="submit"
+                    variant="strong"
+                    disabled={flow.submitting() || props.preview}
+                  >
+                    {props.preview
+                      ? 'Booking is off in preview'
+                      : flow.submitting()
+                        ? 'Booking…'
+                        : flow.uncertain()
+                          ? 'Check booking status'
+                          : event().requiresConfirmation
+                            ? 'Request booking'
+                            : 'Confirm booking'}
+                  </Button>
+                  <p class="text-xs leading-relaxed text-ink-muted">
+                    Your details are shared with the meeting hosts.
+                  </p>
+                </form>
+              }
+            >
+              <h3 class="text-lg font-semibold">Select a date & time</h3>
+              <p class="mt-1 text-sm text-ink-muted">
+                Times are shown in your time zone.
+              </p>
+              <div class="mt-6 grid gap-6 @lg/booking-content:grid-cols-[minmax(220px,1fr)_160px]">
+                <div class="min-w-0">
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="text-sm font-medium">
+                      {month().toLocaleDateString([], {
+                        timeZone: 'UTC',
+                        month: 'long',
+                        year: 'numeric',
+                      })}
+                    </span>
+                    <div class="flex gap-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        label="Previous month"
+                        disabled={month() <= currentMonth()}
+                        onClick={() => shiftMonth(-1)}
+                      >
+                        ‹
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        label="Next month"
+                        onClick={() => shiftMonth(1)}
+                      >
+                        ›
+                      </Button>
+                    </div>
+                  </div>
+                  <div class="mt-3 grid grid-cols-7 gap-1">
+                    <For each={['S', 'M', 'T', 'W', 'T', 'F', 'S']}>
+                      {(day) => (
+                        <span class="py-2 text-center text-xs text-ink-muted">
+                          {day}
+                        </span>
+                      )}
+                    </For>
+                    <For each={Array.from({ length: month().getUTCDay() })}>
+                      {() => <span />}
+                    </For>
+                    <For each={days()}>
+                      {(d) => (
                         <Button
-                          variant="outline"
-                          onClick={() => flow.select(slot.startsAt)}
-                        >
-                          {new Date(slot.startsAt).toLocaleTimeString([], {
-                            timeZone: zone(),
-                            hour: 'numeric',
-                            minute: '2-digit',
+                          type="button"
+                          variant={date() === dateKey(d) ? 'strong' : 'ghost'}
+                          class="h-auto w-full aspect-square"
+                          aria-pressed={date() === dateKey(d)}
+                          disabled={dateKey(d) < today()}
+                          aria-label={d.toLocaleDateString([], {
+                            timeZone: 'UTC',
+                            dateStyle: 'full',
                           })}
+                          onClick={() => choose(dateKey(d))}
+                        >
+                          {d.getUTCDate()}
                         </Button>
                       )}
                     </For>
                   </div>
-                </Show>
+                </div>
+                <div class="border-t border-edge-muted pt-5 @lg/booking-content:border-t-0 @lg/booking-content:border-l @lg/booking-content:pl-5 @lg/booking-content:pt-0">
+                  <Show
+                    when={date()}
+                    fallback={
+                      <p class="text-sm leading-relaxed text-ink-muted">
+                        Choose a date to see available times.
+                      </p>
+                    }
+                  >
+                    <div class="mb-3 flex items-center justify-between gap-1">
+                      <h4 class="text-sm font-medium">Available times</h4>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => choose(date())}
+                      >
+                        Refresh
+                      </Button>
+                    </div>
+                    <Show
+                      when={!flow.loading()}
+                      fallback={
+                        <p role="status" class="text-sm text-ink-muted">
+                          Checking calendars…
+                        </p>
+                      }
+                    >
+                      <div class="grid grid-cols-2 gap-2 @lg/booking-content:grid-cols-1">
+                        <For
+                          each={flow.slots()}
+                          fallback={
+                            <Show when={!flow.error()}>
+                              <p class="col-span-full text-sm leading-relaxed text-ink-muted">
+                                No times available. Please choose another date.
+                              </p>
+                            </Show>
+                          }
+                        >
+                          {(slot) => (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => flow.select(slot.startsAt)}
+                            >
+                              {new Date(slot.startsAt).toLocaleTimeString([], {
+                                timeZone: zone(),
+                                hour: 'numeric',
+                                minute: '2-digit',
+                              })}
+                            </Button>
+                          )}
+                        </For>
+                      </div>
+                    </Show>
+                  </Show>
+                </div>
               </div>
             </Show>
-          </Show>
+          </div>
         </div>
       </div>
     </section>

@@ -1,4 +1,5 @@
 import { enableSnippets, isFeatureEnabled } from '@core/constant/featureFlags';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { $dfsIterator, mergeRegister } from '@lexical/utils';
 import type { PeerIdValidator } from '@macro-inc/lexical-core';
 import {
@@ -195,7 +196,7 @@ function registerSnippetsPlugin(
       });
       const awaitNodeKey = awaitNode.getKey();
       $insertNodes([awaitNode]);
-      void fetchAndReplaceSnippet(awaitNodeKey);
+      fireAndForget(fetchAndReplaceSnippet(awaitNodeKey), 'markdown-snippets');
     });
   }
 

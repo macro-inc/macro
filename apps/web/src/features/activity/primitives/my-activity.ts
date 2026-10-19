@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { type Accessor, createMemo } from 'solid-js';
 import type { ActivityContext } from '../context/activity-context';
 import type { ActivityOverview } from '../core/event';
@@ -101,7 +102,7 @@ export function createMyActivityState(
 
   const fetchNext = () => {
     if (!feedQuery.hasNextPage || feedQuery.isFetchingNextPage) return;
-    void feedQuery.fetchNextPage();
+    fireAndForget(feedQuery.fetchNextPage(), 'activity');
   };
 
   return {

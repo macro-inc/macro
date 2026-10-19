@@ -1,4 +1,5 @@
 import { ENABLE_PDF_TABS } from '@core/constant/featureFlags';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createCallback } from '@solid-primitives/rootless';
 import { usePdfDocument } from '../context/pdf-document-context';
 import { usePdfViewer } from '../context/pdf-viewer-context';
@@ -43,11 +44,14 @@ export function useGoToLocation() {
       viewer.hidePopup();
       const pageNumber = loc.pageIndex + 1;
 
-      viewer.scrollTo({
-        pageNumber,
-        yPos: Math.floor(loc.yPos),
-        topPadding: TOP_PADDING,
-      });
+      fireAndForget(
+        viewer.scrollTo({
+          pageNumber,
+          yPos: Math.floor(loc.yPos),
+          topPadding: TOP_PADDING,
+        }),
+        'pdf-viewer'
+      );
 
       viewer.callout({
         pageNumber,

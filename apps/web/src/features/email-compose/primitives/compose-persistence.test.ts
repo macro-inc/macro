@@ -39,8 +39,9 @@ it.each(['standalone', 'reply'] as const)(
     try {
       root.edit('Send without flashing Draft saved');
       await vi.advanceTimersByTimeAsync(0);
+      let sending: Promise<unknown> | undefined;
       if ('state' in root) root.state.context.onSend();
-      else void root.sendEmail();
+      else sending = root.sendEmail();
       expect(state.acknowledgeSaved()).toBe(false);
       await vi.advanceTimersByTimeAsync(0);
       expect(context.delivery.sendMessage).toHaveBeenCalledOnce();
@@ -52,6 +53,7 @@ it.each(['standalone', 'reply'] as const)(
       root.edit('Keep editing after failure');
       await vi.advanceTimersByTimeAsync(500);
       expect(state.acknowledgeSaved()).toBe(true);
+      await sending;
     } finally {
       delivery.resolve({
         draftId: 'sent',
@@ -364,7 +366,13 @@ it('uses the captured inbox for attachment upload when a sender switch queues be
   ).toBe('inbox');
   expect(
     vi.mocked(composeContext.drafts.saveDraft).mock.calls[1][0].inboxId
-  ).toBe('other');
+  ).toBe('inbox');
+  expect(composeContext.drafts.transferDraft).toHaveBeenCalledWith(
+    expect.objectContaining({
+      sourceInboxId: 'inbox',
+      destinationInboxId: 'other',
+    })
+  );
   root.dispose();
 });
 

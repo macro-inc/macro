@@ -11,6 +11,7 @@ import type { EmailRecipient } from '@app/features/email-compose/core/email-reci
 import { useChatContext } from '@core/component/AI/context';
 import type { AssistantMessagePart } from '@core/component/AI/types';
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { useChatQuery } from '@queries/chat';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import type { SendEmail } from '@service-cognition/generated/tools/types';
@@ -188,7 +189,7 @@ export function ComposeTool(props: ComposeToolProps) {
   const sink: UserToolReviewSink<SendEmail> = {
     canAct,
     lockedNotice,
-    onEdit: (args) => void persistEdit(args),
+    onEdit: (args) => fireAndForget(persistEdit(args), 'ai-email-draft'),
     onExecute: async (args) => {
       const result = await cognitionApiServiceClient.callTool<'SendEmail'>({
         chat_id: props.chatId,

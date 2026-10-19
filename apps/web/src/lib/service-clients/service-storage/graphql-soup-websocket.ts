@@ -1,5 +1,6 @@
 import { toast } from '@core/component/Toast/Toast';
 import { subscribeNativeNetworkStatus } from '@core/mobile/native-network-status';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { normalizedCacheResultMetadata } from '@graphql-cache/exchange/normalized-cache-exchange';
 import type { CacheHost } from '@graphql-cache/host/types';
 import type { Client, OperationResult } from '@urql/core';
@@ -295,10 +296,13 @@ export function createGraphqlSoupSubscriptionsLifecycle(
                 .notificationUpdates;
               publishNotificationPatch(patch);
               const metadata = normalizedCacheResultMetadata(result);
-              void channelHandler.onPatch(
-                patch,
-                metadata?.source === 'live-network' &&
-                  metadata.cacheEffectsApplied === true
+              fireAndForget(
+                channelHandler.onPatch(
+                  patch,
+                  metadata?.source === 'live-network' &&
+                    metadata.cacheEffectsApplied === true
+                ),
+                'graphql-soup-subscriptions'
               );
             }
             if (result.error) {

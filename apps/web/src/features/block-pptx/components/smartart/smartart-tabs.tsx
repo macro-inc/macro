@@ -9,6 +9,7 @@ import type {
   SmartArtCatalogItem,
   SmartArtPosition,
 } from '@core/pptx-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowCounterClockwise from '@phosphor/arrow-counter-clockwise.svg';
 import ArrowDown from '@phosphor/arrow-down.svg';
 import ArrowUp from '@phosphor/arrow-up.svg';
@@ -95,7 +96,7 @@ export function AddShapeItems(props: {
           testId={`pptx-smartart-add-${a.position}`}
           onClick={() => {
             props.close();
-            void s().addNode(a.position);
+            fireAndForget(s().addNode(a.position), 'pptx-editor');
           }}
         />
       )}
@@ -123,7 +124,7 @@ export function SmartArtDesignTab(props: { smartArt: SmartArtState }) {
       testId={`pptx-smartart-colors-${item.short}`}
       onClick={() => {
         close();
-        void s().setColors(item.short);
+        fireAndForget(s().setColors(item.short), 'pptx-editor');
       }}
     >
       <SmartArtPreview
@@ -172,7 +173,7 @@ export function SmartArtDesignTab(props: { smartArt: SmartArtState }) {
           tooltip="Promote"
           data-testid="pptx-smartart-promote"
           disabled={!supported() || !canPromote(lines(), index())}
-          onClick={() => void s().promote()}
+          onClick={() => fireAndForget(s().promote(), 'pptx-editor')}
         >
           <TextOutdent />
         </RibbonButton>
@@ -181,7 +182,7 @@ export function SmartArtDesignTab(props: { smartArt: SmartArtState }) {
           tooltip="Demote"
           data-testid="pptx-smartart-demote"
           disabled={!supported() || !canDemote(lines(), index())}
-          onClick={() => void s().demote()}
+          onClick={() => fireAndForget(s().demote(), 'pptx-editor')}
         >
           <TextIndent />
         </RibbonButton>
@@ -190,7 +191,7 @@ export function SmartArtDesignTab(props: { smartArt: SmartArtState }) {
           tooltip="Move Up"
           data-testid="pptx-smartart-move-up"
           disabled={!supported() || index() < 0}
-          onClick={() => void s().moveUp()}
+          onClick={() => fireAndForget(s().moveUp(), 'pptx-editor')}
         >
           <ArrowUp />
         </RibbonButton>
@@ -199,7 +200,7 @@ export function SmartArtDesignTab(props: { smartArt: SmartArtState }) {
           tooltip="Move Down"
           data-testid="pptx-smartart-move-down"
           disabled={!supported() || index() < 0}
-          onClick={() => void s().moveDown()}
+          onClick={() => fireAndForget(s().moveDown(), 'pptx-editor')}
         >
           <ArrowDown />
         </RibbonButton>
@@ -221,7 +222,7 @@ export function SmartArtDesignTab(props: { smartArt: SmartArtState }) {
                     testId={`pptx-smartart-layout-option-${layout.short}`}
                     onClick={() => {
                       close();
-                      void s().setLayout(layout.short);
+                      fireAndForget(s().setLayout(layout.short), 'pptx-editor');
                     }}
                   >
                     <SmartArtPreview
@@ -285,7 +286,7 @@ export function SmartArtDesignTab(props: { smartArt: SmartArtState }) {
                       testId={`pptx-smartart-style-${style.short}`}
                       onClick={() => {
                         close();
-                        void s().setStyle(style.short);
+                        fireAndForget(s().setStyle(style.short), 'pptx-editor');
                       }}
                     >
                       <SmartArtPreview
@@ -314,7 +315,7 @@ export function SmartArtDesignTab(props: { smartArt: SmartArtState }) {
           tooltip="Discard formatting changes to the graphic"
           data-testid="pptx-smartart-reset"
           disabled={!supported()}
-          onClick={() => void s().reset()}
+          onClick={() => fireAndForget(s().reset(), 'pptx-editor')}
         >
           <ArrowCounterClockwise />
           Reset Graphic
@@ -332,7 +333,7 @@ export function SmartArtDesignTab(props: { smartArt: SmartArtState }) {
                 testId="pptx-smartart-convert-text"
                 onClick={() => {
                   close();
-                  void s().convert('text');
+                  fireAndForget(s().convert('text'), 'pptx-editor');
                 }}
               />
               <PopoverItem
@@ -340,7 +341,7 @@ export function SmartArtDesignTab(props: { smartArt: SmartArtState }) {
                 testId="pptx-smartart-convert-shapes"
                 onClick={() => {
                   close();
-                  void s().convert('shapes');
+                  fireAndForget(s().convert('shapes'), 'pptx-editor');
                 }}
               />
             </div>

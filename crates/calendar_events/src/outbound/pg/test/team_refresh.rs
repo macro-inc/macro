@@ -23,27 +23,25 @@ async fn calendar_metadata_changes_never_certify_unchanged_ooo(pool: PgPool) {
     verify_calendar_snapshot(&mut tx, account, calendar_id)
         .await
         .unwrap();
-    let (_, changed) =
-        upsert_calendar_tx(&mut tx, &mut log, link, account, calendar.clone(), false)
-            .await
-            .unwrap();
+    let (_, changed) = upsert_calendar_tx(&mut tx, &mut log, link, account, calendar.clone(), None)
+        .await
+        .unwrap();
     assert!(
         !changed,
         "an unchanged verified calendar leaves OOO rows intact"
     );
 
     calendar.is_primary = false;
-    let (_, changed) =
-        upsert_calendar_tx(&mut tx, &mut log, link, account, calendar.clone(), false)
-            .await
-            .unwrap();
+    let (_, changed) = upsert_calendar_tx(&mut tx, &mut log, link, account, calendar.clone(), None)
+        .await
+        .unwrap();
     assert!(changed, "OOO reads only primary calendars");
 
     verify_calendar_snapshot(&mut tx, account, calendar_id)
         .await
         .unwrap();
     calendar.access_role = Some("reader".to_string());
-    let (_, changed) = upsert_calendar_tx(&mut tx, &mut log, link, account, calendar, false)
+    let (_, changed) = upsert_calendar_tx(&mut tx, &mut log, link, account, calendar, None)
         .await
         .unwrap();
     assert!(changed, "provider ACL changes require immediate clearing");

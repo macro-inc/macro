@@ -1073,9 +1073,9 @@ test('edits made offline merge when the connection returns', async ({
   // Route Bob's sync socket through the test so the network can be cut.
   let offline = false;
   const sockets: Array<{ close: () => Promise<void> }> = [];
-  await bob.routeWebSocket(/\/connect\?/, (socket) => {
+  await bob.routeWebSocket(/\/connect\?/, async (socket) => {
     if (offline) {
-      void socket.close();
+      await socket.close();
       return;
     }
     socket.connectToServer();

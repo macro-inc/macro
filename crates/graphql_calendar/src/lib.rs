@@ -7,6 +7,8 @@ mod mutation;
 mod objects;
 mod reads;
 #[cfg(test)]
+mod schema_test;
+#[cfg(test)]
 mod test_fixtures;
 mod user_query;
 mod writes;
@@ -22,13 +24,13 @@ pub use mutation::{
 };
 pub use objects::{
     GraphqlAllDayEventTime, GraphqlCalendar, GraphqlCalendarAttendee,
-    GraphqlCalendarAttendeeResponseStatus, GraphqlCalendarChanges,
+    GraphqlCalendarAttendeeResponseStatus, GraphqlCalendarCapabilities, GraphqlCalendarChanges,
     GraphqlCalendarConferenceProvider, GraphqlCalendarEvent, GraphqlCalendarEventChange,
     GraphqlCalendarEventSource, GraphqlCalendarEventStatus, GraphqlCalendarEventTransparency,
     GraphqlCalendarEventType, GraphqlCalendarEventVisibility, GraphqlCalendarLinkWatermark,
     GraphqlCalendarMutationPayload, GraphqlCalendarOccurrence, GraphqlCalendarOccurrencePage,
-    GraphqlCalendarReminderOverride, GraphqlCalendarReminders, GraphqlCalendarSyncStatus,
-    GraphqlEventTime, GraphqlTimedEventTime,
+    GraphqlCalendarProvider, GraphqlCalendarReminderOverride, GraphqlCalendarReminders,
+    GraphqlCalendarSyncStatus, GraphqlEventTime, GraphqlTimedEventTime,
 };
 pub use reads::CalendarGraphqlContext;
 pub use user_query::GraphqlCalendarQuery;

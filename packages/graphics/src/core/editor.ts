@@ -51,12 +51,15 @@ export type EditingSession = SelectionState &
     canUndo: boolean;
     canRedo: boolean;
     snapUnit?: number;
+    objectSnapping: boolean;
   }>;
 
 export type GraphicsEditorOptions = Readonly<{
   measureText?: TextMeasurer;
   /** Any positive finite scene-unit interval; omitted disables snapping. */
   snapUnit?: number;
+  /** Align nearby edges and centers during selection transforms. Off by default. */
+  objectSnapping?: boolean;
 }>;
 export type GraphicsEditor = ReturnType<typeof createGraphicsEditor>;
 
@@ -83,6 +86,7 @@ function createEditor(
 ) {
   validateSnapUnit(options.snapUnit);
   let snapUnit = options.snapUnit;
+  let objectSnapping = options.objectSnapping ?? false;
   let document: GraphicsDocument = Array.isArray(seed)
     ? createScene(seed)
     : freezeDocument(seed as GraphicsDocument);
@@ -98,6 +102,7 @@ function createEditor(
     Object.freeze({
       ...selection.getState(),
       snapUnit,
+      objectSnapping,
       canUndo: backend ? backend.getHistory().canUndo : undoStack.length > 0,
       canRedo: backend ? backend.getHistory().canRedo : redoStack.length > 0,
     });
@@ -108,6 +113,8 @@ function createEditor(
   const selection = createSelection({
     measureText: options.measureText,
     getSnapUnit: () => snapUnit,
+    getObjectSnapping: () => objectSnapping,
+    getScale: () => camera.scale,
     getDocument: () => document,
     commitDocument,
     cancelDrawing: cancelShape,
@@ -332,6 +339,11 @@ function createEditor(
     },
     getSession,
     getSnapUnit: () => snapUnit,
+    setObjectSnapping(enabled: boolean) {
+      if (disposed || objectSnapping === enabled) return;
+      objectSnapping = enabled;
+      cancelTransform();
+    },
     setSnapUnit(unit: number | undefined) {
       validateSnapUnit(unit);
       if (disposed || unit === snapUnit) return;

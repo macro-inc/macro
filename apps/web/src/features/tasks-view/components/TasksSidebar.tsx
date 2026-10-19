@@ -17,6 +17,7 @@ import {
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import CheckSquareIcon from '@phosphor/check-square.svg';
 import ListChecksIcon from '@phosphor/list-checks.svg';
 import NoteIcon from '@phosphor/note-pencil.svg';
@@ -198,10 +199,13 @@ export function TasksSidebar() {
                 openProject(layout, id, { newSplit: true });
                 return;
               }
-              navigate({
-                route: projectDetailRoute,
-                params: { projectId: id, section: 'overview' },
-              });
+              fireAndForget(
+                navigate({
+                  route: projectDetailRoute,
+                  params: { projectId: id, section: 'overview' },
+                }),
+                'tasks-view'
+              );
             }}
           />
         </Show>

@@ -24,6 +24,7 @@ vi.mock('./macroLinkInterceptor', () => ({
   registerMacroLinkInterceptor: () => () => {},
 }));
 
+import { registerPipedreamCallback } from '@core/pipedream/connect-callback';
 import { useTauriNavigationEffect } from './navigation';
 
 let dispose: (() => void) | undefined;
@@ -46,6 +47,32 @@ beforeEach(() => {
 afterEach(() => dispose?.());
 
 describe('native link session routing', () => {
+  it('completes a connector callback without navigating away from the active chat', () => {
+    const onEvent = vi.fn();
+    const { state } = registerPipedreamCallback(onEvent);
+    receive({
+      payload: {
+        path: '/pipedream-connect-callback',
+        query: `state=${state}&outcome=success&account_id=apn_test`,
+      },
+    });
+    expect(onEvent).toHaveBeenCalledExactlyOnceWith({
+      type: 'success',
+      accountId: 'apn_test',
+    });
+    expect(mocks.navigate).not.toHaveBeenCalled();
+    expect(mocks.setPostLoginRedirect).not.toHaveBeenCalled();
+  });
+
+  it('ignores stale connector callbacks without routing to a missing page', () => {
+    receive({
+      payload: {
+        path: '/pipedream-connect-callback',
+        query: 'state=expired&outcome=closed',
+      },
+    });
+    expect(mocks.navigate).not.toHaveBeenCalled();
+  });
   it('preserves query parameters on Android root links', () => {
     receive({
       payload: { path: '/', query: 'subscriptionSuccess=true&type=pro' },

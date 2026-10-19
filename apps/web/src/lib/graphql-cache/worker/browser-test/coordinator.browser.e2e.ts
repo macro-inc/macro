@@ -377,7 +377,7 @@ test('production engine waits out a departing owner that still holds the files, 
   expect(browserErrors).toEqual([]);
 });
 
-test('a newer build takes the production database over and older builds are turned away', async ({
+test('a newer build with the same coordinator URL takes the production database over', async ({
   context,
   page,
 }, testInfo) => {

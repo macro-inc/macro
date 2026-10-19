@@ -19,10 +19,11 @@ repeat with a plus-addressed DM recipient to check the email-name fallback.
 
 ## Private conversations with an agent
 
-Agent DM discovery is enabled with the local/environment flag
-`VITE_ENABLE_AGENT_DMS=true`; it defaults off and has no PostHog flag. Set it
-before starting Vite or building the frontend. Disabling discovery does not
-delete existing conversations or cancel their work.
+Agent DM discovery is on in development builds (dev.macro.com and `bun run dev`)
+and off in production; there is no PostHog flag. Override it with
+`VITE_ENABLE_AGENT_DMS=true` or `false` before starting Vite or building the
+frontend. Disabling discovery does not delete existing conversations or cancel
+their work.
 
 Choose an agent in **Create → Message**, or click **Message** in its settings or
 bot profile. The picker offers your agents, eligible team agents, and Macro.
@@ -598,6 +599,11 @@ On a cold channel open, verify that delayed bot/agent mention requests leave the
 messages and composer visible. Expand a thread while its replies are still
 loading: existing preview replies should remain visible until the full list
 arrives. Repeat after reopening the channel to cover both cold and cached data.
+For PR mentions, also fail a GitHub connection-status request, then paste a
+mention while the retry is held pending. The composer must stay visible and
+focused, and messages containing PR mentions must render immediately. Resolve
+the retry as linked, unlinked, or failed: none should hide the surrounding UI;
+only a confirmed unlinked/reauthentication status changes the chip to a link.
 Scrolling a collapsed thread into view must keep its timeline preview unchanged,
 without fetching or revealing the full reply list. Cached replies from a previous
 expansion must not enlarge that preview either. Explicit expansion, replying,
@@ -613,14 +619,32 @@ reaction, and typing routes no longer exist. Live updates arrive as one
 frames are no longer sent. Documents share the same client, cache, and
 components (see documents.md).
 
-Reopening a channel already loaded this session requests
-`GET /dss/messages/channel/<id>?selection=<cursor of the newest cached root, direction newer, limit 50>`
-and merges the result into the cached first page. A first open, a message link,
-a channel cached away from its latest page, and a delta longer than one page load
-the latest page with the default selection. The `channel_messages_load` event
-records `path` (`catch_up` or `full`) and `reason`
-(`watermark`, `list_ahead`, `no_cache`, `cache_not_at_latest`, `load_around`,
-`delta_overflow`, or `catch_up_error`).
+Reopening a cached channel, reconnecting its live subscription, or returning
+from an absence past the presence window revalidates its timeline with
+`GET /dss/messages/channel/<id>/timeline?selection=<default latest-page selection>`.
+This replaces stale roots and their reply previews, reactions, and edits, and
+removes deleted roots even when no newer top-level message exists. Loaded older
+pages are also refetched using the refreshed cursors. A committed live change
+restarts any in-flight channel timeline refresh, including when older pages are
+still loading, so its result cannot overwrite that change. Idle channels still
+apply live events without fetching; cached content stays visible if a refresh
+fails. Message links still load around the targeted message.
+The `channel_messages_load` event records `path: full` and `reason`
+(`revalidate`, `no_cache`, `cache_not_at_latest`, or `load_around`).
+Actual in-flight restarts emit a `channel.timeline_restart` span, searchable by
+`channel.id`. `query.count` records the number of restarted queries;
+`query.fetch_more_directions` and `query.outcomes` are arrays in the same query
+order (`refetch`/`forward`/`backward` and `fulfilled`/`rejected`). The span also
+records fulfilled/rejected counts and is marked as an error if any restart fails.
+Idle channels emit no restart span. Request error text and message content are
+not included.
+
+To verify recovery, open a root with no replies, disconnect that client's live
+updates, then add replies and reactions, edit another root, and delete a root
+from a second client without posting a new top-level message. Reconnect the first
+client: the collapsed preview, reply count, reactions, text, and deleted row must
+all catch up without a reload. Repeat with older pages loaded and after a mobile
+background/foreground cycle.
 
 ## Message reaction notifications
 
@@ -658,7 +682,7 @@ seen without moving the conversation. No notification read marking runs
 from an abbreviated list result, even if that result is empty. Access failures
 show **Conversation unavailable** and stay hidden during retry until access is
 confirmed. A route without cached channel metadata shows **Loading conversation**
-until its channel arrives. On mobile, opening from Recent, Channels, or DMs
+until its channel arrives. On mobile, opening from the Recent conversation list
 also navigates immediately: a slow or failed notification lookup must not prevent
 messages and the composer from loading. Full-edge notification hydration runs
 only after navigation is accepted; failure leaves unread state unchanged and
@@ -860,18 +884,13 @@ conversation cards on `Recent`. Switching tabs preserves the active search and
 query, then scrolls the results to the selected channel when present or to the
 start. Closing search restores the active tab and applies the same scroll
 behavior to its lists. An empty result uses the standard search empty state
-artwork and wraps long queries. Desktop and the mobile dock use the same channel
-name search: local fuzzy matches plus service results, deduplicated by channel
-ID. Desktop searches across channels and DMs; mobile retains its Recent,
-Channels, or DMs scope. An empty query shows the ordinary list. Scrolling search
-results loads the next search page; clearing the query restores ordinary list
-pagination. Check both surfaces with a matching query, a query with no matches,
-and a clear/reopen cycle.
-On mobile, a nonempty query with no matches shows **No results**, echoes the
-query, and offers **Clear search**. Clearing restores the selected tab's list
-and keeps the dock search session open. The tab's usual empty state and create
-actions appear only when no search text is entered; loading and request errors
-keep their own states.
+artwork and wraps long queries. Desktop channel name search combines local fuzzy
+matches and service results,
+deduplicated by channel ID, across channels and DMs. An empty query shows the
+ordinary list. Scrolling search results loads the next search page; clearing the
+query restores ordinary list pagination. Check a matching query, a query with no
+matches, and a clear/reopen cycle. Mobile dock search uses the independent Search
+route described below.
 Recent search includes both channels and DMs, including service hits without
 message previews. It does not require message metadata or an importance filter.
 Loaded conversation metadata is preserved when a service hit has the same ID.
@@ -901,25 +920,18 @@ into the appended rows. If the section has no next page, navigation proceeds
 to the next section. `[` and `]` jump between the visible Favorites,
 Channels, and DMs section headers.
 
-On touch layouts, the `Recent`, `Channels`, and `DMs` pill tabs each retain
-their own loaded pages and load more as their active list approaches the end.
-The mobile dock search filters the selected tab by conversation name as you type:
-`DMs` searches people, `Channels` searches non-DM channels, and `Recent` searches
-both. Loaded matches appear immediately; queries of at least three characters
-also search the server, including conversations beyond the loaded page. Changing
-tabs keeps the query and changes its scope. Closing search restores the ordinary
-list. Verify `Channels` → `DMs` → type a person's name with GraphQL enabled:
-unrelated rows disappear, no matches shows **No results**, and switching to
-Channels never keeps DM search hits. Changing the query resets list scroll
-without blurring the dock input. While a background browse-list refresh is still
-pending, scroll near the end of search results: the next search page should load
-without waiting for that refresh or requiring another scroll. Clearing search
-restores the browse list's own pagination and fetching state. A failed browse
-request must not show a load-error message over valid search hits or replace
-**No results**, including during debounce and short local-only queries. Search
-failures still show their own error; clearing search restores the browse error.
-With `enable-graphql-soup` enabled, open an unread conversation from each tab
-and return to the list: all notifications on top-level messages should be seen,
+On touch layouts, Channels shows only the Recent conversation feed, with channel
+and DM message previews. There are no view tabs or reserved tab-header space;
+older saved tab selections and mobile-tab links cannot change the list. It loads
+more as the list approaches the end and supports pull to refresh.
+The mobile dock Search button opens the independent Search route. Its Channels
+and People categories search cached channel names and people directly; the
+conversation list does not constrain results. Full-text search is explicit,
+and People uses the existing channel-content scope. Closing search resets its
+session; the conversation list retains its browse pagination. See
+[Search](search.md) for mode, keyboard, and session-reset checks.
+With `enable-graphql-soup` enabled, open an unread conversation from the mobile
+list and return to the list: all notifications on top-level messages should be seen,
 including mentions and reactions older than the global feed's loaded page.
 Replies and mentions inside threads remain unread. Channel-view unread badges
 only represent top-level messages and mentions; unread replies and reactions do
@@ -1169,8 +1181,9 @@ and admins when team settings are available. People keeps search and the compact
 `Add participants` opens a bottom sheet; Bots has its own full-height list and an
 `Invite bot` sheet. Bots uses the same search toolbar and plain rows as People;
 `Search bots` filters existing bots by name, handle, or description, with compact
-`New bot` and `Invite bot` actions beside it. The fallback AI composer and New
-button are hidden throughout this page and return when leaving it. Both sheets use the standard mobile keyboard-aware layout and
+`New bot` and `Invite bot` actions beside it. The fallback New button is hidden
+throughout this page and returns when leaving it. Channel views have no floating
+AI composer. Both sheets use the standard mobile keyboard-aware layout and
 close after a successful add. Check switching tabs, closing/reopening both sheets,
 and scrolling a long participant list above the bottom dock, with and without the
 keyboard open. An invite-bot request from the channel menu opens the Bots tab and

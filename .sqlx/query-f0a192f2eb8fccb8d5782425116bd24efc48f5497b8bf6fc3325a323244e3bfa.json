@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE email_mailbox_drafts SET synced_revision = $2,base_version = $3,\n                state = CASE WHEN revision = $2 AND NOT delete_requested THEN 'synced' ELSE 'pending' END,\n                checkpoint = CASE WHEN revision = $2 THEN $4::jsonb ELSE NULL END,\n                error_code = NULL,lease_id = NULL,lease_until = NULL,available_at = now(),updated_at = now()\n            WHERE message_id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8",
+        "Text",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f0a192f2eb8fccb8d5782425116bd24efc48f5497b8bf6fc3325a323244e3bfa"
+}

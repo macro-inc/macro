@@ -5,6 +5,7 @@ import { SERVER_HOSTS } from '@core/constant/servers';
 import { deriveIsAuthenticated } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
 import { idToDisplayName, idToEmail } from '@core/user/util';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   useAiBillingPlansQuery,
   useCreateBillingPortalMutation,
@@ -176,9 +177,10 @@ export function createAppOnboardingContext(): OnboardingContext {
             loadableQuery(github, (data) => data.status)
           ),
         retry: () => {
-          if (connected.isError) void connected.refetch();
-          if (native.isError) void native.refetch();
-          if (github.isError) void github.refetch();
+          if (connected.isError)
+            fireAndForget(connected.refetch(), 'onboarding');
+          if (native.isError) fireAndForget(native.refetch(), 'onboarding');
+          if (github.isError) fireAndForget(github.refetch(), 'onboarding');
         },
       };
     },
@@ -210,8 +212,8 @@ export function createAppOnboardingContext(): OnboardingContext {
         contacts: () =>
           loadableQuery(contacts, (data) => data.contacts.map(idToEmail)),
         retry: () => {
-          void teams.refetch();
-          void invites.refetch();
+          fireAndForget(teams.refetch(), 'onboarding');
+          fireAndForget(invites.refetch(), 'onboarding');
         },
       };
     },
@@ -252,7 +254,7 @@ export function createAppOnboardingContext(): OnboardingContext {
           }
         },
         retry: () => {
-          void query.refetch();
+          fireAndForget(query.refetch(), 'onboarding');
         },
       };
     },
@@ -261,7 +263,7 @@ export function createAppOnboardingContext(): OnboardingContext {
       return {
         catalog: () => loadableQuery(query, (data) => data),
         retry: () => {
-          void query.refetch();
+          fireAndForget(query.refetch(), 'onboarding');
         },
       };
     },

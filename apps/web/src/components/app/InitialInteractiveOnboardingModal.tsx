@@ -1,6 +1,7 @@
 import { initAndStartEmailSync } from '@core/email-link';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { lazyNamed } from '@core/util/lazyNamed';
 import { useUserInfoQuery } from '@queries/auth/user-info';
 import { createEffect, createSignal, Show, Suspense } from 'solid-js';
@@ -46,13 +47,16 @@ export function InitialInteractiveOnboardingModal() {
     if (emailInitForUserId === data.id) return;
     emailInitForUserId = data.id;
 
-    void initAndStartEmailSync().match(
-      () => {},
-      (err) => {
-        if (err.tag !== 'AlreadyInitialized') {
-          console.error('Failed to init email link for new user', err);
+    fireAndForget(
+      initAndStartEmailSync().match(
+        () => {},
+        (err) => {
+          if (err.tag !== 'AlreadyInitialized') {
+            console.error('Failed to init email link for new user', err);
+          }
         }
-      }
+      ),
+      'email-sync'
     );
   });
 

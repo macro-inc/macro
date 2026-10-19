@@ -18,6 +18,7 @@ pub(super) async fn link_by_fusionauth_and_macro_id(
 ) -> Result<Option<Link>, sqlx::Error> {
     let provider: DbUserProvider = match provider {
         UserProvider::Gmail => DbUserProvider::Gmail,
+        UserProvider::Outlook => DbUserProvider::Outlook,
     };
 
     let db_link = sqlx::query_as!(
@@ -51,6 +52,7 @@ pub(super) async fn link_by_fusionauth_email_provider(
 ) -> Result<Option<Link>, sqlx::Error> {
     let provider: DbUserProvider = match provider {
         UserProvider::Gmail => DbUserProvider::Gmail,
+        UserProvider::Outlook => DbUserProvider::Outlook,
     };
 
     let db_link = sqlx::query_as!(
@@ -240,6 +242,7 @@ impl DbInboxDetailsRow {
             photo_url: self.photo_url,
             provider: match self.provider {
                 DbUserProvider::Gmail => UserProvider::Gmail,
+                DbUserProvider::Outlook => UserProvider::Outlook,
             },
             is_sync_active: self.is_sync_active,
             needs_reauth: self.needs_reauth,
@@ -285,7 +288,14 @@ pub(super) async fn inbox_details_for_macro_id(
                l.updated_at as "updated_at!",
                s.signature_on_replies_forwards as "signature_on_replies_forwards?",
                s.signature,
-               bj.status as "latest_backfill_status?: _",
+               CASE WHEN l.provider = 'OUTLOOK' THEN
+                   CASE WHEN NOT EXISTS (SELECT 1 FROM email_sync_streams ss WHERE ss.link_id = l.id AND ss.generation = l.sync_generation AND ss.kind IN ('folder_catalog','mail_folder'))
+                       THEN 'Init'::email_backfill_job_status
+                   WHEN EXISTS (SELECT 1 FROM email_sync_streams ss WHERE ss.link_id = l.id AND ss.generation = l.sync_generation AND ss.kind IN ('folder_catalog','mail_folder') AND NOT ss.initial_complete)
+                       OR EXISTS (SELECT 1 FROM email_message_reconciliation mr WHERE mr.link_id = l.id AND mr.generation = l.sync_generation AND mr.is_import)
+                       THEN 'InProgress'::email_backfill_job_status
+                   ELSE 'Complete'::email_backfill_job_status END
+               ELSE bj.status END as "latest_backfill_status?: _",
                c.sfs_photo_url as "photo_url?",
                COALESCE(g.granted_scopes, '{}') AS "google_granted_scopes!",
                (g.calendar_disabled_at IS NOT NULL) AS "calendar_disabled!",
@@ -295,13 +305,13 @@ pub(super) async fn inbox_details_for_macro_id(
         FROM (
             SELECT el.id, el.macro_id, el.email_address, el.provider,
                    el.is_sync_active, el.needs_reauth, el.is_primary,
-                   el.created_at, el.updated_at
+                   el.created_at, el.updated_at, el.sync_generation
             FROM email_links el
             WHERE el.macro_id = $1
             UNION
             SELECT el.id, el.macro_id, el.email_address, el.provider,
                    el.is_sync_active, el.needs_reauth, el.is_primary,
-                   el.created_at, el.updated_at
+                   el.created_at, el.updated_at, el.sync_generation
             FROM email_links el
             JOIN macro_user_links mul ON el.id = mul.link_id
             WHERE mul.primary_macro_id = $1

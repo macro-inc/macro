@@ -4,6 +4,7 @@ import {
   hasPermissions,
   Permissions,
 } from '@core/component/SharePermissions';
+import { fireAndForget } from '@core/util/fireAndForget';
 import CircleIcon from '@phosphor/circle.svg';
 import { Property as PropertyUI } from '@property';
 import { Modals } from '@property/component/modal';
@@ -75,7 +76,11 @@ export function TaskPropertiesPreviewProvider(props: {
                 properties: () => metadata().properties ?? [],
                 isLoading: () => metadata().properties === undefined,
                 canEdit: () => metadata().canEdit,
-                refetch: () => void metadata().refetch(),
+                refetch: () =>
+                  fireAndForget(
+                    metadata().refetch(),
+                    'task-properties-preview'
+                  ),
               }}
             >
               {props.children}

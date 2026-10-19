@@ -194,7 +194,7 @@ export function ReviewsBoard(props: {
     toast.success(`${ACTION_COPY[action].done} ${prDisplayName(target)}`);
     // The routes patch the stored pull request first, so the list refetch
     // already sees the change.
-    void queryClient.invalidateQueries({ queryKey: soupKeys.astItems._def });
+    queryClient.invalidateQueries({ queryKey: soupKeys.astItems._def });
     return true;
   };
 

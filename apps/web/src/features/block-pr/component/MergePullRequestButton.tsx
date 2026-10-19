@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import GitMerge from '@phosphor/git-merge.svg';
 import { Button, type ButtonSize, cn, confirmDialog } from '@ui';
 import { getOwner, type Owner, Show } from 'solid-js';
@@ -91,7 +92,7 @@ export function MergePullRequestButton(props: {
         data-merge-pull-request={props.target.number}
         on:click={(event) => {
           event.stopPropagation();
-          void action.merge(props.target);
+          fireAndForget(action.merge(props.target), 'pr-merge');
         }}
       >
         <GitMerge aria-hidden="true" class="size-3.5" />

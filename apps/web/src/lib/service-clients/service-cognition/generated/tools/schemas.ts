@@ -194,6 +194,54 @@ export const SpreadsheetResponse = z.any().superRefine((x, ctx) => {
           populatedCells: z.number().int().gte(0),
           formulaCells: z.number().int().gte(0),
           errorCells: z.number().int().gte(0),
+          tables: z
+            .array(
+              z.object({
+                name: z.string(),
+                range: z.string(),
+                columns: z.array(z.string()),
+                totalsRow: z.boolean(),
+                filteredColumns: z.array(z.string()).optional(),
+                columnTypes: z
+                  .array(
+                    z.object({
+                      column: z.string(),
+                      type: z.any().superRefine((x, ctx) => {
+                        const schemas = [
+                          z.literal('text'),
+                          z.literal('number'),
+                          z.literal('percent'),
+                          z.literal('currency'),
+                          z.literal('date'),
+                          z.literal('datetime'),
+                          z.literal('time'),
+                          z.literal('checkbox'),
+                          z.literal('dropdown'),
+                          z.literal('person'),
+                        ];
+                        const errors = schemas.reduce<z.ZodError[]>(
+                          (errors, schema) =>
+                            ((result) =>
+                              result.error
+                                ? [...errors, result.error]
+                                : errors)(schema.safeParse(x)),
+                          []
+                        );
+                        if (schemas.length - errors.length !== 1) {
+                          ctx.addIssue({
+                            path: ctx.path,
+                            code: 'invalid_union',
+                            unionErrors: errors,
+                            message: 'Invalid input: Should pass single schema',
+                          });
+                        }
+                      }),
+                    })
+                  )
+                  .optional(),
+              })
+            )
+            .optional(),
         })
       ),
       ranges: z.array(
@@ -653,6 +701,54 @@ export const SpreadsheetResponse = z.any().superRefine((x, ctx) => {
           populatedCells: z.number().int().gte(0),
           formulaCells: z.number().int().gte(0),
           errorCells: z.number().int().gte(0),
+          tables: z
+            .array(
+              z.object({
+                name: z.string(),
+                range: z.string(),
+                columns: z.array(z.string()),
+                totalsRow: z.boolean(),
+                filteredColumns: z.array(z.string()).optional(),
+                columnTypes: z
+                  .array(
+                    z.object({
+                      column: z.string(),
+                      type: z.any().superRefine((x, ctx) => {
+                        const schemas = [
+                          z.literal('text'),
+                          z.literal('number'),
+                          z.literal('percent'),
+                          z.literal('currency'),
+                          z.literal('date'),
+                          z.literal('datetime'),
+                          z.literal('time'),
+                          z.literal('checkbox'),
+                          z.literal('dropdown'),
+                          z.literal('person'),
+                        ];
+                        const errors = schemas.reduce<z.ZodError[]>(
+                          (errors, schema) =>
+                            ((result) =>
+                              result.error
+                                ? [...errors, result.error]
+                                : errors)(schema.safeParse(x)),
+                          []
+                        );
+                        if (schemas.length - errors.length !== 1) {
+                          ctx.addIssue({
+                            path: ctx.path,
+                            code: 'invalid_union',
+                            unionErrors: errors,
+                            message: 'Invalid input: Should pass single schema',
+                          });
+                        }
+                      }),
+                    })
+                  )
+                  .optional(),
+              })
+            )
+            .optional(),
         })
       ),
       warnings: z.array(z.string()),
@@ -2053,7 +2149,7 @@ export const CreateCalendarEvent = z.object({
     ])
     .optional(),
   addMacroCall: z.boolean().optional(),
-  addGoogleMeet: z.boolean().optional(),
+  addConference: z.boolean().optional(),
   eventType: z
     .any()
     .superRefine((x, ctx) => {
@@ -2277,7 +2373,7 @@ export const CreateConfirmedCalendarEvent = z.object({
     ])
     .optional(),
   addMacroCall: z.boolean().optional(),
-  addGoogleMeet: z.boolean().optional(),
+  addConference: z.boolean().optional(),
   eventType: z
     .any()
     .superRefine((x, ctx) => {
@@ -8164,6 +8260,55 @@ export const EditSpreadsheet = z.object({
             type: z.literal('insert_checkboxes'),
           })
           .strict(),
+        z
+          .object({
+            sheetId: z.string(),
+            range: z.string(),
+            name: z.union([z.string(), z.null()]).optional(),
+            totalsRow: z.union([z.boolean(), z.null()]).optional(),
+            columnTypes: z
+              .union([
+                z.array(
+                  z.object({
+                    column: z.string(),
+                    type: z.any().superRefine((x, ctx) => {
+                      const schemas = [
+                        z.literal('text'),
+                        z.literal('number'),
+                        z.literal('percent'),
+                        z.literal('currency'),
+                        z.literal('date'),
+                        z.literal('datetime'),
+                        z.literal('time'),
+                        z.literal('checkbox'),
+                        z.literal('dropdown'),
+                        z.literal('person'),
+                      ];
+                      const errors = schemas.reduce<z.ZodError[]>(
+                        (errors, schema) =>
+                          ((result) =>
+                            result.error ? [...errors, result.error] : errors)(
+                            schema.safeParse(x)
+                          ),
+                        []
+                      );
+                      if (schemas.length - errors.length !== 1) {
+                        ctx.addIssue({
+                          path: ctx.path,
+                          code: 'invalid_union',
+                          unionErrors: errors,
+                          message: 'Invalid input: Should pass single schema',
+                        });
+                      }
+                    }),
+                  })
+                ),
+                z.null(),
+              ])
+              .optional(),
+            type: z.literal('create_table'),
+          })
+          .strict(),
       ];
       const errors = schemas.reduce<z.ZodError[]>(
         (errors, schema) =>
@@ -8316,6 +8461,16 @@ export const EditWordDocument = z.object({
 });
 
 export const WordDocumentResponse = z.object({ content: z.string() });
+
+export const ExportPipelineCsv = z.object({ pipelineId: z.string().uuid() });
+
+export const ExportPipelineCsvResponse = z.object({
+  documentId: z.string().uuid(),
+  fileName: z.string(),
+  rows: z.number().int().gte(0),
+  complete: z.boolean(),
+  summary: z.string(),
+});
 
 export const FindPipelineEntries = z.object({
   pipelineId: z.union([z.string().uuid(), z.null()]).optional(),
@@ -8769,6 +8924,45 @@ export const GetThreadResponse = z.object({
   summary: z.string(),
 });
 
+export const ImportCompaniesCsv = z.object({
+  csv: z.union([z.string(), z.null()]).optional(),
+  documentId: z.union([z.string().uuid(), z.null()]).optional(),
+  pipelineId: z.union([z.string().uuid(), z.null()]).optional(),
+  newPipelineName: z.union([z.string(), z.null()]).optional(),
+  shareNewPipeline: z.union([z.boolean(), z.null()]).optional(),
+});
+
+export const ImportCompaniesCsvResponse = z.object({
+  created: z.number().int().gte(0),
+  existing: z.number().int().gte(0),
+  skippedRows: z.number().int().gte(0),
+  failedCount: z.number().int().gte(0),
+  failed: z.array(z.object({ key: z.string(), reason: z.string() })),
+  pipeline: z
+    .union([
+      z.object({
+        pipelineId: z.string().uuid(),
+        pipelineName: z.string(),
+        added: z.number().int().gte(0),
+        alreadyPresent: z.number().int().gte(0),
+        createdRecords: z.number().int().gte(0),
+        unresolvedCount: z.number().int().gte(0),
+        unresolved: z.array(z.object({ key: z.string(), reason: z.string() })),
+        invalidCount: z.number().int().gte(0),
+        invalid: z.array(z.object({ key: z.string(), reason: z.string() })),
+        skippedRows: z.number().int().gte(0),
+        filledFields: z.array(z.string()),
+        ignoredColumns: z.array(z.string()),
+        addedOptions: z.array(
+          z.object({ field: z.string(), labels: z.array(z.string()) })
+        ),
+      }),
+      z.null(),
+    ])
+    .optional(),
+  summary: z.string(),
+});
+
 export const ImportNotionPage = z.object({ pageUrl: z.string() });
 
 export const ImportNotionPageResponse = z.object({
@@ -8827,6 +9021,31 @@ export const ImportNotionPageResponse = z.object({
     importedByTeammate: z.boolean(),
   }),
   message: z.string(),
+});
+
+export const ImportPipelineCsv = z.object({
+  pipelineId: z.string().uuid(),
+  csv: z.union([z.string(), z.null()]).optional(),
+  documentId: z.union([z.string().uuid(), z.null()]).optional(),
+});
+
+export const ImportPipelineCsvResponse = z.object({
+  pipelineId: z.string().uuid(),
+  pipelineName: z.string(),
+  added: z.number().int().gte(0),
+  alreadyPresent: z.number().int().gte(0),
+  createdRecords: z.number().int().gte(0),
+  unresolvedCount: z.number().int().gte(0),
+  unresolved: z.array(z.object({ key: z.string(), reason: z.string() })),
+  invalidCount: z.number().int().gte(0),
+  invalid: z.array(z.object({ key: z.string(), reason: z.string() })),
+  skippedRows: z.number().int().gte(0),
+  filledFields: z.array(z.string()),
+  ignoredColumns: z.array(z.string()),
+  addedOptions: z.array(
+    z.object({ field: z.string(), labels: z.array(z.string()) })
+  ),
+  summary: z.string(),
 });
 
 export const IssueBotCredential = z.object({
@@ -9226,6 +9445,59 @@ export const ListCalendars = z.record(z.any());
 export const ListCalendarsToolResponse = z.object({
   calendars: z.array(
     z.object({
+      provider: z.any().superRefine((x, ctx) => {
+        const schemas = [z.literal('google'), z.literal('outlook')];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
+      }),
+      capabilities: z.object({
+        conferenceProvider: z
+          .union([
+            z.any().superRefine((x, ctx) => {
+              const schemas = [
+                z.literal('microsoft_teams'),
+                z.literal('google_meet'),
+                z.literal('other'),
+              ];
+              const errors = schemas.reduce<z.ZodError[]>(
+                (errors, schema) =>
+                  ((result) =>
+                    result.error ? [...errors, result.error] : errors)(
+                    schema.safeParse(x)
+                  ),
+                []
+              );
+              if (schemas.length - errors.length !== 1) {
+                ctx.addIssue({
+                  path: ctx.path,
+                  code: 'invalid_union',
+                  unionErrors: errors,
+                  message: 'Invalid input: Should pass single schema',
+                });
+              }
+            }),
+            z.null(),
+          ])
+          .optional(),
+        removeConference: z.boolean(),
+        autoDecline: z.boolean(),
+        emailReminders: z.boolean(),
+        customRecurrence: z.boolean(),
+        resetRsvp: z.boolean(),
+      }),
       calendarId: z.string().uuid(),
       name: z.string(),
       emailAddress: z.string(),
@@ -14927,7 +15199,12 @@ export const UpdateCalendarEvent = z.object({
   conference: z
     .union([
       z.any().superRefine((x, ctx) => {
-        const schemas = [z.literal('google_meet'), z.literal('remove')];
+        const schemas = [
+          z.literal('provider_default'),
+          z.literal('microsoft_teams'),
+          z.literal('google_meet'),
+          z.literal('remove'),
+        ];
         const errors = schemas.reduce<z.ZodError[]>(
           (errors, schema) =>
             ((result) => (result.error ? [...errors, result.error] : errors))(

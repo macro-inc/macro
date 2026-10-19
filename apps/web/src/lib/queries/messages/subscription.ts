@@ -14,7 +14,7 @@ function invalidateParent(
     messageKeys.messagesByIds,
     messageKeys.threadReplies,
   ]) {
-    void queryClient.invalidateQueries({ queryKey: [...key._def, parent] });
+    queryClient.invalidateQueries({ queryKey: [...key._def, parent] });
   }
 }
 

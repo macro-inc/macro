@@ -10,7 +10,6 @@ import {
 import { For, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChannelsDataSource } from '../queries';
-import type { ChannelsQueryScope } from '../types';
 
 const mocks = vi.hoisted(() => ({
   pass: (props: { children?: JSX.Element }) => props.children,
@@ -44,7 +43,9 @@ vi.mock('@app/lib/debugSettings', () => ({
 vi.mock('@components/app/GlobalAppState', () => ({
   useGlobalNotificationSource: () => mocks.source,
 }));
-vi.mock('@components/app/mobile/PillTabs', () => ({ PillTabs: () => null }));
+vi.mock('@components/app/mobile/PillTabs', () => ({
+  PillTabs: () => <div role="tablist" />,
+}));
 vi.mock('@components/app/mobile/PullToRefresh', () => ({
   PullToRefresh: () => null,
 }));
@@ -123,35 +124,34 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('mobile channel activation', () => {
-  it.each<ChannelsQueryScope>(['recents', 'channels', 'direct_messages'])(
-    'opens immediately at latest with top-level read marking from %s',
-    async (tab) => {
-      render(() => (
-        <ChannelsMobileView
-          source={source}
-          searchQuery=""
-          onClearSearch={() => {}}
-          tab={tab}
-          onTabChange={() => {}}
-        />
-      ));
+  it('opens recent conversations immediately at latest with top-level read marking', async () => {
+    render(() => (
+      <ChannelsMobileView
+        source={source}
+        searchQuery=""
+        onClearSearch={() => {}}
+      />
+    ));
 
-      fireEvent.click(screen.getByRole('button', { name: 'One' }));
-      expect(mocks.hydrate).not.toHaveBeenCalled();
-      expect(mocks.openSplit).toHaveBeenCalledOnce();
-      expect(mocks.failure).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole('tree', { name: 'Recent conversations' })
+    ).toBeTruthy();
+    expect(screen.queryByRole('tablist')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'One' }));
+    expect(mocks.hydrate).not.toHaveBeenCalled();
+    expect(mocks.openSplit).toHaveBeenCalledOnce();
+    expect(mocks.failure).not.toHaveBeenCalled();
 
-      await waitFor(() =>
-        expect(mocks.openSplit).toHaveBeenCalledExactlyOnceWith(channel, {
-          splitHandle: mocks.handle,
-          referredFrom: 'channels',
-          notificationSource: mocks.source,
-          channelNavigation: 'latest',
-          channelReadScope: 'top-level',
-        })
-      );
-    }
-  );
+    await waitFor(() =>
+      expect(mocks.openSplit).toHaveBeenCalledExactlyOnceWith(channel, {
+        splitHandle: mocks.handle,
+        referredFrom: 'channels',
+        notificationSource: mocks.source,
+        channelNavigation: 'latest',
+        channelReadScope: 'top-level',
+      })
+    );
+  });
 
   it('still reports a navigation failure while the list is mounted', async () => {
     const error = new Error('Navigation failed');
@@ -163,10 +163,12 @@ describe('mobile channel activation', () => {
           source={source}
           searchQuery=""
           onClearSearch={() => {}}
-          tab="channels"
-          onTabChange={() => {}}
         />
       ));
+      expect(
+        screen.getByRole('tree', { name: 'Recent conversations' })
+      ).toBeTruthy();
+      expect(screen.queryByRole('tablist')).toBeNull();
       fireEvent.click(screen.getByRole('button', { name: 'One' }));
       await waitFor(() =>
         expect(mocks.failure).toHaveBeenCalledExactlyOnceWith(

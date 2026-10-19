@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import CopyIcon from '@phosphor/copy.svg';
 import DotsIcon from '@phosphor/dots-three.svg';
 import TrashIcon from '@phosphor/trash-simple.svg';
@@ -85,7 +86,7 @@ export function RoutineDetailView(props: {
               copyDisabled={!state()?.prompt}
               onRun={runNow}
               onEnabled={(enabled) => props.source.setEnabled(enabled)}
-              onCopyPrompt={() => void copyPrompt()}
+              onCopyPrompt={() => fireAndForget(copyPrompt(), 'routines')}
             />
           }
           actions={
@@ -202,7 +203,9 @@ export function RoutineDetailView(props: {
                   Could not load run history.{' '}
                   <button
                     class="underline"
-                    onClick={() => void props.source.refreshHistory()}
+                    onClick={() =>
+                      fireAndForget(props.source.refreshHistory(), 'routines')
+                    }
                   >
                     Retry
                   </button>

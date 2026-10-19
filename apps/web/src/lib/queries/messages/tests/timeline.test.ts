@@ -11,7 +11,7 @@ import type {
   MessageTimelineEntry,
   TimelineActivity,
 } from '@service-storage/messages';
-import { QueryClient } from '@tanstack/solid-query';
+import { InfiniteQueryObserver, QueryClient } from '@tanstack/solid-query';
 import { createRoot } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -130,7 +130,10 @@ function seedLatestCache(
     ],
     pageParams: [extras?.pageParam ?? null],
   };
-  testQueryClient.setQueryData(getMessageTimelineQueryKey(parent, null), data);
+  testQueryClient.setQueryData(
+    getMessageTimelineQueryKey(items[0]?.parent ?? parent, null),
+    data
+  );
 }
 
 function fullPage(
@@ -261,44 +264,81 @@ describe('messageTimelineQueryOptions', () => {
     expect(mocks.track).not.toHaveBeenCalled();
   });
 
-  it('cache at latest fetches only roots newer than the newest cached root', async () => {
-    const older = createMessage('msg-older', '2026-09-10T13:19:00.123456Z');
-    const newer = createMessage('msg-newer', '2026-09-10T13:19:00.123457Z');
+  it('recovers missed replies, reactions, edits, and deletions on cached channel roots', async () => {
+    const root = createMessage('root', '2026-09-10T13:19:00Z');
+    const deleted = createMessage('deleted', '2026-09-10T13:18:00Z');
+    const reply = createMessage('reply', '2026-09-10T13:20:00Z', {
+      thread_id: root.id,
+      content: 'Posted while disconnected',
+    });
+    const refreshed = {
+      ...root,
+      content: 'Edited while disconnected',
+      reactions: [{ emoji: '❤️', users: ['user-2'] }],
+      thread: {
+        reply_count: 1,
+        preview: [reply],
+        latest_reply_at: reply.created_at,
+      },
+    };
+    seedLatestCache([root, deleted]);
+    // A created-at delta is empty: only an existing root changed.
+    mocks.timeline.mockImplementation(async (_parent, selection) =>
+      fullPage(selection.cursor ? [] : [refreshed])
+    );
+
+    const result = await messageTimelineQueryOptions(parent, null).queryFn({
+      pageParam: null,
+    });
+
+    expect(timelineMessages(result)).toEqual([refreshed]);
+    expect(mocks.timeline).toHaveBeenCalledOnce();
+    expect(mocks.timeline).toHaveBeenCalledWith(parent, fullSelection);
+  });
+
+  it('document catch-up still fetches only roots newer than the newest cached root', async () => {
+    const older = createMessage('msg-older', '2026-09-10T13:19:00.123456Z', {
+      parent: document,
+    });
+    const newer = createMessage('msg-newer', '2026-09-10T13:19:00.123457Z', {
+      parent: document,
+    });
     seedLatestCache([older, newer]);
-    const deltaItem = createMessage('msg-delta', '2026-09-10T13:20:00.000000Z');
+    const deltaItem = createMessage(
+      'msg-delta',
+      '2026-09-10T13:20:00.000000Z',
+      {
+        parent: document,
+      }
+    );
     mocks.timeline.mockResolvedValueOnce({
       entries: entries([deltaItem]),
       next_cursor: cursor('msg-delta', '2026-09-10T13:20:00.000000Z'),
       previous_cursor: null,
     });
 
-    const result = await messageTimelineQueryOptions(parent, null).queryFn({
+    const result = await messageTimelineQueryOptions(document, null).queryFn({
       pageParam: null,
     });
 
     expect(mocks.timeline).toHaveBeenCalledTimes(1);
-    expect(mocks.timeline).toHaveBeenCalledWith(parent, {
+    expect(mocks.timeline).toHaveBeenCalledWith(document, {
       cursor: { created_at: '2026-09-10T13:19:00.123457Z', id: 'msg-newer' },
       direction: 'newer',
       limit: 50,
-      include_deleted_threads: false,
+      include_deleted_threads: true,
     });
     expect(ids(result)).toEqual(['msg-delta', 'msg-newer', 'msg-older']);
     expect(result.next_cursor).toEqual(cachedNext);
     expect(result.previous_cursor).toBeNull();
-    expect(mocks.track).toHaveBeenCalledWith('channel_messages_load', {
-      channelId: 'channel-1',
-      path: 'catch_up',
-      reason: 'watermark',
-      after: '2026-09-10T13:19:00.123457Z',
-    });
+    expect(mocks.track).not.toHaveBeenCalled();
   });
 
-  it('breaks created_at ties with the larger root id', async () => {
+  it('document catch-up breaks created_at ties with the larger root id', async () => {
     const time = '2026-09-10T13:19:00.000000Z';
     seedLatestCache([
-      createMessage('msg-a', time),
-      createMessage('msg-b', time),
+      createMessage('msg-a', time, { parent: document }),
+      createMessage('msg-b', time, { parent: document }),
     ]);
     mocks.timeline.mockResolvedValueOnce({
       entries: [],
@@ -306,18 +346,22 @@ describe('messageTimelineQueryOptions', () => {
       previous_cursor: null,
     });
 
-    await messageTimelineQueryOptions(parent, null).queryFn({
+    await messageTimelineQueryOptions(document, null).queryFn({
       pageParam: null,
     });
 
     expect(mocks.timeline).toHaveBeenCalledWith(
-      parent,
+      document,
       expect.objectContaining({ cursor: { created_at: time, id: 'msg-b' } })
     );
   });
 
-  it('delta overflow falls back to the full timeline', async () => {
-    seedLatestCache([createMessage('msg-1', '2026-09-10T13:19:00.123456Z')]);
+  it('document delta overflow falls back to the full timeline', async () => {
+    seedLatestCache([
+      createMessage('msg-1', '2026-09-10T13:19:00.123456Z', {
+        parent: document,
+      }),
+    ]);
     mocks.timeline.mockResolvedValueOnce({
       entries: entries(
         Array.from({ length: 50 }, (_, i) =>
@@ -330,18 +374,16 @@ describe('messageTimelineQueryOptions', () => {
     const page = fullPage();
     mocks.timeline.mockResolvedValueOnce(page);
 
-    const result = await messageTimelineQueryOptions(parent, null).queryFn({
+    const result = await messageTimelineQueryOptions(document, null).queryFn({
       pageParam: null,
     });
 
-    expect(mocks.timeline).toHaveBeenLastCalledWith(parent, fullSelection);
-    expect(ids(result)).toEqual(['full-1']);
-    expect(mocks.track).toHaveBeenCalledWith('channel_messages_load', {
-      channelId: 'channel-1',
-      path: 'full',
-      reason: 'delta_overflow',
-      after: '2026-09-10T13:19:00.123456Z',
+    expect(mocks.timeline).toHaveBeenLastCalledWith(document, {
+      ...fullSelection,
+      include_deleted_threads: true,
     });
+    expect(ids(result)).toEqual(['full-1']);
+    expect(mocks.track).not.toHaveBeenCalled();
   });
 
   it('cache away from latest uses the full timeline', async () => {
@@ -401,37 +443,36 @@ describe('messageTimelineQueryOptions', () => {
     });
   });
 
-  it('catch-up failure falls back except on auth errors', async () => {
-    seedLatestCache([createMessage('msg-1', '2026-09-10T13:19:00.123456Z')]);
+  it('document catch-up failure falls back except on auth errors', async () => {
+    seedLatestCache([
+      createMessage('msg-1', '2026-09-10T13:19:00.123456Z', {
+        parent: document,
+      }),
+    ]);
     mocks.timeline.mockRejectedValueOnce(resultError('INTERNAL'));
     mocks.timeline.mockResolvedValueOnce(fullPage());
 
-    const result = await messageTimelineQueryOptions(parent, null).queryFn({
+    const result = await messageTimelineQueryOptions(document, null).queryFn({
       pageParam: null,
     });
 
     expect(ids(result)).toEqual(['full-1']);
     expect(mocks.timeline).toHaveBeenCalledTimes(2);
-    expect(mocks.track).toHaveBeenCalledWith('channel_messages_load', {
-      channelId: 'channel-1',
-      path: 'full',
-      reason: 'catch_up_error',
-      after: '2026-09-10T13:19:00.123456Z',
-    });
+    expect(mocks.track).not.toHaveBeenCalled();
 
     mocks.timeline.mockClear();
     mocks.track.mockClear();
     mocks.timeline.mockRejectedValueOnce(resultError('UNAUTHORIZED'));
 
     await expect(
-      messageTimelineQueryOptions(parent, null).queryFn({
+      messageTimelineQueryOptions(document, null).queryFn({
         pageParam: null,
       })
     ).rejects.toBeInstanceOf(ThrownResultError);
     expect(mocks.timeline).toHaveBeenCalledTimes(1);
   });
 
-  it('list ahead sets the reason', async () => {
+  it('revalidates channels even when their list advertises a newer root', async () => {
     seedLatestCache([createMessage('msg-1', '2026-09-10T13:19:00.123456Z')]);
     testQueryClient.setQueryData(channelKeys.listChannels.queryKey, [
       {
@@ -458,14 +499,15 @@ describe('messageTimelineQueryOptions', () => {
 
     expect(mocks.track).toHaveBeenCalledWith('channel_messages_load', {
       channelId: 'channel-1',
-      path: 'catch_up',
-      reason: 'list_ahead',
-      after: '2026-09-10T13:19:00.123456Z',
+      path: 'full',
+      reason: 'revalidate',
     });
   });
 
-  it('catch-up merge uses the live first page, not the pre-request snapshot', async () => {
-    const cached = createMessage('msg-1', '2026-09-10T13:19:00.123456Z');
+  it('document catch-up retains a root posted while its request was in flight', async () => {
+    const cached = createMessage('msg-1', '2026-09-10T13:19:00.123456Z', {
+      parent: document,
+    });
     seedLatestCache([cached]);
     let releaseCatchUp!: () => void;
     const holdCatchUp = new Promise<void>((resolve) => {
@@ -476,18 +518,20 @@ describe('messageTimelineQueryOptions', () => {
       return {
         entries: entries([
           createMessage('msg-delta', '2026-09-10T13:20:00.000000Z'),
+          cached,
         ]),
         next_cursor: null,
         previous_cursor: null,
       };
     });
 
-    const pending = messageTimelineQueryOptions(parent, null).queryFn({
+    const pending = messageTimelineQueryOptions(document, null).queryFn({
       pageParam: null,
     });
     await Promise.resolve();
     seedLatestCache([
       createMessage('msg-live', '2026-09-10T13:21:00.000000Z', {
+        parent: document,
         content: 'from websocket',
       }),
       cached,
@@ -498,6 +542,77 @@ describe('messageTimelineQueryOptions', () => {
     expect(ids(result)).toEqual(['msg-live', 'msg-delta', 'msg-1']);
     expect(timelineMessages(result)[0]?.content).toBe('from websocket');
   });
+
+  it('revalidates every loaded channel page using the refreshed pagination cursor', async () => {
+    const newest = createMessage('newest', '2026-09-10T14:00:00Z');
+    const oldest = createMessage('oldest', '2026-09-10T12:00:00Z');
+    const deleted = createMessage('deleted', '2026-09-10T11:00:00Z');
+    const next = cursor(newest.id, newest.created_at);
+    const options = messageTimelineQueryOptions(parent, null);
+    testQueryClient.setQueryData<MessageTimelineData>(options.queryKey, {
+      pages: [
+        { ...fullPage([newest]), next_cursor: next },
+        fullPage([oldest, deleted]),
+      ],
+      pageParams: [null, { next_cursor: next, previous_cursor: null }],
+    });
+    const observer = new InfiniteQueryObserver(testQueryClient, options);
+    const refreshedNext = cursor('page-boundary', '2026-09-10T13:00:00Z');
+    mocks.timeline
+      .mockResolvedValueOnce({
+        ...fullPage([newest]),
+        next_cursor: refreshedNext,
+      })
+      .mockResolvedValueOnce(
+        fullPage([{ ...oldest, content: 'Edited while disconnected' }])
+      );
+
+    await testQueryClient.invalidateQueries({
+      queryKey: options.queryKey,
+      refetchType: 'all',
+    });
+
+    expect(mocks.timeline).toHaveBeenCalledTimes(2);
+    expect(mocks.timeline).toHaveBeenNthCalledWith(1, parent, fullSelection);
+    expect(mocks.timeline).toHaveBeenNthCalledWith(2, parent, {
+      ...fullSelection,
+      limit: 100,
+      cursor: refreshedNext,
+    });
+    const data = testQueryClient.getQueryData<MessageTimelineData>(
+      options.queryKey
+    );
+    expect(
+      data?.pages.flatMap(timelineMessages).map((item) => item.content)
+    ).toEqual([newest.content, 'Edited while disconnected']);
+    observer.destroy();
+  });
+
+  it.each(['INTERNAL', 'UNAUTHORIZED', 'FORBIDDEN'])(
+    'keeps cached channel messages after a failed revalidation: %s',
+    async (code) => {
+      const root = createMessage('root', '2026-09-10T13:19:00Z');
+      seedLatestCache([root]);
+      const options = messageTimelineQueryOptions(parent, null);
+      const observer = new InfiniteQueryObserver(testQueryClient, {
+        ...options,
+        retryDelay: 0,
+      });
+      mocks.timeline.mockRejectedValue(resultError(code));
+
+      await testQueryClient.refetchQueries({ queryKey: options.queryKey });
+
+      expect(
+        testQueryClient.getQueryData<MessageTimelineData>(options.queryKey)
+          ?.pages[0].entries
+      ).toEqual(entries([root]));
+      expect(
+        testQueryClient.getQueryState(options.queryKey)?.error
+      ).toBeInstanceOf(ThrownResultError);
+      expect(mocks.timeline).toHaveBeenCalledTimes(code === 'INTERNAL' ? 2 : 1);
+      observer.destroy();
+    }
+  );
 
   it('later pages keep using the full timeline without an event', async () => {
     mocks.timeline.mockResolvedValueOnce(fullPage());
@@ -619,11 +734,13 @@ describe('channel activity entries', () => {
     };
   }
 
-  it('catch-up merges activity newer than the newest cached root', async () => {
-    seedLatestCache([createMessage('msg-1', '2026-09-10T13:19:00Z')]);
+  it('channel revalidation includes activity and refreshed roots', async () => {
+    const cached = createMessage('msg-1', '2026-09-10T13:19:00Z');
+    seedLatestCache([cached]);
     mocks.timeline.mockResolvedValueOnce({
       entries: [
         { type: 'activity', activity: activity('a', '2026-09-10T13:20:00Z') },
+        { type: 'message', message: cached },
       ],
       next_cursor: null,
       previous_cursor: null,

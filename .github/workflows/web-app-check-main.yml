@@ -62,11 +62,13 @@ jobs:
             - 'packages/sdk/**'
             - 'apps/docs/**'
             - '.github/actions/setup-reqs-web/**'
-  android-version:
-    name: Android Version Code
+  android-native-check:
+    name: Android Native Check
     runs-on: namespace-profile-linux-tiny-no-cache
     permissions:
       contents: read
+      pull-requests: read
+      id-token: write
     steps:
     - name: Checkout PR merge commit
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -74,15 +76,107 @@ jobs:
       uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
       with:
         bun-version: '1.3.13'
-    - name: Require an Android version bump for native changes
+    - id: android-version
+      name: Require an Android version bump for native changes
       run: |
         set -euo pipefail
-        git fetch -q --depth=1 origin "$BASE_SHA"
-        bun scripts/android-version-check.mjs "$BASE_SHA"
+        base=$(git cat-file -p HEAD | sed -n 's/^parent //p' | head -1)
+        echo "Comparing the merge result with its base ${base:0:10}"
+        git fetch -q --depth=1 origin "$base"
+        bun scripts/android-version-check.mjs "$base"
+      shell: bash
+      working-directory: apps/web
+    - id: labels
+      name: Read the PR's current labels
+      if: steps.android-version.outputs.changed == 'true'
+      run: |
+        set -euo pipefail
+        labels=$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json labels --jq '[.labels[].name] | join(",")')
+        echo "labels: ${labels:-<none>}"
+        if [[ ",${labels}," == *",skip-android-update,"* ]]; then
+          echo "skip=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+        fi
       shell: bash
       env:
-        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        GH_TOKEN: ${{ github.token }}
+        GH_REPO: ${{ github.repository }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+    - id: auth
+      name: Authenticate to Google Play
+      if: steps.android-version.outputs.changed == 'true' && steps.labels.outputs.skip != 'true'
+      uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+      with:
+        workload_identity_provider: ${{ vars.GOOGLE_PLAY_WORKLOAD_IDENTITY_PROVIDER }}
+        service_account: ${{ vars.GOOGLE_PLAY_SERVICE_ACCOUNT }}
+        token_format: access_token
+        access_token_scopes: https://www.googleapis.com/auth/androidpublisher
+        create_credentials_file: 'false'
+        export_environment_variables: 'false'
+    - name: Require the Play release to be live
+      if: steps.android-version.outputs.changed == 'true' && steps.labels.outputs.skip != 'true'
+      run: |
+        # --- authenticated fetch ------------------------------------------------------
+        # gh_fetch <sha|ref>: make a commit that is not in this checkout (the base
+        # commit, a moved PR head, GitHub's test merge commit) available. Checkouts
+        # here don't persist credentials, so authenticate the way actions/checkout
+        # does. Fails if the commit is unreachable (a force-pushed-away head).
+        gh_fetch() {
+          local auth
+          auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" \
+            fetch -q --depth=1 origin "$1"
+        }
+        # ------------------------------------------------------------------------------
+        # --- PR merge result ----------------------------------------------------------
+        # pr_merge_commit: print the sha of GitHub's test merge commit for $PR_NUMBER —
+        # the merge result the native gates hash. GitHub computes it lazily
+        # (mergeable=UNKNOWN until it has), so poll a little; a PR that really
+        # conflicts with its base cannot merge anyway. Needs GH_TOKEN, GH_REPO,
+        # PR_NUMBER. Progress goes to stderr so `merge=$(pr_merge_commit)` works.
+        pr_merge_commit() {
+          local deadline pr_json mergeable merge
+          deadline=$(( $(date +%s) + 120 ))
+          while true; do
+            pr_json=$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json mergeable,potentialMergeCommit)
+            mergeable=$(jq -r '.mergeable' <<<"$pr_json")
+            merge=$(jq -r '.potentialMergeCommit.oid // empty' <<<"$pr_json")
+            if [[ -n "$merge" ]]; then
+              echo "$merge"
+              return 0
+            fi
+            if [[ "$mergeable" == "CONFLICTING" ]]; then
+              echo "::error::PR #${PR_NUMBER} conflicts with its base branch, so there is no merge result to check; resolve the conflicts first." >&2
+              return 1
+            fi
+            if (( $(date +%s) > deadline )); then
+              echo "::error::GitHub has not computed PR #${PR_NUMBER}'s merge commit yet (mergeable=${mergeable}); retry in a minute." >&2
+              return 1
+            fi
+            echo "Merge commit not computed yet (mergeable=${mergeable}); waiting." >&2
+            sleep 10
+          done
+        }
+        # ------------------------------------------------------------------------------
+        set -euo pipefail
+        merge=$(pr_merge_commit)
+        gh_fetch "$merge"
+        native_hash=$(bun scripts/android-native.mjs hash "$merge")
+        echo "Merge result ${merge:0:10}: Android native hash ${native_hash}"
+        bun scripts/android-play-status.mjs --version-code "$VERSION_CODE" --require-live \
+          --native-hash "$native_hash" --pr "$PR_NUMBER"
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        GH_REPO: ${{ github.repository }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        VERSION_CODE: ${{ steps.android-version.outputs.version_code }}
+        GOOGLE_PLAY_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
       working-directory: apps/web
+    - name: Skipped via label
+      if: steps.android-version.outputs.changed == 'true' && steps.labels.outputs.skip == 'true'
+      run: echo "Android native changes detected, but the skip-android-update label says they don't break the native/web contract — skipping the Play release gate."
   typescript:
     needs:
     - path-check
@@ -108,6 +202,8 @@ jobs:
     - name: Check Types
       run: bun run type-check
       working-directory: apps/web
+    - name: Check Floating Promises
+      run: bun run lint:oxlint --quiet
     - name: Check Functional Test Types
       run: bun run --bun --silent tsc --project tests/functional/tsconfig.json
       working-directory: apps/web
@@ -430,10 +526,15 @@ jobs:
         set -euo pipefail
         manifest=crates/client/cache-wasm/Cargo.toml
         version() { git show "$1:$manifest" 2>/dev/null | sed -n 's/^version *= *"\([^"]*\)".*/\1/p' | head -1 | grep . || echo none; }
-        git fetch -q --depth=1 origin "$BASE_BRANCH"
-        base=$(version "origin/$BASE_BRANCH")
+        # The merge commit's first parent is the main this merge result was
+        # built on; a fresh fetch of main could be newer and misattribute
+        # its bumps to the PR.
+        base_sha=$(git cat-file -p HEAD | sed -n 's/^parent //p' | head -1)
+        git fetch -q --depth=1 origin "$base_sha"
+        echo "base_sha=${base_sha}" >> "$GITHUB_OUTPUT"
+        base=$(version "$base_sha")
         head=$(version HEAD)
-        echo "cache-wasm version: base ${base}, merge result ${head}"
+        echo "cache-wasm version: base ${base} (${base_sha:0:10}), merge result ${head}"
         if [[ "$base" != "$head" ]]; then
           echo "bumped=true" >> "$GITHUB_OUTPUT"
           echo "The client cache wasm version moved; the native app compiles that cache, so this counts as a native change."
@@ -441,8 +542,6 @@ jobs:
           echo "bumped=false" >> "$GITHUB_OUTPUT"
         fi
       shell: bash
-      env:
-        BASE_BRANCH: ${{ github.base_ref }}
     - id: labels
       name: Read the PR's current labels
       if: (steps.native-filter.outputs.ios_native == 'true' || steps.cache-wasm.outputs.bumped == 'true')
@@ -467,14 +566,9 @@ jobs:
         bun-version: '1.3.13'
     - name: Verify iOS release numbers were bumped
       if: (steps.native-filter.outputs.ios_native == 'true' || steps.cache-wasm.outputs.bumped == 'true') && steps.labels.outputs.skip != 'true'
-      run: |
-        set -euo pipefail
-        git fetch --depth=1 origin "$BASE_BRANCH"
-        bun scripts/ios-verify-native-bump.mjs
-      shell: bash
+      run: bun scripts/ios-verify-native-bump.mjs
       env:
-        BASE_BRANCH: ${{ github.base_ref }}
-        BASE_REF: origin/${{ github.base_ref }}
+        BASE_REF: ${{ steps.cache-wasm.outputs.base_sha }}
       working-directory: apps/web
     - name: Fetch App Store Connect credentials from Doppler
       if: (steps.native-filter.outputs.ios_native == 'true' || steps.cache-wasm.outputs.bumped == 'true') && steps.labels.outputs.skip != 'true'
@@ -586,38 +680,51 @@ jobs:
 
         # native_tree_fetch <sha>: make a commit that is not in this checkout (a new
         # PR head, GitHub's test merge commit, the pre-push head) available to
-        # native_tree_hash. Checkouts here don't persist credentials, so authenticate
-        # the way actions/checkout does. Fails if the commit is unreachable (a
-        # force-pushed-away head).
+        # native_tree_hash. Some callers persist actions/checkout credentials; clear
+        # inherited headers before adding ours so Git sends Authorization exactly once.
+        # Fails if the commit is unreachable (a force-pushed-away head).
         native_tree_fetch() {
           local auth
           auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
-          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" \
+          git -c "http.https://github.com/.extraheader=" \
+            -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" \
             fetch -q --depth=1 origin "$1"
         }
         # ----------------------------------------------------------------------------
+        # --- PR merge result ----------------------------------------------------------
+        # pr_merge_commit: print the sha of GitHub's test merge commit for $PR_NUMBER —
+        # the merge result the native gates hash. GitHub computes it lazily
+        # (mergeable=UNKNOWN until it has), so poll a little; a PR that really
+        # conflicts with its base cannot merge anyway. Needs GH_TOKEN, GH_REPO,
+        # PR_NUMBER. Progress goes to stderr so `merge=$(pr_merge_commit)` works.
+        pr_merge_commit() {
+          local deadline pr_json mergeable merge
+          deadline=$(( $(date +%s) + 120 ))
+          while true; do
+            pr_json=$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json mergeable,potentialMergeCommit)
+            mergeable=$(jq -r '.mergeable' <<<"$pr_json")
+            merge=$(jq -r '.potentialMergeCommit.oid // empty' <<<"$pr_json")
+            if [[ -n "$merge" ]]; then
+              echo "$merge"
+              return 0
+            fi
+            if [[ "$mergeable" == "CONFLICTING" ]]; then
+              echo "::error::PR #${PR_NUMBER} conflicts with its base branch, so there is no merge result to check; resolve the conflicts first." >&2
+              return 1
+            fi
+            if (( $(date +%s) > deadline )); then
+              echo "::error::GitHub has not computed PR #${PR_NUMBER}'s merge commit yet (mergeable=${mergeable}); retry in a minute." >&2
+              return 1
+            fi
+            echo "Merge commit not computed yet (mergeable=${mergeable}); waiting." >&2
+            sleep 10
+          done
+        }
+        # ------------------------------------------------------------------------------
         set -euo pipefail
         # The gate proper: the committed version + build must be live, built from the
-        # native code of the PR's current merge result. GitHub computes that merge
-        # commit lazily (mergeable=UNKNOWN until it has), so poll for it a little; a
-        # PR that really conflicts with main cannot merge anyway.
-        deadline=$(( $(date +%s) + 120 ))
-        while true; do
-          pr_json=$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json mergeable,potentialMergeCommit)
-          mergeable=$(jq -r '.mergeable' <<<"$pr_json")
-          merge=$(jq -r '.potentialMergeCommit.oid // empty' <<<"$pr_json")
-          [[ -n "$merge" ]] && break
-          if [[ "$mergeable" == "CONFLICTING" ]]; then
-            echo "::error::PR #${PR_NUMBER} conflicts with its base branch, so there is no merge result to check; resolve the conflicts first." >&2
-            exit 1
-          fi
-          if (( $(date +%s) > deadline )); then
-            echo "::error::GitHub has not computed PR #${PR_NUMBER}'s merge commit yet (mergeable=${mergeable}); re-run this job in a minute." >&2
-            exit 1
-          fi
-          echo "Merge commit not computed yet (mergeable=${mergeable}); waiting."
-          sleep 10
-        done
+        # native code of the PR's current merge result.
+        merge=$(pr_merge_commit)
         native_tree_fetch "$merge"
         native_tree=$(native_tree_hash "$merge")
         echo "Merge result ${merge:0:10}: native tree ${native_tree}"
@@ -634,7 +741,7 @@ jobs:
   status-check:
     needs:
     - path-check
-    - android-version
+    - android-native-check
     - typescript
     - generated-code
     - biome-check
@@ -649,7 +756,7 @@ jobs:
     - name: Check job results
       run: |
         echo "path-check: ${{ needs.path-check.result }}"
-        echo "android-version: ${{ needs.android-version.result }}"
+        echo "android-native-check: ${{ needs.android-native-check.result }}"
         echo "typescript: ${{ needs.typescript.result }}"
         echo "generated-code: ${{ needs.generated-code.result }}"
         echo "biome-check: ${{ needs.biome-check.result }}"
@@ -660,7 +767,7 @@ jobs:
 
         # Fail if any job failed (skipped and success are both OK). The iOS
         # gate is the merge gate, so a cancelled gate is not OK either.
-        if [[ "${{ needs.android-version.result }}" != "success" ]] || \
+        if [[ "${{ needs.android-native-check.result }}" != "success" ]] || \
            [[ "${{ needs.path-check.result }}" == "failure" ]] || \
            [[ "${{ needs.typescript.result }}" == "failure" ]] || \
            [[ "${{ needs.generated-code.result }}" == "failure" ]] || \

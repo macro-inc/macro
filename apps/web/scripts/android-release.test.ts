@@ -44,6 +44,17 @@ const releaseConfig = {
 };
 
 describe('Android release versions', () => {
+  it('names pull-request releases by version code', () => {
+    const code = releaseConfig.bundle.android.versionCode;
+    expect(androidReleaseMetadata(`vc${code}`, releaseConfig).filename).toBe(
+      `macro-vc${code}-android-arm64.aab`
+    );
+    expect(() => androidReleaseMetadata(`vc${code + 1}`, releaseConfig)).toThrow(
+      /does not match/
+    );
+    expect(() => androidReleaseMetadata('vc0', releaseConfig)).toThrow();
+  });
+
   it.each(['v2026.10.7', 'v2026.10.6.2', 'v2027.1.1.0'])(
     'uses the native config independently of tag %s',
     (tag) => {

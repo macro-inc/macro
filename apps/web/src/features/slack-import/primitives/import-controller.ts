@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { type Accessor, createMemo, createSignal, onCleanup } from 'solid-js';
 import type {
   ArchiveSource,
@@ -457,7 +458,7 @@ export function createImportController(
     await releaseLocal();
   }
   onCleanup(() => {
-    void dispose();
+    fireAndForget(dispose(), 'slack-import');
   });
 
   return {

@@ -1,4 +1,8 @@
-import { newEventType, newSchedule } from '@app/features/scheduling/core/types';
+import {
+  newEventType,
+  newSchedule,
+  schedulingProfileForSave,
+} from '@app/features/scheduling/core/types';
 import {
   deserializeToolCall,
   deserializeToolResponse,
@@ -65,7 +69,10 @@ it('shows the actual saved URL and paused state after execution', () => {
 
 it('keeps historical booking results readable without inventing confirmation', () => {
   const { id: _eventId, scheduleId: _scheduleId, ...event } = draft.event;
-  const { id: _id, ...schedule } = draft.schedule;
+  const { id: _id, ...schedule } = {
+    ...draft.schedule,
+    weekly: draft.schedule.weekly.map(({ day, windows }) => ({ day, windows })),
+  };
   const oldDraft = { event, schedule };
   const call = deserializeToolCall({
     id: 'old',
@@ -90,4 +97,59 @@ it('keeps historical booking results readable without inventing confirmation', (
   });
   expect(response.isOk()).toBe(true);
   if (response.isOk()) expect(response.value.data).toEqual(saved);
+});
+
+it('ignores draft-only time-off annotations when parsing booking settings', () => {
+  const profile = {
+    id: crypto.randomUUID(),
+    name: 'Booking page',
+    description: '',
+    revision: 1,
+    eventTypes: [],
+    schedules: [
+      {
+        ...schedule,
+        weekly: [
+          { day: 0, windows: [], unavailableWindows: [] },
+          {
+            day: 1,
+            windows: [],
+            unavailableWindows: [{ start: '09:00', end: '17:00' }],
+          },
+          { day: 2, windows: [], unavailableWindows: null },
+          { day: 3, windows: [] },
+        ],
+        overrides: [
+          { date: '2026-10-20', windows: [], unavailableWindows: [] },
+          {
+            date: '2026-10-21',
+            windows: [],
+            unavailableWindows: [{ start: '09:00', end: '17:00' }],
+          },
+          { date: '2026-10-22', windows: [], unavailableWindows: null },
+          { date: '2026-10-23', windows: [] },
+        ],
+      },
+    ],
+  };
+  const savedProfile = schedulingProfileForSave(profile);
+  const call = deserializeToolCall({
+    id: 'update-settings',
+    name: 'UpdateBookingSettings',
+    json: { profile, userConfirmation: 'Save these hours.' },
+  });
+  expect(call.isOk()).toBe(true);
+  if (call.isOk())
+    expect(call.value.data).toEqual({
+      profile: savedProfile,
+      userConfirmation: 'Save these hours.',
+    });
+  const response = deserializeToolResponse({
+    id: 'read-settings',
+    name: 'ReadBookingSettings',
+    json: { profile, pageUrl: 'https://macro.com/app/book/profile' },
+  });
+  expect(response.isOk()).toBe(true);
+  if (response.isOk())
+    expect(response.value.data).toMatchObject({ profile: savedProfile });
 });

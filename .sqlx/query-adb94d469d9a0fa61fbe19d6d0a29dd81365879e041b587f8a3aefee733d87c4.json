@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO calendar_event_reminder_firings (\n            event_id, occurrence_key, minutes_before, fire_at, method\n        )\n        SELECT\n            occurrence.event_id,\n            occurrence.occurrence_key,\n            offsets.minutes,\n            COALESCE(\n                occurrence.starts_at,\n                occurrence.start_date::timestamp AT TIME ZONE $3\n            ) - make_interval(mins => offsets.minutes),\n            offsets.method\n        FROM calendar_event_occurrences occurrence\n        LEFT JOIN calendar_event_overrides override ON override.event_id=occurrence.event_id\n            AND override.recurrence_id=occurrence.recurrence_id\n        CROSS JOIN LATERAL (\n            SELECT DISTINCT (reminder.value->>'minutes')::int AS minutes, reminder.value->>'method' AS method\n            FROM jsonb_array_elements(CASE\n                WHEN override.reminders IS NULL THEN $2::jsonb\n                WHEN (override.reminders->>'useDefault')::bool THEN $5::jsonb\n                ELSE override.reminders->'overrides' END) reminder(value)\n            WHERE (reminder.value->>'method'='popup' OR ($4 AND reminder.value->>'method'='email'))\n                AND (reminder.value->>'minutes')::bigint BETWEEN 0 AND 2147483647\n        ) offsets\n        WHERE occurrence.event_id = $1\n          AND NOT occurrence.is_cancelled\n          AND COALESCE(\n                occurrence.starts_at,\n                occurrence.start_date::timestamp AT TIME ZONE $3\n              ) - make_interval(mins => offsets.minutes) > now() - interval '1 day'\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Jsonb",
+        "Text",
+        "Bool",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "adb94d469d9a0fa61fbe19d6d0a29dd81365879e041b587f8a3aefee733d87c4"
+}

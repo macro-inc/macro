@@ -1,4 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   useCodingPreferencesQuery,
   useSetCodingPreferencesMutation,
@@ -38,7 +39,10 @@ export function CodingPreferencesSetting() {
         disabled={!preferences.isSuccess}
         onChange={(enabled) => {
           if (!preferences.isSuccess) return;
-          void toggle(preferences.data, props.preference, enabled);
+          fireAndForget(
+            toggle(preferences.data, props.preference, enabled),
+            'coding-preferences'
+          );
         }}
       />
     </SettingsRow>

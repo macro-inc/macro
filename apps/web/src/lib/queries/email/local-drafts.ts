@@ -8,6 +8,7 @@ import type { DraftFormAttachment } from '@app/features/email-compose/primitives
 import type { EmailMessage } from '@app/features/email-message/core/email-message';
 import { analytics } from '@app/lib/analytics';
 import { getNativeStagedUpload } from '@core/mobile/nativeStagedUpload';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { NormalizedCacheExchangeOptions } from '@graphql-cache/exchange/normalized-cache-exchange';
 import type { CacheHost } from '@graphql-cache/host/types';
 import type {
@@ -141,6 +142,7 @@ export function localDraftMessage(local: LocalDraft): EmailMessage {
     thread_db_id: local.serverThreadId ?? local.threadId ?? local.draftId,
     link_id: local.inboxId ?? '',
     is_draft: true,
+    is_read: true,
     created_at: time,
     updated_at: time,
     body_html_sanitized: content.body_html,
@@ -149,7 +151,19 @@ export function localDraftMessage(local: LocalDraft): EmailMessage {
     bcc: content.bcc ?? [],
     from: { email: local.senderEmail ?? '' },
     labels: [],
-    attachments: [],
+    attachments: local.attachments.flatMap((attachment) =>
+      attachment.type === 'native'
+        ? [
+            {
+              db_id: attachment.attachmentId,
+              filename: attachment.fileName,
+              mime_type: attachment.mimeType,
+              size_bytes: attachment.fileSize,
+              reference_url: attachment.referenceUrl,
+            },
+          ]
+        : []
+    ),
     attachments_draft: local.attachments.flatMap((attachment) =>
       attachment.type === 'remote'
         ? [
@@ -215,7 +229,7 @@ export type LocalDraftInput = SaveEmailDraft & {
 export function saveLocalDraft(input: LocalDraftInput): Promise<LocalDraft> {
   const write = persistLocalDraft(input);
   pendingWrites.add(write);
-  void finishLocalWrite(write);
+  fireAndForget(finishLocalWrite(write), 'email-local-drafts');
   return write;
 }
 
@@ -718,8 +732,17 @@ export function localDraftQueueLifecycle(
       throw new Error('Queued email draft disappeared before recovery');
     return await preserveLegacy(queued);
   }
+  const accountKnown = () => {
+    const user = queryClient.getQueryData<UserInfoData>(
+      authKeys.userInfo.queryKey
+    );
+    return !!user?.authenticated && !!user.id;
+  };
   return {
     async prepareMutationQueue() {
+      // Signed-out tabs have no drafts, and a signed-in tab's first drain
+      // can run before user info loads. Retry later instead of failing.
+      if (!accountKnown()) return false;
       try {
         initialized ??= prepare();
         await initialized;
@@ -729,6 +752,16 @@ export function localDraftQueueLifecycle(
       }
     },
     async beforeMutationAttempt(mutation) {
+      // Without the account, a draft cannot be checked against its working
+      // copy; rejecting it here would roll back the saved intent.
+      if (
+        !accountKnown() &&
+        (attemptOf(mutation) ||
+          legacy.has(mutation.transactionId) ||
+          mutation.operationName === 'SaveEmailDraft' ||
+          mutation.operationName === 'DeleteEmailDraft')
+      )
+        return 'defer';
       const attempt = await resolveAttempt(mutation);
       if (!attempt) return true;
       const owner = await session();

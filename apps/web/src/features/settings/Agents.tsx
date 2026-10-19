@@ -16,6 +16,7 @@ import { MACRO_NEW_BOT_ID } from '@core/constant/macroNew';
 import { useChannelsContext } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import { usePipedreamMcpFlag } from '@core/pipedream/flag';
+import { fireAndForget } from '@core/util/fireAndForget';
 import MacroLogo from '@icon/macro-logo.svg';
 import CursorIcon from '@icon/wide-cursor-ide.svg';
 import ArrowLeftIcon from '@phosphor/arrow-left.svg';
@@ -314,7 +315,13 @@ export function Agents(props: {
                     <AgentRow
                       agent={agent}
                       onMessage={
-                        agentDm ? () => void messageAgent(agent.id) : undefined
+                        agentDm
+                          ? () =>
+                              fireAndForget(
+                                messageAgent(agent.id),
+                                'agent-settings'
+                              )
+                          : undefined
                       }
                       messagePending={agentDm?.pending()}
                       onEdit={
@@ -380,7 +387,7 @@ export function Agents(props: {
             agentName={agent.bot.name}
             pending={deleteAgentMutation.isPending}
             onClose={() => setDeletingAgent(undefined)}
-            onConfirm={() => void deleteAgent()}
+            onConfirm={() => fireAndForget(deleteAgent(), 'agent-settings')}
           />
         )}
       </Show>
@@ -806,7 +813,9 @@ function AgentEditorPage(props: {
                     variant="outline"
                     size="sm"
                     aria-label={`Retry models for ${selectedHarness()?.name ?? 'this runtime'}`}
-                    onClick={() => void query.refetch()}
+                    onClick={() =>
+                      fireAndForget(query.refetch(), 'agent-settings')
+                    }
                   >
                     Retry
                   </Button>
@@ -963,7 +972,7 @@ function AgentEditorPage(props: {
               class="flex flex-col gap-6"
               onSubmit={(event) => {
                 event.preventDefault();
-                void submit();
+                fireAndForget(submit(), 'agent-settings');
               }}
             >
               <AgentFormSection
@@ -1005,7 +1014,10 @@ function AgentEditorPage(props: {
                     class="hidden"
                     disabled={busy()}
                     onChange={(event) =>
-                      void handleAvatarInput(event.currentTarget.files?.[0])
+                      fireAndForget(
+                        handleAvatarInput(event.currentTarget.files?.[0]),
+                        'agent-settings'
+                      )
                     }
                   />
                   <Button

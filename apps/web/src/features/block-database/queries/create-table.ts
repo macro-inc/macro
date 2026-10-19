@@ -36,7 +36,7 @@ export function createTableWithName(params: {
       });
       return { tableId, ready: true };
     } catch {
-      void queryClient.invalidateQueries({ queryKey });
+      queryClient.invalidateQueries({ queryKey });
       return {
         tableId,
         ready: false,

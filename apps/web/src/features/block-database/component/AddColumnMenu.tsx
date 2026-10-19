@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import PlusIcon from '@phosphor/plus.svg';
 import type { ColumnDetail } from '@service-storage/generated/schemas/columnDetail';
 import { Button } from '@ui/components/Button';
@@ -58,7 +59,7 @@ export function AddColumnMenu(props: {
         size="sm"
         disabled={pending()}
         aria-label={props.label ?? 'Add column'}
-        onClick={() => void add()}
+        onClick={() => fireAndForget(add(), 'database-view')}
       >
         <PlusIcon class="size-3.5" />
         {props.label ?? 'Add column'}

@@ -31,6 +31,7 @@ import { createComposerLayout } from '@core/component/LexicalMarkdown/utils/crea
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { handleFileFolderDrop } from '@core/util/upload';
 import { $insertReferencedPaste } from '@macro-inc/lexical-core';
 import { Button, ComposerSurface, SendButton } from '@ui';
@@ -249,8 +250,11 @@ export function AgentInput(props: AgentInputProps) {
     // attachments through the same door as a drop.
     .withFilePaste({
       onPasteFilesAndDirs: (files, directories) => {
-        void handleFileFolderDrop(files, directories, (entries) =>
-          attachFiles(entries.map((entry) => entry.file))
+        fireAndForget(
+          handleFileFolderDrop(files, directories, (entries) =>
+            attachFiles(entries.map((entry) => entry.file))
+          ),
+          'agent-composer'
         );
       },
     })
@@ -342,7 +346,7 @@ export function AgentInput(props: AgentInputProps) {
       <div
         ref={containerRef}
         data-keep-keyboard
-        onFocusIn={() => void preloadAgentFold()}
+        onFocusIn={() => fireAndForget(preloadAgentFold(), 'agent-composer')}
         class="flex flex-col gap-1.5"
         classList={{ 'opacity-50': props.readOnly }}
       >

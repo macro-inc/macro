@@ -1,4 +1,5 @@
 import { scopeChannelNotificationsForEntity } from '@app/features/soup/entity-notifications';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { EntityData } from '@entity/types/entity';
 import type { Notification } from '@entity/types/notification';
 import { skipToken, useQuery } from '@tanstack/solid-query';
@@ -150,7 +151,10 @@ export function hideGraphqlSoupEntitiesAsDone(args: {
     }
     // Keep cleanup independent of a hung refresh, without starting overlapping
     // network retries. A later tick can collect an intent whose readers unmounted.
-    timer = setTimeout(() => void retry(), GRAPHQL_SOUP_DONE_RETENTION_MS);
+    timer = setTimeout(
+      () => fireAndForget(retry(), 'soup-optimistic-done'),
+      GRAPHQL_SOUP_DONE_RETENTION_MS
+    );
     if (settled && !refreshing) {
       refreshing = true;
       try {
@@ -211,7 +215,10 @@ export function hideGraphqlSoupEntitiesAsDone(args: {
         current,
       ]
     );
-    timer = setTimeout(() => void retry(), GRAPHQL_SOUP_DONE_RETENTION_MS);
+    timer = setTimeout(
+      () => fireAndForget(retry(), 'soup-optimistic-done'),
+      GRAPHQL_SOUP_DONE_RETENTION_MS
+    );
   };
   publish(args.done ?? true);
 

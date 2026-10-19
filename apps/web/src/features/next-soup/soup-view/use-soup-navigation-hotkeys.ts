@@ -9,9 +9,13 @@ import { entityIdSelector } from '@core/dom-selectors';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { type EntityData, isTaskEntity } from '@entity/types/entity';
+import { Telemetry } from '@macro-inc/observability';
 import { type Accessor, createMemo, onCleanup } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
 import type { SoupState } from '../create-soup-state';
+
+const reportSoupNavigationError = (error: unknown) =>
+  Telemetry.error(error, { surface: 'soup-view' });
 
 type UseSoupNavigationHotkeysOptions = {
   scopeId: string;
@@ -74,12 +78,12 @@ export const useSoupNavigationHotkeys = (
     );
   }
 
-  const openEntity = (entity: EntityData) => {
+  const openEntity = async (entity: EntityData) => {
     const handleContent = splitHandle.content().type;
 
     if (handleContent === 'component' || handleContent === 'project') return;
 
-    openEntityInSplitFromUnifiedList(entity, {
+    await openEntityInSplitFromUnifiedList(entity, {
       splitHandle,
       mergeHistory: true,
       referredFrom: navigationReferredFrom(),
@@ -151,7 +155,7 @@ export const useSoupNavigationHotkeys = (
 
   const fetchNextPageIfNeeded = () => {
     if (!hasNextPage?.() || isFetching?.() || isFetchingNextPage?.()) return;
-    fetchNextPage?.();
+    fetchNextPage?.().catch(reportSoupNavigationError);
   };
 
   const navigateDown = () => {
@@ -164,7 +168,7 @@ export const useSoupNavigationHotkeys = (
     }
 
     scrollTo(next.index);
-    openEntity(next.row.original);
+    openEntity(next.row.original).catch(reportSoupNavigationError);
 
     if (next.index >= rowCount - 1 - LOAD_MORE_DISTANCE_FROM_END) {
       fetchNextPageIfNeeded();
@@ -179,7 +183,7 @@ export const useSoupNavigationHotkeys = (
     if (!next) return true;
 
     scrollTo(next.index);
-    openEntity(next.row.original);
+    openEntity(next.row.original).catch(reportSoupNavigationError);
 
     return true;
   };

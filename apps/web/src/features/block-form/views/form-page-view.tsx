@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { Button } from '@ui';
 import {
   type Component,
@@ -199,7 +200,9 @@ export function FormPageView(props: FormPageProps) {
             {(failure) => (
               <FormLoadFailureView
                 failure={failure()}
-                onRetry={() => void props.source.refetch()}
+                onRetry={() =>
+                  fireAndForget(props.source.refetch(), 'form-detail')
+                }
               />
             )}
           </Show>

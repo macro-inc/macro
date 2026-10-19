@@ -172,12 +172,15 @@ export function FloatingLinkMenu(props: {
     openExternalUrl(url);
   };
 
-  const copyLink = () => {
+  const copyLink = async () => {
     if (!pendingLinkInfo()) return;
     try {
-      navigator.clipboard.writeText(pendingLinkInfo()!.url || '');
-      toast.success('Copied link to clipboard');
-    } catch {}
+      await navigator.clipboard.writeText(pendingLinkInfo()!.url || '');
+    } catch {
+      toast.failure('Could not copy link');
+      return;
+    }
+    toast.success('Copied link to clipboard');
   };
 
   const handleEditClick = () => {

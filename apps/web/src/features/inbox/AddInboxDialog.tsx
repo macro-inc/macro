@@ -1,6 +1,7 @@
 import { useAddInboxFlow } from '@core/email-link';
-import { Button, Dialog, Panel } from '@ui';
-import { createSignal, onCleanup } from 'solid-js';
+import { EmailProviderDialog } from '@core/email-link/ProviderDialog';
+import { fetchEmailConnectionProviders } from '@queries/auth/outlook-link';
+import { createEffect, createSignal, onCleanup } from 'solid-js';
 
 const [isOpen, setIsOpen] = createSignal(false);
 
@@ -20,21 +21,35 @@ export const isAddInboxDialogOpen = isOpen;
 
 /**
  * Confirmation step before the add-inbox OAuth redirect. Confirming kicks off
- * `useAddInboxFlow`, which navigates the page to Google's consent screen.
+ * `useAddInboxFlow`, which navigates the page to the chosen provider's consent screen.
  */
 export function AddInboxDialog() {
   const addInbox = useAddInboxFlow();
   const [pending, setPending] = createSignal(false);
+  const [outlookAvailable, setOutlookAvailable] = createSignal(false);
+  createEffect(() => {
+    if (!isOpen()) return;
+    let current = true;
+    setOutlookAvailable(false);
+    void fetchEmailConnectionProviders()
+      .then((providers) => {
+        if (current) setOutlookAvailable(providers.outlook);
+      })
+      .catch(() => {});
+    onCleanup(() => {
+      current = false;
+    });
+  });
 
   onCleanup(() => setIsOpen(false));
 
-  const handleConfirm = async () => {
+  const handleConfirm = async (provider: 'GMAIL' | 'OUTLOOK') => {
     if (pending()) return;
     setPending(true);
     // On web this navigates away; on native iOS the OAuth completes in place
     // and resolves, so the dialog dismisses itself.
     try {
-      await addInbox();
+      await addInbox({ provider });
     } finally {
       setPending(false);
       setIsOpen(false);
@@ -42,42 +57,12 @@ export function AddInboxDialog() {
   };
 
   return (
-    <Dialog
+    <EmailProviderDialog
       open={isOpen()}
       onOpenChange={setIsOpen}
-      position="center"
-      class="w-120"
-    >
-      <Panel depth={2} class="rounded-xl">
-        <Panel.Header class="px-6">
-          <Dialog.Title class="text-ink text-sm font-semibold">
-            Add inbox
-          </Dialog.Title>
-        </Panel.Header>
-        <Panel.Body class="p-6 font-sans flex flex-col gap-3">
-          <Dialog.Description class="text-ink-muted text-sm/tight font-normal">
-            Connect another Gmail account to Macro?
-          </Dialog.Description>
-          <div class="pt-3 justify-end items-center gap-3 inline-flex">
-            <Button
-              variant="ghost"
-              depth={3}
-              disabled={pending()}
-              onClick={() => setIsOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="strong"
-              depth={3}
-              disabled={pending()}
-              onClick={handleConfirm}
-            >
-              Add inbox
-            </Button>
-          </div>
-        </Panel.Body>
-      </Panel>
-    </Dialog>
+      onSelect={handleConfirm}
+      disabled={pending()}
+      outlookAvailable={outlookAvailable()}
+    />
   );
 }

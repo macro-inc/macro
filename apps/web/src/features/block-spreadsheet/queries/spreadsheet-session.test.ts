@@ -118,7 +118,7 @@ describe('spreadsheet session', () => {
       (snapshot) =>
         new Promise<void>((resolve) => {
           finishWrite = () => {
-            void originalSave(snapshot).then(resolve);
+            resolve(originalSave(snapshot));
           };
         })
     );

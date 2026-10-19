@@ -1,5 +1,6 @@
 import { isTabFocused } from '@core/signal/tabFocus';
 import type { EntityId } from '@core/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createReconnectEffect } from '@macro-inc/collaboration/websocket';
 import { ok } from 'neverthrow';
 import {
@@ -9,7 +10,6 @@ import {
   on,
   onCleanup,
 } from 'solid-js';
-
 import type { TrackEntityMessage } from './generated/schemas/trackEntityMessage';
 import {
   reportHeartbeatLapse,
@@ -53,10 +53,13 @@ export const connectionGatewayClient = {
           count: 1,
           heartbeat: setInterval(() => {
             if (isTabFocused())
-              void connectionGatewayClient.trackEntity({
-                ...args,
-                action: 'ping',
-              });
+              fireAndForget(
+                connectionGatewayClient.trackEntity({
+                  ...args,
+                  action: 'ping',
+                }),
+                'connection-gateway'
+              );
             else reportLapseOnce(args);
           }, 20_000),
           lastSeen: Date.now(),
@@ -121,7 +124,10 @@ export function useEntitySubscription(
     on(target, (value) => {
       if (!value) return;
       const track = (action: TrackEntityMessage['action']) =>
-        void connectionGatewayClient.trackEntity({ ...value, action });
+        fireAndForget(
+          connectionGatewayClient.trackEntity({ ...value, action }),
+          'connection-gateway'
+        );
       track('open');
       const callbacks = trackedEntities.get(value.entity_id)!.refreshCallbacks;
       if (onRefresh) {
@@ -181,10 +187,13 @@ export function useRefreshTrackedEntitiesOnFocus(): void {
           const pausedMs = now - tracked.lastSeen;
           const missedEvents = pausedMs >= GATEWAY_ACTIVITY_WINDOW_MS;
           if (missedEvents) reportHeartbeatResumed(entity, pausedMs);
-          void connectionGatewayClient.trackEntity({
-            ...entity,
-            action: 'ping',
-          });
+          fireAndForget(
+            connectionGatewayClient.trackEntity({
+              ...entity,
+              action: 'ping',
+            }),
+            'connection-gateway'
+          );
           if (missedEvents)
             for (const onRefresh of tracked.refreshCallbacks.keys())
               onRefresh(entity);

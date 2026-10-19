@@ -1,5 +1,4 @@
 import { listOwnedSlotName } from '@app/components/list';
-import { useMobileSearchText } from '@app/features/command/mobile/use-mobile-search-text';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import {
   type FacetSelection,
@@ -15,6 +14,7 @@ import {
 import { toast } from '@core/component/Toast/Toast';
 import { enableDatabases, enableForms } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import { useTagSets, useTagSetsReady } from '@property/tags/tag-sets-context';
 import {
@@ -70,10 +70,7 @@ function DriveComposition(props: { route: DriveRouteState }) {
       formsFlag().enabled
     )
   );
-  const searchText = useMobileSearchText(
-    () => view.value().search,
-    panel.handle.isActive
-  );
+  const searchText = () => view.value().search;
   const selection = () => ({ ...viewState(), search: searchText() });
   const sidebar = createDriveSidebarSource();
   const source = withSplitPanelOwner(listOwnedSlotName('data-source'), () =>
@@ -167,10 +164,13 @@ function DriveComposition(props: { route: DriveRouteState }) {
       controller: list.controller,
       handle: panel.handle,
       openEntityInSplit: (entity, options) => {
-        void openEntityInSplitFromUnifiedList(entity, {
-          splitHandle: panel.handle,
-          ...options,
-        });
+        fireAndForget(
+          openEntityInSplitFromUnifiedList(entity, {
+            splitHandle: panel.handle,
+            ...options,
+          }),
+          'open-entity-in-split'
+        );
       },
     });
   });

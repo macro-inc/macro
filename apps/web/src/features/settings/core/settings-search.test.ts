@@ -4,7 +4,7 @@ import { searchSettings } from './settings-search';
 
 const search = (query: string) => searchSettings(SETTINGS_TAB_GROUPS, query);
 describe('individual settings search', () => {
-  it('routes calendar connections and scheduling controls to separate pages', () => {
+  it('keeps calendar connections searchable without removed booking settings', () => {
     expect(
       search('calendar color').find(
         (result) => result.title === 'Connected calendars'
@@ -13,14 +13,8 @@ describe('individual settings search', () => {
       tab: 'Calendar',
       target: 'connected-calendars',
     });
-    expect(search('working hours')[0]).toMatchObject({
-      tab: 'Booking links',
-      target: 'availability',
-    });
-    expect(search('reschedule')[0]).toMatchObject({
-      tab: 'Booking links',
-      target: 'bookings',
-    });
+    expect(search('working hours')).toEqual([]);
+    expect(search('reschedule')).toEqual([]);
   });
   it('finds and targets a signature without knowing its page', () => {
     expect(search('signatre')[0]).toMatchObject({

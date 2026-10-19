@@ -36,10 +36,12 @@ export function triggerFocusInput(
 
   let observer: MutationObserver | undefined;
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  let focusTimeoutId: ReturnType<typeof setTimeout> | undefined;
   let tempEl: HTMLInputElement | undefined;
 
   function cleanup() {
     if (timeoutId !== undefined) clearTimeout(timeoutId);
+    if (focusTimeoutId !== undefined) clearTimeout(focusTimeoutId);
     if (tempEl && document.body.contains(tempEl))
       document.body.removeChild(tempEl);
     observer?.disconnect();
@@ -47,7 +49,10 @@ export function triggerFocusInput(
   }
 
   function handleAppearance(el: HTMLElement) {
-    setTimeout(() => {
+    // Stop watching before the timer: list mounting can deliver more mutations
+    // before focus transfers, and each focus forces synchronous WebKit layout.
+    observer?.disconnect();
+    focusTimeoutId = setTimeout(() => {
       el.focus();
       cleanup();
     }, 0);

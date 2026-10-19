@@ -999,6 +999,16 @@ const shortcutSections: ShortcutSection[] = [
       },
     ],
   },
+  {
+    title: 'Email',
+    items: [
+      {
+        keys: ['shift+v'],
+        codes: ['ShiftLeft', 'KeyV'],
+        description: 'Show or hide the reading pane',
+      },
+    ],
+  },
 ];
 
 const [hoveredCodes, setHoveredCodes] = createSignal<string[]>([]);

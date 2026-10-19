@@ -9,6 +9,7 @@
  * lives).
  */
 
+import { fireAndForget } from '@core/util/fireAndForget';
 import type {
   BytesMethod,
   PsdRequest,
@@ -457,7 +458,7 @@ export class PsdEngine {
         this.holds.delete(work);
       }
     };
-    void release();
+    fireAndForget(release(), 'psd-engine');
   }
 
   close() {
@@ -470,6 +471,6 @@ export class PsdEngine {
       await Promise.allSettled([...this.holds]);
       worker.terminate();
     };
-    void finish();
+    fireAndForget(finish(), 'psd-engine');
   }
 }

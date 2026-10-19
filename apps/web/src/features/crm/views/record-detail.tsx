@@ -1,6 +1,7 @@
 import { ViewBreadcrumbs } from '@app/components/view-shell';
 import { SidePanel } from '@components/app/side-panel';
 import { EntityIcon } from '@core/component/EntityIcon';
+import { fireAndForget } from '@core/util/fireAndForget';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { Button, Tooltip } from '@ui';
 import {
@@ -247,7 +248,10 @@ function RecordContent(props: {
         return error(reset);
       }}
     >
-      <Show when={!query.isError} fallback={error(() => void query.refetch())}>
+      <Show
+        when={!query.isError}
+        fallback={error(() => fireAndForget(query.refetch(), 'crm'))}
+      >
         <Suspense
           fallback={
             <div class="grid size-full place-items-center text-ink-muted">

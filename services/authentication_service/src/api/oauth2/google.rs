@@ -38,6 +38,12 @@ async fn link_user(
             .await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     let macro_user_id = in_progress.macro_user_id;
+    if in_progress.email_provider != "GMAIL" {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "invalid Google linking attempt".into(),
+        ));
+    }
 
     let token_response = ctx
         .auth_client

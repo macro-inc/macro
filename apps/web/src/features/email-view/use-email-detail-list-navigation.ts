@@ -4,16 +4,21 @@ import type {
   EmailThreadListNavigation,
 } from '@app/features/email-thread/context/email-thread-context';
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { EntityData } from '@entity';
 import { type Accessor, createMemo, onCleanup } from 'solid-js';
 import { useEmailView } from './email-view-context';
 import type { EmailDataSourceItem } from './queries/use-email-query';
+import { useEmailReaderPane } from './reader-pane';
 
 /** Keeps thread triage inside the Email view's filtered navigation stack. */
 export function useEmailDetailListNavigation(
   threadId: Accessor<string>
 ): EmailThreadListNavigation {
-  const { source, openThread } = useEmailView();
+  const { source, openThread, list } = useEmailView();
+  // Beside the list, the reader steps like the list cursor: the cursor moves
+  // with it and each step replaces history instead of adding an entry.
+  const inPane = useEmailReaderPane() !== undefined;
   const emails = () =>
     source
       .items()
@@ -58,7 +63,16 @@ export function useEmailDetailListNavigation(
       row.kind === 'load-more' ? source.loadMore : undefined,
     open: (entity) => {
       if (entity.type !== 'email') return;
-      openThread({ id: entity.id, fallbackName: entity.name });
+      const thread = { id: entity.id, fallbackName: entity.name };
+      if (!inPane) {
+        openThread(thread);
+        return;
+      }
+      const row = source
+        .items()
+        .find((item) => item.kind === 'entity' && item.entity.id === entity.id);
+      if (row) list.focus.set(row.id, { reason: 'programmatic' });
+      openThread(thread, { replace: true });
     },
     onError: () => toast.failure('Unable to open the next or previous email'),
   });
@@ -96,20 +110,23 @@ export function useEmailDetailListNavigation(
       }
     },
     markDone: (archiveThread: EmailThreadCommands['archiveThread']) => {
-      void navigation.navigate(1, {
-        fallbackDirection: -1,
-        beforeOpen: (next, current) =>
-          archiveThread({
-            navigate: false,
-            nextEntityId: next?.id,
-            navigateBack:
-              current && next
-                ? () => {
-                    navigation.open(current);
-                  }
-                : undefined,
-          }),
-      });
+      fireAndForget(
+        navigation.navigate(1, {
+          fallbackDirection: -1,
+          beforeOpen: (next, current) =>
+            archiveThread({
+              navigate: false,
+              nextEntityId: next?.id,
+              navigateBack:
+                current && next
+                  ? () => {
+                      navigation.open(current);
+                    }
+                  : undefined,
+            }),
+        }),
+        'email-view'
+      );
     },
   };
 }

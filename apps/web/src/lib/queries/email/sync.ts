@@ -59,7 +59,7 @@ export function handleRefreshEmail(payload: unknown): void {
     event.event === 'update_labels' ||
     event.event === 'delete_message'
   ) {
-    void queryClient.invalidateQueries({
+    queryClient.invalidateQueries({
       queryKey: emailKeys.composeDraftState._def,
     });
     return;

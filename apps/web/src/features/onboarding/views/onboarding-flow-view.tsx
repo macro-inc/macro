@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createEffect, Match, onCleanup, Show, Switch } from 'solid-js';
 import { BypassButton } from '../components/bypass-button';
 import {
@@ -104,7 +105,7 @@ export function OnboardingFlowView(props: {
       viewer.t === 'signed-in' &&
       viewer.viewer.licensed
     ) {
-      void finish.finishPremium();
+      fireAndForget(finish.finishPremium(), 'onboarding');
       return;
     }
     goTo(next);
@@ -137,7 +138,9 @@ export function OnboardingFlowView(props: {
           {(current) => (
             <BypassButton
               disabled={finish.finishing()}
-              onBypass={() => void finish.bypass(current())}
+              onBypass={() =>
+                fireAndForget(finish.bypass(current()), 'onboarding')
+              }
             />
           )}
         </Show>
@@ -147,10 +150,15 @@ export function OnboardingFlowView(props: {
         showPlanOffer() ? (
           <PlanComparisonView
             disabled={finish.finishing()}
-            onContinueFree={() => void finish.finishFree()}
+            onContinueFree={() =>
+              fireAndForget(finish.finishFree(), 'onboarding')
+            }
             onBackToPro={() => focusStepHeading(content, true)}
             onStartMax={() =>
-              void finish.startPremiumCheckout('max', 'standard')
+              fireAndForget(
+                finish.startPremiumCheckout('max', 'standard'),
+                'onboarding'
+              )
             }
           />
         ) : step() === 'security' ||
@@ -199,9 +207,14 @@ export function OnboardingFlowView(props: {
               checkoutReturn={props.checkoutReturn}
               finishing={finish.finishing()}
               onStartCheckout={(tier, terms) =>
-                void finish.startPremiumCheckout(tier, terms)
+                fireAndForget(
+                  finish.startPremiumCheckout(tier, terms),
+                  'onboarding'
+                )
               }
-              onContinueFree={() => void finish.finishFree()}
+              onContinueFree={() =>
+                fireAndForget(finish.finishFree(), 'onboarding')
+              }
               renderInviteOffer={props.renderInviteOffer}
               onPremiumPaid={finish.finishPremium}
             />

@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { type Accessor, createSignal, onCleanup } from 'solid-js';
 import type { ListDataSource } from './list-data-source';
 
@@ -137,10 +138,10 @@ export function useListDetailNavigation<
     canPrevious: () => !navigating() && target(-1)?.kind === 'entity',
     canNext: () => !navigating() && target(1) !== undefined,
     previous: () => {
-      void navigate(-1);
+      fireAndForget(navigate(-1), 'list-detail-navigation');
     },
     next: () => {
-      void navigate(1);
+      fireAndForget(navigate(1), 'list-detail-navigation');
     },
     navigate,
     open,

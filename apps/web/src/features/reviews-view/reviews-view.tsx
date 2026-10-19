@@ -23,6 +23,7 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { useUserContext } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type GithubPullRequestEntity,
   ListEntityMetadataQueryProvider,
@@ -209,11 +210,15 @@ function ReviewsRoot() {
   const searchForTab = (tab: ReviewsScope) => ({
     [reviewsTabSearch.namespace]: reviewsTabSearchCodec.serialize({ tab }),
   });
-  const openList = () =>
-    navigate(
-      { route: reviewsSplitRoute, params: {} },
-      { search: searchForTab(scope()) }
+  const openList = () => {
+    fireAndForget(
+      navigate(
+        { route: reviewsSplitRoute, params: {} },
+        { search: searchForTab(scope()) }
+      ),
+      'reviews-view'
     );
+  };
   const selectScope = (next: ReviewsScope) =>
     navigate(
       { route: reviewsSplitRoute, params: {} },
@@ -236,9 +241,12 @@ function ReviewsRoot() {
         });
       return;
     }
-    navigate(
-      { route: reviewsPrRoute, params: { foreignEntityId } },
-      { search: searchForTab(scope()) }
+    fireAndForget(
+      navigate(
+        { route: reviewsPrRoute, params: { foreignEntityId } },
+        { search: searchForTab(scope()) }
+      ),
+      'reviews-view'
     );
   };
   // Links load for every fetched row, not just the searched ones, so the
@@ -275,7 +283,7 @@ function ReviewsRoot() {
         ? new Error('Pull request links couldn’t be loaded')
         : undefined),
     retry: () => {
-      if (links.isError()) void links.retry();
+      if (links.isError()) fireAndForget(links.retry(), 'reviews-view');
       return source.retry();
     },
   };
@@ -441,7 +449,9 @@ function ReviewsRoot() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => void listSource.retry()}
+                  onClick={() =>
+                    fireAndForget(listSource.retry(), 'reviews-view')
+                  }
                 >
                   Try again
                 </Button>
@@ -459,7 +469,7 @@ function ReviewsRoot() {
                 scope={JSON.stringify([scope(), activeFilters(), search()])}
                 hasMore={source.hasMore()}
                 isLoadingMore={source.isLoadingMore()}
-                onLoadMore={() => void loadMore()}
+                onLoadMore={() => fireAndForget(loadMore(), 'reviews-view')}
                 onOpen={openReview}
               />
             </Match>

@@ -1,4 +1,5 @@
 import type { PDFViewer } from '@block-pdf/PdfViewer';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { usePdfViewer } from '../context/pdf-viewer-context';
 import {
   FindState,
@@ -216,10 +217,13 @@ export function useJumpToResult() {
         matchIndex: match.matchNumber,
       });
     } else {
-      rootViewer()?.scrollTo({
-        pageNumber: match.page + 1,
-        yPos: match.yPos,
-      });
+      fireAndForget(
+        rootViewer()?.scrollTo({
+          pageNumber: match.page + 1,
+          yPos: match.yPos,
+        }),
+        'pdf-search'
+      );
     }
   };
 }

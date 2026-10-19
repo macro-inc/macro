@@ -1,5 +1,7 @@
 // Production host + WASM/OPFS, with synthetic responses only. No auth or hosted
 // data is required. Exercise the same scoped subscriber used by Quick Access.
+
+import { fireAndForget } from '@core/util/fireAndForget';
 import { subscribeToVisibleCacheChanges } from '@queries/subscribe-to-visible-cache-changes';
 import { createRoot } from 'solid-js';
 import { createWorkerCacheHost } from '../../host/worker-host';
@@ -91,8 +93,12 @@ try {
       cleanup();
     };
   });
-  pageButton.addEventListener('click', () => void run(3, 'Original'));
-  renameButton.addEventListener('click', () => void run(3, 'Renamed'));
+  pageButton.addEventListener('click', () =>
+    fireAndForget(run(3, 'Original'), 'query-write-scope-harness')
+  );
+  renameButton.addEventListener('click', () =>
+    fireAndForget(run(3, 'Renamed'), 'query-write-scope-harness')
+  );
   pageButton.disabled = renameButton.disabled = false;
   display('ready');
 } catch (error) {

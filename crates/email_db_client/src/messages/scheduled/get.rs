@@ -57,6 +57,8 @@ pub async fn get_and_start_processing_scheduled_message(
         SET processing = true, updated_at = NOW()
         WHERE link_id = $1 AND message_id = $2
           AND NOT sent AND NOT processing AND send_time <= NOW()
+          AND NOT EXISTS(SELECT 1 FROM email_attachments_drafts WHERE draft_id=$2 AND upload_pending)
+          AND NOT EXISTS(SELECT 1 FROM email_draft_transfers WHERE (destination_id=$2 AND state NOT IN ('ready','retained','preparing')) OR (source_id=$2 AND state<>'preparing'))
         RETURNING link_id, message_id, send_time, sent, processing, actor_id
         "#,
         link_id,

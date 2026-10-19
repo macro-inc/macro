@@ -15,6 +15,7 @@ import { TeamContextProvider } from '@core/context/team';
 import { useUserId } from '@core/context/user';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { createBlockOrchestrator } from '@core/orchestrator';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   createNotificationSource,
   type UnifiedNotification,
@@ -68,7 +69,8 @@ function ConfiguredGlobalAppStateProvider(props: ParentProps) {
   }
   const notificationSource = createNotificationSource(
     connectionGatewayWebsocket,
-    (notification) => void deliverNotification(notification)
+    (notification) =>
+      fireAndForget(deliverNotification(notification), 'notifications')
   );
   useNotificationUpdates(notificationSource);
   useAccessRequestInvalidations();

@@ -25,8 +25,8 @@ type UseMergeGithubPullRequestMutationOptions = {
  * already sees it merged rather than waiting on GitHub's webhook.
  */
 export function invalidateMergedPullRequestCaches(): void {
-  void queryClient.invalidateQueries({ queryKey: pullRequestMentionKeys._def });
-  void queryClient.invalidateQueries({
+  queryClient.invalidateQueries({ queryKey: pullRequestMentionKeys._def });
+  queryClient.invalidateQueries({
     queryKey: documentGithubPullRequestsKeys._def,
   });
 }

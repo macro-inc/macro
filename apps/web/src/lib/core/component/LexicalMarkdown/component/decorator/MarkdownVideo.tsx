@@ -1,6 +1,6 @@
 import { toast } from '@core/component/Toast/Toast';
 import { debouncedDependent } from '@core/util/debounce';
-
+import { fireAndForget } from '@core/util/fireAndForget';
 import { Dialog } from '@kobalte/core/dialog';
 import { mergeRegister } from '@lexical/utils';
 import {
@@ -94,39 +94,42 @@ export function MarkdownVideo(props: VideoDecoratorProps) {
       setVideoUrl(props.url);
       return;
     }
-    getMediaUrl({
-      type: props.srcType,
-      id: props.id,
-      url: props.url,
-    }).then((maybeUrl) => {
-      if (maybeUrl.isErr()) {
-        setState('error');
-        if (
-          maybeUrl.isErr() &&
-          maybeUrl.error.some((error) => error.code === 'UNAUTHORIZED')
-        )
-          setVideoError('UNAUTHORIZED');
-        else if (maybeUrl.error.some((error) => error.code === 'NOT_FOUND'))
-          setVideoError('MISSING');
-        else if (
-          maybeUrl.isErr() &&
-          maybeUrl.error.some((error) => error.code === 'GONE')
-        )
-          setVideoError('GONE');
-        else setVideoError('FALLBACK');
-        return;
-      }
-      const url = maybeUrl.value;
-      setVideoUrl(url);
-      if (props.srcType === 'dss') {
-        editor()?.update(
-          () => {
-            $upgradeDSSMediaUrl(props.key, url, 'video');
-          },
-          { discrete: true, tag: 'historic' }
-        );
-      }
-    });
+    fireAndForget(
+      getMediaUrl({
+        type: props.srcType,
+        id: props.id,
+        url: props.url,
+      }).then((maybeUrl) => {
+        if (maybeUrl.isErr()) {
+          setState('error');
+          if (
+            maybeUrl.isErr() &&
+            maybeUrl.error.some((error) => error.code === 'UNAUTHORIZED')
+          )
+            setVideoError('UNAUTHORIZED');
+          else if (maybeUrl.error.some((error) => error.code === 'NOT_FOUND'))
+            setVideoError('MISSING');
+          else if (
+            maybeUrl.isErr() &&
+            maybeUrl.error.some((error) => error.code === 'GONE')
+          )
+            setVideoError('GONE');
+          else setVideoError('FALLBACK');
+          return;
+        }
+        const url = maybeUrl.value;
+        setVideoUrl(url);
+        if (props.srcType === 'dss') {
+          editor()?.update(
+            () => {
+              $upgradeDSSMediaUrl(props.key, url, 'video');
+            },
+            { discrete: true, tag: 'historic' }
+          );
+        }
+      }),
+      'markdown-media'
+    );
   });
 
   const isSelectedAsNode = () => {

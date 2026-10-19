@@ -65,6 +65,7 @@ const MACRO_TOOLS: Record<MacroToolName, Wording | null> = {
   EditSpreadsheet: (whose) => `edit ${whose} spreadsheets`,
   EditTag: (whose) => `edit tags in ${whose} workspace`,
   EditWordDocument: (whose) => `edit ${whose} documents`,
+  ExportPipelineCsv: (whose) => `export ${whose} pipelines to CSV`,
   FindPipelineEntries: (whose) => `read ${whose} pipelines`,
   ExecuteCode: (whose) =>
     `run potentially sensitive tools with ${whose} access`,
@@ -79,7 +80,9 @@ const MACRO_TOOLS: Record<MacroToolName, Wording | null> = {
   GetEntityProperties: (whose) => `read properties in ${whose} workspace`,
   GetTeamAvailability: (whose) => `check availability for ${whose} team`,
   GetThread: (whose) => `read ${whose} email`,
+  ImportCompaniesCsv: (whose) => `import companies into ${whose} CRM`,
   ImportNotionPage: (whose) => `import a Notion page into ${whose} workspace`,
+  ImportPipelineCsv: (whose) => `import deals into ${whose} pipelines`,
   IssueBotCredential: (whose) => `issue credentials for ${whose} bots`,
   ListAgents: (whose) => `list ${whose} agents`,
   ListBookings: (whose) => `read ${whose} bookings`,

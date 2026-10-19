@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import CaretDown from '@phosphor/caret-down.svg';
 import CaretLeft from '@phosphor/caret-left.svg';
 import CaretRight from '@phosphor/caret-right.svg';
@@ -56,7 +57,9 @@ export function ReviewNavigation(props: {
             size="icon-sm"
             label="Previous draft"
             disabled={props.disabled || props.index === 0}
-            onClick={() => void props.onNavigate(props.index - 1)}
+            onClick={() =>
+              fireAndForget(props.onNavigate(props.index - 1), 'agent-reviews')
+            }
           >
             <CaretLeft />
           </Button>
@@ -77,7 +80,9 @@ export function ReviewNavigation(props: {
             size="icon-sm"
             label="Next draft"
             disabled={props.disabled || props.index === props.items.length - 1}
-            onClick={() => void props.onNavigate(props.index + 1)}
+            onClick={() =>
+              fireAndForget(props.onNavigate(props.index + 1), 'agent-reviews')
+            }
           >
             <CaretRight />
           </Button>
@@ -122,7 +127,9 @@ export function ReviewNavigation(props: {
                       item.index === props.index ? 'true' : undefined
                     }
                     disabled={props.disabled}
-                    onClick={() => void choose(item.index)}
+                    onClick={() =>
+                      fireAndForget(choose(item.index), 'agent-reviews')
+                    }
                   >
                     <span class="w-4 shrink-0 text-xs tabular-nums text-ink-muted">
                       <Show

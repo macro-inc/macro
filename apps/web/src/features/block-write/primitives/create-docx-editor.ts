@@ -8,6 +8,7 @@ import type {
   Selection,
   StyleInfo,
 } from '@core/docx-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { LoroDoc } from 'loro-crdt';
 import { createSignal, onCleanup } from 'solid-js';
 import { DocxCollab } from '../core/docx-collab';
@@ -236,7 +237,7 @@ export function createDocxEditor(options: DocxEditorOptions) {
     );
     if (editing && !options.editable) return;
     queue.push({ ops, group });
-    void pump();
+    fireAndForget(pump(), 'block-write');
   }
 
   async function undo() {

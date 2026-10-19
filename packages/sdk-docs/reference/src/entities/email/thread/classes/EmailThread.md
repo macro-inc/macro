@@ -166,6 +166,18 @@ Attach the thread to a project, or clear the project with `null`.
 
 ***
 
+### operations()
+
+> **operations**(): `Promise`\<[`MailboxOperation`](../../../../../generated/email/types.gen/type-aliases/MailboxOperation.md)[]\>
+
+Read pending or failed mailbox changes without initiating a retry.
+
+#### Returns
+
+`Promise`\<[`MailboxOperation`](../../../../../generated/email/types.gen/type-aliases/MailboxOperation.md)[]\>
+
+***
+
 ### participants()
 
 > **participants**(): `Promise`\<[`ApiContactInfo`](../../../../../generated/email/types.gen/type-aliases/ApiContactInfo.md)[]\>
@@ -344,6 +356,24 @@ Apply multi-select option deltas atomically across this entity's properties.
 #### Inherited from
 
 [`PropertiedEntity`](../../../entity/classes/PropertiedEntity.md).[`updatePropertyOptions`](../../../entity/classes/PropertiedEntity.md#updatepropertyoptions)
+
+***
+
+### updateState()
+
+> **updateState**(`request`): `Promise`\<`void`\>
+
+Update provider-neutral read, trash, spam, or star state.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `request` | [`UpdateThreadStateRequest`](../../../../../generated/email/types.gen/type-aliases/UpdateThreadStateRequest.md) |
+
+#### Returns
+
+`Promise`\<`void`\>
 
 ***
 

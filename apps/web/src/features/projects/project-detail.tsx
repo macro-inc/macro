@@ -21,6 +21,7 @@ import { TabsInset } from '@core/component/TabsInset';
 import { toast } from '@core/component/Toast/Toast';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fireAndForget } from '@core/util/fireAndForget';
 import StackIcon from '@phosphor/stack.svg';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { Property } from '@property/types';
@@ -163,15 +164,20 @@ function ProjectTitleMenu(props: {
         }
         onRename={() => setRenaming(true)}
         onSetOption={(_, property, optionId) =>
-          void setOption(property, optionId)
+          fireAndForget(setOption(property, optionId), 'projects')
         }
         onCopyLink={(row) =>
-          void copyLink.executeByBlock(
-            projectRouteId({ id: row.project.id, section: 'overview' }),
-            'component'
+          fireAndForget(
+            copyLink.executeByBlock(
+              projectRouteId({ id: row.project.id, section: 'overview' }),
+              'component'
+            ),
+            'projects'
           )
         }
-        onCopyId={(row) => void copyId.executeById(row.project.id)}
+        onCopyId={(row) =>
+          fireAndForget(copyId.executeById(row.project.id), 'projects')
+        }
         onShare={props.onShare}
         onDelete={() => {
           setError(undefined);
@@ -191,7 +197,7 @@ function ProjectTitleMenu(props: {
           pending={props.commands.pending()}
           error={error()}
           onOpenChange={setDeleting}
-          onDelete={() => void deleteProject()}
+          onDelete={() => fireAndForget(deleteProject(), 'projects')}
         />
       </Show>
     </>
@@ -300,14 +306,17 @@ function ProjectDetailHost(props: ProjectDetailProps) {
                         event?.altKey
                       )
                     ) {
-                      navigate({
-                        route: projectTaskRoute,
-                        params: {
-                          projectId: props.route.id,
-                          section: props.route.section,
-                          taskId: task.id,
-                        },
-                      });
+                      fireAndForget(
+                        navigate({
+                          route: projectTaskRoute,
+                          params: {
+                            projectId: props.route.id,
+                            section: props.route.section,
+                            taskId: task.id,
+                          },
+                        }),
+                        'project-detail'
+                      );
                       return true;
                     }
                     layout.openWithSplit(
@@ -339,7 +348,11 @@ function ProjectDetailHost(props: ProjectDetailProps) {
                   Project unavailable. It may have been deleted, or you may no
                   longer have access.
                 </p>
-                <Button onClick={() => void source.refresh()}>Try again</Button>
+                <Button
+                  onClick={() => fireAndForget(source.refresh(), 'projects')}
+                >
+                  Try again
+                </Button>
               </div>
             </Match>
           </Switch>

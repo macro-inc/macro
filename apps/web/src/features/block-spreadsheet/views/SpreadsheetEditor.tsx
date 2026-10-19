@@ -1,4 +1,5 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { cellPlainText } from '@macro-inc/spreadsheet/cell-mentions';
 import {
   type DropdownOptions,
@@ -28,7 +29,10 @@ import {
   DropdownDialog,
   type DropdownDialogState,
 } from '../components/DropdownDialog';
-import { SpreadsheetFileMenu } from '../components/SpreadsheetActionMenus';
+import {
+  SpreadsheetFileMenu,
+  SpreadsheetImportButton,
+} from '../components/SpreadsheetActionMenus';
 import { SpreadsheetDialog } from '../components/SpreadsheetDialog';
 import {
   SpreadsheetFindDialog,
@@ -92,7 +96,9 @@ import { createGridController } from '../primitives/create-grid-controller';
 import { createRangeMove } from '../primitives/create-range-move';
 import { createSheetActions } from '../primitives/create-sheet-actions';
 import type { SpreadsheetStore } from '../primitives/create-spreadsheet-store';
+import { createTableActions } from '../primitives/create-table-actions';
 import { createWorkbookActions } from '../primitives/create-workbook-actions';
+import { SpreadsheetTableDialogs, tableGridUi } from './SpreadsheetTables';
 
 export function SpreadsheetEditor(props: {
   /** A saved workbook's document, recorded on traces. */
@@ -190,6 +196,15 @@ export function SpreadsheetEditor(props: {
       ),
   });
   const values = calculation.values;
+  const tableActions = createTableActions({
+    store: props.store,
+    canEdit: editable,
+    selection: grid.selection,
+    values,
+    calculating: () => calculation.busy() || !!calculation.error(),
+    copyCells: calculation.copy,
+    setNotice: (message) => actions.setNotice(message),
+  });
   const activeValidation = createMemo(() =>
     validationAt(
       props.store.activeSheet().metadata?.validations,
@@ -197,6 +212,9 @@ export function SpreadsheetEditor(props: {
     )
   );
   const activeList = createMemo(() => {
+    // A table's total row offers its aggregates, as Excel does.
+    const totals = tableActions.totalChoices();
+    if (totals) return totals;
     const rule = activeValidation();
     if (rule?.type !== 'list' || rule.dropdown === false) return;
     const sheetId = props.store.activeSheetId();
@@ -383,6 +401,24 @@ export function SpreadsheetEditor(props: {
     actions.notice() ||
     grid.notice();
   let pendingMenuAction: SpreadsheetCommand | undefined;
+  /** A dialog a grid menu chose, opened once the menu returns focus. */
+  let pendingDialog: (() => void) | undefined;
+  const tableUi = tableGridUi({
+    actions: tableActions,
+    editable,
+    canChangeStructure: () => props.store.canChangeStructure(),
+    changeColumns: (column, action) => {
+      grid.selectRange(
+        { row: 0, column },
+        { row: props.store.rowCount() - 1, column }
+      );
+      fireAndForget(headerAction('column', action), 'spreadsheet-editor');
+    },
+    restoreFocus: () => restoreEditorFocus(),
+    afterMenu: (open) => {
+      pendingDialog = open;
+    },
+  });
   const focusGrid = () => gridElement?.focus({ preventScroll: true });
   const revealSelection = () =>
     gridElement
@@ -462,6 +498,12 @@ export function SpreadsheetEditor(props: {
     const pending = pendingMenuAction;
     pendingMenuAction = undefined;
     if (pending) command(pending);
+    const dialog = pendingDialog;
+    pendingDialog = undefined;
+    if (dialog) {
+      dialog();
+      return;
+    }
     // A drawing a menu just inserted keeps the focus.
     const inserted = insertedDrawing;
     insertedDrawing = undefined;
@@ -475,6 +517,8 @@ export function SpreadsheetEditor(props: {
       workbookActions.preview() ||
       workbookActions.sheetDialog() ||
       dropdownDialog() ||
+      tableActions.dialog() ||
+      tableActions.groupView() ||
       dateFormatDialog()
     )
       return;
@@ -497,6 +541,7 @@ export function SpreadsheetEditor(props: {
     if (
       action.startsWith('insert-') ||
       action === 'dropdown' ||
+      action === 'table' ||
       action === 'custom-date-format'
     )
       pendingMenuAction = action;
@@ -573,16 +618,16 @@ export function SpreadsheetEditor(props: {
       .with('undo', () => grid.undo())
       .with('redo', () => grid.redo())
       .with('cut', () => {
-        void actions.copy(true);
+        fireAndForget(actions.copy(true), 'spreadsheet-editor');
       })
       .with('copy', () => {
-        void actions.copy();
+        fireAndForget(actions.copy(), 'spreadsheet-editor');
       })
       .with('paste', () => {
-        void actions.paste();
+        fireAndForget(actions.paste(), 'spreadsheet-editor');
       })
       .with('paste-values', () => {
-        void actions.paste(true);
+        fireAndForget(actions.paste(true), 'spreadsheet-editor');
       })
       .with('clear-values', () => grid.clear())
       .with('clear-formatting', actions.clearFormatting)
@@ -604,7 +649,7 @@ export function SpreadsheetEditor(props: {
       .with('export-csv', exportCsv)
       .with('import', () => importInput.click())
       .with('export-xlsx', () => {
-        void workbookActions.exportExcel();
+        fireAndForget(workbookActions.exportExcel(), 'spreadsheet-editor');
       })
       .with('add-rows', () => props.store.appendRows(100))
       .with('toggle-gridlines', () => {
@@ -617,13 +662,14 @@ export function SpreadsheetEditor(props: {
       .with('toggle-formula-bar', () => setShowFormulaBar((value) => !value))
       .with('toggle-formulas', () => setShowFormulas((value) => !value))
       .with('sort-asc', () => {
-        void actions.sort(false);
+        fireAndForget(actions.sort(false), 'spreadsheet-editor');
       })
       .with('sort-desc', () => {
-        void actions.sort(true);
+        fireAndForget(actions.sort(true), 'spreadsheet-editor');
       })
       .with('trim-whitespace', actions.trimWhitespace)
       .with('dropdown', openDropdownDialog)
+      .with('table', tableActions.convert)
       .with('custom-date-format', openDateFormatDialog)
       .with('border-all', () => actions.borders('all'))
       .with('border-outer', () => actions.borders('outer'))
@@ -909,6 +955,7 @@ export function SpreadsheetEditor(props: {
           ...activeCell(),
           ...selectionToggleStyles(props.store.cells(), grid.selection()),
         }}
+        inTable={!!tableActions.activeTable()}
         zoom={zoom()}
         showGridlines={showGridlines()}
         showFormulaBar={showFormulaBar()}
@@ -949,7 +996,11 @@ export function SpreadsheetEditor(props: {
         onChange={(event) => {
           const file = event.currentTarget.files?.[0];
           event.currentTarget.value = '';
-          if (file) void drawingActions.insertImage(file);
+          if (file)
+            fireAndForget(
+              drawingActions.insertImage(file),
+              'spreadsheet-editor'
+            );
         }}
       />
       <input
@@ -961,7 +1012,7 @@ export function SpreadsheetEditor(props: {
         onChange={(event) => {
           const file = event.currentTarget.files?.[0];
           event.currentTarget.value = '';
-          void importFile(file);
+          fireAndForget(importFile(file), 'spreadsheet-editor');
         }}
       />
       <Show
@@ -975,6 +1026,7 @@ export function SpreadsheetEditor(props: {
           mentions={props.mentions}
           editing={!!grid.editing()}
           complete={calculation.complete}
+          tableReferences={tableActions.references}
           selectionRequest={grid.editorSelection()}
           references={grid.draftReferences()}
           pickingReference={
@@ -1021,6 +1073,7 @@ export function SpreadsheetEditor(props: {
           mentions={props.mentions}
           sheetId={props.store.activeSheetId()}
           complete={calculation.complete}
+          tableReferences={tableActions.references}
           cells={props.store.cells()}
           zoom={zoom()}
           showGridlines={showGridlines()}
@@ -1043,7 +1096,9 @@ export function SpreadsheetEditor(props: {
           hiddenColumns={props.store.activeSheet().metadata?.hiddenColumns}
           canChangeStructure={props.store.canChangeStructure()}
           onCellAction={command}
-          onHeaderAction={(axis, action) => void headerAction(axis, action)}
+          onHeaderAction={(axis, action) =>
+            fireAndForget(headerAction(axis, action), 'spreadsheet-editor')
+          }
           onResizeColumn={props.store.resizeColumn}
           onFill={grid.fill}
           onCopyMetadata={grid.copyMetadata}
@@ -1052,7 +1107,10 @@ export function SpreadsheetEditor(props: {
               ? (selection, rows, columns) => {
                   grid.commit();
                   actions.clearNotice();
-                  void rangeMove.move(selection, rows, columns);
+                  fireAndForget(
+                    rangeMove.move(selection, rows, columns),
+                    'spreadsheet-editor'
+                  );
                 }
               : undefined
           }
@@ -1093,9 +1151,12 @@ export function SpreadsheetEditor(props: {
             grid.select(position);
             grid.toggleCheckboxes();
           }}
+          tables={props.store.activeSheet().metadata?.tables}
+          tableUi={tableUi}
           onPickListItem={(item) => {
             if (!editable()) return;
             grid.commit();
+            if (tableActions.pickTotal(item)) return;
             // A choice is literal text, even one that starts like a formula.
             props.store.setCells({
               [grid.activeAddress()]: {
@@ -1155,6 +1216,17 @@ export function SpreadsheetEditor(props: {
             ) {
               event.preventDefault();
               command('find');
+              return;
+            }
+            // Google Sheets' shortcut to convert to a table.
+            if (
+              (event.metaKey || event.ctrlKey) &&
+              event.altKey &&
+              event.code === 'KeyT'
+            ) {
+              event.preventDefault();
+              event.stopPropagation();
+              tableActions.convert();
               return;
             }
             if (
@@ -1344,7 +1416,13 @@ export function SpreadsheetEditor(props: {
             </span>
           </Show>
         </div>
-        <div class="shrink-0 border-l border-edge-muted pl-1 max-sm:order-1">
+        <div class="flex shrink-0 items-center gap-0.5 border-l border-edge-muted pl-1 max-sm:order-1">
+          <SpreadsheetImportButton
+            disabled={
+              !editable() || actions.pending() || !!workbookActions.busy()
+            }
+            onCommand={menuCommand}
+          />
           <SpreadsheetFileMenu
             readonly={
               !editable() || actions.pending() || !!workbookActions.busy()
@@ -1379,7 +1457,9 @@ export function SpreadsheetEditor(props: {
       />
       <SpreadsheetMoveDialog
         open={!!rangeMove.confirming()}
-        onConfirm={() => void rangeMove.confirm()}
+        onConfirm={() =>
+          fireAndForget(rangeMove.confirm(), 'spreadsheet-editor')
+        }
         onClose={rangeMove.cancel}
         onRestoreFocus={focusGrid}
       />
@@ -1390,6 +1470,11 @@ export function SpreadsheetEditor(props: {
         onSave={changeDropdown}
         onRemove={() => changeDropdown()}
         onClose={() => setDropdownDialog(undefined)}
+        onRestoreFocus={focusGrid}
+      />
+      <SpreadsheetTableDialogs
+        actions={tableActions}
+        readonly={!editable()}
         onRestoreFocus={focusGrid}
       />
       <DateFormatDialog
@@ -1443,7 +1528,7 @@ export function SpreadsheetEditor(props: {
         solution={goalSeek.solution()}
         message={goalSeek.message()}
         onSeek={() => {
-          void goalSeek.seek();
+          fireAndForget(goalSeek.seek(), 'spreadsheet-editor');
         }}
         onApply={goalSeek.apply}
         onEdit={goalSeek.clearSolution}

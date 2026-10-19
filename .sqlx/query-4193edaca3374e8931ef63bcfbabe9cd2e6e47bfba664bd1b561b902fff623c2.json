@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE email_mailbox_commands SET status = CASE WHEN status = 'pending' THEN 'cancelled' ELSE 'unknown' END,\n                    lease_id = NULL,lease_until = NULL,updated_at = now()\n                WHERE link_id = $1 AND generation <> $2 AND status IN ('pending','running','confirming')\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4193edaca3374e8931ef63bcfbabe9cd2e6e47bfba664bd1b561b902fff623c2"
+}

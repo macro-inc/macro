@@ -1,4 +1,5 @@
 import { HeaderActionButton } from '@components/app/HeaderActionButton';
+import { fireAndForget } from '@core/util/fireAndForget';
 import PhoneIcon from '@phosphor/phone-call.svg';
 import { cn } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
@@ -16,7 +17,7 @@ export function ChannelCallButton(props: { channelId: string }) {
     <Show when={!call.isInThisChannel()}>
       <HeaderActionButton
         ref={tourTarget(CHANNEL_TOUR.call)}
-        onClick={() => void call.start()}
+        onClick={() => fireAndForget(call.start(), 'channel-call')}
         tooltip={tooltip()}
         label={label()}
         icon={<PhoneIcon />}

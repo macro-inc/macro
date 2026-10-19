@@ -8,6 +8,7 @@ import { getPermissions } from '@core/component/SharePermissions';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
 import { isMobile } from '@core/mobile/isMobile';
+import { fireAndForget } from '@core/util/fireAndForget';
 import PhoneCallIcon from '@phosphor/phone-call.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { useCallRecordQuery } from '@queries/call/call';
@@ -113,7 +114,7 @@ function LoadedCallContent(props: {
   onMount(() => {
     optimisticUpdateSoupItemViewedAt(props.callId);
     if (!hasSoupEntity(props.callId)) {
-      void refetchSoupEntity(props.callId, 'call');
+      fireAndForget(refetchSoupEntity(props.callId, 'call'), 'call-detail');
     }
   });
   return (
@@ -171,7 +172,9 @@ export function CallDetailContent(props: {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => void props.query.refetch()}
+                    onClick={() =>
+                      fireAndForget(props.query.refetch(), 'call-detail')
+                    }
                   >
                     Retry
                   </Button>

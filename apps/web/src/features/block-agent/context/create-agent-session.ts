@@ -14,6 +14,7 @@ import {
   type AgentSessionRecord,
   type IssueResult,
 } from '@core/agent-session/AgentSession';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { AgentSessionRenamedEvent } from '@queries/agent-session/realtime-protocol';
 import {
   subscribeAgentSessionRenamed,
@@ -278,7 +279,10 @@ export function createAgentSession(
       // replaces it when it lands, through the same store, so the resource
       // resolves here and the fetch settles it in the background.
       await show(session, cached, 'cached');
-      void settleInBackground(session, renameRefreshAtStart);
+      fireAndForget(
+        settleInBackground(session, renameRefreshAtStart),
+        'agent-session'
+      );
       return cached.session;
     }
   );
@@ -299,9 +303,8 @@ export function createAgentSession(
     subscribeAgentSessionRenamed((event) => {
       if (event.agentSessionId !== sessionId()) return;
       const run = ++renameRefresh;
-      void agentHarnessServiceClient
-        .get(event.agentSessionId)
-        .then((session) => {
+      fireAndForget(
+        agentHarnessServiceClient.get(event.agentSessionId).then((session) => {
           if (
             session.isErr() ||
             run !== renameRefresh ||
@@ -315,7 +318,9 @@ export function createAgentSession(
           mutate((current) =>
             current ? { ...current, name: session.value.name } : current
           );
-        });
+        }),
+        'agent-session'
+      );
     })
   );
 
@@ -324,19 +329,22 @@ export function createAgentSession(
     subscribeAgentSessionUpdated((event) => {
       if (event.agentSessionId !== sessionId()) return;
       const run = ++updateRefresh;
-      void (async () => {
-        const session = await agentHarnessServiceClient.get(
-          event.agentSessionId
-        );
-        if (
-          session.isErr() ||
-          run !== updateRefresh ||
-          event.agentSessionId !== sessionId()
-        ) {
-          return;
-        }
-        mutate((current) => (current ? session.value : current));
-      })();
+      fireAndForget(
+        (async () => {
+          const session = await agentHarnessServiceClient.get(
+            event.agentSessionId
+          );
+          if (
+            session.isErr() ||
+            run !== updateRefresh ||
+            event.agentSessionId !== sessionId()
+          ) {
+            return;
+          }
+          mutate((current) => (current ? session.value : current));
+        })(),
+        'agent-session'
+      );
     })
   );
 
@@ -361,7 +369,7 @@ export function createAgentSession(
     messages: () => list,
     loadFailed: () => failure() !== undefined,
     accessDenied: () => failure() instanceof AgentSessionAccessDenied,
-    retry: () => void refetch(),
+    retry: () => fireAndForget(refetch(), 'agent-session'),
     issue: (action) => {
       const current = live();
       return current

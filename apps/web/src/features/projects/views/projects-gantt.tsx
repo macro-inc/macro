@@ -3,6 +3,7 @@ import { Gantt } from '@app/components/gantt/gantt';
 import { deriveGanttRange } from '@app/components/gantt/gantt-date';
 import { STATUS_GROUP_HEADER_TINTS } from '@app/features/tasks-view/components/task-list/TaskGroupHeader';
 import { UserIcon } from '@core/component/UserIcon';
+import { fireAndForget } from '@core/util/fireAndForget';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import CircleDashedIcon from '@phosphor/circle-dashed.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
@@ -87,7 +88,10 @@ export function ProjectsGantt(props: {
             class="flex flex-1 flex-col items-center justify-center gap-3 text-sm text-ink-muted"
           >
             Projects couldn’t be loaded.
-            <Button variant="outline" onClick={() => void collection.refresh()}>
+            <Button
+              variant="outline"
+              onClick={() => fireAndForget(collection.refresh(), 'projects')}
+            >
               Try again
             </Button>
           </div>
@@ -298,7 +302,12 @@ export function ProjectsGantt(props: {
                                   size="sm"
                                   variant="ghost"
                                   disabled={more().isLoading}
-                                  onClick={() => void collection.loadMore()}
+                                  onClick={() =>
+                                    fireAndForget(
+                                      collection.loadMore(),
+                                      'projects'
+                                    )
+                                  }
                                 >
                                   <Show when={more().isLoading}>
                                     <SpinnerIcon class="size-3 animate-spin" />
@@ -314,7 +323,12 @@ export function ProjectsGantt(props: {
                                 size="sm"
                                 variant="ghost"
                                 disabled={more().isLoading}
-                                onClick={() => void collection.loadMore()}
+                                onClick={() =>
+                                  fireAndForget(
+                                    collection.loadMore(),
+                                    'projects'
+                                  )
+                                }
                               >
                                 <Show when={more().isLoading}>
                                   <SpinnerIcon class="size-3 animate-spin" />

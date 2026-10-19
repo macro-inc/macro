@@ -35,6 +35,7 @@ import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
 import { toast } from '@core/component/Toast/Toast';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import { isMobile } from '@core/mobile/isMobile';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { DateSelectArg, DatesSetArg } from '@fullcalendar/core';
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
 import { useUpdateCalendarEventMutation } from '@queries/calendar/mutations';
@@ -174,7 +175,12 @@ function CalendarPageDataStatus(props: {
               variant="accent"
               size="sm"
               label="Retry loading calendar"
-              onClick={() => void props.data.occurrencesQuery.refetch()}
+              onClick={() =>
+                fireAndForget(
+                  props.data.occurrencesQuery.refetch(),
+                  'calendar-view'
+                )
+              }
             >
               Retry
             </Button>
@@ -436,7 +442,7 @@ function CalendarPageHost(props: {
         props.data.occurrencesQuery.isStale &&
         !props.data.occurrencesQuery.isFetching
       ) {
-        void props.data.occurrencesQuery.refetch();
+        fireAndForget(props.data.occurrencesQuery.refetch(), 'calendar-view');
       }
     })
   );

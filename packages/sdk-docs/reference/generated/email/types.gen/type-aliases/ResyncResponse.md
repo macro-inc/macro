@@ -9,4 +9,4 @@ The response returned from the resync endpoint.
 | Property | Type | Description |
 | ------ | ------ | ------ |
 | <a id="property-already_in_progress"></a> `already_in_progress` | `boolean` | True when a backfill was already running and this call was a no-op. |
-| <a id="property-backfill_job_id"></a> `backfill_job_id` | `string` | The backfill job driving the (re-)sync. Either the freshly enqueued job or the one already in progress. |
+| <a id="property-backfill_job_id"></a> `backfill_job_id` | `string` | Opaque ID of the backfill job or provider sync stream driving the resync. the one already in progress. |

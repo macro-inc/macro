@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { bookingTab, bookingTimeRange, filterBookings } from './booking-list';
+import {
+  bookingTab,
+  bookingTimeRange,
+  bookingTimeRangeDisplay,
+  filterBookings,
+} from './booking-list';
 import type { Booking } from './types';
 
 const now = Date.parse('2026-09-18T16:00:00Z');
@@ -81,15 +86,70 @@ describe('booking management', () => {
     expect(rows.map((b) => b.id)).toEqual(['meeting', 'other']);
   });
 
-  it('distinguishes repeated clock times across a daylight-saving transition', () => {
-    const range = bookingTimeRange(
-      booking({
-        startsAt: '2026-11-01T05:30:00Z',
-        endsAt: '2026-11-01T06:30:00Z',
-      }),
-      'America/New_York'
+  it('shows a shared timezone only once in a time range', () => {
+    const source = booking();
+    const time = new Intl.DateTimeFormat(undefined, {
+      timeZone: 'UTC',
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZoneName: 'short',
+    });
+    expect(bookingTimeRange(source, 'UTC')).toBe(
+      time.formatRange(new Date(source.startsAt), new Date(source.endsAt))
     );
-    expect(range).toContain('EDT');
-    expect(range).toContain('EST');
+    const display = bookingTimeRangeDisplay(source, 'UTC');
+    expect(display.sharedTimeZone).toBe(true);
+    expect(display.start.timeZone).toBe(display.end.timeZone);
+    expect(display.endDate).toBeUndefined();
+  });
+
+  it('keeps the end date visible for overnight bookings', () => {
+    const source = booking({
+      startsAt: '2026-09-18T23:30:00Z',
+      endsAt: '2026-09-19T00:30:00Z',
+    });
+    const start = new Intl.DateTimeFormat(undefined, {
+      timeZone: 'UTC',
+      hour: 'numeric',
+      minute: '2-digit',
+    }).format(new Date(source.startsAt));
+    const end = new Intl.DateTimeFormat(undefined, {
+      timeZone: 'UTC',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZoneName: 'short',
+    }).format(new Date(source.endsAt));
+    expect(bookingTimeRange(source, 'UTC')).toBe(`${start} – ${end}`);
+    expect(bookingTimeRangeDisplay(source, 'UTC').endDate).toBe(
+      new Intl.DateTimeFormat(undefined, {
+        timeZone: 'UTC',
+        dateStyle: 'medium',
+      }).format(new Date(source.endsAt))
+    );
+  });
+
+  it('distinguishes repeated clock times across a daylight-saving transition', () => {
+    const source = booking({
+      startsAt: '2026-11-01T05:30:00Z',
+      endsAt: '2026-11-01T06:30:00Z',
+    });
+    const time = new Intl.DateTimeFormat(undefined, {
+      timeZone: 'America/New_York',
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZoneName: 'short',
+    });
+    const start = time.format(new Date(source.startsAt));
+    const end = time.format(new Date(source.endsAt));
+    expect(start).not.toBe(end);
+    expect(bookingTimeRange(source, 'America/New_York')).toBe(
+      `${start} – ${end}`
+    );
+    const display = bookingTimeRangeDisplay(source, 'America/New_York');
+    expect(display.sharedTimeZone).toBe(false);
+    expect(display.start.time).toBe(display.end.time);
+    expect(display.start.timeZone).not.toBe(display.end.timeZone);
   });
 });

@@ -129,29 +129,25 @@ function Person(props: {
     let opened: PsdEngine | undefined;
     let sharedEngine: PsdSharing | undefined;
     const open = async () => {
-      try {
-        const bytes = props.server.stored();
-        const fingerprint = await fileFingerprint(bytes);
-        opened = await PsdEngine.open(bytes);
+      const bytes = props.server.stored();
+      const fingerprint = await fileFingerprint(bytes);
+      opened = await PsdEngine.open(bytes);
+      if (closed) return;
+      if (shared) {
+        sharedEngine = await sharePsdEngine(opened, shared, {
+          fingerprint,
+          sessionsTaken: session.collaboration
+            .peers()
+            .map((p) => p.presence.session),
+          delivered: session.delivered,
+        });
         if (closed) return;
-        if (shared) {
-          sharedEngine = await sharePsdEngine(opened, shared, {
-            fingerprint,
-            sessionsTaken: session.collaboration
-              .peers()
-              .map((p) => p.presence.session),
-            delivered: session.delivered,
-          });
-          if (closed) return;
-          sharedEngine.onReplaced(() => setReplaced(true));
-          setSharing(sharedEngine);
-        }
-        setEngine(opened);
-      } catch (e) {
-        setFailure(String(e));
+        sharedEngine.onReplaced(() => setReplaced(true));
+        setSharing(sharedEngine);
       }
+      setEngine(opened);
     };
-    void open();
+    open().catch((e: unknown) => setFailure(String(e)));
     onCleanup(() => {
       closed = true;
       sharedEngine?.close();
@@ -270,14 +266,7 @@ export function CollabFixture(props: {
     }
     setStored(true);
   };
-  const load = async () => {
-    try {
-      await store();
-    } catch (e) {
-      setError(String(e));
-    }
-  };
-  void load();
+  store().catch((e: unknown) => setError(String(e)));
   const people = new Map<string, FixturePerson>();
   const [opened, setOpened] = createSignal<Record<string, number>>({});
   const reopen = (user: string) =>

@@ -6,6 +6,7 @@ import {
 } from '@core/block';
 import { enableFigViewer, isFeatureEnabled } from '@core/constant/featureFlags';
 import { compiledFigModule } from '@core/fig-engine/compiled-module';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { fetchBinaryDocumentData } from '@queries/storage/binary-document';
 import { fetchBinary } from '@service-storage/util/fetchBinary';
 import { err, ok } from 'neverthrow';
@@ -35,7 +36,7 @@ export const definition = defineBlock({
     if (source.type !== 'dss') return LoadErrors.INVALID;
     if (intent !== 'preload' && isFeatureEnabled(enableFigViewer)) {
       // Fetch and compile while storage retrieves the document.
-      void warmEngine();
+      fireAndForget(warmEngine(), 'fig-viewer');
     }
     const maybeDocument = await loadResult(fetchBinaryDocumentData(source.id));
     if (intent === 'preload') {

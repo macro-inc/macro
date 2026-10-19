@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createMemo, createSignal } from 'solid-js';
 import type { SimpleEmoji } from './emoji-catalog';
 
@@ -22,7 +23,7 @@ function loadEmojiCatalog(): Promise<EmojiCatalog> {
 export function resolveEmoji(key: string): string | undefined {
   const loaded = catalog();
   if (!loaded) {
-    void loadEmojiCatalog();
+    fireAndForget(loadEmojiCatalog(), 'emoji');
     return undefined;
   }
   return loaded.resolveEmoji(key);
@@ -38,11 +39,11 @@ export const useEmojiData = () => {
 
   return {
     groups: () => {
-      void loadEmojiCatalog();
+      fireAndForget(loadEmojiCatalog(), 'emoji');
       return groups();
     },
     emojis: () => {
-      void loadEmojiCatalog();
+      fireAndForget(loadEmojiCatalog(), 'emoji');
       return emojis();
     },
     filter: (query: string) => {

@@ -33,6 +33,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { itemToBlockName, resolveBlockAlias } from '@core/constant/allBlocks';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { copyBranchNameToClipboard } from '@core/util/branchName';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { matches } from '@core/util/match';
 import { openExternalUrl } from '@core/util/url';
 import MacroEmbed from '@icon/macro-embed.svg';
@@ -242,15 +243,18 @@ function ImageCoverStrip(props: {
 
     const controller = new AbortController();
     let objectUrl: string | undefined;
-    fetchBinary(presignedUrl, 'blob', { signal: controller.signal }).then(
-      (result) => {
-        if (controller.signal.aborted || result.isErr()) return;
-        const blob = result.value;
-        objectUrl = URL.createObjectURL(
-          new Blob([blob], { type: 'image/svg+xml' })
-        );
-        setSvgObjectUrl(objectUrl);
-      }
+    fireAndForget(
+      fetchBinary(presignedUrl, 'blob', { signal: controller.signal }).then(
+        (result) => {
+          if (controller.signal.aborted || result.isErr()) return;
+          const blob = result.value;
+          objectUrl = URL.createObjectURL(
+            new Blob([blob], { type: 'image/svg+xml' })
+          );
+          setSvgObjectUrl(objectUrl);
+        }
+      ),
+      'document-preview'
     );
 
     onCleanup(() => {
@@ -579,15 +583,18 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
 
   const handleOpenInChat = () => {
     const preview = item();
-    void openChatWithAgent({
-      type: 'document',
-      id: props.documentInfo.id,
-      name:
-        (isAccessiblePreviewItem(preview) ? preview.name : undefined) ??
-        props.documentInfo.name ??
-        '',
-      fileType: targetBlockType(),
-    });
+    fireAndForget(
+      openChatWithAgent({
+        type: 'document',
+        id: props.documentInfo.id,
+        name:
+          (isAccessiblePreviewItem(preview) ? preview.name : undefined) ??
+          props.documentInfo.name ??
+          '',
+        fileType: targetBlockType(),
+      }),
+      'document-preview'
+    );
   };
 
   // Copying an event has to reproduce what the calendar's own copy action
@@ -616,7 +623,7 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
     };
   };
 
-  const handleCopy = () => {
+  const handleCopy = async () => {
     try {
       let hostname = window.location.hostname.replace('www.', '').toLowerCase();
       if (hostname === 'localhost') {
@@ -625,7 +632,7 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
 
       const mentionTarget = calendarMentionTarget();
       if (mentionTarget) {
-        copyCalendarEventMentionTarget(mentionTarget);
+        await copyCalendarEventMentionTarget(mentionTarget);
         return;
       }
 
@@ -640,15 +647,19 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
         ).toString();
         link += `?${queryParams}`;
       }
-      navigator.clipboard.writeText(link);
+      await navigator.clipboard.writeText(link);
       toast.success('Copied document link to clipboard');
     } catch (e) {
       console.error(e);
+      toast.failure('Could not copy link');
     }
   };
 
   const handleCopyBranchName = () => {
-    copyBranchNameToClipboard(props.documentInfo.id);
+    fireAndForget(
+      copyBranchNameToClipboard(props.documentInfo.id),
+      'document-preview'
+    );
   };
 
   const isSplitAlreadyOpen = () => {
@@ -712,7 +723,7 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
           class="min-w-0 text-left wrap-anywhere rounded-sm hover:underline focus-visible:outline-2 focus-visible:outline-accent"
           onClick={(event) => {
             event.stopPropagation();
-            void openDocument(event);
+            fireAndForget(openDocument(event), 'document-preview');
           }}
         >
           {local.name}
@@ -776,7 +787,11 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
               </Dropdown.Item>
             </Show>
             <Show when={isOpenable() && !isSplitAlreadyOpen()}>
-              <Dropdown.Item onSelect={() => void openInNewSplit()}>
+              <Dropdown.Item
+                onSelect={() =>
+                  fireAndForget(openInNewSplit(), 'document-preview')
+                }
+              >
                 <ColumnsPlusRight class="size-4" />
                 Open in New Split
               </Dropdown.Item>

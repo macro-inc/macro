@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { Show } from 'solid-js';
 import { useProperty } from '../../core/context';
 import { PropertyEmpty } from '../../extractors/PropertyEmpty';
@@ -25,7 +26,7 @@ export function InlineNumberEditor() {
   const handleKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      editor.save();
+      fireAndForget(editor.save(), 'property-editor');
     } else if (e.key === 'Escape') {
       e.preventDefault();
       editor.cancelEdit();

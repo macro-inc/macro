@@ -24,7 +24,15 @@ export function mountGlobalFocusListener(withDebug?: boolean) {
   onMount(() => {
     document.addEventListener('focusin', setDirty);
     document.addEventListener('focusout', setDirty);
+    // Removing a focused editor (or one of its ancestors) does not reliably
+    // emit focusout. Reconcile after DOM changes so consumers cannot keep
+    // treating a detached search input/composer as the active editor.
+    const observer = new MutationObserver(() => {
+      if (rawActiveElement() !== document.activeElement) setDirty();
+    });
+    observer.observe(document, { childList: true, subtree: true });
     onCleanup(() => {
+      observer.disconnect();
       document.removeEventListener('focusin', setDirty);
       document.removeEventListener('focusout', setDirty);
     });

@@ -1,6 +1,7 @@
 use async_graphql::ID;
 use calendar_events::domain::models::{
-    AttendeeResponseStatus, EventStatus, EventTime, OccurrenceException,
+    AttendeeResponseStatus, CalendarCapabilities, CalendarProvider, EventStatus, EventTime,
+    OccurrenceException,
 };
 use chrono::NaiveDate;
 
@@ -102,6 +103,8 @@ fn visible_calendar_maps_its_link() {
         is_writable: true,
         is_subscription: false,
         sync_error: None,
+        provider: CalendarProvider::Google,
+        capabilities: CalendarCapabilities::google(),
         default_reminders: vec![EventReminderOverride {
             method: "popup".to_owned(),
             minutes: 10,
@@ -111,4 +114,88 @@ fn visible_calendar_maps_its_link() {
     assert_eq!(calendar.id, ID(uuid::Uuid::from_u128(5).to_string()));
     assert_eq!(calendar.link_id, ID(LINK_ID.to_string()));
     assert_eq!(calendar.default_reminders[0].minutes, 10);
+    assert_eq!(calendar.provider, GraphqlCalendarProvider::Google);
+    assert_eq!(calendar.capabilities, CalendarCapabilities::google().into());
+}
+
+#[test]
+fn event_mapping_preserves_teams_and_per_calendar_source_content() {
+    let mut event = crate::test_fixtures::series_event();
+    event.conference_provider = Some(ConferenceProvider::MicrosoftTeams);
+    event.conference_url = Some("https://teams.microsoft.com/meet/example".to_owned());
+    let source = CalendarEventSourceContent {
+        calendar_id: Uuid::from_u128(0x44),
+        title: "Shared calendar title".to_owned(),
+        description: Some("Shared calendar description".to_owned()),
+        location: Some("Room B".to_owned()),
+        event_type: EventType::OutOfOffice,
+        visibility: EventVisibility::Private,
+        transparency: EventTransparency::Transparent,
+        is_read_only: true,
+        reminders: EventReminders {
+            use_default: false,
+            overrides: vec![EventReminderOverride {
+                method: "email".to_owned(),
+                minutes: 20,
+            }],
+        },
+        creator_email: Some("creator@example.com".to_owned()),
+        creator_name: Some("Creator".to_owned()),
+    };
+    event.sources.push(source.clone());
+
+    let mapped = GraphqlCalendarEvent::new(event, LINK_ID);
+
+    assert_eq!(
+        mapped.conference_provider,
+        Some(GraphqlCalendarConferenceProvider::MicrosoftTeams)
+    );
+    assert_eq!(
+        mapped.conference_url.as_deref(),
+        Some("https://teams.microsoft.com/meet/example")
+    );
+    assert_eq!(mapped.title, "Standup");
+    assert!(!mapped.is_read_only);
+    assert_eq!(
+        mapped.sources,
+        vec![GraphqlCalendarEventSource {
+            calendar_id: ID(source.calendar_id.to_string()),
+            title: source.title,
+            description: source.description,
+            location: source.location,
+            event_type: GraphqlCalendarEventType::OutOfOffice,
+            visibility: GraphqlCalendarEventVisibility::Private,
+            transparency: GraphqlCalendarEventTransparency::Transparent,
+            is_read_only: true,
+            reminders: GraphqlCalendarReminders {
+                use_default: false,
+                overrides: vec![GraphqlCalendarReminderOverride {
+                    method: "email".to_owned(),
+                    minutes: 20
+                }],
+            },
+            creator_email: source.creator_email,
+            creator_name: source.creator_name,
+        }]
+    );
+}
+
+#[test]
+fn timed_point_occurrences_keep_equal_start_and_end() {
+    let mut listing = timed_listing(7);
+    let EventTime::Timed {
+        starts_at, ends_at, ..
+    } = &mut listing.occurrence.time
+    else {
+        panic!("expected a timed occurrence");
+    };
+    *ends_at = *starts_at;
+
+    let occurrence = occurrence_nodes(vec![listing]).remove(0);
+
+    let GraphqlEventTime::Timed(time) = occurrence.time else {
+        panic!("expected a timed GraphQL occurrence");
+    };
+    assert_eq!(time.starts_at, "2026-10-07T15:00:00+00:00");
+    assert_eq!(time.ends_at, time.starts_at);
 }

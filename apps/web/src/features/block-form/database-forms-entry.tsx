@@ -7,6 +7,7 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import ClipboardText from '@phosphor/clipboard-text.svg';
 import { createForm, useFormsForDatabaseQuery } from '@queries/storage/forms';
 import { Dropdown } from '@ui';
@@ -132,7 +133,7 @@ function DatabaseFormsMenu(props: {
           <Dropdown.Item
             disabled={creating()}
             closeOnSelect={false}
-            onSelect={() => void createFromTable()}
+            onSelect={() => fireAndForget(createFromTable(), 'database-forms')}
           >
             <ClipboardText class="size-4 text-violet" aria-hidden="true" />
             {creating() ? 'Creating form…' : 'New form'}

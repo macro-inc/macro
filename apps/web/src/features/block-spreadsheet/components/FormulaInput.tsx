@@ -15,6 +15,7 @@ import {
   argumentLabel,
   formulaFunctions,
   functionSummary,
+  type TableReferences,
 } from '../core/formula-completion';
 import type {
   FormulaReferenceSpan,
@@ -37,6 +38,8 @@ export type FormulaInputProps = {
   autoFocus?: boolean;
   placeholder?: string;
   complete?: CompleteFormula;
+  /** Tables whose names and columns formulas complete. */
+  tableReferences?: () => TableReferences | undefined;
   selectionRequest?: FormulaTextSelection;
   /** Spans of `value` to draw in their reference's color. */
   references?: FormulaReferenceSpan[];
@@ -98,12 +101,17 @@ function FormulaTextarea(props: FormulaInputProps & { typed?: boolean }) {
       input.focus({ preventScroll: true });
       input.setSelectionRange(cursor, cursor);
       update();
-    }
+    },
+    () => props.tableReferences?.()
   );
   const result = assistance.completion;
   const choices = () => {
     const value = result();
     return value?.kind === 'list' ? value.names : [];
+  };
+  const references = () => {
+    const value = result();
+    return value?.kind === 'references' ? value.items : [];
   };
   const name = () => {
     const value = result();
@@ -112,6 +120,11 @@ function FormulaTextarea(props: FormulaInputProps & { typed?: boolean }) {
       : choices()[assistance.selected()];
   };
   const info = () => formulaFunctions[name()];
+  const referencesVisible = () =>
+    focused() &&
+    !props.readonly &&
+    !props.pickingReference &&
+    references().length > 0;
   const popupVisible = () =>
     focused() && !props.readonly && !props.pickingReference && !!info();
   const argument = () => {
@@ -165,10 +178,12 @@ function FormulaTextarea(props: FormulaInputProps & { typed?: boolean }) {
         aria-label={props.label}
         aria-autocomplete="list"
         aria-controls={
-          popupVisible() && choices().length ? `${id}-list` : undefined
+          (popupVisible() && choices().length) || referencesVisible()
+            ? `${id}-list`
+            : undefined
         }
         aria-activedescendant={
-          popupVisible() && choices().length
+          (popupVisible() && choices().length) || referencesVisible()
             ? `${id}-${assistance.selected()}`
             : undefined
         }
@@ -232,6 +247,59 @@ function FormulaTextarea(props: FormulaInputProps & { typed?: boolean }) {
             references={references()}
           />
         )}
+      </Show>
+      <Show when={referencesVisible()}>
+        <Portal>
+          <EditorPopup
+            anchor={input}
+            interactive
+            class="w-72"
+            onReady={(element) => {
+              popup = element;
+            }}
+            onOutsidePress={dismiss}
+          >
+            <div
+              id={`${id}-list`}
+              role="listbox"
+              aria-label="Formula suggestions"
+              class="min-h-0 max-h-48 shrink overflow-y-auto overscroll-contain p-1"
+            >
+              <For each={references()}>
+                {(item, index) => {
+                  const press = createTouchPress(
+                    () => assistance.accept(index()),
+                    () => props.readonly ?? false
+                  );
+                  return (
+                    <div
+                      {...press}
+                      id={`${id}-${index()}`}
+                      role="option"
+                      aria-selected={assistance.selected() === index()}
+                      class="flex items-center gap-2 rounded px-2 py-1 text-xs touch:min-h-[44px] touch:text-sm"
+                      classList={{
+                        'bg-accent-bg text-accent':
+                          assistance.selected() === index(),
+                        'text-ink hover:bg-hover':
+                          assistance.selected() !== index(),
+                      }}
+                      onPointerMove={(event) => {
+                        press.onPointerMove(event);
+                        assistance.setSelected(index());
+                      }}
+                    >
+                      <span class="font-mono font-semibold">{item.label}</span>
+                      <span class="truncate text-[11px] text-ink-muted">
+                        {item.detail}
+                      </span>
+                    </div>
+                  );
+                }}
+              </For>
+            </div>
+          </EditorPopup>
+        </Portal>
       </Show>
       <Show when={popupVisible()}>
         <Portal>

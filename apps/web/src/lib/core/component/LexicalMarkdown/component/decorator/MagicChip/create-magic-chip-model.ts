@@ -15,6 +15,7 @@ import { describeToolCall } from '@app/features/block-agent/state/tool-approval-
 import { AgentSession } from '@core/agent-session/AgentSession';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   MAGIC_CHIP_STATUSES,
   type MagicChipData,
@@ -158,7 +159,7 @@ export function createMagicChipModel(props: MagicChipData): {
       if (!released) setLoading(false);
     }
   }
-  void loadSession();
+  fireAndForget(loadSession(), 'magic-chip');
 
   onCleanup(() => {
     released = true;

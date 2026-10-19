@@ -12,7 +12,6 @@ import GaugeIcon from '@phosphor/gauge.svg';
 import HardDrivesIcon from '@phosphor/hard-drives.svg';
 import KeyIcon from '@phosphor/key.svg';
 import KeyboardIcon from '@phosphor/keyboard.svg';
-import LinkIcon from '@phosphor/link.svg';
 import PlugIcon from '@phosphor/plug.svg';
 import PlugsConnectedIcon from '@phosphor/plugs-connected.svg';
 import BotIcon from '@phosphor/robot.svg';
@@ -83,12 +82,6 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
         label: 'Calendar',
         icon: CalendarIcon,
         keywords: ['google', 'accounts', 'visibility', 'colors'],
-      },
-      {
-        tab: 'Booking links',
-        label: 'Booking links',
-        icon: LinkIcon,
-        keywords: ['scheduling', 'bookings', 'availability', 'meetings'],
       },
       {
         tab: 'Agents',
@@ -248,7 +241,6 @@ const SETTINGS_TAB_SLUGS: Record<SettingsTab, string> = {
   Bots: 'bots',
   Team: 'team',
   Calendar: 'calendar',
-  'Booking links': 'booking-links',
   Tags: 'tags',
   CRM: 'crm',
   Connected: 'connections',
@@ -303,7 +295,6 @@ export const useSettingsTabAvailable = () => {
       case 'Email':
         return ENABLE_EMAIL;
       case 'Calendar':
-      case 'Booking links':
         return calendarSchedulingFlag().enabled;
       // Issuing and copying a key is desk work, and the mobile sheet has no
       // good place for a one-time secret.

@@ -4,6 +4,7 @@
  * Everything picked goes into the equation's linear text at its caret.
  */
 
+import { fireAndForget } from '@core/util/fireAndForget';
 import MathOperations from '@phosphor/math-operations.svg';
 import TextAa from '@phosphor/text-aa.svg';
 import { createSignal, For, onCleanup, onMount, Show } from 'solid-js';
@@ -37,9 +38,12 @@ export function EquationThumb(props: {
   });
   onMount(() => {
     matchInk(props.editor, el);
-    void props.editor.thumbnail(props.latex).then((p) => {
-      if (alive) setPicture(p);
-    });
+    fireAndForget(
+      props.editor.thumbnail(props.latex).then((p) => {
+        if (alive) setPicture(p);
+      }),
+      'pptx-editor'
+    );
   });
   return (
     <span ref={el} class="flex min-h-6 items-center justify-center text-ink">

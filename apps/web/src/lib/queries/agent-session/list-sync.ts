@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { refreshSoupEntities } from '@queries/soup/refresh';
 
 const changedSessions = new Set<string>();
@@ -38,7 +39,9 @@ export function refreshAgentSessionLists(sessionId: string): Promise<void> {
 
   if (!pending) {
     pending = new Promise<void>((resolve) => {
-      queueMicrotask(() => void refreshQueuedLists(resolve));
+      queueMicrotask(() =>
+        fireAndForget(refreshQueuedLists(resolve), 'agent-session-lists')
+      );
     });
   }
   return pending;

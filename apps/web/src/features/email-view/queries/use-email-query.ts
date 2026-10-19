@@ -68,22 +68,25 @@ function emailMatchesTab(
   tab: EmailTab,
   userId: string | undefined
 ): boolean {
-  return match(tab)
-    .with('drafts', () => entity.isDraft)
-    .with('archived', () => entity.done === true)
-    .with('shared', () => userId !== undefined && entity.ownerId !== userId)
-    .with(
-      'important',
-      'noise',
-      'favorites',
-      'sent',
-      'scheduled',
-      'reminders',
-      'calendar',
-      'all',
-      () => true
-    )
-    .exhaustive();
+  return (
+    match(tab)
+      .with('drafts', () => entity.isDraft)
+      .with('archived', () => entity.done === true)
+      .with('shared', () => userId !== undefined && entity.ownerId !== userId)
+      // The inbox views list only threads still in the inbox; a cached page can
+      // carry a row whose record was archived after the page was fetched.
+      .with('important', 'noise', () => entity.done !== true)
+      .with(
+        'favorites',
+        'sent',
+        'scheduled',
+        'reminders',
+        'calendar',
+        'all',
+        () => true
+      )
+      .exhaustive()
+  );
 }
 
 type AdmittedEmails = {

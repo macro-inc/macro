@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 export type KanbanAnimationItem = {
   /** Unique placement, including the lane for cards with several placements. */
   key: string;
@@ -203,7 +204,7 @@ export function createKanbanAnimation(options: {
         }
       }
     };
-    void finish();
+    fireAndForget(finish(), 'kanban-animation');
   }
 
   function fly(

@@ -2,6 +2,7 @@ import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { UserIcon } from '@core/component/UserIcon';
 import { useAuthor, useUserId } from '@core/context/user';
 import { getDisplayName, tryMacroId } from '@core/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import ChatIcon from '@phosphor/chat-circle.svg';
 import { cn, InlineCheckbox, Tooltip } from '@ui';
 import type { RemoteParticipant, Track } from 'livekit-client';
@@ -14,7 +15,6 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
-
 import { useCallContext } from './CallContext';
 import { CallControls } from './CallControls/CallControls';
 import {
@@ -418,7 +418,7 @@ export function CallOverlay(props: {
           >
             <button
               type="button"
-              onClick={() => void teamShare.toggle()}
+              onClick={() => fireAndForget(teamShare.toggle(), 'channel-call')}
               disabled={teamShareLocked()}
               role="checkbox"
               aria-checked={sharedWithTeam()}

@@ -6,13 +6,14 @@ use calendar_events::domain::{
         CalendarChangeQueryService, CalendarChangesPage, CalendarEventChange, CalendarWatermark,
         EventOccurrence,
     },
+    meeting_links::{CreateEventWithMacroCallError, MeetingLinkError},
     models::{
         AttendeeResponseStatus, CalendarEvent, CalendarEventDraft, CalendarEventPatch,
         ConferenceChange, EventTime, EventVisibility, OutOfOfficeAutoDeclineMode, VisibleCalendar,
     },
     ports::{
-        CalendarDeletionScope, CalendarMutationError, CalendarMutationService, CalendarRsvpScope,
-        CalendarUpdateScope,
+        CalendarDeletionScope, CalendarMacroCallService, CalendarMutationError,
+        CalendarMutationService, CalendarRsvpScope, CalendarUpdateScope,
     },
 };
 use chrono::{NaiveDate, TimeZone, Utc};
@@ -32,6 +33,7 @@ const VIEWER: &str = "macro|viewer@example.com";
 #[derive(Debug, PartialEq)]
 enum Call {
     Create(Option<Uuid>, Option<Uuid>, CalendarEventDraft),
+    CreateWithMeeting(Option<Uuid>, Option<Uuid>, CalendarEventDraft),
     Update(Uuid, Option<Uuid>, CalendarEventPatch, CalendarUpdateScope),
     Delete(Uuid, Option<Uuid>, CalendarDeletionScope),
     Rsvp(
@@ -47,6 +49,8 @@ enum Call {
 struct FakeMutations {
     calls: Mutex<Vec<(String, Call)>>,
     failure: Mutex<Option<CalendarMutationError>>,
+    /// Fails the next Macro call before any calendar write.
+    meeting_failure: Mutex<Option<MeetingLinkError>>,
 }
 
 impl FakeMutations {
@@ -128,6 +132,25 @@ impl CalendarMutationService for FakeMutations {
         _email_link_id: Uuid,
     ) -> Result<(), CalendarMutationError> {
         unreachable!("disconnecting a calendar is not a GraphQL mutation")
+    }
+}
+
+impl CalendarMacroCallService for FakeMutations {
+    async fn create_event_with_macro_call(
+        &self,
+        requester_id: &str,
+        email_link_id: Option<Uuid>,
+        calendar_id: Option<Uuid>,
+        draft: CalendarEventDraft,
+    ) -> Result<CalendarEvent, CreateEventWithMacroCallError> {
+        if let Some(error) = self.meeting_failure.lock().unwrap().take() {
+            return Err(error.into());
+        }
+        self.record(
+            requester_id,
+            Call::CreateWithMeeting(email_link_id, calendar_id, draft),
+        )?;
+        Ok(series_event())
     }
 }
 
@@ -297,6 +320,170 @@ async fn create_maps_the_input_and_answers_with_the_committed_event() {
         *committed.reads.lock().unwrap(),
         vec![(VIEWER.to_owned(), EVENT_ID)]
     );
+}
+
+#[tokio::test]
+async fn create_and_update_forward_conference_changes_without_losing_calendar_selection() {
+    let calendar = Uuid::from_u128(0xca);
+    let cases = [
+        (
+            "conference: MICROSOFT_TEAMS",
+            Some(ConferenceChange::MicrosoftTeams),
+        ),
+        (
+            "conference: GOOGLE_MEET",
+            Some(ConferenceChange::GoogleMeet),
+        ),
+        ("conference: NONE", Some(ConferenceChange::Removed)),
+        ("conference: null", None),
+        ("", None),
+    ];
+    for (conference, expected) in cases {
+        let mutations = Arc::new(FakeMutations::default());
+        let committed = Arc::new(FakeCommitted {
+            change: Some(committed_change()),
+            ..Default::default()
+        });
+        let response = execute(
+            Arc::clone(&mutations),
+            committed,
+            &format!(r#"mutation {{
+                createCalendarEvent(input: {{
+                    calendarId: "{calendar}", emailLinkId: "{LINK_ID}", title: "Meeting",
+                    time: {{ timed: {{ startsAt: "2026-10-06T15:00:00Z", endsAt: "2026-10-06T15:30:00Z" }} }},
+                    {conference}
+                }}) {{ event {{ id }} }}
+                updateCalendarEvent(input: {{
+                    eventId: "{EVENT_ID}", calendarId: "{calendar}", {conference}
+                }}) {{ event {{ id }} }}
+            }}"#),
+            true,
+        ).await;
+
+        assert!(
+            response.errors.is_empty(),
+            "{conference}: {:?}",
+            response.errors
+        );
+        let calls = mutations.calls.lock().unwrap();
+        assert_eq!(calls.len(), 2);
+        let (viewer, Call::Create(link_id, calendar_id, draft)) = &calls[0] else {
+            panic!("expected a create");
+        };
+        assert_eq!(viewer, VIEWER);
+        assert_eq!(*link_id, Some(LINK_ID));
+        assert_eq!(*calendar_id, Some(calendar));
+        assert_eq!(draft.conference, expected);
+        let (viewer, Call::Update(event_id, calendar_id, patch, scope)) = &calls[1] else {
+            panic!("expected an update");
+        };
+        assert_eq!(viewer, VIEWER);
+        assert_eq!(*event_id, EVENT_ID);
+        assert_eq!(*calendar_id, Some(calendar));
+        assert_eq!(*scope, CalendarUpdateScope::All);
+        assert_eq!(patch.conference, expected);
+    }
+}
+
+#[tokio::test]
+async fn create_with_a_macro_call_mints_the_meeting_before_the_calendar_write() {
+    let mutations = Arc::new(FakeMutations::default());
+    let committed = Arc::new(FakeCommitted {
+        change: Some(committed_change()),
+        ..Default::default()
+    });
+    let calendar = Uuid::from_u128(0xca);
+
+    let response = execute(
+        Arc::clone(&mutations),
+        Arc::clone(&committed),
+        &format!(
+            r#"mutation {{ createCalendarEvent(input: {{
+                calendarId: "{calendar}", title: "Lunch", macroCall: true,
+                time: {{ allDay: {{ startDate: "2026-10-06", endDate: "2026-10-07" }} }}
+            }}) {{ {PAYLOAD} }} }}"#
+        ),
+        true,
+    )
+    .await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let data = response.data.into_json().unwrap();
+    assert_eq!(
+        data["createCalendarEvent"]["event"]["id"],
+        EVENT_ID.to_string()
+    );
+    let calls = mutations.calls.lock().unwrap();
+    let (viewer, Call::CreateWithMeeting(email_link_id, calendar_id, draft)) = &calls[0] else {
+        panic!("expected a create carrying a Macro call, got {calls:?}");
+    };
+    assert_eq!(viewer, VIEWER);
+    assert_eq!(*email_link_id, None);
+    assert_eq!(*calendar_id, Some(calendar));
+    assert_eq!(draft.title, "Lunch");
+    assert_eq!(draft.conference, None);
+    assert_eq!(
+        *committed.reads.lock().unwrap(),
+        vec![(VIEWER.to_owned(), EVENT_ID)]
+    );
+}
+
+#[tokio::test]
+async fn a_macro_call_that_cannot_be_minted_fails_the_create_as_retryable() {
+    let mutations = Arc::new(FakeMutations {
+        meeting_failure: Mutex::new(Some(MeetingLinkError::Failed(
+            "call service at 10.0.0.9 returned 502".to_string(),
+        ))),
+        ..Default::default()
+    });
+    let committed = Arc::new(FakeCommitted::default());
+
+    let response = execute(
+        Arc::clone(&mutations),
+        Arc::clone(&committed),
+        &format!(
+            r#"mutation {{ createCalendarEvent(input: {{
+                title: "Lunch", macroCall: true,
+                time: {{ allDay: {{ startDate: "2026-10-06", endDate: "2026-10-07" }} }}
+            }}) {{ {PAYLOAD} }} }}"#
+        ),
+        true,
+    )
+    .await;
+
+    let (message, code, retryable) = error_extensions(&response);
+    assert_eq!(code, Value::from("macro_call_failed"));
+    assert_eq!(retryable, Value::Bool(true));
+    assert!(!message.contains("10.0.0.9"), "{message}");
+    assert!(mutations.calls.lock().unwrap().is_empty());
+    assert!(committed.reads.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_calendar_failure_behind_a_macro_call_keeps_its_own_code() {
+    let mutations = Arc::new(FakeMutations {
+        failure: Mutex::new(Some(CalendarMutationError::NoWritableCalendar)),
+        ..Default::default()
+    });
+    let committed = Arc::new(FakeCommitted::default());
+
+    let response = execute(
+        Arc::clone(&mutations),
+        Arc::clone(&committed),
+        &format!(
+            r#"mutation {{ createCalendarEvent(input: {{
+                title: "Lunch", macroCall: true,
+                time: {{ allDay: {{ startDate: "2026-10-06", endDate: "2026-10-07" }} }}
+            }}) {{ {PAYLOAD} }} }}"#
+        ),
+        true,
+    )
+    .await;
+
+    let (_, code, retryable) = error_extensions(&response);
+    assert_eq!(code, Value::from("no_writable_calendar"));
+    assert_eq!(retryable, Value::Bool(false));
+    assert!(committed.reads.lock().unwrap().is_empty());
 }
 
 #[tokio::test]

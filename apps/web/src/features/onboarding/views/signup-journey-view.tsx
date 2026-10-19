@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { type JSX, onCleanup, Show } from 'solid-js';
 import { GoogleAccountsStep } from '../components/google-accounts-step';
 import {
@@ -90,7 +91,12 @@ export function SignupJourneyView(props: {
                 mode="work"
                 connecting={journey.connecting() ? 'work' : undefined}
                 error={journey.error()}
-                onConnectWork={() => void journey.connectGoogle(props.onGoogle)}
+                onConnectWork={() =>
+                  fireAndForget(
+                    journey.connectGoogle(props.onGoogle),
+                    'onboarding'
+                  )
+                }
                 onConnectPersonal={() => {}}
               />
             }

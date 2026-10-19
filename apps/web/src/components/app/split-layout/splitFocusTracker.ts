@@ -1,5 +1,6 @@
 import { activeElement } from '@app/signal/focus';
 import { splitContainerSelector } from '@core/dom-selectors';
+import { isEditableInput } from '@core/util/isEditableInput';
 import { type Accessor, createEffect, on, onCleanup } from 'solid-js';
 import {
   SplitEvent,
@@ -115,6 +116,24 @@ export function createSplitFocusTracker(props: {
   };
 
   const focusFromEvent = (event: SplitEventWithType) => {
+    // Navigation can finish after app chrome has focused its search input.
+    // Preserve that editing session; explicit ReturnFocus still takes the pane.
+    const active = document.activeElement;
+    if (
+      isEditableInput(active) &&
+      !Array.from(props.panelRefs.values()).some((panel) =>
+        panel.contains(active)
+      )
+    ) {
+      if (
+        event.type === SplitEvent.Remove &&
+        !props.splits().some((split) => split.id === activeSplitId())
+      ) {
+        const next = findNextSplitToActivate(event.splitIndex);
+        if (next) props.splitManager.activateSplit(next);
+      }
+      return;
+    }
     switch (event.type) {
       case SplitEvent.Insert: {
         if (event.activate === false) break;

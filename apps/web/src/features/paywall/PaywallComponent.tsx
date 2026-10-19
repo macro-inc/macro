@@ -4,6 +4,7 @@ import { enableAiUsageBilling } from '@core/constant/featureFlags';
 import { type PaywallKey, PaywallMessages } from '@core/constant/PaywallState';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserId } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   useAiBillingSummaryQuery,
   useTrialEligibilityQuery,
@@ -72,8 +73,8 @@ const PaywallComponent = (props: PaywallProps) => {
         openSettings('Billing');
       }}
       onRetry={() => {
-        void team.refetch();
-        void summary.refetch();
+        fireAndForget(team.refetch(), 'paywall');
+        fireAndForget(summary.refetch(), 'paywall');
       }}
     />
   );

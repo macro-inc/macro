@@ -76,7 +76,7 @@ export function joinChannelByCodeMutationOptions(
     ...withCallbacks<void, Error, JoinChannelByCodeArgs, undefined>(
       {
         onSuccess() {
-          void queryClient.invalidateQueries({
+          queryClient.invalidateQueries({
             queryKey: channelKeys.listChannels.queryKey,
           });
         },
@@ -119,15 +119,15 @@ export function joinChannelMutationOptions(callbacks?: JoinChannelCallbacks) {
     ...withCallbacks<void, Error, JoinChannelArgs, undefined>(
       {
         onSuccess() {
-          void queryClient.invalidateQueries({
+          queryClient.invalidateQueries({
             queryKey: channelKeys.listChannels.queryKey,
           });
           // Refetch soup so the joined channel's is_participant flips and its
           // Join affordance disappears.
-          void queryClient.invalidateQueries({
+          queryClient.invalidateQueries({
             queryKey: soupKeys.items._def,
           });
-          void queryClient.invalidateQueries({
+          queryClient.invalidateQueries({
             queryKey: soupKeys.astItems._def,
           });
         },

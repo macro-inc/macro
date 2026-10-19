@@ -5,6 +5,7 @@ import {
   enableGraphqlSoup,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
 import { optimisticMutationDispositionOf } from '@graphql-cache/exchange/optimistic';
 import {
@@ -433,7 +434,7 @@ export function useDeleteEntityPropertyMutation(
       {
         onSuccess: (_data, variables) => {
           // The removed row may have been a Companies or Contacts value.
-          void refreshCrmAssociatedSoupQueries();
+          fireAndForget(refreshCrmAssociatedSoupQueries(), 'entity-properties');
           return invalidatePropertiesForEntity(
             variables.entityType,
             variables.entityId
@@ -942,7 +943,10 @@ const CRM_ASSOCIATION_PROPERTY_IDS: readonly string[] = [
 function invalidatePropertySaveCaches(
   item: BulkSaveEntityPropertiesParams['properties'][number]
 ): void {
-  void invalidatePropertiesForEntity(item.entityType, item.entityId);
+  fireAndForget(
+    invalidatePropertiesForEntity(item.entityType, item.entityId),
+    'entity-properties'
+  );
   invalidateSoupEntity(item.entityId);
   // CRM record lists resolve membership on the server, not from these rows.
   if (
@@ -950,7 +954,7 @@ function invalidatePropertySaveCaches(
       getPropertyDefinitionId(item.property)
     )
   ) {
-    void refreshCrmAssociatedSoupQueries();
+    fireAndForget(refreshCrmAssociatedSoupQueries(), 'entity-properties');
   }
 }
 

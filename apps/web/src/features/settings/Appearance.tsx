@@ -1,6 +1,8 @@
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { DropdownMenu as KobalteDropdownMenu } from '@kobalte/core/dropdown-menu';
 import ClipboardIcon from '@phosphor/clipboard.svg';
+import DownloadIcon from '@phosphor/download-simple.svg';
 import PencilIcon from '@phosphor/pencil-simple.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import TrashIcon from '@phosphor/trash.svg';
@@ -27,6 +29,7 @@ import {
   deleteTheme,
   exportTheme,
   getLiveTheme,
+  importThemeFromClipboard,
   previewTheme,
   resolveActiveThemeId,
   saveTheme,
@@ -61,8 +64,7 @@ function CopyThemeButton(props: { themeId: string; name: string }) {
         onClick={(e) => {
           e.preventDefault();
           e.stopPropagation();
-          exportTheme(props.themeId);
-          toast.success('Theme copied to clipboard');
+          fireAndForget(exportTheme(props.themeId), 'theme-export');
         }}
       >
         <ClipboardIcon class="size-3.5 mobile:size-5" />
@@ -442,6 +444,16 @@ function InterfaceThemeSelect(props: {
                 <span class="flex items-center gap-2 text-ink-muted">
                   <PlusIcon class="size-4" />
                   New theme
+                </span>
+              </Dropdown.Item>
+              <Dropdown.Item
+                class="touch:min-h-10"
+                onSelect={() => importThemeFromClipboard()}
+                onFocus={clearThemePreview}
+              >
+                <span class="flex items-center gap-2 text-ink-muted">
+                  <DownloadIcon class="size-4" />
+                  Import from clipboard
                 </span>
               </Dropdown.Item>
             </Dropdown.Group>

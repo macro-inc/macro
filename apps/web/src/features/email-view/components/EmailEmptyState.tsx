@@ -1,5 +1,6 @@
 import { DOCS_BASE } from '@app/constants/docs-links';
 import { useAddInboxFlow, useEmailLinksStatus } from '@core/email-link';
+import { fireAndForget } from '@core/util/fireAndForget';
 import EmptyStateEmailGraphic from '@design/empty-state-email.svg';
 import EmptyStateInboxTrayGraphic from '@design/empty-state-inbox-tray.svg';
 import EmptyStateNoFilterMatchGraphic from '@design/empty-state-no-filter-match.svg';
@@ -85,7 +86,7 @@ export function EmailEmptyState() {
           description="Bring your inbox into Macro to triage signal from noise, reply faster, and let agents work alongside your mail."
           primaryAction={{
             label: 'Connect email',
-            onClick: () => void startAddInbox(),
+            onClick: () => fireAndForget(startAddInbox(), 'add-inbox'),
           }}
           documentationUrl={EMAIL_DOCS_URL}
         />

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO email_pending_mailbox_state (message_id,attribute,command_id,desired)\n            SELECT $1,key,$2,value FROM jsonb_each($3)\n            ON CONFLICT (message_id,attribute) DO UPDATE SET command_id = EXCLUDED.command_id,desired = EXCLUDED.desired\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "54fe0f5a336a023a06d65817e800f30034a4a7ef579f932f29db392f6a1a49dd"
+}

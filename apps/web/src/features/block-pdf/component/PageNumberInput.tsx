@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createCallback } from '@solid-primitives/rootless';
 import { cn } from '@ui';
 import { createEffect, createSignal, onCleanup, Show } from 'solid-js';
@@ -28,7 +29,7 @@ export function PageNumberInput() {
   const onBlur = createCallback((_e: FocusEvent) => {
     const pageNumber = parseInt(intermediateVal(), 10);
     if (Number.isInteger(pageNumber)) {
-      getRootViewer()?.scrollTo({ pageNumber });
+      fireAndForget(getRootViewer()?.scrollTo({ pageNumber }), 'pdf-viewer');
     } else if (inputRef) {
       inputRef.value = currentPageNumber().toString();
     }

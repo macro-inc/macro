@@ -15,6 +15,7 @@ import { SidePanel } from '@components/app/side-panel';
 import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
 import { SplitPanel } from '@components/app/split-panel';
 import { Permissions } from '@core/component/SharePermissions';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { onMount } from 'solid-js';
 
 function ReviewsPrBreadcrumb(props: {
@@ -105,7 +106,9 @@ export function ReviewsPrDetail(props: { foreignEntityId: string }) {
               data={detail.data()}
               status={detail.query.status}
               discussionSource={detail.discussionSource}
-              onRetry={() => void detail.query.refetch()}
+              onRetry={() =>
+                fireAndForget(detail.query.refetch(), 'reviews-view')
+              }
             />
           </div>
         </ChangesSplit>

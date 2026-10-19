@@ -1,6 +1,6 @@
 const RETURN_LAYOUT_KEY = 'macro:inbox-link:return-layout';
 
-/** Where the app should land once the Gmail consent round trip comes back. */
+/** Where the app should land once the inbox consent round trip comes back. */
 export type InboxLinkReturn = {
   /**
    * The base-relative layout URL the flow started from — path plus query and
@@ -13,15 +13,15 @@ export type InboxLinkReturn = {
 type StoredInboxLinkReturn = InboxLinkReturn & { linkId: string };
 
 /**
- * Remember where to return once Gmail consent completes.
+ * Remember where to return once inbox consent completes.
  *
- * On web and desktop the consent screen is a full page navigation, so the app
- * — split layout included — is torn down and rebuilt from the callback URL.
+ * Web consent is a full page navigation; desktop opens the system browser and
+ * its return deep link replaces the app route with the callback URL.
  * The layout lives in the URL, so stashing it here is what lets the callback
  * put the user back where they were instead of falling back to a default.
  *
  * `sessionStorage` rather than the OAuth `state`: the layout path carries
- * document and channel ids, and `state` is handed to Google.
+ * document and channel ids, and `state` is handed to the provider.
  *
  * Keyed by the link id the init call minted, which the callback receives back
  * as `link_id`, so an abandoned flow's leftovers can't hijack a later one.

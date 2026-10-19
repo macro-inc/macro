@@ -27,6 +27,7 @@ import {
   readSession,
   type SessionFoldSnapshot,
 } from '@core/agent-fold/client';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   AgentSessionLogUnavailable,
   canFollowAgentSessionLog,
@@ -198,8 +199,11 @@ export class AgentSession {
   static ingest(event: AgentSessionLogEvent): void {
     const session = AgentSession.open.get(event.agentSessionId);
     if (!session || session.followed) return;
-    void session.enqueueAll(
-      event.entries.map((row) => ({ kind: 'confirmed', row }))
+    fireAndForget(
+      session.enqueueAll(
+        event.entries.map((row) => ({ kind: 'confirmed', row }))
+      ),
+      'agent-session'
     );
   }
 
@@ -270,15 +274,18 @@ export class AgentSession {
     // Subscribed before the fetch so no row between the two is lost: rows
     // that arrive during the load are buffered and folded after the snapshot.
     this.unsubscribeSocket = subscribeSocketSessionStarted(() => {
-      void this.resync();
+      fireAndForget(this.resync(), 'agent-session');
     });
     this.unsubscribeUpdated = subscribeAgentSessionUpdated((event) => {
-      if (event.agentSessionId === this.id) void this.resync();
+      if (event.agentSessionId === this.id)
+        fireAndForget(this.resync(), 'agent-session');
     });
     // The subscription survives a reconnect, but not the rows published
     // while the socket was down.
     this.unsubscribeReconnected = this.followed
-      ? subscribeGraphqlSoupReconnected(() => void this.resync())
+      ? subscribeGraphqlSoupReconnected(() =>
+          fireAndForget(this.resync(), 'agent-session')
+        )
       : () => undefined;
     this.trace = new SessionLoadTrace(id);
     this.watch = this.openWatch();
@@ -303,11 +310,14 @@ export class AgentSession {
       this.followed
         ? {
             rows: (rows) => {
-              void this.enqueueAll(
-                rows.map((row) => ({ kind: 'confirmed', row }))
+              fireAndForget(
+                this.enqueueAll(
+                  rows.map((row) => ({ kind: 'confirmed', row }))
+                ),
+                'agent-session'
               );
             },
-            gap: () => void this.resync(),
+            gap: () => fireAndForget(this.resync(), 'agent-session'),
           }
         : undefined
     );
@@ -382,12 +392,15 @@ export class AgentSession {
       // window would both speculate - the second one showing a bubble the
       // server's `queued` then takes away again.
       if (occupiesTurn(action)) this.setTurn('starting');
-      void this.enqueue({
-        kind: 'speculated',
-        actionId,
-        action,
-        userId: options.userId,
-      });
+      fireAndForget(
+        this.enqueue({
+          kind: 'speculated',
+          actionId,
+          action,
+          userId: options.userId,
+        }),
+        'agent-session'
+      );
     }
 
     // The harness adopts the id the client speculated under; the response
@@ -399,29 +412,38 @@ export class AgentSession {
 
     if (!speculated) return result;
     if (result.isErr()) {
-      void this.enqueue({ kind: 'retracted', actionId });
+      fireAndForget(
+        this.enqueue({ kind: 'retracted', actionId }),
+        'agent-session'
+      );
       return result;
     }
     // Queued after all: the turn opened between the check and the POST. The
     // harness logs the row only when the queue dispatches it, so holding the
     // speculation would show an open turn for the whole wait.
     if (result.value.status === 'queued') {
-      void this.enqueue({ kind: 'retracted', actionId });
+      fireAndForget(
+        this.enqueue({ kind: 'retracted', actionId }),
+        'agent-session'
+      );
       return result;
     }
     // A stop is a notification and carries no id on the wire, so the log
     // confirms it by content whatever id the harness accepted it under.
     const accepted = result.value.actionId;
     if (accepted !== actionId && action.type !== 'stop') {
-      void this.enqueueAll([
-        { kind: 'retracted', actionId },
-        {
-          kind: 'speculated',
-          actionId: accepted,
-          action,
-          userId: options.userId,
-        },
-      ]);
+      fireAndForget(
+        this.enqueueAll([
+          { kind: 'retracted', actionId },
+          {
+            kind: 'speculated',
+            actionId: accepted,
+            action,
+            userId: options.userId,
+          },
+        ]),
+        'agent-session'
+      );
     }
     return result;
   }
@@ -475,17 +497,23 @@ export class AgentSession {
     options: { userId?: string } = {}
   ): void {
     if (occupiesTurn(action)) this.setTurn('starting');
-    void this.enqueue({
-      kind: 'speculated',
-      actionId,
-      action,
-      userId: options.userId,
-    });
+    fireAndForget(
+      this.enqueue({
+        kind: 'speculated',
+        actionId,
+        action,
+        userId: options.userId,
+      }),
+      'agent-session'
+    );
   }
 
   /** Take back a speculation the log will not confirm. Unknown ids are a no-op. */
   retract(actionId: string): void {
-    void this.enqueue({ kind: 'retracted', actionId });
+    fireAndForget(
+      this.enqueue({ kind: 'retracted', actionId }),
+      'agent-session'
+    );
   }
 
   /**
@@ -735,7 +763,7 @@ export class AgentSession {
       );
       throw error;
     }
-    if (this.resyncRequested) void this.resync();
+    if (this.resyncRequested) fireAndForget(this.resync(), 'agent-session');
     return { session: session.value, bot: log.log.bot };
   }
 
@@ -787,11 +815,14 @@ export class AgentSession {
       await this.drainBuffered();
       this.syncing = false;
       if (!this.closed && this.resyncRequested) {
-        void this.resync(true);
+        fireAndForget(this.resync(true), 'agent-session');
       } else if (!this.closed && failed) {
         const delay = RESYNC_RETRY_DELAYS_MS[this.resyncRetry++];
         if (delay !== undefined)
-          this.resyncTimer = setTimeout(() => void this.resync(true), delay);
+          this.resyncTimer = setTimeout(
+            () => fireAndForget(this.resync(true), 'agent-session'),
+            delay
+          );
       }
     }
   }

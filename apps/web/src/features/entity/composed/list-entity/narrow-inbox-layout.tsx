@@ -61,8 +61,13 @@ export function NarrowInboxLayout(props: LayoutProps) {
           active={props.unread}
         />
         <div class="relative size-(--soup-inbox-icon-diameter) shrink-0 group">
-          <Show when={!props.checked}>
-            <div class="absolute inset-0 grid place-items-center group-hover:opacity-0 transition-opacity">
+          <Show when={props.hideCheckbox || !props.checked}>
+            <div
+              class={cn(
+                'absolute inset-0 grid place-items-center transition-opacity',
+                { 'group-hover:opacity-0': !props.hideCheckbox }
+              )}
+            >
               <Show
                 when={isDirectMessage()}
                 fallback={
@@ -86,18 +91,20 @@ export function NarrowInboxLayout(props: LayoutProps) {
               </Show>
             </div>
           </Show>
-          {/* TODO: make multiselect work on mobile */}
-          <div
-            class={cn(
-              'absolute inset-0 grid place-items-center opacity-0 group-hover:opacity-100 transition-opacity',
-              { 'opacity-100': props.checked }
-            )}
-          >
-            <MultiSelectCheckbox
-              checked={props.checked}
-              onChecked={props.onChecked}
-            />
-          </div>
+          <Show when={!props.hideCheckbox}>
+            {/* TODO: make multiselect work on mobile */}
+            <div
+              class={cn(
+                'absolute inset-0 grid place-items-center opacity-0 group-hover:opacity-100 transition-opacity',
+                { 'opacity-100': props.checked }
+              )}
+            >
+              <MultiSelectCheckbox
+                checked={props.checked}
+                onChecked={props.onChecked}
+              />
+            </div>
+          </Show>
         </div>
       </Entity.Slot>
 

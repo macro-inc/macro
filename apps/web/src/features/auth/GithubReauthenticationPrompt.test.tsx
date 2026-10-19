@@ -206,13 +206,13 @@ describe('GithubReauthenticationPrompt', () => {
     const cleanup = renderPrompt();
     await flushPromises();
     const action = getReconnectAction();
-    action.onClick();
-    action.onClick();
+    const first = action.onClick();
+    const duplicate = action.onClick();
     await vi.advanceTimersByTimeAsync(0);
     window.dispatchEvent(
       new PageTransitionEvent('pageshow', { persisted: true })
     );
-    action.onClick();
+    const afterPageshow = action.onClick();
     await vi.advanceTimersByTimeAsync(0);
     expect(mocks.checkGithubLinkStatus).toHaveBeenCalledOnce();
     expect(mocks.authenticate).toHaveBeenCalledOnce();
@@ -221,6 +221,7 @@ describe('GithubReauthenticationPrompt', () => {
     complete({ success: false, error: 'User canceled login' });
     await vi.advanceTimersByTimeAsync(0);
     expect(mocks.toastCustom).toHaveBeenCalledTimes(2);
+    await Promise.all([first, duplicate, afterPageshow]);
     cleanup();
   });
 
@@ -269,7 +270,7 @@ describe('GithubReauthenticationPrompt', () => {
       );
       const cleanup = renderPrompt();
       await flushPromises();
-      getReconnectAction().onClick();
+      await getReconnectAction().onClick();
       await vi.advanceTimersByTimeAsync(0);
       expect(mocks.toastCustom).toHaveBeenCalledOnce();
       expect(mocks.toastDismiss).toHaveBeenCalledWith(101);
@@ -296,7 +297,7 @@ describe('GithubReauthenticationPrompt', () => {
       await vi.advanceTimersByTimeAsync(0);
       expect(mocks.toastCustom).toHaveBeenCalledTimes(needsReauth ? 2 : 1);
       if (needsReauth) {
-        getReconnectAction().onClick();
+        await getReconnectAction().onClick();
         await vi.advanceTimersByTimeAsync(0);
         expect(mocks.reauthenticateGithub).toHaveBeenCalledTimes(2);
       }
@@ -318,7 +319,7 @@ describe('GithubReauthenticationPrompt', () => {
     );
     const cleanup = renderPrompt();
     await flushPromises();
-    getReconnectAction().onClick();
+    await getReconnectAction().onClick();
     await vi.advanceTimersByTimeAsync(0);
     mocks.checkGithubLinkStatus.mockRejectedValueOnce(
       new Error('Network unavailable')

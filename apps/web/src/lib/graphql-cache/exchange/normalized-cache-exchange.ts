@@ -35,6 +35,7 @@
  * forwarding could duplicate a side effect already durable in the old scope.
  */
 
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type Client,
   CombinedError,
@@ -375,10 +376,19 @@ function uncertainEnqueueResult(op: Operation, error: Error): OperationResult {
 }
 
 export interface NormalizedCacheExchangeOptions {
-  /** Best-effort startup recovery before per-mutation admission. */
-  prepareMutationQueue?: () => Promise<void>;
-  /** False discards obsolete client intent without sending it to the server. */
-  beforeMutationAttempt?: (mutation: ClaimedMutation) => Promise<boolean>;
+  /**
+   * Best-effort startup recovery before per-mutation admission. Resolve
+   * `false` when it cannot run yet; the next drain asks again.
+   */
+  prepareMutationQueue?: () => Promise<boolean | void>;
+  /**
+   * False discards obsolete client intent without sending it to the server.
+   * `'defer'` keeps the mutation queued and asks again shortly, for intent
+   * that cannot be judged yet (a draft before its account is known).
+   */
+  beforeMutationAttempt?: (
+    mutation: ClaimedMutation
+  ) => Promise<boolean | 'defer'>;
   /** Persist domain recovery state for a replayed result, including when its UI is closed. */
   onMutationAttemptResult?: (
     mutation: ClaimedMutation,
@@ -605,22 +615,25 @@ export function normalizedCacheExchange(
         }
       })().catch(() => undefined);
       retained.recoveryPromise = recovery;
-      void recovery.then(() => {
-        if (retained.recoveryPromise === recovery) {
-          retained.recoveryPromise = undefined;
-        }
-        if (
-          queryStates.get(key) !== state ||
-          state.retainedReplacementFallback !== retained
-        )
-          return;
-        retained.recovering = false;
-        if (retained.invalidated) {
-          state.retainedReplacementFallback = undefined;
-        } else if (retained.readyPending) {
-          recoverRetainedReplacementFallback(key);
-        }
-      });
+      fireAndForget(
+        recovery.then(() => {
+          if (retained.recoveryPromise === recovery) {
+            retained.recoveryPromise = undefined;
+          }
+          if (
+            queryStates.get(key) !== state ||
+            state.retainedReplacementFallback !== retained
+          )
+            return;
+          retained.recovering = false;
+          if (retained.invalidated) {
+            state.retainedReplacementFallback = undefined;
+          } else if (retained.readyPending) {
+            recoverRetainedReplacementFallback(key);
+          }
+        }),
+        'graphql-cache-exchange'
+      );
     };
 
     const pendingAffectedReads = new Set<Promise<void>>();

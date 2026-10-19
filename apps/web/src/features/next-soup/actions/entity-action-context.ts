@@ -3,6 +3,7 @@ import {
   type ListController,
 } from '@app/components/list';
 import { isListViewID } from '@app/constants/list-views';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { EntityData } from '@entity';
 import type { SoupRow, SoupState } from '../create-soup-state';
 import { canExecuteMarkDoneOnView } from './make-mark-done-action';
@@ -146,7 +147,7 @@ export function toEntityActionListState<TItem, TMetadata>(
   const setFocus = (id: string | undefined) => {
     if (id === undefined) {
       controller.focus.clear({ reason: 'programmatic' });
-      void options.onFocus?.(undefined);
+      fireAndForget(options.onFocus?.(undefined), 'next-soup');
       return;
     }
 
@@ -159,11 +160,14 @@ export function toEntityActionListState<TItem, TMetadata>(
     });
     if (!focused) return;
 
-    void options.onFocus?.({
-      key: focused.key,
-      index: target.controllerIndex,
-      entity: target.entity,
-    });
+    fireAndForget(
+      options.onFocus?.({
+        key: focused.key,
+        index: target.controllerIndex,
+        entity: target.entity,
+      }),
+      'next-soup'
+    );
   };
 
   const peekOffset: EntityActionListState['navigate']['peekOffset'] = (

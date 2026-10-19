@@ -12,6 +12,7 @@ import {
   type Placement,
   shift,
 } from '@floating-ui/dom';
+import { Telemetry } from '@macro-inc/observability';
 import type { Accessor, JSX } from 'solid-js';
 import { createEffect, createSignal, onCleanup, onMount } from 'solid-js';
 import { iosSafePadding, iosSizeMiddleware } from './iosFloatingMiddleware';
@@ -136,34 +137,35 @@ export function floatWithSelection(
     });
   }
 
+  const reportPositionError = (error: unknown) =>
+    Telemetry.error(error, { surface: 'float-with-selection' });
+
+  const placeInBackground = (selection: Selection | null | undefined) => {
+    setInitialFloatingPosition(selection).catch(reportPositionError);
+  };
+
+  const repositionInBackground = () => {
+    if (currentAnchor()) {
+      updatePosition().catch(reportPositionError);
+    }
+  };
+
   const selectionChangeHandler = () => {
     let selection = document.getSelection();
     if (!selection || selection.rangeCount === 0) return;
     setCurrentAnchor(selection.getRangeAt(0));
-    setInitialFloatingPosition(selection);
+    placeInBackground(selection);
   };
 
-  const scrollHandler = () => {
-    if (currentAnchor()) {
-      updatePosition();
-    }
-  };
+  const scrollHandler = repositionInBackground;
   let scrollParent: Element | Document | null = null;
 
-  const resizeObserver = new ResizeObserver(() => {
-    if (currentAnchor()) {
-      updatePosition();
-    }
-  });
+  const resizeObserver = new ResizeObserver(repositionInBackground);
 
-  const mutationObserver = new MutationObserver(() => {
-    if (currentAnchor()) {
-      updatePosition();
-    }
-  });
+  const mutationObserver = new MutationObserver(repositionInBackground);
 
   onMount(() => {
-    setInitialFloatingPosition(accessor()?.selection);
+    placeInBackground(accessor()?.selection);
 
     if (accessor()?.moveWithSelection) {
       document.addEventListener('selectionchange', selectionChangeHandler);

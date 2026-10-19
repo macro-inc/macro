@@ -1,4 +1,5 @@
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { isMutedItem, muteItemForRef } from '@entity/utils/notification';
 import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
@@ -172,7 +173,7 @@ export function useChannelRailVirtualizer(
       return;
     }
 
-    void source.loadMore();
+    fireAndForget(source.loadMore(), 'channels-view');
   };
 
   return { registerVirtualizer, loadMoreNearEnd };

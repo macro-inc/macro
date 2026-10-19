@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { thrownResultErrorHasCode } from '@core/util/result';
 import {
   type Cleanup,
@@ -338,7 +339,7 @@ export function createCallLifecycle(options: {
             releasePreparation();
           }
         }
-        void connect();
+        fireAndForget(connect(), 'channel-call');
         return () => {
           active = false;
           releasePreparation();
@@ -360,7 +361,11 @@ export function createCallLifecycle(options: {
             if (!retry) notifyLeft(call.channelId);
           },
           () => {
-            if (active) void leaveEndedNativeSession(call.channelId);
+            if (active)
+              fireAndForget(
+                leaveEndedNativeSession(call.channelId),
+                'channel-call'
+              );
           }
         );
         return () => {
@@ -417,7 +422,7 @@ export function createCallLifecycle(options: {
             options.reportError(error);
           }
         }
-        void recover();
+        fireAndForget(recover(), 'channel-call');
         return () => {
           active = false;
         };
@@ -444,7 +449,7 @@ export function createCallLifecycle(options: {
             options.reportError(error);
           }
         }
-        void cleanUpFailedJoin();
+        fireAndForget(cleanUpFailedJoin(), 'channel-call');
         return () => {
           active = false;
         };
@@ -483,7 +488,7 @@ export function createCallLifecycle(options: {
             else options.reportError(error);
           }
         }
-        void disconnect();
+        fireAndForget(disconnect(), 'channel-call');
         return () => {
           active = false;
           clearTimeout(timeout);
@@ -623,7 +628,7 @@ export function createCallLifecycle(options: {
         ) {
           // The native transport may already be restored, but the old DELETE
           // is still authoritative for membership until it settles.
-          void restoreAfterLeave(call);
+          fireAndForget(restoreAfterLeave(call), 'channel-call');
           return;
         }
         machine.dispatch({ t: 'adopt', call });
@@ -633,7 +638,10 @@ export function createCallLifecycle(options: {
       if (state.t === 'joining') {
         // Requesting a token can register a server participant before media
         // connects. Clean up unless a new session supersedes this attempt.
-        void leaveEndedNativeSession(state.request.channelId);
+        fireAndForget(
+          leaveEndedNativeSession(state.request.channelId),
+          'channel-call'
+        );
         return;
       }
       const channelId = match(state)

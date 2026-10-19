@@ -39,6 +39,8 @@ GraphQL cache — native for tests/Tauri, OPFS-backed on wasm32.
 
 ## Gotchas
 
+- Quick Access projection version upgrades rebuild derived rows from retained normalized records; preserve the mutation queue and storage generation (covered by `src/storage/test/search_projection.rs`).
+
 - `#![forbid(unsafe_code)]` and `#![deny(missing_docs)]` — this crate is held to
   a stricter bar than most because it's the single physical-disk commit point.
 - The compound-key schema and payload encoding are frozen; an incompatible or

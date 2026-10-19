@@ -64,6 +64,7 @@ import { TaskListHeader } from './TaskListHeader';
 import { taskGridColumnCount } from './task-grid-template';
 import './task-list.css';
 import { ProjectAssignmentDialog } from '@app/features/projects/projects';
+import { fireAndForget } from '@core/util/fireAndForget';
 
 function ResponsiveTaskListHeader() {
   const layout = useListLayout();
@@ -125,11 +126,14 @@ export function TaskList(props: TaskListProps) {
       mergeHistory?: boolean;
     } = {}
   ) {
-    void openEntityInSplitFromUnifiedList(entity, {
-      splitHandle: panel.handle,
-      referredFrom: 'tasks',
-      ...options,
-    });
+    fireAndForget(
+      openEntityInSplitFromUnifiedList(entity, {
+        splitHandle: panel.handle,
+        referredFrom: 'tasks',
+        ...options,
+      }),
+      'open-entity-in-split'
+    );
   }
 
   function onActivate({
@@ -144,15 +148,18 @@ export function TaskList(props: TaskListProps) {
 
     if (item.kind === 'load-more' && item.groupId !== undefined) {
       const focusIndex = list.items.indexOf(item.id);
-      void source.loadMoreGroup(item.groupId).then(() => {
-        if (list.focus.requestedKey() !== item.id) return;
+      fireAndForget(
+        source.loadMoreGroup(item.groupId).then(() => {
+          if (list.focus.requestedKey() !== item.id) return;
 
-        list.focus.restore(item.id, {
-          fallback: 'nearest',
-          nearestIndex: focusIndex,
-          retainUnavailable: false,
-        });
-      });
+          list.focus.restore(item.id, {
+            fallback: 'nearest',
+            nearestIndex: focusIndex,
+            retainUnavailable: false,
+          });
+        }),
+        'tasks-view'
+      );
 
       return;
     }
@@ -299,7 +306,7 @@ export function TaskList(props: TaskListProps) {
           : 0;
         if (distanceFromEnd > 3) return;
 
-        void source.loadMore();
+        fireAndForget(source.loadMore(), 'tasks-view');
       },
     },
     activation: {
@@ -391,7 +398,7 @@ export function TaskList(props: TaskListProps) {
       handle.scrollSize - handle.scrollOffset - handle.viewportSize;
     if (distance >= 300 || source.isLoadingMore()) return;
 
-    void source.loadMore();
+    fireAndForget(source.loadMore(), 'tasks-view');
   }
 
   const emptyMessage = () => {
@@ -436,7 +443,9 @@ export function TaskList(props: TaskListProps) {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => void source.refresh()}
+                    onClick={() =>
+                      fireAndForget(source.refresh(), 'tasks-view')
+                    }
                   >
                     Try again
                   </Button>
@@ -451,7 +460,9 @@ export function TaskList(props: TaskListProps) {
                       variant="outline"
                       size="sm"
                       disabled={source.isLoadingMore()}
-                      onClick={() => void source.loadMore()}
+                      onClick={() =>
+                        fireAndForget(source.loadMore(), 'tasks-view')
+                      }
                     >
                       <Show
                         when={source.isLoadingMore()}

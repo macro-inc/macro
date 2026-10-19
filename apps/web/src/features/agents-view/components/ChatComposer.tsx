@@ -17,6 +17,7 @@ import { createComposerLayout } from '@core/component/LexicalMarkdown/utils/crea
 import { toast } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { handleFileFolderDrop } from '@core/util/upload';
 import { $insertReferencedPaste } from '@macro-inc/lexical-core';
 import PlusIcon from '@phosphor/plus.svg';
@@ -120,8 +121,11 @@ export function ChatComposer(props: {
     .withRestoreFocus()
     .withFilePaste({
       onPasteFilesAndDirs: (files, directories) => {
-        void handleFileFolderDrop(files, directories, (entries) =>
-          attachFiles(entries.map((entry) => entry.file))
+        fireAndForget(
+          handleFileFolderDrop(files, directories, (entries) =>
+            attachFiles(entries.map((entry) => entry.file))
+          ),
+          'agents-view'
         );
       },
     })
@@ -244,7 +248,7 @@ export function ChatComposer(props: {
         class="min-w-0"
         onFocusIn={() => {
           setFocused(true);
-          void preloadAgentFold();
+          fireAndForget(preloadAgentFold(), 'agents-view');
         }}
         onFocusOut={(event) => {
           // iOS control taps can blur with no relatedTarget before click.

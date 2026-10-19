@@ -1,6 +1,7 @@
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { isMobile } from '@core/mobile/isMobile';
 import { handleFileFolderDrop } from '@core/util/upload';
+import { Telemetry } from '@macro-inc/observability';
 import { onElementConnect } from '@solid-primitives/lifecycle';
 import { cn } from '@ui';
 import {
@@ -187,6 +188,8 @@ export const MarkdownShell: Component<MarkdownShellProps> = (props) => {
             undefined,
             state.fileDropConfig!.constrainedMediaDimensions
           )
+        ).catch((error) =>
+          Telemetry.error(error, { surface: 'markdown-file-drop' })
         );
       }
     : undefined;

@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { format } from 'date-fns/format';
 import { isThisYear } from 'date-fns/isThisYear';
 import { type Accessor, createSignal } from 'solid-js';
@@ -414,13 +415,16 @@ export function createEmailSendSchedule(options: {
                     undoStarted = true;
                     scheduledNotices.delete(draftId);
                     if (toastId != null) notices.feedback.dismiss(toastId);
-                    void undoInitialSchedule({
-                      draftId,
-                      threadId: threadId ?? undefined,
-                      inboxId,
-                      sendTime: requested,
-                      markedDone,
-                    });
+                    fireAndForget(
+                      undoInitialSchedule({
+                        draftId,
+                        threadId: threadId ?? undefined,
+                        inboxId,
+                        sendTime: requested,
+                        markedDone,
+                      }),
+                      'email-compose'
+                    );
                   },
                 },
               ]

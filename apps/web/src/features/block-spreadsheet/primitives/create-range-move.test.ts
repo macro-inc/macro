@@ -100,7 +100,7 @@ describe('moving selected cells', () => {
     expect(rangeMove.confirming()).toBeUndefined();
     expect(store.cells().A1.value).toBe('10');
     expect(store.cells().C1.value).toBe('Taken');
-    rangeMove.move(firstColumn, 0, 2);
+    await rangeMove.move(firstColumn, 0, 2);
     await rangeMove.confirm();
     expect(store.cells().A1).toBeUndefined();
     expect(store.cells().C1).toEqual({ value: '10', bold: true });
@@ -126,7 +126,7 @@ describe('moving selected cells', () => {
 
   it("cancels a confirmed move after a collaborator's edit and keeps both", async () => {
     const { doc, store, rangeMove, setNotice } = setup();
-    rangeMove.move(firstColumn, 0, 2);
+    await rangeMove.move(firstColumn, 0, 2);
     const peer = new LoroDoc();
     cleanups.push(() => peer.free());
     peer.import(doc.export({ mode: 'snapshot' }));

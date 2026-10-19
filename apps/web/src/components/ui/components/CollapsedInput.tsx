@@ -1,5 +1,6 @@
 import { focusInput } from '@core/directive/focusInput';
 import { isMobile } from '@core/mobile/isMobile';
+import { fireAndForget } from '@core/util/fireAndForget';
 import PaperclipIcon from '@phosphor/paperclip.svg';
 import { type Accessor, type JSX, Show } from 'solid-js';
 import { cn } from '../utils/classname';
@@ -134,7 +135,7 @@ export function CollapsedInput(props: CollapsedInputProps) {
           disabled={props.disabled || props.pending}
           onPointerDown={(event) => {
             event.preventDefault();
-            void props.onSend?.();
+            fireAndForget(props.onSend?.(), 'collapsed-input');
           }}
           data-collapsed-input-send
         />

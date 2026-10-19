@@ -2,6 +2,8 @@
  * The comment tool's searchable list of pinned threads, alongside the
  * canvas, with the design's discussion (comments pinned nowhere) below.
  */
+
+import { fireAndForget } from '@core/util/fireAndForget';
 import FunnelSimple from '@phosphor/funnel-simple.svg';
 import MagnifyingGlass from '@phosphor/magnifying-glass.svg';
 import X from '@phosphor/x.svg';
@@ -145,7 +147,9 @@ export function CommentsPanel(props: {
                   data-testid="fig-comment-row"
                   data-thread={thread.id}
                   data-unread={c.isUnread(thread) ? 'true' : 'false'}
-                  onClick={() => void c.reveal(thread)}
+                  onClick={() =>
+                    fireAndForget(c.reveal(thread), 'fig-comments')
+                  }
                 >
                   <div class="mb-0.5 flex w-full items-center gap-1">
                     <For each={people()}>

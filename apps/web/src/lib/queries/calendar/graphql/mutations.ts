@@ -615,6 +615,7 @@ export async function executeGraphqlCreate(
               ),
             }
           : {}),
+        ...(args.macroCall ? { macroCall: true } : {}),
         ...(args.outOfOffice
           ? {
               outOfOffice: {

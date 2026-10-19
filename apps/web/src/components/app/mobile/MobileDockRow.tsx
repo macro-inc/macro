@@ -1,13 +1,14 @@
-import {
-  MobileAskAiButton,
-  MobileSearchInput,
-} from '@app/features/command/mobile/MobileSearchInput';
+import { MobileSearchInput } from '@app/features/command/mobile/MobileSearchInput';
 import { SearchState } from '@app/features/command/mobile/mobileSearchState';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { enableTasksReviews } from '@core/constant/featureFlags';
+import {
+  enableCalendarScheduling,
+  enableTasksReviews,
+} from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { triggerFocusInput } from '@core/directive/focusInput';
 import { hapticImpact } from '@core/mobile/haptics';
+import CalendarCheckIcon from '@phosphor/calendar-check.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
 import IconGear from '@phosphor/gear.svg';
 import GitPullRequestIcon from '@phosphor/git-pull-request.svg';
@@ -34,6 +35,7 @@ function MoreViewsDrawer(props: {
 }) {
   const { settingsOpen, toggleSettings } = useSettingsState();
   const reviewsFlag = useFeatureFlag(enableTasksReviews);
+  const schedulingFlag = useFeatureFlag(enableCalendarScheduling);
 
   return (
     <MobileDrawer
@@ -65,7 +67,13 @@ function MoreViewsDrawer(props: {
                 <IconGear class="size-4 shrink-0" />
                 <span>Settings</span>
               </MobileDrawer.Close>
-              <Show when={props.views.length > 0 || reviewsFlag().enabled}>
+              <Show
+                when={
+                  props.views.length > 0 ||
+                  reviewsFlag().enabled ||
+                  schedulingFlag().enabled
+                }
+              >
                 <div class="-mx-1 h-px shrink-0 bg-edge" />
               </Show>
               <For each={props.views.toReversed()}>
@@ -98,6 +106,25 @@ function MoreViewsDrawer(props: {
                 >
                   <GitPullRequestIcon class="size-4 shrink-0" />
                   <span>Reviews</span>
+                </MobileDrawer.Close>
+              </Show>
+              <Show when={schedulingFlag().enabled}>
+                <MobileDrawer.Close
+                  as={MobileDrawer.Item}
+                  aria-label="Scheduling"
+                  class={
+                    props.isActive('booking-links') ? 'text-accent' : undefined
+                  }
+                  aria-current={
+                    props.isActive('booking-links') ? 'page' : undefined
+                  }
+                  onClick={() => {
+                    hapticImpact('light');
+                    props.onNavigate('booking-links');
+                  }}
+                >
+                  <CalendarCheckIcon class="size-4 shrink-0" />
+                  <span>Scheduling</span>
                 </MobileDrawer.Close>
               </Show>
               <div class="-mx-1 h-px shrink-0 bg-edge" />
@@ -170,13 +197,13 @@ function MobileNavigationDockRow() {
           icon={SearchIcon}
           ariaLabel="Search"
           onClick={() => {
-            // Focus synchronously inside the tap so iOS lets the keyboard
-            // open; the input mounts once opening the session flips the row
-            // to the search layout.
+            // Mount the real input first, then focus it in this same user
+            // gesture. Deferring the focus transfer can lose iOS keyboard
+            // activation when reopening search.
+            SearchState.open();
             triggerFocusInput(() =>
               document.getElementById('mobile-search-input')
             );
-            SearchState.open();
             navigate('search');
           }}
         />
@@ -192,9 +219,8 @@ type MobileDockRowProps = {
 /**
  * The bottom-most chrome row. By default it is the navigation dock (see
  * MobileNavigationDockRow); pressing its Search button opens a search session,
- * which swaps in the search row — the search bar ("Search or ask AI...")
- * with the "Ask AI" island — and shows the views pill row in the accessory
- * slot above as the scope switcher (see MobileViewsRow). Pressing the
+ * which swaps in the search bar and category pills in the accessory slot
+ * above (see MobileViewsRow). Pressing the
  * input's X ends the session and restores the navigation dock.
  */
 export function MobileDockRow(props: MobileDockRowProps) {
@@ -208,7 +234,6 @@ export function MobileDockRow(props: MobileDockRowProps) {
       <MobileBottomEdgeFade />
       <Show when={SearchState.isOpen()} fallback={<MobileNavigationDockRow />}>
         <MobileSearchInput />
-        <MobileAskAiButton />
       </Show>
     </div>
   );

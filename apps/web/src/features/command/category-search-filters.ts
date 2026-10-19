@@ -3,8 +3,8 @@ import type { Query } from '@app/features/next-soup/filters/filter-store/types';
 import {
   SEARCH_INDEX_SEEDS,
   type SearchIndexId,
-} from '@app/features/next-soup/soup-view/filters-bar/search/search-filters-state';
-import type { CategoryFilter } from './types';
+} from '@app/features/next-soup/soup-view/filters-bar/search/search-index-seeds';
+import type { EntitySearchCategory } from './queries/entity-search';
 
 type CategorySearchFilters = {
   filters: Query;
@@ -16,7 +16,11 @@ type CategorySearchFilters = {
 // maps to the same channels index as Channels for now; channelType-based
 // narrowing (DMs vs non-DMs) is left for a follow-up once the search
 // backend honors it.
-const CATEGORY_TO_INDEX: Partial<Record<CategoryFilter, SearchIndexId>> = {
+const CATEGORY_TO_INDEX: Partial<
+  Record<EntitySearchCategory | 'commands', SearchIndexId>
+> = {
+  email: 'email',
+  people: 'channels',
   channels: 'channels',
   dms: 'channels',
   documents: 'document-or-file',
@@ -25,7 +29,7 @@ const CATEGORY_TO_INDEX: Partial<Record<CategoryFilter, SearchIndexId>> = {
 };
 
 export function getCategorySearchFilters(
-  category: CategoryFilter
+  category: EntitySearchCategory | 'commands'
 ): CategorySearchFilters | undefined {
   const indexValue = CATEGORY_TO_INDEX[category];
   if (!indexValue) return undefined;

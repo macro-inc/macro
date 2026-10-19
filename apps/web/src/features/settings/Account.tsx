@@ -24,6 +24,7 @@ import {
   useProfilePictureUrl,
 } from '@core/signal/profilePicture';
 import { createStaticFile } from '@core/util/create';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { openFilePicker } from '@core/util/upload';
 import {
   type BundleUpdateStatus,
@@ -161,7 +162,7 @@ async function saveUserName(
       setValue(prev); // rollback on a returned error
       return false;
     }
-    void invalidateOwnUserName();
+    fireAndForget(invalidateOwnUserName(), 'account-settings');
     return true;
   } catch {
     setValue(prev); // rollback if the call throws before returning a Result
@@ -441,9 +442,17 @@ export function Account() {
           </Show>
 
           <Row label="Email">
-            <span class="ph-no-capture text-sm text-ink-muted">
-              {email() ?? ''}
-            </span>
+            <Tooltip
+              as="span"
+              label={email() ?? ''}
+              placement="top"
+              tabIndex={0}
+              class="min-w-0 max-w-full rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            >
+              <span class="ph-no-capture min-w-0 truncate text-sm text-ink-muted">
+                {email() ?? ''}
+              </span>
+            </Tooltip>
           </Row>
 
           <Row label="First Name">
@@ -488,19 +497,18 @@ export function Account() {
         <AccountPlanCard />
       </Show>
 
-      <SettingsSection>
-        <SettingsCard>
-          <SettingsRow
-            label="Log out"
-            description="Sign out of Macro on this device."
-          >
-            <Button variant="outline" depth={3} onClick={() => logout()}>
-              <SignOutIcon class="size-4" />
-              Log out
-            </Button>
-          </SettingsRow>
-        </SettingsCard>
-      </SettingsSection>
+      {/* A bare card like the plan card above, so the two match in height. */}
+      <SettingsCard>
+        <SettingsRow
+          label="Log out"
+          description="Sign out of Macro on this device."
+        >
+          <Button variant="outline" depth={3} onClick={() => logout()}>
+            <SignOutIcon class="size-4" />
+            Log out
+          </Button>
+        </SettingsRow>
+      </SettingsCard>
 
       {/* Deliberately quiet and outside a card, so it isn't mistaken for
           Log out. */}
@@ -697,8 +705,16 @@ function IrreversibleWarning() {
   );
 }
 
+// Every row's control starts at the same left edge, so values line up down the
+// card instead of each hugging the right side at its own width.
 function Row(props: { label: string; children?: JSX.Element }) {
-  return <SettingsRow label={props.label}>{props.children}</SettingsRow>;
+  return (
+    <SettingsRow label={props.label}>
+      <div class="flex w-80 max-w-[55cqw] min-w-0 items-center justify-start text-left">
+        {props.children}
+      </div>
+    </SettingsRow>
+  );
 }
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
@@ -752,8 +768,10 @@ function NameInput(props: {
     }
   };
 
+  // Pull the box out by its padding and border (12px + 1px) so the text, not the
+  // border, lines up with the other values in the column.
   return (
-    <div class="ph-no-capture group relative flex items-center gap-1.5 rounded-lg h-9 px-3 border text-sm bg-transparent text-ink-muted border-edge-muted hover:text-ink focus-within:text-ink focus-within:border-accent">
+    <div class="ph-no-capture group relative -ml-[13px] flex w-[calc(100%+13px)] items-center gap-1.5 rounded-lg h-9 px-3 border text-sm bg-transparent text-ink-muted border-edge-muted hover:text-ink focus-within:text-ink focus-within:border-accent">
       <input
         type="text"
         class="flex-1 min-w-0 bg-transparent outline-none border-0 p-0 text-sm placeholder:text-ink-placeholder"
@@ -764,7 +782,7 @@ function NameInput(props: {
           setStatus('idle'); // clear prior status while editing
         }}
         onBlur={() => {
-          void commit();
+          fireAndForget(commit(), 'account-settings');
           setIsFocused(false);
         }}
         onKeyDown={handleKeyDown}
@@ -865,7 +883,7 @@ function BundleUpdateRow() {
   const action = () => bundleUpdateAction(status());
   return (
     <Row label="App Update">
-      <div class="flex items-center gap-3">
+      <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
         <span class="text-sm text-ink-muted">
           {formatBundleUpdateStatus(status())}
         </span>
@@ -886,7 +904,7 @@ function NativeUpdateRow() {
   return (
     <Show when={tauri && tauri.nativeUpdateStatus().status !== 'Disabled'}>
       <Row label="Desktop app update">
-        <div class="flex items-center gap-3">
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
           <span class="text-sm text-ink-muted">
             {tauri && nativeUpdateDescription(tauri.nativeUpdateStatus())}
           </span>
@@ -895,7 +913,9 @@ function NativeUpdateRow() {
               variant="accent"
               size="sm"
               depth={3}
-              onClick={() => void tauri?.restartNativeUpdate()}
+              onClick={() =>
+                fireAndForget(tauri?.restartNativeUpdate(), 'native-updates')
+              }
             >
               Restart to update
             </Button>

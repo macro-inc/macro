@@ -1,4 +1,5 @@
 import { VideoContent } from '@block-video/component/VideoContent';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { JSX } from 'solid-js';
 import { FileDetailLayout, FileDetailLoadGate } from '../components/FileDetail';
 import { downloadFileOperation } from '../components/file-detail-operations';
@@ -21,14 +22,17 @@ export function VideoDetailDocument(props: {
   const operations = [
     downloadFileOperation(() => {
       const fileName = documentDownloadName(props.data.documentMetadata);
-      void downloadWithProgress(fileName, (onProgress) =>
-        getFileDocumentBlob(
-          {
-            documentId: props.documentId,
-            documentVersionId: props.data.documentMetadata.documentVersionId,
-          },
-          { onProgress }
-        )
+      fireAndForget(
+        downloadWithProgress(fileName, (onProgress) =>
+          getFileDocumentBlob(
+            {
+              documentId: props.documentId,
+              documentVersionId: props.data.documentMetadata.documentVersionId,
+            },
+            { onProgress }
+          )
+        ),
+        'drive-view'
       );
     }),
   ];

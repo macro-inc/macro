@@ -23,6 +23,7 @@ import {
   useBlockDocumentDownloadName,
   useBlockDocumentName,
 } from '@core/util/currentBlockDocumentName';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { downloadFile } from '@filesystem/download';
 import IconShared from '@icon/share.svg';
 import Download from '@phosphor/download-simple.svg';
@@ -60,7 +61,7 @@ export const TopBar: Component<{
     const content = text();
     if (!text || !name) return;
     const file = new Blob([content ?? ''], { type: 'text/plain' });
-    downloadFile(file, downloadName());
+    fireAndForget(downloadFile(file, downloadName()), 'code-top-bar');
     analytics.track('download', { blockType: 'code' });
   });
 

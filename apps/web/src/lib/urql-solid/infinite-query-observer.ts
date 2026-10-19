@@ -56,6 +56,8 @@ type InfiniteQueryObserverState<SelectedData> = {
   fetchingNextPage: boolean;
   refetching: boolean;
   paginationError: CombinedError | undefined;
+  /** A continuation page that failed to refetch; its stale rows stay mounted. */
+  refetchError: CombinedError | undefined;
 };
 
 type NextPageParamResult<PageParam> = {
@@ -135,6 +137,7 @@ export class InfiniteQueryObserver<
     fetchingNextPage: false,
     refetching: false,
     paginationError: undefined,
+    refetchError: undefined,
   };
   private failedNextPage: Page<PageData, Variables, PageParam> | undefined;
   private currentResult!: InfiniteResult<
@@ -208,7 +211,12 @@ export class InfiniteQueryObserver<
       derivationError = nextPage.error;
     }
 
-    const error = this.state.paginationError ?? derivationError ?? pageError;
+    const error =
+      this.state.paginationError ??
+      derivationError ??
+      pageError ??
+      this.state.refetchError ??
+      null;
     const hasNextPage =
       !this.state.paginationError &&
       !derivationError &&
@@ -465,7 +473,7 @@ export class InfiniteQueryObserver<
     };
   }
 
-  private appendPage(
+  private createPage(
     pageParam: PageParam,
     pageIndex: number,
     variables = this.options.variables(pageParam, pageIndex),
@@ -484,10 +492,31 @@ export class InfiniteQueryObserver<
     };
     page.unsubscribe = observer.subscribe(() => this.handlePageUpdate(page));
 
+    return page;
+  }
+
+  private appendPage(
+    pageParam: PageParam,
+    pageIndex: number,
+    variables = this.options.variables(pageParam, pageIndex),
+    executeImmediately = true
+  ): Page<PageData, Variables, PageParam> {
+    const page = this.createPage(
+      pageParam,
+      pageIndex,
+      variables,
+      executeImmediately
+    );
+
     this.pages.push(page);
     this.emit();
 
     return page;
+  }
+
+  private destroyPage(page: Page<PageData, Variables, PageParam>): void {
+    page.unsubscribe();
+    page.observer.destroy();
   }
 
   private handlePageUpdate(page: Page<PageData, Variables, PageParam>): void {
@@ -514,15 +543,12 @@ export class InfiniteQueryObserver<
     this.setState({
       fetchingNextPage: false,
       refetching: false,
+      refetchError: undefined,
     });
   }
 
   private destroyPages(fromIndex = 0): void {
-    const removed = this.pages.splice(fromIndex);
-    for (const page of removed) {
-      page.unsubscribe();
-      page.observer.destroy();
-    }
+    for (const page of this.pages.splice(fromIndex)) this.destroyPage(page);
   }
 
   private successfulPages(
@@ -661,6 +687,7 @@ export class InfiniteQueryObserver<
     this.setState({
       refetching: true,
       paginationError: undefined,
+      refetchError: undefined,
     });
     this.emit();
 
@@ -707,19 +734,20 @@ export class InfiniteQueryObserver<
           break;
         }
 
-        let page = this.pages[pageIndex];
+        const page = this.pages[pageIndex];
 
-        if (!page || !Object.is(page.pageParam, expectedPageParam)) {
-          this.destroyPages(pageIndex);
-          page = this.appendPage(
-            expectedPageParam,
+        if (page && Object.is(page.pageParam, expectedPageParam)) {
+          await page.observer.refetch(refetchOptions);
+        } else if (
+          !(await this.replacePage(
             pageIndex,
-            undefined,
-            false
-          );
+            expectedPageParam,
+            refetchOptions,
+            signal
+          ))
+        ) {
+          break;
         }
-
-        await page.observer.refetch(refetchOptions);
       }
 
       return this.actionResult();
@@ -731,6 +759,44 @@ export class InfiniteQueryObserver<
         this.setState({ refetching: false });
         this.emit();
       }
+    }
+  }
+
+  /**
+   * Fetches the page behind a changed cursor before swapping it in. The stale
+   * page it replaces stays mounted until its rows have arrived, so the list
+   * keeps its height and the viewport its scroll position. A failed fetch
+   * keeps the stale page and reports the error; the chain stops there.
+   */
+  private async replacePage(
+    pageIndex: number,
+    pageParam: PageParam,
+    refetchOptions: UrqlQueryRefetchOptions,
+    signal: AbortSignal
+  ): Promise<boolean> {
+    const replacement = this.createPage(pageParam, pageIndex, undefined, false);
+    // A cancelled action releases the detached page at once, not when its
+    // network result eventually lands.
+    const abort = () => this.destroyPage(replacement);
+    signal.addEventListener('abort', abort, { once: true });
+    let replaced = false;
+    try {
+      await replacement.observer.refetch(refetchOptions);
+      if (signal.aborted || this.destroyed) return false;
+      const result = replacement.observer.getCurrentResult();
+      if (result.data === undefined) {
+        this.setState({ refetchError: result.error ?? undefined });
+        return false;
+      }
+      const stale = this.pages[pageIndex];
+      this.pages.splice(pageIndex, 1, replacement);
+      if (stale) this.destroyPage(stale);
+      replaced = true;
+      this.emit();
+      return true;
+    } finally {
+      signal.removeEventListener('abort', abort);
+      if (!replaced) this.destroyPage(replacement);
     }
   }
 

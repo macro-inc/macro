@@ -19,7 +19,7 @@ pub struct MessageWithCalendarParts {
 }
 
 /// Provider-neutral calendar invitation part discovered in a message.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CalendarPart {
     /// Provider MIME-part identifier, when available.
     pub part_id: Option<String>,

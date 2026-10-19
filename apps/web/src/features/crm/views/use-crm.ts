@@ -34,6 +34,7 @@ export const useCrmLists = (...args: Parameters<CrmContext['createLists']>) =>
 export const useCreateCompanyMutation = (
   ...args: Parameters<CrmContext['createCompany']>
 ) => useCrmContext().createCompany(...args);
+export const useCompanyImporter = () => useCrmContext().createCompanyImporter();
 export const useCreateContactMutation = (
   ...args: Parameters<CrmContext['createContact']>
 ) => useCrmContext().createContact(...args);
@@ -77,3 +78,6 @@ export const useResetCrmStagesMutation = (
 export const useQuickAccessCrmCompaniesQuery = (
   ...args: Parameters<CrmContext['createCompanySuggestions']>
 ) => useCrmContext().createCompanySuggestions(...args);
+export const useQuickAccessCrmContactsQuery = (
+  ...args: Parameters<CrmContext['createContactSuggestions']>
+) => useCrmContext().createContactSuggestions(...args);

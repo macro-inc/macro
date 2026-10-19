@@ -6,6 +6,7 @@
 
 import type { FigEngine } from '@core/fig-engine/client';
 import type { NodeGeometry } from '@core/fig-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { type Accessor, createEffect, createSignal, on } from 'solid-js';
 import type { FigPeer, PeerOverlay } from '../core/presence';
 import type { FigViewer } from './create-fig-viewer';
@@ -68,7 +69,7 @@ export function createPeerOverlays(
             next.set(peer.peerId, { key, frames });
             return next;
           });
-        void loadFrames(page, ids, done);
+        fireAndForget(loadFrames(page, ids, done), 'fig-collab');
       }
     })
   );

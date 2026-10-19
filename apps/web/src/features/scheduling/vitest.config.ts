@@ -15,6 +15,17 @@ export default defineConfig({
   test: {
     name: 'scheduling',
     environment: 'jsdom',
+    // Keep Stepper transitions on the same browser Solid runtime as the editor.
+    deps: { optimizer: { client: { enabled: false } } },
+    server: {
+      deps: {
+        inline: [
+          'solid-transition-group',
+          '@solid-primitives/refs',
+          '@solid-primitives/transition-group',
+        ],
+      },
+    },
     include: [
       'src/features/scheduling/**/*.{test,spec}.{ts,tsx}',
       'src/lib/core/component/AI/component/tool/BookingLinks.test.tsx',

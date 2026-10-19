@@ -1,4 +1,5 @@
 import { getDisplayNameParts, type MacroId } from '@core/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
 import { schedulingClient } from '@service-email/scheduling';
@@ -25,7 +26,8 @@ export function useSchedulingProfileQuery(scope: Accessor<SchedulingScope>) {
 
 export function createSchedulingSource(
   scope: Accessor<SchedulingScope>,
-  range: Accessor<{ from: string; to: string }>
+  range: Accessor<{ from: string; to: string }>,
+  loadBookings: Accessor<boolean> = () => true
 ): SchedulingSource {
   const profile = useSchedulingProfileQuery(scope);
   const bookings = useQuery(() => ({
@@ -37,6 +39,7 @@ export function createSchedulingSource(
           schedulingClient.bookings(scope().teamId, range())
         )
       ).bookings,
+    enabled: loadBookings(),
     retry: false,
   }));
   const save = useMutation(() => ({
@@ -57,15 +60,15 @@ export function createSchedulingSource(
     },
   }));
   const reload = () => {
-    void profile.refetch();
-    void bookings.refetch();
+    fireAndForget(profile.refetch(), 'scheduling');
+    if (loadBookings()) fireAndForget(bookings.refetch(), 'scheduling');
   };
   return {
     profile: () => (profile.isSuccess ? profile.data : undefined),
     bookings: () => (bookings.isSuccess ? bookings.data : []),
-    loading: () => profile.isPending || bookings.isPending,
+    loading: () => profile.isPending || (loadBookings() && bookings.isPending),
     error: () =>
-      profile.isError || bookings.isError
+      profile.isError || (loadBookings() && bookings.isError)
         ? profile.isError
           ? 'Calendar scheduling could not be loaded. Check your connection and try again.'
           : 'Bookings could not be loaded. Try a shorter date range or check your connection.'

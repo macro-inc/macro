@@ -1,4 +1,5 @@
 import { analytics } from '@app/lib/analytics/analytics';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type AudioReceiverStats,
   type RemoteAudioTrack,
@@ -92,7 +93,10 @@ export function startReceiverStatsSampling(
         Track.Source.Microphone
       )?.track;
       if (!track || track.kind !== Track.Kind.Audio) continue;
-      void sampleTrack(participant.identity, track as RemoteAudioTrack);
+      fireAndForget(
+        sampleTrack(participant.identity, track as RemoteAudioTrack),
+        'channel-call'
+      );
     }
   }
 

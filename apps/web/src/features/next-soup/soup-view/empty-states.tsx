@@ -7,6 +7,7 @@ import {
 } from '@app/features/command/Launcher';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
 import { useAddInboxFlow, useEmailLinksStatus } from '@core/email-link';
+import { fireAndForget } from '@core/util/fireAndForget';
 import EmptyStateAiGraphic from '@design/empty-state-ai.svg';
 import EmptyStateCallsGraphic from '@design/empty-state-calls.svg';
 import EmptyStateChannelsGraphic from '@design/empty-state-channels.svg';
@@ -86,7 +87,7 @@ export function EmptyState(props: {
   const isCreatableEnabled = useCreatableEnabled();
 
   const onConnectEmail = () => {
-    void startAddInbox();
+    fireAndForget(startAddInbox(), 'add-inbox');
   };
 
   return (

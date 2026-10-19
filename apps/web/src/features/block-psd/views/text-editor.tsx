@@ -10,6 +10,7 @@
 import { type Point, pageToScreen } from '@app/features/block-fig/core/camera';
 import { IS_MAC } from '@core/constant/isMac';
 import type { Op, TextLayer } from '@core/psd-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { gestureKey, newLayerOp } from '../core/ops';
 import {
@@ -74,42 +75,45 @@ export function TextEditor(props: {
       input.select();
       if (props.initialText) update(props.initialText);
     };
-    void load();
+    fireAndForget(load(), 'block-psd');
   });
 
   const update = (text: string) => {
     setValue(text);
-    void queue.run(async () => {
-      if (layerId === undefined) {
-        if (text.length === 0 || !('at' in props.target)) return;
-        const options = view.toolOptions();
-        const next = pointText(text, props.target.at, {
-          ...defaultTextStyle(view.foreground(), options.fontSize),
-          font: options.font,
-        });
-        const result = await editor.apply(
-          [newLayerOp(editor.activeRow(), { type: 'text', text: next })],
-          key
-        );
-        layerId = result?.created[0];
+    fireAndForget(
+      queue.run(async () => {
+        if (layerId === undefined) {
+          if (text.length === 0 || !('at' in props.target)) return;
+          const options = view.toolOptions();
+          const next = pointText(text, props.target.at, {
+            ...defaultTextStyle(view.foreground(), options.fontSize),
+            font: options.font,
+          });
+          const result = await editor.apply(
+            [newLayerOp(editor.activeRow(), { type: 'text', text: next })],
+            key
+          );
+          layerId = result?.created[0];
+          layer = next;
+          created = layerId !== undefined;
+          autoName = textLayerName(next.text);
+          setEditing(created);
+          props.onLayer?.(layerId);
+          return;
+        }
+        if (!layer) return;
+        const next = retext(layer, text);
         layer = next;
-        created = layerId !== undefined;
-        autoName = textLayerName(next.text);
-        setEditing(created);
-        props.onLayer?.(layerId);
-        return;
-      }
-      if (!layer) return;
-      const next = retext(layer, text);
-      layer = next;
-      const ops: Op[] = [{ op: 'setText', id: layerId, text: next }];
-      const name = textLayerName(next.text);
-      if (autoName !== undefined && name.length > 0 && name !== autoName) {
-        ops.push({ op: 'setLayer', ids: [layerId], name });
-        autoName = name;
-      }
-      await editor.apply(ops, key);
-    });
+        const ops: Op[] = [{ op: 'setText', id: layerId, text: next }];
+        const name = textLayerName(next.text);
+        if (autoName !== undefined && name.length > 0 && name !== autoName) {
+          ops.push({ op: 'setLayer', ids: [layerId], name });
+          autoName = name;
+        }
+        await editor.apply(ops, key);
+      }),
+      'block-psd'
+    );
   };
 
   const finish = async () => {
@@ -127,7 +131,7 @@ export function TextEditor(props: {
   };
 
   onCleanup(() => {
-    if (!finished) void finish();
+    if (!finished) fireAndForget(finish(), 'block-psd');
   });
 
   const at = () => pageToScreen(view.camera(), anchor());
@@ -154,10 +158,10 @@ export function TextEditor(props: {
           const mod = IS_MAC ? e.metaKey : e.ctrlKey;
           if (e.key === 'Escape' || (e.key === 'Enter' && mod)) {
             e.preventDefault();
-            void finish();
+            fireAndForget(finish(), 'block-psd');
           }
         }}
-        onBlur={() => void finish()}
+        onBlur={() => fireAndForget(finish(), 'block-psd')}
       />
       <div class="mt-1 flex items-center justify-between text-[11px] text-ink-muted">
         <Show when={editing()} fallback={<span>New text</span>}>

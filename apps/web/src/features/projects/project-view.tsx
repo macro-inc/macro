@@ -4,6 +4,7 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
 import SplitIcon from '@phosphor/square-half.svg';
 import { createEffect, onMount } from 'solid-js';
@@ -148,7 +149,10 @@ export function CreateProjectView(props: {
             onClose={() => close()}
             onSubmit={(submission) => {
               close(true);
-              void settleProjectSubmission(submission, layout);
+              fireAndForget(
+                settleProjectSubmission(submission, layout),
+                'projects'
+              );
             }}
           />
         </SplitPanel.Body>

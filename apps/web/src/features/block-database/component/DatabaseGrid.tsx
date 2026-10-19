@@ -1,4 +1,5 @@
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { refreshInBackground } from '@queries/database-sql/create-database-sql-query';
 import {
   applyDatabaseOps,
@@ -205,7 +206,10 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
             return;
           listener(change.version);
           if (props.stored && props.view.layout.kind === 'board')
-            void refreshCardPositions(databaseId, props.view.id);
+            fireAndForget(
+              refreshCardPositions(databaseId, props.view.id),
+              'database-cache'
+            );
         });
         // An undo or redo is read back as soon as it answers, ahead of its ping.
         onCleanup(
@@ -253,7 +257,10 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
       if (positions.isSuccess)
         return { kind: 'ready', positions: positions.data };
       if (positions.isError)
-        return { kind: 'failed', retry: () => void positions.refetch() };
+        return {
+          kind: 'failed',
+          retry: () => fireAndForget(positions.refetch(), 'database-view'),
+        };
       return { kind: 'loading' };
     },
     setPositions: (change) => {

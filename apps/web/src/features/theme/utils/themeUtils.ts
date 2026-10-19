@@ -1,4 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
+import { Telemetry } from '@macro-inc/observability';
 import { batch, createEffect, on } from 'solid-js';
 import { DEFAULT_DARK_THEME, DEFAULT_LIGHT_THEME } from '../constants';
 import {
@@ -34,13 +35,20 @@ import {
 import { convertThemev2v3 } from './themeMigrations';
 import { isThemeV2, isThemeV3 } from './themeValidation';
 
-export function exportTheme(themeId?: string) {
+export async function exportTheme(themeId?: string): Promise<void> {
   const id = themeId ?? currentThemeId();
   const theme = JSON.stringify(themes().find((t) => t.id === id));
-  navigator.clipboard.writeText(theme);
+  try {
+    await navigator.clipboard.writeText(theme);
+    toast.success('Theme copied to clipboard');
+  } catch (error) {
+    Telemetry.error(error, { surface: 'theme-export' });
+    toast.failure('Failed to copy theme to clipboard');
+  }
 }
 
-async function _importTheme(): Promise<void> {
+/** Imports a theme from the clipboard JSON and applies it. */
+export async function importThemeFromClipboard(): Promise<void> {
   try {
     const text = await navigator.clipboard.readText();
     const parsed: unknown = JSON.parse(text);
@@ -66,6 +74,7 @@ async function _importTheme(): Promise<void> {
     };
     setUserThemes([...userThemes(), newTheme]);
     applyTheme(id);
+    toast.success(`Imported theme "${imported.name}"`);
   } catch (e) {
     console.error('Failed to import theme:', e);
     toast.alert('Failed to import theme from clipboard.');

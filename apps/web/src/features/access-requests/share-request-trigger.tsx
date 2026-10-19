@@ -1,6 +1,6 @@
 import { useIsAuthenticated } from '@core/auth';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { useAccessRequestState } from '@queries/access-requests/requests';
-
 import {
   type Accessor,
   createEffect,
@@ -56,7 +56,7 @@ export function useShareRequestTrigger(props: {
           if (result.data.canReview && result.data.pendingCount > 0)
             props.open();
         };
-        void review();
+        fireAndForget(review(), 'access-requests');
       }
     )
   );

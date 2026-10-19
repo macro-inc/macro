@@ -44,7 +44,7 @@ fn sample_draft() -> CalendarEventDraft {
 #[test]
 fn create_body_matches_the_router_request() {
     let calendar_id = Some(Uuid::from_u128(3));
-    let body = create_body(None, calendar_id, &sample_draft());
+    let body = create_body(None, calendar_id, &sample_draft(), false);
     let request: CreateCalendarEventRequest = serde_json::from_value(body).unwrap();
 
     assert_eq!(request.calendar_id, calendar_id);
@@ -71,7 +71,7 @@ fn out_of_office_survives_the_create_wire_contract() {
         decline_message: Some("Away".to_string()),
     });
     let request: CreateCalendarEventRequest =
-        serde_json::from_value(create_body(None, None, &draft)).unwrap();
+        serde_json::from_value(create_body(None, None, &draft, false)).unwrap();
 
     let out_of_office = request
         .out_of_office
@@ -253,4 +253,41 @@ fn unrecognized_failures_are_classified_by_status() {
         Some(r#"{"code":"mystery","message":"no"}"#.to_string()),
     );
     assert!(matches!(parsed, CalendarMutationError::Retryable(_)));
+}
+
+#[test]
+fn create_body_asks_for_a_macro_call_only_when_requested() {
+    let request: CreateCalendarEventRequest =
+        serde_json::from_value(create_body(None, None, &sample_draft(), true)).unwrap();
+    assert!(request.macro_call);
+    let request: CreateCalendarEventRequest =
+        serde_json::from_value(create_body(None, None, &sample_draft(), false)).unwrap();
+    assert!(!request.macro_call);
+}
+
+#[test]
+fn macro_call_failures_round_trip_to_the_meeting_link_error() {
+    let api_error = CalendarMutationApiError::from(CreateEventWithMacroCallError::MeetingLink(
+        MeetingLinkError::Failed("down".to_string()),
+    ));
+    let body = serde_json::to_string(&api_error).unwrap();
+    let parsed = macro_call_error_from_response(StatusCode::SERVICE_UNAVAILABLE, Some(body));
+    assert!(matches!(
+        parsed,
+        CreateEventWithMacroCallError::MeetingLink(MeetingLinkError::Failed(_))
+    ));
+
+    let api_error = CalendarMutationApiError::from(CalendarMutationError::NoWritableCalendar);
+    let body = serde_json::to_string(&api_error).unwrap();
+    let parsed = macro_call_error_from_response(StatusCode::CONFLICT, Some(body));
+    assert!(matches!(
+        parsed,
+        CreateEventWithMacroCallError::Calendar(CalendarMutationError::NoWritableCalendar)
+    ));
+
+    let parsed = macro_call_error_from_response(StatusCode::SERVICE_UNAVAILABLE, None);
+    assert!(matches!(
+        parsed,
+        CreateEventWithMacroCallError::Calendar(CalendarMutationError::Retryable(_))
+    ));
 }

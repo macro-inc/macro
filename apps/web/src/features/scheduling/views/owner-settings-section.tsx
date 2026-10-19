@@ -1,21 +1,32 @@
-import { SettingsButton as Button } from '@app/features/settings/primitives';
+import { fireAndForget } from '@core/util/fireAndForget';
 import Copy from '@phosphor/copy.svg';
-import { Match, Show, Switch } from 'solid-js';
+import { CopyButton } from '@ui';
+import {
+  createSignal,
+  type JSX,
+  Match,
+  onCleanup,
+  Show,
+  Switch,
+} from 'solid-js';
 import { AvailabilityPanel } from '../components/availability-panel';
-import { BookingsPanel } from '../components/bookings-panel';
-import { EventEditor } from '../components/event-editor';
+import { BookingPageEditor } from '../components/booking-page-editor';
 import { EventTypesPanel } from '../components/event-types-panel';
-import { Field, TextArea, TextInput } from '../components/fields';
-import { OwnerBadge } from '../components/owner-badge';
-import { ScheduleEditor } from '../components/schedule-editor';
 import { useScheduling } from '../context/scheduling-context';
 import type { SchedulingOwner } from '../primitives/create-scheduling-owner';
+import { BookingsView } from './bookings-view';
+import { EventDetailsDialog } from './event-details-view';
+import { EventEditor } from './event-editor-view';
 import { InsightsView } from './insights-view';
+import { ScheduleEditor } from './schedule-editor-view';
 
 export function OwnerSettingsSection(props: {
   kind: 'links' | 'availability' | 'page' | 'bookings' | 'insights';
   owner: SchedulingOwner;
   search?: string;
+  onSearchChange?: (value: string) => void;
+  dateRange?: JSX.Element;
+  scheduleTopBarOwned?: boolean;
 }) {
   const capabilities = useScheduling();
   const owner = props.owner;
@@ -34,6 +45,24 @@ export function OwnerSettingsSection(props: {
     closeScheduleEditor,
     duplicate,
   } = owner;
+  const [details, setDetails] = createSignal<{
+    id: string;
+    opener?: HTMLElement;
+  }>();
+  let disposed = false;
+  onCleanup(() => {
+    disposed = true;
+  });
+  async function copyPageLink() {
+    const profile = source.profile();
+    if (!profile?.revision) return false;
+    let copied = false;
+    await action(async () => {
+      await capabilities.copyLink(profile);
+      copied = true;
+    });
+    return copied;
+  }
   return (
     <Show when={source.profile()}>
       {(p) => (
@@ -44,253 +73,248 @@ export function OwnerSettingsSection(props: {
               role="group"
               aria-label={`${scope().name} ${props.kind === 'page' ? 'booking page' : props.kind}`}
             >
-              <Show when={event()}>
-                <div class="mb-4">
-                  <OwnerBadge scope={scope()} />
-                </div>
+              <Show when={event()} keyed>
+                {(value) => (
+                  <EventEditor
+                    event={value}
+                    events={p().eventTypes}
+                    schedules={owner.eventSchedules()}
+                    members={capabilities.members()}
+                    team={!!scope().teamId}
+                    defaultHosts={[capabilities.userId()]}
+                    saving={source.saving()}
+                    createActive={owner.createActive()}
+                    dialogTitle={
+                      p().eventTypes.some((item) => item.id === value.id)
+                        ? 'Edit booking link'
+                        : `New ${scope().teamId ? 'team' : 'personal'} booking link`
+                    }
+                    link={(slug) => capabilities.link(p(), slug)}
+                    onCopyLink={(slug) => capabilities.copyLink(p(), slug)}
+                    onCancel={closeEventEditor}
+                    onSave={owner.saveEvent}
+                  />
+                )}
               </Show>
-              <Show
-                when={!event()}
-                fallback={
-                  <Show when={event()} keyed>
+              <Show when={details()} keyed>
+                {(selection) => (
+                  <Show
+                    when={p().eventTypes.find(
+                      (item) => item.id === selection.id
+                    )}
+                  >
                     {(value) => (
-                      <EventEditor
-                        event={value}
-                        events={p().eventTypes}
-                        schedules={p().schedules}
+                      <EventDetailsDialog
+                        event={value()}
+                        link={capabilities.link(p(), value().slug)}
+                        schedule={p().schedules.find(
+                          (item) => item.id === value().scheduleId
+                        )}
                         members={capabilities.members()}
                         team={!!scope().teamId}
                         saving={source.saving()}
-                        onCancel={closeEventEditor}
-                        onSave={async (next) => {
-                          const exists = p().eventTypes.some(
-                            (e) => e.id === next.id
-                          );
-                          await save({
-                            ...p(),
-                            eventTypes: exists
-                              ? p().eventTypes.map((e) =>
-                                  e.id === next.id ? next : e
+                        opener={selection.opener}
+                        onCopyLink={() =>
+                          capabilities.copyLink(p(), value().slug)
+                        }
+                        onClose={() => setDetails(undefined)}
+                        onEdit={
+                          scope().canEdit
+                            ? (next, opener) => {
+                                if (
+                                  disposed ||
+                                  !scope().canEdit ||
+                                  source.saving()
                                 )
-                              : [...p().eventTypes, next],
-                          });
-                          if (event()?.id === next.id) closeEventEditor();
-                        }}
+                                  return;
+                                const saved = source
+                                  .profile()
+                                  ?.eventTypes.find(
+                                    (item) => item.id === next.id
+                                  );
+                                if (saved) owner.editEvent(saved, opener);
+                              }
+                            : undefined
+                        }
                       />
                     )}
                   </Show>
+                )}
+              </Show>
+              <EventTypesPanel
+                owner={scope()}
+                search={props.search ?? ''}
+                events={p().eventTypes}
+                canEdit={scope().canEdit}
+                saving={source.saving()}
+                onView={(item, opener) => setDetails({ id: item.id, opener })}
+                onEdit={owner.editEvent}
+                onDuplicate={duplicate}
+                link={(item) => capabilities.link(p(), item.slug)}
+                onCopy={(item) =>
+                  fireAndForget(
+                    action(() => capabilities.copyLink(p(), item.slug)),
+                    'scheduling'
+                  )
                 }
-              >
-                <EventTypesPanel
-                  owner={scope()}
-                  search={props.search ?? ''}
-                  events={p().eventTypes}
-                  canEdit={scope().canEdit}
-                  saving={source.saving()}
-                  onEdit={owner.editEvent}
-                  onDuplicate={duplicate}
-                  link={(item) => capabilities.link(p(), item.slug)}
-                  onCopy={(item) =>
-                    void action(() => capabilities.copyLink(p(), item.slug))
-                  }
-                  onToggle={(item, enabled) =>
-                    void action(() =>
+                onToggle={(item, enabled) =>
+                  fireAndForget(
+                    action(() =>
                       save({
                         ...p(),
                         eventTypes: p().eventTypes.map((e) =>
                           e.id === item.id ? { ...e, enabled } : e
                         ),
                       })
-                    )
-                  }
-                  onDelete={(item) =>
-                    void action(() =>
+                    ),
+                    'scheduling'
+                  )
+                }
+                onDelete={(item) =>
+                  fireAndForget(
+                    action(() =>
                       save({
                         ...p(),
                         eventTypes: p().eventTypes.filter(
                           (e) => e.id !== item.id
                         ),
                       })
-                    )
-                  }
-                />
-              </Show>
+                    ),
+                    'scheduling'
+                  )
+                }
+              />
             </div>
           </Match>
           <Match when={props.kind === 'availability'}>
             <div
-              class="min-w-0"
+              class="flex min-h-0 min-w-0 flex-1 flex-col"
               role="group"
               aria-label={`${scope().name} ${props.kind === 'page' ? 'booking page' : props.kind}`}
             >
-              <Show when={schedule()}>
-                <div class="mb-4">
-                  <OwnerBadge scope={scope()} />
-                </div>
+              <Show when={schedule()} keyed>
+                {(value) => (
+                  <ScheduleEditor
+                    schedule={value}
+                    topBarOwned={props.scheduleTopBarOwned}
+                    creating={
+                      !p().schedules.some(
+                        (schedule) => schedule.id === value.id
+                      )
+                    }
+                    saving={source.saving()}
+                    onCancel={closeScheduleEditor}
+                    onSave={async (next) => {
+                      const exists = p().schedules.some(
+                        (s) => s.id === next.id
+                      );
+                      await save({
+                        ...p(),
+                        defaultScheduleId:
+                          p().defaultScheduleId ??
+                          p().schedules[0]?.id ??
+                          next.id,
+                        schedules: exists
+                          ? p().schedules.map((s) =>
+                              s.id === next.id ? next : s
+                            )
+                          : [...p().schedules, next],
+                      });
+                      if (schedule()?.id === next.id) closeScheduleEditor();
+                    }}
+                  />
+                )}
               </Show>
-              <Show
-                when={!schedule()}
-                fallback={
-                  <Show when={schedule()} keyed>
-                    {(value) => (
-                      <ScheduleEditor
-                        schedule={value}
-                        saving={source.saving()}
-                        onCancel={closeScheduleEditor}
-                        onSave={async (next) => {
-                          const exists = p().schedules.some(
-                            (s) => s.id === next.id
-                          );
-                          await save({
-                            ...p(),
-                            defaultScheduleId:
-                              p().defaultScheduleId ??
-                              p().schedules[0]?.id ??
-                              next.id,
-                            schedules: exists
-                              ? p().schedules.map((s) =>
-                                  s.id === next.id ? next : s
-                                )
-                              : [...p().schedules, next],
-                          });
-                          if (schedule()?.id === next.id) closeScheduleEditor();
-                        }}
-                      />
-                    )}
-                  </Show>
-                }
-              >
+              {/* Keep card openers mounted for focus restoration after editing. */}
+              <div hidden={!!schedule()}>
                 <AvailabilityPanel
                   profile={p()}
+                  search={props.search}
                   canEdit={scope().canEdit}
                   saving={source.saving()}
                   onEdit={owner.editSchedule}
                   onDefault={(s) =>
-                    void action(() => save({ ...p(), defaultScheduleId: s.id }))
+                    fireAndForget(
+                      action(() => save({ ...p(), defaultScheduleId: s.id })),
+                      'scheduling'
+                    )
                   }
                   onDelete={(s) =>
-                    void action(async () => {
-                      if (p().eventTypes.some((e) => e.scheduleId === s.id))
-                        throw new Error(
-                          'Move event types to another schedule first.'
+                    fireAndForget(
+                      action(async () => {
+                        if (p().eventTypes.some((e) => e.scheduleId === s.id))
+                          throw new Error(
+                            'Move event types to another schedule first.'
+                          );
+                        const schedules = p().schedules.filter(
+                          (x) => x.id !== s.id
                         );
-                      const schedules = p().schedules.filter(
-                        (x) => x.id !== s.id
-                      );
-                      await save({
-                        ...p(),
-                        schedules,
-                        defaultScheduleId:
-                          p().defaultScheduleId === s.id
-                            ? (schedules[0]?.id ?? null)
-                            : p().defaultScheduleId,
-                      });
-                    })
+                        await save({
+                          ...p(),
+                          schedules,
+                          defaultScheduleId:
+                            p().defaultScheduleId === s.id
+                              ? (schedules[0]?.id ?? null)
+                              : p().defaultScheduleId,
+                        });
+                      }),
+                      'scheduling'
+                    )
                   }
                 />
-              </Show>
+              </div>
             </div>
           </Match>
           <Match when={props.kind === 'page'}>
             <div
-              class="min-w-0"
+              class="flex min-h-0 min-w-0 flex-1 flex-col"
               role="group"
               aria-label={`${scope().name} ${props.kind === 'page' ? 'booking page' : props.kind}`}
             >
-              <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-                <p class="text-sm text-ink-muted">Public booking page</p>
-                <div class="flex items-center gap-3">
-                  <Show when={p().revision > 0}>
-                    <a
-                      class="text-sm text-ink-muted underline underline-offset-4"
-                      href={capabilities.link(p())}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      Preview page
-                    </a>
-                  </Show>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={!p().revision}
-                    onClick={() =>
-                      void action(() => capabilities.copyLink(p()))
-                    }
-                  >
-                    <Copy class="size-4" />
-                    Copy page link
-                  </Button>
-                </div>
+              <div class="mb-4 flex shrink-0 flex-wrap items-center justify-end gap-3">
+                <CopyButton
+                  variant="outline"
+                  size="md"
+                  label="Copy link"
+                  tooltip={
+                    p().revision
+                      ? undefined
+                      : 'Save your booking page before sharing'
+                  }
+                  disabled={!p().revision}
+                  onClick={copyPageLink}
+                >
+                  <Copy aria-hidden="true" class="size-4" />
+                  Copy link
+                </CopyButton>
               </div>
-              <div class="grid items-start gap-8 @2xl:grid-cols-2">
-                <div class="flex flex-col gap-5">
-                  <Field label="Display name">
-                    <TextInput
-                      disabled={!scope().canEdit}
-                      value={profileDraft()?.name ?? p().name}
-                      onInput={(e) =>
-                        setProfileDraft({
-                          name: e.currentTarget.value,
-                          description:
-                            profileDraft()?.description ?? p().description,
-                        })
-                      }
-                    />
-                  </Field>
-                  <Field label="Introduction">
-                    <TextArea
-                      disabled={!scope().canEdit}
-                      value={profileDraft()?.description ?? p().description}
-                      onInput={(e) =>
-                        setProfileDraft({
-                          name: profileDraft()?.name ?? p().name,
-                          description: e.currentTarget.value,
-                        })
-                      }
-                    />
-                  </Field>
-                  <Button
-                    class="self-start"
-                    variant="strong"
-                    disabled={
-                      !scope().canEdit || !profileDraft() || source.saving()
-                    }
-                    onClick={() =>
-                      void action(async () => {
-                        await save({ ...p(), ...profileDraft() });
-                        setProfileDraft(undefined);
-                      })
-                    }
-                  >
-                    Save booking page
-                  </Button>
-                </div>
-                <aside class="rounded-lg border border-edge-muted p-5">
-                  <p class="text-xs font-medium uppercase tracking-wide text-ink-muted">
-                    Preview
-                  </p>
-                  <span class="mt-6 flex size-12 items-center justify-center rounded-full bg-active text-lg font-semibold">
-                    {(profileDraft()?.name ?? p().name).slice(0, 1)}
-                  </span>
-                  <h2 class="mt-4 font-semibold">
-                    {profileDraft()?.name ?? p().name}
-                  </h2>
-                  <p class="mt-2 whitespace-pre-wrap text-sm text-ink-muted">
-                    {profileDraft()?.description ?? p().description}
-                  </p>
-                  <Show when={p().revision > 0}>
-                    <a
-                      class="mt-6 inline-block text-sm underline underline-offset-4"
-                      href={capabilities.link(p())}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      View public page ↗
-                    </a>
-                  </Show>
-                </aside>
-              </div>
+              <BookingPageEditor
+                profile={{
+                  id: p().id,
+                  name: profileDraft()?.name ?? p().name,
+                  description: profileDraft()?.description ?? p().description,
+                  eventTypes: p().eventTypes.filter((event) => event.enabled),
+                }}
+                canEdit={scope().canEdit}
+                saving={source.saving()}
+                hasChanges={owner.hasProfileChanges()}
+                onName={(name) =>
+                  setProfileDraft({
+                    name,
+                    description: profileDraft()?.description ?? p().description,
+                  })
+                }
+                onDescription={(description) =>
+                  setProfileDraft({
+                    name: profileDraft()?.name ?? p().name,
+                    description,
+                  })
+                }
+                onRevert={owner.revertProfile}
+                onSave={() =>
+                  fireAndForget(action(owner.saveProfile), 'scheduling')
+                }
+              />
             </div>
           </Match>
           <Match when={props.kind === 'bookings'}>
@@ -299,7 +323,12 @@ export function OwnerSettingsSection(props: {
               role="group"
               aria-label={`${scope().name} ${props.kind === 'page' ? 'booking page' : props.kind}`}
             >
-              <BookingsPanel
+              <BookingsView
+                search={props.search}
+                onSearchChange={props.onSearchChange}
+                dateRange={props.dateRange}
+                loading={source.loading()}
+                error={owner.error() || source.error()}
                 bookings={source.bookings()}
                 events={p().eventTypes}
                 members={capabilities.members()}
@@ -307,17 +336,29 @@ export function OwnerSettingsSection(props: {
                 canManageBookings={scope().canManageBookings}
                 busyId={busyBooking()}
                 onApprove={(id) =>
-                  void bookingAction(id, () => source.approve(id))
+                  fireAndForget(
+                    bookingAction(id, () => source.approve(id)),
+                    'scheduling'
+                  )
                 }
                 onCancel={(id) =>
-                  void bookingAction(id, () => source.cancel(id))
+                  fireAndForget(
+                    bookingAction(id, () => source.cancel(id)),
+                    'scheduling'
+                  )
                 }
                 onManage={(id) =>
-                  void bookingAction(id, () => capabilities.manageBooking(id))
+                  fireAndForget(
+                    bookingAction(id, () => capabilities.manageBooking(id)),
+                    'scheduling'
+                  )
                 }
                 onAttendance={(id, attendance) =>
-                  void bookingAction(id, () =>
-                    source.setAttendance(id, attendance)
+                  fireAndForget(
+                    bookingAction(id, () =>
+                      source.setAttendance(id, attendance)
+                    ),
+                    'scheduling'
                   )
                 }
               />

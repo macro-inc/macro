@@ -1,5 +1,6 @@
 import { useChannelsContext } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { usePlatformNotificationState } from '@notifications';
 import { DefaultUserNameResolver } from '@notifications/notification-resolvers';
 import {
@@ -253,7 +254,7 @@ export function CallStartedNotifier() {
       closeCallNotification(resolution.callId);
       // The creator's other devices never receive call_started; a refetch
       // picks the now-answered call up for their active-call badges.
-      void invalidateActiveCallQueries();
+      fireAndForget(invalidateActiveCallQueries(), 'channel');
       return;
     }
 
@@ -275,7 +276,7 @@ export function CallStartedNotifier() {
       channelId: resolution.channelId,
       callId: resolution.callId,
     });
-    void invalidateActiveCallQueries();
+    fireAndForget(invalidateActiveCallQueries(), 'channel');
   });
 
   createCallEventsEffect({
@@ -311,21 +312,24 @@ export function CallStartedNotifier() {
         createdAt,
         createdBy: createdBy ?? '',
       });
-      void invalidateActiveCallQueries();
+      fireAndForget(invalidateActiveCallQueries(), 'channel');
 
       // The cache above is updated for every call, including our own; only the
       // ring and the toast are skipped when we're already in it or started it.
       if (callCtx.activeCallId() === callId) return;
       if (isFromSelf) return;
 
-      void emitCallStartedNotification({
-        channelId,
-        callId,
-        createdBy,
-        channelName: channelsCtx.channelsById()[channelId]?.name ?? undefined,
-        notif,
-        isJoined: () => callCtx.activeCallId() === callId,
-      });
+      fireAndForget(
+        emitCallStartedNotification({
+          channelId,
+          callId,
+          createdBy,
+          channelName: channelsCtx.channelsById()[channelId]?.name ?? undefined,
+          notif,
+          isJoined: () => callCtx.activeCallId() === callId,
+        }),
+        'channel'
+      );
     },
   });
 
@@ -396,7 +400,7 @@ async function emitCallStartedNotification(args: {
     };
     handle.onClick(() => {
       window.focus();
-      void joinChannelCall(channelId);
+      fireAndForget(joinChannelCall(channelId), 'channel');
       handle.close();
       untrack();
       ringer.stop();

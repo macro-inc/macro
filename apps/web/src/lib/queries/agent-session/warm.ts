@@ -106,7 +106,7 @@ export function replenishWarmAgentSession(
   // A different configuration may have left a usable reservation in the cache.
   // No query means this owner has not mounted a warming surface.
   if (!query || query.data) return;
-  void client.invalidateQueries(
+  client.invalidateQueries(
     { queryKey: key, exact: true },
     { cancelRefetch: false }
   );

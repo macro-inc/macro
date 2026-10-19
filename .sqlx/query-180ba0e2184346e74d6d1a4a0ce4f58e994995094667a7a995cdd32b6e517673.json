@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_mailbox_watch_work SET lease_until=now()+interval '3 minutes' WHERE link_id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "180ba0e2184346e74d6d1a4a0ce4f58e994995094667a7a995cdd32b6e517673"
+}

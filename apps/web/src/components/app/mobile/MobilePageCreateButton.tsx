@@ -33,7 +33,7 @@ const QUICK_CREATE_VIEWS = [
   { view: 'tasks', icon: TaskIcon },
 ] as const;
 
-/** The current view's New action, alongside the mobile AI composer. */
+/** The current non-AI view's New action above the navigation dock. */
 export function MobilePageCreateButton() {
   const foregroundView = useForegroundMobileView();
   const createBlocks = useCreateMenuBlocks();
@@ -77,7 +77,9 @@ export function MobilePageCreateButton() {
             {
               label: 'Call',
               icon: PhoneIcon,
-              onSelect: () => void call.keyDownHandler(),
+              onSelect: () => {
+                call.keyDownHandler();
+              },
             },
           ]
         : []),

@@ -1,4 +1,5 @@
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { Key } from '@solid-primitives/keyed';
 import { cn, Layer } from '@ui';
 import {
@@ -73,7 +74,10 @@ export function MessageList(props: MessageListProps) {
       ) {
         return;
       }
-      void fetchOlderMessages(list, context.query.fetchNextPage);
+      fireAndForget(
+        fetchOlderMessages(list, context.query.fetchNextPage),
+        'email-thread'
+      );
     };
 
     applyHeight();
@@ -108,7 +112,10 @@ export function MessageList(props: MessageListProps) {
           !context.query.isFetching() &&
           context.query.hasMore()
         ) {
-          void fetchOlderMessages(list, context.query.fetchNextPage);
+          fireAndForget(
+            fetchOlderMessages(list, context.query.fetchNextPage),
+            'email-thread'
+          );
         }
       }}
     >
@@ -174,11 +181,11 @@ export function MessageList(props: MessageListProps) {
               });
 
               // A message with an in-progress draft reply stays expanded so the
-              // draft remains visible even after newer messages arrive (matches
-              // Gmail/Superhuman). Desktop only: mobile edits drafts in a drawer.
+              // draft (inline on desktop, a preview on touch) remains visible
+              // even after newer messages arrive.
               const hasDraft = createMemo(() => {
                 const messageId = message().db_id;
-                if (!messageId || viewContext.thread.isTouch()) return false;
+                if (!messageId) return false;
                 return !!context.drafts.getDraftForMessage(messageId);
               });
 

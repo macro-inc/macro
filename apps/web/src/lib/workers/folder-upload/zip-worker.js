@@ -12,7 +12,16 @@ self.onmessage = function (event) {
       },
     });
 
-    zipFiles(taskId, files, fileDetails, folderPaths ?? []);
+    zipFiles(taskId, files, fileDetails, folderPaths ?? []).catch((error) => {
+      console.error('ZipWorker: Error in zipFiles:', error);
+      self.postMessage({
+        taskId,
+        type: 'error',
+        data: {
+          message: error instanceof Error ? error.message : String(error),
+        },
+      });
+    });
   }
 };
 

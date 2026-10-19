@@ -8,6 +8,7 @@ import { useNavigate, useParams, useRouteState } from '@app/lib/split-router';
 import { driveSplitRoute } from '@app/routes/routes';
 import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type Accessor,
   createContext,
@@ -154,9 +155,12 @@ export function DriveDetailNavigationProvider(
         sameDocumentRoute(detailRouteFromTarget(endpoint), resolved.document);
       if (endpointMatches) return true;
 
-      navigate(driveDestination(props.location(), resolved.document), {
-        state: [...currentTrail, resolved.target],
-      });
+      fireAndForget(
+        navigate(driveDestination(props.location(), resolved.document), {
+          state: [...currentTrail, resolved.target],
+        }),
+        'drive-view'
+      );
       return true;
     },
 
@@ -164,12 +168,15 @@ export function DriveDetailNavigationProvider(
       const resolved = resolveTarget(target, options);
       if (!resolved) return false;
 
-      navigate(
-        driveDestination(
-          options?.location ?? props.location(),
-          resolved.document
+      fireAndForget(
+        navigate(
+          driveDestination(
+            options?.location ?? props.location(),
+            resolved.document
+          ),
+          { state: [resolved.target] }
         ),
-        { state: [resolved.target] }
+        'drive-view'
       );
       return true;
     },
@@ -203,9 +210,12 @@ export function DriveDetailNavigationProvider(
       const target = nextTrail.at(-1);
       if (!target) return;
 
-      navigate(
-        driveDestination(props.location(), detailRouteFromTarget(target)),
-        { state: nextTrail }
+      fireAndForget(
+        navigate(
+          driveDestination(props.location(), detailRouteFromTarget(target)),
+          { state: nextTrail }
+        ),
+        'drive-view'
       );
     },
 
@@ -214,9 +224,12 @@ export function DriveDetailNavigationProvider(
       // not climb out of the folder/tab the user just selected.
       if (!activeDocument() && !activeCallId()) return;
       selectPreview(undefined);
-      navigate(driveDestination(props.location()), {
-        replace: options?.replace,
-      });
+      fireAndForget(
+        navigate(driveDestination(props.location()), {
+          replace: options?.replace,
+        }),
+        'drive-view'
+      );
     },
   };
 

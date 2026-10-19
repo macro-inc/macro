@@ -1,5 +1,6 @@
 import { DOCS_BASE } from '@app/constants/docs-links';
 import { useAddInboxFlow, useEmailLinksStatus } from '@core/email-link';
+import { fireAndForget } from '@core/util/fireAndForget';
 import EmptyStateInboxTrayGraphic from '@design/empty-state-inbox-tray.svg';
 import EmptyStateNoFilterMatchGraphic from '@design/empty-state-no-filter-match.svg';
 import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.svg';
@@ -50,7 +51,7 @@ export function HomeEmptyState() {
           description="Your recent work and notifications will appear here. Connect email to include your inbox, too."
           primaryAction={{
             label: 'Connect email',
-            onClick: () => void startAddInbox(),
+            onClick: () => fireAndForget(startAddInbox(), 'add-inbox'),
           }}
           documentationUrl={`${DOCS_BASE}/product/inbox`}
         />

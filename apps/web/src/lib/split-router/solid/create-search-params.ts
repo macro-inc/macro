@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import deepEqual from 'fast-deep-equal';
 import { createEffect, createMemo, on } from 'solid-js';
 import {
@@ -75,7 +76,7 @@ export function createSearchParams<T extends SearchParamsRecord>(
       const alreadyCanonical = deepEqual(rawParams, canonical);
       if (alreadyCanonical) return;
 
-      void writeSearch(canonical, 'replace');
+      fireAndForget(writeSearch(canonical, 'replace'), 'split-router');
     })
   );
 
@@ -94,7 +95,10 @@ export function createSearchParams<T extends SearchParamsRecord>(
       return;
     }
 
-    void writeSearch(codec.serialize(nextValue.data), setOptions.history);
+    fireAndForget(
+      writeSearch(codec.serialize(nextValue.data), setOptions.history),
+      'split-router'
+    );
   };
 
   return [createMemoRecord(() => parsed().value), setParams];

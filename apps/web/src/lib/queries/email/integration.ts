@@ -2,6 +2,7 @@ import {
   enableGraphqlSoup,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { emailClient } from '@service-email/client';
 import { storageServiceClient } from '@service-storage/client';
@@ -37,12 +38,12 @@ export async function archiveEmailThread(
       await refreshActiveGraphqlSoupQueries({
         target: { kind: 'email-archive', threadId: id },
       });
-      void invalidateEmailReminderCollection();
+      fireAndForget(invalidateEmailReminderCollection(), 'email-reminders');
     }
     return disposition;
   }
   await throwOnErr(() => emailClient.flagArchived(...args));
-  void invalidateEmailReminderCollection();
+  fireAndForget(invalidateEmailReminderCollection(), 'email-reminders');
   return 'committed';
 }
 export const unscheduleEmailMessage = (

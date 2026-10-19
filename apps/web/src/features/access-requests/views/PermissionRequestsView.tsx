@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { OwnerLabel } from '@entity/owner/owner-display';
 import { Button } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
@@ -35,7 +36,7 @@ function ReviewRow(props: { request: AccessRequest; source: SharingSource }) {
           size="sm"
           variant="outline"
           disabled={props.source.busy()}
-          onClick={() => void resolve(level())}
+          onClick={() => fireAndForget(resolve(level()), 'access-requests')}
         >
           Grant access
         </Button>
@@ -43,7 +44,7 @@ function ReviewRow(props: { request: AccessRequest; source: SharingSource }) {
           size="sm"
           variant="ghost"
           disabled={props.source.busy()}
-          onClick={() => void resolve(null)}
+          onClick={() => fireAndForget(resolve(null), 'access-requests')}
         >
           Deny
         </Button>

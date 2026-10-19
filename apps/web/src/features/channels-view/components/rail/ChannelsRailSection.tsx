@@ -3,6 +3,7 @@ import {
   CollapsibleSection as WorkspaceSection,
 } from '@app/components/view-shell';
 import { DebugSuspense } from '@channel/DebugSuspense';
+import { fireAndForget } from '@core/util/fireAndForget';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
 import PlusIcon from '@phosphor/plus.svg';
@@ -257,7 +258,11 @@ export function RailListError(props: {
       )}
     >
       <span>Couldn’t load conversations.</span>
-      <Button variant="outline" size="xs" onClick={() => void props.retry()}>
+      <Button
+        variant="outline"
+        size="xs"
+        onClick={() => fireAndForget(props.retry(), 'channels-view')}
+      >
         Try again
       </Button>
     </div>

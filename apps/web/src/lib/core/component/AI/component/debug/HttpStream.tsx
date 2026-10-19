@@ -1,4 +1,5 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { platformFetch } from '@core/util/platformFetch';
 import { WebsocketConnectionState } from '@macro-inc/collaboration/websocket';
 import { connectionGatewayClient } from '@service-connection/client';
@@ -32,11 +33,14 @@ export default function HttpStreamDebug() {
     const id = chatId();
     const connected = connectionState() === WebsocketConnectionState.Open;
     if (id && connected) {
-      connectionGatewayClient.trackEntity({
-        entity_type: 'chat',
-        entity_id: id,
-        action: 'open',
-      });
+      fireAndForget(
+        connectionGatewayClient.trackEntity({
+          entity_type: 'chat',
+          entity_id: id,
+          action: 'open',
+        }),
+        'ai-debug'
+      );
     }
   });
 
@@ -118,11 +122,14 @@ export default function HttpStreamDebug() {
         setChatId(data.chat_id);
       }
       // Subscribe to the chat entity so the connection gateway routes messages to us
-      connectionGatewayClient.trackEntity({
-        entity_type: 'chat',
-        entity_id: data.chat_id || chatId(),
-        action: 'open',
-      });
+      fireAndForget(
+        connectionGatewayClient.trackEntity({
+          entity_type: 'chat',
+          entity_id: data.chat_id || chatId(),
+          action: 'open',
+        }),
+        'ai-debug'
+      );
     } catch (err) {
       setError(`Error: ${err}`);
       setIsStreaming(false);

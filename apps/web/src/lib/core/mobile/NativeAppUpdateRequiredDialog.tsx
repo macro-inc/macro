@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { getNativeMobilePlatform } from '@core/util/platform';
 import { Button, Dialog, Surface } from '@ui';
 import { createSignal, Show } from 'solid-js';
@@ -55,7 +56,7 @@ export function NativeAppUpdateRequiredDialog(props: {
                 variant="strong"
                 size="sm"
                 disabled={opening()}
-                onClick={() => void openStore()}
+                onClick={() => fireAndForget(openStore(), 'native-update-link')}
               >
                 Update app
               </Button>

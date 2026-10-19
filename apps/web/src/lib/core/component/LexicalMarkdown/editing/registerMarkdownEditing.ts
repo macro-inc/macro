@@ -10,6 +10,7 @@
 import type { BlockName } from '@core/block';
 import { IS_MAC } from '@core/constant/isMac';
 import { useUserId } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { handleFileFolderDrop } from '@core/util/upload';
 import {
   AwaitNode,
@@ -18,6 +19,7 @@ import {
   type PeerIdValidator,
   peerIdPlugin,
 } from '@macro-inc/lexical-core';
+import { Telemetry } from '@macro-inc/observability';
 import type { Accessor } from 'solid-js';
 import type { MarkdownEditorErrors } from '../constants';
 import type { LexicalWrapper } from '../context/LexicalWrapperContext';
@@ -285,15 +287,28 @@ export function registerMarkdownEditing(options: MarkdownEditingOptions) {
       event: DragEvent,
       blockName?: BlockName
     ) {
-      handleFileFolderDrop(
-        fileEntries,
-        folderEntries,
-        createFilesReadyHandler(editor, filesBlockId, blockName, () =>
-          getDragDropPosition(editor, event, true)
-        )
+      fireAndForget(
+        dropFilesIntoEditor(
+          fileEntries,
+          folderEntries,
+          createFilesReadyHandler(editor, filesBlockId, blockName, () =>
+            getDragDropPosition(editor, event, true)
+          )
+        ),
+        'markdown-file-drop'
       );
     },
   };
+}
+
+async function dropFilesIntoEditor(
+  ...args: Parameters<typeof handleFileFolderDrop>
+) {
+  try {
+    await handleFileFolderDrop(...args);
+  } catch (error) {
+    Telemetry.error(error, { surface: 'markdown-file-drop' });
+  }
 }
 
 export type MarkdownEditing = ReturnType<typeof registerMarkdownEditing>;

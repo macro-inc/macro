@@ -1,4 +1,5 @@
 import { ENABLE_CALLKIT } from '@core/constant/featureFlags';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { isPlatform, isTauri } from '@core/util/platform';
 import { createEffect, createMemo } from 'solid-js';
 import { setNativeCallKitDrawerTheme } from './callkit-drawer-theme';
@@ -20,7 +21,7 @@ export function useCallKitThemeSync() {
 
   const theme = createMemo(nativeCall.drawerTheme);
   createEffect(() => {
-    void syncDrawerTheme(theme());
+    fireAndForget(syncDrawerTheme(theme()), 'channel-call');
   });
 
   return null;

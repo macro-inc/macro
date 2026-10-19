@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { invalidateDatabase } from '@queries/storage/databases';
 import { useEntitySubscription } from '@service-connection/client';
 
@@ -12,7 +13,7 @@ export function useDatabaseSubscription(
   useEntitySubscription(
     () => ({ entity_type: 'database', entity_id: databaseId }),
     () => {
-      void invalidateDatabase(databaseId);
+      fireAndForget(invalidateDatabase(databaseId), 'database-cache');
       refreshRows();
     }
   );

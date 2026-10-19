@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { type Accessor, createSignal } from 'solid-js';
 import type {
   EmailAttachmentStorage,
@@ -10,6 +11,7 @@ import type { EmailFormContextValue } from './email-form-types';
 type AttachmentState = Pick<
   EmailFormContextValue['attachments'],
   | 'list'
+  | 'markUploadComplete'
   | 'assignAttachmentId'
   | 'markAttachmentUploaded'
   | 'clearAttachmentId'
@@ -44,6 +46,7 @@ export function createAttachmentPersistence(options: {
   inboxId: Accessor<string | undefined>;
   services: Pick<
     EmailAttachmentStorage,
+    | 'completeAttachment'
     | 'uploadAttachments'
     | 'addForwardedAttachments'
     | 'removeAttachment'
@@ -125,15 +128,29 @@ export function createAttachmentPersistence(options: {
         );
         inFlight.add(settled);
         setUploading(true);
-        void settled.then(() => {
-          inFlight.delete(settled);
-          setUploading(inFlight.size > 0);
-        });
+        fireAndForget(
+          settled.then(() => {
+            inFlight.delete(settled);
+            setUploading(inFlight.size > 0);
+          }),
+          'email-compose'
+        );
       }
       while (inFlight.size) await Promise.all([...inFlight]);
       // All work has settled; rethrow this save's own upload failure.
       if (run) await run;
       if (!stillCurrent()) return;
+      for (const attachment of options.attachments.list()) {
+        if (attachment.type === 'remote' && attachment.uploadPending) {
+          await options.services.completeAttachment({
+            draftId,
+            attachmentId: attachment.attachmentId,
+            inboxId: inbox.inboxId,
+          });
+          if (stillCurrent())
+            options.attachments.markUploadComplete(attachment.attachmentId);
+        }
+      }
       const forwarded = options.attachments
         .list()
         .filter((attachment) => attachment.type === 'forwarded');

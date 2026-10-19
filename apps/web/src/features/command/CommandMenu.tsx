@@ -24,6 +24,7 @@ import { TOKENS } from '@core/hotkey/tokens';
 import type { HotkeyCommand, RegisterHotkeyReturn } from '@core/hotkey/types';
 import { runCommand } from '@core/hotkey/utils';
 import { debouncedDependent } from '@core/util/debounce';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { openExternalUrl } from '@core/util/url';
 import { type EntityData, isGithubPrEntity } from '@entity';
 import { EntitySelectionBadge } from '@entity/components/EntitySelectionBadge';
@@ -440,7 +441,7 @@ export function CommandMenuInner(props: {
     }
 
     if (isUserItem(item)) {
-      void openDirectMessage(item.id, openInNewSplit);
+      fireAndForget(openDirectMessage(item.id, openInNewSplit), 'command-menu');
       CommandState.close();
       CommandState.setQuery('');
       return;
@@ -448,7 +449,7 @@ export function CommandMenuInner(props: {
 
     if (isAskAiItem(item)) {
       // Opens a new agent session and sends the query when ready.
-      void openChatWithMessage(item.query);
+      fireAndForget(openChatWithMessage(item.query), 'command-menu');
       CommandState.close();
       CommandState.setQuery('');
       return;
@@ -522,7 +523,8 @@ export function CommandMenuInner(props: {
         CommandState.selectedIndex() >= items.length - 1 &&
         (pagination?.hasMore() || pagination?.isLoadingMore())
       ) {
-        if (!pagination?.isLoadingMore()) void pagination?.loadMore();
+        if (!pagination?.isLoadingMore())
+          fireAndForget(pagination?.loadMore(), 'command-menu');
         return true;
       }
       return listController.selectNext();
@@ -921,7 +923,8 @@ function VirtualizedCommandList(props: {
       virtualizerHandle.scrollSize -
       virtualizerHandle.scrollOffset -
       virtualizerHandle.viewportSize;
-    if (remaining <= LOAD_MORE_THRESHOLD) void pagination.loadMore();
+    if (remaining <= LOAD_MORE_THRESHOLD)
+      fireAndForget(pagination.loadMore(), 'command-menu');
   };
 
   createEffect(() => {

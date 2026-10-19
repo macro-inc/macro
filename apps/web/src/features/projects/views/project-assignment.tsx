@@ -1,5 +1,6 @@
 import { SearchBar } from '@app/components/view-shell';
 import { debouncedDependent } from '@core/util/debounce';
+import { fireAndForget } from '@core/util/fireAndForget';
 import StackIcon from '@phosphor/stack.svg';
 import { Button, Dialog } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
@@ -68,7 +69,7 @@ export function ProjectAssignment(props: {
         <Button
           class="justify-start"
           disabled={commands.pending()}
-          onClick={() => void assign()}
+          onClick={() => fireAndForget(assign(), 'projects')}
         >
           No project
         </Button>
@@ -78,7 +79,9 @@ export function ProjectAssignment(props: {
               <Button
                 class="w-full justify-start"
                 disabled={commands.pending() || !canEditProject(row.project)}
-                onClick={() => void assign(row.project.id)}
+                onClick={() =>
+                  fireAndForget(assign(row.project.id), 'projects')
+                }
               >
                 <StackIcon class="size-4 shrink-0" />
                 <span class="truncate">{row.project.name}</span>
@@ -98,7 +101,9 @@ export function ProjectAssignment(props: {
           <p role="alert" class="text-sm text-failure">
             Could not load projects.
           </p>
-          <Button onClick={() => void source.refresh()}>Try again</Button>
+          <Button onClick={() => fireAndForget(source.refresh(), 'projects')}>
+            Try again
+          </Button>
         </Show>
         <Show
           when={
@@ -112,7 +117,7 @@ export function ProjectAssignment(props: {
         <Show when={source.hasMore()}>
           <Button
             disabled={source.loadingMore()}
-            onClick={() => void source.loadMore()}
+            onClick={() => fireAndForget(source.loadMore(), 'projects')}
           >
             Load more projects
           </Button>

@@ -102,7 +102,7 @@ export function MediaSelector(props: MediaSelectorProps) {
     return null;
   };
 
-  const uploadStaticMediaFiles = async (files: File[]) => {
+  const uploadStaticMediaFiles = (files: File[]) => {
     for (const file of files) {
       const mediaType = lookUpMediaFileType(file);
       if (mediaType === null) continue;

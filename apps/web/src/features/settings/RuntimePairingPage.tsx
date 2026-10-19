@@ -1,4 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { ThrownResultError } from '@core/util/result';
 import ArrowLeftIcon from '@phosphor/arrow-left.svg';
 import {
@@ -357,7 +358,7 @@ export function RuntimePairingPage(props: {
                   variant="cta"
                   size="sm"
                   disabled={!canApprove()}
-                  onClick={() => void approve()}
+                  onClick={() => fireAndForget(approve(), 'runtime-pairing')}
                 >
                   {approveMutation.isPending ? 'Approving…' : 'Approve'}
                 </Button>

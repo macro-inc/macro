@@ -1,6 +1,7 @@
 import { CredentialField } from '@channel/Bots/CredentialField';
 import { LoadingSpinner } from '@core/component/LoadingSpinner';
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { formatRelativeTimestamp } from '@entity';
 import KeyIcon from '@phosphor/key.svg';
 import PlusIcon from '@phosphor/plus.svg';
@@ -301,7 +302,8 @@ function CreateApiKeyDialog(props: {
                       setNameError(undefined);
                     }}
                     onKeyDown={(event) => {
-                      if (event.key === 'Enter') void submit();
+                      if (event.key === 'Enter')
+                        fireAndForget(submit(), 'api-key-settings');
                     }}
                   />
                   <Show
@@ -325,7 +327,7 @@ function CreateApiKeyDialog(props: {
                     variant="strong"
                     size="sm"
                     disabled={props.pending}
-                    onClick={() => void submit()}
+                    onClick={() => fireAndForget(submit(), 'api-key-settings')}
                   >
                     {props.pending ? 'Creating…' : 'Create key'}
                   </Button>

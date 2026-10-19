@@ -1,5 +1,6 @@
 import { useDragDropContext } from '@thisbeyond/solid-dnd';
 import { createEffect, on, onCleanup } from 'solid-js';
+import { createPointerAutoScroll } from './create-pointer-auto-scroll';
 
 type NestedScroll = {
   viewportSelector: string;
@@ -116,11 +117,21 @@ export function createDragAutoScroll(options: {
   const context = useDragDropContext();
   if (!context) throw new Error('Drag auto-scroll requires DragDropProvider');
   const [state, actions] = context;
+  const autoScroll = createPointerAutoScroll({
+    ...options,
+    getPointer: () => state.active.sensor?.coordinates.current,
+    onScroll: () => actions.detectCollisions(),
+  });
   createEffect(
     on(
       () => state.active.draggableId,
       (id) => {
         if (id === null) return;
+        if (!options.nestedScroll) {
+          autoScroll.start();
+          onCleanup(autoScroll.stop);
+          return;
+        }
         let previousTime: number | undefined;
         let frame: number;
         const tick = (time: number) => {

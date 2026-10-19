@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   ListEntity,
   ListEntityMetadataQueryProvider,
@@ -88,6 +89,7 @@ export function RecordItemList(props: {
                 {(entity) => (
                   <ListEntity
                     entity={entity}
+                    hideCheckbox
                     timestamp={entity.updatedAt}
                     onClick={() => openEntity(entity)}
                   />
@@ -127,7 +129,11 @@ function RetryNotice(props: {
   return (
     <div class="flex items-center justify-center gap-2 p-3 text-center text-xs text-ink-muted">
       <span>{props.message}</span>
-      <Button variant="ghost" size="sm" onClick={() => void props.onRetry()}>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => fireAndForget(props.onRetry(), 'crm')}
+      >
         Retry
       </Button>
     </div>

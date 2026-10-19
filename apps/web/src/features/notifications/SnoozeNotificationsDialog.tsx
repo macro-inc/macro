@@ -1,5 +1,6 @@
 import { toast } from '@core/component/Toast/Toast';
 import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { useMuteItemMutation } from '@queries/notification/unsubscribes';
 import type { UserUnsubscribe } from '@service-notification/generated/schemas/userUnsubscribe';
 import {
@@ -66,7 +67,9 @@ function SnoozeNotificationsDialog(
       options={options()}
       pending={controller.pending()}
       error={controller.error()}
-      onSelect={(until) => void controller.submit(until)}
+      onSelect={(until) =>
+        fireAndForget(controller.submit(until), 'notifications')
+      }
     />
   );
 }

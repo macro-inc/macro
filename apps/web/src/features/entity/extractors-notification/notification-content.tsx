@@ -15,7 +15,10 @@ import { Button } from '@ui';
 import { createEffect, createSignal, For, onCleanup, Show } from 'solid-js';
 import type { Notification } from '../types/notification';
 import { extractMessageContent } from '../utils/notification';
-import { useNotificationActions } from './notification-actions';
+import {
+  reportNotificationActionError,
+  useNotificationActions,
+} from './notification-actions';
 
 interface NotificationContentProps {
   notification?: Notification;
@@ -73,7 +76,7 @@ export function DocumentMentionPill(props: {
         tooltip="Mark as done"
         onClick={(e) => {
           e.stopPropagation();
-          markAsDone();
+          markAsDone().catch(reportNotificationActionError);
         }}
       >
         <CheckIcon class="size-2.5" />

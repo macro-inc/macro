@@ -24,7 +24,12 @@ use uuid::Uuid;
 /// Concrete worker adapters, wired by the scheduled worker's composition root.
 pub struct ScheduledDeliveryAdapter {
     pub db: sqlx::PgPool,
+    pub forwarded_attachments: email::domain::forwarded_attachments::ForwardedAttachmentService<
+        crate::outbound::forwarded_attachments::PgForwardedAttachmentRepo,
+    >,
     pub email_api: GmailApi,
+    pub attachment_bytes:
+        std::sync::Arc<dyn email::domain::attachment_access::AuthorizedAttachmentBytes>,
     pub s3_client: s3_client::S3,
     pub attachment_bucket: String,
     pub macro_event_broker: MacroEventBrokerService<KafkaEventPublisher, TaskTracker>,
@@ -55,6 +60,14 @@ impl ScheduledDeliveryRepo for ScheduledDeliveryAdapter {
         else {
             return Ok(None);
         };
+        // Outlook delivery is claimed by its durable draft coordinator. This
+        // legacy adapter must never claim it or release an uncertain send.
+        if !matches!(
+            link.provider,
+            models_email::service::link::UserProvider::Gmail
+        ) {
+            return Ok(None);
+        }
         Ok(
             get_and_start_processing_scheduled_message(&self.db, link_id, message_id)
                 .await?
@@ -145,19 +158,9 @@ impl ScheduledDeliveryRepo for ScheduledDeliveryAdapter {
                 if let (Some(draft_id), Some(attachments)) = (message_to_send.db_id, db_attachments)
                 {
                     let db = ctx.db.clone();
-                    let s3_client = ctx.s3_client.clone();
-                    let bucket = ctx.attachment_bucket.clone();
                     let link_id = link.id;
                     tokio::spawn(async move {
-                        cleanup_draft_attachments(
-                            db,
-                            &s3_client,
-                            bucket,
-                            link_id,
-                            draft_id,
-                            attachments,
-                        )
-                        .await;
+                        cleanup_draft_attachments(db, link_id, draft_id, attachments).await;
                     });
                 }
             }
@@ -211,9 +214,28 @@ impl ScheduledMessageSender<ScheduledClaim, SentDelivery> for ScheduledDeliveryA
         )
         .await?;
 
-        // Include forwarded attachments (fetched from Gmail at send time)
-        fetch_and_attach_forwarded_attachments(&ctx.db, &ctx.email_api, link, &mut message_to_send)
+        // Preserve delivery-time source inbox checks, including legacy jobs
+        // that have no actor attribution. Attachment bytes are resolved below
+        // through the provider-aware reader.
+        let actor = data
+            .actor_id
+            .as_deref()
+            .and_then(|actor| MacroUserIdStr::parse_from_str(actor).ok());
+        ctx.forwarded_attachments
+            .for_delivery(actor.as_ref(), link.id, data.message_id)
             .await?;
+
+        // Include forwarded and imported-draft attachments.
+        fetch_and_attach_forwarded_attachments(
+            &ctx.db,
+            ctx.attachment_bytes.as_ref(),
+            data.actor_id
+                .as_deref()
+                .unwrap_or_else(|| link.macro_id.as_ref()),
+            link,
+            &mut message_to_send,
+        )
+        .await?;
 
         let send_request = SendRequest {
             message: message_to_send.clone(),

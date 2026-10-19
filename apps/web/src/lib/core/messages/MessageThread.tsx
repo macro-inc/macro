@@ -8,6 +8,7 @@ import { createFocusRequest } from '@channel/Thread/focus-request';
 import { buildMessageLink } from '@channel/Thread/utils/message-actions';
 import { useUserId } from '@core/context/user';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   useDeleteMessageMutation,
   usePatchMessageMutation,
@@ -179,7 +180,9 @@ export function MessageThreadById(
       when={query.isSuccess && !query.data.state.deleted_at}
       fallback={
         <Show when={query.isError}>
-          <button onClick={() => void query.refetch()}>
+          <button
+            onClick={() => fireAndForget(query.refetch(), 'message-thread')}
+          >
             Could not load thread. Retry
           </button>
         </Show>

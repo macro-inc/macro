@@ -3,6 +3,7 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { toast } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { onMount, Suspense } from 'solid-js';
 import type { FolderDraft, FolderSubmission } from './core/folder-composer';
 import { createFolderCommands } from './queries/folder-creation';
@@ -100,7 +101,10 @@ export function FolderComposeView(props: FolderComposeProps) {
                 source: props.source,
               };
               close();
-              void settleFolderSubmission(submission, options, layout);
+              fireAndForget(
+                settleFolderSubmission(submission, options, layout),
+                'drive-view'
+              );
             }}
           />
         </Suspense>

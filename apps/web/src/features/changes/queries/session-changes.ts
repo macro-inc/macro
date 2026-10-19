@@ -4,6 +4,7 @@
  * status vocabulary the primitives read.
  */
 
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   useAgentSessionChangesPatchQuery,
   useAgentSessionChangesQuery,
@@ -61,7 +62,7 @@ export function createSessionChangesSource(
     return {
       text: () => (query.isSuccess ? query.data.patch : undefined),
       status: () => queryStatus(query),
-      retry: () => void query.refetch(),
+      retry: () => fireAndForget(query.refetch(), 'changes'),
     };
   };
 

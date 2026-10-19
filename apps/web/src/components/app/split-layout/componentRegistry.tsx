@@ -45,6 +45,10 @@ const CalendarRouteView = lazyNamed(
   () => import('@app/features/calendar-view/route-views'),
   'CalendarRouteView'
 );
+const BookingLinksRouteView = lazyNamed(
+  () => import('@app/features/scheduling/route-views'),
+  'BookingLinksRouteView'
+);
 const ChannelsRouteView = lazyNamed(
   () => import('@app/features/channels-view/route-views'),
   'ChannelsRouteView'
@@ -458,6 +462,11 @@ registerComponent(
 registerComponent(
   'settings',
   () => <SettingsRouteView />,
+  () => composableLayout()
+);
+registerComponent(
+  'booking-links',
+  () => <BookingLinksRouteView />,
   () => composableLayout()
 );
 

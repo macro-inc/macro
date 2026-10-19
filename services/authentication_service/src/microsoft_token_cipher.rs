@@ -1,8 +1,3 @@
-#![allow(
-    dead_code,
-    reason = "cipher wiring is consumed by Microsoft grant persistence in the follow-up task"
-)]
-
 use std::collections::HashMap;
 
 use aes_gcm::{
@@ -18,54 +13,15 @@ const AES_GCM_NONCE_LENGTH: usize = 12;
 const AES_GCM_TAG_LENGTH: usize = 16;
 const ENCRYPTION_PURPOSE: &str = "microsoft-refresh-token";
 
-/// An encrypted Microsoft refresh-token envelope suitable for persistence.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct EncryptedMicrosoftToken {
-    pub(crate) refresh_token_ciphertext: Vec<u8>,
-    pub(crate) encrypted_data_key: Vec<u8>,
-    pub(crate) nonce: Vec<u8>,
-    pub(crate) encryption_version: i16,
-    pub(crate) kms_key_id: String,
-}
-
-/// A Microsoft refresh token that clears its allocation when dropped.
-pub(crate) struct MicrosoftRefreshToken(Zeroizing<String>);
-
-impl MicrosoftRefreshToken {
-    pub(crate) fn new(value: String) -> Self {
-        Self(Zeroizing::new(value))
-    }
-
-    pub(crate) fn as_str(&self) -> &str {
-        self.0.as_str()
-    }
-}
-
-/// Encrypts and decrypts Microsoft refresh-token envelopes.
-#[async_trait::async_trait]
-pub(crate) trait MicrosoftTokenCipher: Send + Sync {
-    async fn encrypt(
-        &self,
-        fusionauth_user_id: &str,
-        email_address: &str,
-        refresh_token: MicrosoftRefreshToken,
-    ) -> Result<EncryptedMicrosoftToken, MicrosoftTokenCipherError>;
-
-    async fn decrypt(
-        &self,
-        fusionauth_user_id: &str,
-        email_address: &str,
-        envelope: &EncryptedMicrosoftToken,
-    ) -> Result<MicrosoftRefreshToken, MicrosoftTokenCipherError>;
-}
+pub use crate::domain::microsoft::token::*;
 
 /// AES-256-GCM envelope cipher backed by an external data-key provider.
-pub(crate) struct EnvelopeMicrosoftTokenCipher<P> {
+pub struct EnvelopeMicrosoftTokenCipher<P> {
     data_key_provider: P,
 }
 
 impl<P> EnvelopeMicrosoftTokenCipher<P> {
-    pub(crate) fn new(data_key_provider: P) -> Self {
+    pub fn new(data_key_provider: P) -> Self {
         Self { data_key_provider }
     }
 }
@@ -158,36 +114,6 @@ where
     }
 }
 
-#[derive(Debug, thiserror::Error)]
-pub(crate) enum MicrosoftTokenCipherError {
-    #[error("Microsoft token data-key operation failed")]
-    DataKey(#[from] DataKeyProviderError),
-    #[error("Microsoft token identity is malformed")]
-    MalformedIdentity,
-    #[error("Microsoft token envelope is malformed")]
-    MalformedEnvelope,
-    #[error("Microsoft token plaintext is malformed")]
-    MalformedPlaintext,
-    #[error("Microsoft token envelope uses unsupported encryption version {0}")]
-    UnsupportedVersion(i16),
-    #[error("Microsoft token data key is invalid")]
-    InvalidDataKey,
-    #[error("Microsoft token encryption failed")]
-    EncryptionFailed,
-    #[error("Microsoft token decryption failed")]
-    DecryptionFailed,
-}
-
-#[derive(Debug, thiserror::Error)]
-pub(crate) enum DataKeyProviderError {
-    #[error("KMS GenerateDataKey failed")]
-    GenerateFailed,
-    #[error("KMS Decrypt failed")]
-    DecryptFailed,
-    #[error("KMS returned a malformed data key")]
-    MalformedResponse,
-}
-
 struct GeneratedDataKey {
     plaintext: Zeroizing<Vec<u8>>,
     encrypted: Vec<u8>,
@@ -210,13 +136,13 @@ trait DataKeyProvider: Send + Sync {
 }
 
 /// KMS implementation of the envelope data-key provider.
-pub(crate) struct KmsDataKeyProvider {
+pub struct KmsDataKeyProvider {
     client: Client,
     key_id: String,
 }
 
 impl KmsDataKeyProvider {
-    pub(crate) fn new(client: Client, key_id: String) -> Self {
+    pub fn new(client: Client, key_id: String) -> Self {
         Self { client, key_id }
     }
 }

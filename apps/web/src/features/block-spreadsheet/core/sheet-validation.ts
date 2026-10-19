@@ -8,6 +8,7 @@ import {
   type DataValidation,
   sqrefContains,
 } from '@macro-inc/spreadsheet/sheet-rules';
+import { typedNumber } from '@macro-inc/spreadsheet/typed-number';
 import { formatCellAddress, parseCellAddress } from './spreadsheet-document';
 
 /** The validation rule of a cell: Excel applies one rule per cell. */
@@ -94,50 +95,15 @@ export type ValidationOutcome =
       message: string;
     };
 
-const DAY_MILLISECONDS = 86_400_000;
-const SERIAL_EPOCH = Date.UTC(1899, 11, 30);
-
-/**
- * A typed number, percentage, currency amount, date (ISO or month/day/year)
- * or time as Excel's value.
- */
-function numericInput(input: string): number | undefined {
-  const text = input.trim().replace(/^\+/, '');
-  if (/^-?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(text))
-    return Number(text);
-  let match = /^(-?(?:\d+(?:\.\d*)?|\.\d+))%$/.exec(text);
-  if (match) return Number(match[1]) / 100;
-  match = /^(-?)[$€£]?(\d{1,3}(?:,\d{3})+|\d+)(\.\d+)?$/.exec(text);
-  if (match)
-    return Number(`${match[1]}${match[2].replace(/,/g, '')}${match[3] ?? ''}`);
-  match = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(text);
-  if (match)
-    return (
-      (Date.UTC(+match[1], +match[2] - 1, +match[3]) - SERIAL_EPOCH) /
-      DAY_MILLISECONDS
-    );
-  match = /^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/.exec(text);
-  if (match) {
-    const year = +match[3] < 100 ? 2000 + +match[3] : +match[3];
-    return (
-      (Date.UTC(year, +match[1] - 1, +match[2]) - SERIAL_EPOCH) /
-      DAY_MILLISECONDS
-    );
-  }
-  match = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(text);
-  if (match)
-    return (+match[1] * 3600 + +match[2] * 60 + +(match[3] ?? 0)) / 86_400;
-}
-
 /** A bound written as a number, date or single-cell reference. */
 function bound(formula: string | undefined, values: RangeValues) {
   if (formula === undefined) return;
-  const direct = numericInput(formula.replace(/^"(.*)"$/, '$1'));
+  const direct = typedNumber(formula.replace(/^"(.*)"$/, '$1'));
   if (direct !== undefined) return direct;
   const target = validationReference(formula);
   if (!target || target.range.includes(':')) return;
   const value = values(target.sheet, target.range)?.[0];
-  return value?.number ?? (value && numericInput(value.text));
+  return value?.number ?? (value && typedNumber(value.text));
 }
 
 function compare(
@@ -204,7 +170,7 @@ export function validateInput(
     const second = bound(rule.formulas?.[1], values);
     if (first === undefined) return { valid: true };
     const value =
-      rule.type === 'textLength' ? input.length : numericInput(input);
+      rule.type === 'textLength' ? input.length : typedNumber(input);
     valid =
       value !== undefined &&
       (rule.type !== 'whole' || Number.isInteger(value)) &&

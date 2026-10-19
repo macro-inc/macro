@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { queryReadyGate } from '@queries/gate';
 import { useQuery } from '@tanstack/solid-query';
@@ -45,7 +46,7 @@ export function createPipelinesSource(
             : [pipeline]
         )
     );
-    void refreshAfterSave();
+    fireAndForget(refreshAfterSave(), 'crm');
   }
   return {
     pipelines: () => (queryReadyGate(query) ? query.data : []),
@@ -60,7 +61,7 @@ export function createPipelinesSource(
         crmKeys.pipelines(pipeline.teamId).queryKey,
         (old: (typeof pipeline)[] | undefined) => [...(old ?? []), pipeline]
       );
-      void refreshAfterSave();
+      fireAndForget(refreshAfterSave(), 'crm');
       return pipeline;
     },
     rename: async (id, name) => {

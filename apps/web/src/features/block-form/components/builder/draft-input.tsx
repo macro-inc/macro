@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type Accessor,
   createRenderEffect,
@@ -122,7 +123,7 @@ function createDraft(options: {
         return;
       }
       if (draft === held && !refused()) return;
-      void commit(draft);
+      fireAndForget(commit(draft), 'form-builder');
     },
   };
 }

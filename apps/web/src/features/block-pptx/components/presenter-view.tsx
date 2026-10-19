@@ -202,8 +202,9 @@ export function PresenterView(props: {
       e.preventDefault();
       show.go(-1);
     };
-    const onFull = () =>
-      void win.document.documentElement.requestFullscreen?.().catch(() => {});
+    const onFull = () => {
+      win.document.documentElement.requestFullscreen?.().catch(() => {});
+    };
     const onResize = () =>
       setAudienceSize({ w: win.innerWidth, h: win.innerHeight });
     const onGone = () => setPopup(null);

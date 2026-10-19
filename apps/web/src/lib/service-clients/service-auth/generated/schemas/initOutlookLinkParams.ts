@@ -10,4 +10,12 @@ export type InitOutlookLinkParams = {
    * **OPTIONAL**. The original URL to redirect to.
    */
   original_url?: string;
+  /**
+   * mail (default) or mail_and_calendar. Calendar requests obey the deployment calendar consent switch.
+   */
+  scopes?: string;
+  /**
+   * Existing accessible inbox being reconnected or granted calendar consent.
+   */
+  reconnect_link_id?: string;
 };

@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { channelThreadRootId } from '@notifications/channel-thread-root';
 import type { UnifiedNotification } from '@notifications/types';
 import { match, P } from 'ts-pattern';
@@ -59,7 +60,10 @@ export function updateSoupForNotification(notification: UnifiedNotification) {
       );
     }
   } else {
-    void refetchSoupEntity(notification.entity_id, soupTag);
+    fireAndForget(
+      refetchSoupEntity(notification.entity_id, soupTag),
+      'notification-soup'
+    );
   }
 
   // Mentions, replies, and reactions belong to the thread's Home row.
@@ -72,7 +76,10 @@ export function updateSoupForNotification(notification: UnifiedNotification) {
     );
   }
   if (threadRootId && !hasSoupEntity(threadRootId)) {
-    void refetchSoupEntity(threadRootId, 'channelThread');
+    fireAndForget(
+      refetchSoupEntity(threadRootId, 'channelThread'),
+      'notification-soup'
+    );
   }
 
   // A field merge cannot restore a cached row removed by a done filter.

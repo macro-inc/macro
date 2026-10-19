@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { useQuery, useQueryClient } from '@tanstack/solid-query';
 import { type Accessor, onCleanup } from 'solid-js';
@@ -17,11 +18,15 @@ export function useAgentPreview(sessionId: Accessor<string | undefined>) {
   const invalidate = () =>
     client.invalidateQueries({ queryKey: key(sessionId()) });
   const listener = (id: string) => {
-    if (id === sessionId()) void invalidate();
+    if (id === sessionId()) fireAndForget(invalidate(), 'agent-preview');
   };
   listeners.add(listener);
   onCleanup(() => listeners.delete(listener));
-  onCleanup(subscribeSocketSessionStarted(() => void invalidate()));
+  onCleanup(
+    subscribeSocketSessionStarted(() =>
+      fireAndForget(invalidate(), 'agent-preview')
+    )
+  );
   const query = useQuery(() => ({
     queryKey: key(sessionId()),
     queryFn: () => throwOnErr(() => previewServiceClient.get(sessionId()!)),

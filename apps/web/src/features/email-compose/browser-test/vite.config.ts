@@ -52,6 +52,8 @@ export default defineConfig({
     tsconfigPaths({ projects: [`${webDirectory}/tsconfig.json`] }),
     tailwind(),
   ],
+  // The recipient hotkey page uses the full app config, not these fixture shims.
+  optimizeDeps: { entries: ['index.html'] },
   resolve: {
     dedupe: ['solid-js'],
     // Exact matches only: `@ui/…` subpaths resolve to the real components.

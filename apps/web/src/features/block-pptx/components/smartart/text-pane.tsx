@@ -5,6 +5,7 @@
  * the arrow keys move between bullets, as in PowerPoint.
  */
 
+import { fireAndForget } from '@core/util/fireAndForget';
 import X from '@phosphor/x.svg';
 import {
   createMemo,
@@ -92,12 +93,16 @@ export function SmartArtTextPane(props: {
     pending.set(id, {
       text,
       at: s().target(),
-      timer: setTimeout(() => void commit(id), TYPING_DELAY),
+      timer: setTimeout(
+        () => fireAndForget(commit(id), 'pptx-editor'),
+        TYPING_DELAY
+      ),
     });
   };
   // Closing the pane (or deselecting the graphic) sends what was typed.
   onCleanup(() => {
-    for (const id of [...pending.keys()]) void commit(id);
+    for (const id of [...pending.keys()])
+      fireAndForget(commit(id), 'pptx-editor');
   });
 
   /** Puts the caret in a bullet: at its start, its end, or an offset. */
@@ -199,7 +204,7 @@ export function SmartArtTextPane(props: {
     if (e.key === 'Tab' || e.key === 'Enter') e.preventDefault();
     if (action.kind === 'none') return;
     e.preventDefault();
-    void run(action, input);
+    fireAndForget(run(action, input), 'pptx-editor');
   };
 
   return (
@@ -265,10 +270,13 @@ export function SmartArtTextPane(props: {
                   }}
                   onBlur={(e) => {
                     const el = e.currentTarget;
-                    void commit(id, el.value).then(() => {
-                      if (document.activeElement !== el)
-                        setDraft(id, undefined);
-                    });
+                    fireAndForget(
+                      commit(id, el.value).then(() => {
+                        if (document.activeElement !== el)
+                          setDraft(id, undefined);
+                      }),
+                      'pptx-editor'
+                    );
                   }}
                   onKeyDown={(e) => onKeyDown(e, id)}
                 />

@@ -9,6 +9,7 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { useWarmAgentSessionQuery } from '@queries/agent-session/warm';
 import { createEffect, onCleanup } from 'solid-js';
 import '../agents-view/agents-view.css';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   createPersistedComposerDraft,
   HOME_CONVERSATION_DRAFT_KEY,
@@ -65,7 +66,7 @@ export function HomeAgentComposer(props: { autoFocus?: boolean }) {
     const requested = input.pendingDraft();
     if (requested == null) return;
     input.setPendingDraft(null);
-    void applySuggestion(requested);
+    fireAndForget(applySuggestion(requested), 'home');
   });
   registerHotkey({
     hotkey: 'enter',

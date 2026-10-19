@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import FilterIcon from '@phosphor/funnel-simple.svg';
 import HashIcon from '@phosphor/hash.svg';
 import XIcon from '@phosphor/x.svg';
@@ -75,7 +76,7 @@ function SmartTagDialog(props: SmartTagDialogProps & ManagedDialogProps) {
       >
         <form
           class="flex shrink-0 flex-col gap-4"
-          onSubmit={(event) => void submit(event)}
+          onSubmit={(event) => fireAndForget(submit(event), 'channels-view')}
           aria-busy={saving()}
         >
           <div class="flex items-center justify-between gap-2">
@@ -191,7 +192,9 @@ function SmartTagDialog(props: SmartTagDialogProps & ManagedDialogProps) {
                       type="button"
                       variant="ghost"
                       size="sm"
-                      onClick={() => void preview.refetch()}
+                      onClick={() =>
+                        fireAndForget(preview.refetch(), 'channels-view')
+                      }
                     >
                       Retry
                     </Button>

@@ -1,4 +1,5 @@
 import { useUserId } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { Telemetry } from '@macro-inc/observability';
 import { invalidateUserInfo } from '@queries/auth/user-info';
@@ -133,7 +134,7 @@ async function refreshSenderCatalog(): Promise<void> {
 export function invalidateEmailLinks() {
   // Connection, reauthorization and link-removal events must refresh the
   // GraphQL catalog consumed by both From and the sidebar, not only legacy reads.
-  void refreshSenderCatalog();
+  fireAndForget(refreshSenderCatalog(), 'email-links');
   queryClient.cancelQueries({ queryKey: emailKeys.links.queryKey });
   queryClient.invalidateQueries({
     queryKey: emailKeys.links.queryKey,

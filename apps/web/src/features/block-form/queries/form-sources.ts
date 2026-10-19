@@ -1,4 +1,6 @@
 /** Adapters from the shared form and database queries to the feature's sources. */
+
+import { fireAndForget } from '@core/util/fireAndForget';
 import { ThrownResultError } from '@core/util/result';
 import { queryReadyGate } from '@queries/gate';
 import { useDatabaseDetailQuery } from '@queries/storage/databases';
@@ -35,7 +37,6 @@ import type {
   SubmitOutcome,
 } from '../context/form-context';
 import type { SubmittedAnswer } from '../core/answers';
-
 import type { ResponseCounts } from '../core/response-stats';
 import { toFormDetail, toMyResponse, toSubmitOutcome } from './form-detail';
 import { toFormColumn } from './table-columns';
@@ -148,7 +149,7 @@ export function createFormDetailSource(
       () => (database.isSuccess ? database.data.database.name : undefined),
       (name, previous) => {
         if (name !== undefined && previous !== undefined && name !== previous)
-          void query.refetch();
+          fireAndForget(query.refetch(), 'form-detail');
       }
     )
   );

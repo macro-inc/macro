@@ -1,4 +1,5 @@
 import type { PaidPlanTier } from '@app/features/paywall/plans';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { Button } from '@ui';
 import { type Accessor, type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -113,16 +114,18 @@ export function PlanStep(props: {
               !trial.existingSubscription() &&
               (offer().t === 'loading' || trial.eligibility().t !== 'ready'))
           }
-          onClick={() =>
-            plan.state().t === 'offer'
-              ? trial.existingSubscription()
-                ? void trial.manage()
-                : props.onStartCheckout(
-                    'premium',
-                    trialEligible() ? 'trial' : 'standard'
-                  )
-              : void plan.confirm()
-          }
+          onClick={() => {
+            if (plan.state().t !== 'offer') {
+              fireAndForget(plan.confirm(), 'onboarding');
+            } else if (trial.existingSubscription()) {
+              fireAndForget(trial.manage(), 'onboarding');
+            } else {
+              props.onStartCheckout(
+                'premium',
+                trialEligible() ? 'trial' : 'standard'
+              );
+            }
+          }}
         />
       </div>
       <Show when={plan.state().t === 'offer' && !trial.existingSubscription()}>

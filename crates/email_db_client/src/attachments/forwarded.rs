@@ -1,4 +1,4 @@
-use models_email::{db, service};
+use models_email::db;
 use sqlx::types::Uuid;
 use sqlx::{Executor, PgPool, Postgres};
 
@@ -64,6 +64,19 @@ where
     Ok(result.rows_affected())
 }
 
+/// Provider download facts scoped to a draft, retaining the original inbox.
+#[derive(Debug, sqlx::FromRow)]
+pub struct ForwardedAttachmentForSend {
+    pub source_link_id: Uuid,
+    pub attachment_id: Uuid,
+    pub draft_id: Uuid,
+    pub provider_attachment_id: Option<String>,
+    pub message_provider_id: String,
+    pub filename: Option<String>,
+    pub mime_type: Option<String>,
+    pub size_bytes: Option<i64>,
+}
+
 /// Fetches all forwarded attachments for a given draft, joining email_attachments
 /// for metadata and email_messages for the original message's provider_id.
 #[tracing::instrument(skip(pool), err)]
@@ -71,11 +84,12 @@ pub async fn fetch_forwarded_attachments_by_draft_id(
     pool: &PgPool,
     link_id: Uuid,
     draft_id: Uuid,
-) -> anyhow::Result<Vec<service::attachment::AttachmentForwarded>> {
-    let db_attachments = sqlx::query_as!(
-        db::attachment::AttachmentForwarded,
+) -> anyhow::Result<Vec<ForwardedAttachmentForSend>> {
+    let attachments = sqlx::query_as!(
+        ForwardedAttachmentForSend,
         r#"
         SELECT
+            orig_msg.link_id AS source_link_id,
             eaf.attachment_id,
             eaf.message_id AS draft_id,
             ea.provider_attachment_id,
@@ -96,12 +110,7 @@ pub async fn fetch_forwarded_attachments_by_draft_id(
     .fetch_all(pool)
     .await?;
 
-    let service_attachments = db_attachments
-        .into_iter()
-        .map(service::attachment::AttachmentForwarded::from)
-        .collect();
-
-    Ok(service_attachments)
+    Ok(attachments)
 }
 
 /// Fetches forwarded attachments for multiple draft IDs and returns a map keyed by draft_id.

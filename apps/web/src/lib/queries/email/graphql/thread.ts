@@ -3,6 +3,7 @@ import {
   type UrqlInfiniteQueryResult,
 } from '@app/lib/urql-solid';
 import { DEFAULT_THREAD_MESSAGES_LIMIT } from '@core/constant/pagination';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { ThrownResultError } from '@core/util/result';
 import {
   readRecordsByKeys,
@@ -270,11 +271,11 @@ export function createGraphqlEmailThreadQuery<TData = GraphqlEmailThreadPages>(
   // the accessor's underlying route or props signal does.
   createEffect(
     on(createMemo(threadId), () => {
-      void refreshIdentity();
+      fireAndForget(refreshIdentity(), 'email-thread');
     })
   );
   const unsubscribe = host?.onCacheChanged(() => {
-    void refreshIdentity();
+    fireAndForget(refreshIdentity(), 'email-thread');
   });
   onCleanup(() => {
     disposed = true;

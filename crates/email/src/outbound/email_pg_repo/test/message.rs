@@ -843,6 +843,9 @@ fn staged_attachment(draft_id: Uuid, id: Uuid) -> AttachmentDraft {
         sha: "f".repeat(64),
         size: 42,
         s3_key: format!("draft/{draft_id}/{id}"),
+        upload_pending: false,
+        content_id: None,
+        is_inline: false,
     }
 }
 

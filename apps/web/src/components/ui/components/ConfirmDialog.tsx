@@ -25,6 +25,8 @@ export type ConfirmDialogDisplayProps = {
   position?: DialogProps['position'];
   /** Dialog presentation only; the mobile drawer ignores it. */
   class?: string;
+  /** Lets the owning surface restore focus after a programmatic confirmation. */
+  onCloseAutoFocus?: DialogProps['onCloseAutoFocus'];
 };
 
 export type ConfirmDialogProps = ManagedDialogProps &
@@ -42,6 +44,7 @@ export function ConfirmDialog(props: ConfirmDialogProps) {
         <Dialog
           open={props.open}
           onOpenChange={(open) => !props.pending && props.onOpenChange(open)}
+          onCloseAutoFocus={props.onCloseAutoFocus}
           position={props.position ?? 'center'}
           class={cn('w-110', props.class)}
           visibleScrim

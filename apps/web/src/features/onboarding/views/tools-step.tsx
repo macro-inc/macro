@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import SearchIcon from '@phosphor/magnifying-glass.svg';
 import { createSignal, For, Show } from 'solid-js';
 import { ContinueButton } from '../components/controls';
@@ -58,7 +59,7 @@ export function ToolsStep(props: { onContinue: () => void }) {
                   ['loading', 'error'].includes(connected.state(tool.slug))
                 }
                 state={connected.state(tool.slug)}
-                onConnect={() => void connect(tool)}
+                onConnect={() => fireAndForget(connect(tool), 'onboarding')}
               />
             )}
           </For>

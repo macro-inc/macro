@@ -3,7 +3,7 @@ import { Combobox } from '@kobalte/core/combobox';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
 import SearchIcon from '@phosphor/magnifying-glass.svg';
-import { cn, Layer } from '@ui';
+import { Layer, selectTriggerClasses } from '@ui';
 import { type Accessor, createMemo, createSignal, Show } from 'solid-js';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 
@@ -41,6 +41,8 @@ const VirtualizedListbox = () => {
             {(item) => (
               <Combobox.Item
                 item={item}
+                // Keep virtual focus in the search input inside parent popovers.
+                on:mousedown={(event: MouseEvent) => event.preventDefault()}
                 class="group flex w-full cursor-default items-center gap-1.5 rounded-lg p-1.5 px-2 text-left text-sm data-highlighted:bg-ink/5"
               >
                 <span class="flex size-3.5 shrink-0 items-center justify-center text-accent">
@@ -73,6 +75,9 @@ export function TimezoneSelect(props: {
   portalScope?: 'local';
 }) {
   let triggerRef: HTMLButtonElement | undefined;
+  let searchRef: HTMLInputElement | undefined;
+  let restoreTriggerFocus = true;
+  const [open, setOpen] = createSignal(false);
   const [search, setSearch] = createSignal('');
   // Keep the current zone in the collection even when the runtime no longer
   // lists it (a zone dropped between releases), so it resolves as the selection
@@ -99,12 +104,15 @@ export function TimezoneSelect(props: {
 
   return (
     <Combobox<TimezoneOption>
+      open={open()}
       multiple={false}
       options={optionsWithCurrent()}
       value={selected()}
       onChange={(option) => option && props.onChange(option.value)}
       onInputChange={setSearch}
       onOpenChange={(open) => {
+        if (open) restoreTriggerFocus = true;
+        setOpen(open);
         if (!open) setSearch('');
       }}
       optionValue="value"
@@ -123,13 +131,21 @@ export function TimezoneSelect(props: {
           ref={triggerRef}
           type="button"
           aria-label="Timezone"
-          class={cn(
-            'flex w-full min-w-0 items-center justify-between gap-2 rounded-md border border-edge-muted bg-input px-2 py-1.5 text-sm text-ink outline-none focus:border-accent',
-            props.class
+          tabIndex={0}
+          onKeyDown={(event: KeyboardEvent) => {
+            if (!['Enter', ' ', 'ArrowDown', 'ArrowUp'].includes(event.key))
+              return;
+            event.preventDefault();
+            restoreTriggerFocus = true;
+            setOpen(true);
+            queueMicrotask(() => searchRef?.focus());
+          }}
+          class={selectTriggerClasses(
+            `min-w-0 text-sm touch:h-9 ${props.class ?? ''}`
           )}
         >
           <span class="truncate">{triggerLabel()}</span>
-          <CaretDownIcon class="size-3 shrink-0 text-ink-muted" />
+          <CaretDownIcon class="size-3 shrink-0 text-ink-extra-muted" />
         </Combobox.Trigger>
       </Combobox.Control>
 
@@ -141,10 +157,22 @@ export function TimezoneSelect(props: {
         }
       >
         <Layer depth={2}>
-          <Combobox.Content class="menu-surface z-action-menu w-[24rem] max-w-[90vw] overflow-hidden">
+          <Combobox.Content
+            onInteractOutside={() => {
+              restoreTriggerFocus = false;
+            }}
+            onCloseAutoFocus={(event) => {
+              event.preventDefault();
+              if (restoreTriggerFocus && triggerRef?.isConnected) {
+                triggerRef.focus({ preventScroll: true });
+              }
+            }}
+            class="menu-surface z-action-menu w-[24rem] max-w-[90vw] overflow-hidden"
+          >
             <div class="flex items-center gap-2 border-b border-edge-muted px-3 py-2">
               <SearchIcon class="size-3.5 shrink-0 text-ink-muted" />
               <Combobox.Input
+                ref={searchRef}
                 class="min-w-0 flex-1 bg-transparent text-sm caret-accent outline-none placeholder:text-ink-placeholder"
                 placeholder="Search timezones..."
               />

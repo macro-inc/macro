@@ -17,10 +17,9 @@ describe('settings Usage tab', () => {
 });
 
 describe('settings navigation', () => {
-  it('gives calendar connections and booking links separate routes', () => {
+  it('keeps calendar connections in settings and removes booking links settings', () => {
     expect(settingsSlugToTab('calendar')).toBe('Calendar');
-    expect(settingsSlugToTab('booking-links')).toBe('Booking links');
-    expect(settingsTabToSlug('Booking links')).toBe('booking-links');
+    expect(settingsSlugToTab('booking-links')).toBeUndefined();
   });
   it('routes agent-connections to the Connections tab', () => {
     expect(settingsSlugToTab('agent-connections')).toBe('Connections');
@@ -36,7 +35,6 @@ describe('settings navigation', () => {
     expect(SETTINGS_TAB_GROUPS[0].items.map((item) => item.tab)).toEqual([
       'Email',
       'Calendar',
-      'Booking links',
       'Agents',
       'CRM',
     ]);

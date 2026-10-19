@@ -13,6 +13,10 @@ import type { EmailAttachment } from './core/email-message';
 export function createEmailAttachmentOpener() {
   const { openWithSplit } = useSplitLayout();
   const openAttachment = async (attachment: EmailAttachment) => {
+    if (attachment.reference_url) {
+      window.open(attachment.reference_url, '_blank', 'noopener,noreferrer');
+      return;
+    }
     const dbId = attachment.db_id;
     if (!dbId) return;
     const response = await getEmailAttachmentDocument(dbId);
@@ -37,7 +41,9 @@ export function createEmailAttachmentOpener() {
       );
     }
 
-    refetchSoupEntity(document_id, 'document');
+    refetchSoupEntity(document_id, 'document').catch((error) =>
+      Telemetry.error(error, { surface: 'email-attachment' })
+    );
 
     const fileType = Object.values(FileTypeMap).findLast(
       (type) => type.mime === attachment.mime_type

@@ -71,6 +71,8 @@ async fn point_storage_and_own_and_team_queries_preserve_half_open_membership(po
     })
     .collect();
     upsert.overrides = vec![CalendarEventOverride {
+        reminders: None,
+        automatic_decline: None,
         recurrence_id: starts_at.to_rfc3339(),
         original_time: EventStart::Timed(starts_at),
         time: point(starts_at),

@@ -33,6 +33,9 @@ export function toEmailThread(thread: ApiThread): EmailThread {
         file_name: attachment.file_name,
         id: attachment.id,
         s3_key: attachment.s3_key,
+        upload_pending: attachment.upload_pending,
+        content_id: attachment.content_id,
+        is_inline: attachment.is_inline,
         size: attachment.size,
       })),
       attachments_forwarded: message.attachments_forwarded.map(
@@ -68,6 +71,15 @@ export function toEmailThread(thread: ApiThread): EmailThread {
         : message.from,
       internal_date_ts: message.internal_date_ts,
       is_draft: message.is_draft,
+      operation: message.operation_status
+        ? {
+            state: message.operation_status.state,
+            revision: message.operation_status.revision,
+            remoteVersion: message.operation_status.remote_version,
+            issue: message.operation_status.issue,
+          }
+        : undefined,
+      is_read: message.is_read,
       labels: message.labels.map((label) => ({
         name: label.name,
         provider_label_id: label.provider_label_id,

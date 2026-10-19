@@ -1,5 +1,6 @@
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { getDestinationFromOptions } from '@core/util/destination';
+import { fireAndForget } from '@core/util/fireAndForget';
 import XIcon from '@phosphor/x.svg';
 import { Button, Dialog, Panel, RadioGroup } from '@ui';
 import { type ComponentProps, createSignal, Show } from 'solid-js';
@@ -151,7 +152,7 @@ export function ChannelInviteModal(props: {
               </Button>
               <Button
                 variant="strong"
-                onClick={() => void addPeople()}
+                onClick={() => fireAndForget(addPeople(), 'channel-invite')}
                 disabled={!canAdd()}
               >
                 {pending() ? 'Adding…' : 'Add'}

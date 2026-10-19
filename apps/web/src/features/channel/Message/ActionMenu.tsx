@@ -4,6 +4,7 @@ import type {
   MessageActionHandler,
 } from '@core/messages/types';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fireAndForget } from '@core/util/fireAndForget';
 import ReplyIcon from '@phosphor/arrow-bend-up-left.svg';
 import CopyIcon from '@phosphor/copy.svg';
 import LinkIcon from '@phosphor/link.svg';
@@ -103,11 +104,14 @@ function ActionMenuContent(props: ActionMenuProps) {
   onCleanup(() => actionMenuVisibility.setPersistent(false));
 
   const handleReaction = (emoji: string, event?: MessageActionEvent) => {
-    void actions?.onReact?.({
-      message: message(),
-      event,
-      emoji,
-    });
+    fireAndForget(
+      actions?.onReact?.({
+        message: message(),
+        event,
+        emoji,
+      }),
+      'channel-message-actions'
+    );
   };
 
   const hasReactAction = () => actions?.onReact !== undefined;
@@ -229,7 +233,10 @@ function ActionMenuContent(props: ActionMenuProps) {
                   <ActionButton
                     action={action}
                     onClick={(event) => {
-                      void action.onClick?.({ message: message(), event });
+                      fireAndForget(
+                        action.onClick?.({ message: message(), event }),
+                        'channel-message-actions'
+                      );
                     }}
                   />
                 )}
@@ -275,12 +282,15 @@ function ActionMenuContent(props: ActionMenuProps) {
                             ))
                           : undefined;
                       renderedReplyText = undefined;
-                      void action.onClick?.({
-                        message: message(),
-                        event,
-                        selectedText,
-                        renderedText,
-                      });
+                      fireAndForget(
+                        action.onClick?.({
+                          message: message(),
+                          event,
+                          selectedText,
+                          renderedText,
+                        }),
+                        'channel-message-actions'
+                      );
                     }}
                   />
                 )}

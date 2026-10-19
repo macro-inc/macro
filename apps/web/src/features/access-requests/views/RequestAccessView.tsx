@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { Button } from '@ui';
 import { Show } from 'solid-js';
 import { AccessLevelSelect } from '../components/AccessLevelSelect';
@@ -70,7 +71,7 @@ export function RequestAccessView(props: {
               composer.unchanged() ||
               composer.levels().length === 0
             }
-            onClick={() => void send()}
+            onClick={() => fireAndForget(send(), 'access-requests')}
           >
             {composer.pending()
               ? composer.unchanged()
@@ -83,7 +84,7 @@ export function RequestAccessView(props: {
               variant="ghost"
               size="sm"
               disabled={props.source.busy()}
-              onClick={() => void cancel()}
+              onClick={() => fireAndForget(cancel(), 'access-requests')}
             >
               Cancel request
             </Button>

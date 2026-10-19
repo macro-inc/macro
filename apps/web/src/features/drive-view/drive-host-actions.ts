@@ -17,6 +17,7 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   handleFileFolderDrop,
   handleFolderSelect,
@@ -100,13 +101,16 @@ export function createDriveHostActions(options: {
         openInNewSplit || location ? undefined : inlineDetailTarget(entity);
       if (target && navigation.openRoot(target, { event })) return;
 
-      void openEntityInSplitFromUnifiedList(entity, {
-        splitHandle: panel.handle,
-        referredFrom: 'documents',
-        openInNewSplit,
-        location,
-        notificationSource,
-      });
+      fireAndForget(
+        openEntityInSplitFromUnifiedList(entity, {
+          splitHandle: panel.handle,
+          referredFrom: 'documents',
+          openInNewSplit,
+          location,
+          notificationSource,
+        }),
+        'open-entity-in-split'
+      );
     },
 
     openFavorite(favorite, name, event) {
@@ -188,7 +192,7 @@ export function createDriveHostActions(options: {
     },
 
     shareFolder: (folder) => {
-      void share.execute([folder]);
+      fireAndForget(share.execute([folder]), 'drive-view');
     },
 
     uploadFiles: () =>
@@ -204,7 +208,7 @@ export function createDriveHostActions(options: {
       }),
 
     dropFiles: (files, folders) => {
-      void handleFileFolderDrop(files, folders, upload);
+      fireAndForget(handleFileFolderDrop(files, folders, upload), 'drive-view');
     },
   };
 }

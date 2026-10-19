@@ -247,7 +247,11 @@ function FixtureThreadCard(props: {
             class="flex flex-col gap-2"
             onSubmit={(event) => {
               event.preventDefault();
-              void props.onPost(text());
+              props
+                .onPost(text())
+                .catch((error: unknown) =>
+                  console.error('[docx-fixture]', error)
+                );
             }}
           >
             <textarea
@@ -486,7 +490,7 @@ function LocalFixture() {
   const pair = params.get('local') === 'pair';
   const [docs, setDocs] = createSignal<LoroDoc[]>();
   const [editor, setEditor] = createSignal<DocxEditor>();
-  void (async () => {
+  const seed = async () => {
     const original = new Uint8Array(await (await fetch(fixture)).arrayBuffer());
     const snapshot = await buildSeedSnapshot(original);
     const { LoroDoc } = await import('loro-crdt');
@@ -501,7 +505,8 @@ function LocalFixture() {
     a.subscribeLocalUpdates((u) => queueMicrotask(() => b.import(u)));
     b.subscribeLocalUpdates((u) => queueMicrotask(() => a.import(u)));
     setDocs([a, b]);
-  })();
+  };
+  seed().catch((error: unknown) => console.error('[docx-fixture]', error));
   window.docxFixture = {
     status: () => 'connected',
     ready: () => !!editor(),

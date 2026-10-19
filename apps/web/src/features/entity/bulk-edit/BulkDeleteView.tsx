@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { ActionDialogShell, Button } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { BulkDeleteFailure } from '../queries/bulk-delete-result';
@@ -82,7 +83,10 @@ export const BulkDeleteView = (props: {
         <Button variant="ghost" onClick={props.onCancel}>
           Cancel
         </Button>
-        <Button variant="strong" onClick={() => void handleDelete()}>
+        <Button
+          variant="strong"
+          onClick={() => fireAndForget(handleDelete(), 'bulk-delete')}
+        >
           {multi() ? `Delete ${entities().length} items` : 'Delete item'}
         </Button>
       </ActionDialogShell.Footer>

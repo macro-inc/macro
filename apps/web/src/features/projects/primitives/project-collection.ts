@@ -12,6 +12,7 @@ import {
 } from '@app/features/soup/collection/transforms';
 import type { SoupRow } from '@app/features/soup/collection/types';
 import { debouncedDependent } from '@core/util/debounce';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { type Accessor, createMemo, createSignal } from 'solid-js';
 import type { ProjectRow, ProjectsContext } from '../context/projects-context';
@@ -191,7 +192,8 @@ export function createProjectCollection(capabilities: {
     isSelectable: (row) => row.kind === 'entity',
     onActivate: ({ item, metadata }) => {
       if (item.kind === 'group-header') disclosure.toggle(item.groupId);
-      else if (item.kind === 'load-more') void source.loadMore();
+      else if (item.kind === 'load-more')
+        fireAndForget(source.loadMore(), 'projects');
       else if (item.kind === 'entity')
         capabilities.onOpen?.(item.entity.id, metadata);
     },

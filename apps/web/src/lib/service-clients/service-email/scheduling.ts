@@ -1,10 +1,11 @@
-import type {
-  Booking,
-  BookingAttendance,
-  BookingReceipt,
-  BookingRequest,
-  PublicProfile,
-  SchedulingProfile,
+import {
+  type Booking,
+  type BookingAttendance,
+  type BookingReceipt,
+  type BookingRequest,
+  type PublicProfile,
+  type SchedulingProfile,
+  schedulingProfileForSave,
 } from '@app/features/scheduling/core/types';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchWithToken } from '@core/util/fetchWithToken';
@@ -26,7 +27,7 @@ export const schedulingClient = {
   save: (profile: SchedulingProfile, teamId?: string) =>
     fetchWithToken<{ profile: SchedulingProfile }>(
       `${host}/settings${scope(teamId)}`,
-      { method: 'PUT', ...json(profile) }
+      { method: 'PUT', ...json(schedulingProfileForSave(profile)) }
     ),
   bookings: (teamId?: string, range?: { from: string; to: string }) => {
     const query = new URLSearchParams();

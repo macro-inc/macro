@@ -98,6 +98,11 @@ export type LeaveGuardContext = {
 
 export type LeaveGuard = (context: LeaveGuardContext) => MaybePromise<boolean>;
 
+export type LeaveGuardOptions = {
+  /** Also check changes to these search namespaces while the view stays mounted. */
+  search?: readonly string[];
+};
+
 export type RouteMatchInfo = {
   id: string;
   params: SplitRouteParams;

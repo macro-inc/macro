@@ -2,6 +2,7 @@ import { UnknownContent } from '@block-unknown/component/UnknownContent';
 import { getPermissions } from '@core/component/SharePermissions';
 import { toast } from '@core/component/Toast/Toast';
 import { useShareModal } from '@core/component/TopBar/shareModal';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { downloadFile } from '@filesystem/download';
 import type { JSX } from 'solid-js';
 import { FileDetailLayout, FileDetailLoadGate } from '../components/FileDetail';
@@ -37,13 +38,17 @@ export function UnknownDetailDocument(props: {
         documentId: props.documentId,
         documentVersionId: props.data.documentMetadata.documentVersionId,
       });
-      downloadFile(file, downloadName());
+      await downloadFile(file, downloadName());
     } catch (error) {
       console.error('error downloading file', error);
       toast.failure('Error downloading file');
     }
   };
-  const operations = [downloadFileOperation(() => void downloadDocument())];
+  const operations = [
+    downloadFileOperation(() =>
+      fireAndForget(downloadDocument(), 'drive-file-download')
+    ),
+  ];
 
   return (
     <FileDetailLayout
@@ -61,7 +66,9 @@ export function UnknownDetailDocument(props: {
       <UnknownContent
         fileName={props.data.documentMetadata.documentName}
         onShare={openShare}
-        onDownload={() => void downloadDocument()}
+        onDownload={() =>
+          fireAndForget(downloadDocument(), 'drive-file-download')
+        }
       />
     </FileDetailLayout>
   );

@@ -531,6 +531,11 @@ pub async fn build_tool_service_context_from_env(
         &databases_tool_context,
         &crm_tool_context,
     );
+    let crm_transfer_tool_context = crate::tool_context::build_crm_transfer_tool_context(
+        &pipeline_tool_context,
+        &crm_tool_context,
+        &document_tool_context,
+    );
 
     let forms_tool_context = crate::tool_context::build_forms_tool_context(
         pool.clone(),
@@ -673,6 +678,7 @@ pub async fn build_tool_service_context_from_env(
         team_tool_context: crate::tool_context::build_team_tool_context(pool.clone()),
         crm_tool_context,
         pipeline_tool_context,
+        crm_transfer_tool_context,
         skill_tool_context,
         schedule_tool_context: crate::build_routine_tool_context()?,
         anthropic_tool_context,

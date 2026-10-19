@@ -1,5 +1,6 @@
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import clickOutside from '@core/directive/clickOutside';
+import { fireAndForget } from '@core/util/fireAndForget';
 import PlusIcon from '@phosphor/plus.svg';
 import { TagDot } from '@property/tags/TagDot';
 import { DEFAULT_TAG_COLOR, TAG_COLOR_OPTIONS } from '@property/tags/tagColors';
@@ -328,7 +329,7 @@ export function TagsMenu(props: {
       return;
     }
     const scope = scopeOptions()[selectedScopeIndex()]?.scope;
-    if (scope) void createTag(scope);
+    if (scope) fireAndForget(createTag(scope), 'tags-menu');
   };
 
   useMenuKeyboardNavigation({
@@ -449,7 +450,9 @@ export function TagsMenu(props: {
                       setCreateStep('scope');
                     }}
                     onScopeMouseEnter={setSelectedScopeIndex}
-                    onScopeSelect={(scope) => void createTag(scope)}
+                    onScopeSelect={(scope) =>
+                      fireAndForget(createTag(scope), 'tags-menu')
+                    }
                   />
                 )}
               </Show>

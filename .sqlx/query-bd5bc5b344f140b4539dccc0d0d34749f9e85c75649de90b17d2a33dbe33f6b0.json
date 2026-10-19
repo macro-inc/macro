@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE email_message_reconciliation SET lease_id = NULL,lease_until = NULL,available_at = now()\n            WHERE link_id = $1 AND generation = $2 AND provider_id = $3 AND lease_id = $4\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "bd5bc5b344f140b4539dccc0d0d34749f9e85c75649de90b17d2a33dbe33f6b0"
+}

@@ -5,6 +5,7 @@
  * row arrives under the same id and promotes this speculation in place.
  */
 
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { TurnState } from '@service-agent-fold/generated/types';
 import type {
   AgentAction,
@@ -32,9 +33,12 @@ export function createSteer(session: {
     const action = entry ? actionForQueuedEntry(entry) : undefined;
     if (!action) return;
     session.expect(actionId, action);
-    void (async () => {
-      const accepted = await session.steer(actionId);
-      if (!accepted) session.retract(actionId);
-    })();
+    fireAndForget(
+      (async () => {
+        const accepted = await session.steer(actionId);
+        if (!accepted) session.retract(actionId);
+      })(),
+      'agent-queue'
+    );
   };
 }

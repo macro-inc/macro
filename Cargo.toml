@@ -456,8 +456,17 @@ serde_urlencoded = "0.7.1"
 strum_macros = "0.27.1"
 unicode-segmentation = "1.9.0"
 url = "2.5.0"
-zip = "=2.4.2"
-ammonia = "4.1.7"
+zip = { version = "9.0.5", default-features = false, features = [
+  "aes-crypto",
+  "bzip2",
+  "deflate",
+  "deflate64",
+  "lzma",
+  "time",
+  "xz",
+  "zstd",
+] }
+ammonia = "4.1.8"
 html-escape = "0.2"
 subtle = "2.6.1"
 

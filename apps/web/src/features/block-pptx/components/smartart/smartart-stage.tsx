@@ -8,6 +8,7 @@ import type {
   ShapeOutline,
   SmartArtNodeOutline,
 } from '@core/pptx-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import CaretLeft from '@phosphor/caret-left.svg';
 import CaretRight from '@phosphor/caret-right.svg';
 import { createSignal, For, onCleanup, Show } from 'solid-js';
@@ -80,7 +81,7 @@ function NodeEditor(props: {
     const text = value();
     if (text === sent) return;
     sent = text;
-    void s().setText(node, text, at);
+    fireAndForget(s().setText(node, text, at), 'pptx-editor');
   };
   onCleanup(commit);
   if (seed !== undefined) queueMicrotask(commit);

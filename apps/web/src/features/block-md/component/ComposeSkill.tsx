@@ -21,6 +21,7 @@ import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { createSkill } from '@core/util/create';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { mergeRegister } from '@lexical/utils';
+import { Telemetry } from '@macro-inc/observability';
 import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
 import ArrowsOutIcon from '@phosphor/arrows-out.svg';
 import SplitIcon from '@phosphor/square-half.svg';
@@ -303,7 +304,7 @@ export function ComposeSkill(props: ComposeSkillProps) {
 
     const documentId = await submitSkill();
     if (documentId && !props.onSuccess) {
-      showSkillCreatedToast(documentId);
+      await showSkillCreatedToast(documentId);
     }
   };
 
@@ -338,7 +339,9 @@ export function ComposeSkill(props: ComposeSkillProps) {
     scopeId: composeHotkeyScope,
     description: 'Create skill',
     keyDownHandler: () => {
-      handleCreateSkill();
+      handleCreateSkill().catch((error) =>
+        Telemetry.error(error, { surface: 'compose-skill' })
+      );
       return true;
     },
     runWithInputFocused: true,

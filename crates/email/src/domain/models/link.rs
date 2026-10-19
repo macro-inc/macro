@@ -6,15 +6,19 @@ use uuid::Uuid;
 mod test;
 
 /// The provider of this email
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum UserProvider {
     Gmail,
+    /// Microsoft Outlook and Microsoft 365.
+    Outlook,
 }
 
 impl UserProvider {
     pub fn as_str(&self) -> &'static str {
         match self {
             UserProvider::Gmail => "GMAIL",
+            UserProvider::Outlook => "OUTLOOK",
         }
     }
 }

@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { Key } from '@solid-primitives/keyed';
 import { Scroll } from '@ui/components/Scroll';
 import {
@@ -218,7 +219,7 @@ function Root(props: {
 
   function commitDrop(drop: KanbanDrop, visual?: KanbanDropVisual) {
     if (drop.kind === 'lane') {
-      void props.onDrop(drop);
+      fireAndForget(props.onDrop(drop), 'kanban-drop');
       return;
     }
     if (!canDropCard(drop)) return;
@@ -251,7 +252,7 @@ function Root(props: {
         finish();
       }
     }
-    void saveAndReveal();
+    fireAndForget(saveAndReveal(), 'kanban-drop');
   }
 
   const dragProps =

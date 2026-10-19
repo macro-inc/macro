@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import ListChecks from '@phosphor-icons/core/regular/list-checks.svg';
 import { invalidateAuthoredForm } from '@queries/storage/form-tools';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
@@ -51,7 +52,10 @@ function mutationHandler<
     handleResponse: (ctx) => {
       const saved = ctx.tool.data.saved;
       if (saved)
-        void invalidateAuthoredForm(saved.form.id, saved.form.databaseId);
+        fireAndForget(
+          invalidateAuthoredForm(saved.form.id, saved.form.databaseId),
+          'ai-forms'
+        );
     },
     render: (ctx) => (
       <Card

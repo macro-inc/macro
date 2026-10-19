@@ -33,6 +33,7 @@ export type {
   ClaimOwner,
   LeaveGuard,
   LeaveGuardContext,
+  LeaveGuardOptions,
   NavigationCause,
   NavigationResult,
   RouteMatchInfo,

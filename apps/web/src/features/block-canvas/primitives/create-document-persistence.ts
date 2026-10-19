@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { GraphicsEditor } from '@macro-inc/graphics';
 import { createSignal } from 'solid-js';
 import type { CanvasDocumentSource } from '../context/document-source';
@@ -56,7 +57,7 @@ export function createDocumentPersistence(
     setStatus('pending');
     clearTimeout(timer);
     timer = setTimeout(() => {
-      void flush();
+      fireAndForget(flush(), 'canvas-persistence');
     }, 500);
   });
   return {
@@ -69,7 +70,7 @@ export function createDocumentPersistence(
       unsubscribe();
       clearTimeout(timer);
       // The captured source keeps this document's identity even after navigation.
-      void flush();
+      fireAndForget(flush(), 'canvas-persistence');
     },
   };
 }

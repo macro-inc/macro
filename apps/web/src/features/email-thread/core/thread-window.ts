@@ -2,11 +2,11 @@ export type NavDirection = 'prev' | 'next';
 
 export type OpenTargetMessage = {
   db_id?: string | null;
-  labels: Array<{ provider_label_id?: string | null }>;
+  is_read: boolean;
 };
 
 export function isUnreadMessage(message: OpenTargetMessage): boolean {
-  return message.labels.some((label) => label.provider_label_id === 'UNREAD');
+  return !message.is_read;
 }
 
 /** Oldest, penultimate, and newest stay visible. Hide the rest when length > 3. */

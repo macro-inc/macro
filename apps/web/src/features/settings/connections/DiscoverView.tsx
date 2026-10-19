@@ -4,6 +4,7 @@ import {
   createPipedreamCatalogConnect,
   createPipedreamCatalogSearch,
 } from '@core/pipedream/catalog';
+import { fireAndForget } from '@core/util/fireAndForget';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
 import PlusIcon from '@phosphor/plus.svg';
@@ -169,7 +170,12 @@ export function DiscoverView(props: { model: ConnectionsModel }) {
                   variant="outline"
                   size="sm"
                   depth={3}
-                  onClick={() => void catalog.query.fetchNextPage()}
+                  onClick={() =>
+                    fireAndForget(
+                      catalog.query.fetchNextPage(),
+                      'connections-settings'
+                    )
+                  }
                 >
                   Load more
                 </Button>
@@ -261,7 +267,7 @@ function CatalogRow(props: {
         aria-describedby={descriptionId}
         aria-busy={busy()}
         disabled={busy()}
-        onClick={() => void connect()}
+        onClick={() => fireAndForget(connect(), 'connections-settings')}
       >
         {row()}
       </button>

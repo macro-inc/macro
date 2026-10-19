@@ -3,6 +3,7 @@ import type {
   FieldFilters,
   QueryState,
 } from '@app/features/next-soup/filters/filter-store/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { EmailEntity } from '@entity';
 import {
   type Accessor,
@@ -42,7 +43,7 @@ export function createLocalDraftSource(enabled: Accessor<boolean>) {
   // where reading `enabled` re-runs the disposing owner's stale memos.
   const scheduleRefresh = () =>
     queueMicrotask(() => {
-      if (!disposed) void refresh();
+      if (!disposed) fireAndForget(refresh(), 'email-local-drafts');
     });
   const unsubscribe = localDraftStore.subscribe(scheduleRefresh);
   const auth = queryClient.getQueryCache().subscribe((event) => {
@@ -56,7 +57,7 @@ export function createLocalDraftSource(enabled: Accessor<boolean>) {
   });
   createEffect(
     on(enabled, () => {
-      void refresh();
+      fireAndForget(refresh(), 'email-local-drafts');
     })
   );
   return { drafts: () => (enabled() ? drafts() : []), ready };

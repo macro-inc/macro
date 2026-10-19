@@ -101,10 +101,18 @@ where
     ))
 }
 
-/// Resolve one email thread through the existing user-scoped Soup item loader.
+/// Resolve one email thread through the Soup item loader, whose email
+/// hydration settles access with entity access receipts: the rule the REST
+/// thread route applies, so a thread reached through a team's CRM, a project,
+/// or a share opens even though it lives in a teammate's inbox.
 ///
-/// A missing or inaccessible thread is represented as `None` by the loader's
-/// filtered Soup request.
+/// A missing or inaccessible thread is represented as `None`.
+#[tracing::instrument(
+    name = "soup.resolve_email_thread",
+    skip_all,
+    fields(thread_id = %thread_id),
+    err(Debug)
+)]
 pub async fn resolve_soup_email_thread<Edges>(
     ctx: &Context<'_>,
     user_id: MacroUserIdStr<'static>,

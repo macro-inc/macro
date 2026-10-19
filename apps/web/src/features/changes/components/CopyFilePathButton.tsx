@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import CheckIcon from '@phosphor/check.svg';
 import CopyIcon from '@phosphor/copy.svg';
 import { Button } from '@ui';
@@ -37,7 +38,7 @@ export function CopyFilePathButton(props: {
         tooltip="Copy path"
         aria-label="Copy path"
         class="motion-safe:transition-transform motion-safe:duration-150 motion-safe:active:scale-95"
-        onClick={() => void copy()}
+        onClick={() => fireAndForget(copy(), 'changes')}
       >
         <Show when={copied()} fallback={<CopyIcon />}>
           <CheckIcon class="text-success" />

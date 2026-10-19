@@ -82,6 +82,11 @@ function GuardedView() {
   return <p data-testid="guarded">guarded</p>;
 }
 
+function SearchGuardedView() {
+  useBeforeLeave(() => allowLeave, { search: ['list'] });
+  return <ListView />;
+}
+
 function ListView() {
   const [search, setSearch] = createSearchParams({
     namespace: 'list',
@@ -157,6 +162,12 @@ const paneRoutes = [
   }),
   defineRoute({ id: 'home', path: 'home', component: () => <p>home</p> }),
   defineRoute({ id: 'guarded', path: 'guarded', component: GuardedView }),
+  defineRoute({
+    id: 'watched-list',
+    path: 'watched-list',
+    search: ['list'],
+    component: SearchGuardedView,
+  }),
   defineRoute({
     id: 'list',
     path: 'list',
@@ -255,22 +266,31 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+it('opts a mounted view into leave guards for its search namespace', () => {
+  renderPanes('/watched-list');
+  allowLeave = false;
+  fireEvent.click(screen.getByRole('button', { name: 'sort:name' }));
+  expect(screen.getByRole('button', { name: 'sort:name' })).toBeTruthy();
+  allowLeave = true;
+  fireEvent.click(screen.getByRole('button', { name: 'sort:name' }));
+  expect(screen.getByRole('button', { name: 'sort:date' })).toBeTruthy();
+});
 describe('split router Solid bindings', () => {
-  it('keeps a view mounted while its remount key holds and updates params in place', () => {
+  it('keeps a view mounted while its remount key holds and updates params in place', async () => {
     const { router } = renderPanes('/drive/md/d1');
     const pane = router.panes()[0]!;
     expect(screen.getByTestId('document').textContent).toBe('md:d1');
 
-    router.navigatePane(pane, '/drive/md/d2');
+    await router.navigatePane(pane, '/drive/md/d2');
     expect(screen.getByTestId('document').textContent).toBe('md:d2');
     expect(counts).toEqual({ drive: 1, document: 1 });
     expect(documentTypeReads).toHaveBeenCalledTimes(1);
 
-    router.navigatePane(pane, '/drive/pdf/d2');
+    await router.navigatePane(pane, '/drive/pdf/d2');
     expect(counts).toEqual({ drive: 1, document: 2 });
   });
 
-  it('lets panel chrome around a prop-less outlet use the hooks', () => {
+  it('lets panel chrome around a prop-less outlet use the hooks', async () => {
     const { router } = renderPanes('/drive/md/d1', (pane) => (
       <Panel pane={pane} />
     ));
@@ -280,7 +300,7 @@ describe('split router Solid bindings', () => {
     );
     expect(screen.getByTestId('document').textContent).toBe('md:d1');
 
-    router.navigatePane(pane, '/home');
+    await router.navigatePane(pane, '/home');
     expect(screen.getByTestId('header').textContent).toBe('app/home back:true');
     expect(screen.getByText('home')).toBeTruthy();
   });
@@ -376,16 +396,16 @@ describe('split router Solid bindings', () => {
     expect(screen.getByTestId('document').textContent).toBe('md:d3');
   });
 
-  it('runs leave guards before unmounting a view but not for search changes', () => {
+  it('runs leave guards before unmounting a view but not for search changes', async () => {
     const { router, history } = renderPanes('/guarded');
     const pane = router.panes()[0]!;
     allowLeave = false;
-    router.navigatePane(pane, '/home');
+    await router.navigatePane(pane, '/home');
     expect(screen.getByTestId('guarded')).toBeTruthy();
-    router.updateSearch(pane, 'anything', { x: ['1'] });
+    await router.updateSearch(pane, 'anything', { x: ['1'] });
     expect(history.read().search).toBe('?s0.anything.x=1');
     allowLeave = true;
-    router.navigatePane(pane, '/home');
+    await router.navigatePane(pane, '/home');
     expect(screen.queryByTestId('guarded')).toBeNull();
   });
 

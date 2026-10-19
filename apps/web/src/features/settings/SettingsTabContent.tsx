@@ -3,7 +3,6 @@ import { useSettingsTabAvailable } from '@core/constant/settingsTabsConfig';
 import { Show, Suspense } from 'solid-js';
 import { CalendarSettings } from '../calendar/calendar-settings';
 import { CrmSettings as Crm } from '../crm/crm-settings';
-import { SchedulingSettings } from '../scheduling/scheduling';
 import { Usage } from '../usage/usage';
 import { Account } from './Account';
 import { Admin } from './Admin';
@@ -44,9 +43,6 @@ export function SettingsTabContent(props: { tab: SettingsTab }) {
       </Show>
       <Show when={isCurrentTab('Calendar')}>
         <CalendarSettings />
-      </Show>
-      <Show when={isCurrentTab('Booking links')}>
-        <SchedulingSettings />
       </Show>
       <Show when={isCurrentTab('API Keys')}>
         <ApiKeys />

@@ -135,7 +135,11 @@ function useAppShareDeliveryContext(
 
 function toAttachment(item: ShareItemRef): NewAttachment {
   return {
-    entity_type: itemTypeToReferenceEntityType(item.kind),
+    // Attachments name a pull request `foreign_entity`, unlike its item type.
+    entity_type:
+      item.kind === 'foreign'
+        ? 'foreign_entity'
+        : itemTypeToReferenceEntityType(item.kind),
     entity_id: item.id,
   };
 }

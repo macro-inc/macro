@@ -29,6 +29,9 @@ vi.mock('@core/user', () => ({
 vi.mock('@core/component/UserIcon', () => ({
   UserIcon: () => <span />,
 }));
+vi.mock('@app/features/scheduling/calendar-actions', () => ({
+  CalendarSchedulingActions: () => null,
+}));
 vi.mock('@queries/calendar/team-ooo', () => ({
   useTeamOutOfOfficeQuery: () =>
     useQuery(() => ({ queryKey: ['team-ooo'], queryFn: requests.teamOoo })),

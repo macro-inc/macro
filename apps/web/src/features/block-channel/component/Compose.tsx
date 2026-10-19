@@ -35,8 +35,8 @@ import {
 } from '@core/user';
 import { useSendMessageToPeople } from '@core/util/channels';
 import { getDestinationFromOptions } from '@core/util/destination';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { isPlatform } from '@core/util/platform';
-
 import {
   chatRuleset,
   handleFileFolderDrop,
@@ -226,13 +226,17 @@ export function ChannelCompose() {
     onChange: (markdown) => inputState.setValue(markdown),
     onEnter: () => {
       if (isTouchDevice()) return false;
-      void inputState.commands.send();
+      fireAndForget(inputState.commands.send(), 'block-channel');
       return true;
     },
-    sendMessage: () => void inputState.commands.send(),
+    sendMessage: () =>
+      fireAndForget(inputState.commands.send(), 'block-channel'),
     onPasteFilesAndDirs: (files, directories) => {
-      void handleFileFolderDrop(files, directories, (entries) =>
-        inputState.commands.attachFiles(entries.map((e) => e.file))
+      fireAndForget(
+        handleFileFolderDrop(files, directories, (entries) =>
+          inputState.commands.attachFiles(entries.map((e) => e.file))
+        ),
+        'block-channel'
       );
     },
   });

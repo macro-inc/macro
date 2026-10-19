@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE calendar_projection_outbox SET lease_id=NULL,lease_until=NULL WHERE event_id=$1 AND lease_id=$2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7a0fcb36724e6122c043d4e1b4a440c68ad72dadcaa38af140fdd5ed61a9ff7a"
+}

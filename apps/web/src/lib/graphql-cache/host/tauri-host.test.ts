@@ -1081,7 +1081,7 @@ describe('createTauriCacheHost', () => {
           { commit }
         );
         invokeMock.mockResolvedValue(null);
-        void host.enqueueOptimisticMutation(
+        const enqueued = host.enqueueOptimisticMutation(
           {
             query: 'mutation M { m }',
             data: {},
@@ -1098,6 +1098,7 @@ describe('createTauriCacheHost', () => {
             })
           )
         );
+        await enqueued;
       } finally {
         host.dispose();
       }

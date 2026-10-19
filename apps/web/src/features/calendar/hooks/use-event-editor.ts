@@ -112,7 +112,7 @@ export function useEventEditor(props: UseEventEditorProps) {
     const event = props.event();
     if (event) {
       const calendarId = event.calendarId ?? event.calendar.id;
-      const calendars = calendarsQuery.data ?? [];
+      const calendars = calendarsQuery.isSuccess ? calendarsQuery.data : [];
       const calendar = calendars.find(
         (candidate) => candidate.id === calendarId
       );
@@ -122,6 +122,8 @@ export function useEventEditor(props: UseEventEditorProps) {
       return [
         {
           id: calendarId,
+          provider: calendar?.provider ?? event.calendar.provider,
+          capabilities: calendar?.capabilities ?? event.calendar.capabilities,
           label: event.calendar.name || 'Calendar',
           color: event.calendar.color,
           defaultReminders: reminderCalendar?.defaultReminders,
@@ -132,6 +134,8 @@ export function useEventEditor(props: UseEventEditorProps) {
 
     return writableCalendars().map((calendar) => ({
       id: calendar.id,
+      provider: calendar.provider,
+      capabilities: calendar.capabilities,
       label: calendarDisplayLabel(calendar, spansInboxes()),
       color: calendar.color ?? DEFAULT_CALENDAR_SOURCE.color,
       defaultReminders: calendar.defaultReminders,
@@ -146,11 +150,7 @@ export function useEventEditor(props: UseEventEditorProps) {
   const createMeeting = useCreateMeetingMutation();
   const [pending, setPending] = createSignal(false);
   const [saveError, setSaveError] = createSignal<string>();
-  // If adding the link fails, retry the same saved event and meeting.
-  const [createdEvent, setCreatedEvent] = createSignal<{
-    id: string;
-    calendarId?: string;
-  }>();
+  // If attaching the link to an existing event fails, retry the same meeting.
   const [createdMeeting, setCreatedMeeting] = createSignal<{
     url: string;
     shareToken: string;
@@ -246,7 +246,9 @@ export function useEventEditor(props: UseEventEditorProps) {
 
     try {
       if (!event) {
-        const eventValues = {
+        // The server mints the call and writes its link into the event, so
+        // the one invitation attendees receive already carries it.
+        await create.mutateAsync({
           title: values.title,
           time: values.time,
           calendarId: values.calendarId,
@@ -259,46 +261,10 @@ export function useEventEditor(props: UseEventEditorProps) {
               : cleanContent.description,
           attendees: values.guestEmails.map((email) => ({ email })),
           ...(conference ? { conference } : {}),
+          ...(needsCall() ? { macroCall: true } : {}),
           ...(values.reminders ? { reminders: values.reminders } : {}),
           ...(values.outOfOffice ? { outOfOffice: values.outOfOffice } : {}),
-        };
-        let created = createdEvent();
-        if (created) {
-          await update.mutateAsync({
-            eventId: created.id,
-            calendarId: created.calendarId,
-            patch: {
-              ...eventValues,
-              location: cleanContent.location,
-              description: cleanContent.description,
-            },
-          });
-        } else {
-          const result = await create.mutateAsync(eventValues);
-          created = {
-            id: result.id,
-            calendarId: values.calendarId ?? result.calendarId ?? undefined,
-          };
-          setCreatedEvent(created);
-        }
-        calendarSaved = true;
-
-        if (needsCall()) {
-          const meetingUrl = await createScheduledMeeting(values);
-          const linkedContent = attachCalendarMacroCall(
-            cleanContent,
-            meetingUrl
-          );
-          if (needsCall())
-            await update.mutateAsync({
-              eventId: created.id,
-              calendarId: created.calendarId ?? values.calendarId,
-              patch: {
-                location: linkedContent.location,
-                description: linkedContent.description,
-              },
-            });
-        }
+        });
         props.onSaved();
         return;
       }
@@ -415,7 +381,7 @@ export function useEventEditor(props: UseEventEditorProps) {
   const disabledFields = createMemo<EventEditorDisabledFields | undefined>(
     () => {
       const event = props.event();
-      if (!event) return createdEvent() ? EDIT_DISABLED_FIELDS : undefined;
+      if (!event) return undefined;
       const editsOtherCopy = !editsPrimaryCopy(event);
       return {
         ...EDIT_DISABLED_FIELDS,
@@ -434,7 +400,6 @@ export function useEventEditor(props: UseEventEditorProps) {
     showRecurringEditNotice,
     pending,
     saveError,
-    eventCreated: () => createdEvent() !== undefined,
     save,
   };
 }

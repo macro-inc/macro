@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM calendar_outlook_members WHERE work_id=$1 AND master_id=$2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d41235b413cd335d23d86d34bd555cf9f36c580d2b8409d5ef27de6295018784"
+}

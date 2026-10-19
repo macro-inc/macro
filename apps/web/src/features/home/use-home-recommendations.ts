@@ -5,6 +5,7 @@ import { useChatInputContext } from '@core/component/AI/context';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { useSettingsState } from '@core/constant/SettingsState';
 import type { Entity } from '@core/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   compositeEntity,
   fetchNotificationsForEntities,
@@ -109,7 +110,10 @@ export function useHomeRecommendations() {
   };
 
   const retry = () => {
-    void Promise.allSettled([emailLinks.refetch(), recommendations.retry()]);
+    fireAndForget(
+      Promise.allSettled([emailLinks.refetch(), recommendations.retry()]),
+      'home'
+    );
   };
 
   return {

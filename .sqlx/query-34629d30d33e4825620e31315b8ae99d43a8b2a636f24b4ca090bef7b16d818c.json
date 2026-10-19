@@ -1,0 +1,70 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE microsoft_link_attempts a SET claimed_at = now()\n            FROM in_progress_user_link p\n            WHERE a.id = $1 AND a.id = p.id AND p.email_provider = 'OUTLOOK'\n                AND a.claimed_at IS NULL AND a.completed_at IS NULL AND a.expires_at > now()\n            RETURNING a.id, p.macro_user_id, a.identity_provider_id, a.redirect_uri,\n                a.return_uri, a.pkce_verifier, a.oidc_nonce, a.expires_at, a.calendar_requested\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "macro_user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "identity_provider_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "redirect_uri",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "return_uri",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "pkce_verifier",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "oidc_nonce",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "expires_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "calendar_requested",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "34629d30d33e4825620e31315b8ae99d43a8b2a636f24b4ca090bef7b16d818c"
+}

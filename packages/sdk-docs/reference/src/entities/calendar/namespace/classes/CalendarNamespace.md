@@ -85,3 +85,21 @@ A handle to a calendar event by id, for driving mutations.
 #### Returns
 
 [`CalendarEvent`](../../event/classes/CalendarEvent.md)
+
+***
+
+### replacement()
+
+> **replacement**(`operationId`): [`CalendarReplacement`](../../replacement/classes/CalendarReplacement.md)
+
+Recover a saved replacement, including after its original event was retired.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `operationId` | `string` |
+
+#### Returns
+
+[`CalendarReplacement`](../../replacement/classes/CalendarReplacement.md)

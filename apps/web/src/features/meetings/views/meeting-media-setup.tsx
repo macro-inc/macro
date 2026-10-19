@@ -1,6 +1,7 @@
 import { MediaBackgroundPicker } from '@core/component/media/media-background-picker';
 import { MediaDevicePicker } from '@core/component/media/media-device-picker';
 import type { BackgroundEffect } from '@core/media/background-effect';
+import { fireAndForget } from '@core/util/fireAndForget';
 import Image from '@phosphor/image.svg';
 import Microphone from '@phosphor/microphone.svg';
 import MicrophoneSlash from '@phosphor/microphone-slash.svg';
@@ -227,7 +228,9 @@ export function MeetingMediaSetup(props: {
           uploading={uploading()}
           onSelect={selectBackground}
           onUpload={
-            props.readBackgroundImage ? (file) => void upload(file) : undefined
+            props.readBackgroundImage
+              ? (file) => fireAndForget(upload(file), 'meeting-media')
+              : undefined
           }
         />
       </div>

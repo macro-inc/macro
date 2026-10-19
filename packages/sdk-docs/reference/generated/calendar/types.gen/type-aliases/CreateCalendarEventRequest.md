@@ -1,6 +1,6 @@
 # Type Alias: CreateCalendarEventRequest
 
-> **CreateCalendarEventRequest** = \{ `attendees?`: [`CalendarAttendeeInputBody`](CalendarAttendeeInputBody.md)[]; `calendarId?`: `string` \| `null`; `conference?`: `null` \| [`ConferenceChange`](ConferenceChange.md); `description?`: `string` \| `null`; `emailLinkId?`: `string` \| `null`; `idempotencyKey?`: `string` \| `null`; `location?`: `string` \| `null`; `outOfOffice?`: `null` \| [`OutOfOfficeProperties`](OutOfOfficeProperties.md); `recurrenceLines?`: `string`[]; `reminders?`: `null` \| [`EventReminders`](EventReminders.md); `time`: [`EventTime`](EventTime.md); `title`: `string`; `transparency?`: `null` \| [`EventTransparency`](EventTransparency.md); `visibility?`: `null` \| [`EventVisibility`](EventVisibility.md); \}
+> **CreateCalendarEventRequest** = \{ `attendees?`: [`CalendarAttendeeInputBody`](CalendarAttendeeInputBody.md)[]; `calendarId?`: `string` \| `null`; `conference?`: `null` \| [`ConferenceChange`](ConferenceChange.md); `description?`: `string` \| `null`; `emailLinkId?`: `string` \| `null`; `idempotencyKey?`: `string` \| `null`; `location?`: `string` \| `null`; `macroCall?`: `boolean`; `outOfOffice?`: `null` \| [`OutOfOfficeProperties`](OutOfOfficeProperties.md); `recurrenceLines?`: `string`[]; `reminders?`: `null` \| [`EventReminders`](EventReminders.md); `time`: [`EventTime`](EventTime.md); `title`: `string`; `transparency?`: `null` \| [`EventTransparency`](EventTransparency.md); `visibility?`: `null` \| [`EventVisibility`](EventVisibility.md); \}
 
 Request body creating a calendar event on the requester's calendar.
 
@@ -15,6 +15,7 @@ Request body creating a calendar event on the requester's calendar.
 | <a id="property-emaillinkid"></a> `emailLinkId?` | `string` \| `null` | Connected inbox whose primary calendar receives the event; defaults to the requester's primary inbox. |
 | <a id="property-idempotencykey"></a> `idempotencyKey?` | `string` \| `null` | Stable retry identity, scoped to the authenticated organizer. |
 | <a id="property-location"></a> `location?` | `string` \| `null` | Optional location label. |
+| <a id="property-macrocall"></a> `macroCall?` | `boolean` | Mint a Macro call and write its join link into the description and location before creating the event, so the invitation carries it. Cannot be combined with `conference`. |
 | <a id="property-outofoffice"></a> `outOfOffice?` | `null` \| [`OutOfOfficeProperties`](OutOfOfficeProperties.md) | - |
 | <a id="property-recurrencelines"></a> `recurrenceLines?` | `string`[] | Raw RFC 5545 recurrence properties (`RRULE`, `RDATE`, `EXDATE`). |
 | <a id="property-reminders"></a> `reminders?` | `null` \| [`EventReminders`](EventReminders.md) | - |

@@ -13,6 +13,7 @@ import type { MacroClient } from '../../utils/client';
 import type { Link } from '../email/link';
 import { Calendar } from './calendar';
 import { CalendarEvent } from './event';
+import { CalendarReplacement } from './replacement';
 
 /** Fields for a new calendar event. */
 export interface CreateEventOptions {
@@ -36,7 +37,10 @@ export interface CreateEventOptions {
   reminders?: EventReminders;
   /** Conference to attach; omit to create the event without one. */
   conference?: ConferenceChange;
-  /** Out-of-office properties; present to create a Google out-of-office event. */
+  /** Mint a Macro call with the event; its join link lands in the description
+   * and location. Cannot be combined with `conference`. */
+  macroCall?: boolean;
+  /** Out-of-office properties; present to create an out-of-office event. */
   outOfOffice?: OutOfOfficeProperties;
   /** Exact calendar to create the event on; takes precedence over the inbox
    * default. */
@@ -69,6 +73,11 @@ export class CalendarNamespace {
     return CalendarEvent.byId(this.client, id);
   }
 
+  /** Recover a saved replacement, including after its original event was retired. */
+  replacement(operationId: string): CalendarReplacement {
+    return new CalendarReplacement(this.client, operationId);
+  }
+
   /** Create a calendar event and return a handle to its synced record. */
   async createEvent(options: CreateEventOptions): Promise<CalendarEvent> {
     const record = unwrap(
@@ -92,6 +101,7 @@ function toCreateBody(options: CreateEventOptions): CreateCalendarEventRequest {
     transparency: options.transparency,
     reminders: options.reminders,
     conference: options.conference,
+    macroCall: options.macroCall,
     outOfOffice: options.outOfOffice,
     calendarId: options.calendar?.id,
     emailLinkId: options.emailLink?.id,

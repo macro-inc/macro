@@ -5,6 +5,7 @@
  * Background, Hide Background Graphics), Size, and Close Master View.
  */
 
+import { fireAndForget } from '@core/util/fireAndForget';
 import ChartBar from '@phosphor/chart-bar.svg';
 import FilmStrip from '@phosphor/film-strip.svg';
 import ImageIcon from '@phosphor/image.svg';
@@ -86,7 +87,7 @@ export function SlideMasterTab(props: { master: MasterView }) {
           tooltip="Insert Layout: add a layout to the slide master"
           disabled={ro() || !m.page()}
           data-testid="pptx-master-insert-layout"
-          onClick={() => void m.insertLayout()}
+          onClick={() => fireAndForget(m.insertLayout(), 'pptx-editor')}
         >
           <Layout />
           Insert Layout
@@ -99,7 +100,7 @@ export function SlideMasterTab(props: { master: MasterView }) {
           }
           disabled={ro() || !m.page() || !!m.deleteBlocker()}
           data-testid="pptx-master-delete"
-          onClick={() => void m.deletePage()}
+          onClick={() => fireAndForget(m.deletePage(), 'pptx-editor')}
         >
           <Trash />
           Delete
@@ -136,7 +137,10 @@ export function SlideMasterTab(props: { master: MasterView }) {
                     testId={`pptx-master-placeholder-${choice.kind}${choice.vertical ? '-vertical' : ''}`}
                     onClick={() => {
                       close();
-                      void m.insertPlaceholder(choice.kind, choice.vertical);
+                      fireAndForget(
+                        m.insertPlaceholder(choice.kind, choice.vertical),
+                        'pptx-editor'
+                      );
                     }}
                   />
                 )}
@@ -150,7 +154,9 @@ export function SlideMasterTab(props: { master: MasterView }) {
           tooltip="Show the title placeholder on this layout"
           checked={options().title}
           disabled={ro() || !layout()}
-          onChange={(title) => void m.setOptions({ title })}
+          onChange={(title) =>
+            fireAndForget(m.setOptions({ title }), 'pptx-editor')
+          }
         />
         <RibbonCheckbox
           label="Footers"
@@ -158,7 +164,9 @@ export function SlideMasterTab(props: { master: MasterView }) {
           tooltip="Show the date, footer, and slide number placeholders on this layout"
           checked={options().footers}
           disabled={ro() || !layout()}
-          onChange={(footers) => void m.setOptions({ footers })}
+          onChange={(footers) =>
+            fireAndForget(m.setOptions({ footers }), 'pptx-editor')
+          }
         />
       </RibbonGroup>
       <RibbonGroup label="Background">
@@ -182,7 +190,10 @@ export function SlideMasterTab(props: { master: MasterView }) {
           checked={!!layout()?.hideBackgroundGraphics}
           disabled={ro() || !layout()}
           onChange={(hide) =>
-            void m.setOptions({ hideBackgroundGraphics: hide })
+            fireAndForget(
+              m.setOptions({ hideBackgroundGraphics: hide }),
+              'pptx-editor'
+            )
           }
         />
       </RibbonGroup>
@@ -193,7 +204,7 @@ export function SlideMasterTab(props: { master: MasterView }) {
           tooltip="Close Master View: back to editing slides"
           variant="accent"
           data-testid="pptx-master-close"
-          onClick={() => void m.close()}
+          onClick={() => fireAndForget(m.close(), 'pptx-editor')}
         >
           <XCircle />
           Close Master View
@@ -246,7 +257,10 @@ function ThemeColorsMenu() {
                 }
                 onClick={() => {
                   close();
-                  void env.commands.setThemeColors(set.colors, set.name);
+                  fireAndForget(
+                    env.commands.setThemeColors(set.colors, set.name),
+                    'pptx-editor'
+                  );
                 }}
               />
             )}
@@ -280,10 +294,13 @@ function ThemeFontsMenu() {
                 }
                 onClick={() => {
                   close();
-                  void env.commands.setThemeFonts(
-                    pair.major,
-                    pair.minor,
-                    pair.name
+                  fireAndForget(
+                    env.commands.setThemeFonts(
+                      pair.major,
+                      pair.minor,
+                      pair.name
+                    ),
+                    'pptx-editor'
                   );
                 }}
               />
@@ -331,7 +348,10 @@ function BackgroundStylesMenu(props: { master: MasterView }) {
                   }}
                   onClick={() => {
                     close();
-                    void props.master.setBackgroundStyle(style);
+                    fireAndForget(
+                      props.master.setBackgroundStyle(style),
+                      'pptx-editor'
+                    );
                   }}
                 />
               )}

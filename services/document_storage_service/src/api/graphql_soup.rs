@@ -15,7 +15,7 @@ use bots::outbound::pg_bots_repo::PgBotsRepo;
 use complete_graph::GraphqlRequestParts;
 use entity_registry::OwnerGrantPolicy;
 use entity_registry_db_utils::OwnedEntityRegistrar;
-use graphql_soup::{email_mutation_thread_loader, soup_item_loader_with_team_access};
+use graphql_soup::email_mutation_thread_loader;
 use macro_authorization::{
     OptionalMacroAuthorizationExtractor, UserOrInternalService, UserOrInternalServiceAuthorization,
 };
@@ -143,13 +143,6 @@ fn insert_graphql_context_data(
         state.soup_router_state.email_service(),
         state.entity_access_service.clone(),
     );
-    // Ordinary queries use the replica-backed Soup reader. Subscription
-    // hydration and the mutation-only loader below read the primary.
-    let soup_item_loader = soup_item_loader_with_team_access(
-        state.soup_router_state.service(),
-        state.soup_router_state.email_service(),
-        state.entity_access_service.as_ref().clone(),
-    );
     data.insert(macro_user_id.clone());
     data.insert(entity_mutation::EntityMutationActor {
         user_id: macro_user_id.clone(),
@@ -189,7 +182,7 @@ fn insert_graphql_context_data(
     data.insert(state.graphql_notification_reader.clone());
     data.insert(state.soup_router_state.email_service());
     data.insert(state.entity_access_service.clone());
-    data.insert(soup_item_loader);
+    data.insert(state.graphql_soup_item_loader.clone());
     data.insert(state.agent_session_log_subscriptions.clone());
     // Mutation replies must read their committed state from the primary email
     // service. Ordinary Soup lists and subscriptions retain their own reader.

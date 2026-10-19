@@ -1,4 +1,5 @@
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { EntityData } from '@entity';
 import type { Property, PropertyDefinitionDomain } from '@property/types';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
@@ -72,7 +73,7 @@ export function closePropertyEditor() {
       targetPropertyDefinition: undefined,
     })
   );
-  void restoreFocus?.();
+  fireAndForget(restoreFocus?.(), 'property-editor');
 }
 
 export async function notifyPropertyEditorPropertyAdded(

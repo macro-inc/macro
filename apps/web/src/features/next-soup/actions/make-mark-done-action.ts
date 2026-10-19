@@ -14,6 +14,7 @@ import {
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import type { HotkeyGroup } from '@core/hotkey/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { EntityData } from '@entity';
 import type { NotificationSource } from '@notifications';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
@@ -144,9 +145,12 @@ function delegatedDoneUndoLifecycle(
           label: 'Undo',
           icon: ArrowCounterClockwise,
           onClick: () => {
-            void handle.undo({
-              onError: () => toast.failure('Failed to undo'),
-            });
+            fireAndForget(
+              handle.undo({
+                onError: () => toast.failure('Failed to undo'),
+              }),
+              'next-soup'
+            );
           },
         },
       ],
@@ -162,7 +166,7 @@ function delegatedDoneUndoLifecycle(
     onUndone: () => {
       if (toastId !== undefined) toast.dismiss(toastId);
       variables.restoreFocus?.();
-      void restoreSoupFocus(firstEntityId);
+      fireAndForget(restoreSoupFocus(firstEntityId), 'next-soup');
       variables.navigateBack?.();
     },
     onRedone: showToast,
@@ -227,7 +231,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     const restoreFocus = () => {
       dismiss();
       variables.restoreFocus?.();
-      void restoreSoupFocus(firstEntityId);
+      fireAndForget(restoreSoupFocus(firstEntityId), 'next-soup');
       variables.navigateBack?.();
     };
     const showToast = () => {
@@ -246,9 +250,12 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
             label: 'Undo',
             icon: ArrowCounterClockwise,
             onClick: () => {
-              void handle.undo({
-                onError: () => toast.failure('Failed to undo'),
-              });
+              fireAndForget(
+                handle.undo({
+                  onError: () => toast.failure('Failed to undo'),
+                }),
+                'next-soup'
+              );
             },
           },
         ],

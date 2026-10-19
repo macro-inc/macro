@@ -28,6 +28,13 @@ async fn change_schedule(
     signature: Option<&SignaturePreparation>,
 ) -> Result<Option<Uuid>, EmailErr> {
     let mut tx = pool.begin().await.map_err(anyhow::Error::from)?;
+    let outlook = sqlx::query!(r#"
+        SELECT (macro_id = $2 OR EXISTS (SELECT 1 FROM macro_user_links u WHERE u.link_id = email_links.id AND u.primary_macro_id = $2)) AS "authorized!"
+        FROM email_links WHERE id = $1 AND provider = 'OUTLOOK' FOR UPDATE
+    "#,link_id,actor.as_ref()).fetch_optional(&mut *tx).await.map_err(anyhow::Error::from)?;
+    if outlook.as_ref().is_some_and(|link| !link.authorized) {
+        return Err(EmailErr::Unauthorized);
+    }
     // Every mutator locks message before schedule; no locks cross provider work.
     let message = sqlx::query!(
         "SELECT thread_id, is_draft, is_sent, replying_to_id, body_html_sanitized, body_text FROM email_messages WHERE id = $1 AND link_id = $2 FOR UPDATE",
@@ -47,6 +54,7 @@ async fn change_schedule(
     }
     match change {
         ScheduleChange::Set(send_time) => {
+            super::draft::require_completed_uploads(&mut tx, message_id).await?;
             if !message.is_draft {
                 return Err(EmailErr::MessageDeliveryConflict(message_id));
             }
@@ -98,6 +106,11 @@ async fn change_schedule(
                 message_id, link_id,
             ).execute(&mut *tx).await.map_err(anyhow::Error::from)?;
         }
+    }
+    if outlook.is_some() && matches!(change, ScheduleChange::Set(_)) {
+        super::draft::snapshot_outlook_draft(&mut tx, message_id, link_id, actor.as_ref())
+            .await
+            .map_err(anyhow::Error::from)?;
     }
     tx.commit().await.map_err(anyhow::Error::from)?;
     Ok(Some(message.thread_id))

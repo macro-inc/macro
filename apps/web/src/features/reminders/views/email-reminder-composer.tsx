@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { EmailEntity } from '@entity';
 import {
   executeEmailFollowup,
@@ -129,7 +130,7 @@ export function EmailReminderComposer(
     ) {
       lastCommand = { ...values, operationId: crypto.randomUUID() };
     }
-    void submit(lastCommand);
+    fireAndForget(submit(lastCommand), 'reminders');
   };
   return (
     <EmailReminderMenu
@@ -143,7 +144,11 @@ export function EmailReminderComposer(
       pending={pending()}
       ready={query.isSuccess}
       error={query.isError ? 'Couldn’t load this email reminder.' : error()}
-      onRetry={query.isError ? () => void query.refetch() : undefined}
+      onRetry={
+        query.isError
+          ? () => fireAndForget(query.refetch(), 'reminders')
+          : undefined
+      }
       onSave={save}
       onRemove={
         active()
@@ -163,7 +168,7 @@ export function EmailReminderComposer(
                   undo: false,
                 };
               }
-              void submit(lastCommand);
+              fireAndForget(submit(lastCommand), 'reminders');
             }
           : undefined
       }

@@ -13,6 +13,7 @@ import {
   MenuItem,
   MenuSeparator,
 } from '@core/component/ContextMenu';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import {
   createSignal,
@@ -162,7 +163,7 @@ export function EditPointsOverlay(props: {
     } else if (node) {
       if (mod) {
         const next = deleteNode(shape, node);
-        if (next) void ep.commit(next, null);
+        if (next) fireAndForget(ep.commit(next, null), 'pptx-editor');
         return;
       }
       ep.select(node);
@@ -176,7 +177,7 @@ export function EditPointsOverlay(props: {
     } else if (segment) {
       if (mod) {
         const added = addNode(shape, segment.ref, segment.t);
-        void ep.commit(added.shape, added.node);
+        fireAndForget(ep.commit(added.shape, added.node), 'pptx-editor');
         return;
       }
       gesture = {
@@ -229,7 +230,7 @@ export function EditPointsOverlay(props: {
     if (!g) return;
     const now = ep.model();
     const changed = moved && now && !sameShape(now, g.start) ? now : null;
-    void ep.endDrag(changed);
+    fireAndForget(ep.endDrag(changed), 'pptx-editor');
   };
 
   const onPointerCancel = (e: PointerEvent) => {
@@ -239,7 +240,7 @@ export function EditPointsOverlay(props: {
       root.releasePointerCapture(e.pointerId);
     if (g) {
       ep.preview(g.start);
-      void ep.endDrag(null);
+      fireAndForget(ep.endDrag(null), 'pptx-editor');
     }
   };
 
@@ -258,7 +259,8 @@ export function EditPointsOverlay(props: {
     const shape = ep.model();
     if (!shape) return;
     const next = edit(shape);
-    if (next && !sameShape(next, shape)) void ep.commit(next);
+    if (next && !sameShape(next, shape))
+      fireAndForget(ep.commit(next), 'pptx-editor');
   };
   const kindItem = (ref: NodeRef, kind: NodeKind, text: string) => (
     <MenuItem
@@ -271,7 +273,7 @@ export function EditPointsOverlay(props: {
         if (!shape) return;
         const next = setNodeKind(shape, ref, kind);
         // The kind alone may change (a corner whose handles already line up).
-        void ep.commit(next);
+        fireAndForget(ep.commit(next), 'pptx-editor');
       }}
     />
   );
@@ -309,7 +311,10 @@ export function EditPointsOverlay(props: {
       if (mod && (key === 'z' || key === 'y')) {
         e.preventDefault();
         e.stopPropagation();
-        void (key === 'y' || e.shiftKey ? ep.redo() : ep.undo());
+        fireAndForget(
+          key === 'y' || e.shiftKey ? ep.redo() : ep.undo(),
+          'pptx-editor'
+        );
         return;
       }
       if (e.key === 'Delete' || e.key === 'Backspace') {
@@ -319,7 +324,7 @@ export function EditPointsOverlay(props: {
         const selected = ep.selected();
         const shape = ep.model();
         const next = selected && shape && deleteNode(shape, selected);
-        if (next) void ep.commit(next, null);
+        if (next) fireAndForget(ep.commit(next, null), 'pptx-editor');
         return;
       }
       if (e.key.startsWith('Arrow') || e.key === 'Tab') {
@@ -456,7 +461,8 @@ export function EditPointsOverlay(props: {
                     onClick={() => {
                       const shape = ep.model();
                       const next = shape && deleteNode(shape, m().ref);
-                      if (next) void ep.commit(next, null);
+                      if (next)
+                        fireAndForget(ep.commit(next, null), 'pptx-editor');
                     }}
                   />
                   {pathItem(m().ref, () => run((s) => openAt(s, m().ref)))}
@@ -481,7 +487,10 @@ export function EditPointsOverlay(props: {
                       const shape = ep.model();
                       if (!shape) return;
                       const added = addNode(shape, m().ref, m().t);
-                      void ep.commit(added.shape, added.node);
+                      fireAndForget(
+                        ep.commit(added.shape, added.node),
+                        'pptx-editor'
+                      );
                     }}
                   />
                   <MenuItem

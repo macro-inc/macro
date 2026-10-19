@@ -83,7 +83,10 @@ const partlyDecoded = () =>
 const channel = new MessageChannel();
 channel.port1.onmessage = () => {
   scheduled = false;
-  void pump();
+  // pump reports each request's failure itself; this is only a failed report.
+  pump().catch((error: unknown) => {
+    console.error('[fig-engine] worker could not report a failure', error);
+  });
 };
 
 function schedule() {

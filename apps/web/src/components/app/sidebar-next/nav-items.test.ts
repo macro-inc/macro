@@ -17,6 +17,7 @@ const defaultPrefs = (overrides: Partial<SidebarPrefs> = {}): SidebarPrefs => ({
 
 const defaultGates = (overrides: Partial<NavItemGates> = {}): NavItemGates => ({
   showCalendar: true,
+  showScheduling: true,
   showCustomers: true,
   showCalls: true,
   showReviews: true,
@@ -43,7 +44,11 @@ describe('sidebar visibility preferences', () => {
   it('puts default-hidden items in the more menu', () => {
     const items = moreMenuItems(defaultGates());
 
-    expect(items.map((item) => item.id)).toEqual(['calls', 'reviews']);
+    expect(items.map((item) => item.id)).toEqual([
+      'calls',
+      'reviews',
+      'booking-links',
+    ]);
   });
 
   it('shows an item on the rail when it is not hidden', () => {
@@ -77,6 +82,52 @@ describe('sidebar visibility preferences', () => {
     expect(items.some((item) => item.id === 'home')).toBe(true);
     expect(items.some((item) => item.id === 'calls')).toBe(true);
     expect(items.some((item) => item.id === 'reviews')).toBe(true);
+  });
+
+  it('offers Scheduling for customization and moves it between More and the rail', () => {
+    expect(
+      customizableNavItems(defaultGates()).find(
+        (item) => item.id === 'booking-links'
+      )
+    ).toMatchObject({
+      label: 'Scheduling',
+      href: '/scheduling',
+    });
+    expect(
+      visibleNavItems(defaultGates()).some(
+        (item) => item.id === 'booking-links'
+      )
+    ).toBe(false);
+    const gates = defaultGates({
+      prefs: defaultPrefs({
+        hidden: new Set(['calls', 'reviews']),
+        order: ['booking-links', 'tasks'],
+      }),
+    });
+    expect(
+      visibleNavItems(gates)
+        .map((item) => item.id)
+        .slice(0, 3)
+    ).toEqual(['home', 'booking-links', 'tasks']);
+    expect(
+      moreMenuItems(gates).some((item) => item.id === 'booking-links')
+    ).toBe(false);
+  });
+
+  it('keeps Scheduling absent everywhere when its feature flag is off', () => {
+    for (const hidden of [new Set<string>(), new Set(DEFAULT_HIDDEN_IDS)]) {
+      const gates = defaultGates({
+        showScheduling: false,
+        prefs: defaultPrefs({ hidden }),
+      });
+      for (const items of [
+        customizableNavItems(gates),
+        visibleNavItems(gates),
+        moreMenuItems(gates),
+      ]) {
+        expect(items.some((item) => item.id === 'booking-links')).toBe(false);
+      }
+    }
   });
 });
 

@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { propertyValueToApi } from '@property/api/converters';
@@ -59,10 +60,13 @@ export function createProjectMutation(
           if (scope.isCurrent()) {
             await seedProjectDetail(scope.viewer, project, scope.host);
             if (scope.isCurrent())
-              void refetchSoupEntity(project.id, 'initiative', {
-                ownTouch: true,
-                refreshGraphql: true,
-              });
+              fireAndForget(
+                refetchSoupEntity(project.id, 'initiative', {
+                  ownTouch: true,
+                  refreshGraphql: true,
+                }),
+                'projects'
+              );
           }
           return toProjectDetail(project);
         } finally {

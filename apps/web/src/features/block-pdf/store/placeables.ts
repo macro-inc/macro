@@ -20,6 +20,7 @@ import {
 import { normalizeRect } from '@block-pdf/util/pdfjsUtils';
 import { PDF_TO_CSS_UNITS } from '@block-pdf/util/pixelsPerInch';
 import { useUserId } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createCallback } from '@solid-primitives/rootless';
 import type { PageViewport } from 'pdfjs-dist';
 import { batch, createEffect, createMemo } from 'solid-js';
@@ -694,7 +695,7 @@ export function useDeletePlaceable() {
         deleteNewComments();
         return;
       }
-      void deleteMessageCommentThread(threadId);
+      fireAndForget(deleteMessageCommentThread(threadId), 'pdf-comments');
       return;
     }
 

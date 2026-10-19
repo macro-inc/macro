@@ -42,7 +42,7 @@ pub struct DeleteCalendarEventResponse {
 #[schemars(
     title = "DeleteCalendarEvent",
     description = "\
-Delete an event from the user's calendar. The deletion is written to Google immediately and \
+Delete an event from the user's calendar. The deletion is written to the calendar provider immediately and \
 attendees are notified, so confirm with the user before deleting — it cannot be undone. Get \
 the `eventId` from ListCalendarEvents.\n\
 \n\

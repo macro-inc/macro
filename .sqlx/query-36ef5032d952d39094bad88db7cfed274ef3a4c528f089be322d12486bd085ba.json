@@ -1,0 +1,31 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT l.id,l.sync_generation FROM email_links l JOIN email_messages m ON m.link_id = l.id\n        WHERE m.id = $1 AND m.thread_id = $2 AND l.id = ANY($3) AND l.provider = 'OUTLOOK'\n            AND ($4::text = l.macro_id OR EXISTS (SELECT 1 FROM macro_user_links u WHERE u.link_id = l.id AND u.primary_macro_id = $4))\n        FOR UPDATE OF l\n    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "sync_generation",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "UuidArray",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "36ef5032d952d39094bad88db7cfed274ef3a4c528f089be322d12486bd085ba"
+}

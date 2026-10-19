@@ -1,4 +1,5 @@
 import type { EditOp, PageRect, Pos } from '@core/docx-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { MessageListItem } from '@service-storage/messages';
 import type { LoroDoc } from 'loro-crdt';
 import {
@@ -386,15 +387,17 @@ export function DocxEditorView(props: DocxEditorViewProps) {
           editor.run([{ op: 'setParagraph', align: alignment }]);
           input?.focus();
         }}
-        onUndo={() => void editor.undo()}
-        onRedo={() => void editor.redo()}
+        onUndo={() => fireAndForget(editor.undo(), 'docx-editor')}
+        onRedo={() => fireAndForget(editor.redo(), 'docx-editor')}
         onInsertTable={() => {
           editor.run([{ op: 'insertTable', rows: 3, cols: 3 }]);
           input?.focus();
         }}
         onInsertNote={(endnote) => command([{ op: 'insertNote', endnote }])}
         inBody={editor.state()?.story.kind === 'body'}
-        onToggleMarkup={() => void editor.setMarkup(!editor.markup())}
+        onToggleMarkup={() =>
+          fireAndForget(editor.setMarkup(!editor.markup()), 'docx-editor')
+        }
         onToggleTracking={() =>
           editor.run([{ op: 'setTracking', on: !format()?.tracking }])
         }

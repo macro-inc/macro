@@ -11,6 +11,7 @@ import {
 } from '@app/lib/split-router';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useUserId } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { useCalendarOccurrencesQuery } from '@queries/calendar/occurrences';
 import deepEqual from 'fast-deep-equal';
 import {
@@ -201,7 +202,10 @@ export function CalendarView(props: CalendarViewProps) {
   };
   const setPeriodView = (period: CalendarPeriodView) => {
     if (routeParams.period === period) return;
-    navigate({ route: props.route, params: { period } });
+    fireAndForget(
+      navigate({ route: props.route, params: { period } }),
+      'calendar-view'
+    );
   };
 
   onMount(() => {

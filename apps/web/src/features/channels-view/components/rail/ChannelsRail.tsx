@@ -101,6 +101,7 @@ import { promptSmartTag } from './SmartTagDialog';
 
 export { buildChannelRailRows } from './build-channel-rail-rows';
 
+import { fireAndForget } from '@core/util/fireAndForget';
 import { useChannelCalls } from './hooks/useChannelCalls';
 import { useChannelRailActivity } from './hooks/useChannelRailActivity';
 
@@ -216,7 +217,10 @@ export function ChannelsRail(props: ChannelsRailProps) {
       // Only fetched selections need to join the browser router's transition.
       await startTransition(() => {
         if (request === activation)
-          void selectChannel(channel, channelId, openInNewSplit);
+          fireAndForget(
+            selectChannel(channel, channelId, openInNewSplit),
+            'channels-view'
+          );
       });
     } catch (error) {
       if (request === activation) reportActivationError(error);
@@ -252,9 +256,15 @@ export function ChannelsRail(props: ChannelsRailProps) {
     // Telemetry installs ZoneAwarePromise; native async results are not
     // instances of that constructor. Detect the pending edge structurally.
     if ('then' in selection) {
-      void selectHydratedChannel(selection, request, channelId, openInNewSplit);
+      fireAndForget(
+        selectHydratedChannel(selection, request, channelId, openInNewSplit),
+        'channels-view'
+      );
     } else {
-      void selectChannel(selection, channelId, openInNewSplit);
+      fireAndForget(
+        selectChannel(selection, channelId, openInNewSplit),
+        'channels-view'
+      );
     }
   };
 
@@ -504,11 +514,14 @@ export function ChannelsRail(props: ChannelsRailProps) {
         else {
           const request = ++activation;
           if (openInNewSplit) {
-            void selectHydratedChannel(
-              fetchChannelSelectionById(channelId),
-              request,
-              channelId,
-              true
+            fireAndForget(
+              selectHydratedChannel(
+                fetchChannelSelectionById(channelId),
+                request,
+                channelId,
+                true
+              ),
+              'channels-view'
             );
           } else setSelectedChannel({ type: 'channel', id: channelId });
         }
@@ -716,7 +729,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
           if (!source.isLoadingMore()) {
             if (!source.hasMore()) return true;
-            void source.loadMore();
+            fireAndForget(source.loadMore(), 'channels-view');
           }
 
           if (row.scope === 'direct_messages') {
@@ -1146,7 +1159,10 @@ export function ChannelsRail(props: ChannelsRailProps) {
       setChannelLabel(drag.channelId, undefined);
       return;
     }
-    void createLabel([drag.channelId, target.channelId]);
+    fireAndForget(
+      createLabel([drag.channelId, target.channelId]),
+      'channels-view'
+    );
   });
 
   const registerVirtualizer = (

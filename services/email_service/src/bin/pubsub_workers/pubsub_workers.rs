@@ -292,6 +292,31 @@ async fn main() -> anyhow::Result<()> {
         sqs_client.clone(),
         RateBudget::Live,
     );
+    let outlook_repository = email_api_client::OutlookApiClientRepository::with_gate(Arc::new(
+        email_service::outbound::email_api::RedisMicrosoftRequestGate(redis_conn.clone()),
+    ))?;
+    let outlook_api = email_api_client::domain::service::mailbox::MailboxApiService::new(
+        outlook_repository.clone(),
+        email::domain::mailbox::credentials::MailboxCredentials::new(
+            email::outbound::mailbox_pg::PgMailboxSync::new(db.clone()),
+            email_service::outbound::email_api::MicrosoftCredentialsClient(
+                auth_service_client.clone(),
+            ),
+        ),
+        // Admission is applied to each actual Graph request by the injected gate.
+        email_api_client::domain::ports::AlwaysAllowRateLimiter,
+    );
+    let mailbox_repository = email::outbound::mailbox_pg::PgMailboxSync::new(db.clone());
+    if config.outlook_sync_enabled {
+        worker_tracker.spawn(email_service::mailbox_sync_worker::run(
+            email::domain::mailbox::MailboxSyncService::new(
+                mailbox_repository.clone(),
+                email_service::outbound::email_api::ProviderMailboxGateway(outlook_api.clone()),
+                mailbox_repository.clone(),
+            ),
+            worker_cancellation_token.clone(),
+        ));
+    }
     let email_api_backfill = compose_email_api(
         db_backfill.clone(),
         config.gmail_gcp_queue.to_string(),
@@ -307,6 +332,20 @@ async fn main() -> anyhow::Result<()> {
         StaticFileServiceUrl::new()?.to_string(),
     );
 
+    if config.outlook_sync_enabled {
+        worker_tracker.spawn(email_service::mailbox_sync_worker::run_contacts(
+            email::domain::mailbox::contacts::AddressBookService::new(
+                mailbox_repository.clone(),
+                email_service::outbound::email_api::ProviderMailboxGateway(outlook_api.clone()),
+                email_service::outbound::contact_photos::ContactPhotoStore {
+                    db: db.clone(),
+                    sfs: sfs_client.clone(),
+                },
+            ),
+            worker_cancellation_token.clone(),
+        ));
+    }
+
     let dss_client = DocumentStorageServiceClient::new(
         config.internal_api_key.to_string(),
         DocumentStorageServiceUrl::new()?.to_string(),
@@ -316,6 +355,16 @@ async fn main() -> anyhow::Result<()> {
         config.internal_api_key.to_string(),
         ConnectionGatewayUrl::new()?.to_string(),
     );
+    worker_tracker.spawn(email_service::mailbox_sync_worker::run_lifecycle(
+        email_service::composition::inbox_lifecycle(
+            outlook_repository,
+            db.clone(),
+            auth_service_client.clone(),
+            sqs_client.clone(),
+            connection_gateway_client.clone(),
+        ),
+        worker_cancellation_token.clone(),
+    ));
 
     let system_properties_service = Arc::new(SystemPropertiesServiceImpl::new(
         PgSystemPropertiesRepository::new(db.clone()),
@@ -368,6 +417,109 @@ async fn main() -> anyhow::Result<()> {
         crm::outbound::companies_repo::CompaniesRepositoryImpl::new(db_backfill.clone()),
         metadata_resolver,
     );
+
+    if config.outlook_sync_enabled {
+        worker_tracker.spawn(email_service::mailbox_sync_worker::run_watches(
+            email::domain::mailbox::watches::MailboxWatchService::new(
+                mailbox_repository.clone(),
+                email_service::outbound::email_api::ProviderMailboxGateway(outlook_api.clone()),
+                macro_service_urls::EmailServiceUrl::new_for_environment(env)?.to_string(),
+            ),
+            worker_cancellation_token.clone(),
+        ));
+    }
+    worker_tracker.spawn(email_service::mailbox_sync_worker::run_settings(
+        email::domain::mailbox::settings::MailboxSettingsService::new(
+            mailbox_repository.clone(),
+            email_service::outbound::mailbox_settings::ProviderMailboxSettings {
+                gmail: email_api_live.clone(),
+                outlook: outlook_api.clone(),
+            },
+        )
+        .with_outlook_runtime(config.outlook_sync_enabled, config.outlook_writes_enabled),
+        worker_cancellation_token.clone(),
+    ));
+    if config.outlook_writes_enabled {
+        worker_tracker.spawn(email_service::mailbox_sync_worker::run_commands(
+            email::domain::mailbox::commands::MailboxCommandService::new(
+                mailbox_repository.clone(),
+                email_service::outbound::email_api::ProviderMailboxGateway(outlook_api.clone()),
+            ),
+            worker_cancellation_token.clone(),
+        ));
+    }
+    worker_tracker.spawn(email_service::mailbox_sync_worker::run_attachment_cleanup(
+        email::domain::attachment_cleanup::DraftObjectCleanup {
+            repository: email::outbound::EmailPgRepo::new(db.clone()),
+            storage: email_service::outbound::draft_attachment_storage::DraftAttachmentS3 {
+                s3: s3_client.clone(),
+                bucket: config.attachment_bucket.to_string(),
+            },
+        },
+        worker_cancellation_token.clone(),
+    ));
+    let draft_content = Arc::new(
+        email::domain::mailbox::drafts::content::DraftContentService {
+            repository: email::outbound::EmailPgRepo::new(db.clone()),
+            bytes: email_service::outbound::mailbox_drafts::MailboxDraftContent {
+                provider: email_service::outbound::attachment_access::ProviderAttachmentBytes {
+                    s3: s3_client.clone(),
+                    bucket: config.attachment_bucket.to_string(),
+                    gmail: email_api_live.clone(),
+                    outlook: email_service::outbound::email_api::ProviderMailboxGateway(
+                        outlook_api.clone(),
+                    ),
+                },
+                s3: s3_client.clone(),
+                bucket: config.attachment_bucket.to_string(),
+            },
+            access: entity_access::domain::service::EntityAccessServiceImpl::new(
+                entity_access::outbound::PgAccessRepository::new(db.clone()),
+            ),
+        },
+    );
+    if config.outlook_writes_enabled {
+        worker_tracker.spawn(email_service::mailbox_sync_worker::run_transfers(
+            email::domain::draft_transfer::DraftRetirementService {
+                repository: email::outbound::EmailPgRepo::new(db.clone()),
+                gateway: email_service::outbound::email_api::ProviderMailboxGateway(
+                    outlook_api.clone(),
+                ),
+            },
+            worker_cancellation_token.clone(),
+        ));
+    }
+    worker_tracker.spawn(email_service::mailbox_sync_worker::run_drafts(
+        email::domain::mailbox::drafts::MailboxDraftService::new(
+            mailbox_repository.clone(),
+            email_service::outbound::email_api::ProviderMailboxGateway(outlook_api.clone()),
+            draft_content.clone(),
+        )
+        .with_writes_enabled(config.outlook_writes_enabled),
+        worker_cancellation_token.clone(),
+    ));
+    worker_tracker.spawn(email_service::mailbox_sync_worker::run_projections(
+        email::domain::mailbox::projection::MailboxProjectionService::new(
+            mailbox_repository,
+            email_service::outbound::mailbox_projection::MailboxEffects {
+                db: db.clone(),
+                attachments: email_service::outbound::email_api::ProviderMailboxGateway(
+                    outlook_api,
+                ),
+                invitations: email::outbound::invitation_pg::InvitationPgRepository(db.clone()),
+                broker: macro_event_broker.clone(),
+                notification: notification_ingress_service.clone(),
+                contacts: contacts_ingress.clone(),
+                queue: sqs_client.clone(),
+                gateway: connection_gateway_client.clone(),
+                dss: dss_client.clone(),
+                sfs: sfs_client.clone(),
+                properties: system_properties_service.clone(),
+                notifications_enabled: config.notifications_enabled,
+            },
+        ),
+        worker_cancellation_token.clone(),
+    ));
 
     // process user inbox updates from gmail inbox_sync queue, triggered by update pubsub messages from Google
     for worker in inbox_sync_workers {
@@ -600,12 +752,15 @@ async fn main() -> anyhow::Result<()> {
     // send scheduled emails
     worker_tracker.spawn(async move {
         email_service::pubsub::scheduled::worker::run_worker_with_cancellation(
-            scheduled_worker,
-            db_scheduled,
-            email_api_scheduled,
-            s3_client_scheduled,
-            attachment_bucket_scheduled,
-            macro_event_broker_scheduled,
+            email_service::pubsub::scheduled::context::ScheduledContext {
+                sqs_worker: scheduled_worker,
+                db: db_scheduled,
+                email_api: email_api_scheduled,
+                attachment_bytes: draft_content,
+                s3_client: s3_client_scheduled,
+                attachment_bucket: attachment_bucket_scheduled,
+                macro_event_broker: macro_event_broker_scheduled,
+            },
             cancellation_token,
         )
         .await;

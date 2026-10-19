@@ -23,6 +23,7 @@ import {
   useBlockDocumentDownloadName,
   useBlockDocumentName,
 } from '@core/util/currentBlockDocumentName';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { downloadFile } from '@filesystem/download';
 import IconShared from '@icon/share.svg';
 import Download from '@phosphor/download.svg';
@@ -47,7 +48,7 @@ export function TopBar() {
   const downloadDocument = createCallback(async () => {
     const file = imageFile();
     if (!file) return;
-    downloadFile(file, downloadName());
+    fireAndForget(downloadFile(file, downloadName()), 'image-top-bar');
   });
 
   const ops: FileOperation[] = [

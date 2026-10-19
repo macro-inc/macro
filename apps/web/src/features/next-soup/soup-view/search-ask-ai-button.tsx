@@ -5,6 +5,7 @@ import {
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { Button, Hotkey } from '@ui';
 import { createSignal, onCleanup } from 'solid-js';
 import { useSoupView } from './soup-view-context';
@@ -35,7 +36,7 @@ export function SearchAskAiButton() {
     scopeId: panel.splitHotkeyScope,
     description: 'Ask AI',
     keyDownHandler: () => {
-      askAi();
+      fireAndForget(askAi(), 'soup-view');
       return true;
     },
     runWithInputFocused: true,

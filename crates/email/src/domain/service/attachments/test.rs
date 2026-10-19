@@ -136,6 +136,9 @@ impl DraftAttachmentRepo for Fake {
             draft_attachment_key(self.draft_id, attachment.id)
         );
         assert_eq!(attachment.sha.len(), 64);
+        assert!(!attachment.upload_pending);
+        assert!(!attachment.is_inline);
+        assert!(attachment.content_id.is_none());
         self.calls.push(format!(
             "record:{}:{}:{}",
             attachment.file_name, attachment.content_type, attachment.size

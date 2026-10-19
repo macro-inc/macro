@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { AsyncBatcher } from '@tanstack/pacer';
 import type { AgentSessionMentionPreview } from './mention-types';
 
@@ -30,6 +31,9 @@ export function createAgentSessionMentionBatcher(
   );
   return (id: string) =>
     new Promise<AgentSessionMentionPreview>((resolve, reject) => {
-      batcher.addItem({ id, resolve, reject });
+      fireAndForget(
+        batcher.addItem({ id, resolve, reject }),
+        'agent-session-mentions'
+      );
     });
 }

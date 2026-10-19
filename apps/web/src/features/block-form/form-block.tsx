@@ -26,8 +26,8 @@ import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
 import { enableForms } from '@core/constant/featureFlags';
-import { useSettingsState } from '@core/constant/SettingsState';
 import { isMobile } from '@core/mobile/isMobile';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { openExternalUrl } from '@core/util/url';
 import { useCopyLink } from '@core/util/useCopyLink';
 import { getWebOrigin } from '@core/util/webOrigin';
@@ -63,13 +63,13 @@ function FormBlockContent(props: {
 }) {
   const formId = useBlockId();
   const { replaceOrInsertSplit, insertSplit } = useSplitLayout();
-  const settings = useSettingsState();
   const panel = useSplitPanelOrThrow();
   const context = createAppFormContext({
     openRelated: (destination) =>
       replaceOrInsertSplit({ type: 'database', id: destination.databaseId }),
     openChannel: (channelId) => insertSplit({ type: 'channel', id: channelId }),
-    openCalendarSettings: () => settings.openSettingsInSplit('Booking links'),
+    openCalendarSettings: () =>
+      insertSplit({ type: 'component', id: 'booking-links' }),
   });
   const source = context.createFormSource(
     () => formId,
@@ -90,7 +90,8 @@ function FormBlockContent(props: {
   const link = () => respondLink(`${getWebOrigin()}/app/`, formId);
   // Sharing a form hands out its respond link; editors copy theirs apart.
   const copyEntityLink = useCopyLink();
-  const copyRespondLink = () => void copyEntityLink(link());
+  const copyRespondLink = () =>
+    fireAndForget(copyEntityLink(link()), 'form-share');
   const shareInput = createFormShareInput({
     formId: () => formId,
     detail: source.detail,
@@ -175,7 +176,7 @@ function FormBlockContent(props: {
                 variant="ghost"
                 size="sm"
                 disabled={preview.opening()}
-                onClick={() => void preview.open()}
+                onClick={() => fireAndForget(preview.open(), 'form-preview')}
               >
                 <Eye class="size-3.5" />
                 Preview
@@ -234,12 +235,12 @@ function FormBlockContent(props: {
 function FormCardContent() {
   const formId = useBlockId();
   const { insertSplit } = useSplitLayout();
-  const settings = useSettingsState();
   const context = createAppFormContext({
     openRelated: (destination) =>
       insertSplit({ type: 'database', id: destination.databaseId }),
     openChannel: (channelId) => insertSplit({ type: 'channel', id: channelId }),
-    openCalendarSettings: () => settings.openSettingsInSplit('Booking links'),
+    openCalendarSettings: () =>
+      insertSplit({ type: 'component', id: 'booking-links' }),
   });
   const source = context.createFormSource(() => formId);
   const open = () => {

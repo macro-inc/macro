@@ -1,6 +1,7 @@
 import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
 import { getMeetingPath } from '@channel/Call/call-link';
 import { joinChannelCall } from '@channel/Call/join-channel-call';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { useCallLinkQuery } from '@queries/call/meetings';
 import { useNavigate } from '@solidjs/router';
 import type { Accessor } from 'solid-js';
@@ -24,7 +25,7 @@ export function useCallAgain(
   const callAgain = () => {
     const channel = channelId();
     if (channel) {
-      void joinChannelCall(channel);
+      fireAndForget(joinChannelCall(channel), 'block-call');
       return;
     }
     const token = shareToken();

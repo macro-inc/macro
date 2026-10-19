@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import * as Effect from 'effect/Effect';
 import { APP_BUILD_TIME } from '../app-build';
 import type { CacheRequest, WorkerMessage } from '../protocol';
@@ -106,10 +107,13 @@ const withVersion = <
     ...value,
   }) as unknown as T;
 
-const defaultSharedWorkerFactory = (scope: string): SharedWorkerLike =>
+const defaultSharedWorkerFactory = (
+  scope: string,
+  buildTime: number
+): SharedWorkerLike =>
   new SharedWorker(
     new URL('./cache.coordinator.shared-worker.ts', import.meta.url),
-    { type: 'module', name: `graphql-cache-coordinator:${scope}` }
+    { type: 'module', name: `graphql-cache-coordinator:${scope}:${buildTime}` }
   );
 
 const defaultDedicatedWorkerFactory = (
@@ -181,7 +185,9 @@ export class CacheCoordinatorPageAdapter {
     }
     this.tabId = options.tabId ?? crypto.randomUUID();
     this.createSharedWorker =
-      options.createSharedWorker ?? defaultSharedWorkerFactory;
+      options.createSharedWorker ??
+      ((scope) =>
+        defaultSharedWorkerFactory(scope, options.buildTime ?? APP_BUILD_TIME));
     this.createDedicatedWorker =
       options.createDedicatedWorker ?? defaultDedicatedWorkerFactory;
     this.lockManager = options.lockManager;
@@ -640,7 +646,10 @@ export class CacheCoordinatorPageAdapter {
           message.tabId === this.tabId &&
           message.ownerEpoch === this.ownerEpoch
         ) {
-          void this.removeStaleDatabases();
+          fireAndForget(
+            this.removeStaleDatabases(),
+            'graphql-cache-coordinator'
+          );
         }
         break;
     }
@@ -914,7 +923,10 @@ export class CacheCoordinatorPageAdapter {
     addEventListener(
       'pagehide',
       () => {
-        void this.dispose({ graceful: false, preserveDatabase: true });
+        fireAndForget(
+          this.dispose({ graceful: false, preserveDatabase: true }),
+          'graphql-cache-coordinator'
+        );
       },
       { once: true }
     );

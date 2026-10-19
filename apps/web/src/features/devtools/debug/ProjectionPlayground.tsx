@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createAIProjection } from '@queries/ai/projection';
 import type { Expiry } from '@service-cognition/generated/schemas/expiry';
 import type { RefreshCadence } from '@service-cognition/generated/schemas/refreshCadence';
@@ -238,7 +239,7 @@ export default function ProjectionPlayground() {
               variant="cta"
               size="sm"
               disabled={busy()}
-              onClick={() => void regenerate()}
+              onClick={() => fireAndForget(regenerate(), 'devtools')}
             >
               Force regenerate
             </Button>

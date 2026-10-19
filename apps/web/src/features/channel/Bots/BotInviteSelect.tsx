@@ -1,4 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   Combobox,
   type ComboboxRootItemComponentProps,
@@ -150,7 +151,7 @@ export function BotInviteSelect(props: {
       <Button
         variant="outline"
         disabled={!selectedBot() || addBotMutation.isPending}
-        onClick={() => void inviteBot()}
+        onClick={() => fireAndForget(inviteBot(), 'channel-bots')}
       >
         {addBotMutation.isPending ? 'Inviting…' : 'Invite bot'}
       </Button>

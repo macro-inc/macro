@@ -3,6 +3,7 @@
  * Previous, Next, Show Comments), as in PowerPoint.
  */
 
+import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowLeft from '@phosphor/arrow-left.svg';
 import ArrowRight from '@phosphor/arrow-right.svg';
 import ChatText from '@phosphor/chat-text.svg';
@@ -75,7 +76,7 @@ export function ReviewTab() {
                       disabled={none()}
                       onClick={() => {
                         close();
-                        void c().deleteCurrent();
+                        fireAndForget(c().deleteCurrent(), 'pptx-editor');
                       }}
                     />
                     <PopoverItem
@@ -84,7 +85,7 @@ export function ReviewTab() {
                       disabled={none()}
                       onClick={() => {
                         close();
-                        void c().deleteAll('slide');
+                        fireAndForget(c().deleteAll('slide'), 'pptx-editor');
                       }}
                     />
                     <PopoverItem
@@ -92,7 +93,10 @@ export function ReviewTab() {
                       testId="pptx-review-delete-all"
                       onClick={() => {
                         close();
-                        void c().deleteAll('presentation');
+                        fireAndForget(
+                          c().deleteAll('presentation'),
+                          'pptx-editor'
+                        );
                       }}
                     />
                   </div>

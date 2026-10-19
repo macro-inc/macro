@@ -8,6 +8,7 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableGraphqlSoup } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { compareDateDesc } from '@core/util/date';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type ChannelEntity,
   type EntityData,
@@ -178,7 +179,7 @@ export function useChannelsByIdsQuery(channelIds: Accessor<readonly string[]>) {
       !query.hasNextPage
     )
       return;
-    void query.fetchNextPage();
+    fireAndForget(query.fetchNextPage(), 'channels-view');
   });
   return query;
 }
@@ -287,7 +288,7 @@ function useThreadChannelsDataSource(
         THREAD_CHANNELS_PAGE_SIZE * THREAD_CHANNELS_AUTO_PAGES
     )
       return;
-    void threadsQuery.fetchNextPage();
+    fireAndForget(threadsQuery.fetchNextPage(), 'channels-view');
   });
   const channelIds = createMemo<string[]>((previous) => {
     if (!threadsQuery.isEnabled || threadsQuery.isLoading) return previous;

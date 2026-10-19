@@ -21,6 +21,16 @@ export type CrmQuery<T> = {
   readonly isError: boolean;
   refetch(): Promise<unknown>;
 };
+/** Creates many companies, refreshing CRM listings once at the end. */
+export type CompanyImporter = {
+  /** `exists` when the team already tracks the domain. */
+  create(input: {
+    name: string;
+    domain: string;
+  }): Promise<'created' | 'exists'>;
+  refresh(): Promise<void>;
+};
+
 export type CrmMutation<Input, Output = unknown> = {
   readonly isPending: boolean;
   mutate(

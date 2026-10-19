@@ -1,4 +1,5 @@
 import { ImageContent } from '@block-image/component/ImageContent';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { downloadFile } from '@filesystem/download';
 import type { JSX } from 'solid-js';
 import { FileDetailLayout, FileDetailLoadGate } from '../components/FileDetail';
@@ -19,9 +20,12 @@ export function ImageDetailDocument(props: {
 }) {
   const operations = [
     downloadFileOperation(() => {
-      downloadFile(
-        props.data.file,
-        documentDownloadName(props.data.documentMetadata)
+      fireAndForget(
+        downloadFile(
+          props.data.file,
+          documentDownloadName(props.data.documentMetadata)
+        ),
+        'drive-file-download'
       );
     }),
   ];

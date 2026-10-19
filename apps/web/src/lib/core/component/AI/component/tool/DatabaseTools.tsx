@@ -14,6 +14,7 @@ import {
   StaticMarkdownContext,
 } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { isFeatureEnabled, showDatabaseSql } from '@core/constant/featureFlags';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { decodeHtmlEntities } from '@macro-inc/lexical-core/utils/html-entities';
 import DatabaseIcon from '@phosphor/database.svg';
 import TableIcon from '@phosphor/table.svg';
@@ -293,7 +294,7 @@ const saveDatabaseViewHandler = createToolRenderer({
             <button
               type="button"
               class="shrink-0 rounded px-2 py-1 text-xs text-ink hover:bg-hover"
-              onClick={() => void openView()}
+              onClick={() => fireAndForget(openView(), 'ai-database-tool')}
             >
               Open view
             </button>

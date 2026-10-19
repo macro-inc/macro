@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="no-referrer" />
+    <title>Connect to Macro</title>
+    <style>
+      :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+      body { margin: 0; min-height: 100vh; display: grid; place-items: center; }
+      main { max-width: 30rem; margin: 2rem; line-height: 1.6; }
+      a { display: block; margin-top: 1rem; }
+    </style>
+  </head>
+  <body>
+    <main id="connect" aria-live="polite"></main>
+    <script type="module">
+      import { mountPipedreamBrowserConnect } from '/src/lib/core/pipedream/connect-browser.ts';
+      mountPipedreamBrowserConnect(document.getElementById('connect'));
+    </script>
+  </body>
+</html>

@@ -10,6 +10,7 @@ import {
   readClipboardAsDataTransfer,
   writeClipboardData,
 } from '@core/util/dataTransfer';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   $getClipboardDataFromSelection,
   $insertDataTransferForRichText,
@@ -281,9 +282,15 @@ export function TableSelectionActionBar() {
                 floatingOptions: { placement: 'top' },
               }}
             >
-              {barButton('Cut', ScissorsIcon, () => void runCut())}
-              {barButton('Copy', CopyIcon, () => void runCopy())}
-              {barButton('Paste', ClipboardIcon, () => void runPaste())}
+              {barButton('Cut', ScissorsIcon, () =>
+                fireAndForget(runCut(), 'markdown-table-actions')
+              )}
+              {barButton('Copy', CopyIcon, () =>
+                fireAndForget(runCopy(), 'markdown-table-actions')
+              )}
+              {barButton('Paste', ClipboardIcon, () =>
+                fireAndForget(runPaste(), 'markdown-table-actions')
+              )}
               <Show when={isMultiCell()}>
                 {barButton('Merge', CornersInIcon, runMerge)}
               </Show>

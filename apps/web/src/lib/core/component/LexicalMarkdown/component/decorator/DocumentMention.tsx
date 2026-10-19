@@ -29,6 +29,7 @@ import {
 } from '@core/constant/featureFlags';
 import { canNestBlock } from '@core/orchestrator';
 import { formatDate } from '@core/util/date';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { matches } from '@core/util/match';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { useNativeSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
@@ -715,10 +716,13 @@ function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
         setPreviewCardOpen(true);
         return;
       }
-      openCalendarEventSplit({
-        ...target.target,
-        openInNewSplit: openInNewSplitForMention(e?.shiftKey, e != null),
-      });
+      fireAndForget(
+        openCalendarEventSplit({
+          ...target.target,
+          openInNewSplit: openInNewSplitForMention(e?.shiftKey, e != null),
+        }),
+        'document-mention'
+      );
       return;
     }
     openDocument(

@@ -6,6 +6,7 @@ import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { toEntityLoadError } from '@core/component/EntityLoadGate';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { buildEntityData } from '@entity';
 import { useThreadQuery } from '@queries/email/thread';
 import { representativeThreadMessage } from '@queries/email/thread-subject';
@@ -75,7 +76,7 @@ export default function BlockEmail() {
             threadId={threadId()}
             linkId={threadData()?.link_id}
             debounceTime={100}
-            onRetry={() => void threadQuery.refetch()}
+            onRetry={() => fireAndForget(threadQuery.refetch(), 'email-thread')}
           >
             <Show when={threadId()}>
               {(id) => (

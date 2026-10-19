@@ -6,6 +6,7 @@
 import { IS_MAC } from '@core/constant/isMac';
 import type { FigEngine } from '@core/fig-engine/client';
 import type { LayerRow, SearchHit } from '@core/fig-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import CaretDown from '@phosphor/caret-down.svg';
 import CaretRight from '@phosphor/caret-right.svg';
 import Eye from '@phosphor/eye.svg';
@@ -93,7 +94,7 @@ export function LayersPanel(props: {
     on(viewer.page, () => {
       setChildren(new Map());
       setExpanded(new Set<string>());
-      void load(ROOT);
+      fireAndForget(load(ROOT), 'fig-layers-panel');
     })
   );
   // After edits, every loaded level reloads in place (expansion kept); a
@@ -158,7 +159,7 @@ export function LayersPanel(props: {
     if (next.has(row.id)) next.delete(row.id);
     else {
       next.add(row.id);
-      void load(row.id);
+      fireAndForget(load(row.id), 'fig-layers-panel');
     }
     setExpanded(next);
   };
@@ -195,9 +196,10 @@ export function LayersPanel(props: {
     setRenamingPage(undefined);
     const trimmed = name.trim();
     if (!trimmed || trimmed === old) return;
-    void props.editor?.apply([
-      { op: 'set', ids: [id], props: { name: trimmed } },
-    ]);
+    fireAndForget(
+      props.editor?.apply([{ op: 'set', ids: [id], props: { name: trimmed } }]),
+      'fig-layers-panel'
+    );
   };
 
   const addPage = async () => {
@@ -223,9 +225,12 @@ export function LayersPanel(props: {
     setRenaming(undefined);
     const trimmed = name.trim();
     if (!trimmed || trimmed === row.name) return;
-    void props.editor?.apply([
-      { op: 'set', ids: [row.id], props: { name: trimmed } },
-    ]);
+    fireAndForget(
+      props.editor?.apply([
+        { op: 'set', ids: [row.id], props: { name: trimmed } },
+      ]),
+      'fig-layers-panel'
+    );
   };
 
   createEffect(
@@ -242,16 +247,19 @@ export function LayersPanel(props: {
 
   const toggleFlag = (row: LayerRow, flag: 'visible' | 'locked') => {
     if (flag === 'locked') {
-      void props.editor?.toggleLocked([row.id]);
+      fireAndForget(props.editor?.toggleLocked([row.id]), 'fig-layers-panel');
       return;
     }
-    void props.editor?.apply([
-      {
-        op: 'set',
-        ids: [row.id],
-        props: { visible: !row.visible },
-      },
-    ]);
+    fireAndForget(
+      props.editor?.apply([
+        {
+          op: 'set',
+          ids: [row.id],
+          props: { visible: !row.visible },
+        },
+      ]),
+      'fig-layers-panel'
+    );
   };
 
   const [dragging, setDragging] = createSignal<string[]>();
@@ -281,7 +289,10 @@ export function LayersPanel(props: {
             parent: item.parent,
             index: target.zone === 'above' ? item.index + 1 : item.index,
           };
-    void props.editor?.apply([{ op: 'reorder', ids, ...op }]);
+    fireAndForget(
+      props.editor?.apply([{ op: 'reorder', ids, ...op }]),
+      'fig-layers-panel'
+    );
   };
 
   let searchRun = 0;
@@ -396,11 +407,13 @@ export function LayersPanel(props: {
             data-testid="fig-layer-search"
             class="h-7 min-w-0 flex-1 bg-transparent text-ink outline-none placeholder:text-ink-placeholder"
             value={query()}
-            onInput={(e) => void search(e.currentTarget.value)}
+            onInput={(e) =>
+              fireAndForget(search(e.currentTarget.value), 'fig-layers-panel')
+            }
             onKeyDown={(e) => {
               e.stopPropagation();
               if (e.key === 'Escape') {
-                void search('');
+                fireAndForget(search(''), 'fig-layers-panel');
                 setSearchOpen(false);
                 searchButton?.focus();
               }
@@ -411,7 +424,7 @@ export function LayersPanel(props: {
             aria-label="Close search"
             class="rounded p-0.5 text-ink-muted hover:text-ink"
             onClick={() => {
-              void search('');
+              fireAndForget(search(''), 'fig-layers-panel');
               setSearchOpen(false);
               searchButton?.focus();
             }}
@@ -451,7 +464,7 @@ export function LayersPanel(props: {
                 aria-label="Add page"
                 data-testid="fig-page-add"
                 class="flex size-6 items-center justify-center rounded text-ink-muted hover:bg-hover hover:text-ink"
-                onClick={() => void addPage()}
+                onClick={() => fireAndForget(addPage(), 'fig-layers-panel')}
               >
                 <Plus class="size-3.5" />
               </button>
@@ -482,7 +495,12 @@ export function LayersPanel(props: {
                             type="button"
                             data-testid="fig-page"
                             class="min-w-0 flex-1 truncate text-left"
-                            onClick={() => void viewer.openPage(p.index)}
+                            onClick={() =>
+                              fireAndForget(
+                                viewer.openPage(p.index),
+                                'fig-layers-panel'
+                              )
+                            }
                             onDblClick={() => {
                               if (props.editor?.enabled())
                                 setRenamingPage(p.id);
@@ -501,9 +519,12 @@ export function LayersPanel(props: {
                               data-testid="fig-page-delete"
                               class="invisible rounded p-0.5 text-ink-muted hover:text-ink group-hover:visible"
                               onClick={() =>
-                                void props.editor?.apply([
-                                  { op: 'delete', ids: [p.id] },
-                                ])
+                                fireAndForget(
+                                  props.editor?.apply([
+                                    { op: 'delete', ids: [p.id] },
+                                  ]),
+                                  'fig-layers-panel'
+                                )
                               }
                             >
                               <Trash class="size-3" />

@@ -1,7 +1,7 @@
 import CheckIcon from '@phosphor/check.svg';
 import PlusIcon from '@phosphor/plus.svg';
+import XIcon from '@phosphor/x.svg';
 import { Key } from '@solid-primitives/keyed';
-import { Button } from '@ui/components/Button';
 import {
   createMemo,
   createSignal,
@@ -129,37 +129,39 @@ export function OptionPicker(props: {
     );
   };
   return (
-    <div class="flex w-56 flex-col">
-      <input
-        ref={(element) => {
-          input = element;
-          props.inputRef?.(element);
-        }}
-        role="combobox"
-        aria-label={`Search ${props.column.name} options`}
-        aria-expanded="true"
-        aria-controls={listId}
-        aria-activedescendant={active() >= 0 ? rowId(active()) : undefined}
-        aria-autocomplete="list"
-        placeholder="Search or create…"
-        value={props.search}
-        maxlength={200}
-        class="mb-1 h-7 w-full rounded border border-edge-muted bg-input px-2 text-xs outline-none placeholder:text-ink-placeholder focus:border-ink/50"
-        onInput={(event) => {
-          props.onSearch(event.currentTarget.value);
-          setActive(event.currentTarget.value.trim() ? 0 : -1);
-        }}
-        onKeyDown={(event) => {
-          if (event.isComposing || event.keyCode === 229) return;
-          if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-            event.preventDefault();
-            move(event.key === 'ArrowDown' ? 1 : -1);
-          } else if (event.key === 'Enter') {
-            event.preventDefault();
-            activate(rows()[Math.max(active(), 0)]);
-          } else props.onKeyDown?.(event, chosen());
-        }}
-      />
+    <div class="flex w-full min-w-56 flex-col">
+      <div class="-mx-1.5 -mt-1.5 mb-1.5 border-b border-edge-divider">
+        <input
+          ref={(element) => {
+            input = element;
+            props.inputRef?.(element);
+          }}
+          role="combobox"
+          aria-label={`Search ${props.column.name} options`}
+          aria-expanded="true"
+          aria-controls={listId}
+          aria-activedescendant={active() >= 0 ? rowId(active()) : undefined}
+          aria-autocomplete="list"
+          placeholder="Search or create…"
+          value={props.search}
+          maxlength={200}
+          class="h-9 w-full bg-transparent px-3.5 text-xs text-ink outline-none placeholder:text-ink-placeholder"
+          onInput={(event) => {
+            props.onSearch(event.currentTarget.value);
+            setActive(event.currentTarget.value.trim() ? 0 : -1);
+          }}
+          onKeyDown={(event) => {
+            if (event.isComposing || event.keyCode === 229) return;
+            if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+              event.preventDefault();
+              move(event.key === 'ArrowDown' ? 1 : -1);
+            } else if (event.key === 'Enter') {
+              event.preventDefault();
+              activate(rows()[Math.max(active(), 0)]);
+            } else props.onKeyDown?.(event, chosen());
+          }}
+        />
+      </div>
       <div
         id={listId}
         role="listbox"
@@ -177,7 +179,7 @@ export function OptionPicker(props: {
               role="option"
               aria-selected={isPicked(row())}
               data-active={active() === index() ? '' : undefined}
-              class="group/option flex h-7 shrink-0 items-center gap-1.5 rounded px-1.5 text-xs data-active:bg-hover hover:bg-hover"
+              class="group/option flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-xs data-active:bg-hover hover:bg-hover"
               onPointerMove={() => setActive(index())}
               onPointerDown={(event) => event.preventDefault()}
               onClick={() => activate(row())}
@@ -224,15 +226,14 @@ export function OptionPicker(props: {
           )}
         </Key>
         <Show when={!rows().length}>
-          <p class="px-1.5 py-1 text-xs text-ink-placeholder">No options</p>
+          <p class="px-2 py-1 text-xs text-ink-placeholder">No options</p>
         </Show>
       </div>
       <Show when={props.selected.length}>
-        <div class="mt-2 flex items-center justify-end border-t border-edge-divider pt-2 pb-2">
-          <Button
+        <div class="-mx-1.5 mt-1.5 border-t border-edge-divider px-1.5 pt-1.5">
+          <button
             type="button"
-            variant="ghost"
-            size="sm"
+            class="flex h-7 w-full items-center gap-1.5 rounded-md px-2 text-left text-xs text-ink-muted outline-none hover:bg-hover hover:text-ink focus-visible:bg-hover focus-visible:text-ink"
             ref={clearButton}
             onClick={props.onClear}
             onKeyDown={(event) => {
@@ -250,12 +251,13 @@ export function OptionPicker(props: {
               } else props.onKeyDown?.(event, undefined);
             }}
           >
+            <XIcon class="size-3.5 shrink-0" />
             Clear value
-          </Button>
+          </button>
         </div>
       </Show>
       <Show when={props.error}>
-        <p role="alert" class="px-1.5 pt-1 text-xs text-failure-ink">
+        <p role="alert" class="px-2 pt-1 text-xs text-failure-ink">
           {props.error}
         </p>
       </Show>

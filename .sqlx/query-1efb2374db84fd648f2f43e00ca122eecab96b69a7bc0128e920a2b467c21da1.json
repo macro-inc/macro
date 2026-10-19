@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE calendars SET last_sync_error=$2,last_sync_error_at=now(),consecutive_sync_failures=consecutive_sync_failures+1 WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1efb2374db84fd648f2f43e00ca122eecab96b69a7bc0128e920a2b467c21da1"
+}

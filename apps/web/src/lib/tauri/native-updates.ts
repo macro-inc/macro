@@ -1,4 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { isPlatform } from '@core/util/platform';
 import { hasAutomaticReloadHolds } from '@core/util/reloadForNewerBuild';
 import { invoke } from '@tauri-apps/api/core';
@@ -109,7 +110,7 @@ export function createNativeUpdates(flush: () => Promise<void>) {
   }
 
   onMount(() => {
-    if (isPlatform('desktop')) void initialize();
+    if (isPlatform('desktop')) fireAndForget(initialize(), 'native-updates');
   });
   onCleanup(() => {
     disposed = true;

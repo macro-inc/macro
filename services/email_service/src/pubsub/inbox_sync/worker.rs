@@ -78,6 +78,9 @@ pub async fn run_worker_with_cancellation(
     cancellation_token: CancellationToken,
 ) {
     let ctx = PubSubContext {
+        gmail_history: email::domain::mailbox::gmail_history::GmailHistoryService(
+            email::outbound::mailbox_pg::PgMailboxSync::new(db.clone()),
+        ),
         invitation_extractor: crate::pubsub::invitation_extraction::compose(
             db.clone(),
             email_api.clone(),

@@ -7,10 +7,11 @@ use async_graphql::{Enum, ID, SimpleObject, Union};
 use calendar_events::domain::{
     changes::{CalendarChangesPage, CalendarEventChange, CalendarWatermark, EventOccurrence},
     models::{
-        AttendeeResponseStatus, CalendarAttendee, CalendarEvent, CalendarEventSourceContent,
-        CalendarOccurrence, CalendarSyncStatus, ConferenceProvider, EventReminderOverride,
-        EventReminders, EventStatus, EventTime, EventTransparency, EventType, EventVisibility,
-        OccurrenceException, OccurrenceListing, VisibleCalendar,
+        AttendeeResponseStatus, CalendarAttendee, CalendarCapabilities, CalendarEvent,
+        CalendarEventSourceContent, CalendarOccurrence, CalendarProvider, CalendarSyncStatus,
+        ConferenceProvider, EventReminderOverride, EventReminders, EventStatus, EventTime,
+        EventTransparency, EventType, EventVisibility, OccurrenceException, OccurrenceListing,
+        VisibleCalendar,
     },
 };
 use uuid::Uuid;
@@ -114,6 +115,8 @@ impl From<EventType> for GraphqlCalendarEventType {
 /// Conferencing system backing an event's join URL.
 #[derive(Enum, Copy, Clone, Debug, Eq, PartialEq)]
 pub enum GraphqlCalendarConferenceProvider {
+    /// Microsoft Teams.
+    MicrosoftTeams,
     /// Google Meet.
     GoogleMeet,
     /// Any other conferencing system.
@@ -123,6 +126,7 @@ pub enum GraphqlCalendarConferenceProvider {
 impl From<ConferenceProvider> for GraphqlCalendarConferenceProvider {
     fn from(provider: ConferenceProvider) -> Self {
         match provider {
+            ConferenceProvider::MicrosoftTeams => Self::MicrosoftTeams,
             ConferenceProvider::GoogleMeet => Self::GoogleMeet,
             ConferenceProvider::Other => Self::Other,
         }
@@ -524,6 +528,54 @@ pub(crate) fn occurrence_nodes(listings: Vec<OccurrenceListing>) -> Vec<GraphqlC
         .collect()
 }
 
+/// Provider selected from the persisted calendar account and email binding.
+#[derive(Enum, Copy, Clone, Debug, Eq, PartialEq)]
+pub enum GraphqlCalendarProvider {
+    /// Google Calendar.
+    Google,
+    /// Microsoft Outlook calendar.
+    Outlook,
+}
+
+impl From<CalendarProvider> for GraphqlCalendarProvider {
+    fn from(provider: CalendarProvider) -> Self {
+        match provider {
+            CalendarProvider::Google => Self::Google,
+            CalendarProvider::Outlook => Self::Outlook,
+        }
+    }
+}
+
+/// Actual provider capabilities used by calendar editors.
+#[derive(SimpleObject, Clone, Debug, PartialEq, Eq)]
+pub struct GraphqlCalendarCapabilities {
+    /// Whether event-level automatic invitation declines are supported.
+    auto_decline: bool,
+    /// Conferencing system available when creating an online meeting.
+    conference_provider: Option<GraphqlCalendarConferenceProvider>,
+    /// Whether arbitrary RFC 5545 recurrence properties can be written.
+    custom_recurrence: bool,
+    /// Whether email reminders are delivered by the provider or Macro.
+    email_reminders: bool,
+    /// Whether an existing conference can be detached.
+    remove_conference: bool,
+    /// Whether an attendee can reset their RSVP to unanswered.
+    reset_rsvp: bool,
+}
+
+impl From<CalendarCapabilities> for GraphqlCalendarCapabilities {
+    fn from(capabilities: CalendarCapabilities) -> Self {
+        Self {
+            auto_decline: capabilities.auto_decline,
+            conference_provider: capabilities.conference_provider.map(Into::into),
+            custom_recurrence: capabilities.custom_recurrence,
+            email_reminders: capabilities.email_reminders,
+            remove_conference: capabilities.remove_conference,
+            reset_rsvp: capabilities.reset_rsvp,
+        }
+    }
+}
+
 /// A calendar visible to the viewer.
 #[derive(SimpleObject, Clone, Debug, PartialEq, Eq)]
 pub struct GraphqlCalendar {
@@ -533,6 +585,10 @@ pub struct GraphqlCalendar {
     link_id: ID,
     /// Connected inbox address.
     email_address: String,
+    /// Calendar provider, for display and reconnect routing.
+    provider: GraphqlCalendarProvider,
+    /// Provider features available on this actual calendar.
+    capabilities: GraphqlCalendarCapabilities,
     /// Provider display name.
     name: String,
     /// Provider color.
@@ -555,6 +611,8 @@ impl From<VisibleCalendar> for GraphqlCalendar {
             id: id(calendar.id),
             link_id: id(calendar.email_link_id),
             email_address: calendar.email_address,
+            provider: calendar.provider.into(),
+            capabilities: calendar.capabilities.into(),
             name: calendar.name,
             color: calendar.color,
             is_primary: calendar.is_primary,

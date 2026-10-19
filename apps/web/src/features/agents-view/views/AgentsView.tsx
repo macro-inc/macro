@@ -38,6 +38,7 @@ import {
 import { routineContent } from '../../routines/routine-navigation';
 import { RoutinesPage } from '../../routines/routines-page';
 import '../agents-view.css';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { AgentSessionPane } from '../components/AgentSessionPane';
 import { AgentsSidebar } from '../components/AgentsSidebar';
 import { Topbar } from '../components/Topbar';
@@ -325,8 +326,8 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
       onOpenConversation={(conversation, event) =>
         openConversation(conversation, event, modeForConversation(conversation))
       }
-      onRetry={() => void query.refetch()}
-      onLoadMore={() => void query.fetchNextPage()}
+      onRetry={() => fireAndForget(query.refetch(), 'agents-view')}
+      onLoadMore={() => fireAndForget(query.fetchNextPage(), 'agents-view')}
     />
   );
 

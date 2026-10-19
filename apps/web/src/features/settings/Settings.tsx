@@ -22,6 +22,7 @@ import type { ValidHotkey } from '@core/hotkey/types';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { activeTabId, setActiveTabId } from '@core/signal/settingsTab';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   createMemo,
   createRenderEffect,
@@ -132,7 +133,10 @@ export function SettingsPanel(props: SettingsPanelProps) {
   const selectRoutedTab = (tab: SettingsTab) => {
     setSearchSelection(undefined);
     selectTab(tab, (next) => {
-      splitNavigate(`/settings/${settingsTabToSlug(next)}`);
+      fireAndForget(
+        splitNavigate(`/settings/${settingsTabToSlug(next)}`),
+        'settings'
+      );
     });
   };
 

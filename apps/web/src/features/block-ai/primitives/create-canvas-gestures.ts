@@ -16,6 +16,7 @@ import {
   pageToScreen,
   screenToPage,
 } from '@app/features/block-fig/core/camera';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createEffect, on } from 'solid-js';
 import { match, P } from 'ts-pattern';
 import {
@@ -254,7 +255,7 @@ export function createCanvasGestures(options: CanvasGestureOptions) {
         if (hoverNext !== target) hoverAt(hoverNext);
       }
     };
-    void run();
+    fireAndForget(run(), 'ai-editor');
   };
 
   /** The selection's box on screen. */
@@ -397,9 +398,12 @@ export function createCanvasGestures(options: CanvasGestureOptions) {
       marquee: false,
     };
     drag = press;
-    void (async () => {
-      press.resolved = { value: await pressed };
-    })();
+    fireAndForget(
+      (async () => {
+        press.resolved = { value: await pressed };
+      })(),
+      'ai-editor'
+    );
   };
 
   /** A press on the chosen artboard's handles: resizing it. */
@@ -453,14 +457,14 @@ export function createCanvasGestures(options: CanvasGestureOptions) {
     const reach = PEN_CLOSE / zoom();
     if (closesPen(points, point, reach)) {
       penCursor = undefined;
-      void editor.penFinish(true);
+      fireAndForget(editor.penFinish(true), 'ai-editor');
       return;
     }
     const last = points[points.length - 1];
     if (last && Math.hypot(last.p.x - point.x, last.p.y - point.y) <= reach) {
       // The last point again (a double-click) ends an open path.
       penCursor = undefined;
-      void editor.penFinish(false);
+      fireAndForget(editor.penFinish(false), 'ai-editor');
       return;
     }
     const anchor = { x: round2(point.x), y: round2(point.y) };
@@ -491,8 +495,9 @@ export function createCanvasGestures(options: CanvasGestureOptions) {
     else if (isShapeTool(tool))
       drag = { kind: 'create', tool, start: p, current: p };
     else if (tool === 'type') pressType(p);
-    else if (tool === 'eyedropper') void pressEyedropper(p);
-    else if (tool === 'artboard') void pressArtboard(p);
+    else if (tool === 'eyedropper')
+      fireAndForget(pressEyedropper(p), 'ai-editor');
+    else if (tool === 'artboard') fireAndForget(pressArtboard(p), 'ai-editor');
   };
 
   const onPointerDown = (e: PointerEvent) => {
@@ -563,14 +568,18 @@ export function createCanvasGestures(options: CanvasGestureOptions) {
       const decide = (r: Pressed) => {
         // A press on an object drags it (when editable); elsewhere it
         // draws a marquee.
-        if (r && editing() && !d.additive) void beginMove(d, e.altKey);
+        if (r && editing() && !d.additive)
+          fireAndForget(beginMove(d, e.altKey), 'ai-editor');
         else d.marquee = true;
       };
       if (d.resolved) decide(d.resolved.value);
       else
-        void (async () => {
-          decide(await d.pressed);
-        })();
+        fireAndForget(
+          (async () => {
+            decide(await d.pressed);
+          })(),
+          'ai-editor'
+        );
     }
     if (d.marquee) {
       marquee = spanRect(d.start, p);
@@ -815,25 +824,31 @@ export function createCanvasGestures(options: CanvasGestureOptions) {
   const finishArtboard = (area: Rect | undefined) => {
     if (!area || area.w <= DRAG_THRESHOLD || area.h <= DRAG_THRESHOLD) return;
     const tl = at({ x: area.x, y: area.y });
-    void editor.newArtboard({
-      x: round2(tl.x),
-      y: round2(tl.y),
-      w: round2(area.w / zoom()),
-      h: round2(area.h / zoom()),
-    });
+    fireAndForget(
+      editor.newArtboard({
+        x: round2(tl.x),
+        y: round2(tl.y),
+        w: round2(area.w / zoom()),
+        h: round2(area.h / zoom()),
+      }),
+      'ai-editor'
+    );
   };
 
   const finishMarquee = (d: Press, area: Rect, e: PointerEvent) => {
     const tl = at({ x: area.x, y: area.y });
-    void viewer.marqueeSelect(
-      { x: tl.x, y: tl.y, w: area.w / zoom(), h: area.h / zoom() },
-      { deep: d.deep, additive: e.shiftKey }
+    fireAndForget(
+      viewer.marqueeSelect(
+        { x: tl.x, y: tl.y, w: area.w / zoom(), h: area.h / zoom() },
+        { deep: d.deep, additive: e.shiftKey }
+      ),
+      'ai-editor'
     );
   };
 
   const finishPress = (d: Press, area: Rect | undefined, e: PointerEvent) => {
     if (d.mover) {
-      void d.mover.end();
+      fireAndForget(d.mover.end(), 'ai-editor');
       return;
     }
     if (d.marquee) {
@@ -842,29 +857,35 @@ export function createCanvasGestures(options: CanvasGestureOptions) {
     }
     if (d.active) return;
     // A click on one object of a multi-selection selects just it.
-    void (async () => {
-      const r = await d.pressed;
-      if (r?.wasSelected && !d.additive && viewer.selected().length > 1)
-        viewer.select([r.id]);
-    })();
+    fireAndForget(
+      (async () => {
+        const r = await d.pressed;
+        if (r?.wasSelected && !d.additive && viewer.selected().length > 1)
+          viewer.select([r.id]);
+      })(),
+      'ai-editor'
+    );
   };
 
   /** Ends a drag; `area` is the marquee it drew. */
   const finishDrag = (d: Drag, area: Rect | undefined, e: PointerEvent) =>
     match(d)
-      .with({ kind: 'create' }, (create) => void finishCreate(create, e))
-      .with({ kind: 'type' }, (type) => void finishType(type))
+      .with({ kind: 'create' }, (create) =>
+        fireAndForget(finishCreate(create, e), 'ai-editor')
+      )
+      .with({ kind: 'type' }, (type) =>
+        fireAndForget(finishType(type), 'ai-editor')
+      )
       .with({ kind: 'zoom' }, finishZoom)
       .with({ kind: 'artboard-new' }, () => finishArtboard(area))
       .with(
         {
           kind: P.union('scale', 'rotate', 'artboard-move', 'artboard-resize'),
         },
-        (moved) => void moved.mover.end()
+        (moved) => fireAndForget(moved.mover.end(), 'ai-editor')
       )
-      .with(
-        { kind: P.union('anchor', 'handle') },
-        (edit) => void edit.editor.end()
+      .with({ kind: P.union('anchor', 'handle') }, (edit) =>
+        fireAndForget(edit.editor.end(), 'ai-editor')
       )
       .with({ kind: 'press' }, (press) => finishPress(press, area, e))
       .with({ kind: P.union('pan', 'pinch', 'pen') }, () => undefined)

@@ -154,6 +154,7 @@ export function Header(props: { presentation: 'workspace' | 'preview' }) {
     calendarPeriodLabel(calendarView.displaySettings.periodView).toLowerCase()
   );
   const isNarrow = () => shell?.aside.isCollapsed() ?? true;
+  const showBookingLinks = () => isMobile() || !shell?.breakpoints.narrow?.();
   const showHeaderCreate = () =>
     isCompactHeader() ||
     (shell?.aside.isCollapsed() && !shell?.aside.isOverlay());
@@ -288,7 +289,9 @@ export function Header(props: { presentation: 'workspace' | 'preview' }) {
               <Show when={!isMobile()}>
                 <CalendarSearch />
               </Show>
-              <CalendarSchedulingActions />
+              <Show when={showBookingLinks()}>
+                <CalendarSchedulingActions />
+              </Show>
               <Show when={props.presentation === 'preview' || isMobile()}>
                 <CalendarSettingsDropdown isNarrow={isNarrow()} />
               </Show>
@@ -368,7 +371,9 @@ export function Header(props: { presentation: 'workspace' | 'preview' }) {
                 {headerCreateMenu()}
               </div>
             </Show>
-            <CalendarSchedulingActions />
+            <Show when={showBookingLinks()}>
+              <CalendarSchedulingActions />
+            </Show>
             {todayButton(!breakpoints.labeledToday())}
             <PeriodSelector isNarrow={isNarrow()} />
             {previous()}

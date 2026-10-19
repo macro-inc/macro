@@ -124,7 +124,12 @@ export function PollBars(props: {
                     <span class="sr-only">
                       {bar().count === 1 ? ' vote' : ' votes'}
                     </span>
-                    <span aria-hidden="true" class="w-8 text-right font-medium">
+                    {/* w-8 (32px) is narrower than tabular "100%" (~35px),
+                        and some engines break before "%". */}
+                    <span
+                      aria-hidden="true"
+                      class="w-10 shrink-0 text-right font-medium whitespace-nowrap"
+                    >
                       {bar().percent}%
                     </span>
                   </span>

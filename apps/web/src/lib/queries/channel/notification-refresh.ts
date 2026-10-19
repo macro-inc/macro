@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { isTransientRequestError } from '@core/util/request-error';
 import type { QueryRevalidation } from '@graphql-cache/exchange/optimistic';
 import type { GraphqlNotificationPatch } from '@service-storage/graphql-soup-websocket';
@@ -302,7 +303,7 @@ export class ChannelNotificationRefresh {
       // Rotate dispatched operations so a busy channel cannot starve others.
       this.jobs.delete(key);
       this.jobs.set(key, job);
-      void this.run(key, job);
+      fireAndForget(this.run(key, job), 'channel-notification-refresh');
     }
     this.schedule();
   };

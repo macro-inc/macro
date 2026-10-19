@@ -3,6 +3,7 @@ import { useBlockId } from '@core/block';
 import { toast } from '@core/component/Toast/Toast';
 import { blockMetadataSignal } from '@core/signal/load';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { downloadFile } from '@filesystem/download';
 import { createQuery } from '@tanstack/solid-query';
 import { Button } from '@ui';
@@ -54,7 +55,12 @@ export default function UploadedWorkbook() {
                 ? query.error.message
                 : 'Unable to open this workbook.'}
             </span>
-            <Button size="sm" onClick={() => void query.refetch()}>
+            <Button
+              size="sm"
+              onClick={() =>
+                fireAndForget(query.refetch(), 'uploaded-workbook')
+              }
+            >
               Try again
             </Button>
           </div>
@@ -163,7 +169,7 @@ function UploadedWorkbookPreview(props: {
           size="sm"
           variant="accent"
           disabled={!!actions.pending()}
-          onClick={() => void actions.edit()}
+          onClick={() => fireAndForget(actions.edit(), 'uploaded-workbook')}
         >
           {actions.pending() ? 'Saving…' : 'Edit in Macro'}
         </Button>

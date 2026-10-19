@@ -1,6 +1,7 @@
 import { hideSlackImportPromotion } from '@app/features/slack-import/primitives/promotion';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import SpinnerIcon from '@phosphor/spinner-gap.svg';
 import {
@@ -221,7 +222,7 @@ export function SlackChannelImportCard(
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => void query.refetch()}
+                onClick={() => fireAndForget(query.refetch(), 'slack-import')}
               >
                 Retry
               </Button>

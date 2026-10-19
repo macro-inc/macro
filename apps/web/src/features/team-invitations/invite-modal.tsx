@@ -1,7 +1,8 @@
 import { toast } from '@core/component/Toast/Toast';
 import { useReferralCode } from '@core/context/user';
-
+import { fireAndForget } from '@core/util/fireAndForget';
 import { getWebOrigin } from '@core/util/webOrigin';
+import { Telemetry } from '@macro-inc/observability';
 import ClipboardIcon from '@phosphor/clipboard.svg';
 import CloseIcon from '@phosphor/x.svg';
 import { authServiceClient } from '@service-auth/client';
@@ -14,6 +15,15 @@ function parseEmails(raw: string): string[] {
     .split(/[,\n\s]/)
     .map((s) => s.trim())
     .filter((s) => s.includes('@'));
+}
+
+async function addInvitedContact(email: string) {
+  const result = await contactsClient.addContact(
+    `macro|${email.toLowerCase()}`
+  );
+  if (result.isErr()) {
+    Telemetry.error(result.error, { surface: 'team-invitations' });
+  }
 }
 
 const [inviteModalOpen, setInviteModalOpen] = createSignal(false);
@@ -32,12 +42,19 @@ export const InviteModal = () => {
     return `${getWebOrigin()}/app/signup?referral_code=${code}`;
   };
 
+  const copyReferralUrl = async (url: string) => {
+    await navigator.clipboard.writeText(url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   const handleCopy = () => {
     const url = referralUrl();
     if (!url) return;
-    navigator.clipboard.writeText(url);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    copyReferralUrl(url).catch((error) => {
+      Telemetry.error(error, { surface: 'team-invitations' });
+      toast.failure('Failed to copy link');
+    });
   };
 
   const handleSend = async () => {
@@ -47,7 +64,7 @@ export const InviteModal = () => {
     for (const email of emails) {
       const result = await authServiceClient.sendReferralInvite(email);
       if (result.isOk()) {
-        contactsClient.addContact(`macro|${email.toLowerCase()}`);
+        fireAndForget(addInvitedContact(email), 'team-invitations');
       }
     }
     setValue('');

@@ -24,6 +24,7 @@ import {
   withSplitPanelOwner,
 } from '@components/app/split-layout/layoutUtils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fireAndForget } from '@core/util/fireAndForget';
 import EmptyStateCallsGraphic from '@design/empty-state-calls.svg';
 import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.svg';
 import {
@@ -108,11 +109,14 @@ function ChannelCallsList(props: { channelId: string }) {
       mergeHistory?: boolean;
     } = {}
   ) {
-    void openEntityInSplitFromUnifiedList(entity, {
-      splitHandle: panel.handle,
-      referredFrom: 'calls',
-      ...options,
-    });
+    fireAndForget(
+      openEntityInSplitFromUnifiedList(entity, {
+        splitHandle: panel.handle,
+        referredFrom: 'calls',
+        ...options,
+      }),
+      'open-entity-in-split'
+    );
   }
 
   function onActivate({
@@ -120,7 +124,7 @@ function ChannelCallsList(props: { channelId: string }) {
     metadata,
   }: ListActivation<ChannelCallsRow, ChannelCallsActivationMetadata>) {
     if (item.kind === 'load-more') {
-      if (!item.isLoading) void source.loadMore();
+      if (!item.isLoading) fireAndForget(source.loadMore(), 'channel-calls');
       return;
     }
 
@@ -142,10 +146,13 @@ function ChannelCallsList(props: { channelId: string }) {
       controller: list,
       handle: panel.handle,
       openEntityInSplit: (entity, options) => {
-        void openEntityInSplitFromUnifiedList(entity, {
-          splitHandle: panel.handle,
-          ...options,
-        });
+        fireAndForget(
+          openEntityInSplitFromUnifiedList(entity, {
+            splitHandle: panel.handle,
+            ...options,
+          }),
+          'open-entity-in-split'
+        );
       },
     });
   });
@@ -189,7 +196,7 @@ function ChannelCallsList(props: { channelId: string }) {
         if (source.error()) return;
 
         if (!event.result || list.items.count() - event.result.index <= 4) {
-          void source.loadMore();
+          fireAndForget(source.loadMore(), 'channel-calls');
         }
       },
     },
@@ -222,7 +229,7 @@ function ChannelCallsList(props: { channelId: string }) {
 
     const distance =
       container.scrollHeight - container.scrollTop - container.clientHeight;
-    if (distance < 300) void source.loadMore();
+    if (distance < 300) fireAndForget(source.loadMore(), 'channel-calls');
   };
 
   createEffect(() => {
@@ -286,7 +293,9 @@ function ChannelCallsList(props: { channelId: string }) {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => void source.refresh()}
+                    onClick={() =>
+                      fireAndForget(source.refresh(), 'channel-calls')
+                    }
                   >
                     Try again
                   </Button>

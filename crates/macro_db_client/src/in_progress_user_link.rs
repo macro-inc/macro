@@ -147,6 +147,7 @@ pub async fn get_macro_user_id_by_link_id(
 }
 
 pub struct InProgressUserLink {
+    pub email_provider: String,
     pub macro_user_id: Uuid,
     pub linked_email: Option<String>,
     /// Scopes Macro placed on the authorization request.
@@ -162,6 +163,7 @@ pub async fn get_in_progress_user_link(
     let row = sqlx::query!(
         r#"
             SELECT
+                email_provider::text AS "email_provider!",
                 macro_user_id,
                 linked_email,
                 requested_google_scopes,
@@ -177,11 +179,28 @@ pub async fn get_in_progress_user_link(
     .await?;
 
     Ok(InProgressUserLink {
+        email_provider: row.email_provider,
         macro_user_id: row.macro_user_id,
         linked_email: row.linked_email,
         requested_google_scopes: row.requested_google_scopes,
         granted_google_scopes: row.granted_google_scopes,
     })
+}
+
+/// Cleanup must not let a caller delete another principal's linking attempt.
+pub async fn delete_owned_in_progress_user_link(
+    db: &sqlx::PgPool,
+    link_id: Uuid,
+    owner: &str,
+) -> anyhow::Result<()> {
+    sqlx::query!(
+        "DELETE FROM in_progress_user_link WHERE id = $1 AND macro_user_id::text = $2",
+        link_id,
+        owner
+    )
+    .execute(db)
+    .await?;
+    Ok(())
 }
 
 /// Record the identity and actual scopes returned by Google's OAuth callback.

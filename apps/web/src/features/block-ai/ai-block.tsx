@@ -33,6 +33,7 @@ import {
   useBlockDocumentDownloadName,
   useBlockDocumentName,
 } from '@core/util/currentBlockDocumentName';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { downloadFile } from '@filesystem/download';
 import IconShared from '@icon/share.svg';
 import DownloadSimple from '@phosphor/download-simple.svg';
@@ -142,7 +143,7 @@ function AiHost(props: {
         setFailure(e instanceof Error ? e.message : String(e));
       }
     };
-    void open();
+    fireAndForget(open(), 'ai-editor');
     onCleanup(() => {
       disposed = true;
       shared?.close();
@@ -168,7 +169,8 @@ function AiHost(props: {
                 context={{
                   engine: e(),
                   fileName: props.fileName,
-                  download: (blob, name) => void downloadFile(blob, name),
+                  download: (blob, name) =>
+                    fireAndForget(downloadFile(blob, name), 'ai-editor'),
                   notifyError: (message) => toast.failure(message),
                   notifyInfo: (message) => toast.success(message),
                   canEdit,
@@ -325,7 +327,7 @@ export default function AiBlock(props: { share?: string }) {
       const url = data()?.blobUrl;
       if (!url) return;
       const response = await fetch(url);
-      void downloadFile(await response.blob(), downloadName());
+      await downloadFile(await response.blob(), downloadName());
     } catch {
       toast.failure('Error downloading file');
     }
@@ -353,7 +355,7 @@ export default function AiBlock(props: { share?: string }) {
               group: 'file',
               label: 'Download',
               icon: DownloadSimple,
-              action: () => void download(),
+              action: () => fireAndForget(download(), 'ai-editor'),
             },
             { op: 'delete' },
           ]}
@@ -373,7 +375,11 @@ export default function AiBlock(props: { share?: string }) {
             {(d) => (
               <Show
                 when={d.bytes}
-                fallback={<DownloadOnly onDownload={() => void download()} />}
+                fallback={
+                  <DownloadOnly
+                    onDownload={() => fireAndForget(download(), 'ai-editor')}
+                  />
+                }
               >
                 {(bytes) => (
                   <CollaborativeAiHost

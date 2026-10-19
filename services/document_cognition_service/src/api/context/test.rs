@@ -472,6 +472,11 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         &databases_tool_context,
         &crm_tool_context,
     );
+    let crm_transfer_tool_context = ai_tools::build_crm_transfer_tool_context(
+        &pipeline_tool_context,
+        &crm_tool_context,
+        &document_tool_context,
+    );
 
     let calendar_tool_context = ai_tools::build_calendar_tool_context(
         pool.clone(),
@@ -563,6 +568,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         team_tool_context: ai_tools::build_team_tool_context(pool.clone()),
         crm_tool_context,
         pipeline_tool_context,
+        crm_transfer_tool_context,
         skill_tool_context: ai_tools::build_skill_tool_context(
             search_service_client.clone(),
             soup_service.clone(),

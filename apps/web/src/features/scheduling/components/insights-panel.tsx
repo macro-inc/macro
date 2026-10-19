@@ -3,17 +3,28 @@ import InfoIcon from '@phosphor/info.svg';
 import { Button, Tooltip } from '@ui';
 import { createMemo, createSignal, For, type JSX, Show } from 'solid-js';
 import {
+  type InsightHostOption,
+  insightHostOptions,
+  insightHostSelection,
+} from '../core/insight-host-options';
+import { insightOutcomes } from '../core/insight-outcomes';
+import {
   buildInsightPeriod,
   type InsightDay,
   type InsightMetric,
   insightComparison,
-  insightPresetRange,
-  insightRangeError,
   insightsCsv,
   previousInsightRange,
 } from '../core/insights';
 import type { Booking, EventType, SchedulingMember } from '../core/types';
-import { Field, SelectInput, TextInput } from './fields';
+import { EventOutcomesChart } from './event-outcomes-chart';
+import { SelectInput } from './fields';
+import { hourLabel, hourPlot, trendPlot } from './insight-chart-options';
+import { InsightPlot } from './insight-plot';
+import { InsightHostAvatar, InsightsHostFilter } from './insights-host-filter';
+import { InsightsRangeSelector } from './insights-range-selector';
+import { SchedulingFilterSection } from './scheduling-filter-section';
+import { SchedulingFilters } from './scheduling-filters';
 
 const SERIES: { key: InsightMetric; label: string; color: string }[] = [
   { key: 'total', label: 'Scheduled', color: 'var(--color-purple)' },
@@ -118,37 +129,15 @@ function Metric(props: {
 
 function TrendChart(props: { days: InsightDay[] }) {
   const [visible, setVisible] = createSignal<InsightMetric[]>(
-    SERIES.map((s) => s.key)
+    SERIES.map((series) => series.key)
   );
-  const [hovered, setHovered] = createSignal<number>();
-  const plotted = () => SERIES.filter((s) => visible().includes(s.key));
-  const maxValue = () =>
-    Math.max(
-      4,
-      Math.ceil(
-        Math.max(
-          0,
-          ...props.days.flatMap((d) => plotted().map((s) => d[s.key]))
-        ) / 4
-      ) * 4
-    );
-  const x = (index: number) =>
-    48 + (index / Math.max(1, props.days.length - 1)) * 812;
-  const y = (count: number) => 246 - (count / maxValue()) * 210;
+  const [selectedDay, setSelectedDay] = createSignal<number>();
+  const plotted = () =>
+    SERIES.filter((series) => visible().includes(series.key));
   const activeDay = () =>
-    hovered() === undefined
+    selectedDay() === undefined
       ? undefined
-      : props.days[Math.min(hovered()!, props.days.length - 1)];
-  const labelIndices = () => [
-    ...new Set(
-      Array.from({ length: Math.min(7, props.days.length) }, (_, i) =>
-        Math.round(
-          (i / Math.max(1, Math.min(6, props.days.length - 1))) *
-            (props.days.length - 1)
-        )
-      )
-    ),
-  ];
+      : props.days[Math.min(selectedDay()!, props.days.length - 1)];
   return (
     <InsightSection
       title="Event trends"
@@ -182,16 +171,16 @@ function TrendChart(props: { days: InsightDay[] }) {
     >
       <div class="px-4 pb-4 pt-3 sm:px-6">
         <div
-          class="relative rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ink/20"
+          class="rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ink/20"
           tabIndex={0}
           role="group"
           aria-label="Event trends chart. Use left and right arrow keys to explore dates."
-          onFocus={() => setHovered((value) => value ?? props.days.length - 1)}
-          onBlur={() => setHovered(undefined)}
+          onFocus={() => setSelectedDay(props.days.length - 1)}
+          onBlur={() => setSelectedDay(undefined)}
           onKeyDown={(event) => {
             if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
             event.preventDefault();
-            setHovered((index) =>
+            setSelectedDay((index) =>
               Math.max(
                 0,
                 Math.min(
@@ -202,146 +191,35 @@ function TrendChart(props: { days: InsightDay[] }) {
               )
             );
           }}
-          onPointerMove={(event) => {
-            const rect = event.currentTarget.getBoundingClientRect();
-            const plotX = ((event.clientX - rect.left) / rect.width) * 900;
-            setHovered(
-              Math.max(
-                0,
-                Math.min(
-                  props.days.length - 1,
-                  Math.round(((plotX - 48) / 812) * (props.days.length - 1))
-                )
-              )
-            );
-          }}
-          onPointerLeave={() => setHovered(undefined)}
         >
-          <svg
-            viewBox="0 0 900 290"
-            class="block w-full"
-            role="img"
-            aria-label="Daily booking totals and outcomes"
-          >
-            <For each={[0, 1, 2, 3, 4]}>
-              {(step) => (
-                <g>
-                  <line
-                    x1="48"
-                    x2="860"
-                    y1={y((maxValue() / 4) * step)}
-                    y2={y((maxValue() / 4) * step)}
-                    stroke="var(--color-edge-muted)"
-                    stroke-dasharray="3 3"
-                  />
-                  <text
-                    x="36"
-                    y={y((maxValue() / 4) * step) + 4}
-                    text-anchor="end"
-                    fill="var(--color-ink-muted)"
-                    font-size="11"
-                  >
-                    {(maxValue() / 4) * step}
-                  </text>
-                </g>
-              )}
-            </For>
-            <For each={plotted()}>
-              {(series) => (
-                <>
-                  <polyline
-                    points={props.days
-                      .map((day, index) => `${x(index)},${y(day[series.key])}`)
-                      .join(' ')}
-                    fill="none"
-                    stroke={series.color}
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  />
-                  <Show when={props.days.length <= 10}>
-                    <For each={props.days}>
-                      {(day, index) => (
-                        <circle
-                          cx={x(index())}
-                          cy={y(day[series.key])}
-                          r="3"
-                          fill="var(--color-panel)"
-                          stroke={series.color}
-                          stroke-width="1.5"
-                        />
-                      )}
-                    </For>
-                  </Show>
-                </>
-              )}
-            </For>
-            <For each={labelIndices()}>
-              {(index) => (
-                <text
-                  x={x(index)}
-                  y="270"
-                  text-anchor="middle"
-                  fill="var(--color-ink-muted)"
-                  font-size="11"
-                >
-                  {formatDate(props.days[index].date)}
-                </text>
-              )}
-            </For>
-            <Show when={activeDay()}>
-              {(day) => (
-                <>
-                  <line
-                    x1={x(Math.min(hovered()!, props.days.length - 1))}
-                    x2={x(Math.min(hovered()!, props.days.length - 1))}
-                    y1="26"
-                    y2="246"
-                    stroke="var(--color-edge)"
-                  />
-                  <For each={plotted()}>
-                    {(series) => (
-                      <circle
-                        cx={x(Math.min(hovered()!, props.days.length - 1))}
-                        cy={y(day()[series.key])}
-                        r="4"
-                        fill={series.color}
-                        stroke="var(--color-panel)"
-                        stroke-width="2"
-                      />
-                    )}
-                  </For>
-                </>
-              )}
-            </Show>
-          </svg>
+          <InsightPlot
+            label="Daily booking totals and outcomes"
+            height={280}
+            options={(plot, width) =>
+              trendPlot(plot, width, props.days, plotted())
+            }
+          />
           <Show when={activeDay()}>
             {(day) => (
               <div
-                class="pointer-events-none absolute right-3 top-3 z-10 w-48 rounded-lg border border-edge-muted bg-panel p-3 text-xs shadow-lg"
                 role="status"
                 aria-live="polite"
+                class="flex flex-wrap gap-x-4 gap-y-1 rounded-md bg-surface-1 px-3 py-2 text-xs text-ink-muted"
               >
-                <p class="mb-2 border-b border-edge-muted pb-2 font-semibold">
+                <span class="font-medium text-ink">
                   {formatDate(day().date, true)}
-                </p>
+                </span>
                 <For each={plotted()}>
                   {(series) => (
-                    <div class="flex items-center gap-2 py-1">
-                      <span
-                        class="size-2 rounded-full"
-                        style={{ background: series.color }}
-                      />
-                      <span class="flex-1 text-ink-muted">{series.label}</span>
-                      <span class="tabular-nums">{day()[series.key]}</span>
-                    </div>
+                    <span>
+                      {series.label}: {day()[series.key]}
+                    </span>
                   )}
                 </For>
               </div>
             )}
           </Show>
         </div>
-        <p class="text-center text-xs text-ink-muted">Booking start date</p>
         <details class="mt-4 text-xs text-ink-muted">
           <summary class="w-fit rounded py-1 focus-visible:outline-2 focus-visible:outline-ink">
             View daily data
@@ -382,45 +260,43 @@ function TrendChart(props: { days: InsightDay[] }) {
 }
 
 function HourChart(props: { hours: number[] }) {
-  const max = () => Math.max(1, ...props.hours);
-  const hourLabel = (hour: number) =>
-    `${hour % 12 || 12}${hour < 12 ? 'am' : 'pm'}`;
   return (
     <InsightSection
       title="Popular booking times"
       description="When your meetings start"
     >
-      <div class="px-5 pb-5 pt-8">
-        <div class="flex h-36 items-end gap-1 border-b border-edge-muted">
-          <For each={props.hours}>
-            {(count, hour) => (
-              <Tooltip
-                class="h-full min-w-0 flex-1 items-end"
-                label={`${hourLabel(hour())}: ${count} ${count === 1 ? 'booking' : 'bookings'}`}
-              >
-                <div class="flex h-full min-w-0 flex-1 items-end">
-                  <div
-                    tabIndex={0}
-                    role="img"
-                    aria-label={`${hourLabel(hour())}: ${count} bookings`}
-                    class="w-full rounded-t-sm bg-ink/70 outline-none hover:bg-ink focus-visible:ring-2 focus-visible:ring-ink/30"
-                    style={{
-                      height: `${Math.max(count ? 3 : 0, (count / max()) * 100)}%`,
-                      'min-height': '2px',
-                    }}
-                  />
-                </div>
-              </Tooltip>
-            )}
-          </For>
-        </div>
-        <div class="mt-3 flex justify-between text-xs text-ink-muted">
-          <span>12am</span>
-          <span>6am</span>
-          <span>12pm</span>
-          <span>6pm</span>
-          <span>11pm</span>
-        </div>
+      <div class="p-5">
+        <InsightPlot
+          label="Bookings by start hour"
+          height={200}
+          options={(plot, width) => hourPlot(plot, width, props.hours)}
+        />
+        <details class="mt-3 text-xs text-ink-muted">
+          <summary class="w-fit rounded py-1 focus-visible:outline-2 focus-visible:outline-ink">
+            View hourly data
+          </summary>
+          <div class="mt-2 max-h-60 overflow-auto">
+            <table class="w-full text-left tabular-nums">
+              <caption class="sr-only">Bookings by start hour</caption>
+              <thead>
+                <tr>
+                  <th class="py-2">Hour</th>
+                  <th class="py-2">Bookings</th>
+                </tr>
+              </thead>
+              <tbody>
+                <For each={props.hours}>
+                  {(count, hour) => (
+                    <tr class="border-t border-edge-muted">
+                      <th class="py-2 font-normal">{hourLabel(hour())}</th>
+                      <td class="py-2">{count}</td>
+                    </tr>
+                  )}
+                </For>
+              </tbody>
+            </table>
+          </div>
+        </details>
       </div>
     </InsightSection>
   );
@@ -476,13 +352,10 @@ export function InsightsPanel(props: {
   onRangeChange: (from: string, to: string) => void;
   onRetry: () => void;
   scopeSelector?: JSX.Element;
+  renderHostAvatar?: (host: InsightHostOption) => JSX.Element;
 }) {
   const [eventId, setEventId] = createSignal('all');
   const [hostId, setHostId] = createSignal('all');
-  const [customOpen, setCustomOpen] = createSignal(false);
-  const [customFrom, setCustomFrom] = createSignal(props.from);
-  const [customTo, setCustomTo] = createSignal(props.to);
-  const [rangeError, setRangeError] = createSignal('');
   const now = new Date();
   const filtered = createMemo(() =>
     props.bookings.filter(
@@ -507,6 +380,7 @@ export function InsightsPanel(props: {
       now
     )
   );
+  const outcomes = createMemo(() => insightOutcomes(current().bookings, now));
   const eventOptions = createMemo(() => {
     const items = new Map(props.events.map((event) => [event.id, event.title]));
     for (const booking of props.bookings)
@@ -517,41 +391,9 @@ export function InsightsPanel(props: {
       ...[...items].map(([value, label]) => ({ value, label })),
     ];
   });
-  const hostOptions = createMemo(() => {
-    const items = new Map(
-      props.members.map((member) => [member.id, member.name || member.email])
-    );
-    for (const booking of props.bookings)
-      for (const id of booking.hosts)
-        if (!items.has(id)) items.set(id, 'Former member');
-    return [
-      { value: 'all', label: 'All hosts' },
-      ...[...items].map(([value, label]) => ({ value, label })),
-    ];
-  });
-  const selectedRange = () => {
-    if (customOpen()) return 'custom';
-    return (
-      [7, 30, 90]
-        .find((days) => {
-          const range = insightPresetRange(days, props.timeZone, now);
-          return range.from === props.from && range.to === props.to;
-        })
-        ?.toString() ?? 'custom'
-    );
-  };
-  const changePreset = (value: string) => {
-    setRangeError('');
-    if (value === 'custom') {
-      setCustomFrom(props.from);
-      setCustomTo(props.to);
-      setCustomOpen(true);
-      return;
-    }
-    setCustomOpen(false);
-    const range = insightPresetRange(Number(value), props.timeZone, now);
-    props.onRangeChange(range.from, range.to);
-  };
+  const hostOptions = createMemo(() =>
+    insightHostOptions(props.members, props.events, props.bookings)
+  );
   const download = () => {
     const csv = insightsCsv(
       current().bookings,
@@ -569,105 +411,94 @@ export function InsightsPanel(props: {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
   return (
-    <div class="flex flex-col gap-5" aria-busy={props.loading}>
-      <div class="flex flex-wrap items-center gap-2">
+    <div
+      class="@container/insights flex w-full min-w-0 flex-col gap-5"
+      aria-busy={props.loading}
+    >
+      <div class="flex min-w-0 flex-wrap items-center gap-2">
         {props.scopeSelector}
-        <div class="w-44">
-          <SelectInput
-            label="Filter event types"
-            value={eventId()}
-            options={eventOptions()}
-            onChange={setEventId}
-          />
-        </div>
-        <div class="w-40">
-          <SelectInput
-            label="Filter hosts"
-            value={hostId()}
-            options={hostOptions()}
-            onChange={setHostId}
-          />
-        </div>
-        <div class="hidden flex-1 sm:block" />
-        <Button
-          variant="outline"
-          onClick={download}
-          disabled={
-            props.loading || !!props.error || !current().bookings.length
-          }
-          class="h-10"
-        >
-          <DownloadIcon class="size-4" />
-          Download
-        </Button>
-        <div class="w-40">
-          <SelectInput
-            label="Insights date range"
-            value={selectedRange()}
-            onChange={changePreset}
-            options={[
-              { value: '7', label: 'Last 7 days' },
-              { value: '30', label: 'Last 30 days' },
-              { value: '90', label: 'Last 90 days' },
-              { value: 'custom', label: 'Custom range' },
-            ]}
-          />
+        <div class="ml-auto flex min-w-0 items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={download}
+            disabled={
+              props.loading || !!props.error || !current().bookings.length
+            }
+          >
+            <DownloadIcon class="size-4" />
+            Download
+          </Button>
+          <SchedulingFilters
+            title="Insights filters"
+            activeCount={
+              Number(eventId() !== 'all') + Number(hostId() !== 'all')
+            }
+            onClear={() => {
+              setEventId('all');
+              setHostId('all');
+            }}
+            mobileChildren={
+              <>
+                <SchedulingFilterSection
+                  value="booking-links"
+                  label="Booking links"
+                  selected={eventId()}
+                  options={eventOptions()}
+                  onChange={setEventId}
+                />
+                <SchedulingFilterSection
+                  value="hosts"
+                  label="Hosts"
+                  selected={hostId()}
+                  options={
+                    hostOptions().some((option) => option.value === hostId())
+                      ? hostOptions()
+                      : [
+                          ...hostOptions(),
+                          insightHostSelection(hostOptions(), hostId()),
+                        ]
+                  }
+                  onChange={setHostId}
+                  renderIcon={(option) =>
+                    props.renderHostAvatar?.(option) ?? (
+                      <InsightHostAvatar host={option} />
+                    )
+                  }
+                />
+                <InsightsRangeSelector
+                  inline
+                  from={props.from}
+                  to={props.to}
+                  timeZone={props.timeZone}
+                  now={now}
+                  onChange={props.onRangeChange}
+                />
+              </>
+            }
+          >
+            <SelectInput
+              label="Filter event types"
+              class="w-full text-sm touch:h-9"
+              value={eventId()}
+              options={eventOptions()}
+              onChange={setEventId}
+            />
+            <InsightsHostFilter
+              value={hostId()}
+              options={hostOptions()}
+              onChange={setHostId}
+              renderAvatar={props.renderHostAvatar}
+            />
+            <InsightsRangeSelector
+              from={props.from}
+              to={props.to}
+              timeZone={props.timeZone}
+              now={now}
+              onChange={props.onRangeChange}
+            />
+          </SchedulingFilters>
         </div>
       </div>
-      <Show when={customOpen()}>
-        <form
-          class="flex flex-wrap items-end gap-3 rounded-xl border border-edge-muted bg-surface-2 p-4"
-          onSubmit={(event) => {
-            event.preventDefault();
-            const error = insightRangeError({
-              from: customFrom(),
-              to: customTo(),
-            });
-            setRangeError(error ?? '');
-            if (!error) {
-              setCustomOpen(false);
-              props.onRangeChange(customFrom(), customTo());
-            }
-          }}
-        >
-          <Field label="Start date">
-            <TextInput
-              required
-              type="date"
-              value={customFrom()}
-              onInput={(event) => setCustomFrom(event.currentTarget.value)}
-            />
-          </Field>
-          <Field label="End date">
-            <TextInput
-              required
-              type="date"
-              value={customTo()}
-              min={customFrom()}
-              onInput={(event) => setCustomTo(event.currentTarget.value)}
-            />
-          </Field>
-          <Button type="submit" variant="strong" class="h-10">
-            Apply dates
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            class="h-10"
-            onClick={() => {
-              setCustomOpen(false);
-              setRangeError('');
-            }}
-          >
-            Cancel
-          </Button>
-          <Show when={rangeError()}>
-            <p role="alert" class="w-full text-sm text-failure">
-              {rangeError()}
-            </p>
-          </Show>
-        </form>
-      </Show>
       <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-ink-muted">
         <p>
           {formatDate(props.from)} – {formatDate(props.to)} ·{' '}
@@ -704,78 +535,81 @@ export function InsightsPanel(props: {
       </Show>
       <Show when={!props.error}>
         <div
-          class="flex flex-col gap-5"
+          class="grid min-w-0 grid-cols-1 items-start gap-5 @min-[1000px]/insights:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]"
           classList={{ 'opacity-50': props.loading }}
         >
-          <InsightSection title="Events">
-            <div class="grid grid-cols-1 divide-y divide-edge-muted @sm:grid-cols-2 @3xl:grid-cols-4 @3xl:divide-x @3xl:divide-y-0">
-              <Metric
-                label="Total events"
-                definition="Bookings starting in this period, including pending and cancelled bookings. Failed and processing requests are excluded."
-                value={current().counts.total}
-                previous={previous().counts.total}
-              />
-              <Metric
-                label="Events completed"
-                definition="Confirmed bookings that have ended, excluding marked no-shows. This does not imply attendance was recorded."
-                value={current().counts.completed}
-                previous={previous().counts.completed}
-              />
-              <Metric
-                label="Events rescheduled"
-                definition="Bookings starting in this period with at least one recorded reschedule. Each booking is counted once."
-                value={current().counts.rescheduled}
-                previous={previous().counts.rescheduled}
-              />
-              <Metric
-                label="Events cancelled"
-                definition="Cancelled bookings with a scheduled start in this period."
-                value={current().counts.cancelled}
-                previous={previous().counts.cancelled}
-                lowerIsBetter
-              />
-            </div>
-          </InsightSection>
-          <InsightSection title="Performance">
-            <div class="grid grid-cols-1 divide-y divide-edge-muted @sm:grid-cols-2 @3xl:grid-cols-4 @3xl:divide-x @3xl:divide-y-0">
-              <Metric
-                label="Hours in meetings"
-                definition="Total scheduled duration of completed events. Actual call duration is not tracked."
-                value={current().meetingMinutes / 60}
-                previous={previous().meetingMinutes / 60}
-                unit="hrs"
-              />
-              <Metric
-                label="Average duration"
-                definition="Average scheduled duration of confirmed bookings starting in this period, in minutes."
-                value={current().averageMinutes}
-                previous={previous().averageMinutes}
-                unit="min"
-              />
-              <Metric
-                label="No-show (host)"
-                definition="Bookings explicitly marked as a host no-show. Unrecorded attendance is not treated as a no-show."
-                value={current().counts.hostNoShow}
-                previous={previous().counts.hostNoShow}
-                lowerIsBetter
-              />
-              <Metric
-                label="No-show (guest)"
-                definition="Bookings explicitly marked as a guest no-show. Unrecorded attendance is not treated as a no-show."
-                value={current().counts.guestNoShow}
-                previous={previous().counts.guestNoShow}
-                lowerIsBetter
-              />
-            </div>
-          </InsightSection>
-          <Show when={!props.loading && !current().bookings.length}>
-            <p class="rounded-lg border border-dashed border-edge-muted px-5 py-4 text-sm text-ink-muted">
-              No bookings match this period and these filters. Try another date
-              range or clear the filters.
-            </p>
-          </Show>
-          <TrendChart days={current().days} />
-          <div class="grid grid-cols-1 items-start gap-5 @3xl:grid-cols-2">
+          <div class="@container/insight-main flex min-w-0 flex-col gap-5">
+            <InsightSection title="Events">
+              <EventOutcomesChart rows={outcomes()} />
+              <div class="grid grid-cols-1 divide-y divide-edge-muted @sm/insight-main:grid-cols-2 @3xl/insight-main:grid-cols-4 @3xl/insight-main:divide-x @3xl/insight-main:divide-y-0">
+                <Metric
+                  label="Total events"
+                  definition="Bookings starting in this period, including pending and cancelled bookings. Failed and processing requests are excluded."
+                  value={current().counts.total}
+                  previous={previous().counts.total}
+                />
+                <Metric
+                  label="Events completed"
+                  definition="Confirmed bookings that have ended, excluding marked no-shows. This does not imply attendance was recorded."
+                  value={current().counts.completed}
+                  previous={previous().counts.completed}
+                />
+                <Metric
+                  label="Events rescheduled"
+                  definition="Bookings starting in this period with at least one recorded reschedule. Each booking is counted once."
+                  value={current().counts.rescheduled}
+                  previous={previous().counts.rescheduled}
+                />
+                <Metric
+                  label="Events cancelled"
+                  definition="Cancelled bookings with a scheduled start in this period."
+                  value={current().counts.cancelled}
+                  previous={previous().counts.cancelled}
+                  lowerIsBetter
+                />
+              </div>
+            </InsightSection>
+            <InsightSection title="Performance">
+              <div class="grid grid-cols-1 divide-y divide-edge-muted @sm/insight-main:grid-cols-2 @3xl/insight-main:grid-cols-4 @3xl/insight-main:divide-x @3xl/insight-main:divide-y-0">
+                <Metric
+                  label="Hours in meetings"
+                  definition="Total scheduled duration of completed events. Actual call duration is not tracked."
+                  value={current().meetingMinutes / 60}
+                  previous={previous().meetingMinutes / 60}
+                  unit="hrs"
+                />
+                <Metric
+                  label="Average duration"
+                  definition="Average scheduled duration of confirmed bookings starting in this period, in minutes."
+                  value={current().averageMinutes}
+                  previous={previous().averageMinutes}
+                  unit="min"
+                />
+                <Metric
+                  label="No-show (host)"
+                  definition="Bookings explicitly marked as a host no-show. Unrecorded attendance is not treated as a no-show."
+                  value={current().counts.hostNoShow}
+                  previous={previous().counts.hostNoShow}
+                  lowerIsBetter
+                />
+                <Metric
+                  label="No-show (guest)"
+                  definition="Bookings explicitly marked as a guest no-show. Unrecorded attendance is not treated as a no-show."
+                  value={current().counts.guestNoShow}
+                  previous={previous().counts.guestNoShow}
+                  lowerIsBetter
+                />
+              </div>
+            </InsightSection>
+            <Show when={!props.loading && !current().bookings.length}>
+              <p class="rounded-lg border border-dashed border-edge-muted px-5 py-4 text-sm text-ink-muted">
+                No bookings match this period and these filters. Try another
+                date range or clear the filters.
+              </p>
+            </Show>
+            <TrendChart days={current().days} />
+          </div>
+          <div class="flex min-w-0 flex-col gap-5">
             <RankedList
               title="Popular event types"
               description="Number of bookings by event type"
@@ -788,21 +622,21 @@ export function InsightsPanel(props: {
               empty="No event types booked in this period."
             />
             <HourChart hours={current().hours} />
+            <Show when={hostOptions().length > 2}>
+              <RankedList
+                title="Bookings by host"
+                description="Collective bookings count toward each participating host"
+                rows={current().hostCounts.map((row) => ({
+                  ...row,
+                  name:
+                    props.members.find((member) => member.id === row.id)
+                      ?.name ?? 'Former member',
+                }))}
+                empty="No hosts with bookings in this period."
+              />
+            </Show>
           </div>
-          <Show when={hostOptions().length > 2}>
-            <RankedList
-              title="Bookings by host"
-              description="Collective bookings count toward each participating host"
-              rows={current().hostCounts.map((row) => ({
-                ...row,
-                name:
-                  props.members.find((member) => member.id === row.id)?.name ??
-                  'Former member',
-              }))}
-              empty="No hosts with bookings in this period."
-            />
-          </Show>
-          <p class="text-xs leading-relaxed text-ink-muted">
+          <p class="col-span-full text-xs leading-relaxed text-ink-muted">
             Compared with{' '}
             {formatDate(
               previousInsightRange({ from: props.from, to: props.to }).from

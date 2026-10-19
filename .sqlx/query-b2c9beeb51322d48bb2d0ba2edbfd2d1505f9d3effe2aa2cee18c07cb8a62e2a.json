@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO email_contact_address_book_projection(contact_id,previous_name,applied_name,previous_photo,applied_photo)\n            VALUES ($1,$2,$3,$4,$5) ON CONFLICT(contact_id) DO UPDATE SET previous_name = EXCLUDED.previous_name,applied_name = EXCLUDED.applied_name,\n                previous_photo = EXCLUDED.previous_photo,applied_photo = EXCLUDED.applied_photo",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b2c9beeb51322d48bb2d0ba2edbfd2d1505f9d3effe2aa2cee18c07cb8a62e2a"
+}

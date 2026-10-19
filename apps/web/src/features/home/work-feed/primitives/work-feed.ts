@@ -2,6 +2,7 @@ import type {
   MarkDoneDelegate,
   PreparedMarkDone,
 } from '@app/features/next-soup/actions/mark-done-delegate';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { EntityData } from '@entity';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { setDoneOverride } from '@notifications/notification-source';
@@ -106,7 +107,7 @@ export function createWorkFeed(options: WorkFeedOptions) {
     pending = [];
     // Without the cache there are no pages to place changes in.
     if (!host) {
-      void refetch();
+      fireAndForget(refetch(), 'home');
       return;
     }
     writing = true;
@@ -118,20 +119,20 @@ export function createWorkFeed(options: WorkFeedOptions) {
         batch,
         query.hasNextPage
       );
-      if (!placed) void refetch();
+      if (!placed) fireAndForget(refetch(), 'home');
     } catch (error) {
       console.warn('Work feed update failed', error);
-      void refetch();
+      fireAndForget(refetch(), 'home');
     } finally {
       writing = false;
-      void writePending();
+      fireAndForget(writePending(), 'home');
     }
   };
   createEffect(
     on(
       () => query.isFetching,
       (fetching) => {
-        if (!fetching) void writePending();
+        if (!fetching) fireAndForget(writePending(), 'home');
       }
     )
   );
@@ -154,7 +155,7 @@ export function createWorkFeed(options: WorkFeedOptions) {
       setDone((current) => unmarkWorkFeedDone(current, reopened));
     }
     pending.push(...patches);
-    void writePending();
+    fireAndForget(writePending(), 'home');
   };
 
   // The live stream is an external system: follow it while the feed is
@@ -179,14 +180,16 @@ export function createWorkFeed(options: WorkFeedOptions) {
             if (disposed) return;
             follow();
             // Changes made while the stream was down are only in a read.
-            void refetch();
+            fireAndForget(refetch(), 'home');
           }, delay);
           delay = Math.min(delay * 2, WORK_FEED_MAX_RESUBSCRIBE_DELAY_MS);
         },
       });
     };
     follow();
-    const stopReconnects = options.onReconnected?.(() => void refetch());
+    const stopReconnects = options.onReconnected?.(() =>
+      fireAndForget(refetch(), 'home')
+    );
     onCleanup(() => {
       disposed = true;
       pending = [];
@@ -251,7 +254,7 @@ export function createWorkFeed(options: WorkFeedOptions) {
       // which removes or moves the rows; no read is needed.
       commit: async () => {
         const { undoToken } = await markWorkFeedItemsDone(client, items);
-        void options.revalidateNotifications?.(client);
+        fireAndForget(options.revalidateNotifications?.(client), 'home');
         return {
           undo: async () => {
             const patches = await undoWorkFeedItemsDone(
@@ -259,7 +262,7 @@ export function createWorkFeed(options: WorkFeedOptions) {
               undoToken,
               scope
             );
-            void options.revalidateNotifications?.(client);
+            fireAndForget(options.revalidateNotifications?.(client), 'home');
             // The restored places land now rather than with the stream.
             applyPatches(patches);
           },

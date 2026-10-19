@@ -47,7 +47,7 @@ export function useSetCodingPreferencesMutation() {
       );
     },
     onSettled: () => {
-      void queryClient.invalidateQueries({
+      queryClient.invalidateQueries({
         queryKey: agentKeys.codingPreferences.queryKey,
       });
     },

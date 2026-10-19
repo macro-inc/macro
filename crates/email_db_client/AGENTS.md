@@ -43,6 +43,8 @@ cleanup, and backfill.
 
 ## Gotchas
 
+- Forwarded-attachment delivery reads preserve `source_link_id` from the original
+  message; the destination draft inbox is only the query access scope.
 - Quote and alias camelCase columns to Rust field names; check
   `crates/macro_db_client/migrations/` for real column spelling, don't guess.
 

@@ -1,6 +1,7 @@
 import type { EmailEntity } from '@entity';
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { EmailReaderPaneContext } from './reader-pane';
 import { useEmailDetailListNavigation } from './use-email-detail-list-navigation';
 
 const mocks = vi.hoisted(() => ({
@@ -8,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   open: vi.fn(),
   failure: vi.fn(),
   loadMore: vi.fn(),
+  focus: vi.fn(),
 }));
 vi.mock('./email-view-context', () => ({ useEmailView: mocks.view }));
 vi.mock('@core/component/Toast/Toast', () => ({
@@ -22,7 +24,11 @@ beforeEach(() => vi.resetAllMocks());
 afterEach(() => {
   for (const dispose of disposals.splice(0)) dispose();
 });
-function setup(ids: string[], current = 'b') {
+function setup(
+  ids: string[],
+  current = 'b',
+  options: { inPane?: boolean } = {}
+) {
   const [rows, setRows] = createSignal(ids);
   const [threadId, setThreadId] = createSignal(current);
   const [hasMore, setHasMore] = createSignal(false);
@@ -31,6 +37,7 @@ function setup(ids: string[], current = 'b') {
       items: () =>
         rows().map((id) => ({
           kind: 'entity',
+          id: `row:${id}`,
           entity: { type: 'email', id, name: id } as EmailEntity,
         })),
       hasMore,
@@ -38,10 +45,26 @@ function setup(ids: string[], current = 'b') {
       error: () => undefined,
     },
     openThread: mocks.open,
+    list: { focus: { set: mocks.focus } },
   });
   const navigation = createRoot((dispose) => {
     disposals.push(dispose);
-    return useEmailDetailListNavigation(threadId);
+    if (!options.inPane) return useEmailDetailListNavigation(threadId);
+    let inPane!: ReturnType<typeof useEmailDetailListNavigation>;
+    EmailReaderPaneContext.Provider({
+      value: {
+        hotkeyScope: 'email-reader',
+        focusList: () => {},
+        focusRequest: () => undefined,
+        requestFocus: () => {},
+        clearFocusRequest: () => {},
+      },
+      get children() {
+        inPane = useEmailDetailListNavigation(threadId);
+        return null;
+      },
+    });
+    return inPane;
   });
   return { navigation, setRows, setHasMore, setThreadId };
 }
@@ -98,5 +121,21 @@ describe('email reminder navigation', () => {
     const { navigation } = setup(['a', 'b', 'c']);
     await navigation.afterReminderSaved?.();
     expect(mocks.open).toHaveBeenCalledWith({ id: 'c', fallbackName: 'c' });
+  });
+});
+
+describe('thread navigation in the reading pane', () => {
+  it('moves the list cursor and replaces history with each step', async () => {
+    const { navigation } = setup(['a', 'b', 'c'], 'b', { inPane: true });
+    navigation.next();
+    await vi.waitFor(() =>
+      expect(mocks.open).toHaveBeenLastCalledWith(
+        { id: 'c', fallbackName: 'c' },
+        { replace: true }
+      )
+    );
+    expect(mocks.focus).toHaveBeenLastCalledWith('row:c', {
+      reason: 'programmatic',
+    });
   });
 });

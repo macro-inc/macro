@@ -1,3 +1,4 @@
+import { Telemetry } from '@macro-inc/observability';
 import type { CallTokenResponse } from '@service-call/client';
 import {
   type AudioCaptureOptions,
@@ -287,7 +288,9 @@ export function createLivekitJsCallController(
 
     options.cancelPendingMediaSetup();
     stopReceiverStats();
-    room.disconnect();
+    room
+      .disconnect()
+      .catch((error) => Telemetry.error(error, { surface: 'livekit-call' }));
   }
 
   function dispose() {
@@ -297,7 +300,9 @@ export function createLivekitJsCallController(
     const room = options.room();
     if (!room) return;
 
-    room.disconnect();
+    room
+      .disconnect()
+      .catch((error) => Telemetry.error(error, { surface: 'livekit-call' }));
     room.removeAllListeners();
   }
 

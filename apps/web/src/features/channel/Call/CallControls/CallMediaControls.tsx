@@ -2,6 +2,7 @@ import { MediaBackgroundPicker } from '@core/component/media/media-background-pi
 import { MediaDevicePicker } from '@core/component/media/media-device-picker';
 import type { BackgroundEffect } from '@core/media/background-effect';
 import { readBackgroundImage } from '@core/media/read-background-image';
+import { fireAndForget } from '@core/util/fireAndForget';
 import Microphone from '@phosphor/microphone.svg';
 import SpeakerHigh from '@phosphor/speaker-high.svg';
 import VideoCamera from '@phosphor/video-camera.svg';
@@ -89,10 +90,12 @@ export function CallMediaControls(props: {
       audioMuted={call.isAudioMuted()}
       videoMuted={call.isVideoMuted()}
       screenSharing={call.isScreenSharing()}
-      onToggleAudio={() => void run(call.toggleAudio)}
-      onToggleVideo={() => void run(call.toggleVideo)}
-      onToggleScreen={() => void run(call.toggleScreenShare)}
-      onLeave={() => void run(props.onLeave)}
+      onToggleAudio={() => fireAndForget(run(call.toggleAudio), 'channel-call')}
+      onToggleVideo={() => fireAndForget(run(call.toggleVideo), 'channel-call')}
+      onToggleScreen={() =>
+        fireAndForget(run(call.toggleScreenShare), 'channel-call')
+      }
+      onLeave={() => fireAndForget(run(props.onLeave), 'channel-call')}
       menuOpen={menuOpen()}
       error={error()}
       audioSettings={
@@ -107,7 +110,10 @@ export function CallMediaControls(props: {
               onOpenChange={setMenuOpen}
               disabled={call.isConnecting()}
               onSelect={(id) =>
-                void run(() => call.switchAudioInput(id || 'default'))
+                fireAndForget(
+                  run(() => call.switchAudioInput(id || 'default')),
+                  'channel-call'
+                )
               }
             />
             <MediaDevicePicker
@@ -120,7 +126,10 @@ export function CallMediaControls(props: {
               unsupported={!('setSinkId' in HTMLMediaElement.prototype)}
               disabled={call.isConnecting()}
               onSelect={(id) =>
-                void run(() => call.switchAudioOutput(id || 'default'))
+                fireAndForget(
+                  run(() => call.switchAudioOutput(id || 'default')),
+                  'channel-call'
+                )
               }
             />
           </div>
@@ -129,7 +138,9 @@ export function CallMediaControls(props: {
             role="checkbox"
             aria-checked={call.isNoiseSuppressed()}
             disabled={call.isConnecting()}
-            onClick={() => void run(call.toggleNoiseSuppression)}
+            onClick={() =>
+              fireAndForget(run(call.toggleNoiseSuppression), 'channel-call')
+            }
             class="flex min-h-8 items-center gap-2 self-start rounded-lg px-2 text-sm text-ink-muted hover:bg-hover focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-50"
           >
             <InlineCheckbox checked={call.isNoiseSuppressed()} />
@@ -147,10 +158,13 @@ export function CallMediaControls(props: {
           onOpenChange={setMenuOpen}
           disabled={call.isConnecting()}
           onSelect={(id) =>
-            void run(() =>
-              call.switchVideoInput(
-                id || call.videoInputDevices()[0]?.deviceId || ''
-              )
+            fireAndForget(
+              run(() =>
+                call.switchVideoInput(
+                  id || call.videoInputDevices()[0]?.deviceId || ''
+                )
+              ),
+              'channel-call'
             )
           }
         />
@@ -158,10 +172,13 @@ export function CallMediaControls(props: {
       backgroundActive={call.backgroundEffect().type !== 'none'}
       backgroundDisabled={applyingBackground()}
       onToggleBackground={() =>
-        void applyBackground(
-          call.backgroundEffect().type === 'none'
-            ? lastBackground
-            : { type: 'none' }
+        fireAndForget(
+          applyBackground(
+            call.backgroundEffect().type === 'none'
+              ? lastBackground
+              : { type: 'none' }
+          ),
+          'channel-call'
         )
       }
       backgroundSettings={
@@ -171,8 +188,12 @@ export function CallMediaControls(props: {
           onOpenChange={setMenuOpen}
           disabled={call.isConnecting()}
           uploading={applyingBackground()}
-          onSelect={(effect) => void applyBackground(effect)}
-          onUpload={(file) => void applyBackground(file)}
+          onSelect={(effect) =>
+            fireAndForget(applyBackground(effect), 'channel-call')
+          }
+          onUpload={(file) =>
+            fireAndForget(applyBackground(file), 'channel-call')
+          }
         />
       }
     />

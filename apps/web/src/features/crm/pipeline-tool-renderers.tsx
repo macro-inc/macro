@@ -1,7 +1,9 @@
 import { BaseTool } from '@core/component/AI/component/tool/BaseTool';
 import { createToolRenderer } from '@core/component/AI/component/tool/ToolRenderer';
+import FileCsv from '@phosphor-icons/core/regular/file-csv.svg';
 import Kanban from '@phosphor-icons/core/regular/kanban.svg';
 import { queryClient } from '@queries/client';
+import { soupKeys } from '@queries/soup/keys';
 import { Show } from 'solid-js';
 import { pluralize } from './components/tool-companies';
 import {
@@ -15,6 +17,18 @@ import { crmKeys } from './queries/keys';
 /** New, renamed, re-shared or reshaped pipelines show in the sidebar now. */
 async function refreshPipelines() {
   await queryClient.invalidateQueries({ queryKey: crmKeys.pipelines._def });
+}
+
+/** Imported companies and entries show in listings and open pipelines now. */
+async function refreshImported() {
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: crmKeys._def }),
+    queryClient.invalidateQueries({ queryKey: soupKeys._def }),
+  ]);
+}
+
+function Summary(props: { text: string }) {
+  return <p class="px-2 py-1 text-xs text-ink-muted">{props.text}</p>;
 }
 
 function Status(props: { text?: string }) {
@@ -241,6 +255,86 @@ const editPipelineHandler = createToolRenderer({
   ),
 });
 
+const importCompaniesCsvHandler = createToolRenderer({
+  name: 'ImportCompaniesCsv',
+  handleResponse: refreshImported,
+  render: (ctx) => (
+    <BaseTool
+      icon={FileCsv}
+      renderContext={ctx.renderContext}
+      type="call"
+      response={
+        ctx.response ? <Summary text={ctx.response.data.summary} /> : undefined
+      }
+    >
+      <Label
+        status={
+          ctx.response
+            ? `${pluralize(ctx.response.data.created, 'company', 'companies')} created`
+            : undefined
+        }
+      >
+        {ctx.response
+          ? 'Imported companies from CSV'
+          : 'Import companies from CSV'}
+      </Label>
+    </BaseTool>
+  ),
+});
+
+const importPipelineCsvHandler = createToolRenderer({
+  name: 'ImportPipelineCsv',
+  handleResponse: refreshImported,
+  render: (ctx) => (
+    <BaseTool
+      icon={FileCsv}
+      renderContext={ctx.renderContext}
+      type="call"
+      response={
+        ctx.response ? <Summary text={ctx.response.data.summary} /> : undefined
+      }
+    >
+      <Label
+        status={
+          ctx.response
+            ? `${pluralize(ctx.response.data.added, 'entry', 'entries')} added`
+            : undefined
+        }
+      >
+        {ctx.response
+          ? `Imported CSV into ${ctx.response.data.pipelineName}`
+          : 'Import CSV into pipeline'}
+      </Label>
+    </BaseTool>
+  ),
+});
+
+const exportPipelineCsvHandler = createToolRenderer({
+  name: 'ExportPipelineCsv',
+  render: (ctx) => (
+    <BaseTool
+      icon={FileCsv}
+      renderContext={ctx.renderContext}
+      type="call"
+      response={
+        ctx.response ? <Summary text={ctx.response.data.summary} /> : undefined
+      }
+    >
+      <Label
+        status={
+          ctx.response
+            ? pluralize(ctx.response.data.rows, 'entry', 'entries')
+            : undefined
+        }
+      >
+        {ctx.response
+          ? `Exported ${ctx.response.data.fileName} to CSV`
+          : 'Export pipeline to CSV'}
+      </Label>
+    </BaseTool>
+  ),
+});
+
 export const pipelineToolHandlers = {
   ListPipelines: listPipelinesHandler,
   FindPipelineEntries: findPipelineEntriesHandler,
@@ -249,4 +343,7 @@ export const pipelineToolHandlers = {
   RemoveFromPipeline: removeFromPipelineHandler,
   CreatePipeline: createPipelineHandler,
   EditPipeline: editPipelineHandler,
+  ImportCompaniesCsv: importCompaniesCsvHandler,
+  ImportPipelineCsv: importPipelineCsvHandler,
+  ExportPipelineCsv: exportPipelineCsvHandler,
 };

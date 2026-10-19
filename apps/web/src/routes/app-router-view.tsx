@@ -30,6 +30,7 @@ import {
 } from '@components/app/split-layout/split-router/legacy-route';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { lazyNamed } from '@core/util/lazyNamed';
 import { isTauri } from '@core/util/platform';
 import { transformShortIdInUrlPathname } from '@core/util/url';
 import { lazy } from 'solid-js';
@@ -87,6 +88,7 @@ import {
   appRoute,
   authRoute,
   baseRoute,
+  bookingLinksRoute,
   bookingReceiptRoute,
   calendarSplitRoute,
   callDetailRoute,
@@ -158,6 +160,10 @@ const { Router, Route } = SplitRouter;
 
 // Views under appRoute load lazily (lazy-route-views.ts); auth and booking
 // pages render outside it and load with the app.
+const BookingLinksRouteView = lazyNamed(
+  () => import('@app/features/scheduling/route-views'),
+  'BookingLinksRouteView'
+);
 
 /** Debug views stay behind the registry's lazy import. */
 function debugView(componentId: string) {
@@ -370,6 +376,10 @@ export function AppRouterView() {
             component={ReviewsPrDetailRouteView}
           />
         </Route>
+        <Route
+          definition={bookingLinksRoute}
+          component={BookingLinksRouteView}
+        />
         <Route
           definition={calendarSplitRoute}
           component={CalendarRouteView}

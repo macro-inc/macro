@@ -44,6 +44,11 @@ milliseconds instead of waiting on container provisioning.
 
 - `cargo test -p agent_inmem` (`SQLX_OFFLINE` unset).
 
+## Gotchas
+
+- Replay tool calls using `_meta.macro.toolName`; ACP titles may be human-readable
+  MCP labels, so only use the title for older frames without tool-name metadata.
+
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`

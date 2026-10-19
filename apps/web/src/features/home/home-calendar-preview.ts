@@ -16,6 +16,7 @@ import {
   enableCalendarUi,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
+import { fireAndForget } from '@core/util/fireAndForget';
 import deepEqual from 'fast-deep-equal';
 import { createSignal } from 'solid-js';
 import { homeCalendarNavigation } from './home-preview-navigation';
@@ -47,9 +48,12 @@ export function useHomeCalendarPreview(withTab: WithTab) {
     // The same URL still needs to refocus the event in the inline calendar.
     if (alreadyOpen) setCalendarRefocus((count) => count + 1);
     else
-      navigate(
-        { route: homeCalendarRoute, params: navigation.params },
-        { search: withTab(navigation.search) }
+      fireAndForget(
+        navigate(
+          { route: homeCalendarRoute, params: navigation.params },
+          { search: withTab(navigation.search) }
+        ),
+        'home-view'
       );
     return true;
   };
