@@ -121,12 +121,19 @@ const fromBase64 = (text: string) =>
   Uint8Array.from(atob(text), (c) => c.charCodeAt(0));
 
 const errors: string[] = [];
+/** The last updates' tags and dirty counts, to see what loops. */
+const updateLog: string[] = [];
 const originalError = console.error;
 console.error = (...args: unknown[]) => {
   errors.push(
-    args
-      .map((a) => (a instanceof Error ? `${a.message}\n${a.stack}` : String(a)))
-      .join(' ')
+    (String(args[0]).includes('endlessly')
+      ? `${updateLog.slice(-120).join(' | ')}\n`
+      : '') +
+      args
+        .map((a) =>
+          a instanceof Error ? `${a.message}\n${a.stack}` : String(a)
+        )
+        .join(' ')
   );
   originalError(...args);
 };
@@ -448,6 +455,14 @@ function FuzzEditor(props: {
   const { editor, plugins, cleanup } = lexicalWrapper;
   onCleanup(cleanup);
   props.onEditor(editor);
+  onCleanup(
+    editor.registerUpdateListener(({ tags, dirtyElements, dirtyLeaves }) => {
+      updateLog.push(
+        `${[...tags].join(',') || '-'} e${dirtyElements.size} l${dirtyLeaves.size}`
+      );
+      if (updateLog.length > 300) updateLog.shift();
+    })
+  );
   const [editorFocus, setEditorFocus] = createSignal(false);
   editorFocusSignal(editor, setEditorFocus);
   const peerId = () => props.loroManager.peerIdStr;

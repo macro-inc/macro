@@ -11,10 +11,10 @@
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { type Browser, expect, type Page, test } from '@playwright/test';
-import { match } from 'ts-pattern';
+import { expect, test } from '@playwright/test';
 import type { FuzzBlock, FuzzCaret } from './fixture';
-import { type Action, type Block, PeerModel } from './model';
+import { END_MARKER, openPeers, type Peer, perform } from './harness';
+import type { Action, Block } from './model';
 import { Relay } from './relay';
 import { seededRandom } from './rng';
 
@@ -30,86 +30,11 @@ const SCRIPT: Record<string, Action[]> | undefined = process.env.FUZZ_SCRIPT
   ? JSON.parse(readFileSync(process.env.FUZZ_SCRIPT, 'utf8')).logs
   : undefined;
 const PEERS = SCRIPT ? Object.keys(SCRIPT).length : env('FUZZ_PEERS', 3);
-const NAMES = 'ABCDEFGH';
-const END_MARKER = 'The end.';
+/** Keep typing after a caret finding (the model is wrong from then on). */
+const CONTINUE = process.env.FUZZ_CONTINUE === '1';
 const REPORTS = fileURLToPath(new URL('./reports/', import.meta.url));
 
-type Peer = { name: string; page: Page; model: PeerModel; log: Action[] };
-
 type Finding = { kind: string; peer?: string; detail: unknown };
-
-async function openPeers(
-  browser: Browser,
-  relay: Relay,
-  seed: number
-): Promise<Peer[]> {
-  const peers: Peer[] = [];
-  for (let i = 0; i < PEERS; i++) {
-    const name = NAMES[i];
-    const context = await browser.newContext();
-    const page = await context.newPage();
-    if (process.env.FUZZ_DEBUG)
-      page.on('console', (m) =>
-        console.log(`[${name}] ${m.type()}: ${m.text()}`)
-      );
-    page.on('pageerror', (e) =>
-      console.log(`[${name}] pageerror: ${e.message}`)
-    );
-    await relay.attach(name, page);
-    peers.push({ name, page, model: new PeerModel(`Peer ${name}:`), log: [] });
-  }
-  // A last block nobody types into, so no region ends the document (where
-  // trailingParagraphPlugin adds a paragraph after a code block).
-  const markdown = [...peers.map((p) => p.model.marker), END_MARKER].join(
-    '\n\n'
-  );
-  await Promise.all(peers.map((p) => p.page.goto(`/?doc=fuzz-${seed}`)));
-  await peers[0].page.waitForFunction(
-    () => window.lexFuzz !== undefined,
-    undefined,
-    { timeout: 120_000 }
-  );
-  if (process.env.FUZZ_DEBUG) console.log('fixture loaded');
-  relay.initialize(
-    await peers[0].page.evaluate((md) => window.lexFuzz!.seed(md), markdown)
-  );
-  if (process.env.FUZZ_DEBUG) console.log('server seeded');
-  for (const peer of peers) {
-    await peer.page.waitForFunction(
-      () => window.lexFuzz?.ready() === true,
-      undefined,
-      { timeout: 30_000 }
-    );
-    const placed = await peer.page.evaluate(
-      (m) => window.lexFuzz!.placeAtEnd(m),
-      peer.model.marker
-    );
-    if (!placed) throw new Error(`${peer.name} could not find its marker`);
-  }
-  return peers;
-}
-
-async function perform(
-  peer: Peer,
-  relay: Relay,
-  action: Action
-): Promise<void> {
-  const keyboard = peer.page.keyboard;
-  await match(action)
-    .with({ kind: 'type' }, ({ text, delay }) => keyboard.type(text, { delay }))
-    .with({ kind: 'enter' }, () => keyboard.press('Enter'))
-    .with({ kind: 'linebreak' }, () => keyboard.press('Shift+Enter'))
-    .with({ kind: 'backspace' }, () => keyboard.press('Backspace'))
-    .with({ kind: 'shortcut' }, ({ prefix }) => keyboard.type(prefix))
-    .with({ kind: 'code' }, async () => {
-      await keyboard.type('```');
-      await keyboard.press('Enter');
-    })
-    .with({ kind: 'offline' }, async () => relay.hold(peer.name))
-    .with({ kind: 'online' }, async () => relay.release(peer.name))
-    .with({ kind: 'pause' }, ({ ms }) => peer.page.waitForTimeout(ms))
-    .exhaustive();
-}
 
 /** The blocks between this peer's marker and the next marker. */
 function region(blocks: FuzzBlock[], marker: string): FuzzBlock[] {
@@ -139,7 +64,7 @@ async function drive(
   const random = seededRandom(seed);
   const steps = script?.length ?? STEPS;
   for (let step = 0; step < steps; step++) {
-    if (findings.length > 0) return;
+    if (findings.length > 0 && !CONTINUE) return;
     const action = script ? script[step] : peer.model.generate(random);
     peer.log.push(action);
     await perform(peer, relay, action);
@@ -166,7 +91,7 @@ async function drive(
         peer: peer.name,
         detail: { step, action, caret, expected, region: peer.model.blocks },
       });
-      return;
+      if (!CONTINUE) return;
     }
   }
 }
@@ -287,11 +212,25 @@ async function check(peers: Peer[], relay: Relay): Promise<Finding[]> {
         peer: peer.name,
         detail: state.invariants,
       });
-    if (state.errors.length > 0)
+    // Lexical's cascade guard: it trips after ~100 keystrokes in a row
+    // (see the README), so it is its own kind rather than noise in the rest.
+    const cascade = state.errors.filter((e) =>
+      e.includes('endlessly enqueueing')
+    );
+    if (cascade.length > 0)
+      findings.push({
+        kind: 'lexical-cascade-guard',
+        peer: peer.name,
+        detail: cascade.length,
+      });
+    const errors = state.errors.filter(
+      (e) => !e.includes('endlessly enqueueing')
+    );
+    if (errors.length > 0)
       findings.push({
         kind: 'console-errors',
         peer: peer.name,
-        detail: state.errors,
+        detail: errors,
       });
     const jsonDifference = firstDifference(
       JSON.parse(state.editorJson),
@@ -314,7 +253,7 @@ for (let run = 0; run < RUNS; run++) {
   const seed = FIRST_SEED + run;
   test(`fuzz seed ${seed}`, async ({ browser }) => {
     const relay = new Relay(seededRandom(seed ^ 0x5eed), LATENCY_MS);
-    const peers = await openPeers(browser, relay, seed);
+    const peers = await openPeers(browser, relay, `fuzz-${seed}`, PEERS);
     const findings: Finding[] = [];
     await Promise.all(
       peers.map((peer, i) =>
