@@ -27,6 +27,9 @@ vi.mock('@ui', () => ({
   ),
   ActionDialogShell: (props: ParentProps) => <div>{props.children}</div>,
 }));
+vi.mock('@core/component/TopBar/ShareDialog', async () => ({
+  ShareDialog: (await import('@ui')).Dialog,
+}));
 const share = vi.hoisted(() => ({
   dismiss: vi.fn(),
   views: [] as { onFinish: () => void; onCancel: () => void }[],

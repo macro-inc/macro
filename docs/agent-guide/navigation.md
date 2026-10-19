@@ -974,11 +974,15 @@ reviewing dialogs against hosted data; confirmation performs real mutations.
 
 With two or more rows selected, Share in the row context menu, `Share items` in
 the selection toolbar's `Actions` menu, or `Share items` in the command menu
-opens `Share N items`. One item still opens the full Share dialog. Focus starts
-in `To: Email or group`, which lists people and channels with more than two
-members. With two or more people and no channel, `Send As Group Message` is on
-and sends one group message; turned off, each person gets their own message.
-`Recipients can` sets the access level for items you own. It starts at the
+opens `Share N items`. One item still opens the full Share dialog. `Share N
+items` takes the Share dialog's place, size, and form: an 800px card near the
+top of the window (a bottom drawer on phones) with the selected items under
+its title, then the To row, the optional message, and Cancel and Share. Focus
+starts in `To: Email or group`, which lists people and channels with more than
+two members. With two or more people and no channel, `Send As Group Message` is
+on and sends one group message; turned off, each person gets their own message.
+The access selector at the end of the To row (`can` and a level once a
+recipient is picked) sets the access level for items you own. It starts at the
 lowest default among them: Edit for markdown documents, Comment for PDFs, and
 View for anything else, ignoring view-only items such as email threads. A
 selection that includes a form offers no Comment level. Each recipient gets a
@@ -1000,7 +1004,7 @@ Email snoozing uses a command menu with quick or typed times, **If no reply** /
 **Regardless**, and **Remove reminder**. Saving waits for confirmation and shows
 retry errors inline. See [Email reminders](reminders.md).
 
-Action dialogs share `ActionDialogShell` presentation slots: the same capped selection badges for single and multiple items, compact heading and copy, prominent fields, and an attached footer. Rename, delete, move, bulk share, and shared confirmations use this layout. Bulk rename keeps bubble tabs and one first-item preview.
+Action dialogs share `ActionDialogShell` presentation slots: the same capped selection badges for single and multiple items, compact heading and copy, prominent fields, and an attached footer. Rename, delete, move, and shared confirmations use this layout. Bulk rename keeps bubble tabs and one first-item preview.
 
 The Move to folder picker uses the Drive sidebar’s folder rows: neutral icons, trailing expand/collapse buttons, and indented branch guides. Click a folder to select it; use the chevron to expand it. Search and arrow-key navigation remain available.
 

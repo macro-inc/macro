@@ -2,6 +2,7 @@ import {
   BulkShare,
   type BulkShareHandle,
 } from '@app/features/sharing/share-delivery/bulk-share';
+import { ShareDialog } from '@core/component/TopBar/ShareDialog';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import type { EntityData } from '@entity';
 import { ActionDialogShell, Dialog } from '@ui';
@@ -22,58 +23,61 @@ const BulkEditEntityModalContent = (props: {
   onPartialDelete?: PartialDeleteHandler;
 }) => {
   let share: BulkShareHandle | undefined;
+  const onOpenChange = (open: boolean) => {
+    if (!open) (share?.dismiss ?? props.onCancel)();
+  };
 
   return (
-    <Dialog
-      open={props.isOpen()}
-      position="center"
-      class={
-        props.view === 'moveToProject' || props.view === 'share'
-          ? 'w-120'
-          : 'w-110'
+    <Show
+      when={props.view === 'share'}
+      fallback={
+        <Dialog
+          open={props.isOpen()}
+          position="center"
+          class={props.view === 'moveToProject' ? 'w-120' : 'w-110'}
+          onOpenChange={onOpenChange}
+        >
+          <ActionDialogShell>
+            <Show when={props.view === 'rename'}>
+              <BulkRenameEntitiesView
+                entities={props.entities}
+                onFinish={props.onFinish}
+                onCancel={props.onCancel}
+                onError={props.onError}
+              />
+            </Show>
+            <Show when={props.view === 'moveToProject'}>
+              <BulkMoveToProjectView
+                entities={props.entities}
+                onFinish={props.onFinish}
+                onCancel={props.onCancel}
+                onError={props.onError}
+              />
+            </Show>
+            <Show when={props.view === 'delete'}>
+              <BulkDeleteView
+                onPartialDelete={props.onPartialDelete}
+                entities={props.entities}
+                onFinish={props.onFinish}
+                onCancel={props.onCancel}
+                onError={props.onError}
+              />
+            </Show>
+          </ActionDialogShell>
+        </Dialog>
       }
-      onOpenChange={(open) => {
-        if (!open) (share?.dismiss ?? props.onCancel)();
-      }}
     >
-      <ActionDialogShell>
-        <Show when={props.view === 'rename'}>
-          <BulkRenameEntitiesView
-            entities={props.entities}
-            onFinish={props.onFinish}
-            onCancel={props.onCancel}
-            onError={props.onError}
-          />
-        </Show>
-        <Show when={props.view === 'moveToProject'}>
-          <BulkMoveToProjectView
-            entities={props.entities}
-            onFinish={props.onFinish}
-            onCancel={props.onCancel}
-            onError={props.onError}
-          />
-        </Show>
-        <Show when={props.view === 'delete'}>
-          <BulkDeleteView
-            onPartialDelete={props.onPartialDelete}
-            entities={props.entities}
-            onFinish={props.onFinish}
-            onCancel={props.onCancel}
-            onError={props.onError}
-          />
-        </Show>
-        <Show when={props.view === 'share'}>
-          <BulkShare
-            entities={props.entities}
-            onFinish={props.onFinish}
-            onCancel={props.onCancel}
-            ref={(handle) => {
-              share = handle;
-            }}
-          />
-        </Show>
-      </ActionDialogShell>
-    </Dialog>
+      <ShareDialog open={props.isOpen()} onOpenChange={onOpenChange}>
+        <BulkShare
+          entities={props.entities}
+          onFinish={props.onFinish}
+          onCancel={props.onCancel}
+          ref={(handle) => {
+            share = handle;
+          }}
+        />
+      </ShareDialog>
+    </Show>
   );
 };
 

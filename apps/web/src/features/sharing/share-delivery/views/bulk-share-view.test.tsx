@@ -32,6 +32,12 @@ vi.mock('@core/hotkey/hotkeys', () => ({
   registerHotkey: vi.fn(),
   useHotkeyDOMScope: () => [() => {}, 'bulk-share'],
 }));
+vi.mock('@core/component/CustomScrollbar', () => ({
+  CustomScrollbar: () => null,
+}));
+vi.mock('@core/component/VerticalScrollIndicators', () => ({
+  ScrollIndicators: () => null,
+}));
 vi.mock('@ui', async () => {
   const Slot = (props: ParentProps) => <div>{props.children}</div>;
   return {
@@ -40,14 +46,9 @@ vi.mock('@ui', async () => {
       <button type="button" {...props} />
     ),
     Checkbox: (await import('@ui/components/Checkbox')).Checkbox,
+    Dialog: { Title: Slot },
     Hotkey: () => null,
-    ActionDialogShell: Object.assign(Slot, {
-      Body: Slot,
-      Header: Slot,
-      Title: Slot,
-      Description: Slot,
-      Footer: Slot,
-    }),
+    Panel: Object.assign(Slot, { Header: Slot, Body: Slot }),
   };
 });
 
@@ -97,6 +98,7 @@ function setup(
   const onSubmitted = vi.fn();
   const onFinish = vi.fn();
   const onCancel = vi.fn();
+  const focusMessage = vi.fn();
   let handle: BulkShareHandle | undefined;
   render(() => {
     let minted = 0;
@@ -116,7 +118,8 @@ function setup(
         count={items.length}
         selection={null}
         recipientField={null}
-        messageField={null}
+        messageField={<p>Optional message</p>}
+        focusMessage={focusMessage}
         recipientName={(recipient) => NAMES[recipient.id] ?? recipient.id}
         onSubmitted={onSubmitted}
         onFinish={onFinish}
@@ -135,6 +138,7 @@ function setup(
     onSubmitted,
     onFinish,
     onCancel,
+    focusMessage,
     dismiss: () => handle?.dismiss(),
   };
 }
@@ -328,5 +332,16 @@ describe('BulkShareView', () => {
     keyDownHandler?.(new KeyboardEvent('keydown'));
     await vi.waitFor(() => expect(onFinish).toHaveBeenCalledOnce());
     expect(context.send).toHaveBeenCalledOnce();
+  });
+
+  it('focuses the message when its area is clicked', () => {
+    const { focusMessage } = setup(
+      [item('document', 'Spec'), item('chat', 'Notes')],
+      [channel('general')]
+    );
+
+    fireEvent.click(screen.getByText('Optional message'));
+
+    expect(focusMessage).toHaveBeenCalledOnce();
   });
 });

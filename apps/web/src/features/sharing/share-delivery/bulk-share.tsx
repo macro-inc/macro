@@ -60,25 +60,22 @@ export function BulkShare(props: {
           setSelectedOptions={form.setRecipients}
           triedToSubmit={form.triedToSubmit}
           triggerMode="input"
-          class="rounded-[10px] border border-edge-frame bg-control p-1"
           focusOnMount
+          horizontalScroll
+          hideBorder
           disabled={form.locked()}
         />
       }
       messageField={
-        <div
-          class="min-h-20 max-h-40 overflow-y-auto rounded-[10px] border border-edge-frame bg-control px-2.5 py-2 text-sm"
-          onClick={() => editor.controls.focus()}
-        >
-          <MarkdownShell
-            config={editor}
-            placeholder="Optional message"
-            portalScope="local"
-            class="text-sm"
-            disabled={form.locked()}
-          />
-        </div>
+        <MarkdownShell
+          config={editor}
+          placeholder="Optional message"
+          portalScope="local"
+          class="text-sm"
+          disabled={form.locked()}
+        />
       }
+      focusMessage={() => editor.controls.focus()}
       recipientName={recipientName}
       onSubmitted={refetchDocumentShareButtonResource}
       onFinish={props.onFinish}
