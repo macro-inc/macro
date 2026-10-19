@@ -3,7 +3,7 @@ import { isShareableEntity } from '@app/features/sharing/global-share-modal/shar
 import { createConfiguredChannelMarkdownEditor } from '@channel/Input';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
-import { RecipientSelector } from '@core/component/RecipientSelector';
+import { ShareRecipientField } from '@core/component/ShareRecipientField';
 import { refetchDocumentShareButtonResource } from '@core/component/TopBar/ShareButton';
 import { itemToBlockName } from '@core/constant/allBlocks';
 import { useUserId } from '@core/context/user';
@@ -52,20 +52,7 @@ export function BulkShare(props: {
       form={form}
       count={items().length}
       selection={<EntityActionSelection entities={props.entities} />}
-      recipientField={
-        <RecipientSelector<'user' | 'contact' | 'channel'>
-          placeholder="To: Email or group"
-          options={options}
-          selectedOptions={form.recipients()}
-          setSelectedOptions={form.setRecipients}
-          triedToSubmit={form.triedToSubmit}
-          triggerMode="input"
-          focusOnMount
-          horizontalScroll
-          hideBorder
-          disabled={form.locked()}
-        />
-      }
+      recipientField={<ShareRecipientField form={form} options={options} />}
       messageField={
         <MarkdownShell
           config={editor}

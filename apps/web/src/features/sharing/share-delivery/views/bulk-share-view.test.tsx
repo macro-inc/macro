@@ -2,7 +2,7 @@ import { registerHotkey } from '@core/hotkey/hotkeys';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { err, ok } from 'neverthrow';
 import type { JSX, ParentProps } from 'solid-js';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ShareDeliveryContext } from '../context/share-delivery-context';
 import type { PickedRecipient } from '../core/delivery-plan';
 import type {
@@ -13,8 +13,9 @@ import type {
 import { createShareForm } from '../primitives/create-share-form';
 import { type BulkShareHandle, BulkShareView } from './bulk-share-view';
 
-const mocks = vi.hoisted(() => ({ toastSuccess: vi.fn() }));
+const mocks = vi.hoisted(() => ({ toastSuccess: vi.fn(), mobile: false }));
 
+vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => mocks.mobile }));
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { success: mocks.toastSuccess },
 }));
@@ -150,7 +151,11 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe('BulkShareView', () => {
+describe.each([false, true])('BulkShareView (mobile: %s)', (mobile) => {
+  beforeEach(() => {
+    mocks.mobile = mobile;
+  });
+
   it('names one recipient in the success toast and finishes', async () => {
     const { onFinish, opened } = setup(
       [item('document', 'Spec'), item('chat', 'Notes')],
@@ -225,7 +230,7 @@ describe('BulkShareView', () => {
   });
 
   it('cancels when closed with nothing delivered', async () => {
-    const { failingChannels, onFinish, onCancel } = setup(
+    const { failingChannels, onFinish, onCancel, dismiss } = setup(
       [item('document', 'Spec'), item('chat', 'Notes')],
       [channel('general')]
     );
@@ -233,7 +238,8 @@ describe('BulkShareView', () => {
 
     fireEvent.click(button('Share'));
     await screen.findByText('General did not get Spec and Notes.');
-    fireEvent.click(button('Close'));
+    if (mobile) dismiss();
+    else fireEvent.click(button('Close'));
 
     expect(onCancel).toHaveBeenCalledOnce();
     expect(onFinish).not.toHaveBeenCalled();
@@ -343,5 +349,25 @@ describe('BulkShareView', () => {
     fireEvent.click(screen.getByText('Optional message'));
 
     expect(focusMessage).toHaveBeenCalledOnce();
+  });
+});
+
+describe('BulkShareView on phones', () => {
+  beforeEach(() => {
+    mocks.mobile = true;
+  });
+
+  it('gives the access level its own row and leaves closing to the drawer', async () => {
+    const { onFinish } = setup(
+      [item('document', 'Spec'), item('chat', 'Notes')],
+      [channel('general')]
+    );
+
+    expect(screen.getByText('Access:')).toBeTruthy();
+    expect(screen.queryByText('can')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull();
+
+    fireEvent.click(button('Share'));
+    await vi.waitFor(() => expect(onFinish).toHaveBeenCalledOnce());
   });
 });

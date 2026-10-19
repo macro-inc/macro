@@ -1,11 +1,11 @@
 import { isMobile } from '@core/mobile/isMobile';
 import { Dialog as KobalteDialog } from '@kobalte/core/dialog';
-import { Dialog } from '@ui';
 import { type JSX, Show } from 'solid-js';
+import { ShareDrawer } from './ShareDrawer';
 
 /**
  * The Share menu's frame: on desktop, a column of cards anchored near the top
- * of the window; on phones, the shared bottom drawer.
+ * of the window; on phones, the Share drawer.
  */
 export function ShareDialog(props: {
   open: boolean;
@@ -16,9 +16,9 @@ export function ShareDialog(props: {
     <Show
       when={!isMobile()}
       fallback={
-        <Dialog open={props.open} onOpenChange={props.onOpenChange}>
+        <ShareDrawer open={props.open} onOpenChange={props.onOpenChange}>
           {props.children}
-        </Dialog>
+        </ShareDrawer>
       }
     >
       <KobalteDialog onOpenChange={props.onOpenChange} open={props.open}>

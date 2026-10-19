@@ -1,8 +1,16 @@
 import { SendAsGroupToggle } from '@core/component/SendAsGroupToggle';
-import { ShareComposeLayout } from '@core/component/ShareComposeLayout';
+import {
+  MobileShareComposeLayout,
+  ShareComposeLayout,
+} from '@core/component/ShareComposeLayout';
 import { toast } from '@core/component/Toast/Toast';
 import { ShareOptions } from '@core/component/TopBar/ShareButton';
+import {
+  ShareDrawerAction,
+  ShareDrawerHeader,
+} from '@core/component/TopBar/ShareDrawer';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { isMobile } from '@core/mobile/isMobile';
 import PaperPlaneTilt from '@phosphor/paper-plane-tilt.svg';
 import { Button, Dialog, Hotkey, Panel } from '@ui';
 import { type JSX, onMount, Show } from 'solid-js';
@@ -29,7 +37,6 @@ export function BulkShareView<Recipient extends PickedRecipient>(props: {
   onCancel: () => void;
   ref?: (handle: BulkShareHandle) => void;
 }) {
-  let root!: HTMLDivElement;
   const [attachHotkeys, scopeId] = useHotkeyDOMScope('bulk-share', true);
   const report = () =>
     match(props.form.status())
@@ -39,8 +46,11 @@ export function BulkShareView<Recipient extends PickedRecipient>(props: {
       .exhaustive();
   const sending = () => props.form.status().t === 'sending';
   const settled = () => report()?.retryable === false;
+  const canShare = () =>
+    props.form.recipients().length > 0 && props.form.sendable() && !sending();
   const dismiss = () =>
     report()?.anyDelivered ? props.onFinish() : props.onCancel();
+  const title = () => `Share ${props.count} items`;
 
   const targetName = (target: ShareTarget) => {
     const name = (id: string) => {
@@ -71,6 +81,13 @@ export function BulkShareView<Recipient extends PickedRecipient>(props: {
     props.onFinish();
   }
 
+  const send = () => (settled() ? props.onFinish() : void share());
+
+  const setLevel = (accessLevel: string | null) => {
+    const parsed = accessLevel && parseChannelAccessLevel(accessLevel);
+    if (parsed) props.form.setLevel(parsed);
+  };
+
   registerHotkey({
     hotkey: 'cmd+enter',
     scopeId,
@@ -78,115 +95,152 @@ export function BulkShareView<Recipient extends PickedRecipient>(props: {
     runWithInputFocused: true,
     keyDownHandler: (event) => {
       if (event?.repeat) return true;
-      if (settled()) props.onFinish();
-      else void share();
+      send();
       return true;
     },
   });
 
-  onMount(() => {
-    attachHotkeys(root);
-    props.ref?.({ dismiss });
-  });
+  onMount(() => props.ref?.({ dismiss }));
+
+  const status = () => (
+    <Show
+      when={report()}
+      fallback={<ShareNotices notices={props.form.notices()} />}
+    >
+      {(outcome) => (
+        <ShareReport outcome={outcome()} recipientName={targetName} />
+      )}
+    </Show>
+  );
+  const groupToggle = () => (
+    <Show when={props.form.group()}>
+      {(group) => (
+        <SendAsGroupToggle
+          on={group().on}
+          locked={props.form.locked()}
+          onChange={props.form.setGroup}
+        />
+      )}
+    </Show>
+  );
 
   return (
-    <Panel depth={2} class="rounded-xl bg-dialog">
-      <Panel.Header class="px-4">
-        <Dialog.Title class="min-w-0 truncate text-sm font-medium">
-          {`Share ${props.count} items`}
-        </Dialog.Title>
-      </Panel.Header>
-      <Panel.Body>
-        <div ref={root}>
-          <div class="border-b border-edge-muted px-4 py-2">
-            {props.selection}
-          </div>
-          <ShareComposeLayout
-            recipients={props.recipientField}
-            access={
-              <Show when={props.form.level()}>
-                {(level) => (
-                  <>
-                    <Show when={props.form.recipients().length > 0}>
-                      <span class="text-sm text-ink-extra-muted">can</span>
-                    </Show>
+    <Show
+      when={!isMobile()}
+      fallback={
+        <>
+          <ShareDrawerHeader
+            action={
+              <ShareDrawerAction
+                disabled={!settled() && !canShare()}
+                onClick={send}
+              >
+                {settled() ? 'Done' : report() ? 'Retry' : 'Share'}
+              </ShareDrawerAction>
+            }
+          >
+            <span class="truncate">{title()}</span>
+          </ShareDrawerHeader>
+          <div ref={attachHotkeys}>
+            <div class="border-b border-edge-muted px-3 pb-2 mb-2">
+              {props.selection}
+            </div>
+            <MobileShareComposeLayout
+              recipients={props.recipientField}
+              group={groupToggle()}
+              access={
+                <Show when={props.form.level()}>
+                  {(level) => (
                     <ShareOptions
                       allowedAccessLevels={level().options}
                       permissions={level().value}
-                      setPermissions={(accessLevel) => {
-                        const parsed =
-                          accessLevel && parseChannelAccessLevel(accessLevel);
-                        if (parsed) props.form.setLevel(parsed);
-                      }}
+                      setPermissions={setLevel}
                       label="Permission"
                       hideNoAccess
-                      noBorder
                       disabled={props.form.locked()}
                     />
-                  </>
-                )}
-              </Show>
-            }
-            message={props.messageField}
-            focusMessage={props.focusMessage}
-            status={
-              <Show
-                when={report()}
-                fallback={<ShareNotices notices={props.form.notices()} />}
-              >
-                {(outcome) => (
-                  <ShareReport outcome={outcome()} recipientName={targetName} />
-                )}
-              </Show>
-            }
-            group={
-              <Show when={props.form.group()}>
-                {(group) => (
-                  <SendAsGroupToggle
-                    on={group().on}
-                    locked={props.form.locked()}
-                    onChange={props.form.setGroup}
-                  />
-                )}
-              </Show>
-            }
-            actions={
-              <Show
-                when={!settled()}
-                fallback={
-                  <Button variant="strong" depth={3} onClick={props.onFinish}>
-                    Done
+                  )}
+                </Show>
+              }
+              status={status()}
+              message={props.messageField}
+              focusMessage={props.focusMessage}
+            />
+          </div>
+        </>
+      }
+    >
+      <Panel depth={2} class="rounded-xl bg-dialog">
+        <Panel.Header class="px-4">
+          <Dialog.Title class="min-w-0 truncate text-sm font-medium">
+            {title()}
+          </Dialog.Title>
+        </Panel.Header>
+        <Panel.Body>
+          <div ref={attachHotkeys}>
+            <div class="border-b border-edge-muted px-4 py-2">
+              {props.selection}
+            </div>
+            <ShareComposeLayout
+              recipients={props.recipientField}
+              access={
+                <Show when={props.form.level()}>
+                  {(level) => (
+                    <>
+                      <Show when={props.form.recipients().length > 0}>
+                        <span class="text-sm text-ink-extra-muted">can</span>
+                      </Show>
+                      <ShareOptions
+                        allowedAccessLevels={level().options}
+                        permissions={level().value}
+                        setPermissions={setLevel}
+                        label="Permission"
+                        hideNoAccess
+                        noBorder
+                        disabled={props.form.locked()}
+                      />
+                    </>
+                  )}
+                </Show>
+              }
+              message={props.messageField}
+              focusMessage={props.focusMessage}
+              status={status()}
+              group={groupToggle()}
+              actions={
+                <Show
+                  when={!settled()}
+                  fallback={
+                    <Button variant="strong" depth={3} onClick={props.onFinish}>
+                      Done
+                      <Hotkey shortcut="cmd+enter" theme="current" />
+                    </Button>
+                  }
+                >
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    class="text-ink-extra-muted"
+                    onClick={dismiss}
+                  >
+                    {report() ? 'Close' : 'Cancel'}
+                  </Button>
+                  <Button
+                    variant="strong"
+                    depth={3}
+                    disabled={!canShare()}
+                    onClick={() => void share()}
+                  >
+                    <PaperPlaneTilt class="size-4" />
+                    {report() ? 'Retry' : 'Share'}
                     <Hotkey shortcut="cmd+enter" theme="current" />
                   </Button>
-                }
-              >
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  class="text-ink-extra-muted"
-                  onClick={dismiss}
-                >
-                  {report() ? 'Close' : 'Cancel'}
-                </Button>
-                <Button
-                  variant="strong"
-                  depth={3}
-                  disabled={
-                    props.form.recipients().length === 0 ||
-                    !props.form.sendable() ||
-                    sending()
-                  }
-                  onClick={() => void share()}
-                >
-                  <PaperPlaneTilt class="size-4" />
-                  {report() ? 'Retry' : 'Share'}
-                  <Hotkey shortcut="cmd+enter" theme="current" />
-                </Button>
-              </Show>
-            }
-          />
-        </div>
-      </Panel.Body>
-    </Panel>
+                </Show>
+              }
+            />
+          </div>
+        </Panel.Body>
+      </Panel>
+    </Show>
   );
 }
