@@ -21,6 +21,7 @@ import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel
 import { Button, Hotkey } from '@ui';
 import { type Accessor, createSignal, onMount, Show } from 'solid-js';
 import { SendAsGroupToggle } from './SendAsGroupToggle';
+import { ShareComposeLayout } from './ShareComposeLayout';
 import { toast } from './Toast/Toast';
 import { ScrollIndicators } from './VerticalScrollIndicators';
 
@@ -200,9 +201,8 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
         }
       >
         <Show when={isAuthenticated()}>
-          {/* Row 1: Recipient input + ShareOptions */}
-          <div class="flex items-center bg-surface pr-2">
-            <div class="min-w-0 flex-1 min-h-11">
+          <ShareComposeLayout
+            recipients={
               <RecipientSelector<'user' | 'contact' | 'channel'>
                 placeholder="To: Email or group"
                 setSelectedOptions={form.setRecipients}
@@ -215,52 +215,41 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
                 hideBorder
                 disabled={form.locked()}
               />
-            </div>
-            <Show when={form.level()}>
-              {(level) => (
-                <div class="shrink-0 pr-2 flex items-center gap-2">
-                  <Show when={form.recipients().length > 0}>
-                    <span class="text-sm text-ink-extra-muted">can</span>
-                  </Show>
-                  <ShareOptions
-                    editPermissionEnabled={props.editPermissionEnabled}
-                    allowedAccessLevels={level().options}
-                    setPermissions={(accessLevel) =>
-                      pickLevel(form, accessLevel)
-                    }
-                    permissions={level().value}
-                    label="Permission"
-                    hideNoAccess
-                    noBorder
-                    disabled={form.locked()}
-                  />
-                </div>
-              )}
-            </Show>
-          </div>
-
-          {/* Row 2: Optional message */}
-          <div class="grow shrink min-h-0 flex flex-col w-full border-t border-edge-muted">
-            <div class="relative grow shrink min-h-0 flex flex-col">
-              <ScrollIndicators scrollRef={mdScrollRef} noBorderStart />
-              <CustomScrollbar scrollContainer={mdScrollRef} />
-              <div
-                class="grow shrink min-h-20 max-h-40 overflow-y-auto scrollbar-hidden px-4 py-1.5 w-full text-sm"
-                onClick={() => markdownEditor.controls.focus()}
-                ref={setMdScrollRef}
-              >
-                <MarkdownShell
-                  config={markdownEditor}
-                  placeholder="Optional message"
-                  portalScope="local"
-                  class="text-sm"
-                  disabled={form.locked()}
-                />
-              </div>
-            </div>
-
-            {/* Row 3: Send As Group (optional) + Cancel + Send */}
-            <div class="shrink-0 flex w-full items-center px-4 py-4 gap-3 flex-wrap">
+            }
+            access={
+              <Show when={form.level()}>
+                {(level) => (
+                  <>
+                    <Show when={form.recipients().length > 0}>
+                      <span class="text-sm text-ink-extra-muted">can</span>
+                    </Show>
+                    <ShareOptions
+                      editPermissionEnabled={props.editPermissionEnabled}
+                      allowedAccessLevels={level().options}
+                      setPermissions={(accessLevel) =>
+                        pickLevel(form, accessLevel)
+                      }
+                      permissions={level().value}
+                      label="Permission"
+                      hideNoAccess
+                      noBorder
+                      disabled={form.locked()}
+                    />
+                  </>
+                )}
+              </Show>
+            }
+            message={
+              <MarkdownShell
+                config={markdownEditor}
+                placeholder="Optional message"
+                portalScope="local"
+                class="text-sm"
+                disabled={form.locked()}
+              />
+            }
+            focusMessage={() => markdownEditor.controls.focus()}
+            group={
               <Show when={form.group()}>
                 {(group) => (
                   <SendAsGroupToggle
@@ -270,8 +259,9 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
                   />
                 )}
               </Show>
-
-              <div class="flex flex-auto items-center justify-end gap-2">
+            }
+            actions={
+              <>
                 <Button
                   variant="ghost"
                   size="sm"
@@ -293,9 +283,9 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
                   Share
                   <Hotkey shortcut="cmd+enter" theme="current" />
                 </Button>
-              </div>
-            </div>
-          </div>
+              </>
+            }
+          />
         </Show>
       </Show>
     </div>
