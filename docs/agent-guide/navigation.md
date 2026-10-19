@@ -997,8 +997,8 @@ share also clears the selection, because someone already has the items. A share
 to one channel ends with a `Shared with <channel>` toast and `View in channel`;
 several recipients get `Shared with N recipients`. Finishing clears the
 selection and returns focus to the row. `Cancel` keeps the selection. Before
-the first Share, Escape cancels too, but not while focus is in the To field;
-press Tab first.
+the first Share, Escape cancels too, but not while focus is in the To field or
+the message, as in the Share dialog; press Tab in the To field first.
 
 Email snoozing uses a command menu with quick or typed times, **If no reply** /
 **Regardless**, and **Remove reminder**. Saving waits for confirmation and shows
