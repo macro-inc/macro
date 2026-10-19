@@ -13,6 +13,7 @@ import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
 import type { CollabSurfaceLoroManager } from '@core/collab-surface/createCollabSurface';
 import { UserContextProvider } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { $isCodeNode } from '@lexical/code';
 import { createHeadlessEditor } from '@lexical/headless';
 import { $isListItemNode, $isListNode } from '@lexical/list';
@@ -25,6 +26,7 @@ import { $findMatchingParent } from '@lexical/utils';
 import { createLoroManager } from '@macro-inc/collaboration/collab/manager';
 import {
   type LiveSyncSource,
+  SyncError,
   type SyncSourceEvent,
   SyncSourceStatus,
 } from '@macro-inc/collaboration/collab/source';
@@ -51,7 +53,7 @@ import {
   type SerializedEditorState,
 } from 'lexical';
 import type { VersionVector } from 'loro-crdt';
-import { errAsync, okAsync } from 'neverthrow';
+import { okAsync, ResultAsync } from 'neverthrow';
 import {
   type Accessor,
   createEffect,
@@ -330,23 +332,21 @@ function Peer() {
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
-    pushUpdate: (updates) =>
-      Promise.all(updates.map((u) => window.fuzzPush(toBase64(u)))).then(
-        (acks) => acks.every(Boolean)
-      ),
+    pushUpdate: async (updates) => {
+      const acks = await Promise.all(
+        updates.map((u) => window.fuzzPush(toBase64(u)))
+      );
+      return acks.every(Boolean);
+    },
     pushAwareness: (value) => {
-      void window.fuzzAwareness(toBase64(value));
+      fireAndForget(window.fuzzAwareness(toBase64(value)), 'lexical-fuzz');
     },
     registerPeerId: () => {},
     requestUpdatesSince: (version: VersionVector) =>
-      okAsync(undefined).andThen(() =>
-        window
-          .fuzzSince(toBase64(version.encode()))
-          .then((b) => okAsync(fromBase64(b)))
-          .catch((e: unknown) =>
-            errAsync({ type: 'unknown' as const, error: e as Error })
-          )
-      ),
+      ResultAsync.fromPromise(
+        window.fuzzSince(toBase64(version.encode())),
+        (error): SyncError => SyncError.unknown(new Error(String(error)))
+      ).map(fromBase64),
     requestSnapshot: () => okAsync(new Uint8Array()),
     reconnect: () => {},
     cleanup: () => listeners.clear(),
@@ -355,10 +355,12 @@ function Peer() {
   const [ready, setReady] = createSignal(false);
   let editor: LexicalEditor | undefined;
 
-  void window.fuzzConnect().then(async (snapshot) => {
+  const connect = async () => {
+    const snapshot = await window.fuzzConnect();
     await loroManager.ingest({ kind: 'dss', snapshot: fromBase64(snapshot) });
     setSyncSource(source);
-  });
+  };
+  fireAndForget(connect(), 'lexical-fuzz');
 
   const loroState = () =>
     loroManager.doc.toJSON() as unknown as SerializedEditorState;

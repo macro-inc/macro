@@ -109,12 +109,14 @@ export class Relay {
     if (link.pumping || link.held) return;
     link.pumping = true;
     const delay = this.random.int(this.maxLatencyMs + 1);
-    setTimeout(() => {
-      this.pump(link).finally(() => {
+    setTimeout(async () => {
+      try {
+        await this.pump(link);
+      } finally {
         link.pumping = false;
         if (!link.held && (link.up.length > 0 || link.down.length > 0))
           this.schedule(link);
-      });
+      }
     }, delay);
   }
 
