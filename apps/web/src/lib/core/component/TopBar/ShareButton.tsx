@@ -28,7 +28,6 @@ import {
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useChannelParticipants } from '@channel/use-channel-participants';
 import { HeaderActionButton } from '@components/app/HeaderActionButton';
-import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { useIsAuthenticated } from '@core/auth';
 import {
@@ -151,7 +150,11 @@ import {
   teamShareScopeOptionsForItem,
 } from './linkShare';
 import { ShareDialog } from './ShareDialog';
-import { getShareDrawerRecipientInput } from './ShareDrawer';
+import {
+  ShareDrawer,
+  ShareDrawerAction,
+  ShareDrawerHeader,
+} from './ShareDrawer';
 
 false && clickOutside;
 
@@ -590,217 +593,190 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
   }>();
 
   return (
-    <MobileDrawer
-      open={props.isOpen}
-      onOpenChange={wrappedSetOpen}
-      closeOnOutsidePointerStrategy="pointerdown"
-      initialFocusEl={getShareDrawerRecipientInput() ?? undefined}
-    >
-      <MobileDrawer.Portal>
-        <MobileDrawer.Overlay />
-        <MobileDrawer.Content
-          aria-label="Share"
-          class="h-[80vh] overflow-y-auto"
-        >
-          <div class="flex justify-center pt-3 pb-1 shrink-0">
-            <div class="w-10 h-1 rounded-full bg-edge-muted" />
+    <ShareDrawer open={props.isOpen} onOpenChange={wrappedSetOpen}>
+      <ShareDrawerHeader
+        action={
+          <Show when={effectiveActiveTab() === 'share' && props.canForward}>
+            <ShareDrawerAction
+              disabled={(forwardRef()?.getSelectedOptions().length ?? 0) === 0}
+              onClick={() => forwardRef()?.handleSubmit()}
+            >
+              Share
+            </ShareDrawerAction>
+          </Show>
+        }
+      >
+        <EntityIcon targetType={props.blockAlias} size="sm" class="shrink-0" />
+        <span class="truncate">{props.name}</span>
+      </ShareDrawerHeader>
+      <div class="shrink-0 h-9 border-b border-edge-muted px-3 mb-2">
+        <Tabs
+          list={mobileTabs()}
+          value={effectiveActiveTab()}
+          onChange={setActiveTab}
+          indicatorPosition="bottom"
+        />
+      </div>
+      {/* Share tab: always mounted to preserve input state */}
+      <div
+        style={{
+          display: effectiveActiveTab() === 'share' ? undefined : 'none',
+        }}
+      >
+        <Show when={!props.canForward}>
+          <p class="px-4 py-3 text-sm text-ink-muted">
+            {restrictedShareDescription(props.itemType)}
+          </p>
+        </Show>
+        <Show when={props.canForward}>
+          <ForwardToChannel
+            item={props.shareItem}
+            editPermissionEnabled={props.editPermissionEnabled}
+            ref={(handle) => setForwardRef(handle)}
+            onSubmit={() => props.setIsOpen(false)}
+            refetch={props.refetch}
+          />
+        </Show>
+        <Show when={!props.canForward}>
+          <div class="px-4 py-3">
+            <Button variant="outline" onClick={props.copyLink}>
+              <CopyIcon class="size-4" />
+              <span>Copy Link</span>
+            </Button>
           </div>
-          <div class="shrink-0 flex items-center justify-between px-3 text-sm font-medium text-ink min-h-11">
-            <div class="flex items-center gap-1.5 flex-1 min-w-0">
-              <EntityIcon
-                targetType={props.blockAlias}
-                size="sm"
-                class="shrink-0"
-              />
-              <span class="truncate">{props.name}</span>
-            </div>
-            <Show when={effectiveActiveTab() === 'share' && props.canForward}>
-              <Button
-                variant="ghost"
-                size="sm"
-                class="shrink-0 ml-2 pl-2 disabled:text-ink-muted text-accent"
-                disabled={
-                  (forwardRef()?.getSelectedOptions().length ?? 0) === 0
-                }
-                onClick={() => forwardRef()?.handleSubmit()}
-              >
-                Share
-              </Button>
-            </Show>
-          </div>
-          <div class="shrink-0 h-9 border-b border-edge-muted px-3 mb-2">
-            <Tabs
-              list={mobileTabs()}
-              value={effectiveActiveTab()}
-              onChange={setActiveTab}
-              indicatorPosition="bottom"
-            />
-          </div>
-          {/* Share tab: always mounted to preserve input state */}
-          <div
-            style={{
-              display: effectiveActiveTab() === 'share' ? undefined : 'none',
-            }}
-          >
-            <Show when={!props.canForward}>
-              <p class="px-4 py-3 text-sm text-ink-muted">
-                {restrictedShareDescription(props.itemType)}
-              </p>
-            </Show>
-            <Show when={props.canForward}>
-              <ForwardToChannel
-                item={props.shareItem}
-                editPermissionEnabled={props.editPermissionEnabled}
-                ref={(handle) => setForwardRef(handle)}
-                onSubmit={() => props.setIsOpen(false)}
-                refetch={props.refetch}
-              />
-            </Show>
-            <Show when={!props.canForward}>
-              <div class="px-4 py-3">
-                <Button variant="outline" onClick={props.copyLink}>
-                  <CopyIcon class="size-4" />
-                  <span>Copy Link</span>
-                </Button>
+        </Show>
+      </div>
+      <Show when={effectiveActiveTab() === 'people'}>
+        <AccessRequestError source={props.requests} />
+        <PermissionRequestsView source={props.requests} />
+        <div class="grid gap-3 text-ink text-sm select-none py-3 px-4">
+          <Show when={props.owner}>
+            <div class="flex justify-between">
+              <div class="flex items-center gap-2 overflow-hidden font-medium">
+                <OwnerLabel ownerId={props.owner} viewerLabel="Me" />
               </div>
-            </Show>
-          </div>
-          <Show when={effectiveActiveTab() === 'people'}>
-            <AccessRequestError source={props.requests} />
-            <PermissionRequestsView source={props.requests} />
-            <div class="grid gap-3 text-ink text-sm select-none py-3 px-4">
-              <Show when={props.owner}>
-                <div class="flex justify-between">
-                  <div class="flex items-center gap-2 overflow-hidden font-medium">
-                    <OwnerLabel ownerId={props.owner} viewerLabel="Me" />
-                  </div>
-                  <div class="flex items-center">
-                    <div class="font-medium text-ink-muted text-xs">Owner</div>
-                  </div>
-                </div>
-              </Show>
-              <RequestAccessView
-                source={props.requests}
-                allowedLevels={props.requestLevels}
-              />
-              <DirectAccessView
-                source={props.requests}
-                exclude={props.directPeopleIds}
-              />
-              <Dynamic component={props.people} />
-              <For each={props.recipients || []}>
-                {(recipient) => (
-                  <div class="flex justify-between">
-                    <div
-                      class="flex items-center gap-2 overflow-hidden"
-                      onClick={() =>
-                        props.navigateToChannel(recipient.channel_id)
+              <div class="flex items-center">
+                <div class="font-medium text-ink-muted text-xs">Owner</div>
+              </div>
+            </div>
+          </Show>
+          <RequestAccessView
+            source={props.requests}
+            allowedLevels={props.requestLevels}
+          />
+          <DirectAccessView
+            source={props.requests}
+            exclude={props.directPeopleIds}
+          />
+          <Dynamic component={props.people} />
+          <For each={props.recipients || []}>
+            {(recipient) => (
+              <div class="flex justify-between">
+                <div
+                  class="flex items-center gap-2 overflow-hidden"
+                  onClick={() => props.navigateToChannel(recipient.channel_id)}
+                >
+                  <Switch fallback={<UsersIcon class="shrink-0 size-4" />}>
+                    <Match
+                      when={
+                        props.channelNameMap.get(recipient.channel_id)?.type ===
+                        'direct_message'
                       }
                     >
-                      <Switch fallback={<UsersIcon class="shrink-0 size-4" />}>
-                        <Match
-                          when={
-                            props.channelNameMap.get(recipient.channel_id)
-                              ?.type === 'direct_message'
-                          }
-                        >
-                          <DmRecipientIcon channelId={recipient.channel_id} />
-                        </Match>
-                        <Match
-                          when={props.channelNameMap.get(recipient.channel_id)}
-                        >
-                          <UsersIcon class="shrink-0 size-4" />
-                        </Match>
-                      </Switch>
-                      <div class="font-medium truncate">
-                        <Show
-                          when={
-                            props.channelNameMap.get(recipient.channel_id)
-                              ?.type !== 'direct_message'
-                          }
-                          fallback={
-                            props.channelNameMap.get(recipient.channel_id)
-                              ?.name || 'Conversation'
-                          }
-                        >
-                          <GroupChannelLabel
-                            channelId={recipient.channel_id}
-                            fallbackName={
-                              props.channelNameMap.get(recipient.channel_id)
-                                ?.name || 'Conversation'
-                            }
-                          />
-                        </Show>
-                      </div>
-                      <Show when={props.itemType === 'form'}>
-                        <span class="shrink-0 text-xs text-ink-muted">
-                          Can respond (channel)
-                        </span>
-                      </Show>
-                    </div>
-                    <div class="flex items-center">
-                      <ShareOptions
-                        editPermissionEnabled={props.editPermissionEnabled}
-                        allowedAccessLevels={shareLevelsFor(props.itemType)}
-                        disabled={props.userPermissions !== Permissions.OWNER}
-                        permissions={recipient.access_level}
-                        setPermissions={(accessLevel) => {
-                          if (accessLevel === null) {
-                            props.removeChannelAccess(recipient.channel_id);
-                          } else if (accessLevel !== recipient.access_level) {
-                            props.setChannelPermissions(
-                              recipient.channel_id,
-                              accessLevel
-                            );
-                          }
-                        }}
+                      <DmRecipientIcon channelId={recipient.channel_id} />
+                    </Match>
+                    <Match
+                      when={props.channelNameMap.get(recipient.channel_id)}
+                    >
+                      <UsersIcon class="shrink-0 size-4" />
+                    </Match>
+                  </Switch>
+                  <div class="font-medium truncate">
+                    <Show
+                      when={
+                        props.channelNameMap.get(recipient.channel_id)?.type !==
+                        'direct_message'
+                      }
+                      fallback={
+                        props.channelNameMap.get(recipient.channel_id)?.name ||
+                        'Conversation'
+                      }
+                    >
+                      <GroupChannelLabel
+                        channelId={recipient.channel_id}
+                        fallbackName={
+                          props.channelNameMap.get(recipient.channel_id)
+                            ?.name || 'Conversation'
+                        }
                       />
-                    </div>
+                    </Show>
                   </div>
-                )}
-              </For>
-            </div>
-          </Show>
-          <Show when={effectiveActiveTab() === 'link'}>
-            <Show
-              when={props.linkSharing}
-              fallback={
-                <LinkSharingControls
-                  editPermissionEnabled={props.editPermissionEnabled}
-                  linkShare={props.linkShare}
-                  linkShareAccessLevel={props.linkShareAccessLevel}
-                  hasExplicitShares={
-                    (props.recipients?.length ?? 0) > 0 ||
-                    !!props.hasDirectShares
-                  }
-                  setLinkShareScope={props.setLinkShareScope}
-                  setLinkShareAccessLevel={props.setLinkShareAccessLevel}
-                  copyLink={props.copyLink}
-                  teamShare={props.teamShare}
-                />
-              }
-            >
-              <div class="p-4">
-                <Dynamic component={props.linkSharing} />
-              </div>
-            </Show>
-          </Show>
-          <Show
-            when={
-              effectiveActiveTab() === 'team'
-                ? teamShareOnOwnCard(props.itemType, props.teamShare)
-                : undefined
-            }
-          >
-            {(teamShare) => (
-              <div class="p-4 text-sm text-ink">
-                <TeamAccessSection teamShare={teamShare()} />
+                  <Show when={props.itemType === 'form'}>
+                    <span class="shrink-0 text-xs text-ink-muted">
+                      Can respond (channel)
+                    </span>
+                  </Show>
+                </div>
+                <div class="flex items-center">
+                  <ShareOptions
+                    editPermissionEnabled={props.editPermissionEnabled}
+                    allowedAccessLevels={shareLevelsFor(props.itemType)}
+                    disabled={props.userPermissions !== Permissions.OWNER}
+                    permissions={recipient.access_level}
+                    setPermissions={(accessLevel) => {
+                      if (accessLevel === null) {
+                        props.removeChannelAccess(recipient.channel_id);
+                      } else if (accessLevel !== recipient.access_level) {
+                        props.setChannelPermissions(
+                          recipient.channel_id,
+                          accessLevel
+                        );
+                      }
+                    }}
+                  />
+                </div>
               </div>
             )}
-          </Show>
-        </MobileDrawer.Content>
-      </MobileDrawer.Portal>
-    </MobileDrawer>
+          </For>
+        </div>
+      </Show>
+      <Show when={effectiveActiveTab() === 'link'}>
+        <Show
+          when={props.linkSharing}
+          fallback={
+            <LinkSharingControls
+              editPermissionEnabled={props.editPermissionEnabled}
+              linkShare={props.linkShare}
+              linkShareAccessLevel={props.linkShareAccessLevel}
+              hasExplicitShares={
+                (props.recipients?.length ?? 0) > 0 || !!props.hasDirectShares
+              }
+              setLinkShareScope={props.setLinkShareScope}
+              setLinkShareAccessLevel={props.setLinkShareAccessLevel}
+              copyLink={props.copyLink}
+              teamShare={props.teamShare}
+            />
+          }
+        >
+          <div class="p-4">
+            <Dynamic component={props.linkSharing} />
+          </div>
+        </Show>
+      </Show>
+      <Show
+        when={
+          effectiveActiveTab() === 'team'
+            ? teamShareOnOwnCard(props.itemType, props.teamShare)
+            : undefined
+        }
+      >
+        {(teamShare) => (
+          <div class="p-4 text-sm text-ink">
+            <TeamAccessSection teamShare={teamShare()} />
+          </div>
+        )}
+      </Show>
+    </ShareDrawer>
   );
 }
 
