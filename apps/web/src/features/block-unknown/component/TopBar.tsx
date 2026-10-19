@@ -10,10 +10,8 @@ import { BlockItemSplitLabel } from '@components/app/split-layout/components/Spl
 import { useBlockId } from '@core/block';
 import { FileTypeChip } from '@core/component/FileTypeChip';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  getShareDrawerRecipientInput,
-  ShareTrigger,
-} from '@core/component/TopBar/ShareButton';
+import { ShareTrigger } from '@core/component/TopBar/ShareButton';
+import { getShareDrawerRecipientInput } from '@core/component/TopBar/ShareDrawer';
 import {
   useBlockDocumentDownloadName,
   useBlockDocumentName,

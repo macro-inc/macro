@@ -151,6 +151,7 @@ import {
   teamShareScopeOptionsForItem,
 } from './linkShare';
 import { ShareDialog } from './ShareDialog';
+import { getShareDrawerRecipientInput } from './ShareDrawer';
 
 false && clickOutside;
 
@@ -283,12 +284,6 @@ const [refetchArray, setRefetchArray] = createSignal<(() => void)[]>([]);
 export const refetchDocumentShareButtonResource = () => {
   refetchArray().forEach((refetch) => refetch());
 };
-
-export function getShareDrawerRecipientInput(): HTMLElement | null {
-  return document.querySelector<HTMLElement>(
-    '[data-share-drawer-recipient] input'
-  );
-}
 
 interface ShareModalProps extends ManagedDialogProps {
   userPermissions: Permissions;
