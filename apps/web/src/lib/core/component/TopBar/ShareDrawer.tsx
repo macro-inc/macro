@@ -1,4 +1,5 @@
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
+import { blockNextClick } from '@core/util/blockNextClick';
 import { Button } from '@ui';
 import type { JSX } from 'solid-js';
 
@@ -19,6 +20,11 @@ export function ShareDrawer(props: {
       open={props.open}
       onOpenChange={props.onOpenChange}
       closeOnOutsidePointerStrategy="pointerdown"
+      onOutsidePointer={(event) => {
+        // A pointer that dismisses the drawer unmounts it at once, so the
+        // click ending that tap would land on whatever was beneath it.
+        if (!event.defaultPrevented) blockNextClick();
+      }}
       initialFocusEl={getShareDrawerRecipientInput() ?? undefined}
     >
       <MobileDrawer.Portal>
