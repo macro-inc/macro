@@ -9,9 +9,7 @@ import {
 import { createConfiguredChannelMarkdownEditor } from '@channel/Input';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { useIsAuthenticated } from '@core/auth';
-import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
-import { RecipientSelector } from '@core/component/RecipientSelector';
 import { ShareOptions } from '@core/component/TopBar/ShareButton';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
@@ -19,91 +17,14 @@ import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import PaperPlaneTilt from '@phosphor/paper-plane-tilt.svg';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import { Button, Hotkey } from '@ui';
-import { type Accessor, createSignal, onMount, Show } from 'solid-js';
+import { createSignal, onMount, Show } from 'solid-js';
 import { SendAsGroupToggle } from './SendAsGroupToggle';
-import { ShareComposeLayout } from './ShareComposeLayout';
+import {
+  MobileShareComposeLayout,
+  ShareComposeLayout,
+} from './ShareComposeLayout';
+import { ShareRecipientField } from './ShareRecipientField';
 import { toast } from './Toast/Toast';
-import { ScrollIndicators } from './VerticalScrollIndicators';
-
-interface MobileForwardToChannelLayoutProps
-  extends Pick<ForwardToChannelProps, 'editPermissionEnabled'> {
-  form: ShareForm<RecipientOption>;
-  isAuthenticated: Accessor<boolean | undefined>;
-  destinationOptions: ReturnType<typeof useCombinedRecipients>['all'];
-  mdScrollRef: Accessor<HTMLElement | undefined>;
-  setMdScrollRef: (el: HTMLElement) => void;
-  markdownEditor: ReturnType<typeof createConfiguredChannelMarkdownEditor>;
-}
-
-function MobileForwardToChannelLayout(
-  props: MobileForwardToChannelLayoutProps
-) {
-  return (
-    <Show when={props.isAuthenticated()}>
-      <div class="px-3 py-2 min-h-11" data-share-drawer-recipient>
-        <RecipientSelector<'user' | 'contact' | 'channel'>
-          placeholder="To: Email or group"
-          setSelectedOptions={props.form.setRecipients}
-          selectedOptions={props.form.recipients()}
-          triedToSubmit={props.form.triedToSubmit}
-          options={props.destinationOptions}
-          triggerMode="input"
-          class="border border-edge-muted p-1"
-          focusOnMount
-          disabled={props.form.locked()}
-        />
-      </div>
-      {/* Send as group */}
-      <Show when={props.form.group()}>
-        {(group) => (
-          <div class="shrink-0 flex w-full items-center p-3 gap-3 flex-wrap">
-            <SendAsGroupToggle
-              on={group().on}
-              locked={props.form.locked()}
-              onChange={props.form.setGroup}
-            />
-          </div>
-        )}
-      </Show>
-      <Show when={props.form.level()}>
-        {(level) => (
-          <div class="px-3 py-2 flex items-center">
-            <span class="text-sm text-ink-muted pr-2">Access:</span>
-            <ShareOptions
-              editPermissionEnabled={props.editPermissionEnabled}
-              allowedAccessLevels={level().options}
-              setPermissions={(accessLevel) =>
-                pickLevel(props.form, accessLevel)
-              }
-              permissions={level().value}
-              label="Permission"
-              hideNoAccess
-              disabled={props.form.locked()}
-            />
-          </div>
-        )}
-      </Show>
-
-      <div class="flex-1 min-h-20 flex flex-col w-full mt-3 border-t border-edge-muted relative">
-        <ScrollIndicators scrollRef={props.mdScrollRef} noBorderStart />
-        <CustomScrollbar scrollContainer={props.mdScrollRef} />
-        <div
-          class="grow shrink min-h-20 overflow-y-auto scrollbar-hidden px-3 py-1.5 w-full text-sm"
-          onClick={() => props.markdownEditor.controls.focus()}
-          ref={props.setMdScrollRef}
-        >
-          <MarkdownShell
-            config={props.markdownEditor}
-            placeholder="Optional message"
-            portalScope="local"
-            class="text-sm"
-            disabled={props.form.locked()}
-          />
-        </div>
-      </div>
-    </Show>
-  );
-}
 
 interface ForwardToChannelProps {
   item: ShareItem;
@@ -125,7 +46,6 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
     location: 'forward_to_channel',
   });
 
-  const [mdScrollRef, setMdScrollRef] = createSignal<HTMLElement>();
   const [containerRef, setContainerRef] = createSignal<HTMLDivElement>();
 
   // No onEnter: the optional message is a multi-line composer, so a bare Enter
@@ -182,39 +102,65 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
     }
   });
 
+  const groupToggle = () => (
+    <Show when={form.group()}>
+      {(group) => (
+        <SendAsGroupToggle
+          on={group().on}
+          locked={form.locked()}
+          onChange={form.setGroup}
+        />
+      )}
+    </Show>
+  );
+  const messageField = () => (
+    <MarkdownShell
+      config={markdownEditor}
+      placeholder="Optional message"
+      portalScope="local"
+      class="text-sm"
+      disabled={form.locked()}
+    />
+  );
+
   return (
     // Hosts the hotkey scope. `contents` keeps it out of the layout while it
     // still sees the focusin events that activate the scope.
     <div class="contents" ref={setContainerRef}>
-      <Show
-        when={!isMobile()}
-        fallback={
-          <MobileForwardToChannelLayout
-            editPermissionEnabled={props.editPermissionEnabled}
-            form={form}
-            isAuthenticated={isAuthenticated}
-            destinationOptions={destinationOptions}
-            mdScrollRef={mdScrollRef}
-            setMdScrollRef={setMdScrollRef}
-            markdownEditor={markdownEditor}
-          />
-        }
-      >
-        <Show when={isAuthenticated()}>
+      <Show when={isAuthenticated()}>
+        <Show
+          when={!isMobile()}
+          fallback={
+            <MobileShareComposeLayout
+              recipients={
+                <ShareRecipientField form={form} options={destinationOptions} />
+              }
+              group={groupToggle()}
+              access={
+                <Show when={form.level()}>
+                  {(level) => (
+                    <ShareOptions
+                      editPermissionEnabled={props.editPermissionEnabled}
+                      allowedAccessLevels={level().options}
+                      setPermissions={(accessLevel) =>
+                        pickLevel(form, accessLevel)
+                      }
+                      permissions={level().value}
+                      label="Permission"
+                      hideNoAccess
+                      disabled={form.locked()}
+                    />
+                  )}
+                </Show>
+              }
+              message={messageField()}
+              focusMessage={() => markdownEditor.controls.focus()}
+            />
+          }
+        >
           <ShareComposeLayout
             recipients={
-              <RecipientSelector<'user' | 'contact' | 'channel'>
-                placeholder="To: Email or group"
-                setSelectedOptions={form.setRecipients}
-                selectedOptions={form.recipients()}
-                triedToSubmit={form.triedToSubmit}
-                options={destinationOptions}
-                triggerMode="input"
-                focusOnMount
-                horizontalScroll
-                hideBorder
-                disabled={form.locked()}
-              />
+              <ShareRecipientField form={form} options={destinationOptions} />
             }
             access={
               <Show when={form.level()}>
@@ -239,27 +185,9 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
                 )}
               </Show>
             }
-            message={
-              <MarkdownShell
-                config={markdownEditor}
-                placeholder="Optional message"
-                portalScope="local"
-                class="text-sm"
-                disabled={form.locked()}
-              />
-            }
+            message={messageField()}
             focusMessage={() => markdownEditor.controls.focus()}
-            group={
-              <Show when={form.group()}>
-                {(group) => (
-                  <SendAsGroupToggle
-                    on={group().on}
-                    locked={form.locked()}
-                    onChange={form.setGroup}
-                  />
-                )}
-              </Show>
-            }
+            group={groupToggle()}
             actions={
               <>
                 <Button

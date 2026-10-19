@@ -52,3 +52,55 @@ export function ShareComposeLayout(props: {
     </>
   );
 }
+
+/**
+ * The Share drawer's message form: the To field, the group toggle, and the
+ * access level stacked above the optional message. The send button lives in
+ * the drawer's header.
+ */
+export function MobileShareComposeLayout(props: {
+  recipients: JSX.Element;
+  group?: JSX.Element;
+  access?: JSX.Element;
+  /** Notices or a send report, between the access level and the message. */
+  status?: JSX.Element;
+  message: JSX.Element;
+  focusMessage: () => void;
+}) {
+  const [messageScrollRef, setMessageScrollRef] = createSignal<HTMLElement>();
+  const group = children(() => props.group);
+  const access = children(() => props.access);
+  const status = children(() => props.status);
+  return (
+    <>
+      <div class="px-3 py-2 min-h-11" data-share-drawer-recipient>
+        {props.recipients}
+      </div>
+      <Show when={group()}>
+        <div class="shrink-0 flex w-full items-center p-3 gap-3 flex-wrap">
+          {group()}
+        </div>
+      </Show>
+      <Show when={access()}>
+        <div class="px-3 py-2 flex items-center">
+          <span class="text-sm text-ink-muted pr-2">Access:</span>
+          {access()}
+        </div>
+      </Show>
+      <Show when={status()}>
+        <div class="px-3 py-2">{status()}</div>
+      </Show>
+      <div class="flex-1 min-h-20 flex flex-col w-full mt-3 border-t border-edge-muted relative">
+        <ScrollIndicators scrollRef={messageScrollRef} noBorderStart />
+        <CustomScrollbar scrollContainer={messageScrollRef} />
+        <div
+          class="grow shrink min-h-20 overflow-y-auto scrollbar-hidden px-3 py-1.5 w-full text-sm"
+          onClick={() => props.focusMessage()}
+          ref={setMessageScrollRef}
+        >
+          {props.message}
+        </div>
+      </div>
+    </>
+  );
+}
