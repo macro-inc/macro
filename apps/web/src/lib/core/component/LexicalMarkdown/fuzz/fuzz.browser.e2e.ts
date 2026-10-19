@@ -30,11 +30,18 @@ const SCRIPT: Record<string, Action[]> | undefined = process.env.FUZZ_SCRIPT
   ? JSON.parse(readFileSync(process.env.FUZZ_SCRIPT, 'utf8')).logs
   : undefined;
 const PEERS = SCRIPT ? Object.keys(SCRIPT).length : env('FUZZ_PEERS', 3);
+/** Undo everything everyone did, check, then redo it all and check again. */
+const UNDO = process.env.FUZZ_UNDO;
 /** Keep typing after a caret finding (the model is wrong from then on). */
 const CONTINUE = process.env.FUZZ_CONTINUE === '1';
 const REPORTS = fileURLToPath(new URL('./reports/', import.meta.url));
 
-type Finding = { kind: string; peer?: string; detail: unknown };
+type Finding = {
+  kind: string;
+  peer?: string;
+  phase?: string;
+  detail: unknown;
+};
 
 /** The blocks between this peer's marker and the next marker. */
 function region(blocks: FuzzBlock[], marker: string): FuzzBlock[] {
@@ -96,6 +103,12 @@ async function drive(
   }
 }
 
+/** Presses `key` `times` times, slower than history's merge window. */
+async function repeat(peer: Peer, key: string, times: number): Promise<void> {
+  for (let i = 0; i < times; i++)
+    await peer.page.keyboard.press(key, { delay: 5 });
+}
+
 /** The first place two JSON values differ, ignoring key order. */
 function firstDifference(
   a: unknown,
@@ -146,7 +159,12 @@ async function converge(peers: Peer[], relay: Relay): Promise<boolean> {
   }
 }
 
-async function check(peers: Peer[], relay: Relay): Promise<Finding[]> {
+async function check(
+  peers: Peer[],
+  relay: Relay,
+  phase: string,
+  expected: (peer: Peer) => Block[]
+): Promise<Finding[]> {
   const findings: Finding[] = [];
   if (!(await converge(peers, relay)))
     findings.push({
@@ -176,13 +194,14 @@ async function check(peers: Peer[], relay: Relay): Promise<Finding[]> {
     editorMarkdowns.push(state.editorMarkdown);
     for (const other of peers) {
       const actual = region(state.blocks, other.model.marker);
-      if (!sameBlocks(actual, other.model.blocks))
+      if (!sameBlocks(actual, expected(other)))
         findings.push({
           kind: 'model',
           peer: peer.name,
           detail: {
             region: other.name,
-            expected: other.model.blocks,
+            phase,
+            expected: expected(other),
             actual,
             log: other.log,
           },
@@ -246,7 +265,7 @@ async function check(peers: Peer[], relay: Relay): Promise<Finding[]> {
   }
   if (new Set(editorMarkdowns).size > 1)
     findings.push({ kind: 'peers-disagree', detail: editorMarkdowns });
-  return findings;
+  return findings.map((f) => ({ ...f, phase }));
 }
 
 for (let run = 0; run < RUNS; run++) {
@@ -260,7 +279,31 @@ for (let run = 0; run < RUNS; run++) {
         drive(peer, relay, seed * 31 + i, findings, SCRIPT?.[peer.name])
       )
     );
-    findings.push(...(await check(peers, relay)));
+    findings.push(
+      ...(await check(peers, relay, 'typed', (p) => p.model.blocks))
+    );
+    const structural = ['caret', 'model', 'no-convergence'];
+    if (UNDO && !findings.some((f) => structural.includes(f.kind))) {
+      // Loro's undo is per person: undoing everything you did leaves only
+      // the seed, whatever the others did; redoing it all brings it back.
+      if (UNDO === 'sequential')
+        for (const p of peers) await repeat(p, 'Control+z', 3 * p.log.length);
+      else
+        await Promise.all(
+          peers.map((p) => repeat(p, 'Control+z', 3 * p.log.length))
+        );
+      findings.push(
+        ...(await check(peers, relay, 'undone', (p) => [
+          { type: 'p', text: p.model.marker },
+        ]))
+      );
+      await Promise.all(
+        peers.map((p) => repeat(p, 'Control+Shift+z', 3 * p.log.length))
+      );
+      findings.push(
+        ...(await check(peers, relay, 'redone', (p) => p.model.blocks))
+      );
+    }
     const report = {
       seed,
       peers: PEERS,
