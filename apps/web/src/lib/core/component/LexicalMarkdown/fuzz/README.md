@@ -46,11 +46,13 @@ their edits are gone (`FUZZ_UNDO=sequential`: one person at a time), and the
 document must be back to the markers; then everyone redoes, and every region
 must match its model again. Findings carry the phase they came from.
 
-`regressions.browser.e2e.ts` keeps the bugs the fuzzer found as fixed
-scenarios; run it with the same configuration and `regressions` as the test
-filter.
+Known findings, which show up in most runs:
 
-Known open findings, which show up in most runs:
+- `caret`: with someone else editing, a caret after a line break (Shift+Enter,
+  or a new line in a code block) jumps to the start of its block, so the next
+  keystrokes land there.
+- Undo phase: while someone else types, an undo step is a character or two
+  instead of the burst of typing, so undoing everything runs out of steps.
 
 - `markdown-round-trip`: internal markdown drops empty paragraphs on import
   (`PRESERVE_LINES` writes them as a space line, and Lexical's importer then
