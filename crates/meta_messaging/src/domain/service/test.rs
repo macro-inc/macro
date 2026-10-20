@@ -14,6 +14,7 @@ use std::sync::Mutex;
 enum DuringPreparation {
     None,
     RevokeAccess,
+    RevokeDocument,
     Disconnect,
     Reconnect,
     MoveTeam,
@@ -52,6 +53,7 @@ struct Prepared(Arc<Fixture>, String);
 
 fn fixture() -> (MessagingService, Arc<Fixture>) {
     let account = AccountScope {
+        personal: None,
         id: Uuid::now_v7(),
         team_id: Uuid::now_v7(),
         generation: Some(Utc::now()),
@@ -144,9 +146,18 @@ fn progress(memory: &Memory) -> SendProgress {
 }
 #[async_trait]
 impl ConversationRepository for Fixture {
-    async fn account_scope(&self, id: Uuid) -> PortResult<Option<AccountScope>> {
+    async fn account_scope(&self, id: Uuid, _channel: Uuid) -> PortResult<Option<AccountScope>> {
         let memory = self.0.lock().unwrap();
         Ok((id == memory.account.id).then(|| memory.account.clone()))
+    }
+    async fn account_for_sender(
+        &self,
+        conversation: &Conversation,
+        _user: &str,
+    ) -> PortResult<AccountScope> {
+        self.account_scope(conversation.connection_id, conversation.channel_id)
+            .await?
+            .ok_or_else(|| MessagingError::NotFound.into())
     }
     async fn conversation(&self, channel: Uuid) -> PortResult<Option<Conversation>> {
         let memory = self.0.lock().unwrap();
@@ -335,6 +346,7 @@ impl ReplyTransport for Transport {
         memory.preparations += 1;
         match memory.change {
             DuringPreparation::None => {}
+            DuringPreparation::RevokeDocument => memory.media_readable = false,
             DuringPreparation::RevokeAccess => memory.access = false,
             DuringPreparation::Disconnect => memory.account.status = ConnectionStatus::Disconnected,
             DuringPreparation::Reconnect => {
@@ -389,6 +401,12 @@ impl NativeConversation for Fixture {
         _: MediaBytes,
     ) -> PortResult<UploadedAttachment> {
         Err(MessagingError::Invalid("text only").into())
+    }
+    async fn require_media_access(&self, _: &str, _: Uuid) -> PortResult<()> {
+        if !self.0.lock().unwrap().media_readable {
+            return Err(MessagingError::Forbidden.into());
+        }
+        Ok(())
     }
     async fn read_media(&self, _: &str, _: Uuid, _: Uuid) -> PortResult<MediaBytes> {
         let mut memory = self.0.lock().unwrap();
@@ -775,4 +793,29 @@ async fn invalid_or_inaccessible_attachment_is_rejected_before_copying_at_each_b
             );
         }
     }
+}
+
+#[tokio::test]
+async fn document_revocation_during_transport_preparation_prevents_dispatch() {
+    let (service, fixture) = fixture();
+    let request = SendReply {
+        message: ReplyContent::Media {
+            document_id: Uuid::now_v7(),
+            kind: MediaKind::Image,
+            caption: None,
+        },
+        ..request()
+    };
+    service
+        .send_reply(&receipt(&fixture), request, SendAuthority::Human)
+        .await
+        .unwrap();
+    fixture.0.lock().unwrap().change = DuringPreparation::RevokeDocument;
+    let work = fixture.claim_send().await.unwrap().unwrap();
+    assert!(service.process_send(&work).await.is_err());
+    let memory = fixture.0.lock().unwrap();
+    assert_eq!(
+        (memory.fences, memory.dispatches, memory.state),
+        (0, 0, DeliveryState::Failed)
+    );
 }

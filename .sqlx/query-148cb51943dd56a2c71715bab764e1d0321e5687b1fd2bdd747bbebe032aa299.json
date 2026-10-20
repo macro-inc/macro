@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO whatsapp_group_roster(binding_id,observed_at,metadata) SELECT b.id,$3,$4 FROM whatsapp_group_binding b JOIN whatsapp_group_membership m ON m.binding_id=b.id WHERE b.group_jid=$1 AND m.account_id=$2 AND m.consent_ended_at IS NULL AND b.id=ANY($5) ON CONFLICT(binding_id) DO UPDATE SET metadata=excluded.metadata,observed_at=excluded.observed_at WHERE whatsapp_group_roster.observed_at<excluded.observed_at",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Timestamptz",
+        "Jsonb",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "148cb51943dd56a2c71715bab764e1d0321e5687b1fd2bdd747bbebe032aa299"
+}

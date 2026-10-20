@@ -5,6 +5,7 @@ use serde_json::json;
 fn notification(alert: Option<Alert>, push_type: PushType) -> FCMMessage<serde_json::Value> {
     android_notification(
         &APNSTargets {
+            authorization_notification_id: None,
             notif: APNSPushNotification {
                 aps: Aps {
                     alert,

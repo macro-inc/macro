@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS(SELECT 1 FROM meta_messaging_send WHERE id=$1 AND linked_binding_id=$2 AND linked_account_id=$3 AND provider_message_id=$4 AND state IN ('accepted','sent','delivered','read')) AS \"accepted!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "accepted!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "ce0151da4b2c3c6669843173032f2251765ba8100ffaea4cc6d53a9cbbf82d5c"
+}

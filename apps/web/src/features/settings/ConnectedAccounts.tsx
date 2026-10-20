@@ -19,6 +19,11 @@ const BusinessMessagingSettings = lazyNamed(
   'BusinessMessagingSettings'
 );
 
+const PersonalWhatsAppSettings = lazyNamed(
+  () => import('../whatsapp-linked/account-settings'),
+  'PersonalWhatsAppSettings'
+);
+
 /** Account integrations. Agent tools live in Agent connections. */
 export function ConnectedAccounts() {
   const { openSettings } = useSettingsState();
@@ -42,6 +47,9 @@ export function ConnectedAccounts() {
               </Show>
               <Suspense>
                 <GitHubCard />
+              </Suspense>
+              <Suspense>
+                <PersonalWhatsAppSettings />
               </Suspense>
               <Suspense>
                 <BusinessMessagingSettings

@@ -112,7 +112,7 @@ internal rollout. Model usage continues through the existing session metering.
 
 ## Create and manage a WhatsApp group
 
-In **Create channel**, enter a name and enable **Create a WhatsApp group** when a
+In **Create channel**, enter a name and enable **Create a WhatsApp Business group** when a
 ready Platform account connected by you is available. A picker appears only for
 multiple eligible local connections. Confirm private visibility, then create.
 The server verifies OBA/permissions/subscriptions. Pending confirmation and failure
@@ -1380,7 +1380,7 @@ sharing/deletion rules. There is no automatic-member list or ownership backfill.
 Opening an ordinary channel, Participants, and Rename must produce zero `/meta/*`
 requests in the browser network log. External routing comes from native channel
 metadata; unjoined team channels use the native detail query. The create dialog
-loads lazily; accounts load only after selecting **Create a WhatsApp group**.
+loads lazily; accounts load only after selecting **Create a WhatsApp Business group**.
 Turning the option off preserves the normal visibility and auto-join choices.
 An uncertain create keeps its submitted subject/account and exposes the same setup.
 
@@ -1401,3 +1401,9 @@ team settings use channel detail, including auto-join, while retaining native ro
 checks. Account refresh errors keep registration rows and unsubmitted PINs mounted;
 PINs must never persist outside that password field. Invite-link copy uses a transient
 success toast, and confirmed group deletion removes the channel from pane history.
+
+## Personal WhatsApp groups
+
+With the linked-device flag enabled, choose **Create channel → Connect WhatsApp group**. The same dialog switches to a searchable list of existing groups. Select a group, review the workspace and Macro access, then choose **Connect group**. **Back** returns to channel creation; opening the picker does not create a channel or stack a second dialog. Each teammate connects their own account and adopts the same group; authorized retries reuse one native channel. In Participants, distinguish WhatsApp roster from Macro access. Granting Macro access does not add people remotely. **Disconnect group from Macro** is a local detach. When ownership is required, a permitted manager may explicitly own future files.
+
+The composer uses the native channel name in its placeholder without a phone-number banner or raw WhatsApp ID. The header icon identifies WhatsApp, and sends still use only your own account. Personal accounts have no Business API reply windows or template requirements. A server permission denial shows that sending is unavailable and offers **Refresh**; it never becomes a reply-window notice or grants permission locally. Check text, native attachments, quotes, reactions and supported own-message edits/deletes. Phone-origin rows retain a WhatsApp origin mark. Offline preserves drafts without submitting; account replacement must isolate old drafts. Unknown metadata never creates an internal composer. Verify 390px layouts, keyboard controls, and zero business `/meta/channels` calls for linked groups. Ordinary channels still make zero `/meta/*` calls. See `WHATSAPP_LINKED_VERIFICATION.md` for executed synthetic checks and the separately authorized real-account checklist.

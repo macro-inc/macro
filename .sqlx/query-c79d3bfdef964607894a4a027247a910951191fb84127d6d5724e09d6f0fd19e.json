@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT user_id=$2 AND ownership_state='active' AND state='active' AND whatsapp_linked_can_view(channel_id,$2) AS \"valid!\" FROM whatsapp_group_binding WHERE id=$1 FOR SHARE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "valid!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "c79d3bfdef964607894a4a027247a910951191fb84127d6d5724e09d6f0fd19e"
+}

@@ -65,6 +65,7 @@ jobs:
             - '.github/actions/setup-reqs-web/**'
           messaging_changed:
             - 'apps/web/src/features/block-channel/**'
+            - 'apps/web/src/features/whatsapp-linked/**'
             - 'apps/web/src/features/meta-messaging/**'
             - 'apps/web/src/features/channel/**'
             - 'apps/web/src/features/entity/**'
@@ -605,10 +606,11 @@ jobs:
         VITE_DISABLE_BROWSER_TURSO_CACHE: 'true'
         VITE_ENABLE_IN_APP_TOURS: 'false'
         VITE_ENABLE_BROWSER_OTEL: 'false'
+        VITE_ENABLE_WHATSAPP_LINKED: 'true'
         WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
       working-directory: apps/web
     - name: Test Native Messaging in Chromium
-      run: bun run test:functional meta-messaging.spec.ts
+      run: bun run test:functional meta-messaging.spec.ts whatsapp-linked.spec.ts
       env:
         FUNCTIONAL_MESSAGING: '1'
       working-directory: apps/web

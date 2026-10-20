@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS(SELECT 1 FROM whatsapp_inbound_event WHERE account_id=$1 AND event_id=$2 AND state='quarantined') AS \"quarantined!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "quarantined!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "ef17a037e2239c59359137d1ab0c2a8886514145d27cb599682285509c433be8"
+}

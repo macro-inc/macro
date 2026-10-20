@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_send SET allocated_source_id=$2 WHERE id=$1 AND (allocated_source_id IS NULL OR allocated_source_id=$2) AND dispatch_started_at IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "624356f3e966d667bccbfc27738203571053be8fa2c351f39d85e6212d567fb0"
+}

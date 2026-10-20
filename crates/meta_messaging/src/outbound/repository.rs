@@ -26,7 +26,7 @@ pub mod revisions;
 mod sends;
 mod subscription;
 #[cfg(test)]
-mod test;
+pub(crate) mod test;
 
 /// Local wakeups after successful durable writes. Other replicas and lost wakeups
 /// are covered by the worker's bounded sweep; these signals contain no work.
@@ -66,12 +66,12 @@ impl PgMessagingRepository {
     }
 }
 
-pub(super) fn failure(
+pub(crate) fn failure(
     error: impl std::error::Error + Send + Sync + 'static,
 ) -> rootcause::Report<MessagingError> {
     rootcause::Report::new(error).context(MessagingError::Unavailable)
 }
-pub(super) fn decode<T: DeserializeOwned>(value: serde_json::Value) -> PortResult<T> {
+pub(crate) fn decode<T: DeserializeOwned>(value: serde_json::Value) -> PortResult<T> {
     serde_json::from_value(value).map_err(failure)
 }
 pub(super) fn spelling(value: impl serde::Serialize) -> String {
@@ -402,8 +402,18 @@ impl ConversationRepository for PgMessagingRepository {
     async fn account_scope(
         &self,
         id: Uuid,
+        _channel: Uuid,
     ) -> PortResult<Option<crate::domain::replies::AccountScope>> {
         Ok(self.connection(id).await?.as_ref().map(Into::into))
+    }
+    async fn account_for_sender(
+        &self,
+        conversation: &Conversation,
+        _user: &str,
+    ) -> PortResult<crate::domain::replies::AccountScope> {
+        self.account_scope(conversation.connection_id, conversation.channel_id)
+            .await?
+            .ok_or_else(|| MessagingError::NotFound.into())
     }
     async fn conversation(&self, channel: Uuid) -> PortResult<Option<Conversation>> {
         sqlx::query!("SELECT to_jsonb(c) AS \"data!\" FROM meta_messaging_conversation c WHERE channel_id = $1",channel)
@@ -441,10 +451,10 @@ impl ConversationRepository for PgMessagingRepository {
         self.sends_for_messages_impl(channel, messages).await
     }
     async fn claim_send(&self) -> PortResult<Option<SendWork>> {
-        self.claim_send_impl().await
+        self.claim_send_impl(false).await
     }
     async fn accepted_sends(&self) -> PortResult<Vec<(SendWork, ProviderId)>> {
-        self.accepted_sends_impl().await
+        self.accepted_sends_impl(false).await
     }
     async fn defer_accepted_send(
         &self,

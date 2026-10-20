@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT a.identity_jid FROM whatsapp_linked_account a JOIN team_user tu ON tu.user_id=a.user_id AND tu.team_id=$2 WHERE a.user_id=$1 AND a.state IN ('connected','offline') ORDER BY a.updated_at DESC LIMIT 1 FOR SHARE OF a,tu",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "identity_jid",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "8c647dbe10a45f019af91fcb94112dc4db4e80ff99f4f46f1b6797e110135646"
+}

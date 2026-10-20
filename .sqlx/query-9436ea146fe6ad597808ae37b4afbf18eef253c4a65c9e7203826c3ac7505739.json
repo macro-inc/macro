@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO whatsapp_external_message(binding_id,person_id,source_id,origin,source_at,content_revision,deleted_at,revision_content,revised_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(binding_id,person_id,source_id) DO UPDATE SET deleted_at=COALESCE(whatsapp_external_message.deleted_at,excluded.deleted_at),revision_content=CASE WHEN excluded.content_revision>whatsapp_external_message.content_revision THEN excluded.revision_content ELSE whatsapp_external_message.revision_content END,revised_at=CASE WHEN excluded.content_revision>whatsapp_external_message.content_revision THEN excluded.revised_at ELSE whatsapp_external_message.revised_at END,content_revision=GREATEST(whatsapp_external_message.content_revision,excluded.content_revision)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Int8",
+        "Timestamptz",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9436ea146fe6ad597808ae37b4afbf18eef253c4a65c9e7203826c3ac7505739"
+}

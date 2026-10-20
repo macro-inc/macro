@@ -4,6 +4,8 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { ImportedAuthorOrigin } from './importedAuthorOrigin';
+import type { ImportedAuthorVerifiedUserId } from './importedAuthorVerifiedUserId';
 
 /**
  * Display attribution for a comment imported from an external document.
@@ -11,4 +13,8 @@
 export interface ImportedAuthor {
   /** Original author text; never interpreted as an authenticated principal. */
   name: string;
+  /** Provider origin, kept distinct from the associated person. */
+  origin?: ImportedAuthorOrigin;
+  /** Provider-verified association; this is not an authenticated Macro action. */
+  verified_user_id?: ImportedAuthorVerifiedUserId;
 }

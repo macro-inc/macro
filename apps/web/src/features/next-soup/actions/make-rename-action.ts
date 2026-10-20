@@ -28,6 +28,7 @@ export const makeRenameAction = (options: MakeRenameOptions) => {
       return (
         !!entity.messagingBinding &&
         entity.messagingBinding !== 'whatsapp_group' &&
+        entity.messagingBinding !== 'whatsapp_linked_group' &&
         canEditChannelIdentity(entity)
       );
     }

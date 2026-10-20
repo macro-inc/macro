@@ -5,7 +5,7 @@ use super::*;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sha2::{Digest, Sha256};
 
-async fn team(pool: &PgPool, name: &str) -> (Uuid, String) {
+pub(crate) async fn team(pool: &PgPool, name: &str) -> (Uuid, String) {
     let id = Uuid::now_v7();
     let user = format!("macro|{name}@messaging.test");
     let email = format!("{name}@messaging.test");
@@ -60,7 +60,7 @@ fn connection(team_id: Uuid, user_id: String, account: &str) -> Connection {
         health_error: None,
     }
 }
-async fn channel(pool: &PgPool, user: &str) -> Uuid {
+pub(crate) async fn channel(pool: &PgPool, user: &str) -> Uuid {
     let id = Uuid::now_v7();
     sqlx::query!("INSERT INTO comms_channels (id,name,owner_id,channel_type) VALUES ($1,'Customer',$2,'private')",id,user).execute(pool).await.unwrap();
     id

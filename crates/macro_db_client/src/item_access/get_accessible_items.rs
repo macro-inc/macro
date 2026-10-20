@@ -1,6 +1,3 @@
-#[cfg(not(test))]
-use cached::proc_macro::cached;
-
 use model::item::UserAccessibleItem;
 use sqlx::{Pool, Postgres};
 
@@ -8,15 +5,6 @@ use sqlx::{Pool, Postgres};
 /// (user ID, team memberships, and channel participations). Soft-deleted items and grants
 /// whose item row no longer exists are excluded.
 #[tracing::instrument(skip(db))]
-#[cfg_attr(
-    not(test),
-    cached(
-        time = 10,
-        result = true,
-        key = "String",
-        convert = r#"{ format!("{}-{}-{}", user_id, item_type_filter.as_deref().unwrap_or("all"), exclude_owned) }"#
-    )
-)]
 pub async fn get_user_accessible_items(
     db: &Pool<Postgres>,
     user_id: &str,
@@ -55,7 +43,7 @@ async fn accessible_documents(
         r#"
         WITH user_source_ids AS (
             SELECT cp.channel_id::text as source_id FROM comms_channel_participants cp
-                WHERE cp.user_id = $1 AND cp.left_at IS NULL
+                WHERE cp.user_id = $1 AND cp.left_at IS NULL AND EXISTS(SELECT 1 FROM comms_channels linked_channel WHERE linked_channel.id=cp.channel_id AND CASE WHEN linked_channel.messaging_binding='whatsapp_linked_group' THEN whatsapp_linked_can_view(linked_channel.id,cp.user_id) ELSE true END)
             UNION ALL
             SELECT t.team_id::text FROM team_user t
                 WHERE t.user_id = $1
@@ -66,7 +54,7 @@ async fn accessible_documents(
         FROM entity_access ea
         JOIN user_source_ids us ON us.source_id = ea.source_id
         JOIN "Document" d ON d.id = ea.entity_id::text
-        WHERE ea.entity_type = 'document'
+        WHERE ea.entity_type = 'document' AND whatsapp_linked_can_read_document(ea.entity_id,$1)
             AND d."deletedAt" IS NULL
             AND (NOT $2 OR d.owner != $1)
         "#,
@@ -88,7 +76,7 @@ async fn accessible_chats(
         r#"
         WITH user_source_ids AS (
             SELECT cp.channel_id::text as source_id FROM comms_channel_participants cp
-                WHERE cp.user_id = $1 AND cp.left_at IS NULL
+                WHERE cp.user_id = $1 AND cp.left_at IS NULL AND EXISTS(SELECT 1 FROM comms_channels linked_channel WHERE linked_channel.id=cp.channel_id AND CASE WHEN linked_channel.messaging_binding='whatsapp_linked_group' THEN whatsapp_linked_can_view(linked_channel.id,cp.user_id) ELSE true END)
             UNION ALL
             SELECT t.team_id::text FROM team_user t
                 WHERE t.user_id = $1
@@ -121,7 +109,7 @@ async fn accessible_projects(
         r#"
         WITH user_source_ids AS (
             SELECT cp.channel_id::text as source_id FROM comms_channel_participants cp
-                WHERE cp.user_id = $1 AND cp.left_at IS NULL
+                WHERE cp.user_id = $1 AND cp.left_at IS NULL AND EXISTS(SELECT 1 FROM comms_channels linked_channel WHERE linked_channel.id=cp.channel_id AND CASE WHEN linked_channel.messaging_binding='whatsapp_linked_group' THEN whatsapp_linked_can_view(linked_channel.id,cp.user_id) ELSE true END)
             UNION ALL
             SELECT t.team_id::text FROM team_user t
                 WHERE t.user_id = $1

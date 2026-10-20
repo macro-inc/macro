@@ -404,7 +404,18 @@ pub trait NativeMessaging: NativeConversation + super::groups::ports::NativeGrou
 #[async_trait]
 pub trait ConversationRepository: Send + Sync {
     /// Current account scope without provider configuration or credentials.
-    async fn account_scope(&self, id: Uuid) -> PortResult<Option<super::replies::AccountScope>>;
+    async fn account_scope(
+        &self,
+        id: Uuid,
+        channel: Uuid,
+    ) -> PortResult<Option<super::replies::AccountScope>>;
+    /// Select the sending account from the authenticated user and conversation.
+    /// Multi-observer transports must never select an arbitrary observing account.
+    async fn account_for_sender(
+        &self,
+        conversation: &Conversation,
+        user: &str,
+    ) -> PortResult<super::replies::AccountScope>;
     /// Find the real channel mapping.
     async fn conversation(&self, channel: Uuid) -> PortResult<Option<Conversation>>;
     /// Check a quoted provider message against this exact account and customer.
@@ -472,6 +483,8 @@ pub trait NativeConversation: Send + Sync {
     ) -> PortResult<UploadedAttachment>;
     /// Revalidate current channel posting access plus account team membership.
     async fn require_send(&self, team: Uuid, channel: Uuid, user: &str) -> PortResult<()>;
+    /// Recheck document access after potentially slow transport preparation.
+    async fn require_media_access(&self, user: &str, document: Uuid) -> PortResult<()>;
     /// Read and validate native bytes with current document/channel access; never stage a provider copy.
     async fn read_media(&self, user: &str, channel: Uuid, document: Uuid)
     -> PortResult<MediaBytes>;

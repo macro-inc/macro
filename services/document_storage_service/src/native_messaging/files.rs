@@ -1,6 +1,8 @@
 //! Compose native document storage and channel attachment permissions. Provider
 //! URLs are never persisted as Macro file links; every file is a private document.
 
+pub(super) mod linked;
+
 use async_trait::async_trait;
 use base64::Engine;
 use channels::{
@@ -549,10 +551,20 @@ impl MessageFiles for NativeFiles {
     ) -> PortResult<OutboundMedia> {
         let user = MacroUserIdStr::try_from(user).map_err(|_| MessagingError::Forbidden)?;
         let repo = PgMessagingRepository::new(self.pool.clone());
-        let conversation = repo
-            .conversation(channel)
-            .await?
-            .ok_or(MessagingError::NotFound)?;
+        let conversation = repo.conversation(channel).await?;
+        if conversation.is_none() {
+            self.access
+                .generate_entity_access_receipt::<MemberParticipantRole>(
+                    &user.0,
+                    None,
+                    &channel.to_string(),
+                    EntityType::Channel,
+                )
+                .await
+                .map_err(access_error)?;
+            return Ok(OutboundMedia { file, url: None });
+        }
+        let conversation = conversation.ok_or(MessagingError::NotFound)?;
         let connection = repo
             .connection(conversation.connection_id)
             .await?

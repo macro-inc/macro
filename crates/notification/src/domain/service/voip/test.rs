@@ -53,6 +53,21 @@ impl MockRepo {
 }
 
 impl NotificationRepository for MockRepo {
+    async fn filter_delivery_recipients<'a>(
+        &self,
+        _notification_id: uuid::Uuid,
+        recipients: &[macro_user_id::user_id::MacroUserIdStr<'a>],
+    ) -> Result<
+        std::collections::HashSet<macro_user_id::user_id::MacroUserIdStr<'static>>,
+        rootcause::Report,
+    > {
+        Ok(recipients
+            .iter()
+            .cloned()
+            .map(cowlike::CowLike::into_owned)
+            .collect())
+    }
+
     async fn notification_is_withdrawn(
         &self,
         _notification_id: uuid::Uuid,

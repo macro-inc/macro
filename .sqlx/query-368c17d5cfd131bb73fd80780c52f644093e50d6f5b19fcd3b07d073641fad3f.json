@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO whatsapp_group_binding(id,team_id,group_jid,channel_id,user_id,state) VALUES($1,$2,$3,$4,$5,'active') RETURNING to_jsonb(whatsapp_group_binding) AS \"data!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "data!",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "368c17d5cfd131bb73fd80780c52f644093e50d6f5b19fcd3b07d073641fad3f"
+}

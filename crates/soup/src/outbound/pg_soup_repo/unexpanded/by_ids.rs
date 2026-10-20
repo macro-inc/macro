@@ -43,7 +43,7 @@ pub async fn unexpanded_soup_by_ids<'a>(
         r#"
         WITH user_source_ids AS (
             SELECT cp.channel_id::text as source_id FROM comms_channel_participants cp
-                WHERE cp.user_id = $1 AND cp.left_at IS NULL
+                WHERE cp.user_id = $1 AND cp.left_at IS NULL AND EXISTS(SELECT 1 FROM comms_channels linked_channel WHERE linked_channel.id=cp.channel_id AND CASE WHEN linked_channel.messaging_binding='whatsapp_linked_group' THEN whatsapp_linked_can_view(linked_channel.id,cp.user_id) ELSE true END)
             UNION ALL
             SELECT t.team_id::text FROM team_user t
                 WHERE t.user_id = $1
@@ -55,7 +55,7 @@ pub async fn unexpanded_soup_by_ids<'a>(
                 ea.entity_id::text as item_id,
                 ea.entity_type as item_type
             FROM entity_access ea
-            WHERE ea.source_id = ANY(SELECT source_id FROM user_source_ids)
+            WHERE ea.source_id = ANY(SELECT source_id FROM user_source_ids) AND CASE WHEN ea.entity_type='document' THEN whatsapp_linked_can_read_document(ea.entity_id,$1) ELSE true END
         ),
         Combined AS (
             SELECT
@@ -114,7 +114,7 @@ pub async fn unexpanded_soup_by_ids<'a>(
                 ORDER BY i."updatedAt" DESC
                 LIMIT 1
             ) di ON true
-            WHERE d."deletedAt" IS NULL
+            WHERE d."deletedAt" IS NULL AND NOT EXISTS(SELECT 1 FROM whatsapp_attachment wa JOIN whatsapp_group_binding wb ON wb.id=wa.binding_id WHERE wa.document_id::text=d.id AND (wa.state='deleted' OR NOT whatsapp_linked_can_view(wb.channel_id,$1)))
             AND d.id = ANY($2::text[])
 
             UNION ALL

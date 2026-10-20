@@ -406,12 +406,14 @@ pub enum MessagingBinding {
     InstagramDirect,
     /// Pending or bound WhatsApp group, with provider-owned lifecycle.
     WhatsappGroup,
+    /// Existing personal-account group adopted into a private native channel.
+    WhatsappLinkedGroup,
 }
 
 impl MessagingBinding {
     /// Whether the provider owns group lifecycle and native mutation policy.
     pub fn is_group(self) -> bool {
-        self == Self::WhatsappGroup
+        matches!(self, Self::WhatsappGroup | Self::WhatsappLinkedGroup)
     }
 }
 

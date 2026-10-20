@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH user_source_ids AS (\n            SELECT cp.channel_id::text as source_id FROM comms_channel_participants cp\n                WHERE cp.user_id = $1 AND cp.left_at IS NULL AND EXISTS(SELECT 1 FROM comms_channels linked_channel WHERE linked_channel.id=cp.channel_id AND CASE WHEN linked_channel.messaging_binding='whatsapp_linked_group' THEN whatsapp_linked_can_view(linked_channel.id,cp.user_id) ELSE true END)\n            UNION ALL\n            SELECT t.team_id::text FROM team_user t\n                WHERE t.user_id = $1\n            UNION ALL\n            SELECT $1\n        )\n        SELECT DISTINCT ea.entity_id::text as \"item_id!\"\n        FROM entity_access ea\n        JOIN user_source_ids us ON us.source_id = ea.source_id\n        JOIN \"Chat\" c ON c.id = ea.entity_id::text\n        WHERE ea.entity_type = 'chat'\n            AND c.\"deletedAt\" IS NULL\n            AND (NOT $2 OR c.\"userId\" != $1)\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "item_id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "f95d8002b78300927d5127c91846c24586cb9606c8d36ed29dfde5a33b5fb7da"
+}

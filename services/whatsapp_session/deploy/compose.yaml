@@ -1,0 +1,21 @@
+# One control process with durable account stores. Opt-in; never part of default
+# local/dev stack startup. Supply an audited immutable image digest and secrets.
+services:
+  whatsapp-session:
+    image: ${WHATSAPP_SESSION_IMAGE:?Set an approved image digest}
+    init: true
+    restart: unless-stopped
+    read_only: true
+    user: '12001:12001'
+    stop_grace_period: 90s
+    pids_limit: 512
+    mem_limit: 4g
+    cpus: 4
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    env_file: ${WHATSAPP_SESSION_ENV_FILE:?Set a private operator env file}
+    volumes:
+      - ${WHATSAPP_SESSION_STATE_DIR:?Set an encrypted durable volume}:/var/lib/whatsapp
+      - ${WHATSAPP_SESSION_TLS_DIR:?Set a private TLS directory}:/run/whatsapp-tls:ro
+    tmpfs: [/tmp:size=64m,mode=0700,uid=12001,gid=12001]
+    ports: ['${WHATSAPP_BIND_IP:-127.0.0.1}:8128:8128']

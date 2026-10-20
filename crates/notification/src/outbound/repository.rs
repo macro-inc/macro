@@ -153,6 +153,7 @@ fn build_user_notifications_query<'a>(
             WHERE un.user_id = "#,
     );
     builder.push_bind(user_id);
+    builder.push(" AND whatsapp_linked_notification_allowed(n.id,un.user_id)");
 
     push_event_item_ids_filter(&mut builder, event_item_ids);
     push_notification_status_filters(&mut builder, filters);
@@ -423,6 +424,13 @@ pub trait NotificationDbOps: DeviceRegistrationDbOps + Send + Sync + 'static {
         service_name: &str,
         apns_collapse_key: Option<&str>,
     ) -> impl std::future::Future<Output = Result<Option<Vec<UserNotificationRow<Arc<T>>>>, Report>> + Send;
+
+    /// Retain recipients with current access at retry and final delivery.
+    fn filter_delivery_recipients<'a>(
+        &self,
+        notification_id: Uuid,
+        recipients: &[MacroUserIdStr<'a>],
+    ) -> impl std::future::Future<Output = Result<HashSet<MacroUserIdStr<'static>>, Report>> + Send;
 
     /// Whether a resolved workflow has withdrawn this notification before delivery.
     fn notification_is_withdrawn(
@@ -840,6 +848,18 @@ impl NotificationDbOps for PgPool {
         Ok(Some(rows))
     }
 
+    async fn filter_delivery_recipients<'a>(
+        &self,
+        notification_id: Uuid,
+        recipients: &[MacroUserIdStr<'a>],
+    ) -> Result<HashSet<MacroUserIdStr<'static>>, Report> {
+        let ids: Vec<String> = recipients.iter().map(ToString::to_string).collect();
+        let rows=sqlx::query_scalar!(r#"SELECT recipient AS "recipient!" FROM unnest($2::text[]) recipient WHERE whatsapp_linked_notification_allowed($1,recipient)"#,notification_id,&ids).fetch_all(self).await?;
+        rows.into_iter()
+            .map(|id| MacroUserIdStr::try_from(id).map_err(Report::from))
+            .collect()
+    }
+
     async fn notification_is_withdrawn(&self, notification_id: Uuid) -> Result<bool, Report> {
         Ok(sqlx::query_scalar!(
             r#"SELECT EXISTS(SELECT 1 FROM notification_withdrawal WHERE notification_id = $1) AS "exists!""#,
@@ -917,6 +937,7 @@ impl NotificationDbOps for PgPool {
                 n.sender_id
             FROM updated
             JOIN notification n ON n.id = updated.notification_id
+              AND whatsapp_linked_notification_allowed(n.id,updated.user_id)
             ORDER BY array_position($2, updated.notification_id)
             "#,
             user_id.as_ref(),
@@ -972,6 +993,7 @@ impl NotificationDbOps for PgPool {
                 n.sender_id
             FROM updated
             JOIN notification n ON n.id = updated.notification_id
+              AND whatsapp_linked_notification_allowed(n.id,updated.user_id)
             ORDER BY array_position($2, updated.notification_id)
             "#,
             user_id.as_ref(),
@@ -1011,6 +1033,7 @@ impl NotificationDbOps for PgPool {
             FROM user_notification un
             JOIN notification n ON n.id = un.notification_id
             WHERE un.user_id = $1
+              AND whatsapp_linked_notification_allowed(n.id,un.user_id)
               AND un.deleted_at IS NULL
               AND (un.state = ANY($4::notification_state[]) OR ($5 AND un.seen_at IS NULL))
               AND EXISTS (
@@ -1080,6 +1103,7 @@ impl NotificationDbOps for PgPool {
             FROM user_notification un
             JOIN notification n ON n.id = un.notification_id
             WHERE un.user_id = $1
+              AND whatsapp_linked_notification_allowed(n.id,un.user_id)
               AND un.notification_id = ANY($2)
               AND un.deleted_at IS NULL
               AND un.state = 'unseen'
@@ -1449,6 +1473,7 @@ impl NotificationDbOps for PgPool {
             FROM user_notification un
             JOIN notification n ON n.id = un.notification_id
             WHERE un.user_id = $1
+              AND whatsapp_linked_notification_allowed(n.id,un.user_id)
             AND un.notification_id = $2
             AND un.deleted_at IS NULL
             LIMIT 1
@@ -1687,6 +1712,16 @@ impl<D: NotificationDbOps + Send + Sync> NotificationRepository for DbNotificati
     ) -> Result<Option<Vec<UserNotificationRow<Arc<T>>>>, Report> {
         self.db
             .create_notification(request, notification_id, service_name, apns_collapse_key)
+            .await
+    }
+
+    async fn filter_delivery_recipients<'a>(
+        &self,
+        notification_id: Uuid,
+        recipients: &[MacroUserIdStr<'a>],
+    ) -> Result<HashSet<MacroUserIdStr<'static>>, Report> {
+        self.db
+            .filter_delivery_recipients(notification_id, recipients)
             .await
     }
 

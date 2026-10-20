@@ -160,7 +160,7 @@ where
         message: QueueMessage<'static, serde_json::Value, serde_json::Value>,
     ) -> Vec<Result<DeliverySuccess, Report<DeliveryFailure>>> {
         let access_request = message.message_type() == "entity_access_requested";
-        let content = message.into_inner();
+        let mut content = message.into_inner();
         if access_request {
             let notification_id = match &content {
                 NotificationChannel::ConnGateway(conn) => conn.notif.notification_id,
@@ -187,6 +187,47 @@ where
                 Ok(true) => return Vec::new(),
                 Ok(false) => {}
                 Err(error) => return vec![Err(error.context(DeliveryFailure::Other))],
+            }
+        }
+
+        let scoped = match &content {
+            NotificationChannel::ConnGateway(conn) => {
+                Some((conn.notif.notification_id, conn.recipients.clone()))
+            }
+            NotificationChannel::Ios(apns) => apns
+                .authorization_notification_id
+                .or_else(|| {
+                    serde_json::from_value::<crate::domain::models::apple::PushNotificationData>(
+                        apns.notif.push_notification_data.clone(),
+                    )
+                    .ok()
+                    .map(|data| data.notification_id)
+                })
+                .map(|id| (id, apns.ios_device_endpoints.keys().cloned().collect())),
+            NotificationChannel::Email(email) => {
+                email.notification_id.map(|id| (id, vec![email.to.clone()]))
+            }
+        };
+        if let Some((id, recipients)) = scoped {
+            let allowed = match self
+                .repository
+                .filter_delivery_recipients(id, &recipients)
+                .await
+            {
+                Ok(allowed) => allowed,
+                Err(error) => return vec![Err(error.context(DeliveryFailure::Other))],
+            };
+            if allowed.is_empty() {
+                return Vec::new();
+            }
+            match &mut content {
+                NotificationChannel::ConnGateway(conn) => {
+                    conn.recipients.retain(|user| allowed.contains(user))
+                }
+                NotificationChannel::Ios(apns) => apns
+                    .ios_device_endpoints
+                    .retain(|user, _| allowed.contains(user)),
+                NotificationChannel::Email(_) => {}
             }
         }
 
@@ -322,6 +363,7 @@ where
             to: recipient,
             rate_limit_config,
             rate_limit_key,
+            notification_id: _,
         } = email;
 
         let ticket = self
@@ -506,7 +548,7 @@ where
             return Ok(ClaimResult::Ready(()));
         }
 
-        let email_content = EmailCreateBundle::new(&email_notif).with_recipient(recipient);
+        let email_content = EmailCreateBundle::new(&email_notif).with_recipient(recipient, None);
 
         let message: QueueMessage<'static, T, ()> =
             QueueMessage::new_from_email(email_content, &typename);

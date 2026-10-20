@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE whatsapp_pairing SET state='connected',consumed_at=clock_timestamp() WHERE id=$1 AND user_id=$2 AND account_id=$3 AND authorization_generation=$4 AND consumed_at IS NULL AND expires_at>clock_timestamp() AND (expected_identity_jid IS NULL OR expected_identity_jid=$5)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5a6b99e4973f4fe30301382e94bf81c24610c4bffb553eb86f377da9a5d735dd"
+}

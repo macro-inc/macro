@@ -493,6 +493,8 @@ async fn deleted_blank_imported_and_bot_messages_read_as_their_authors_wrote_the
     let blank = posted(&parent, 21, None, "teo@example.com", "  \n ", 1);
     let imported = Message {
         imported_author: Some(ImportedAuthor {
+            verified_user_id: None,
+            origin: None,
             name: "Dana (Slack)".to_owned(),
         }),
         ..posted(&parent, 22, None, "importer@example.com", "from slack", 2)

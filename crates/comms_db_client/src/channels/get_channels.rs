@@ -1,4 +1,3 @@
-use cached::proc_macro::cached;
 use channels::domain::models::ChannelListItem;
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
@@ -15,6 +14,7 @@ pub async fn check_channels_for_user(
         FROM comms_channels c
         INNER JOIN comms_channel_participants cp ON cp.channel_id = c.id 
         WHERE cp.user_id = $1 AND cp.left_at IS NULL
+            AND CASE WHEN c.messaging_binding='whatsapp_linked_group' THEN whatsapp_linked_can_view(c.id,$1) ELSE true END
         AND c.id = ANY($2::uuid[])
         "#,
         user_id,
@@ -28,12 +28,6 @@ pub async fn check_channels_for_user(
 }
 
 #[tracing::instrument(skip(db, _user_org_id))]
-#[cached(
-    time = 5,
-    result = true,
-    key = "String",
-    convert = r#"{ user_id.to_string() }"#
-)]
 pub async fn get_user_channel_ids(
     db: &Pool<Postgres>,
     user_id: &str,
@@ -46,6 +40,7 @@ pub async fn get_user_channel_ids(
             FROM comms_channels c
             INNER JOIN comms_channel_participants cp ON cp.channel_id = c.id
             WHERE cp.user_id = $1 AND cp.left_at IS NULL
+            AND CASE WHEN c.messaging_binding='whatsapp_linked_group' THEN whatsapp_linked_can_view(c.id,$1) ELSE true END
         )
         SELECT
             id as "id!"

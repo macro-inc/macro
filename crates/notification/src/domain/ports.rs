@@ -82,6 +82,13 @@ pub trait NotificationRepository: Send + Sync + 'static {
         apns_collapse_key: Option<&str>,
     ) -> impl Future<Output = Result<Option<Vec<UserNotificationRow<Arc<T>>>>, Report>> + Send;
 
+    /// Retain recipients with current access at retry and final delivery.
+    fn filter_delivery_recipients<'a>(
+        &self,
+        notification_id: Uuid,
+        recipients: &[MacroUserIdStr<'a>],
+    ) -> impl std::future::Future<Output = Result<HashSet<MacroUserIdStr<'static>>, Report>> + Send;
+
     /// Whether a resolved workflow has withdrawn this notification before delivery.
     fn notification_is_withdrawn(
         &self,

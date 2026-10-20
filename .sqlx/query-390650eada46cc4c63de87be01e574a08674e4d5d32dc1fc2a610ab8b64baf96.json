@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE whatsapp_pairing SET state='cancelled',consumed_at=now(),handoff_sha256=NULL WHERE account_id=$1 AND consumed_at IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "390650eada46cc4c63de87be01e574a08674e4d5d32dc1fc2a610ab8b64baf96"
+}

@@ -31,7 +31,9 @@ export function ExternalBadge() {
         class="shrink-0 rounded px-1 text-xs text-ink-muted ring ring-edge-muted"
         title="Sent from a connected external account"
       >
-        External
+        {message().imported_author?.origin === 'whatsapp'
+          ? 'WhatsApp'
+          : 'External'}
       </span>
     </Show>
   );
@@ -42,7 +44,15 @@ export function SenderName(props: { message: MessageData }) {
   const displayName = () => getDisplayName(macroId());
   const agentName = () =>
     getBotDisplayName(props.message.sender_id, props.message.sender);
+  const verifiedName = () =>
+    props.message.imported_author?.verified_user_id
+      ? getDisplayName(
+          tryMacroId(props.message.imported_author.verified_user_id)
+        )
+      : undefined;
   const importedName = () =>
     props.message.imported_author?.name?.trim() || undefined;
-  return <>{importedName() ?? agentName() ?? displayName()}</>;
+  return (
+    <>{verifiedName() ?? importedName() ?? agentName() ?? displayName()}</>
+  );
 }

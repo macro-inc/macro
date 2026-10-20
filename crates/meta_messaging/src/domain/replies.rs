@@ -16,12 +16,27 @@ use super::{
 pub struct AccountScope {
     /// Retained connection identity.
     pub id: Uuid,
-    /// Owning Macro team; provider permission never substitutes for membership.
+    /// Conversation workspace; personal account ownership remains independent.
     pub team_id: Uuid,
     /// Authorization generation fenced at durable dispatch.
     pub generation: Option<DateTime<Utc>>,
+    /// Personal account authorization and worker ownership, absent for business accounts.
+    pub personal: Option<PersonalAccountScope>,
     /// Current account health.
     pub status: ConnectionStatus,
+}
+
+/// Personal sending identity selected by the server from the authenticated actor.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PersonalAccountScope {
+    /// Stable authenticated Macro owner.
+    pub user_id: String,
+    /// Explicit consent generation; reconnecting a socket never changes it.
+    pub authorization_generation: i64,
+    /// Exclusive worker incarnation, independently monotonic.
+    pub owner_epoch: i64,
+    /// Verified account identity, never a user-entered phone number.
+    pub identity_jid: String,
 }
 
 /// Operations implemented by this integration, independently of current permission.
@@ -167,7 +182,13 @@ impl ReplyCapabilities {
         if !self.modes.contains(&reply_mode(request)) {
             return Err(ReplyBlockReason::Unsupported.error());
         }
-        if let ReplyContent::Text { text } = &request.message {
+        if let ReplyContent::Text { text }
+        | ReplyContent::Mutation {
+            text: Some(text),
+            operation: super::connection::LinkedMutation::Edit,
+            ..
+        } = &request.message
+        {
             let length = if self.text_limit_in_bytes {
                 text.len()
             } else {

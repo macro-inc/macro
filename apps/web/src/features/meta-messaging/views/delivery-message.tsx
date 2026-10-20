@@ -45,6 +45,13 @@ export function ReplyAttempt(props: {
   const preview = () =>
     match(props.send.payload.message)
       .with({ type: 'text' }, (message) => message.text)
+      .with({ type: 'mutation' }, (message) =>
+        message.operation === 'reaction'
+          ? 'Updating reaction'
+          : message.operation === 'edit'
+            ? 'Editing message'
+            : 'Deleting message for everyone'
+      )
       .with({ type: 'media' }, (message) =>
         message.caption
           ? `${message.caption}\n${message.kind} attachment`

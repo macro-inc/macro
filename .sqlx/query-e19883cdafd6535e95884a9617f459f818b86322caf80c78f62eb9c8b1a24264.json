@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS(SELECT 1 FROM whatsapp_group_binding b JOIN whatsapp_linked_account a ON a.id=$3 JOIN whatsapp_group_membership m ON m.binding_id=b.id AND m.account_id=a.id WHERE b.id=$1 AND b.user_id=$2 AND b.ownership_state='active' AND b.state='active' AND a.authorization_generation=$4 AND a.state IN ('connected','offline') AND m.authorization_generation=$4 AND m.consent_ended_at IS NULL AND whatsapp_linked_can_view(b.channel_id,a.user_id) AND whatsapp_linked_can_view(b.channel_id,b.user_id)) AS \"valid!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "valid!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "e19883cdafd6535e95884a9617f459f818b86322caf80c78f62eb9c8b1a24264"
+}

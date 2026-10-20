@@ -6,5 +6,7 @@
 	<string>Macro</string>
 	<key>CFBundleIconName</key>
 	<string>Macro</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Macro uses Bluetooth to securely authenticate a WhatsApp connection with your nearby phone.</string>
 </dict>
 </plist>

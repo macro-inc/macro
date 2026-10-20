@@ -1,0 +1,68 @@
+// Copyright (c) 2026 Macro
+// SPDX-License-Identifier: MPL-2.0
+package socket
+
+import (
+    "context"
+    "crypto/aes"
+    "crypto/cipher"
+    "errors"
+    "net"
+    "net/http"
+    "net/http/httptest"
+    "strings"
+    "sync"
+    "sync/atomic"
+    "testing"
+    "time"
+
+    "github.com/coder/websocket"
+    waLog "go.mau.fi/whatsmeow/util/log"
+)
+
+type heldWriteConn struct {
+    net.Conn
+    hold atomic.Bool
+    active atomic.Int32
+    writes atomic.Int32
+    entered chan struct{}
+    closed chan struct{}
+    once sync.Once
+}
+func (c *heldWriteConn) Write(bytes []byte)(int,error){
+    if !c.hold.Load(){return c.Conn.Write(bytes)}
+    c.active.Add(1);defer c.active.Add(-1);c.writes.Add(1)
+    select{case c.entered<-struct{}{}:default:}
+    <-c.closed
+    return 0,net.ErrClosed
+}
+func (c *heldWriteConn) Close()error{c.once.Do(func(){close(c.closed)});return c.Conn.Close()}
+
+// Exercise the actual coder/websocket -> FrameSocket -> NoiseSocket path. The
+// write is known to be physically blocked before cancellation, without sleeps.
+func TestMacroCancellationRetiresPhysicalWriter(t *testing.T){
+    serverDone:=make(chan struct{})
+    server:=httptest.NewServer(http.HandlerFunc(func(out http.ResponseWriter,r *http.Request){
+        ws,err:=websocket.Accept(out,r,&websocket.AcceptOptions{InsecureSkipVerify:true});if err!=nil{return};defer ws.CloseNow();<-serverDone
+    }));defer func(){close(serverDone);server.Close()}()
+    connections:=make(chan *heldWriteConn,1)
+    transport:=&http.Transport{DialContext:func(ctx context.Context,network,address string)(net.Conn,error){
+        raw,err:=(&net.Dialer{}).DialContext(ctx,network,address);if err!=nil{return nil,err}
+        c:=&heldWriteConn{Conn:raw,entered:make(chan struct{},1),closed:make(chan struct{})};connections<-c;return c,nil
+    }};defer transport.CloseIdleConnections()
+    fs:=NewFrameSocket(waLog.Noop,&http.Client{Transport:transport});fs.URL="ws"+strings.TrimPrefix(server.URL,"http")
+    ctx,cancel:=context.WithTimeout(context.Background(),5*time.Second);defer cancel()
+    if err:=fs.Connect(ctx);err!=nil{t.Fatal(err)}
+    conn:=<-connections;conn.hold.Store(true)
+    block,err:=aes.NewCipher(make([]byte,32));if err!=nil{t.Fatal(err)};key,err:=cipher.NewGCM(block);if err!=nil{t.Fatal(err)}
+    noise,err:=newNoiseSocket(fs,key,key,func(context.Context,[]byte){},func(context.Context,*NoiseSocket,bool){});if err!=nil{t.Fatal(err)}
+    writeCtx,cancelWrite:=context.WithCancel(ctx)
+    done:=make(chan error,1);go func(){done<-noise.SendFrame(writeCtx,[]byte("controlled frame"))}()
+    select{case <-conn.entered:case <-ctx.Done():t.Fatal("physical write did not start")}
+    cancelWrite()
+    select{case err:=<-done:if err==nil{t.Fatal("cancelled write reported success")};case <-ctx.Done():t.Fatal("physical writer was not retired")}
+    if conn.active.Load()!=0{t.Fatal("SendFrame returned while a physical writer remained active")}
+    if !noise.destroyed.Load(){t.Fatal("failed encrypted stream remained reusable")}
+    if err=noise.SendFrame(ctx,[]byte("second frame"));!errors.Is(err,ErrSocketClosed){t.Fatalf("retired stream accepted another frame: %v",err)}
+    if conn.writes.Load()!=1{t.Fatalf("physical submissions=%d",conn.writes.Load())}
+}

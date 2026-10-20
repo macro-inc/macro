@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_send s SET dispatch_started_at=clock_timestamp(),payload=jsonb_set(payload,'{rendered_text}',to_jsonb($7::text))\n          FROM whatsapp_linked_account a,whatsapp_session_owner o,whatsapp_group_membership m\n          WHERE s.id=$1 AND s.lease_id=$2 AND s.lease_until>clock_timestamp() AND s.state='sending' AND s.dispatch_started_at IS NULL\n          AND s.linked_account_id=$3 AND s.linked_binding_id=$4 AND s.authorization_generation=$5 AND s.owner_epoch=$6\n          AND s.allocated_source_id IS NOT NULL AND a.id=$3 AND a.user_id=s.user_id AND a.authorization_generation=$5 AND a.state='connected'\n          AND o.account_id=$3 AND o.epoch=$6 AND o.state='running' AND o.lease_until>clock_timestamp()\n          AND m.binding_id=$4 AND m.account_id=$3 AND m.authorization_generation=$5 AND m.consent_ended_at IS NULL\n          AND m.reconciled AND m.remote_member AND m.can_post AND m.observed_at>clock_timestamp()-interval '2 minutes'\n          AND whatsapp_linked_can_view(s.channel_id,s.user_id)\n          AND EXISTS(SELECT 1 FROM whatsapp_group_binding b WHERE b.id=s.linked_binding_id AND b.state='active' AND b.ownership_state='active')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Int8",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "bd3057141b3089c23a173a68d6b2ddc85403e5162f69b50f442d4099d2b9ce31"
+}

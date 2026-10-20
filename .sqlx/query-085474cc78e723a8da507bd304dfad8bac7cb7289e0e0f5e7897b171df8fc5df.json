@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT to_jsonb(s) AS \"data!\",request_sha256,linked_account_id,authorization_generation FROM meta_messaging_send s WHERE channel_id=$1 AND user_id=$2 AND idempotency_key=$3 FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "data!",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 1,
+        "name": "request_sha256",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 2,
+        "name": "linked_account_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "authorization_generation",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "085474cc78e723a8da507bd304dfad8bac7cb7289e0e0f5e7897b171df8fc5df"
+}

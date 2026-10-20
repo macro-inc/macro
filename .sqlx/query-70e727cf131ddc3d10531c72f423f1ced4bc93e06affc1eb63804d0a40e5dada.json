@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT EXISTS (\n            SELECT 1\n            FROM entity_access\n            WHERE entity_id = $1\n              AND entity_type = 'document'\n              AND source_id = ANY($2)\n              AND access_level = 'owner'\n        ) AS \"is_direct_owner!\", whatsapp_linked_can_read_document($1,$3) AS \"linked_allowed!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "is_direct_owner!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "linked_allowed!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "70e727cf131ddc3d10531c72f423f1ced4bc93e06affc1eb63804d0a40e5dada"
+}

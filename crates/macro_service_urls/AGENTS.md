@@ -49,3 +49,5 @@ service and gateway, resolved from `macro_env::Environment` with an
 
 - Rules: `.agents/rules/config-and-service-urls.md` ·
   Docs: `docs/guides/new-service.md` (§5 Service discovery)
+
+`WhatsAppSessionServiceUrl` is private mTLS control traffic from DSS only. Its override is `OVERRIDE_WHATS_APP_SESSION_SERVICE_URL`; it has no public web/SDK route. The optional standalone service supplies its private bind address; the default local stack leaves all linked-device gates off. See `docs/WHATSAPP_LINKED_DEVICES.md`.

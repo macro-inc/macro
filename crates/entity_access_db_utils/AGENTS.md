@@ -55,3 +55,7 @@ top of it.
 ## Related
 
 - Rules: `.agents/rules/rust/db.md`, `.agents/rules/rust/architecture.md`
+
+## Personal WhatsApp linked devices
+
+Use `delete_channel_document_grant` for an imported source's deletion: it removes only that channel/document grant inside the caller's transaction. Never remove unrelated owner, direct, team or other-channel grants. See `docs/WHATSAPP_LINKED_DEVICES.md`.

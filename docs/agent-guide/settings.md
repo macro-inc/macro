@@ -499,3 +499,9 @@ OAuth token.
 The Codex section and its auth/config requests were exercised in Chromium with
 mocked backend responses on 2026-09-15. Provider login and a full deployed Macro
 session were not exercised by that UI check.
+
+## Personal WhatsApp
+
+In **Settings → Integrations**, the personal WhatsApp row has Connect, identity/health and Disconnect. A focused pairing dialog renders its QR locally. A passkey-required browser flow offers **Finish connecting in Macro desktop**; the desktop must authenticate the same owner before fetching the real challenge. The flow identifier is the only handoff URL value. Confirm the shown code deliberately; cancellation/expiry must stop the flow, and transient status errors must not demand a fresh pairing. **Use a different account** explicitly replaces consent and requires choosing groups again.
+
+Pairing DOM is excluded from session replay. Check that no QR/challenge appears in request URLs, persisted query state, screenshots submitted to telemetry or console logs. Actual authenticator/device qualification is an operator task; controlled browser fixtures do not establish WhatsApp delivery or authentication compatibility.

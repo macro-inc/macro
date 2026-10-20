@@ -82,7 +82,13 @@ impl MessagingService {
         let Some(conversation) = self.conversation(access).await? else {
             return Ok(None);
         };
-        let account = self.account(conversation.connection_id).await?;
+        let user = access
+            .get_authenticated_user()
+            .map_err(|_| MessagingError::Forbidden)?;
+        let account = self
+            .repository
+            .account_for_sender(&conversation, user.as_ref())
+            .await?;
         let can_reply = if let Ok(user) = access.get_authenticated_user() {
             self.native
                 .require_send(account.team_id, conversation.channel_id, user.as_ref())
@@ -146,7 +152,10 @@ impl MessagingService {
             .conversation(channel)
             .await?
             .ok_or(MessagingError::NotFound)?;
-        let account = self.account(conversation.connection_id).await?;
+        let account = self
+            .repository
+            .account_for_sender(&conversation, user)
+            .await?;
         self.native
             .require_send(account.team_id, channel, user)
             .await?;
@@ -196,7 +205,10 @@ impl MessagingService {
             .conversation(channel)
             .await?
             .ok_or(MessagingError::NotFound)?;
-        let account = self.account(conversation.connection_id).await?;
+        let account = self
+            .repository
+            .account_for_sender(&conversation, user)
+            .await?;
         self.native
             .require_send(account.team_id, channel, user)
             .await?;
@@ -219,9 +231,9 @@ impl MessagingService {
         self.native.upload_attachment(user, channel, file).await
     }
 
-    async fn account(&self, id: Uuid) -> PortResult<AccountScope> {
+    async fn account(&self, id: Uuid, channel: Uuid) -> PortResult<AccountScope> {
         self.repository
-            .account_scope(id)
+            .account_scope(id, channel)
             .await?
             .ok_or_else(|| MessagingError::NotFound.into())
     }

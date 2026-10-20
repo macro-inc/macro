@@ -219,3 +219,7 @@ fetch invite links only through the authorized action. The shared functional
 messaging journeys cover these flows using fixtures, not live Meta effects.
 
 Native metadata loading/error state gates the composer and exposes a retry; unknown metadata never implies native. Participants/team controls read channel detail, independent of sidebar membership. Keep cached account rows mounted through refresh errors so transient PIN input survives only in memory.
+
+## Personal WhatsApp linked devices
+
+Personal WhatsApp uses lazy Settings UI, a searchable existing-group step inside channel creation, and the normal channel/composer/Participants surfaces. Composer placeholders use the native channel name; account identity stays in Settings. The native `whatsapp_linked_group` marker must never trigger business account queries or internal fallback posting. Keep pairing codes/challenges under `ph-no-capture`, outside persistent query caches and URLs. Drafts include user/channel/personal account/generation. Browser coverage is `tests/functional/whatsapp-linked.spec.ts`; operations and native passkey limitations are in `docs/WHATSAPP_LINKED_DEVICES.md`.

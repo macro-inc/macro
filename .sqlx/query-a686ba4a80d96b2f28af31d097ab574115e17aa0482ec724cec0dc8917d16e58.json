@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE whatsapp_group_binding SET user_id=$2,ownership_state='active' WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a686ba4a80d96b2f28af31d097ab574115e17aa0482ec724cec0dc8917d16e58"
+}

@@ -115,6 +115,9 @@ impl HttpMetaProvider {
             .into());
         }
         let mut rendered_text = match &request.message {
+            ReplyContent::Mutation { .. } => {
+                return Err(MessagingError::Invalid("unsupported operation").into());
+            }
             ReplyContent::Text { text } => text.clone(),
             ReplyContent::Media { caption, .. } => caption.clone().unwrap_or_default(),
             _ => String::new(),
@@ -140,6 +143,9 @@ impl HttpMetaProvider {
             Provider::Instagram => json!({"recipient":{"id":conversation.customer_id.as_str()}}),
         };
         match &request.message {
+            ReplyContent::Mutation { .. } => {
+                return Err(MessagingError::Invalid("unsupported operation").into());
+            }
             ReplyContent::Text { text } => match c.provider {
                 Provider::Whatsapp => {
                     payload["type"] = json!("text");

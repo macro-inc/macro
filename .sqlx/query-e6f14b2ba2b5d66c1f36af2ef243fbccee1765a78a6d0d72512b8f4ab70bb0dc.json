@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT DISTINCT cp.user_id\n        FROM comms_channel_participants cp JOIN comms_channels c ON c.id=cp.channel_id\n        WHERE cp.channel_id = $1 AND cp.left_at IS NULL\n        AND CASE WHEN c.messaging_binding='whatsapp_linked_group' THEN whatsapp_linked_can_view(c.id,cp.user_id) ELSE true END\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "e6f14b2ba2b5d66c1f36af2ef243fbccee1765a78a6d0d72512b8f4ab70bb0dc"
+}

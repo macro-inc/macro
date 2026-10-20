@@ -18,4 +18,5 @@ export const MessagingBinding = {
   whatsapp_direct: 'whatsapp_direct',
   instagram_direct: 'instagram_direct',
   whatsapp_group: 'whatsapp_group',
+  whatsapp_linked_group: 'whatsapp_linked_group',
 } as const;

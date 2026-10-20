@@ -446,6 +446,7 @@ static CHANNEL_LIST_PREFIX: &str = r#"
         INNER JOIN comms_channel_participants cp ON cp.channel_id = c.id
         LEFT JOIN comms_activity a ON a.channel_id = c.id AND a.user_id = $1
         WHERE cp.user_id = $1 AND cp.left_at IS NULL
+          AND CASE WHEN c.messaging_binding='whatsapp_linked_group' THEN whatsapp_linked_can_view(c.id,$1) ELSE true END
 "#;
 
 /// Candidate set used when the filter mentions [`ChannelLiteral::IsParticipant`]:
@@ -474,7 +475,7 @@ static CHANNEL_LIST_PREFIX_WITH_TEAM_CHANNELS: &str = r#"
                       AND tu.user_id = $1
                 )
             )
-        )
+        ) AND CASE WHEN c.messaging_binding='whatsapp_linked_group' THEN whatsapp_linked_can_view(c.id,$1) ELSE true END
 "#;
 
 #[cfg(feature = "list")]
@@ -857,6 +858,7 @@ fn build_channel_thread_rows_query(
     builder.push_bind(params.user().as_ref().to_string());
     builder.push(
         r#" AND cp.left_at IS NULL
+          AND CASE WHEN c.messaging_binding='whatsapp_linked_group' THEN whatsapp_linked_can_view(c.id,cp.user_id) ELSE true END
         )
         SELECT
             m.id AS id,
@@ -1807,6 +1809,7 @@ impl ChannelRepo for PgChannelsRepo {
                   AND a.entity_id  = $2
                   AND cp.user_id   = $3
                   AND cp.left_at  IS NULL
+                  AND CASE WHEN c.messaging_binding='whatsapp_linked_group' THEN whatsapp_linked_can_view(c.id,cp.user_id) ELSE true END
                   AND m.deleted_at IS NULL
                 ORDER BY a.created_at DESC
                 "#,
@@ -1840,6 +1843,7 @@ impl ChannelRepo for PgChannelsRepo {
                   AND em.entity_id  = $2
                   AND cp.user_id   = $3
                   AND cp.left_at  IS NULL
+                  AND CASE WHEN c.messaging_binding='whatsapp_linked_group' THEN whatsapp_linked_can_view(c.id,cp.user_id) ELSE true END
                   AND m.deleted_at IS NULL
                 ORDER BY em.created_at DESC
                 "#,
@@ -2053,6 +2057,7 @@ impl ChannelRepo for PgChannelsRepo {
                 ) THEN true ELSE false END AS "has_access!: bool"
             FROM comms_channels c
             WHERE c.id::text = ANY($1)
+              AND CASE WHEN c.messaging_binding='whatsapp_linked_group' THEN whatsapp_linked_can_view(c.id,$2) ELSE true END
             "#,
             channel_ids,
             viewer_user_id,

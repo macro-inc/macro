@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT messaging_binding IN ('whatsapp_group','whatsapp_linked_group') AS \"managed!\" FROM comms_channels WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "managed!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "852615c929f959d163564c3adc2de18791988993d43204c3c16abaf968117ff1"
+}

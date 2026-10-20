@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE whatsapp_linked_account a SET state='disconnected',authorization_generation=a.authorization_generation+1,updated_at=now() FROM whatsapp_pairing p WHERE p.account_id=a.id AND p.authorization_generation=a.authorization_generation AND p.consumed_at IS NULL AND p.expires_at<=clock_timestamp()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "c44efe75e0ed6e63d7b22a35fa7f77b0fb4519db1ed83259f2f37660ba05dbca"
+}

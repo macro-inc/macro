@@ -103,10 +103,13 @@ impl MessagingService {
             .conversation(work.channel_id)
             .await?
             .ok_or(MessagingError::NotFound)?;
-        if conversation.connection_id != work.connection_id {
+        let connection = self
+            .repository
+            .account_for_sender(&conversation, &work.user_id)
+            .await?;
+        if connection.id != work.connection_id {
             return Err(MessagingError::Conflict.into());
         }
-        let connection = self.account(work.connection_id).await?;
         self.native
             .require_send(connection.team_id, work.channel_id, &work.user_id)
             .await?;
@@ -136,8 +139,15 @@ impl MessagingService {
             .transport
             .prepare(&connection, &conversation, &work.request, media.as_ref())
             .await?;
-        let current = self.account(connection.id).await?;
-        if current.team_id != connection.team_id || current.generation != connection.generation {
+        let current = self
+            .repository
+            .account_for_sender(&conversation, &work.user_id)
+            .await?;
+        if current.team_id != connection.team_id
+            || current.generation != connection.generation
+            || current.personal != connection.personal
+            || current.id != connection.id
+        {
             return Err(MessagingError::Conflict.into());
         }
         let latest = self
@@ -145,7 +155,7 @@ impl MessagingService {
             .conversation(work.channel_id)
             .await?
             .ok_or(MessagingError::NotFound)?;
-        if latest.connection_id != current.id {
+        if latest.connection_id != conversation.connection_id {
             return Err(MessagingError::Conflict.into());
         }
         if latest.customer_id != conversation.customer_id
@@ -170,6 +180,11 @@ impl MessagingService {
         self.native
             .require_send(current.team_id, work.channel_id, &work.user_id)
             .await?;
+        if let ReplyContent::Media { document_id, .. } = &work.request.message {
+            self.native
+                .require_media_access(&work.user_id, *document_id)
+                .await?;
+        }
         options
             .eligibility
             .require(reply_mode(&work.request), Utc::now())?;
@@ -199,10 +214,7 @@ impl MessagingService {
                     .conversation(work.channel_id)
                     .await?
                     .ok_or(MessagingError::NotFound)?;
-                if conversation.connection_id != work.connection_id {
-                    return Err(MessagingError::Conflict.into());
-                }
-                let connection = self.account(work.connection_id).await?;
+                let connection = self.account(work.connection_id, work.channel_id).await?;
                 self.native
                     .sent(&work, &conversation, &connection, &id)
                     .await

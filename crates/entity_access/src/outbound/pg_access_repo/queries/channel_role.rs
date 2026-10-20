@@ -18,6 +18,7 @@ struct ChannelRoleRow {
     #[cfg_attr(not(feature = "explain_binary"), allow(dead_code))]
     team_id: Option<Uuid>,
     is_team_member: bool,
+    linked_allowed: bool,
 }
 
 /// Row returned from the team-scoped channel role query.
@@ -45,6 +46,7 @@ async fn fetch_channel_role_row(
         r#"
         SELECT
             cp.role::text as "role?",
+            CASE WHEN c.messaging_binding='whatsapp_linked_group' THEN whatsapp_linked_can_view(c.id,$2) ELSE true END AS "linked_allowed!",
             c.channel_type::text as "channel_type!",
             c.org_id as "org_id?",
             c.team_id as "team_id?",
@@ -90,6 +92,9 @@ pub async fn get_channel_role(
         return Ok(ChannelRoleResult::NotFound);
     };
 
+    if !row.linked_allowed {
+        return Ok(ChannelRoleResult::NoAccess);
+    }
     let role = match row.channel_type.as_str() {
         "public" => Some(
             row.role
@@ -136,6 +141,9 @@ pub async fn explain_channel_access(
         return Ok(vec![]);
     };
 
+    if !row.linked_allowed {
+        return Ok(vec![]);
+    }
     if let Some(stored_role) = row.role.as_deref() {
         return Ok(vec![AccessGrant::ChannelParticipant {
             role: parse_role(stored_role),
@@ -187,6 +195,7 @@ pub async fn get_team_channel_role(
          AND cp.user_id = $2
          AND cp.left_at IS NULL
          AND b.id IS NOT NULL
+         AND c.messaging_binding<>'whatsapp_linked_group'
          AND NOT EXISTS (
              SELECT 1
              FROM comms_channel_agents ca

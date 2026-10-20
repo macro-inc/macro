@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE whatsapp_attachment SET state='ready',lease_id=NULL,lease_until=NULL WHERE document_id=$1 AND lease_id=$2 AND lease_until>now() RETURNING document_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "document_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "4ca11c6dca02410458b4b05ffe82f073d4b618cea715a31afd46d3ef60c72a4e"
+}

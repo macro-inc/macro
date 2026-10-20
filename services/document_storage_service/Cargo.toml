@@ -27,6 +27,8 @@ local_auth = ["macro_authorization/local_auth"]
 location_check = []
 
 [dependencies]
+entity_access_db_utils = { path = "../../crates/entity_access_db_utils" }
+zeroize = { workspace = true }
 access_requests = { path = "../../crates/access_requests" }
 async-trait = { workspace = true }
 ai_billing = { path = "../../crates/ai_billing" }

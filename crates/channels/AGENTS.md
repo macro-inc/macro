@@ -71,3 +71,7 @@ local name/visibility mutations and fails generic deletion closed for these chan
 revalidates human authority and synchronizes through native teardown. DSS uses explicit human-authorized messaging deletion, so its generic native
 delete remains fail closed for groups. Private-chat reuse selects only native bindings, excluding every external conversation. `pg_channels_repo/provider.rs` owns transactional provider
 subject changes; DSS publishes the returned ordinary channel event.
+
+## Personal WhatsApp linked devices
+
+Personal `whatsapp_linked_group` bindings preserve native access and block generic provider mutations/calls. Participant, preview, thread and list queries gate current linked audiences behind the native marker. Remote membership never creates native grants; local detach never deletes a remote group. See `docs/WHATSAPP_LINKED_DEVICES.md`.

@@ -6623,6 +6623,7 @@ dependencies = [
  "webhook",
  "work_feed",
  "workspace-hack",
+ "zeroize",
  "zip",
 ]
 

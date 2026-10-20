@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_send SET state='accepted',provider_message_id=allocated_source_id,lease_id=NULL,lease_until=NULL,native_retry_at=now() WHERE id=$1 AND linked_account_id=$2 AND authorization_generation=$3 AND allocated_source_id=$4 AND dispatch_started_at IS NOT NULL AND provider_message_id IS NULL AND state IN ('sending','unknown')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6d9ec7f493c089bd56d8953ef1a8d76e29403bdaafcfd761b2b7e584febc12d0"
+}

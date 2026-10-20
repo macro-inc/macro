@@ -193,6 +193,7 @@ impl messages::domain::api::MessageCommands for RecordingMessages {
     ) -> Result<messages::domain::models::Message, messages::domain::ports::MessageError> {
         let reactions = if add {
             vec![messages::domain::models::CountedReaction {
+                external_users: vec![],
                 emoji: emoji.clone(),
                 users: vec![TEST_USER_ID.to_string()],
             }]

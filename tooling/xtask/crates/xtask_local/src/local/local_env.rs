@@ -681,6 +681,12 @@ struct BootStubEnv;
 
 impl BootStubEnv {
     fn write(&self, env: &mut BTreeMap<String, String>) {
+        // Hosted personal sessions remain opt-in; no live accounts on local boot.
+        env.insert("WHATSAPP_LINKED_PAIRING_ENABLED".into(), "false".into());
+        env.insert("WHATSAPP_LINKED_ADOPTION_ENABLED".into(), "false".into());
+        env.insert("WHATSAPP_LINKED_SENDING_ENABLED".into(), "false".into());
+        env.insert("WHATSAPP_SESSION_CLIENT_IDENTITY_PEM".into(), String::new());
+        env.insert("WHATSAPP_SESSION_CA_PEM".into(), String::new());
         // Empty keeps optional Platform signup off until an explicit local config supplies it.
         env.insert(
             "META_WHATSAPP_PLATFORM_CONFIGURATION_ID".into(),

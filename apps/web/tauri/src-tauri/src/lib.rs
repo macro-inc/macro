@@ -1,3 +1,4 @@
+mod whatsapp_passkey;
 use device::{IsIpad, detect_is_ipad, is_ipad};
 use logger::Logger;
 use macro_bundle_updater_plugin::domain::{
@@ -313,6 +314,7 @@ pub fn run() {
         .manage(graphql_cache_plugin::CacheState::default())
         .manage(IsIpad(is_ipad_device))
         .invoke_handler(tauri::generate_handler![
+            whatsapp_passkey::authenticate_whatsapp_passkey,
             desktop_update::get_native_update_status,
             desktop_update::restart_native_update,
             diagnostics::read_desktop_diagnostics,

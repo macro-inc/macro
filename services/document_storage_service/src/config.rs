@@ -248,3 +248,21 @@ impl Config {
             .context("ENABLE_NON_USER_OWNERS must be `true` or `false`")
     }
 }
+
+// Optional hosted personal-device configuration, loaded once at composition.
+macro_env_var::maybe_env_vars! {
+    pub struct WhatsappLinkedPairingEnabled;
+    pub struct WhatsappLinkedAdoptionEnabled;
+    pub struct WhatsappLinkedSendingEnabled;
+    pub struct WhatsappSessionClientIdentityPem;
+    pub struct WhatsappSessionCaPem;
+}
+#[derive(macro_config::MacroConfig)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub struct LinkedConfig {
+    pub whatsapp_linked_pairing_enabled: WhatsappLinkedPairingEnabled,
+    pub whatsapp_linked_adoption_enabled: WhatsappLinkedAdoptionEnabled,
+    pub whatsapp_linked_sending_enabled: WhatsappLinkedSendingEnabled,
+    pub whatsapp_session_client_identity_pem: WhatsappSessionClientIdentityPem,
+    pub whatsapp_session_ca_pem: WhatsappSessionCaPem,
+}

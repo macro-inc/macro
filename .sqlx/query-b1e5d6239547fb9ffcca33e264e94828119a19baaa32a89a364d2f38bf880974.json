@@ -1,0 +1,27 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS(SELECT 1 FROM whatsapp_group_binding b\n          JOIN whatsapp_group_membership m ON m.binding_id=b.id\n          JOIN whatsapp_linked_account a ON a.id=m.account_id\n          JOIN whatsapp_session_owner o ON o.account_id=a.id\n          JOIN whatsapp_group_audience v ON v.binding_id=b.id AND v.user_id=a.user_id\n          JOIN comms_channel_participants cp ON cp.channel_id=b.channel_id AND cp.user_id=a.user_id AND cp.left_at IS NULL\n          JOIN team_user tu ON tu.team_id=b.team_id AND tu.user_id=a.user_id\n          WHERE b.id=$1 AND b.channel_id=$2 AND b.state='active' AND b.ownership_state='active'\n          AND a.id=$3 AND a.user_id=$4 AND a.state='connected' AND a.authorization_generation=$5\n          AND o.epoch=$6 AND o.state='running' AND o.lease_until>clock_timestamp()\n          AND m.authorization_generation=a.authorization_generation AND m.consent_ended_at IS NULL\n          AND m.remote_member AND m.can_post AND m.reconciled AND m.observed_at>clock_timestamp()-interval '2 minutes'\n          AND v.remote_member AND v.reconciled AND v.revoked_at IS NULL) AS \"eligible!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "eligible!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "b1e5d6239547fb9ffcca33e264e94828119a19baaa32a89a364d2f38bf880974"
+}

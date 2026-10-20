@@ -38,6 +38,9 @@ pub struct UserApnsEndpoints {
 /// Mobile push targets using the existing APNS content template and queue format.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct APNSTargets<T> {
+    /// Original notification for delivery authorization; absent on legacy and silent-clear payloads.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub authorization_notification_id: Option<Uuid>,
     /// The APNS notification payload.
     pub notif: APNSPushNotification<T>,
     /// The APNS message attributes.
@@ -58,6 +61,9 @@ pub struct EmailContent {
 /// Email notification payload.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct EmailNotification<'a> {
+    /// Original notification for final authorization. Legacy/digest payloads have none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) notification_id: Option<Uuid>,
     /// The recipient email/user ID.
     pub(crate) to: MacroUserIdStr<'a>,
     /// The email content (subject and body).
@@ -92,13 +98,18 @@ impl EmailCreateBundle {
         }
     }
 
-    pub(crate) fn with_recipient<'a>(self, to: MacroUserIdStr<'a>) -> EmailNotification<'a> {
+    pub(crate) fn with_recipient<'a>(
+        self,
+        to: MacroUserIdStr<'a>,
+        notification_id: Option<Uuid>,
+    ) -> EmailNotification<'a> {
         let EmailCreateBundle {
             content,
             rate_limit_config,
             rate_limit_key,
         } = self;
         EmailNotification {
+            notification_id,
             to,
             content,
             rate_limit_config,

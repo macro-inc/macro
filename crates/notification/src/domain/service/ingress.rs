@@ -263,11 +263,18 @@ where
             }));
         };
 
+        let candidates: Vec<_> = n.iter().map(|row| row.owner_id.clone()).collect();
+        let permitted = self
+            .repository
+            .filter_delivery_recipients(notification_id, &candidates)
+            .await
+            .context(SendNotificationError::Other)?;
         // Do not alert again after a recipient has already acted on the stored notification.
         let n: Vec<_> = n
             .into_iter()
             .filter(|row| {
-                row.state == crate::domain::models::NotificationState::Unseen
+                permitted.contains(&row.owner_id)
+                    && row.state == crate::domain::models::NotificationState::Unseen
                     && row.deleted_at.is_none()
             })
             .collect();
@@ -281,7 +288,7 @@ where
                 notified_recipients: HashSet::new(),
             }));
         }
-        // A retry uses the original recipients, including when current filters changed.
+        // A retry uses the original recipients, subject to current authorization.
         request.req.recipient_ids = n.iter().map(|row| row.owner_id.clone()).collect();
         let notified_recipients = request.req.recipient_ids.clone();
         let (queue_messages, _) = self
@@ -394,6 +401,7 @@ where
                 apns_collapse_key = Some(attr.collapse_key.clone());
                 messages.push(QueueMessage::new_from_apns(
                     APNSTargets {
+                        authorization_notification_id: Some(notification_id),
                         notif,
                         attributes: attr,
                         ios_device_endpoints: mobile_endpoints,
@@ -408,7 +416,7 @@ where
             for recipient in &notification.req.recipient_ids {
                 let email_content = build_email.clone();
                 messages.push(QueueMessage::new_from_email(
-                    email_content.with_recipient(recipient.clone()),
+                    email_content.with_recipient(recipient.clone(), Some(notification_id)),
                     typename,
                 ));
             }
@@ -588,6 +596,7 @@ where
 
                     QueueMessage::new_from_apns(
                         APNSTargets {
+                            authorization_notification_id: None,
                             notif: APNSPushNotification {
                                 aps: Aps {
                                     content_available: Some(1),

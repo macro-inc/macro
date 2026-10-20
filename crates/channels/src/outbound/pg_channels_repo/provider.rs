@@ -82,7 +82,36 @@ impl PgChannelsRepo {
 impl crate::domain::provider::ChannelCallPolicy for PgChannelsRepo {
     type Err = sqlx::Error;
     async fn allows_calls(&self, channel: Uuid) -> Result<bool, Self::Err> {
-        Ok(sqlx::query_scalar!("SELECT messaging_binding <> 'whatsapp_group' AS \"allowed!\" FROM comms_channels WHERE id=$1",channel)
+        Ok(sqlx::query_scalar!("SELECT messaging_binding NOT IN ('whatsapp_group','whatsapp_linked_group') AS \"allowed!\" FROM comms_channels WHERE id=$1",channel)
             .fetch_optional(&self.pool).await?.unwrap_or(false))
+    }
+}
+
+impl PgChannelsRepo {
+    /// Transfer a linked channel's native ownership after the host has checked
+    /// native management and the new owner's verified group/workspace access.
+    /// Existing document owners are deliberately not changed by this operation.
+    pub async fn transfer_linked_owner_in(
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        channel: Uuid,
+        new_owner: &str,
+    ) -> anyhow::Result<()> {
+        let current=sqlx::query!("SELECT owner_id FROM comms_channels WHERE id=$1 AND messaging_binding='whatsapp_linked_group' FOR UPDATE",channel).fetch_one(&mut **tx).await?;
+        let changed=sqlx::query!("UPDATE comms_channel_participants SET role='owner' WHERE channel_id=$1 AND user_id=$2 AND left_at IS NULL",channel,new_owner).execute(&mut **tx).await?;
+        anyhow::ensure!(
+            changed.rows_affected() == 1,
+            "new owner must be an active native participant"
+        );
+        if current.owner_id != new_owner {
+            sqlx::query!("UPDATE comms_channel_participants SET role='member' WHERE channel_id=$1 AND user_id=$2",channel,current.owner_id).execute(&mut **tx).await?;
+        }
+        sqlx::query!(
+            "UPDATE comms_channels SET owner_id=$2,updated_at=now() WHERE id=$1",
+            channel,
+            new_owner
+        )
+        .execute(&mut **tx)
+        .await?;
+        Ok(())
     }
 }

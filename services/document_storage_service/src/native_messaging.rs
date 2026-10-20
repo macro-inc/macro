@@ -2,6 +2,7 @@
 
 mod effects;
 mod files;
+mod linked;
 mod native;
 mod settings;
 mod workers;
@@ -96,20 +97,48 @@ pub(crate) async fn build(dependencies: Dependencies) -> anyhow::Result<State> {
             notifications,
         ),
     });
+    let linked_settings = linked::Settings::load()?;
+    let linked_repository = Arc::new(
+        meta_messaging::outbound::linked::repository::PgLinkedRepository::new(
+            pool.clone(),
+            linked_settings.features.sending,
+        ),
+    );
+    let mut native = native::NativeChannels::new(
+        pool,
+        access.clone(),
+        ConnectionGatewayMessages(gateway),
+        (*search).clone(),
+        files.clone(),
+        effects,
+        channel_events,
+    );
+    if let Some(sessions) = &linked_settings.sessions {
+        native = native.with_linked(native::linked::LinkedComposition {
+            repository: linked_repository.clone(),
+            files: Arc::new(files::linked::LinkedNativeFiles {
+                files,
+                sessions: sessions.clone(),
+            }),
+        });
+    }
+    let native = Arc::new(native);
+    let linked_service = linked_settings.sessions.clone().map(|sessions| {
+        linked::build(linked_settings, linked_repository, sessions, native.clone())
+    });
+    if let Some(linked_service) = &linked_service {
+        linked::spawn(
+            linked_service.clone(),
+            tracker.clone(),
+            cancellation.clone(),
+        );
+    }
     let service = Arc::new(
         MetaService::new(
             repository,
             Arc::new(settings.provider),
             cipher,
-            Arc::new(native::NativeChannels::new(
-                pool,
-                access.clone(),
-                ConnectionGatewayMessages(gateway),
-                (*search).clone(),
-                files,
-                effects,
-                channel_events,
-            )),
+            native,
             settings.public,
         )
         .with_group_tasks(tracker.clone()),
@@ -117,6 +146,7 @@ pub(crate) async fn build(dependencies: Dependencies) -> anyhow::Result<State> {
     spawn(service.clone(), work_ready, tracker, cancellation);
     Ok(State {
         service,
+        linked: linked_service,
         entity_access_service: access,
         authorization_state: authorization,
         webhooks: Arc::new(settings.webhooks),

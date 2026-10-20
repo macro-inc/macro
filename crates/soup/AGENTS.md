@@ -67,3 +67,7 @@ rows, initiatives, ...) and get back a single unified, paginated result.
 
 - Skill: `database-core`, `cloud-storage-hexagonal-architecture` · Rules:
   `.agents/rules/rust/db.md`, `.agents/rules/rust/architecture.md`
+
+## Personal WhatsApp linked devices
+
+Every raw channel/source candidate path applies the native linked-group marker gate, including expanded, unexpanded, notified, touched and work-feed queries. Shared attachment gates preserve independent native grants. Do not rely only on a later detail authorization check to hide forbidden search results. See `docs/WHATSAPP_LINKED_DEVICES.md`.

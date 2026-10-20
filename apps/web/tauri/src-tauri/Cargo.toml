@@ -127,3 +127,11 @@ tauri-plugin-photo-library = { path = "../photo_library_plugin" }
 # Used to call NSFileManager from Rust to get the App Group container path.
 # This version is already in the dependency tree via wry/tao.
 objc2 = "0.5"
+
+[target.'cfg(any(target_os = "macos", target_os = "linux"))'.dependencies]
+webauthn-authenticator-rs = { workspace = true, features = ["cable"] }
+webauthn-rs-proto = { workspace = true }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+webauthn-authenticator-rs = { workspace = true, features = ["win10"] }
+webauthn-rs-proto = { workspace = true }

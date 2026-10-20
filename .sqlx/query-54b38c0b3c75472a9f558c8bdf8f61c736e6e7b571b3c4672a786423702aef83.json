@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO whatsapp_inbound_event(account_id,event_id,authorization_generation,owner_epoch,schema_version,payload,state,retry_at) SELECT $1,$2,$3,$4,1,$5,'pending',now()+interval '10 seconds' WHERE EXISTS(SELECT 1 FROM whatsapp_group_binding b JOIN whatsapp_group_membership m ON m.binding_id=b.id JOIN whatsapp_linked_account a ON a.id=m.account_id WHERE b.group_jid=$6 AND m.account_id=$1 AND m.authorization_generation=$3 AND m.consent_ended_at IS NULL AND b.adopted_at<=$7 AND whatsapp_linked_can_view(b.channel_id,a.user_id)) ON CONFLICT(account_id,event_id) DO UPDATE SET retry_at=now()+interval '30 seconds',attempts=whatsapp_inbound_event.attempts+1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8",
+        "Int8",
+        "Jsonb",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "54b38c0b3c75472a9f558c8bdf8f61c736e6e7b571b3c4672a786423702aef83"
+}

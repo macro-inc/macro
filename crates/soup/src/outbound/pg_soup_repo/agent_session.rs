@@ -211,7 +211,7 @@ const SELECT_SQL: &str = r#"
 /// Continues [`SELECT_SQL`] after the user id bind: the remaining source-id
 /// arms, the row projection, the history join, and the access predicate.
 /// Every `$1` here refers back to that same bind.
-const ACCESS_SQL: &str = r#" AND cp.left_at IS NULL
+const ACCESS_SQL: &str = r#" AND cp.left_at IS NULL AND EXISTS(SELECT 1 FROM comms_channels linked_channel WHERE linked_channel.id=cp.channel_id AND CASE WHEN linked_channel.messaging_binding='whatsapp_linked_group' THEN whatsapp_linked_can_view(linked_channel.id,cp.user_id) ELSE true END)
         UNION ALL
         SELECT t.team_id::text FROM team_user t WHERE t.user_id = $1
         UNION ALL

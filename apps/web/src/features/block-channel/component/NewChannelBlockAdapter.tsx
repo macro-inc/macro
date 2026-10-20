@@ -213,7 +213,8 @@ function NewTop(props: { channelId: string }) {
         lockRename={
           !binding.value() ||
           !!binding.error() ||
-          binding.value() === 'whatsapp_group'
+          binding.value() === 'whatsapp_group' ||
+          binding.value() === 'whatsapp_linked_group'
         }
         tabs={tabs()}
         activeTab={activeTab()}

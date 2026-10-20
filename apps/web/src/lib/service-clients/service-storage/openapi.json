@@ -16196,6 +16196,488 @@
         }
       }
     },
+    "/meta/linked/account": {
+      "get": {
+        "tags": ["linked"],
+        "operationId": "linked_account",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkedAccountView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meta/linked/channels/{channel_id}": {
+      "get": {
+        "tags": ["linked"],
+        "operationId": "linked_channel",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkedChannelView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meta/linked/channels/{channel_id}/access": {
+      "post": {
+        "tags": ["linked"],
+        "operationId": "linked_grant_access",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/meta/linked/channels/{channel_id}/attachments": {
+      "post": {
+        "tags": ["linked"],
+        "operationId": "linked_upload",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/MetaUploadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetaUploadedAttachment"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meta/linked/channels/{channel_id}/delivery": {
+      "post": {
+        "tags": ["linked"],
+        "operationId": "linked_delivery",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MetaSendProgress"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meta/linked/channels/{channel_id}/detach": {
+      "post": {
+        "tags": ["linked"],
+        "operationId": "linked_detach",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/meta/linked/channels/{channel_id}/owner": {
+      "post": {
+        "tags": ["linked"],
+        "operationId": "linked_transfer_owner",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "text/plain": {
+              "schema": {
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/meta/linked/channels/{channel_id}/replies": {
+      "post": {
+        "tags": ["linked"],
+        "operationId": "linked_reply",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MetaSendReply"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetaSendProgress"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meta/linked/configuration": {
+      "get": {
+        "tags": ["linked"],
+        "operationId": "linked_configuration",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkedFeatures"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meta/linked/connect": {
+      "post": {
+        "tags": ["linked"],
+        "operationId": "linked_connect",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LinkedConnect"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkedPairing"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meta/linked/disconnect": {
+      "post": {
+        "tags": ["linked"],
+        "operationId": "linked_disconnect",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LinkedDisconnectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkedDisconnect"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meta/linked/groups": {
+      "get": {
+        "tags": ["linked"],
+        "operationId": "linked_groups",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/LinkedGroupInfo"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["linked"],
+        "operationId": "linked_adopt",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LinkedAdoptGroup"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkedBinding"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meta/linked/pairing/{id}": {
+      "get": {
+        "tags": ["linked"],
+        "operationId": "linked_pairing",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkedPairState"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["linked"],
+        "operationId": "linked_cancel_pairing",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/meta/linked/pairing/{id}/confirm": {
+      "post": {
+        "tags": ["linked"],
+        "operationId": "linked_confirm_pairing",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/meta/linked/pairing/{id}/passkey": {
+      "post": {
+        "tags": ["linked"],
+        "operationId": "linked_passkey",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {}
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/pins": {
       "get": {
         "tags": ["pins::get_pins"],
@@ -24477,6 +24959,13 @@
             "type": "string",
             "description": "Emoji being reacted with."
           },
+          "external_users": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExternalReactionActor"
+            },
+            "description": "Provider actors are distinct from Macro user identities."
+          },
           "users": {
             "type": "array",
             "items": {
@@ -28445,6 +28934,25 @@
           }
         }
       },
+      "ExternalReactionActor": {
+        "type": "object",
+        "description": "An external reaction author, scoped to the authorized native message.",
+        "required": ["sender_id"],
+        "properties": {
+          "name": {
+            "type": ["string", "null"],
+            "description": "Untrusted display name shown with external provenance."
+          },
+          "sender_id": {
+            "type": "string",
+            "description": "Stable external sender identity; never a synthetic Macro user."
+          },
+          "user_id": {
+            "type": ["string", "null"],
+            "description": "Verified Macro association, while the reaction retains WhatsApp provenance."
+          }
+        }
+      },
       "Favorite": {
         "type": "object",
         "description": "A single favorited entity, including display metadata hydrated from the\nfavorited entity where available. Display names are deliberately not\nincluded: clients resolve them from the entity previews pipeline, which\nis viewer-relative for DM channels and updated by renames.\n\nA favorite is identified by `(entity_type, entity_id)` within the user's\ncollection; there is no surrogate id.",
@@ -31828,6 +32336,14 @@
           "name": {
             "type": "string",
             "description": "Original author text; never interpreted as an authenticated principal."
+          },
+          "origin": {
+            "type": ["string", "null"],
+            "description": "Provider origin, kept distinct from the associated person."
+          },
+          "verified_user_id": {
+            "type": ["string", "null"],
+            "description": "Provider-verified association; this is not an authenticated Macro action."
           }
         }
       },
@@ -32415,6 +32931,425 @@
         "type": "string",
         "description": "Defines who can access an item through its share link.",
         "enum": ["PUBLIC", "TEAM"]
+      },
+      "LinkedAccount": {
+        "type": "object",
+        "description": "One personal account, never owned by a workspace.",
+        "required": ["id", "user_id", "state", "authorization_generation"],
+        "properties": {
+          "authorization_generation": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Explicit consent generation, independent of transport reconnects."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable Macro account identity."
+          },
+          "identity_jid": {
+            "type": ["string", "null"],
+            "description": "Provider-verified identity, absent until pairing finishes."
+          },
+          "owner_epoch": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Current process incarnation, absent before a worker is assigned."
+          },
+          "state": {
+            "$ref": "#/components/schemas/LinkedAccountState",
+            "description": "Connection health."
+          },
+          "user_id": {
+            "type": "string",
+            "description": "Authenticated owner."
+          }
+        }
+      },
+      "LinkedAccountState": {
+        "type": "string",
+        "description": "Account lifecycle presented by the normal Settings row.",
+        "enum": [
+          "connecting",
+          "connected",
+          "offline",
+          "reconnect",
+          "disconnected"
+        ]
+      },
+      "LinkedAccountView": {
+        "type": "object",
+        "description": "Owner-scoped account state, including the not-connected state.",
+        "properties": {
+          "account": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LinkedAccount",
+                "description": "The caller's retained account, when one exists."
+              }
+            ]
+          }
+        }
+      },
+      "LinkedAdoptGroup": {
+        "type": "object",
+        "description": "Explicit adoption request; account identity is selected server-side.",
+        "required": ["team_id", "group_jid", "users"],
+        "properties": {
+          "group_jid": {
+            "type": "string",
+            "description": "Verified joined remote group."
+          },
+          "team_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Destination workspace."
+          },
+          "users": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Explicit native audience receiving this binding's shared-history grant."
+          }
+        }
+      },
+      "LinkedBinding": {
+        "type": "object",
+        "description": "One remote group and native channel in a workspace.",
+        "required": [
+          "id",
+          "team_id",
+          "group_jid",
+          "channel_id",
+          "user_id",
+          "state",
+          "ownership_state",
+          "adopted_at"
+        ],
+        "properties": {
+          "adopted_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Default history boundary."
+          },
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Native channel."
+          },
+          "group_jid": {
+            "type": "string",
+            "description": "Remote group identity, never its display name."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable binding identity, independent of an observing account."
+          },
+          "ownership_state": {
+            "type": "string",
+            "description": "Active or deliberate ownership transfer required."
+          },
+          "state": {
+            "type": "string",
+            "description": "Active, suspended or detached."
+          },
+          "team_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Owning workspace."
+          },
+          "user_id": {
+            "type": "string",
+            "description": "Designated native content owner."
+          }
+        }
+      },
+      "LinkedChannelView": {
+        "type": "object",
+        "description": "Normal native composer metadata for the authenticated viewer.",
+        "required": [
+          "account",
+          "binding",
+          "capabilities",
+          "eligibility",
+          "can_reply",
+          "sends"
+        ],
+        "properties": {
+          "account": {
+            "$ref": "#/components/schemas/LinkedAccount",
+            "description": "Own personal account; never a colleague's identity."
+          },
+          "binding": {
+            "$ref": "#/components/schemas/LinkedBinding",
+            "description": "Workspace/native binding."
+          },
+          "can_reply": {
+            "type": "boolean",
+            "description": "Current native posting authority."
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/ReplyCapabilities",
+            "description": "Implemented native composer operations."
+          },
+          "eligibility": {
+            "$ref": "#/components/schemas/ReplyEligibility",
+            "description": "Current server eligibility."
+          },
+          "roster": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LinkedGroupInfo",
+                "description": "Last reconciled WhatsApp roster, separate from native audience grants."
+              }
+            ]
+          },
+          "sends": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MetaSendProgress"
+            },
+            "description": "Existing durable send results."
+          }
+        }
+      },
+      "LinkedConnect": {
+        "type": "object",
+        "description": "Explicit pairing intent; replacement requires a separate deliberate UI action.",
+        "properties": {
+          "replace": {
+            "type": "boolean",
+            "description": "Explicitly replace the retained personal identity."
+          }
+        }
+      },
+      "LinkedDisconnect": {
+        "type": "object",
+        "description": "Local disconnect and the independently observed remote unlink result.",
+        "required": ["remote_unlink_confirmed"],
+        "properties": {
+          "remote_unlink_confirmed": {
+            "type": "boolean",
+            "description": "True only when WhatsApp confirmed unlinking this endpoint."
+          }
+        }
+      },
+      "LinkedDisconnectRequest": {
+        "type": "object",
+        "description": "The account consent the owner deliberately disconnects.",
+        "required": ["authorization_generation"],
+        "properties": {
+          "authorization_generation": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Fences retries against a subsequent replacement or reconnect."
+          }
+        }
+      },
+      "LinkedFeatures": {
+        "type": "object",
+        "description": "Independently controlled backend rollout gates. None grants access.",
+        "required": ["pairing", "adoption", "sending"],
+        "properties": {
+          "adoption": {
+            "type": "boolean",
+            "description": "Allow explicit existing-group adoption."
+          },
+          "pairing": {
+            "type": "boolean",
+            "description": "Allow new owner-bound pairing transactions."
+          },
+          "sending": {
+            "type": "boolean",
+            "description": "Allow new intentional external operations."
+          }
+        }
+      },
+      "LinkedGroupInfo": {
+        "type": "object",
+        "description": "Full metadata refresh, rather than incomplete membership deltas.",
+        "required": [
+          "jid",
+          "name",
+          "participants",
+          "announce",
+          "disappearing",
+          "community",
+          "version",
+          "observedAt"
+        ],
+        "properties": {
+          "announce": {
+            "type": "boolean",
+            "description": "Only admins may post."
+          },
+          "community": {
+            "type": "boolean",
+            "description": "Community announcement/parent groups are outside the supported surface."
+          },
+          "disappearing": {
+            "type": "boolean",
+            "description": "This feature does not retain disappearing content."
+          },
+          "jid": {
+            "type": "string",
+            "description": "Typed remote group JID."
+          },
+          "name": {
+            "type": "string",
+            "description": "Current remote subject."
+          },
+          "observedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Successful full metadata read time."
+          },
+          "participants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LinkedParticipant"
+            },
+            "description": "Full remote roster."
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Monotonic observation version within this worker."
+          }
+        }
+      },
+      "LinkedIdentity": {
+        "type": "object",
+        "description": "Verified typed sender aliases, supplied only by protocol metadata.",
+        "required": ["jid"],
+        "properties": {
+          "alternateJid": {
+            "type": ["string", "null"],
+            "description": "Verified alternate identity, not inferred from a name or submitted phone."
+          },
+          "displayName": {
+            "type": ["string", "null"],
+            "description": "Untrusted external display name."
+          },
+          "jid": {
+            "type": "string",
+            "description": "PN or LID account JID."
+          }
+        }
+      },
+      "LinkedMutation": {
+        "type": "string",
+        "description": "Supported deliberate remote operations on a linked group message.",
+        "enum": ["reaction", "edit", "delete"]
+      },
+      "LinkedPairState": {
+        "type": "object",
+        "description": "Sensitive owner-only pairing response; deliberately has no Debug implementation.",
+        "required": ["state", "expiresAt"],
+        "properties": {
+          "challenge": {
+            "description": "Actual WhatsApp WebAuthn options for the native authenticator only."
+          },
+          "code": {
+            "type": ["string", "null"],
+            "description": "Confirmation code shown by the protocol, requiring deliberate confirmation."
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Same owner-bound deadline."
+          },
+          "identityJid": {
+            "type": ["string", "null"],
+            "description": "Verified linked identity once authenticated."
+          },
+          "qr": {
+            "type": ["string", "null"],
+            "description": "Short-lived QR content; never placed in a URL/cache."
+          },
+          "state": {
+            "type": "string",
+            "description": "Displayed, passkey, confirmation, connected, expired or error."
+          }
+        }
+      },
+      "LinkedPairing": {
+        "type": "object",
+        "description": "Durable owner-bound transaction. Challenge/QR material is not retained here.",
+        "required": [
+          "id",
+          "account_id",
+          "user_id",
+          "authorization_generation",
+          "state",
+          "expires_at"
+        ],
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Account being connected."
+          },
+          "authorization_generation": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Generation captured at explicit consent."
+          },
+          "consumed_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Terminal transaction time."
+          },
+          "expected_identity_jid": {
+            "type": ["string", "null"],
+            "description": "Identity a reconnect must preserve."
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Database-assigned expiry."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "One-use flow ID."
+          },
+          "state": {
+            "type": "string",
+            "description": "Current transaction state."
+          },
+          "user_id": {
+            "type": "string",
+            "description": "Initiating human."
+          }
+        }
+      },
+      "LinkedParticipant": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/LinkedIdentity",
+            "description": "Provider identity evidence."
+          },
+          {
+            "type": "object",
+            "required": ["admin"],
+            "properties": {
+              "admin": {
+                "type": "boolean",
+                "description": "Whether remote announcement posting is allowed."
+              }
+            }
+          }
+        ],
+        "description": "Current remote participant; Macro access remains an independent grant."
       },
       "ListDatabaseWebhooksResponse": {
         "type": "object",
@@ -33804,7 +34739,8 @@
           "native",
           "whatsapp_direct",
           "instagram_direct",
-          "whatsapp_group"
+          "whatsapp_group",
+          "whatsapp_linked_group"
         ]
       },
       "MetaBeginAuthorization": {
@@ -34526,6 +35462,30 @@
               "type": {
                 "type": "string",
                 "enum": ["media"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Deliberate source-scoped mutation for a personal linked group.",
+            "required": ["message_id", "operation", "type"],
+            "properties": {
+              "message_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Existing authorized native message; resolved to its canonical source by the server."
+              },
+              "operation": {
+                "$ref": "#/components/schemas/LinkedMutation",
+                "description": "Explicit external operation."
+              },
+              "text": {
+                "type": ["string", "null"],
+                "description": "Replacement text or reaction; absent for deletion and empty to remove a reaction."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["mutation"]
               }
             }
           },

@@ -42,7 +42,7 @@ impl PgMessagingRepository {
     ) -> PortResult<Vec<SendProgress>> {
         sqlx::query!("SELECT to_jsonb(s) AS \"data!\" FROM meta_messaging_message m JOIN meta_messaging_send s ON s.connection_id = m.connection_id AND s.provider_message_id = m.provider_message_id AND s.message_id = m.message_id WHERE s.channel_id = $1 AND m.message_id = ANY($2)", channel, messages).fetch_all(&self.pool).await.map_err(failure)?.into_iter().map(|row| decode(row.data)).collect()
     }
-    pub(super) async fn claim_send_impl(&self) -> PortResult<Option<SendWork>> {
+    pub(crate) async fn claim_send_impl(&self, linked: bool) -> PortResult<Option<SendWork>> {
         let mut tx = self.pool.begin().await.map_err(failure)?;
         // Uncertainty is terminal for dispatch. After a bounded lease it releases
         // the conversation; delivered/read receipts are never needed to proceed.
@@ -67,18 +67,18 @@ impl PgMessagingRepository {
         let row = sqlx::query!(
             r#"WITH candidate AS (
             SELECT s.id FROM meta_messaging_send s
-            WHERE s.state='pending' AND s.available_at<=now() AND s.attempts<20
+            WHERE s.state='pending' AND s.available_at<=now() AND s.attempts<20 AND (s.linked_account_id IS NOT NULL)=$2
               AND NOT EXISTS (SELECT 1 FROM meta_messaging_send earlier
-                  WHERE earlier.connection_id=s.connection_id AND earlier.channel_id=s.channel_id
+                  WHERE earlier.channel_id=s.channel_id
                     AND earlier.state IN ('pending','sending')
                     AND (earlier.created_at,earlier.id)<(s.created_at,s.id))
             ORDER BY s.created_at,s.id FOR UPDATE SKIP LOCKED LIMIT 1
         ) UPDATE meta_messaging_send s SET state='sending',lease_id=$1,dispatch_started_at=NULL,
             lease_until=now()+interval '5 minutes',attempts=attempts+1,updated_at=now()
           FROM candidate c WHERE s.id=c.id
-          RETURNING s.id,s.connection_id,s.channel_id,s.user_id,s.created_at,s.payload,s.attempts
+          RETURNING s.id,COALESCE(s.connection_id,s.linked_account_id) AS "connection_id!",s.channel_id,s.user_id,s.created_at,s.payload,s.attempts
         "#,
-            token
+            token, linked
         )
         .fetch_optional(&mut *tx)
         .await
@@ -127,16 +127,19 @@ impl PgMessagingRepository {
         work: &SendWork,
         provider_id: &ProviderId,
     ) -> PortResult<()> {
-        sqlx::query!("UPDATE meta_messaging_send SET native_retry_at=now()+interval '30 seconds' WHERE id=$1 AND connection_id=$2 AND channel_id=$3 AND provider_message_id=$4 AND state IN ('accepted','sent','delivered','read','failed') AND (message_id IS NULL OR EXISTS (SELECT 1 FROM meta_messaging_message m WHERE m.message_id=meta_messaging_send.message_id AND m.media_state='pending'))",work.lease.id,work.connection_id,work.channel_id,provider_id.as_str())
+        sqlx::query!("UPDATE meta_messaging_send SET native_retry_at=now()+interval '30 seconds' WHERE id=$1 AND COALESCE(connection_id,linked_account_id)=$2 AND channel_id=$3 AND provider_message_id=$4 AND state IN ('accepted','sent','delivered','read','failed') AND (linked_account_id IS NOT NULL OR message_id IS NULL OR EXISTS (SELECT 1 FROM meta_messaging_message m WHERE m.message_id=meta_messaging_send.message_id AND m.media_state='pending'))",work.lease.id,work.connection_id,work.channel_id,provider_id.as_str())
             .execute(&self.pool).await.map_err(failure)?;
         Ok(())
     }
-    pub(super) async fn accepted_sends_impl(&self) -> PortResult<Vec<(SendWork, ProviderId)>> {
+    pub(crate) async fn accepted_sends_impl(
+        &self,
+        linked: bool,
+    ) -> PortResult<Vec<(SendWork, ProviderId)>> {
         // Retire finished acceptances so the recovery scan stays proportional
         // to recovery work rather than to every reply ever sent.
-        sqlx::query!("UPDATE meta_messaging_send SET native_retry_at='infinity' WHERE native_retry_at<=now() AND provider_message_id IS NOT NULL AND message_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM meta_messaging_message m WHERE m.message_id=meta_messaging_send.message_id AND m.media_state='pending') AND state IN ('accepted','sent','delivered','read','failed')")
+        sqlx::query!("UPDATE meta_messaging_send SET native_retry_at='infinity' WHERE linked_account_id IS NULL AND native_retry_at<=now() AND provider_message_id IS NOT NULL AND message_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM meta_messaging_message m WHERE m.message_id=meta_messaging_send.message_id AND m.media_state='pending') AND state IN ('accepted','sent','delivered','read','failed')")
             .execute(&self.pool).await.map_err(failure)?;
-        let rows=sqlx::query!("SELECT id, connection_id, channel_id, user_id, created_at, payload, provider_message_id, attempts FROM meta_messaging_send WHERE native_retry_at<=now() AND provider_message_id IS NOT NULL AND (message_id IS NULL OR EXISTS (SELECT 1 FROM meta_messaging_message m WHERE m.message_id=meta_messaging_send.message_id AND m.media_state='pending')) AND state IN ('accepted','sent','delivered','read','failed') ORDER BY native_retry_at,id LIMIT 50")
+        let rows=sqlx::query!("SELECT id, COALESCE(connection_id,linked_account_id) AS \"connection_id!\", channel_id, user_id, created_at, payload, provider_message_id, attempts FROM meta_messaging_send WHERE (linked_account_id IS NOT NULL)=$1 AND native_retry_at<=now() AND provider_message_id IS NOT NULL AND (linked_account_id IS NOT NULL OR message_id IS NULL OR EXISTS (SELECT 1 FROM meta_messaging_message m WHERE m.message_id=meta_messaging_send.message_id AND m.media_state='pending')) AND state IN ('accepted','sent','delivered','read','failed') ORDER BY native_retry_at,id LIMIT 50",linked)
             .fetch_all(&self.pool).await.map_err(failure)?;
         rows.into_iter()
             .map(|r| {

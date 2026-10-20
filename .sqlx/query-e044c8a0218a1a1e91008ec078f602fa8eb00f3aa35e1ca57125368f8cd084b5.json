@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT a.id FROM whatsapp_linked_account a JOIN team_user tu ON tu.user_id=a.user_id AND tu.team_id=$4 WHERE a.id=$1 AND a.user_id=$2 AND a.authorization_generation=$3 AND a.state='connected' FOR SHARE OF a,tu",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int8",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "e044c8a0218a1a1e91008ec078f602fa8eb00f3aa35e1ca57125368f8cd084b5"
+}

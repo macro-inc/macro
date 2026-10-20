@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT r.metadata FROM whatsapp_group_roster r JOIN whatsapp_group_binding b ON b.id=r.binding_id WHERE b.channel_id=$1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "metadata",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "e0ac087ce4ad3012512a2320d588aa25ce53a88fac349d10885319e63160cd9a"
+}

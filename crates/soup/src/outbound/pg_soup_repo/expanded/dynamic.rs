@@ -61,7 +61,7 @@ use models_grouping::{GroupByField, GroupingConfig, date_bucket_sql_order};
 static PREFIX: &str = r#"
     WITH user_source_ids AS (
         SELECT cp.channel_id::text as source_id FROM comms_channel_participants cp
-            WHERE cp.user_id = $1 AND cp.left_at IS NULL
+            WHERE cp.user_id = $1 AND cp.left_at IS NULL AND EXISTS(SELECT 1 FROM comms_channels linked_channel WHERE linked_channel.id=cp.channel_id AND CASE WHEN linked_channel.messaging_binding='whatsapp_linked_group' THEN whatsapp_linked_can_view(linked_channel.id,cp.user_id) ELSE true END)
         UNION ALL
         SELECT t.team_id::text FROM team_user t
             WHERE t.user_id = $1
@@ -1303,7 +1303,7 @@ pub(in crate::outbound::pg_soup_repo) fn access_semi_join(
                     SELECT ea.entity_id::text
                     FROM entity_access ea
                     JOIN user_source_ids us ON us.source_id = ea.source_id
-                    WHERE ea.entity_type = '{entity_type}'
+                    WHERE ea.entity_type = '{entity_type}' AND CASE WHEN ea.entity_type='document' THEN whatsapp_linked_can_read_document(ea.entity_id,$1) ELSE true END
                 )"#
     )
 }
@@ -1336,7 +1336,7 @@ fn document_top_where_clause(sort_method: SimpleSortMethod) -> String {
         ""
     };
     format!(
-        r#"{user_history_join}                WHERE d."deletedAt" IS NULL
+        r#"{user_history_join}                WHERE d."deletedAt" IS NULL AND NOT EXISTS(SELECT 1 FROM whatsapp_attachment wa JOIN whatsapp_group_binding wb ON wb.id=wa.binding_id WHERE wa.document_id::text=d.id AND (wa.state='deleted' OR NOT whatsapp_linked_can_view(wb.channel_id,$1)))
                 AND {}
 "#,
         access_semi_join("d.id", "document")

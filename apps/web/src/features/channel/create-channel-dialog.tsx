@@ -34,6 +34,10 @@ import {
 } from '@ui';
 import { createMemo, createSignal, Show } from 'solid-js';
 import { v7 as uuidv7 } from 'uuid';
+import {
+  ConnectWhatsAppGroup,
+  WhatsAppGroupPicker,
+} from '../whatsapp-linked/group-adoption';
 
 import {
   newChannelModalFocusLock,
@@ -48,6 +52,8 @@ export function CreateChannelDialog() {
   const { replaceOrInsertSplit } = useSplitLayout();
   const userId = useUserId();
   const [step, setStep] = createSignal<ChannelCreationStep>('name');
+  const [linkingGroup, setLinkingGroup] = createSignal(false);
+  const [connectingGroup, setConnectingGroup] = createSignal(false);
   const { users: recipientOptions } = useCombinedRecipients();
   const agentsQuery = useAgentsQuery(
     () => newChannelModalOpen() && step() === 'invite'
@@ -104,9 +110,11 @@ export function CreateChannelDialog() {
   const team = () =>
     queryReadyGate(currentTeamQuery) ? currentTeamQuery.data?.team : undefined;
   let nameInput: HTMLInputElement | undefined;
+  let groupSearchInput: HTMLInputElement | undefined;
   let visibilityOptions: HTMLDivElement | undefined;
 
   function reset() {
+    setLinkingGroup(false);
     setWhatsapp(false);
     setGroupConnectionId(undefined);
     setGroupChannelId(undefined);
@@ -130,6 +138,7 @@ export function CreateChannelDialog() {
 
   function close() {
     if (
+      connectingGroup() ||
       groupCreate.isPending ||
       createChannelMutation.isPending ||
       patchChannelMutation.isPending ||
@@ -316,353 +325,401 @@ export function CreateChannelDialog() {
       onOpenChange={(open) => !open && close()}
       class="w-150"
     >
-      <Panel depth={2} class="rounded-xl *:max-h-[85vh]">
-        <Panel.Body scroll>
-          <form
-            class="flex min-h-80 flex-col gap-7 p-6 sm:p-8"
-            onSubmit={handleSubmit}
-          >
-            <div class="flex items-start justify-between gap-4">
-              <div class="min-w-0">
-                <Dialog.Title class="text-xl font-semibold text-ink">
-                  {step() === 'invite' ? (
-                    <>
-                      Add people or agents to{' '}
-                      <span class="inline-flex items-baseline gap-1">
-                        <Show
-                          when={visibility() === 'private'}
-                          fallback={
-                            <HashIcon
-                              aria-hidden="true"
-                              class="inline size-4"
-                            />
-                          }
-                        >
-                          <LockIcon aria-hidden="true" class="inline size-4" />
-                        </Show>
-                        {channelName()}
-                      </span>
-                    </>
-                  ) : (
-                    'Create a channel'
-                  )}
-                </Dialog.Title>
-                <Show when={step() === 'visibility'}>
-                  <p class="mt-1 flex items-center gap-1 text-sm text-ink-muted">
-                    <Show
-                      when={visibility() === 'private'}
-                      fallback={
-                        <HashIcon aria-hidden="true" class="size-3.5" />
+      <Panel depth={2} class="rounded-xl max-h-[85vh]">
+        <Show
+          when={linkingGroup()}
+          fallback={
+            <>
+              <Panel.Body scroll>
+                <form
+                  class="flex min-h-80 flex-col gap-7 p-6 sm:p-8"
+                  onSubmit={handleSubmit}
+                >
+                  <div class="flex items-start justify-between gap-4">
+                    <div class="min-w-0">
+                      <Dialog.Title class="text-xl font-semibold text-ink">
+                        {step() === 'invite' ? (
+                          <>
+                            Add people or agents to{' '}
+                            <span class="inline-flex items-baseline gap-1">
+                              <Show
+                                when={visibility() === 'private'}
+                                fallback={
+                                  <HashIcon
+                                    aria-hidden="true"
+                                    class="inline size-4"
+                                  />
+                                }
+                              >
+                                <LockIcon
+                                  aria-hidden="true"
+                                  class="inline size-4"
+                                />
+                              </Show>
+                              {channelName()}
+                            </span>
+                          </>
+                        ) : (
+                          'Create a channel'
+                        )}
+                      </Dialog.Title>
+                      <Show when={step() === 'visibility'}>
+                        <p class="mt-1 flex items-center gap-1 text-sm text-ink-muted">
+                          <Show
+                            when={visibility() === 'private'}
+                            fallback={
+                              <HashIcon aria-hidden="true" class="size-3.5" />
+                            }
+                          >
+                            <LockIcon aria-hidden="true" class="size-3.5" />
+                          </Show>
+                          {channelName()}
+                        </p>
+                      </Show>
+                    </div>
+                    <Dialog.CloseButton
+                      as={Button}
+                      variant="ghost"
+                      size="icon-sm"
+                      label="Close"
+                      tabIndex={-1}
+                      disabled={
+                        groupCreate.isPending ||
+                        createChannelMutation.isPending ||
+                        patchChannelMutation.isPending ||
+                        addParticipantsMutation.isPending ||
+                        addAgentMutation.isPending
                       }
                     >
-                      <LockIcon aria-hidden="true" class="size-3.5" />
-                    </Show>
-                    {channelName()}
-                  </p>
-                </Show>
-              </div>
-              <Dialog.CloseButton
-                as={Button}
-                variant="ghost"
-                size="icon-sm"
-                label="Close"
-                tabIndex={-1}
-                disabled={
-                  groupCreate.isPending ||
-                  createChannelMutation.isPending ||
-                  patchChannelMutation.isPending ||
-                  addParticipantsMutation.isPending ||
-                  addAgentMutation.isPending
-                }
-              >
-                <XIcon />
-              </Dialog.CloseButton>
-            </div>
+                      <XIcon />
+                    </Dialog.CloseButton>
+                  </div>
 
-            <Show when={step() === 'name'}>
-              <div class="flex flex-col gap-2">
-                <label
-                  for="new-channel-name"
-                  class="text-sm font-medium text-ink"
-                >
-                  Name
-                </label>
-                <InputGroup
-                  size="xl"
-                  class="focus-within:ring-2 focus-within:ring-edge-muted"
-                >
-                  <InputGroup.Addon>
-                    <HashIcon aria-hidden="true" class="size-4" />
-                  </InputGroup.Addon>
-                  <InputGroup.Input
-                    ref={nameInput}
-                    id="new-channel-name"
-                    disabled={!!submittedGroup()}
-                    type="text"
-                    value={name()}
-                    onInput={(event) => {
-                      setName(event.currentTarget.value);
-                      setError(undefined);
-                    }}
-                    placeholder="e.g. Feature Requests"
-                    maxLength={80}
-                    autocomplete="off"
-                    data-1p-ignore
-                    aria-invalid={error() === 'Enter a channel name'}
-                    aria-describedby="new-channel-name-description"
-                  />
-                  <InputGroup.Addon align="inline-end">
-                    <span class="text-xs tabular-nums text-ink-extra-muted">
-                      {80 - name().length}
-                    </span>
-                  </InputGroup.Addon>
-                </InputGroup>
-                <p
-                  id="new-channel-name-description"
-                  class="text-sm text-ink-muted"
-                >
-                  Channels are where conversations happen around a topic. Use a
-                  name that is easy to find and understand.
-                </p>
-              </div>
-            </Show>
+                  <Show when={step() === 'name'}>
+                    <div class="flex flex-col gap-2">
+                      <label
+                        for="new-channel-name"
+                        class="text-sm font-medium text-ink"
+                      >
+                        Name
+                      </label>
+                      <InputGroup
+                        size="xl"
+                        class="focus-within:ring-2 focus-within:ring-edge-muted"
+                      >
+                        <InputGroup.Addon>
+                          <HashIcon aria-hidden="true" class="size-4" />
+                        </InputGroup.Addon>
+                        <InputGroup.Input
+                          ref={nameInput}
+                          id="new-channel-name"
+                          disabled={!!submittedGroup()}
+                          type="text"
+                          value={name()}
+                          onInput={(event) => {
+                            setName(event.currentTarget.value);
+                            setError(undefined);
+                          }}
+                          placeholder="e.g. Feature Requests"
+                          maxLength={80}
+                          autocomplete="off"
+                          data-1p-ignore
+                          aria-invalid={error() === 'Enter a channel name'}
+                          aria-describedby="new-channel-name-description"
+                        />
+                        <InputGroup.Addon align="inline-end">
+                          <span class="text-xs tabular-nums text-ink-extra-muted">
+                            {80 - name().length}
+                          </span>
+                        </InputGroup.Addon>
+                      </InputGroup>
+                      <p
+                        id="new-channel-name-description"
+                        class="text-sm text-ink-muted"
+                      >
+                        Channels are where conversations happen around a topic.
+                        Use a name that is easy to find and understand.
+                      </p>
+                    </div>
+                  </Show>
 
-            <Show when={step() === 'name'}>
-              <div class="flex flex-col gap-3">
-                <Checkbox
-                  checked={whatsapp()}
-                  disabled={!!submittedGroup()}
-                  onChange={setWhatsapp}
-                  class="min-h-11"
-                >
-                  <Checkbox.Control />
-                  <Checkbox.Label>Create a WhatsApp group</Checkbox.Label>
-                </Checkbox>
-                <Show when={whatsapp()}>
-                  <Show
-                    when={
-                      !groupConnections.isPending && accounts().length === 0
-                    }
-                  >
-                    <p role="status">
-                      Connect an eligible WhatsApp Platform account in Settings
-                      to create a group.
+                  <Show when={step() === 'name'}>
+                    <div class="flex flex-col gap-3">
+                      <Checkbox
+                        checked={whatsapp()}
+                        disabled={!!submittedGroup()}
+                        onChange={setWhatsapp}
+                        class="min-h-11"
+                      >
+                        <Checkbox.Control />
+                        <Checkbox.Label>
+                          Create a WhatsApp Business group
+                        </Checkbox.Label>
+                      </Checkbox>
+                      <Show when={whatsapp()}>
+                        <Show
+                          when={
+                            !groupConnections.isPending &&
+                            accounts().length === 0
+                          }
+                        >
+                          <p role="status">
+                            Connect an eligible WhatsApp Platform account in
+                            Settings to create a group.
+                          </p>
+                        </Show>
+                        <Show
+                          when={accounts().length > 1}
+                          fallback={
+                            <Show when={selectedAccount()}>
+                              {(account) => (
+                                <p class="text-sm text-ink-muted">
+                                  Connected account: {account().display_name}
+                                </p>
+                              )}
+                            </Show>
+                          }
+                        >
+                          <Select<MetaConnection>
+                            options={accounts()}
+                            disabled={!!submittedGroup()}
+                            optionValue="id"
+                            optionTextValue="display_name"
+                            value={selectedAccount() ?? null}
+                            onChange={(account) =>
+                              setGroupConnectionId(account?.id)
+                            }
+                            placeholder="Choose a connected account"
+                          >
+                            <Select.Label>WhatsApp account</Select.Label>
+                            <Select.Trigger>
+                              <Select.Value<MetaConnection>>
+                                {(state) => state.selectedOption().display_name}
+                              </Select.Value>
+                              <Select.Icon />
+                            </Select.Trigger>
+                            <Select.Content portalScope="local">
+                              <Select.Listbox />
+                            </Select.Content>
+                          </Select>
+                        </Show>
+                        <p class="text-sm text-ink-muted">
+                          Creates a private Macro channel and a WhatsApp group.
+                          WhatsApp participants join using its invite link.
+                          Adding Macro teammates does not add their phones to
+                          WhatsApp.
+                        </p>
+                      </Show>
+                    </div>
+                  </Show>
+                  <Show when={step() === 'visibility' && whatsapp()}>
+                    <p>
+                      Private WhatsApp group · Only invited Macro teammates can
+                      access this channel. WhatsApp eligibility is checked when
+                      you create it.
                     </p>
                   </Show>
-                  <Show
-                    when={accounts().length > 1}
-                    fallback={
-                      <Show when={selectedAccount()}>
-                        {(account) => (
-                          <p class="text-sm text-ink-muted">
-                            Connected account: {account().display_name}
-                          </p>
-                        )}
-                      </Show>
-                    }
-                  >
-                    <Select<MetaConnection>
-                      options={accounts()}
-                      disabled={!!submittedGroup()}
-                      optionValue="id"
-                      optionTextValue="display_name"
-                      value={selectedAccount() ?? null}
-                      onChange={(account) => setGroupConnectionId(account?.id)}
-                      placeholder="Choose a connected account"
-                    >
-                      <Select.Label>WhatsApp account</Select.Label>
-                      <Select.Trigger>
-                        <Select.Value<MetaConnection>>
-                          {(state) => state.selectedOption().display_name}
-                        </Select.Value>
-                        <Select.Icon />
-                      </Select.Trigger>
-                      <Select.Content portalScope="local">
-                        <Select.Listbox />
-                      </Select.Content>
-                    </Select>
-                  </Show>
-                  <p class="text-sm text-ink-muted">
-                    Creates a private Macro channel and a WhatsApp group.
-                    WhatsApp participants join using its invite link. Adding
-                    Macro teammates does not add their phones to WhatsApp.
-                  </p>
-                </Show>
-              </div>
-            </Show>
-            <Show when={step() === 'visibility' && whatsapp()}>
-              <p>
-                Private WhatsApp group · Only invited Macro teammates can access
-                this channel. WhatsApp eligibility is checked when you create
-                it.
-              </p>
-            </Show>
-            <Show when={step() === 'visibility' && !whatsapp()}>
-              <div ref={visibilityOptions} class="flex flex-col gap-3">
-                <span class="text-sm font-medium text-ink">Visibility</span>
-                <RadioGroup
-                  value={visibility()}
-                  onChange={(value) => {
-                    if (value !== 'team' && value !== 'private') return;
-                    setVisibility(value);
-                    setError(undefined);
-                  }}
-                  aria-label="Visibility"
-                  class="gap-4"
-                >
-                  <RadioGroup.Item value="team" class="items-start">
-                    <RadioGroup.ItemControl class="mt-0.5" />
-                    <div class="flex flex-col gap-1">
-                      <RadioGroup.ItemLabel class="text-base text-ink">
-                        Team — anyone on your team
-                      </RadioGroup.ItemLabel>
-                      <RadioGroup.ItemDescription class="text-sm text-ink-muted">
-                        Always discoverable to teammates
-                      </RadioGroup.ItemDescription>
-                    </div>
-                  </RadioGroup.Item>
-                  <RadioGroup.Item value="private" class="items-start">
-                    <RadioGroup.ItemControl class="mt-0.5" />
-                    <div class="flex flex-col gap-1">
-                      <RadioGroup.ItemLabel class="text-base text-ink">
-                        Private — only specific people
-                      </RadioGroup.ItemLabel>
-                      <RadioGroup.ItemDescription class="text-sm text-ink-muted">
-                        Can only be viewed or joined by invitation
-                      </RadioGroup.ItemDescription>
-                    </div>
-                  </RadioGroup.Item>
-                </RadioGroup>
-              </div>
-            </Show>
-
-            <Show when={step() === 'invite'}>
-              <div class="flex flex-col gap-3">
-                <RecipientSelector<'user' | 'contact' | 'agent'>
-                  options={inviteOptions}
-                  selectedOptions={selectedRecipients()}
-                  setSelectedOptions={setSelectedRecipients}
-                  placeholder="Search people, agents, or email addresses"
-                  focusOnMount
-                  inviteExternalEmails
-                  class="min-h-12 rounded-full border-edge-frame bg-control px-3 py-2 focus-within:ring-2 focus-within:ring-edge-muted"
-                />
-                <Show when={visibility() === 'team'}>
-                  <ToggleSwitch
-                    size="md"
-                    class="w-full gap-3 py-2"
-                    controlClass="shrink-0"
-                    checked={autoJoinTeam()}
-                    disabled={
-                      patchChannelMutation.isPending ||
-                      addParticipantsMutation.isPending ||
-                      addAgentMutation.isPending
-                    }
-                    onChange={setAutoJoinTeam}
-                    label={
-                      <span class="flex min-w-0 flex-col gap-0.5">
-                        <span class="text-sm font-medium text-ink">
-                          Automatically add teammates
-                        </span>
-                        <span class="text-xs text-ink-muted">
-                          Add current and future teammates to this channel.
-                        </span>
+                  <Show when={step() === 'visibility' && !whatsapp()}>
+                    <div ref={visibilityOptions} class="flex flex-col gap-3">
+                      <span class="text-sm font-medium text-ink">
+                        Visibility
                       </span>
-                    }
-                  />
-                </Show>
-              </div>
-            </Show>
+                      <RadioGroup
+                        value={visibility()}
+                        onChange={(value) => {
+                          if (value !== 'team' && value !== 'private') return;
+                          setVisibility(value);
+                          setError(undefined);
+                        }}
+                        aria-label="Visibility"
+                        class="gap-4"
+                      >
+                        <RadioGroup.Item value="team" class="items-start">
+                          <RadioGroup.ItemControl class="mt-0.5" />
+                          <div class="flex flex-col gap-1">
+                            <RadioGroup.ItemLabel class="text-base text-ink">
+                              Team — anyone on your team
+                            </RadioGroup.ItemLabel>
+                            <RadioGroup.ItemDescription class="text-sm text-ink-muted">
+                              Always discoverable to teammates
+                            </RadioGroup.ItemDescription>
+                          </div>
+                        </RadioGroup.Item>
+                        <RadioGroup.Item value="private" class="items-start">
+                          <RadioGroup.ItemControl class="mt-0.5" />
+                          <div class="flex flex-col gap-1">
+                            <RadioGroup.ItemLabel class="text-base text-ink">
+                              Private — only specific people
+                            </RadioGroup.ItemLabel>
+                            <RadioGroup.ItemDescription class="text-sm text-ink-muted">
+                              Can only be viewed or joined by invitation
+                            </RadioGroup.ItemDescription>
+                          </div>
+                        </RadioGroup.Item>
+                      </RadioGroup>
+                    </div>
+                  </Show>
 
-            <Show when={error()}>
-              {(message) => (
-                <p class="text-sm text-failure-ink" role="alert">
-                  {message()}
-                </p>
-              )}
-            </Show>
+                  <Show when={step() === 'invite'}>
+                    <div class="flex flex-col gap-3">
+                      <RecipientSelector<'user' | 'contact' | 'agent'>
+                        options={inviteOptions}
+                        selectedOptions={selectedRecipients()}
+                        setSelectedOptions={setSelectedRecipients}
+                        placeholder="Search people, agents, or email addresses"
+                        focusOnMount
+                        inviteExternalEmails
+                        class="min-h-12 rounded-full border-edge-frame bg-control px-3 py-2 focus-within:ring-2 focus-within:ring-edge-muted"
+                      />
+                      <Show when={visibility() === 'team'}>
+                        <ToggleSwitch
+                          size="md"
+                          class="w-full gap-3 py-2"
+                          controlClass="shrink-0"
+                          checked={autoJoinTeam()}
+                          disabled={
+                            patchChannelMutation.isPending ||
+                            addParticipantsMutation.isPending ||
+                            addAgentMutation.isPending
+                          }
+                          onChange={setAutoJoinTeam}
+                          label={
+                            <span class="flex min-w-0 flex-col gap-0.5">
+                              <span class="text-sm font-medium text-ink">
+                                Automatically add teammates
+                              </span>
+                              <span class="text-xs text-ink-muted">
+                                Add current and future teammates to this
+                                channel.
+                              </span>
+                            </span>
+                          }
+                        />
+                      </Show>
+                    </div>
+                  </Show>
 
-            <div class="mt-auto flex items-center justify-between gap-3 pt-4">
-              <span class="text-sm text-ink-muted">
-                Step{' '}
-                {step() === 'name' ? '1' : step() === 'visibility' ? '2' : '3'}{' '}
-                of {whatsapp() ? '2' : '3'}
-              </span>
-              <div class="flex items-center gap-2">
-                <Show when={step() === 'visibility'}>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    disabled={createChannelMutation.isPending}
-                    onClick={goBack}
-                  >
-                    Back
-                  </Button>
-                </Show>
-                <Button
-                  type={step() === 'invite' ? 'button' : 'submit'}
-                  onClick={() => {
-                    if (step() === 'invite') void finishInvites();
-                  }}
-                  variant="strong"
-                  disabled={
-                    (step() !== 'invite' && !channelName()) ||
-                    groupCreate.isPending ||
-                    createChannelMutation.isPending ||
-                    patchChannelMutation.isPending ||
-                    addParticipantsMutation.isPending ||
-                    addAgentMutation.isPending ||
-                    (step() === 'visibility' &&
-                      !whatsapp() &&
-                      visibility() === 'team' &&
-                      !team())
-                  }
-                >
-                  {step() === 'name'
-                    ? 'Next'
-                    : step() === 'visibility'
-                      ? groupCreate.isPending || createChannelMutation.isPending
-                        ? 'Creating…'
-                        : 'Create'
-                      : patchChannelMutation.isPending ||
+                  <Show when={error()}>
+                    {(message) => (
+                      <p class="text-sm text-failure-ink" role="alert">
+                        {message()}
+                      </p>
+                    )}
+                  </Show>
+
+                  <div class="mt-auto flex items-center justify-between gap-3 pt-4">
+                    <span class="text-sm text-ink-muted">
+                      Step{' '}
+                      {step() === 'name'
+                        ? '1'
+                        : step() === 'visibility'
+                          ? '2'
+                          : '3'}{' '}
+                      of {whatsapp() ? '2' : '3'}
+                    </span>
+                    <div class="flex items-center gap-2">
+                      <Show when={step() === 'visibility'}>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          disabled={createChannelMutation.isPending}
+                          onClick={goBack}
+                        >
+                          Back
+                        </Button>
+                      </Show>
+                      <Button
+                        type={step() === 'invite' ? 'button' : 'submit'}
+                        onClick={() => {
+                          if (step() === 'invite') void finishInvites();
+                        }}
+                        variant="strong"
+                        disabled={
+                          (step() !== 'invite' && !channelName()) ||
+                          groupCreate.isPending ||
+                          createChannelMutation.isPending ||
+                          patchChannelMutation.isPending ||
                           addParticipantsMutation.isPending ||
-                          addAgentMutation.isPending
-                        ? 'Saving…'
-                        : selectedRecipients().length > 0
-                          ? 'Add'
-                          : 'Skip for now'}
-                </Button>
-              </div>
-            </div>
-          </form>
-        </Panel.Body>
-        <Show when={step() === 'invite'}>
-          <Panel.Footer class="items-start gap-3 px-6 py-4 sm:px-8">
-            <InfoIcon
-              aria-hidden="true"
-              class="mt-0.5 size-5 shrink-0 text-accent"
-            />
-            <p class="text-sm text-ink-muted">
-              <Show
-                when={visibility() === 'team'}
-                fallback={
-                  <>
-                    <strong class="font-semibold text-ink">
-                      Working with people outside your team?
-                    </strong>{' '}
-                    Type their email above and press Enter. If they don’t have a
-                    Macro account, clicking Add emails them an invite.
-                  </>
-                }
-              >
-                <strong class="font-semibold text-ink">
-                  Team channels are always discoverable.
-                </strong>{' '}
-                Anyone on your team can find and join this channel, even when
-                automatic adding is off.
+                          addAgentMutation.isPending ||
+                          (step() === 'visibility' &&
+                            !whatsapp() &&
+                            visibility() === 'team' &&
+                            !team())
+                        }
+                      >
+                        {step() === 'name'
+                          ? 'Next'
+                          : step() === 'visibility'
+                            ? groupCreate.isPending ||
+                              createChannelMutation.isPending
+                              ? 'Creating…'
+                              : 'Create'
+                            : patchChannelMutation.isPending ||
+                                addParticipantsMutation.isPending ||
+                                addAgentMutation.isPending
+                              ? 'Saving…'
+                              : selectedRecipients().length > 0
+                                ? 'Add'
+                                : 'Skip for now'}
+                      </Button>
+                    </div>
+                  </div>
+                </form>
+              </Panel.Body>
+              <Show when={step() === 'name'}>
+                <ConnectWhatsAppGroup
+                  onSelect={() => {
+                    setLinkingGroup(true);
+                    queueMicrotask(() => groupSearchInput?.focus());
+                  }}
+                />
               </Show>
-            </p>
-          </Panel.Footer>
+              <Show when={step() === 'invite'}>
+                <Panel.Footer class="items-start gap-3 px-6 py-4 sm:px-8">
+                  <InfoIcon
+                    aria-hidden="true"
+                    class="mt-0.5 size-5 shrink-0 text-accent"
+                  />
+                  <p class="text-sm text-ink-muted">
+                    <Show
+                      when={visibility() === 'team'}
+                      fallback={
+                        <>
+                          <strong class="font-semibold text-ink">
+                            Working with people outside your team?
+                          </strong>{' '}
+                          Type their email above and press Enter. If they don’t
+                          have a Macro account, clicking Add emails them an
+                          invite.
+                        </>
+                      }
+                    >
+                      <strong class="font-semibold text-ink">
+                        Team channels are always discoverable.
+                      </strong>{' '}
+                      Anyone on your team can find and join this channel, even
+                      when automatic adding is off.
+                    </Show>
+                  </p>
+                </Panel.Footer>
+              </Show>
+            </>
+          }
+        >
+          <WhatsAppGroupPicker
+            onConnectingChange={setConnectingGroup}
+            searchRef={(input) => {
+              groupSearchInput = input;
+            }}
+            onBack={() => {
+              setLinkingGroup(false);
+              queueMicrotask(() => nameInput?.focus());
+            }}
+            onConnected={(id) => {
+              replaceOrInsertSplit({ type: 'channel', id });
+              resetAndClose();
+            }}
+          />
         </Show>
       </Panel>
     </Dialog>

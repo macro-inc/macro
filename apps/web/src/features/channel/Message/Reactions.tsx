@@ -32,13 +32,23 @@ export function Reactions(props: ReactionsProps) {
         <For each={message().reactions}>
           {(reaction) => {
             const didCurrentUserReact = () =>
-              !!userId() && reaction.users.includes(userId()!);
+              !!userId() &&
+              (reaction.users.includes(userId()!) ||
+                reaction.external_users?.some(
+                  (actor) => actor.user_id === userId()
+                ) === true);
 
             return (
               <ReactionChip
                 emoji={reaction.emoji}
-                count={reaction.users.length}
+                count={
+                  reaction.users.length + (reaction.external_users?.length ?? 0)
+                }
                 users={reaction.users}
+                externalNames={reaction.external_users?.map(
+                  (actor) =>
+                    `${actor.name || 'WhatsApp participant'} (WhatsApp)`
+                )}
                 currentUserId={userId() ?? undefined}
                 selected={didCurrentUserReact()}
                 interactive={canReact()}

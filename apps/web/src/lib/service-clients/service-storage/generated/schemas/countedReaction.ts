@@ -4,6 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { ExternalReactionActor } from './externalReactionActor';
 
 /**
  * Reaction emoji and the users who added it.
@@ -11,6 +12,8 @@
 export interface CountedReaction {
   /** Emoji being reacted with. */
   emoji: string;
+  /** Provider actors are distinct from Macro user identities. */
+  external_users?: ExternalReactionActor[];
   /** User identifiers. */
   users: string[];
 }

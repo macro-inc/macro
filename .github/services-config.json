@@ -335,6 +335,14 @@
       "deploy_binaries": [
         "preview_gateway"
       ]
+    },
+    "whatsapp-session": {
+      "source_paths": [
+        "services/whatsapp_session/**"
+      ],
+      "stack_path": "services/whatsapp_session/deploy/**",
+      "deploy_enabled": false,
+      "bootstrap_pending": "Private persistent host, dedicated database role, KMS, mTLS and license review must be approved before opt-in deployment. This Go container is outside the Rust/Nix binary inventory."
     }
   }
 }

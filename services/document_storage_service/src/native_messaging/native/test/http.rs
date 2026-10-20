@@ -442,6 +442,7 @@ async fn fixture_with_files(
         })
     };
     let state = MessagingRouterState {
+        linked: None,
         service: service.clone(),
         entity_access_service: native.access.clone(),
         authorization_state: MacroAuthorizationState::new(Arc::new(Authentication {

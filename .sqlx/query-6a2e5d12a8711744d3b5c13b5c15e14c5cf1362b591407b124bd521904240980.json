@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT to_jsonb(a) || jsonb_build_object('owner_epoch',o.epoch) AS \"data!\"\n            FROM whatsapp_linked_account a LEFT JOIN whatsapp_session_owner o ON o.account_id=a.id\n            WHERE ($1::uuid IS NULL OR a.id=$1) AND ($2::text IS NULL OR a.user_id=$2)\n            ORDER BY a.created_at DESC LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "data!",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "6a2e5d12a8711744d3b5c13b5c15e14c5cf1362b591407b124bd521904240980"
+}

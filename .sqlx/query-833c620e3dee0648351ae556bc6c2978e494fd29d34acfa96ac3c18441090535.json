@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS(SELECT 1 FROM whatsapp_pairing p JOIN whatsapp_linked_account a ON a.id=p.account_id WHERE p.id=$1 AND p.user_id=$2 AND p.state='connected' AND p.consumed_at IS NOT NULL AND a.id=$3 AND a.authorization_generation=$4 AND a.identity_jid=$5 AND a.state='connected') AS \"completed!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "completed!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "833c620e3dee0648351ae556bc6c2978e494fd29d34acfa96ac3c18441090535"
+}

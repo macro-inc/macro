@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id,authorization_generation AS \"generation!\" FROM meta_messaging_send WHERE linked_account_id=$1 AND allocated_source_id IS NOT NULL AND dispatch_started_at IS NOT NULL AND provider_message_id IS NULL AND state IN ('sending','unknown') ORDER BY created_at,id LIMIT 32",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "generation!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "0b76cf7c3c359c818b50903c885bae033f0fb842e402e00ce8a2dc2ec5f84ff1"
+}

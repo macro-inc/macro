@@ -13,6 +13,7 @@ import {
 } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ConversationAccount } from '../core/conversation';
 import { createReplySource } from '../queries/reply-source';
 import { replyOptions } from '../tests/reply-options';
 import { ChannelMessagingComposer } from './channel-composer';
@@ -150,6 +151,53 @@ function enableImages() {
 }
 
 describe('native external-reply boundary', () => {
+  it('keeps personal-account permission denials separate from Business reply windows', async () => {
+    const [personal, setPersonal] = createSignal<ConversationAccount>({
+      ...account(),
+      transport: 'linked',
+      authorization_generation: 1,
+      eligibility: {
+        evaluated_at: new Date().toISOString(),
+        modes: [{ mode: 'free_form', allowed: false, reason: 'forbidden' }],
+      },
+    });
+    render(() => (
+      <ChannelMessagingComposer
+        channelId="personal-group"
+        channelName="Project group"
+        userId={fixture.userId()}
+        createSource={createReplySource}
+        interaction={{ kind: 'external', account: personal(), available: true }}
+        onRefresh={() =>
+          setPersonal({
+            ...personal(),
+            eligibility: {
+              evaluated_at: new Date().toISOString(),
+              modes: [{ mode: 'free_form', allowed: true }],
+            },
+          })
+        }
+        onRecoverReady={() => () => {}}
+      />
+    ));
+    fireEvent.input(screen.getByRole('textbox'), {
+      target: { value: 'A personal reply' },
+    });
+    const send = screen.getByRole('button', {
+      name: 'Send reply via WhatsApp',
+    });
+    expect(send).toHaveProperty('disabled', true);
+    expect(
+      screen.getByText('Sending is unavailable for this group.')
+    ).toBeTruthy();
+    expect(
+      screen.queryByText(/reply window|approved template|human-authored reply/i)
+    ).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    await waitFor(() => expect(send).toHaveProperty('disabled', false));
+    fireEvent.click(send);
+    await waitFor(() => expect(fixture.reply).toHaveBeenCalledOnce());
+  });
   it('returns focus to the reply field after sending from the button', async () => {
     mount();
     const input = screen.getByRole('textbox', {

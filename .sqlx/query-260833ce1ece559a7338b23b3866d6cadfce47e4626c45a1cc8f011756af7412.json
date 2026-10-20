@@ -1,0 +1,53 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            cp.role::text as \"role?\",\n            CASE WHEN c.messaging_binding='whatsapp_linked_group' THEN whatsapp_linked_can_view(c.id,$2) ELSE true END AS \"linked_allowed!\",\n            c.channel_type::text as \"channel_type!\",\n            c.org_id as \"org_id?\",\n            c.team_id as \"team_id?\",\n            EXISTS (\n                SELECT 1\n                FROM team_user tu\n                WHERE tu.user_id = $2 AND tu.team_id = c.team_id\n            ) as \"is_team_member!\"\n        FROM comms_channels c\n        LEFT JOIN comms_channel_participants cp\n            ON cp.channel_id = c.id AND cp.user_id = $2 AND cp.left_at IS NULL\n        WHERE c.id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "role?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "linked_allowed!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "channel_type!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "org_id?",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "team_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "is_team_member!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      true,
+      true,
+      null
+    ]
+  },
+  "hash": "260833ce1ece559a7338b23b3866d6cadfce47e4626c45a1cc8f011756af7412"
+}

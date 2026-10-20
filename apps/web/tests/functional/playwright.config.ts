@@ -8,7 +8,9 @@ const appPort = Number(process.env.FUNCTIONAL_APP_PORT ?? port + 1);
 export default defineConfig({
   testDir: '.',
   testMatch: '*.spec.ts',
-  testIgnore: messaging ? [] : ['meta-messaging.spec.ts'],
+  testIgnore: messaging
+    ? []
+    : ['meta-messaging.spec.ts', 'whatsapp-linked.spec.ts'],
   timeout: 60_000,
   expect: { timeout: 10_000 },
   workers: 1,

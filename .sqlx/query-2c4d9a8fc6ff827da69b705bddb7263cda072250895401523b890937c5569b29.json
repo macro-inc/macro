@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE whatsapp_external_message SET message_id=$4,effect_revision=effect_revision+CASE WHEN $5 THEN 1 ELSE 0 END,native_retry_at=now(),origin=CASE WHEN $6 THEN 'macro' ELSE origin END WHERE binding_id=$1 AND person_id=$2 AND source_id=$3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Bool",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2c4d9a8fc6ff827da69b705bddb7263cda072250895401523b890937c5569b29"
+}

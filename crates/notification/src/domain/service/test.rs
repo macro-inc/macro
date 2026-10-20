@@ -108,6 +108,7 @@ fn test_user_id(email: &str) -> MacroUserIdStr<'static> {
 /// Mock repository that tracks calls.
 struct MockRepository {
     withdrawn_notifications: HashSet<Uuid>,
+    revoked_recipients: HashSet<MacroUserIdStr<'static>>,
     muted_users: HashSet<MacroUserIdStr<'static>>,
     unsubscribed_users: HashSet<MacroUserIdStr<'static>>,
     type_disabled_users: HashSet<MacroUserIdStr<'static>>,
@@ -131,6 +132,7 @@ impl MockRepository {
     fn new() -> Self {
         Self {
             withdrawn_notifications: HashSet::new(),
+            revoked_recipients: HashSet::new(),
             muted_users: HashSet::new(),
             unsubscribed_users: HashSet::new(),
             type_disabled_users: HashSet::new(),
@@ -312,6 +314,19 @@ impl NotificationRepository for MockRepository {
             })
             .collect();
         Ok(Some(rows))
+    }
+
+    async fn filter_delivery_recipients<'a>(
+        &self,
+        _notification_id: Uuid,
+        recipients: &[MacroUserIdStr<'a>],
+    ) -> Result<HashSet<MacroUserIdStr<'static>>, Report> {
+        Ok(recipients
+            .iter()
+            .filter(|id| !self.revoked_recipients.contains(*id))
+            .cloned()
+            .map(CowLike::into_owned)
+            .collect())
     }
 
     async fn notification_is_withdrawn(&self, notification_id: Uuid) -> Result<bool, Report> {
@@ -606,6 +621,16 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
     ) -> Result<Option<Vec<UserNotificationRow<Arc<T>>>>, Report> {
         (**self)
             .create_notification(request, notification_id, service_sender, apns_collapse_key)
+            .await
+    }
+
+    async fn filter_delivery_recipients<'a>(
+        &self,
+        notification_id: Uuid,
+        recipients: &[MacroUserIdStr<'a>],
+    ) -> Result<HashSet<MacroUserIdStr<'static>>, Report> {
+        (**self)
+            .filter_delivery_recipients(notification_id, recipients)
             .await
     }
 
@@ -1577,7 +1602,7 @@ async fn test_egress_rate_limit_exceeded() {
     let email = EmailCreateBundle::new(&TestNotification {
         message: "Hello".to_string(),
     })
-    .with_recipient(recipient);
+    .with_recipient(recipient, None);
     let message = QueueMessage::new_test(
         "test_notification".to_string(),
         NotificationChannel::Email(email),
@@ -1605,7 +1630,7 @@ async fn test_egress_rate_limit_allowed() {
     let email = EmailCreateBundle::new(&TestNotification {
         message: "Hello".to_string(),
     })
-    .with_recipient(recipient);
+    .with_recipient(recipient, None);
     let message = QueueMessage::new_test(
         "test_notification".to_string(),
         NotificationChannel::Email(email),
@@ -2306,6 +2331,7 @@ async fn test_egress_ios_attempts_all_endpoints_even_if_some_fail() {
     let message = QueueMessage::new_test(
         "test_notification".to_string(),
         NotificationChannel::Ios(Box::new(APNSTargets {
+            authorization_notification_id: None,
             notif: APNSPushNotification {
                 aps: Aps::default(),
                 push_notification_data: json!({"message": "Hello"}),
@@ -2401,6 +2427,7 @@ async fn test_egress_removes_unavailable_push_endpoints() {
     let message = QueueMessage::new_test(
         "test_notification".to_string(),
         NotificationChannel::Ios(Box::new(APNSTargets {
+            authorization_notification_id: None,
             notif: APNSPushNotification {
                 aps: Aps::default(),
                 push_notification_data: json!({"message": "Hello"}),
@@ -2737,7 +2764,7 @@ async fn test_poll_and_deliver_deletes_rate_limited_message() {
     let email = EmailCreateBundle::new(&TestNotification {
         message: "Hello".to_string(),
     })
-    .with_recipient(recipient);
+    .with_recipient(recipient, None);
     let message = QueueMessage::new_test(
         "test_notification".to_string(),
         NotificationChannel::Email(email),
@@ -2834,6 +2861,7 @@ async fn test_poll_and_deliver_deletes_message_when_all_ios_failures() {
     let message = QueueMessage::new_test(
         "test_notification".to_string(),
         NotificationChannel::Ios(Box::new(APNSTargets {
+            authorization_notification_id: None,
             notif: APNSPushNotification {
                 aps: Aps::default(),
                 push_notification_data: json!({"message": "Hello"}),

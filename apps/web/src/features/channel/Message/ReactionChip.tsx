@@ -8,6 +8,7 @@ type ReactionChipProps = {
   emoji: string;
   count: number;
   users: string[];
+  externalNames?: string[];
   currentUserId: string | undefined;
   selected?: boolean;
   interactive?: boolean;
@@ -44,13 +45,19 @@ export function formatReactorNames(
 
 function ReactionTooltipContent(props: {
   users: string[];
+  externalNames?: string[];
   currentUserId: string | undefined;
   emoji: string;
 }): JSX.Element {
   return (
     <span>
-      {formatReactorNames(props.users, props.currentUserId)} reacted with{' '}
-      <span class="text-base">{props.emoji}</span>
+      {[
+        formatReactorNames(props.users, props.currentUserId),
+        ...(props.externalNames ?? []),
+      ]
+        .filter(Boolean)
+        .join(', ')}{' '}
+      reacted with <span class="text-base">{props.emoji}</span>
     </span>
   );
 }
@@ -70,6 +77,7 @@ export function ReactionChip(props: ReactionChipProps) {
           content={
             <ReactionTooltipContent
               users={props.users}
+              externalNames={props.externalNames}
               currentUserId={props.currentUserId}
               emoji={props.emoji}
             />
@@ -112,6 +120,7 @@ export function ReactionChip(props: ReactionChipProps) {
         <Popover.Content class="z-modal glass bg-menu-glass p-1.5 text-ink-muted text-xs rounded-xl">
           <ReactionTooltipContent
             users={props.users}
+            externalNames={props.externalNames}
             currentUserId={props.currentUserId}
             emoji={props.emoji}
           />

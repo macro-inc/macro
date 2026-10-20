@@ -1,0 +1,76 @@
+--- a/send.go
++++ b/send.go
+@@ -143,7 +143,12 @@
+ //	cli.SendMessage(ctx, to, message, whatsmeow.SendRequestExtra{...})
+ //
+ // Trying to add multiple extra parameters will return an error.
++// MacroDispatchSafetyVersion identifies the reviewed local transport patch.
++const MacroDispatchSafetyVersion = 1
++
+ type SendRequestExtra struct {
++	// NoDisconnectRetry returns uncertainty instead of submitting a second frame.
++	NoDisconnectRetry bool
+ 	// The message ID to use when sending. If this is not provided, a random message ID will be generated
+ 	ID types.MessageID
+ 	// JID of the bot to be invoked (optional)
+@@ -453,6 +458,10 @@
+ 	}
+ 	resp.DebugTimings.Resp = time.Since(start)
+ 	if isDisconnectNode(respNode) {
++		if req.NoDisconnectRetry {
++			err = &DisconnectedError{Action: "message send", Node: respNode}
++			return
++		}
+ 		start = time.Now()
+ 		respNode, err = cli.retryFrame(ctx, "message send", req.ID, data, respNode, 0)
+ 		resp.DebugTimings.Retry = time.Since(start)
+--- a/socket/framesocket.go
++++ b/socket/framesocket.go
+@@ -123,6 +123,12 @@
+ }
+ 
+ func (fs *FrameSocket) SendFrame(data []byte) error {
++	return fs.SendFrameContext(fs.cancelCtx, data)
++}
++
++// SendFrameContext completes the physical write before returning. Cancellation closes
++// this websocket through coder/websocket; a failed encrypted frame retires its stream.
++func (fs *FrameSocket) SendFrameContext(ctx context.Context, data []byte) error {
+ 	conn := fs.conn.Load()
+ 	if conn == nil {
+ 		return ErrSocketClosed
+@@ -151,7 +157,7 @@
+ 	// Copy actual frame data
+ 	copy(wholeFrame[headerLength+FrameLengthSize:], data)
+ 
+-	return conn.Write(fs.cancelCtx, websocket.MessageBinary, wholeFrame)
++	return conn.Write(ctx, websocket.MessageBinary, wholeFrame)
+ }
+ 
+ func (fs *FrameSocket) frameComplete() {
+--- a/socket/noisesocket.go
++++ b/socket/noisesocket.go
+@@ -96,16 +96,14 @@
+ 	// Don't reuse plaintext slice for storage as it may be needed for retries
+ 	ciphertext := ns.writeKey.Seal(nil, generateIV(ns.writeCounter), plaintext, nil)
+ 	ns.writeCounter++
+-	doneChan := make(chan error, 1)
+-	go func() {
+-		doneChan <- ns.fs.SendFrame(ciphertext)
+-	}()
+-	select {
+-	case <-ctx.Done():
+-		return ctx.Err()
+-	case retErr := <-doneChan:
+-		return retErr
++	// Keep the nonce lock until the actual writer has returned. A cancelled
++	// caller cannot leave an unobserved writer using this stream.
++	err := ns.fs.SendFrameContext(ctx, ciphertext)
++	if err != nil {
++		ns.Stop(false, true)
++		ns.fs.Close(0)
+ 	}
++	return err
+ }
+ 
+ func (ns *NoiseSocket) receiveEncryptedFrame(ctx context.Context, ciphertext []byte) {

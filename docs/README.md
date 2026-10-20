@@ -10,3 +10,6 @@
 | [`agent-guide/`](agent-guide/) | How browser agents operate the app, not how to develop it. |
 
 Docs that belong to one app, service, or crate live next to its code.
+
+- [Personal WhatsApp linked devices](WHATSAPP_LINKED_DEVICES.md): native group behavior, hosted sessions, rollout and recovery.
+- [Linked-device verification](WHATSAPP_LINKED_VERIFICATION.md): executed evidence and remaining real-account qualification.

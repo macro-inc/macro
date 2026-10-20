@@ -301,6 +301,15 @@ pub enum ReplyContent {
         /// Optional caption, where the provider permits it.
         caption: Option<String>,
     },
+    /// Deliberate source-scoped mutation for a personal linked group.
+    Mutation {
+        /// Existing authorized native message; resolved to its canonical source by the server.
+        message_id: Uuid,
+        /// Explicit external operation.
+        operation: LinkedMutation,
+        /// Replacement text or reaction; absent for deletion and empty to remove a reaction.
+        text: Option<String>,
+    },
     /// Approved WhatsApp template, resolved by ID against the sending account.
     Template {
         /// Account-scoped provider template identity.
@@ -311,6 +320,19 @@ pub enum ReplyContent {
         /// are validated separately and never passed through as raw provider JSON.
         parameters: Vec<String>,
     },
+}
+
+/// Supported deliberate remote operations on a linked group message.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub enum LinkedMutation {
+    /// Add/replace/remove the caller's reaction.
+    Reaction,
+    /// Edit a recently sent message owned by the caller's verified account.
+    Edit,
+    /// Delete the caller's message for everyone, subject to remote eligibility.
+    Delete,
 }
 
 /// Durable result of an intentional send; accepted does not mean delivered.

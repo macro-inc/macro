@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS(SELECT 1 FROM whatsapp_attachment WHERE binding_id=$1 AND person_id=$2 AND source_id=$3 AND ordinal=$4 AND state IN ('ready','deleted')) AS \"ready!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "ready!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Int2"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "0a870b56d3697b68df52827f81f61c604f4dc445b52adee13be1c81570de79ba"
+}

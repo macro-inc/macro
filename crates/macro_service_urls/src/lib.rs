@@ -651,3 +651,12 @@ service_url! {
         prod: "https://gateway.macro.com/preview",
     }
 }
+
+service_url! {
+    /// Private mTLS control surface for hosted personal WhatsApp sessions.
+    pub struct WhatsAppSessionServiceUrl {
+        local: "https://localhost:8128/",
+        dev: "https://whatsapp-session.dev.macro.internal/",
+        prod: "https://whatsapp-session.macro.internal/",
+    }
+}

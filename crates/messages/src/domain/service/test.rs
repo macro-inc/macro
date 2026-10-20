@@ -256,6 +256,8 @@ fn fixture() -> Repo {
             bot_profile: None,
             mentions: vec![],
             imported_author: Some(ImportedAuthor {
+                verified_user_id: None,
+                origin: None,
                 name: "External PDF author".into(),
             }),
             triggered_by: None,

@@ -17,6 +17,7 @@ async fn main() -> anyhow::Result<()> {
         .expect("able to grab doppler project");
 
     dev.load::<config::Config>().await?;
+    dev.load::<config::LinkedConfig>().await?;
 
     let prd = doppler_config::DopplerConfig::builder()
         .token_from_env("DOPPLER_TOKEN")
@@ -26,6 +27,7 @@ async fn main() -> anyhow::Result<()> {
         .expect("able to grab doppler project");
 
     prd.load::<config::Config>().await?;
+    prd.load::<config::LinkedConfig>().await?;
 
     Ok(())
 }

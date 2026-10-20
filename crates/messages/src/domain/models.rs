@@ -358,6 +358,12 @@ pub struct BotSenderProfile {
 pub struct ImportedAuthor {
     /// Original author text; never interpreted as an authenticated principal.
     pub name: String,
+    /// Provider-verified association; this is not an authenticated Macro action.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verified_user_id: Option<String>,
+    /// Provider origin, kept distinct from the associated person.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin: Option<String>,
 }
 
 /// Reaction emoji and the users who added it.
@@ -369,6 +375,23 @@ pub struct CountedReaction {
     pub emoji: String,
     /// User identifiers.
     pub users: Vec<String>,
+    /// Provider actors are distinct from Macro user identities.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub external_users: Vec<ExternalReactionActor>,
+}
+
+/// An external reaction author, scoped to the authorized native message.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
+pub struct ExternalReactionActor {
+    /// Verified Macro association, while the reaction retains WhatsApp provenance.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user_id: Option<String>,
+    /// Stable external sender identity; never a synthetic Macro user.
+    pub sender_id: String,
+    /// Untrusted display name shown with external provenance.
+    pub name: Option<String>,
 }
 
 /// An entity attached to a message.

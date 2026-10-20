@@ -24,7 +24,10 @@ const json = (body: unknown) => ({
   headers: { 'Content-Type': 'application/json' },
 });
 
-function metaFetch<T extends ObjectLike>(path: string, init?: SafeFetchInit) {
+export function metaFetch<T extends ObjectLike>(
+  path: string,
+  init?: SafeFetchInit
+) {
   return fetchWithToken<T>(
     `${SERVER_HOSTS['document-storage-service']}${path}`,
     {

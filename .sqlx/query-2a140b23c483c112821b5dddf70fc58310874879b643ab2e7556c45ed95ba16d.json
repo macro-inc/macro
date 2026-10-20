@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT messaging_binding NOT IN ('whatsapp_group','whatsapp_linked_group') AS \"allowed!\" FROM comms_channels WHERE id=$1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "allowed!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "2a140b23c483c112821b5dddf70fc58310874879b643ab2e7556c45ed95ba16d"
+}

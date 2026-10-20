@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 const contentSchema = z.object({
   text: z.string().default(''),
+  replyTo: z.string().optional(),
   attachment: z
     .object({
       document_id: z.string(),
@@ -39,10 +40,11 @@ export const emptyReplyDraft = () => replyDraftSchema.parse({});
 /** A draft and its retry identity belong to one signed-in user and customer. */
 export function createReplyDraft(
   userId: string | undefined,
-  channelId: string
+  channelId: string,
+  accountScope?: string
 ) {
   const storage = createUserScopedStorage(
-    `macro:meta-reply:v1:${encodeURIComponent(channelId)}`
+    `macro:meta-reply:v1:${encodeURIComponent(channelId)}${accountScope ? `:${encodeURIComponent(accountScope)}` : ''}`
   );
   return makePersistedState(createStore(emptyReplyDraft()), {
     storages: {

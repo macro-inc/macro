@@ -1,0 +1,77 @@
+--- a/message.go
++++ b/message.go
+@@ -788,14 +788,25 @@
+ 	} else if data, err = cli.Download(ctx, notif); err != nil {
+ 		return nil, fmt.Errorf("failed to download: %w", err)
+ 	}
++    return cli.ParseHistorySync(ctx,data,synchronousStorage,0)
++}
++
++// ParseHistorySync preserves the protocol storage behavior while allowing an
++// owning endpoint to enforce compressed and expanded allocation bounds.
++// A nonpositive maxExpandedBytes preserves the upstream default.
++func (cli *Client) ParseHistorySync(ctx context.Context,data []byte,synchronousStorage bool,maxExpandedBytes int64)(*waHistorySync.HistorySync,error){
+ 	var historySync waHistorySync.HistorySync
+ 	if reader, err := zlib.NewReader(bytes.NewReader(data)); err != nil {
+ 		return nil, fmt.Errorf("failed to prepare to decompress: %w", err)
+-	} else if rawData, err := io.ReadAll(reader); err != nil {
+-		return nil, fmt.Errorf("failed to decompress: %w", err)
+-	} else if err = proto.Unmarshal(rawData, &historySync); err != nil {
+-		return nil, fmt.Errorf("failed to unmarshal: %w", err)
+-	}
++    } else {
++        defer reader.Close()
++        var bounded io.Reader=reader
++        if maxExpandedBytes>0 {bounded=io.LimitReader(reader,maxExpandedBytes+1)}
++        rawData,err:=io.ReadAll(bounded)
++        if err!=nil{return nil,fmt.Errorf("failed to decompress: %w",err)}
++        if maxExpandedBytes>0&&int64(len(rawData))>maxExpandedBytes{return nil,fmt.Errorf("expanded history exceeds endpoint limit")}
++        if err=proto.Unmarshal(rawData,&historySync);err!=nil{return nil,fmt.Errorf("failed to unmarshal: %w",err)}
++    }
+ 	cli.Log.Debugf("Received history sync (type %s, chunk %d, progress %d)", historySync.GetSyncType(), historySync.GetChunkOrder(), historySync.GetProgress())
+ 	doStorage := func(ctx context.Context) {
+ 		if err := cli.storeNCTSalt(ctx, historySync.GetNctSalt()); err != nil {
+@@ -924,7 +935,7 @@
+ 		go cli.handleAppStateSyncKeyShare(context.WithoutCancel(ctx), protoMsg.AppStateSyncKeyShare)
+ 	}
+ 
+-	if info.Category == "peer" {
++	if ok && info.Category == "peer" && !(protoMsg.GetHistorySyncNotification()!=nil && cli.ManualHistorySyncDownload && cli.DisableManualHistorySyncReceipt) {
+ 		go func() {
+ 			err := cli.SendProtocolMessageReceipt(ctx, info.ID, types.ReceiptTypePeerMsg)
+ 			if err != nil {
+@@ -1172,7 +1183,7 @@
+ func (cli *Client) handleDecryptedMessage(ctx context.Context, info *types.MessageInfo, msg *waE2E.Message, retryCount int) (handlerFailed bool) {
+ 	ok := cli.processProtocolParts(ctx, info, msg)
+ 	if !ok {
+-		return false
++		return true
+ 	}
+ 	evt := &events.Message{Info: *info, RawMessage: msg, RetryCount: retryCount}
+ 	return cli.dispatchEvent(evt.UnwrapRaw())
+--- a/receipt.go
++++ b/receipt.go
+@@ -27,9 +27,7 @@
+ 		go cli.sendAck(ctx, node, NackParsingError)
+ 	} else if participants != nil {
+ 		defer cli.maybeDeferredAck(ctx, node)(&cancelled)
+-		for _, pcp := range participants {
+-			cancelled = cli.handleGroupedReceipt(*receipt, &pcp)
+-		}
++        cancelled=cli.handleGroupedReceipts(*receipt,participants)
+ 	} else {
+ 		if receipt.Type == types.ReceiptTypeRetry {
+ 			// Ack happens inside the retry receipt handler
+@@ -41,6 +39,12 @@
+ 		}
+ 		cancelled = cli.dispatchEvent(receipt)
+ 	}
++}
++
++// Preserve every failure while still processing later participant blocks.
++func (cli *Client) handleGroupedReceipts(receipt events.Receipt,participants []waBinary.Node)(cancelled bool){
++    for _,pcp:=range participants{cancelled=cli.handleGroupedReceipt(receipt,&pcp)||cancelled}
++    return
+ }
+ 
+ func (cli *Client) handleGroupedReceipt(partialReceipt events.Receipt, participants *waBinary.Node) (cancelled bool) {

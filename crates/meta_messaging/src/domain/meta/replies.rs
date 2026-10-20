@@ -22,6 +22,7 @@ impl From<&Connection> for AccountScope {
             id: connection.id,
             team_id: connection.team_id,
             generation: connection.connected_at,
+            personal: None,
             status: connection.status,
         }
     }
@@ -71,6 +72,11 @@ impl ReplyPolicy for MetaReplies {
     }
 
     async fn validate_content(&self, scope: &AccountScope, request: &SendReply) -> PortResult<()> {
+        if matches!(request.message, ReplyContent::Mutation { .. }) {
+            return Err(
+                MessagingError::Invalid("this operation requires a personal linked group").into(),
+            );
+        }
         if request.human_support && !self.human_agent_approved {
             return Err(MessagingError::HumanSupportRequired.into());
         }

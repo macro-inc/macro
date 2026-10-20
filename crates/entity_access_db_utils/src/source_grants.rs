@@ -32,3 +32,17 @@ where
     .await?;
     Ok(result.rows_affected())
 }
+
+/// Revoke one integration-derived channel/document grant, preserving every direct,
+/// team, other-channel and owner grant. The caller owns the provenance reservation.
+pub async fn delete_channel_document_grant<'e, E>(
+    executor: E,
+    channel: sqlx::types::Uuid,
+    document: sqlx::types::Uuid,
+) -> Result<u64, sqlx::Error>
+where
+    E: Executor<'e, Database = Postgres>,
+{
+    let result=sqlx::query!("DELETE FROM entity_access WHERE source_type='channel' AND source_id=$1 AND entity_id=$2 AND entity_type='document'",channel.to_string(),document).execute(executor).await?;
+    Ok(result.rows_affected())
+}

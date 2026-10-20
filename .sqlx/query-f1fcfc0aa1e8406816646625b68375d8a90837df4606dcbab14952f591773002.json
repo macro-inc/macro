@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO whatsapp_external_person(id,binding_id,user_id,display_name) VALUES($1,$2,$3,$4) ON CONFLICT(id) DO UPDATE SET display_name=COALESCE(excluded.display_name,whatsapp_external_person.display_name)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f1fcfc0aa1e8406816646625b68375d8a90837df4606dcbab14952f591773002"
+}

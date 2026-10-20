@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE whatsapp_group_binding SET state='suspended' WHERE group_jid=$1 AND state='active' AND id=ANY($2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e395954888de2efcbd95751eebc1f91d6bbcdeb27d8687935f75c4cb76a87ad7"
+}

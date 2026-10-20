@@ -35,6 +35,8 @@ export type ReplyEligibility = {
   modes: ModeEligibility[];
 };
 export type ConversationAccount = {
+  transport?: 'linked';
+  authorization_generation?: number;
   provider: MessagingProvider;
   account_name: string;
   status: 'connecting' | 'connected' | 'disconnected' | 'revoked' | 'error';
@@ -67,6 +69,12 @@ export type ReplyRequest = {
   reply_to?: string | null;
   message:
     | { type: 'text'; text: string }
+    | {
+        type: 'mutation';
+        message_id: string;
+        operation: 'reaction' | 'edit' | 'delete';
+        text?: string | null;
+      }
     | {
         type: 'media';
         document_id: string;

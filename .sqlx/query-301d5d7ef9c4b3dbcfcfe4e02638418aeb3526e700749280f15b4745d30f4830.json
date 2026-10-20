@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT deleted_at IS NULL AS \"alive!\" FROM whatsapp_external_message WHERE binding_id=$1 AND person_id=$2 AND source_id=$3 FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "alive!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "301d5d7ef9c4b3dbcfcfe4e02638418aeb3526e700749280f15b4745d30f4830"
+}

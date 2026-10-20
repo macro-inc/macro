@@ -41,11 +41,13 @@ use uuid::Uuid;
 use super::effects::NativeMessageEffects;
 use crate::api::context::EntityAccessService;
 mod groups;
+pub(crate) mod linked;
 #[cfg(test)]
 mod test;
 
 /// Native adapters instantiated only by DSS's composition root.
 pub(crate) struct NativeChannels {
+    linked: Option<linked::LinkedComposition>,
     pool: PgPool,
     access: Arc<EntityAccessService>,
     realtime: ConnectionGatewayMessages,
@@ -65,6 +67,7 @@ impl NativeChannels {
         channel_events: Arc<dyn channels::domain::ports::ChannelEventDispatcher>,
     ) -> Self {
         Self {
+            linked: None,
             pool,
             access,
             realtime,
@@ -428,7 +431,12 @@ impl NativeChannels {
             )
             .await
             .map_err(error)?;
-        repo.native_effects_complete(id, revision).await?;
+        if info.messaging_binding == channels::domain::models::MessagingBinding::WhatsappLinkedGroup
+        {
+            self.linked()?.repository.published(id, revision).await?;
+        } else {
+            repo.native_effects_complete(id, revision).await?;
+        }
         Ok(())
     }
 }
@@ -465,6 +473,19 @@ impl NativeConversation for NativeChannels {
             .map_err(access_error)?;
         Ok(())
     }
+    async fn require_media_access(&self, user: &str, document: Uuid) -> PortResult<()> {
+        let user = MacroUserIdStr::try_from(user).map_err(|_| MessagingError::Forbidden)?;
+        self.access
+            .generate_entity_access_receipt::<entity_access::domain::models::ViewAccessLevel>(
+                &user.0,
+                None,
+                &document.to_string(),
+                EntityType::Document,
+            )
+            .await
+            .map_err(access_error)?;
+        Ok(())
+    }
     async fn read_media(
         &self,
         user: &str,
@@ -489,6 +510,9 @@ impl NativeConversation for NativeChannels {
         scope: &meta_messaging::domain::replies::AccountScope,
         id: &ProviderId,
     ) -> PortResult<()> {
+        if scope.personal.is_some() {
+            return self.sent_linked(work, conversation, scope, id).await;
+        }
         let connection = PgMessagingRepository::new(self.pool.clone())
             .connection(scope.id)
             .await?
@@ -499,6 +523,7 @@ impl NativeConversation for NativeChannels {
             .rendered_text
             .clone()
             .unwrap_or_else(|| match &work.request.message {
+                ReplyContent::Mutation { .. } => String::new(),
                 ReplyContent::Text { text } => text.clone(),
                 ReplyContent::Template { parameters, .. } => {
                     format!("[WhatsApp template]\n{}", parameters.join("\n"))
@@ -538,7 +563,10 @@ impl NativeConversation for NativeChannels {
     async fn reconcile_effects(&self) -> PortResult<usize> {
         let repo = PgMessagingRepository::new(self.pool.clone());
         let mut first_error = None;
-        let effects = repo.pending_native_effects().await?;
+        let mut effects = repo.pending_native_effects().await?;
+        if let Some(linked) = &self.linked {
+            effects.extend(linked.repository.effects().await?);
+        }
         let count = effects.len();
         for effect in effects {
             let (message, revision) = (effect.message_id, effect.revision);

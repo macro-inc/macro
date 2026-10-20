@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE whatsapp_group_binding SET next_sequence=next_sequence+1 WHERE id=$1 AND channel_id=$2 AND state='active' RETURNING next_sequence",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "next_sequence",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "2689e700500a42e454a228f14b6ee5c519157639243d0a13c7f4f3d0cc325e7d"
+}

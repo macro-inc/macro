@@ -68,3 +68,7 @@ mutations use the same parent lookup as reads, without an extra per-channel quer
 The domain blocks ordinary human posts and unsupported edits/deletes/reactions/
 threads on pending or bound provider groups. Existing permissioned bot behavior
 remains internal. Explicit external replies use the separate messaging domain.
+
+## Personal WhatsApp linked devices
+
+Linked-device reactions use `comms_external_reactions` and optional verified Macro association, never synthetic Macro users. Imported author origin/association is trusted stored provenance, not send authority. Quoted replies and revisions reuse canonical native message IDs and permanent source tombstones. See `docs/WHATSAPP_LINKED_DEVICES.md`.

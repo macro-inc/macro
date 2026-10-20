@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO whatsapp_linked_account(id,user_id,store_ref) VALUES($1,$2,$3)\n            ON CONFLICT(id) DO UPDATE SET state='connecting',authorization_generation=whatsapp_linked_account.authorization_generation+1,updated_at=now()\n            RETURNING authorization_generation",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "authorization_generation",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "65226bb09b666bce4056dc8f8ee074a6c2abe782a63837be1375c398cb75b567"
+}

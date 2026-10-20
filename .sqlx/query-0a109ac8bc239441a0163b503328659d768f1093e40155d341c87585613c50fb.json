@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE whatsapp_group_membership SET consent_ended_at=COALESCE(consent_ended_at,now()) WHERE account_id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0a109ac8bc239441a0163b503328659d768f1093e40155d341c87585613c50fb"
+}

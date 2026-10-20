@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT recipient AS \"recipient!\" FROM unnest($2::text[]) recipient WHERE whatsapp_linked_notification_allowed($1,recipient)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "recipient!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "3778c553db75a96040724bc5bbe10ee182aa4b5ea980d0c4b07b8ebc60c2697e"
+}

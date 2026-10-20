@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO comms_external_reactions(message_id,sender_id,display_name,emoji,revision,updated_at,user_id,source_id) SELECT $1,$2,$3,$4,$5,$6,$7,$8 WHERE EXISTS(SELECT 1 FROM comms_messages WHERE id=$1 AND deleted_at IS NULL) ON CONFLICT(message_id,sender_id) DO UPDATE SET emoji=excluded.emoji,display_name=excluded.display_name,revision=excluded.revision,updated_at=excluded.updated_at,user_id=excluded.user_id,source_id=excluded.source_id WHERE (comms_external_reactions.revision,comms_external_reactions.source_id)<(excluded.revision,excluded.source_id)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Int8",
+        "Timestamptz",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f061f83394eca25f960f73f4ba9b419119df1c059fb073c5729fd7e9d21bc88b"
+}

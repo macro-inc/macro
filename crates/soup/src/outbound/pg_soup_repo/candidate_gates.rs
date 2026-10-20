@@ -200,7 +200,7 @@ pub(super) fn channel_gate(id_sql: &str, filter: Option<&EntityFilterAst>) -> St
                 SELECT 1 FROM comms_channel_participants cp
                 WHERE cp.channel_id = {id_sql}::uuid
                 AND cp.user_id = $1
-                AND cp.left_at IS NULL
+                AND cp.left_at IS NULL AND EXISTS(SELECT 1 FROM comms_channels linked_channel WHERE linked_channel.id=cp.channel_id AND CASE WHEN linked_channel.messaging_binding='whatsapp_linked_group' THEN whatsapp_linked_can_view(linked_channel.id,cp.user_id) ELSE true END)
                 {implied}
             )"#
         ),
@@ -241,7 +241,7 @@ pub(super) fn channel_thread_gate(id_sql: &str, filter: Option<&EntityFilterAst>
                 JOIN comms_channel_participants cp
                     ON m.parent_entity_type = 'channel' AND m.parent_entity_id = cp.channel_id::text
                     AND cp.user_id = $1
-                    AND cp.left_at IS NULL
+                    AND cp.left_at IS NULL AND EXISTS(SELECT 1 FROM comms_channels linked_channel WHERE linked_channel.id=cp.channel_id AND CASE WHEN linked_channel.messaging_binding='whatsapp_linked_group' THEN whatsapp_linked_can_view(linked_channel.id,cp.user_id) ELSE true END)
                 WHERE m.id = {id_sql}::uuid
                 AND m.thread_id IS NULL
                 AND m.deleted_at IS NULL

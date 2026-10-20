@@ -13,3 +13,7 @@ packages/sdk-docs/reference/** linguist-generated=true
 # and exclude from language stats; edit the Rust source, not the YAML.
 .github/workflows/code_check_cloud_storage.yml linguist-generated=true
 .github/workflows/check_generated.yml linguist-generated=true
+
+# Preserve byte-exact third-party notices and whitespace in upstream diff context.
+services/whatsapp_session/licenses/** -whitespace linguist-vendored=true
+services/whatsapp_session/patches/*.patch -whitespace

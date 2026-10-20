@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 mod external;
-pub use external::{ExternalMessageRevision, ExternalReplyAttribution};
+pub use external::{ExternalMessageRevision, ExternalReaction, ExternalReplyAttribution};
 mod historical;
 mod timeline;
 
@@ -30,6 +30,8 @@ struct StoredMessage {
     thread_id: Option<Uuid>,
     sender_id: String,
     imported_author: Option<String>,
+    #[serde(default)]
+    import_metadata: serde_json::Value,
     triggered_by_user_id: Option<String>,
     content: String,
     created_at: DateTime<Utc>,
@@ -190,7 +192,42 @@ impl PgMessageRepository {
                 .push(CountedReaction {
                     emoji: r.emoji,
                     users: r.users,
+                    external_users: vec![],
                 });
+        }
+        let external_ids = rows
+            .iter()
+            .filter(|r| {
+                r.import_metadata
+                    .get("source")
+                    .and_then(serde_json::Value::as_str)
+                    == Some("whatsapp_linked")
+            })
+            .map(|r| r.id)
+            .collect::<Vec<_>>();
+        let external_reactions = if external_ids.is_empty() {
+            vec![]
+        } else {
+            sqlx::query!("SELECT message_id,sender_id,display_name,emoji,user_id FROM comms_external_reactions WHERE message_id=ANY($1) AND emoji<>'' ORDER BY message_id,emoji,sender_id",&external_ids).fetch_all(&mut *connection).await.map_err(database_error)?
+        };
+        for reaction in external_reactions {
+            let reactions = reaction_map.entry(reaction.message_id).or_default();
+            if !reactions.iter().any(|r| r.emoji == reaction.emoji) {
+                reactions.push(CountedReaction {
+                    emoji: reaction.emoji.clone(),
+                    users: vec![],
+                    external_users: vec![],
+                });
+            }
+            if let Some(entry) = reactions.iter_mut().find(|r| r.emoji == reaction.emoji) {
+                entry
+                    .external_users
+                    .push(crate::domain::models::ExternalReactionActor {
+                        sender_id: reaction.sender_id,
+                        user_id: reaction.user_id,
+                        name: reaction.display_name,
+                    });
+            }
         }
         let string_ids: Vec<String> = ids.iter().map(ToString::to_string).collect();
         let mention_rows = sqlx::query!("SELECT source_entity_id, entity_type, entity_id FROM comms_entity_mentions WHERE source_entity_type = 'message' AND source_entity_id = ANY($1) ORDER BY entity_type, entity_id", &string_ids)
@@ -258,7 +295,19 @@ impl PgMessageRepository {
                         .sender_id
                         .try_into()
                         .map_err(|e| MessageError::Repository(rootcause::Report::new(e).into()))?,
-                    imported_author: r.imported_author.map(|name| ImportedAuthor { name }),
+                    imported_author: r.imported_author.map(|name| ImportedAuthor {
+                        name,
+                        verified_user_id: r
+                            .import_metadata
+                            .get("verified_macro_user")
+                            .and_then(serde_json::Value::as_str)
+                            .map(str::to_owned),
+                        origin: r
+                            .import_metadata
+                            .get("origin")
+                            .and_then(serde_json::Value::as_str)
+                            .map(str::to_owned),
+                    }),
                     triggered_by: r.triggered_by_user_id,
                     content: if deleted { String::new() } else { r.content },
                     created_at: r.created_at,
@@ -578,7 +627,7 @@ impl MessageRepository for PgMessageRepository {
             MessageParent::Document(_) => sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM "Document" WHERE id = $1 AND "deletedAt" IS NULL) AS "exists!""#, parent.entity_id())
                 .fetch_one(&self.pool).await,
             MessageParent::Channel(id) => {
-                return sqlx::query_scalar!(r#"SELECT messaging_binding = 'whatsapp_group' AS "managed!" FROM comms_channels WHERE id = $1"#, id)
+                return sqlx::query_scalar!(r#"SELECT messaging_binding IN ('whatsapp_group','whatsapp_linked_group') AS "managed!" FROM comms_channels WHERE id = $1"#, id)
                     .fetch_optional(&self.pool).await.map(|managed| match managed {
                         None => ParentState::Missing,
                         Some(true) => ParentState::ProviderManaged,

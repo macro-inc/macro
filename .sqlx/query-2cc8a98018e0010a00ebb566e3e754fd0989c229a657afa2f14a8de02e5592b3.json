@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE whatsapp_attachment SET state='deleted',lease_id=NULL,lease_until=NULL WHERE binding_id=$1 AND person_id=$2 AND source_id=$3 RETURNING document_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "document_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "2cc8a98018e0010a00ebb566e3e754fd0989c229a657afa2f14a8de02e5592b3"
+}

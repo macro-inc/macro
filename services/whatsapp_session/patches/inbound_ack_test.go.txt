@@ -1,0 +1,41 @@
+// Copyright (c) 2026 Macro
+// SPDX-License-Identifier: MPL-2.0
+package whatsmeow
+
+import (
+ "bytes"
+ "compress/zlib"
+ "context"
+ "strings"
+ "testing"
+ waBinary "go.mau.fi/whatsmeow/binary"
+ "go.mau.fi/whatsmeow/proto/waCommon"
+ "go.mau.fi/whatsmeow/proto/waE2E"
+ "go.mau.fi/whatsmeow/proto/waWeb"
+ "go.mau.fi/whatsmeow/store"
+ "go.mau.fi/whatsmeow/types"
+ "go.mau.fi/whatsmeow/types/events"
+ "google.golang.org/protobuf/proto"
+)
+func TestMacroGroupedReceiptRetainsEarlierFailure(t *testing.T){
+ cli:=NewClient(&store.Device{},nil);calls:=0
+ cli.AddEventHandlerWithSuccessStatus(func(any)bool{calls++;return calls!=1})
+ blocks:=[]waBinary.Node{
+  {Tag:"participants",Attrs:waBinary.Attrs{"key":"first"},Content:[]waBinary.Node{{Tag:"user",Attrs:waBinary.Attrs{"jid":types.NewJID("15550000001",types.DefaultUserServer),"t":"100"}}}},
+  {Tag:"participants",Attrs:waBinary.Attrs{"key":"second"},Content:[]waBinary.Node{{Tag:"user",Attrs:waBinary.Attrs{"jid":types.NewJID("15550000002",types.DefaultUserServer),"t":"101"}}}},
+ }
+ if !cli.handleGroupedReceipts(events.Receipt{},blocks)||calls!=2{t.Fatalf("failure lost or later block skipped: %d",calls)}
+}
+func TestMacroPlaceholderFailureRetainsOuterEnvelope(t *testing.T){
+ own:=types.NewJID("15550000000",types.DefaultUserServer);cli:=NewClient(&store.Device{ID:&own},nil);calls:=0
+ cli.AddEventHandlerWithSuccessStatus(func(any)bool{calls++;return false})
+ recovered,err:=proto.Marshal(&waWeb.WebMessageInfo{Key:&waCommon.MessageKey{RemoteJID:proto.String("15550000001@s.whatsapp.net"),ID:proto.String("recovered")},Message:&waE2E.Message{Conversation:proto.String("retained")}});if err!=nil{t.Fatal(err)}
+ message:=&waE2E.Message{ProtocolMessage:&waE2E.ProtocolMessage{PeerDataOperationRequestResponseMessage:&waE2E.PeerDataOperationRequestResponseMessage{PeerDataOperationRequestType:waE2E.PeerDataOperationRequestType_PLACEHOLDER_MESSAGE_RESEND.Enum(),PeerDataOperationResult:[]*waE2E.PeerDataOperationRequestResponseMessage_PeerDataOperationResult{{PlaceholderMessageResendResponse:&waE2E.PeerDataOperationRequestResponseMessage_PeerDataOperationResult_PlaceholderMessageResendResponse{WebMessageInfoBytes:recovered}}}}}}
+ info:=types.MessageInfo{MessageSource:types.MessageSource{IsFromMe:true,Sender:own,Chat:own}}
+ if !cli.handleDecryptedMessage(context.Background(),&info,message,0)||calls!=1{t.Fatalf("failed recovery envelope acknowledged: %d",calls)}
+}
+func TestMacroExpandedHistoryBound(t *testing.T){
+ var data bytes.Buffer;writer:=zlib.NewWriter(&data);writer.Write(bytes.Repeat([]byte{1},1<<20));writer.Close()
+ cli:=NewClient(&store.Device{},nil)
+ if _,err:=cli.ParseHistorySync(context.Background(),data.Bytes(),true,1024);err==nil||!strings.Contains(err.Error(),"endpoint limit"){t.Fatalf("expanded bound not enforced: %v",err)}
+}

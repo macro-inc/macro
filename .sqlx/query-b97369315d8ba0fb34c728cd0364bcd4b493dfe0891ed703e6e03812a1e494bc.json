@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT to_jsonb(a)||jsonb_build_object('owner_epoch',o.epoch) AS \"data!\" FROM whatsapp_linked_account a LEFT JOIN whatsapp_session_owner o ON o.account_id=a.id WHERE a.state IN ('connecting','connected','offline','reconnect') OR EXISTS(SELECT 1 FROM meta_messaging_send s WHERE s.linked_account_id=a.id AND s.state IN ('sending','unknown') AND s.dispatch_started_at IS NOT NULL AND s.provider_message_id IS NULL) ORDER BY a.updated_at,a.id LIMIT 100",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "data!",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "b97369315d8ba0fb34c728cd0364bcd4b493dfe0891ed703e6e03812a1e494bc"
+}

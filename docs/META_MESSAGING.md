@@ -412,3 +412,5 @@ For local testing, the callback may be on a trusted HTTPS loopback origin that
 the browser can reach and Meta accepts in its redirect allowlist. Webhooks still
 need their narrowly exposed public HTTPS endpoint. Do not expose the local
 passwordless app to the internet just to receive the browser redirect.
+
+Personal linked-device groups use a distinct account lifecycle and native marker; see [Personal WhatsApp groups](WHATSAPP_LINKED_DEVICES.md). Existing Cloud API and Instagram contracts above remain unchanged.

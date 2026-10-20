@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO whatsapp_verified_identity(jid,user_id) VALUES($1,$2) ON CONFLICT(jid) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "dbde29059800c58a9b040deed8b89bc9ce8a93e12f2cdeff2bc1a9a610e2cd50"
+}

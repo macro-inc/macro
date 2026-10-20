@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE whatsapp_external_message SET effect_revision=effect_revision+1,native_retry_at=now() WHERE message_id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8aeb1da5fdb1b9d0e951b2c083c7834815a026528050be446857c386e05e9609"
+}

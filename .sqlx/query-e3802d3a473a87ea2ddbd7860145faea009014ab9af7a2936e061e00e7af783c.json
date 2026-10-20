@@ -1,0 +1,83 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                c.id,\n                c.name,\n                c.profile_picture_id,\n                c.auto_join_team,\n                c.messaging_binding AS \"messaging_binding: MessagingBinding\",\n                c.channel_type AS \"channel_type: ChannelType\",\n                c.org_id,\n                c.team_id,\n                CASE WHEN (\n                    c.channel_type = 'public'\n                    OR\n                    (c.channel_type IN ('private', 'direct_message', 'team') AND EXISTS (\n                        SELECT 1 FROM comms_channel_participants cp\n                        WHERE cp.channel_id = c.id\n                        AND cp.user_id = $2\n                        AND cp.left_at IS NULL\n                    ))\n                ) THEN true ELSE false END AS \"has_access!: bool\"\n            FROM comms_channels c\n            WHERE c.id::text = ANY($1)\n              AND CASE WHEN c.messaging_binding='whatsapp_linked_group' THEN whatsapp_linked_can_view(c.id,$2) ELSE true END\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "profile_picture_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "auto_join_team",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "messaging_binding: MessagingBinding",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "channel_type: ChannelType",
+        "type_info": {
+          "Custom": {
+            "name": "comms_channel_type",
+            "kind": {
+              "Enum": [
+                "public",
+                "private",
+                "direct_message",
+                "team"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "org_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 8,
+        "name": "has_access!: bool",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      true,
+      true,
+      null
+    ]
+  },
+  "hash": "e3802d3a473a87ea2ddbd7860145faea009014ab9af7a2936e061e00e7af783c"
+}

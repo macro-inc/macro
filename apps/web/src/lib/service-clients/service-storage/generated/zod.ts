@@ -3492,7 +3492,13 @@ export const getChannelResponse = zod
       .enum(['public', 'private', 'direct_message', 'team'])
       .describe('Type of channel.'),
     messaging_binding: zod
-      .enum(['native', 'whatsapp_direct', 'instagram_direct', 'whatsapp_group'])
+      .enum([
+        'native',
+        'whatsapp_direct',
+        'instagram_direct',
+        'whatsapp_group',
+        'whatsapp_linked_group',
+      ])
       .describe(
         'Authoritative external binding, including an unbound provider group setup.\nNative authorization always reads this from storage, never from a client.'
       ),
@@ -4060,6 +4066,7 @@ export const getChannelsResponse = zod
                 'whatsapp_direct',
                 'instagram_direct',
                 'whatsapp_group',
+                'whatsapp_linked_group',
               ])
               .describe(
                 'Authoritative external binding, including an unbound provider group setup.\nNative authorization always reads this from storage, never from a client.'
@@ -25363,6 +25370,7 @@ export const getItemsSoupResponse = zod
                           'whatsapp_direct',
                           'instagram_direct',
                           'whatsapp_group',
+                          'whatsapp_linked_group',
                         ])
                         .describe(
                           'Authoritative external binding, including an unbound provider group setup.\nNative authorization always reads this from storage, never from a client.'
@@ -30016,6 +30024,7 @@ export const postItemsSoupResponse = zod
                           'whatsapp_direct',
                           'instagram_direct',
                           'whatsapp_group',
+                          'whatsapp_linked_group',
                         ])
                         .describe(
                           'Authoritative external binding, including an unbound provider group setup.\nNative authorization always reads this from storage, never from a client.'
@@ -34143,6 +34152,7 @@ export const postItemsSoupAstResponse = zod
                           'whatsapp_direct',
                           'instagram_direct',
                           'whatsapp_group',
+                          'whatsapp_linked_group',
                         ])
                         .describe(
                           'Authoritative external binding, including an unbound provider group setup.\nNative authorization always reads this from storage, never from a client.'
@@ -38615,6 +38625,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                 'whatsapp_direct',
                                 'instagram_direct',
                                 'whatsapp_group',
+                                'whatsapp_linked_group',
                               ])
                               .describe(
                                 'Authoritative external binding, including an unbound provider group setup.\nNative authorization always reads this from storage, never from a client.'
@@ -42723,6 +42734,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                 'whatsapp_direct',
                                 'instagram_direct',
                                 'whatsapp_group',
+                                'whatsapp_linked_group',
                               ])
                               .describe(
                                 'Authoritative external binding, including an unbound provider group setup.\nNative authorization always reads this from storage, never from a client.'
@@ -45215,6 +45227,18 @@ export const messageTimelineResponse = zod
                       .describe(
                         'Original author text; never interpreted as an authenticated principal.'
                       ),
+                    origin: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Provider origin, kept distinct from the associated person.'
+                      ),
+                    verified_user_id: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Provider-verified association; this is not an authenticated Macro action.'
+                      ),
                   })
                   .describe(
                     'Display attribution for a comment imported from an external document.'
@@ -45298,6 +45322,36 @@ export const messageTimelineResponse = zod
                 zod
                   .object({
                     emoji: zod.string().describe('Emoji being reacted with.'),
+                    external_users: zod
+                      .array(
+                        zod
+                          .object({
+                            name: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Untrusted display name shown with external provenance.'
+                              ),
+                            sender_id: zod
+                              .string()
+                              .describe(
+                                'Stable external sender identity; never a synthetic Macro user.'
+                              ),
+                            user_id: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Verified Macro association, while the reaction retains WhatsApp provenance.'
+                              ),
+                          })
+                          .describe(
+                            'An external reaction author, scoped to the authorized native message.'
+                          )
+                      )
+                      .optional()
+                      .describe(
+                        'Provider actors are distinct from Macro user identities.'
+                      ),
                     users: zod
                       .array(zod.string())
                       .describe('User identifiers.'),
@@ -45538,6 +45592,18 @@ export const messageTimelineResponse = zod
                                     .describe(
                                       'Original author text; never interpreted as an authenticated principal.'
                                     ),
+                                  origin: zod
+                                    .string()
+                                    .nullish()
+                                    .describe(
+                                      'Provider origin, kept distinct from the associated person.'
+                                    ),
+                                  verified_user_id: zod
+                                    .string()
+                                    .nullish()
+                                    .describe(
+                                      'Provider-verified association; this is not an authenticated Macro action.'
+                                    ),
                                 })
                                 .describe(
                                   'Display attribution for a comment imported from an external document.'
@@ -45635,6 +45701,36 @@ export const messageTimelineResponse = zod
                                   emoji: zod
                                     .string()
                                     .describe('Emoji being reacted with.'),
+                                  external_users: zod
+                                    .array(
+                                      zod
+                                        .object({
+                                          name: zod
+                                            .string()
+                                            .nullish()
+                                            .describe(
+                                              'Untrusted display name shown with external provenance.'
+                                            ),
+                                          sender_id: zod
+                                            .string()
+                                            .describe(
+                                              'Stable external sender identity; never a synthetic Macro user.'
+                                            ),
+                                          user_id: zod
+                                            .string()
+                                            .nullish()
+                                            .describe(
+                                              'Verified Macro association, while the reaction retains WhatsApp provenance.'
+                                            ),
+                                        })
+                                        .describe(
+                                          'An external reaction author, scoped to the authorized native message.'
+                                        )
+                                    )
+                                    .optional()
+                                    .describe(
+                                      'Provider actors are distinct from Macro user identities.'
+                                    ),
                                   users: zod
                                     .array(zod.string())
                                     .describe('User identifiers.'),
@@ -45921,6 +46017,18 @@ export const entityMessageCreateResponse = zod
               .describe(
                 'Original author text; never interpreted as an authenticated principal.'
               ),
+            origin: zod
+              .string()
+              .nullish()
+              .describe(
+                'Provider origin, kept distinct from the associated person.'
+              ),
+            verified_user_id: zod
+              .string()
+              .nullish()
+              .describe(
+                'Provider-verified association; this is not an authenticated Macro action.'
+              ),
           })
           .describe(
             'Display attribution for a comment imported from an external document.'
@@ -45996,6 +46104,36 @@ export const entityMessageCreateResponse = zod
         zod
           .object({
             emoji: zod.string().describe('Emoji being reacted with.'),
+            external_users: zod
+              .array(
+                zod
+                  .object({
+                    name: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Untrusted display name shown with external provenance.'
+                      ),
+                    sender_id: zod
+                      .string()
+                      .describe(
+                        'Stable external sender identity; never a synthetic Macro user.'
+                      ),
+                    user_id: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Verified Macro association, while the reaction retains WhatsApp provenance.'
+                      ),
+                  })
+                  .describe(
+                    'An external reaction author, scoped to the authorized native message.'
+                  )
+              )
+              .optional()
+              .describe(
+                'Provider actors are distinct from Macro user identities.'
+              ),
             users: zod.array(zod.string()).describe('User identifiers.'),
           })
           .describe('Reaction emoji and the users who added it.')
@@ -46077,6 +46215,18 @@ export const entityMessageGetMessageResponse = zod
               .describe(
                 'Original author text; never interpreted as an authenticated principal.'
               ),
+            origin: zod
+              .string()
+              .nullish()
+              .describe(
+                'Provider origin, kept distinct from the associated person.'
+              ),
+            verified_user_id: zod
+              .string()
+              .nullish()
+              .describe(
+                'Provider-verified association; this is not an authenticated Macro action.'
+              ),
           })
           .describe(
             'Display attribution for a comment imported from an external document.'
@@ -46152,6 +46302,36 @@ export const entityMessageGetMessageResponse = zod
         zod
           .object({
             emoji: zod.string().describe('Emoji being reacted with.'),
+            external_users: zod
+              .array(
+                zod
+                  .object({
+                    name: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Untrusted display name shown with external provenance.'
+                      ),
+                    sender_id: zod
+                      .string()
+                      .describe(
+                        'Stable external sender identity; never a synthetic Macro user.'
+                      ),
+                    user_id: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Verified Macro association, while the reaction retains WhatsApp provenance.'
+                      ),
+                  })
+                  .describe(
+                    'An external reaction author, scoped to the authorized native message.'
+                  )
+              )
+              .optional()
+              .describe(
+                'Provider actors are distinct from Macro user identities.'
+              ),
             users: zod.array(zod.string()).describe('User identifiers.'),
           })
           .describe('Reaction emoji and the users who added it.')
@@ -46237,6 +46417,18 @@ export const entityMessageDeleteMessageResponse = zod
               .describe(
                 'Original author text; never interpreted as an authenticated principal.'
               ),
+            origin: zod
+              .string()
+              .nullish()
+              .describe(
+                'Provider origin, kept distinct from the associated person.'
+              ),
+            verified_user_id: zod
+              .string()
+              .nullish()
+              .describe(
+                'Provider-verified association; this is not an authenticated Macro action.'
+              ),
           })
           .describe(
             'Display attribution for a comment imported from an external document.'
@@ -46312,6 +46504,36 @@ export const entityMessageDeleteMessageResponse = zod
         zod
           .object({
             emoji: zod.string().describe('Emoji being reacted with.'),
+            external_users: zod
+              .array(
+                zod
+                  .object({
+                    name: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Untrusted display name shown with external provenance.'
+                      ),
+                    sender_id: zod
+                      .string()
+                      .describe(
+                        'Stable external sender identity; never a synthetic Macro user.'
+                      ),
+                    user_id: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Verified Macro association, while the reaction retains WhatsApp provenance.'
+                      ),
+                  })
+                  .describe(
+                    'An external reaction author, scoped to the authorized native message.'
+                  )
+              )
+              .optional()
+              .describe(
+                'Provider actors are distinct from Macro user identities.'
+              ),
             users: zod.array(zod.string()).describe('User identifiers.'),
           })
           .describe('Reaction emoji and the users who added it.')
@@ -46493,6 +46715,18 @@ export const entityMessageEditResponse = zod
               .describe(
                 'Original author text; never interpreted as an authenticated principal.'
               ),
+            origin: zod
+              .string()
+              .nullish()
+              .describe(
+                'Provider origin, kept distinct from the associated person.'
+              ),
+            verified_user_id: zod
+              .string()
+              .nullish()
+              .describe(
+                'Provider-verified association; this is not an authenticated Macro action.'
+              ),
           })
           .describe(
             'Display attribution for a comment imported from an external document.'
@@ -46568,6 +46802,36 @@ export const entityMessageEditResponse = zod
         zod
           .object({
             emoji: zod.string().describe('Emoji being reacted with.'),
+            external_users: zod
+              .array(
+                zod
+                  .object({
+                    name: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Untrusted display name shown with external provenance.'
+                      ),
+                    sender_id: zod
+                      .string()
+                      .describe(
+                        'Stable external sender identity; never a synthetic Macro user.'
+                      ),
+                    user_id: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Verified Macro association, while the reaction retains WhatsApp provenance.'
+                      ),
+                  })
+                  .describe(
+                    'An external reaction author, scoped to the authorized native message.'
+                  )
+              )
+              .optional()
+              .describe(
+                'Provider actors are distinct from Macro user identities.'
+              ),
             users: zod.array(zod.string()).describe('User identifiers.'),
           })
           .describe('Reaction emoji and the users who added it.')
@@ -46657,6 +46921,18 @@ export const entityMessageReactResponse = zod
               .describe(
                 'Original author text; never interpreted as an authenticated principal.'
               ),
+            origin: zod
+              .string()
+              .nullish()
+              .describe(
+                'Provider origin, kept distinct from the associated person.'
+              ),
+            verified_user_id: zod
+              .string()
+              .nullish()
+              .describe(
+                'Provider-verified association; this is not an authenticated Macro action.'
+              ),
           })
           .describe(
             'Display attribution for a comment imported from an external document.'
@@ -46732,6 +47008,36 @@ export const entityMessageReactResponse = zod
         zod
           .object({
             emoji: zod.string().describe('Emoji being reacted with.'),
+            external_users: zod
+              .array(
+                zod
+                  .object({
+                    name: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Untrusted display name shown with external provenance.'
+                      ),
+                    sender_id: zod
+                      .string()
+                      .describe(
+                        'Stable external sender identity; never a synthetic Macro user.'
+                      ),
+                    user_id: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Verified Macro association, while the reaction retains WhatsApp provenance.'
+                      ),
+                  })
+                  .describe(
+                    'An external reaction author, scoped to the authorized native message.'
+                  )
+              )
+              .optional()
+              .describe(
+                'Provider actors are distinct from Macro user identities.'
+              ),
             users: zod.array(zod.string()).describe('User identifiers.'),
           })
           .describe('Reaction emoji and the users who added it.')
@@ -46820,6 +47126,18 @@ export const entityMessageLegacyResponse = zod
               .describe(
                 'Original author text; never interpreted as an authenticated principal.'
               ),
+            origin: zod
+              .string()
+              .nullish()
+              .describe(
+                'Provider origin, kept distinct from the associated person.'
+              ),
+            verified_user_id: zod
+              .string()
+              .nullish()
+              .describe(
+                'Provider-verified association; this is not an authenticated Macro action.'
+              ),
           })
           .describe(
             'Display attribution for a comment imported from an external document.'
@@ -46895,6 +47213,36 @@ export const entityMessageLegacyResponse = zod
         zod
           .object({
             emoji: zod.string().describe('Emoji being reacted with.'),
+            external_users: zod
+              .array(
+                zod
+                  .object({
+                    name: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Untrusted display name shown with external provenance.'
+                      ),
+                    sender_id: zod
+                      .string()
+                      .describe(
+                        'Stable external sender identity; never a synthetic Macro user.'
+                      ),
+                    user_id: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Verified Macro association, while the reaction retains WhatsApp provenance.'
+                      ),
+                  })
+                  .describe(
+                    'An external reaction author, scoped to the authorized native message.'
+                  )
+              )
+              .optional()
+              .describe(
+                'Provider actors are distinct from Macro user identities.'
+              ),
             users: zod.array(zod.string()).describe('User identifiers.'),
           })
           .describe('Reaction emoji and the users who added it.')
@@ -46993,6 +47341,18 @@ export const entityMessageGetThreadResponse = zod
                       .describe(
                         'Original author text; never interpreted as an authenticated principal.'
                       ),
+                    origin: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Provider origin, kept distinct from the associated person.'
+                      ),
+                    verified_user_id: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Provider-verified association; this is not an authenticated Macro action.'
+                      ),
                   })
                   .describe(
                     'Display attribution for a comment imported from an external document.'
@@ -47076,6 +47436,36 @@ export const entityMessageGetThreadResponse = zod
                 zod
                   .object({
                     emoji: zod.string().describe('Emoji being reacted with.'),
+                    external_users: zod
+                      .array(
+                        zod
+                          .object({
+                            name: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Untrusted display name shown with external provenance.'
+                              ),
+                            sender_id: zod
+                              .string()
+                              .describe(
+                                'Stable external sender identity; never a synthetic Macro user.'
+                              ),
+                            user_id: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Verified Macro association, while the reaction retains WhatsApp provenance.'
+                              ),
+                          })
+                          .describe(
+                            'An external reaction author, scoped to the authorized native message.'
+                          )
+                      )
+                      .optional()
+                      .describe(
+                        'Provider actors are distinct from Macro user identities.'
+                      ),
                     users: zod
                       .array(zod.string())
                       .describe('User identifiers.'),
@@ -47155,6 +47545,18 @@ export const entityMessageGetThreadResponse = zod
                   .string()
                   .describe(
                     'Original author text; never interpreted as an authenticated principal.'
+                  ),
+                origin: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Provider origin, kept distinct from the associated person.'
+                  ),
+                verified_user_id: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Provider-verified association; this is not an authenticated Macro action.'
                   ),
               })
               .describe(
@@ -47237,6 +47639,36 @@ export const entityMessageGetThreadResponse = zod
             zod
               .object({
                 emoji: zod.string().describe('Emoji being reacted with.'),
+                external_users: zod
+                  .array(
+                    zod
+                      .object({
+                        name: zod
+                          .string()
+                          .nullish()
+                          .describe(
+                            'Untrusted display name shown with external provenance.'
+                          ),
+                        sender_id: zod
+                          .string()
+                          .describe(
+                            'Stable external sender identity; never a synthetic Macro user.'
+                          ),
+                        user_id: zod
+                          .string()
+                          .nullish()
+                          .describe(
+                            'Verified Macro association, while the reaction retains WhatsApp provenance.'
+                          ),
+                      })
+                      .describe(
+                        'An external reaction author, scoped to the authorized native message.'
+                      )
+                  )
+                  .optional()
+                  .describe(
+                    'Provider actors are distinct from Macro user identities.'
+                  ),
                 users: zod.array(zod.string()).describe('User identifiers.'),
               })
               .describe('Reaction emoji and the users who added it.')
@@ -47732,6 +48164,18 @@ export const messageTimelineEntriesResponse = zod
                               .describe(
                                 'Original author text; never interpreted as an authenticated principal.'
                               ),
+                            origin: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Provider origin, kept distinct from the associated person.'
+                              ),
+                            verified_user_id: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Provider-verified association; this is not an authenticated Macro action.'
+                              ),
                           })
                           .describe(
                             'Display attribution for a comment imported from an external document.'
@@ -47823,6 +48267,36 @@ export const messageTimelineEntriesResponse = zod
                             emoji: zod
                               .string()
                               .describe('Emoji being reacted with.'),
+                            external_users: zod
+                              .array(
+                                zod
+                                  .object({
+                                    name: zod
+                                      .string()
+                                      .nullish()
+                                      .describe(
+                                        'Untrusted display name shown with external provenance.'
+                                      ),
+                                    sender_id: zod
+                                      .string()
+                                      .describe(
+                                        'Stable external sender identity; never a synthetic Macro user.'
+                                      ),
+                                    user_id: zod
+                                      .string()
+                                      .nullish()
+                                      .describe(
+                                        'Verified Macro association, while the reaction retains WhatsApp provenance.'
+                                      ),
+                                  })
+                                  .describe(
+                                    'An external reaction author, scoped to the authorized native message.'
+                                  )
+                              )
+                              .optional()
+                              .describe(
+                                'Provider actors are distinct from Macro user identities.'
+                              ),
                             users: zod
                               .array(zod.string())
                               .describe('User identifiers.'),
@@ -48085,6 +48559,18 @@ export const messageTimelineEntriesResponse = zod
                                             .describe(
                                               'Original author text; never interpreted as an authenticated principal.'
                                             ),
+                                          origin: zod
+                                            .string()
+                                            .nullish()
+                                            .describe(
+                                              'Provider origin, kept distinct from the associated person.'
+                                            ),
+                                          verified_user_id: zod
+                                            .string()
+                                            .nullish()
+                                            .describe(
+                                              'Provider-verified association; this is not an authenticated Macro action.'
+                                            ),
                                         })
                                         .describe(
                                           'Display attribution for a comment imported from an external document.'
@@ -48189,6 +48675,36 @@ export const messageTimelineEntriesResponse = zod
                                             .string()
                                             .describe(
                                               'Emoji being reacted with.'
+                                            ),
+                                          external_users: zod
+                                            .array(
+                                              zod
+                                                .object({
+                                                  name: zod
+                                                    .string()
+                                                    .nullish()
+                                                    .describe(
+                                                      'Untrusted display name shown with external provenance.'
+                                                    ),
+                                                  sender_id: zod
+                                                    .string()
+                                                    .describe(
+                                                      'Stable external sender identity; never a synthetic Macro user.'
+                                                    ),
+                                                  user_id: zod
+                                                    .string()
+                                                    .nullish()
+                                                    .describe(
+                                                      'Verified Macro association, while the reaction retains WhatsApp provenance.'
+                                                    ),
+                                                })
+                                                .describe(
+                                                  'An external reaction author, scoped to the authorized native message.'
+                                                )
+                                            )
+                                            .optional()
+                                            .describe(
+                                              'Provider actors are distinct from Macro user identities.'
                                             ),
                                           users: zod
                                             .array(zod.string())
@@ -48995,6 +49511,29 @@ export const metaConversationResponse = zod
                               ),
                             zod
                               .object({
+                                message_id: zod
+                                  .uuid()
+                                  .describe(
+                                    'Existing authorized native message; resolved to its canonical source by the server.'
+                                  ),
+                                operation: zod
+                                  .enum(['reaction', 'edit', 'delete'])
+                                  .describe(
+                                    'Supported deliberate remote operations on a linked group message.'
+                                  ),
+                                text: zod
+                                  .string()
+                                  .nullish()
+                                  .describe(
+                                    'Replacement text or reaction; absent for deletion and empty to remove a reaction.'
+                                  ),
+                                type: zod.enum(['mutation']),
+                              })
+                              .describe(
+                                'Deliberate source-scoped mutation for a personal linked group.'
+                              ),
+                            zod
+                              .object({
                                 language: zod
                                   .string()
                                   .describe('Exact approved language.'),
@@ -49179,6 +49718,29 @@ export const metaMessageDeliveryResponseItem = zod
               .describe('Media loaded through an authorized Macro document.'),
             zod
               .object({
+                message_id: zod
+                  .uuid()
+                  .describe(
+                    'Existing authorized native message; resolved to its canonical source by the server.'
+                  ),
+                operation: zod
+                  .enum(['reaction', 'edit', 'delete'])
+                  .describe(
+                    'Supported deliberate remote operations on a linked group message.'
+                  ),
+                text: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Replacement text or reaction; absent for deletion and empty to remove a reaction.'
+                  ),
+                type: zod.enum(['mutation']),
+              })
+              .describe(
+                'Deliberate source-scoped mutation for a personal linked group.'
+              ),
+            zod
+              .object({
                 language: zod.string().describe('Exact approved language.'),
                 parameters: zod
                   .array(zod.string())
@@ -49333,6 +49895,29 @@ export const metaReplyBody = zod
           .describe('Media loaded through an authorized Macro document.'),
         zod
           .object({
+            message_id: zod
+              .uuid()
+              .describe(
+                'Existing authorized native message; resolved to its canonical source by the server.'
+              ),
+            operation: zod
+              .enum(['reaction', 'edit', 'delete'])
+              .describe(
+                'Supported deliberate remote operations on a linked group message.'
+              ),
+            text: zod
+              .string()
+              .nullish()
+              .describe(
+                'Replacement text or reaction; absent for deletion and empty to remove a reaction.'
+              ),
+            type: zod.enum(['mutation']),
+          })
+          .describe(
+            'Deliberate source-scoped mutation for a personal linked group.'
+          ),
+        zod
+          .object({
             language: zod.string().describe('Exact approved language.'),
             parameters: zod
               .array(zod.string())
@@ -49425,6 +50010,29 @@ export const metaReplyResponse = zod
                 type: zod.enum(['media']),
               })
               .describe('Media loaded through an authorized Macro document.'),
+            zod
+              .object({
+                message_id: zod
+                  .uuid()
+                  .describe(
+                    'Existing authorized native message; resolved to its canonical source by the server.'
+                  ),
+                operation: zod
+                  .enum(['reaction', 'edit', 'delete'])
+                  .describe(
+                    'Supported deliberate remote operations on a linked group message.'
+                  ),
+                text: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Replacement text or reaction; absent for deletion and empty to remove a reaction.'
+                  ),
+                type: zod.enum(['mutation']),
+              })
+              .describe(
+                'Deliberate source-scoped mutation for a personal linked group.'
+              ),
             zod
               .object({
                 language: zod.string().describe('Exact approved language.'),
@@ -50052,6 +50660,1079 @@ export const metaDeveloperWhatsappResponse = zod
       .optional(),
   })
   .describe('Public account health; never includes credentials.');
+
+export const linkedAccountResponse = zod
+  .object({
+    account: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            authorization_generation: zod
+              .number()
+              .describe(
+                'Explicit consent generation, independent of transport reconnects.'
+              ),
+            id: zod.uuid().describe('Stable Macro account identity.'),
+            identity_jid: zod
+              .string()
+              .nullish()
+              .describe(
+                'Provider-verified identity, absent until pairing finishes.'
+              ),
+            owner_epoch: zod
+              .number()
+              .nullish()
+              .describe(
+                'Current process incarnation, absent before a worker is assigned.'
+              ),
+            state: zod
+              .enum([
+                'connecting',
+                'connected',
+                'offline',
+                'reconnect',
+                'disconnected',
+              ])
+              .describe(
+                'Account lifecycle presented by the normal Settings row.'
+              ),
+            user_id: zod.string().describe('Authenticated owner.'),
+          })
+          .describe('One personal account, never owned by a workspace.'),
+      ])
+      .optional(),
+  })
+  .describe('Owner-scoped account state, including the not-connected state.');
+
+export const linkedChannelParams = zod.object({
+  channel_id: zod.uuid(),
+});
+
+export const linkedChannelResponseCapabilitiesMaxAttachmentsMin = 0;
+
+export const linkedChannelResponseCapabilitiesMediaItemCaptionLimitMin = 0;
+
+export const linkedChannelResponseCapabilitiesMediaItemMaxBytesMin = 0;
+
+export const linkedChannelResponseCapabilitiesTextLimitMin = 0;
+
+export const linkedChannelResponse = zod
+  .object({
+    account: zod
+      .object({
+        authorization_generation: zod
+          .number()
+          .describe(
+            'Explicit consent generation, independent of transport reconnects.'
+          ),
+        id: zod.uuid().describe('Stable Macro account identity.'),
+        identity_jid: zod
+          .string()
+          .nullish()
+          .describe(
+            'Provider-verified identity, absent until pairing finishes.'
+          ),
+        owner_epoch: zod
+          .number()
+          .nullish()
+          .describe(
+            'Current process incarnation, absent before a worker is assigned.'
+          ),
+        state: zod
+          .enum([
+            'connecting',
+            'connected',
+            'offline',
+            'reconnect',
+            'disconnected',
+          ])
+          .describe('Account lifecycle presented by the normal Settings row.'),
+        user_id: zod.string().describe('Authenticated owner.'),
+      })
+      .describe('One personal account, never owned by a workspace.'),
+    binding: zod
+      .object({
+        adopted_at: zod.iso.datetime({}).describe('Default history boundary.'),
+        channel_id: zod.uuid().describe('Native channel.'),
+        group_jid: zod
+          .string()
+          .describe('Remote group identity, never its display name.'),
+        id: zod
+          .uuid()
+          .describe(
+            'Stable binding identity, independent of an observing account.'
+          ),
+        ownership_state: zod
+          .string()
+          .describe('Active or deliberate ownership transfer required.'),
+        state: zod.string().describe('Active, suspended or detached.'),
+        team_id: zod.uuid().describe('Owning workspace.'),
+        user_id: zod.string().describe('Designated native content owner.'),
+      })
+      .describe('One remote group and native channel in a workspace.'),
+    can_reply: zod.boolean().describe('Current native posting authority.'),
+    capabilities: zod
+      .object({
+        max_attachments: zod
+          .number()
+          .min(linkedChannelResponseCapabilitiesMaxAttachmentsMin)
+          .describe('Maximum files in one implemented send operation.'),
+        media: zod
+          .array(
+            zod
+              .object({
+                caption_limit: zod
+                  .number()
+                  .min(
+                    linkedChannelResponseCapabilitiesMediaItemCaptionLimitMin
+                  )
+                  .nullish()
+                  .describe(
+                    'Maximum caption characters, absent when text must be sent separately.'
+                  ),
+                kind: zod
+                  .enum(['image', 'audio', 'video', 'document'])
+                  .describe(
+                    'Supported attachment categories; provider limits remain explicit in the sender.'
+                  ),
+                max_bytes: zod
+                  .number()
+                  .min(linkedChannelResponseCapabilitiesMediaItemMaxBytesMin)
+                  .describe('Effective provider and Macro byte limit.'),
+                mime_types: zod
+                  .array(zod.string())
+                  .describe('Allowed MIME types for the selected account.'),
+              })
+              .describe('One currently supported provider attachment category.')
+          )
+          .describe(
+            'Supported private attachment categories and effective limits.'
+          ),
+        modes: zod
+          .array(
+            zod
+              .enum(['free_form', 'approved_template', 'human_support'])
+              .describe('Policy mode of the requested send.')
+          )
+          .describe('Supported explicit sending modes.'),
+        text_limit: zod
+          .number()
+          .min(linkedChannelResponseCapabilitiesTextLimitMin)
+          .describe('Maximum text units.'),
+        text_limit_in_bytes: zod
+          .boolean()
+          .describe(
+            'Whether text is counted in UTF-8 bytes instead of Unicode characters.'
+          ),
+      })
+      .describe(
+        'Operations implemented by this integration, independently of current permission.'
+      ),
+    eligibility: zod
+      .object({
+        evaluated_at: zod.iso
+          .datetime({})
+          .describe(
+            'Server time used to evaluate every mode in this response.'
+          ),
+        modes: zod
+          .array(
+            zod
+              .object({
+                allowed: zod
+                  .boolean()
+                  .describe(
+                    'True only when every current server-side condition is satisfied.'
+                  ),
+                expires_at: zod.iso
+                  .datetime({})
+                  .nullish()
+                  .describe(
+                    'An allowed control may expire locally; the browser cannot extend permission.'
+                  ),
+                mode: zod
+                  .enum(['free_form', 'approved_template', 'human_support'])
+                  .describe('Policy mode of the requested send.'),
+                reason: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .enum([
+                        'forbidden',
+                        'disconnected',
+                        'window_closed',
+                        'template_required',
+                        'human_support_required',
+                        'group_read_only',
+                        'unsupported',
+                      ])
+                      .describe(
+                        'Stable reason a supported operation cannot run now.'
+                      ),
+                  ])
+                  .optional(),
+              })
+              .describe(
+                'Current server decision for one implemented sending mode.'
+              )
+          )
+          .describe(
+            'Current decisions, separate from static implemented support.'
+          ),
+      })
+      .describe('Eligibility is a snapshot, re-evaluated before dispatch.'),
+    roster: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            announce: zod.boolean().describe('Only admins may post.'),
+            community: zod
+              .boolean()
+              .describe(
+                'Community announcement\/parent groups are outside the supported surface.'
+              ),
+            disappearing: zod
+              .boolean()
+              .describe('This feature does not retain disappearing content.'),
+            jid: zod.string().describe('Typed remote group JID.'),
+            name: zod.string().describe('Current remote subject.'),
+            observedAt: zod.iso
+              .datetime({})
+              .describe('Successful full metadata read time.'),
+            participants: zod
+              .array(
+                zod
+                  .object({
+                    alternateJid: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Verified alternate identity, not inferred from a name or submitted phone.'
+                      ),
+                    displayName: zod
+                      .string()
+                      .nullish()
+                      .describe('Untrusted external display name.'),
+                    jid: zod.string().describe('PN or LID account JID.'),
+                  })
+                  .describe(
+                    'Verified typed sender aliases, supplied only by protocol metadata.'
+                  )
+                  .and(
+                    zod.object({
+                      admin: zod
+                        .boolean()
+                        .describe(
+                          'Whether remote announcement posting is allowed.'
+                        ),
+                    })
+                  )
+                  .describe(
+                    'Current remote participant; Macro access remains an independent grant.'
+                  )
+              )
+              .describe('Full remote roster.'),
+            version: zod
+              .number()
+              .describe('Monotonic observation version within this worker.'),
+          })
+          .describe(
+            'Full metadata refresh, rather than incomplete membership deltas.'
+          ),
+      ])
+      .optional(),
+    sends: zod
+      .array(
+        zod
+          .object({
+            channel_id: zod.uuid().describe('Native conversation.'),
+            created_at: zod.iso.datetime({}).describe('Intent creation time.'),
+            error_code: zod
+              .string()
+              .nullish()
+              .describe('Sanitized rejection\/recovery code.'),
+            id: zod.uuid().describe('Stable local intent ID.'),
+            message_id: zod
+              .uuid()
+              .nullish()
+              .describe('Linked native message, when created.'),
+            payload: zod
+              .object({
+                human_support: zod
+                  .boolean()
+                  .optional()
+                  .describe(
+                    'Explicit human support action, never inferred from closing the window.'
+                  ),
+                idempotency_key: zod
+                  .uuid()
+                  .describe(
+                    'Stable client intent key. A changed payload with this key is a conflict.'
+                  ),
+                message: zod
+                  .union([
+                    zod
+                      .object({
+                        text: zod
+                          .string()
+                          .describe(
+                            "UTF-8 text, checked against the selected provider's limit."
+                          ),
+                        type: zod.enum(['text']),
+                      })
+                      .describe('Free-form text.'),
+                    zod
+                      .object({
+                        caption: zod
+                          .string()
+                          .nullish()
+                          .describe(
+                            'Optional caption, where the provider permits it.'
+                          ),
+                        document_id: zod
+                          .uuid()
+                          .describe(
+                            'Existing Macro document ID, authorized again by the worker.'
+                          ),
+                        kind: zod
+                          .enum(['image', 'audio', 'video', 'document'])
+                          .describe(
+                            'Supported attachment categories; provider limits remain explicit in the sender.'
+                          ),
+                        type: zod.enum(['media']),
+                      })
+                      .describe(
+                        'Media loaded through an authorized Macro document.'
+                      ),
+                    zod
+                      .object({
+                        message_id: zod
+                          .uuid()
+                          .describe(
+                            'Existing authorized native message; resolved to its canonical source by the server.'
+                          ),
+                        operation: zod
+                          .enum(['reaction', 'edit', 'delete'])
+                          .describe(
+                            'Supported deliberate remote operations on a linked group message.'
+                          ),
+                        text: zod
+                          .string()
+                          .nullish()
+                          .describe(
+                            'Replacement text or reaction; absent for deletion and empty to remove a reaction.'
+                          ),
+                        type: zod.enum(['mutation']),
+                      })
+                      .describe(
+                        'Deliberate source-scoped mutation for a personal linked group.'
+                      ),
+                    zod
+                      .object({
+                        language: zod
+                          .string()
+                          .describe('Exact approved language.'),
+                        parameters: zod
+                          .array(zod.string())
+                          .describe(
+                            'Ordered text parameters for header\/body. Buttons and media templates\nare validated separately and never passed through as raw provider JSON.'
+                          ),
+                        template_id: zod
+                          .string()
+                          .describe(
+                            'Provider identifier, scoped separately by the persisted connection.'
+                          ),
+                        type: zod.enum(['template']),
+                      })
+                      .describe(
+                        'Approved WhatsApp template, resolved by ID against the sending account.'
+                      ),
+                  ])
+                  .describe(
+                    'Text, Macro-owned media or approved-template input. Remote arbitrary URLs are\nnot accepted from clients as attachments.'
+                  ),
+                reply_to: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .string()
+                      .describe(
+                        'Provider identifier, scoped separately by the persisted connection.'
+                      ),
+                  ])
+                  .optional(),
+              })
+              .describe(
+                'Explicit send action; ordinary channel posts never call this boundary.'
+              ),
+            state: zod
+              .enum([
+                'pending',
+                'sending',
+                'unknown',
+                'accepted',
+                'sent',
+                'delivered',
+                'read',
+                'failed',
+              ])
+              .describe(
+                'Observed outbound state. Unknown outcomes require reconciliation, not resend.'
+              ),
+            user_id: zod
+              .string()
+              .describe('Human who explicitly submitted this reply.'),
+          })
+          .describe(
+            'Durable result of an intentional send; accepted does not mean delivered.'
+          )
+      )
+      .describe('Existing durable send results.'),
+  })
+  .describe('Normal native composer metadata for the authenticated viewer.');
+
+export const linkedGrantAccessParams = zod.object({
+  channel_id: zod.uuid(),
+});
+
+export const linkedGrantAccessBodyItem = zod.string();
+export const linkedGrantAccessBody = zod.array(linkedGrantAccessBodyItem);
+
+export const linkedUploadParams = zod.object({
+  channel_id: zod.uuid(),
+});
+
+export const linkedUploadBody = zod
+  .object({
+    file: zod.instanceof(File).describe('One image, audio, video or PDF file.'),
+  })
+  .describe('Multipart private-file staging contract.');
+
+export const linkedUploadResponse = zod
+  .object({
+    document_id: zod
+      .uuid()
+      .describe('Native Macro document, authorized again at send time.'),
+    filename: zod.string().describe('Original display filename.'),
+    kind: zod
+      .enum(['image', 'audio', 'video', 'document'])
+      .describe(
+        'Supported attachment categories; provider limits remain explicit in the sender.'
+      ),
+  })
+  .describe(
+    'A private file staged for an explicit customer reply; staging never sends it.'
+  );
+
+export const linkedDeliveryParams = zod.object({
+  channel_id: zod.uuid(),
+});
+
+export const linkedDeliveryBodyItem = zod.uuid();
+export const linkedDeliveryBody = zod.array(linkedDeliveryBodyItem);
+
+export const linkedDeliveryResponseItem = zod
+  .object({
+    channel_id: zod.uuid().describe('Native conversation.'),
+    created_at: zod.iso.datetime({}).describe('Intent creation time.'),
+    error_code: zod
+      .string()
+      .nullish()
+      .describe('Sanitized rejection\/recovery code.'),
+    id: zod.uuid().describe('Stable local intent ID.'),
+    message_id: zod
+      .uuid()
+      .nullish()
+      .describe('Linked native message, when created.'),
+    payload: zod
+      .object({
+        human_support: zod
+          .boolean()
+          .optional()
+          .describe(
+            'Explicit human support action, never inferred from closing the window.'
+          ),
+        idempotency_key: zod
+          .uuid()
+          .describe(
+            'Stable client intent key. A changed payload with this key is a conflict.'
+          ),
+        message: zod
+          .union([
+            zod
+              .object({
+                text: zod
+                  .string()
+                  .describe(
+                    "UTF-8 text, checked against the selected provider's limit."
+                  ),
+                type: zod.enum(['text']),
+              })
+              .describe('Free-form text.'),
+            zod
+              .object({
+                caption: zod
+                  .string()
+                  .nullish()
+                  .describe('Optional caption, where the provider permits it.'),
+                document_id: zod
+                  .uuid()
+                  .describe(
+                    'Existing Macro document ID, authorized again by the worker.'
+                  ),
+                kind: zod
+                  .enum(['image', 'audio', 'video', 'document'])
+                  .describe(
+                    'Supported attachment categories; provider limits remain explicit in the sender.'
+                  ),
+                type: zod.enum(['media']),
+              })
+              .describe('Media loaded through an authorized Macro document.'),
+            zod
+              .object({
+                message_id: zod
+                  .uuid()
+                  .describe(
+                    'Existing authorized native message; resolved to its canonical source by the server.'
+                  ),
+                operation: zod
+                  .enum(['reaction', 'edit', 'delete'])
+                  .describe(
+                    'Supported deliberate remote operations on a linked group message.'
+                  ),
+                text: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Replacement text or reaction; absent for deletion and empty to remove a reaction.'
+                  ),
+                type: zod.enum(['mutation']),
+              })
+              .describe(
+                'Deliberate source-scoped mutation for a personal linked group.'
+              ),
+            zod
+              .object({
+                language: zod.string().describe('Exact approved language.'),
+                parameters: zod
+                  .array(zod.string())
+                  .describe(
+                    'Ordered text parameters for header\/body. Buttons and media templates\nare validated separately and never passed through as raw provider JSON.'
+                  ),
+                template_id: zod
+                  .string()
+                  .describe(
+                    'Provider identifier, scoped separately by the persisted connection.'
+                  ),
+                type: zod.enum(['template']),
+              })
+              .describe(
+                'Approved WhatsApp template, resolved by ID against the sending account.'
+              ),
+          ])
+          .describe(
+            'Text, Macro-owned media or approved-template input. Remote arbitrary URLs are\nnot accepted from clients as attachments.'
+          ),
+        reply_to: zod
+          .union([
+            zod.null(),
+            zod
+              .string()
+              .describe(
+                'Provider identifier, scoped separately by the persisted connection.'
+              ),
+          ])
+          .optional(),
+      })
+      .describe(
+        'Explicit send action; ordinary channel posts never call this boundary.'
+      ),
+    state: zod
+      .enum([
+        'pending',
+        'sending',
+        'unknown',
+        'accepted',
+        'sent',
+        'delivered',
+        'read',
+        'failed',
+      ])
+      .describe(
+        'Observed outbound state. Unknown outcomes require reconciliation, not resend.'
+      ),
+    user_id: zod
+      .string()
+      .describe('Human who explicitly submitted this reply.'),
+  })
+  .describe(
+    'Durable result of an intentional send; accepted does not mean delivered.'
+  );
+export const linkedDeliveryResponse = zod.array(linkedDeliveryResponseItem);
+
+export const linkedDetachParams = zod.object({
+  channel_id: zod.uuid(),
+});
+
+export const linkedTransferOwnerParams = zod.object({
+  channel_id: zod.uuid(),
+});
+
+export const linkedReplyParams = zod.object({
+  channel_id: zod.uuid(),
+});
+
+export const linkedReplyBody = zod
+  .object({
+    human_support: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Explicit human support action, never inferred from closing the window.'
+      ),
+    idempotency_key: zod
+      .uuid()
+      .describe(
+        'Stable client intent key. A changed payload with this key is a conflict.'
+      ),
+    message: zod
+      .union([
+        zod
+          .object({
+            text: zod
+              .string()
+              .describe(
+                "UTF-8 text, checked against the selected provider's limit."
+              ),
+            type: zod.enum(['text']),
+          })
+          .describe('Free-form text.'),
+        zod
+          .object({
+            caption: zod
+              .string()
+              .nullish()
+              .describe('Optional caption, where the provider permits it.'),
+            document_id: zod
+              .uuid()
+              .describe(
+                'Existing Macro document ID, authorized again by the worker.'
+              ),
+            kind: zod
+              .enum(['image', 'audio', 'video', 'document'])
+              .describe(
+                'Supported attachment categories; provider limits remain explicit in the sender.'
+              ),
+            type: zod.enum(['media']),
+          })
+          .describe('Media loaded through an authorized Macro document.'),
+        zod
+          .object({
+            message_id: zod
+              .uuid()
+              .describe(
+                'Existing authorized native message; resolved to its canonical source by the server.'
+              ),
+            operation: zod
+              .enum(['reaction', 'edit', 'delete'])
+              .describe(
+                'Supported deliberate remote operations on a linked group message.'
+              ),
+            text: zod
+              .string()
+              .nullish()
+              .describe(
+                'Replacement text or reaction; absent for deletion and empty to remove a reaction.'
+              ),
+            type: zod.enum(['mutation']),
+          })
+          .describe(
+            'Deliberate source-scoped mutation for a personal linked group.'
+          ),
+        zod
+          .object({
+            language: zod.string().describe('Exact approved language.'),
+            parameters: zod
+              .array(zod.string())
+              .describe(
+                'Ordered text parameters for header\/body. Buttons and media templates\nare validated separately and never passed through as raw provider JSON.'
+              ),
+            template_id: zod
+              .string()
+              .describe(
+                'Provider identifier, scoped separately by the persisted connection.'
+              ),
+            type: zod.enum(['template']),
+          })
+          .describe(
+            'Approved WhatsApp template, resolved by ID against the sending account.'
+          ),
+      ])
+      .describe(
+        'Text, Macro-owned media or approved-template input. Remote arbitrary URLs are\nnot accepted from clients as attachments.'
+      ),
+    reply_to: zod
+      .union([
+        zod.null(),
+        zod
+          .string()
+          .describe(
+            'Provider identifier, scoped separately by the persisted connection.'
+          ),
+      ])
+      .optional(),
+  })
+  .describe(
+    'Explicit send action; ordinary channel posts never call this boundary.'
+  );
+
+export const linkedReplyResponse = zod
+  .object({
+    channel_id: zod.uuid().describe('Native conversation.'),
+    created_at: zod.iso.datetime({}).describe('Intent creation time.'),
+    error_code: zod
+      .string()
+      .nullish()
+      .describe('Sanitized rejection\/recovery code.'),
+    id: zod.uuid().describe('Stable local intent ID.'),
+    message_id: zod
+      .uuid()
+      .nullish()
+      .describe('Linked native message, when created.'),
+    payload: zod
+      .object({
+        human_support: zod
+          .boolean()
+          .optional()
+          .describe(
+            'Explicit human support action, never inferred from closing the window.'
+          ),
+        idempotency_key: zod
+          .uuid()
+          .describe(
+            'Stable client intent key. A changed payload with this key is a conflict.'
+          ),
+        message: zod
+          .union([
+            zod
+              .object({
+                text: zod
+                  .string()
+                  .describe(
+                    "UTF-8 text, checked against the selected provider's limit."
+                  ),
+                type: zod.enum(['text']),
+              })
+              .describe('Free-form text.'),
+            zod
+              .object({
+                caption: zod
+                  .string()
+                  .nullish()
+                  .describe('Optional caption, where the provider permits it.'),
+                document_id: zod
+                  .uuid()
+                  .describe(
+                    'Existing Macro document ID, authorized again by the worker.'
+                  ),
+                kind: zod
+                  .enum(['image', 'audio', 'video', 'document'])
+                  .describe(
+                    'Supported attachment categories; provider limits remain explicit in the sender.'
+                  ),
+                type: zod.enum(['media']),
+              })
+              .describe('Media loaded through an authorized Macro document.'),
+            zod
+              .object({
+                message_id: zod
+                  .uuid()
+                  .describe(
+                    'Existing authorized native message; resolved to its canonical source by the server.'
+                  ),
+                operation: zod
+                  .enum(['reaction', 'edit', 'delete'])
+                  .describe(
+                    'Supported deliberate remote operations on a linked group message.'
+                  ),
+                text: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Replacement text or reaction; absent for deletion and empty to remove a reaction.'
+                  ),
+                type: zod.enum(['mutation']),
+              })
+              .describe(
+                'Deliberate source-scoped mutation for a personal linked group.'
+              ),
+            zod
+              .object({
+                language: zod.string().describe('Exact approved language.'),
+                parameters: zod
+                  .array(zod.string())
+                  .describe(
+                    'Ordered text parameters for header\/body. Buttons and media templates\nare validated separately and never passed through as raw provider JSON.'
+                  ),
+                template_id: zod
+                  .string()
+                  .describe(
+                    'Provider identifier, scoped separately by the persisted connection.'
+                  ),
+                type: zod.enum(['template']),
+              })
+              .describe(
+                'Approved WhatsApp template, resolved by ID against the sending account.'
+              ),
+          ])
+          .describe(
+            'Text, Macro-owned media or approved-template input. Remote arbitrary URLs are\nnot accepted from clients as attachments.'
+          ),
+        reply_to: zod
+          .union([
+            zod.null(),
+            zod
+              .string()
+              .describe(
+                'Provider identifier, scoped separately by the persisted connection.'
+              ),
+          ])
+          .optional(),
+      })
+      .describe(
+        'Explicit send action; ordinary channel posts never call this boundary.'
+      ),
+    state: zod
+      .enum([
+        'pending',
+        'sending',
+        'unknown',
+        'accepted',
+        'sent',
+        'delivered',
+        'read',
+        'failed',
+      ])
+      .describe(
+        'Observed outbound state. Unknown outcomes require reconciliation, not resend.'
+      ),
+    user_id: zod
+      .string()
+      .describe('Human who explicitly submitted this reply.'),
+  })
+  .describe(
+    'Durable result of an intentional send; accepted does not mean delivered.'
+  );
+
+export const linkedConfigurationResponse = zod
+  .object({
+    adoption: zod.boolean().describe('Allow explicit existing-group adoption.'),
+    pairing: zod
+      .boolean()
+      .describe('Allow new owner-bound pairing transactions.'),
+    sending: zod
+      .boolean()
+      .describe('Allow new intentional external operations.'),
+  })
+  .describe(
+    'Independently controlled backend rollout gates. None grants access.'
+  );
+
+export const linkedConnectBody = zod
+  .object({
+    replace: zod
+      .boolean()
+      .optional()
+      .describe('Explicitly replace the retained personal identity.'),
+  })
+  .describe(
+    'Explicit pairing intent; replacement requires a separate deliberate UI action.'
+  );
+
+export const linkedConnectResponse = zod
+  .object({
+    account_id: zod.uuid().describe('Account being connected.'),
+    authorization_generation: zod
+      .number()
+      .describe('Generation captured at explicit consent.'),
+    consumed_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Terminal transaction time.'),
+    expected_identity_jid: zod
+      .string()
+      .nullish()
+      .describe('Identity a reconnect must preserve.'),
+    expires_at: zod.iso.datetime({}).describe('Database-assigned expiry.'),
+    id: zod.uuid().describe('One-use flow ID.'),
+    state: zod.string().describe('Current transaction state.'),
+    user_id: zod.string().describe('Initiating human.'),
+  })
+  .describe(
+    'Durable owner-bound transaction. Challenge\/QR material is not retained here.'
+  );
+
+export const linkedDisconnectBody = zod
+  .object({
+    authorization_generation: zod
+      .number()
+      .describe(
+        'Fences retries against a subsequent replacement or reconnect.'
+      ),
+  })
+  .describe('The account consent the owner deliberately disconnects.');
+
+export const linkedDisconnectResponse = zod
+  .object({
+    remote_unlink_confirmed: zod
+      .boolean()
+      .describe('True only when WhatsApp confirmed unlinking this endpoint.'),
+  })
+  .describe(
+    'Local disconnect and the independently observed remote unlink result.'
+  );
+
+export const linkedGroupsResponseItem = zod
+  .object({
+    announce: zod.boolean().describe('Only admins may post.'),
+    community: zod
+      .boolean()
+      .describe(
+        'Community announcement\/parent groups are outside the supported surface.'
+      ),
+    disappearing: zod
+      .boolean()
+      .describe('This feature does not retain disappearing content.'),
+    jid: zod.string().describe('Typed remote group JID.'),
+    name: zod.string().describe('Current remote subject.'),
+    observedAt: zod.iso
+      .datetime({})
+      .describe('Successful full metadata read time.'),
+    participants: zod
+      .array(
+        zod
+          .object({
+            alternateJid: zod
+              .string()
+              .nullish()
+              .describe(
+                'Verified alternate identity, not inferred from a name or submitted phone.'
+              ),
+            displayName: zod
+              .string()
+              .nullish()
+              .describe('Untrusted external display name.'),
+            jid: zod.string().describe('PN or LID account JID.'),
+          })
+          .describe(
+            'Verified typed sender aliases, supplied only by protocol metadata.'
+          )
+          .and(
+            zod.object({
+              admin: zod
+                .boolean()
+                .describe('Whether remote announcement posting is allowed.'),
+            })
+          )
+          .describe(
+            'Current remote participant; Macro access remains an independent grant.'
+          )
+      )
+      .describe('Full remote roster.'),
+    version: zod
+      .number()
+      .describe('Monotonic observation version within this worker.'),
+  })
+  .describe('Full metadata refresh, rather than incomplete membership deltas.');
+export const linkedGroupsResponse = zod.array(linkedGroupsResponseItem);
+
+export const linkedAdoptBody = zod
+  .object({
+    group_jid: zod.string().describe('Verified joined remote group.'),
+    team_id: zod.uuid().describe('Destination workspace.'),
+    users: zod
+      .array(zod.string())
+      .describe(
+        "Explicit native audience receiving this binding's shared-history grant."
+      ),
+  })
+  .describe(
+    'Explicit adoption request; account identity is selected server-side.'
+  );
+
+export const linkedAdoptResponse = zod
+  .object({
+    adopted_at: zod.iso.datetime({}).describe('Default history boundary.'),
+    channel_id: zod.uuid().describe('Native channel.'),
+    group_jid: zod
+      .string()
+      .describe('Remote group identity, never its display name.'),
+    id: zod
+      .uuid()
+      .describe(
+        'Stable binding identity, independent of an observing account.'
+      ),
+    ownership_state: zod
+      .string()
+      .describe('Active or deliberate ownership transfer required.'),
+    state: zod.string().describe('Active, suspended or detached.'),
+    team_id: zod.uuid().describe('Owning workspace.'),
+    user_id: zod.string().describe('Designated native content owner.'),
+  })
+  .describe('One remote group and native channel in a workspace.');
+
+export const linkedPairingParams = zod.object({
+  id: zod.uuid(),
+});
+
+export const linkedPairingResponse = zod
+  .object({
+    challenge: zod
+      .unknown()
+      .optional()
+      .describe(
+        'Actual WhatsApp WebAuthn options for the native authenticator only.'
+      ),
+    code: zod
+      .string()
+      .nullish()
+      .describe(
+        'Confirmation code shown by the protocol, requiring deliberate confirmation.'
+      ),
+    expiresAt: zod.iso.datetime({}).describe('Same owner-bound deadline.'),
+    identityJid: zod
+      .string()
+      .nullish()
+      .describe('Verified linked identity once authenticated.'),
+    qr: zod
+      .string()
+      .nullish()
+      .describe('Short-lived QR content; never placed in a URL\/cache.'),
+    state: zod
+      .string()
+      .describe(
+        'Displayed, passkey, confirmation, connected, expired or error.'
+      ),
+  })
+  .describe(
+    'Sensitive owner-only pairing response; deliberately has no Debug implementation.'
+  );
+
+export const linkedCancelPairingParams = zod.object({
+  id: zod.uuid(),
+});
+
+export const linkedConfirmPairingParams = zod.object({
+  id: zod.uuid(),
+});
+
+export const linkedPasskeyParams = zod.object({
+  id: zod.uuid(),
+});
+
+export const linkedPasskeyBody = zod.unknown();
 
 /**
  * @summary Gets the users pinned items

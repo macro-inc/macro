@@ -49,6 +49,14 @@ vi.mock('@queries/meta-messaging', () => ({
     };
   },
 }));
+vi.mock('@queries/whatsapp-linked', () => ({
+  useLinkedChannel: () => ({
+    isPending: true,
+    isError: false,
+    refetch: vi.fn(),
+  }),
+  useLinkedDelivery: () => ({ isPending: false, data: [] }),
+}));
 let dispose: () => void;
 afterEach(() => {
   dispose?.();

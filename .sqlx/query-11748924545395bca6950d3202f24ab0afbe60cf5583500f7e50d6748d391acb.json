@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT to_jsonb(p) AS \"data!\" FROM whatsapp_pairing p WHERE user_id=$1 AND consumed_at IS NULL AND expires_at>now()",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "data!",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "11748924545395bca6950d3202f24ab0afbe60cf5583500f7e50d6748d391acb"
+}

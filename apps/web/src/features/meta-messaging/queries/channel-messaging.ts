@@ -6,6 +6,8 @@ import {
   type useMetaConversation,
   useMetaDelivery,
 } from '@queries/meta-messaging';
+import { useLinkedChannel, useLinkedDelivery } from '@queries/whatsapp-linked';
+import type { MetaConversationView } from '@service-storage/generated/schemas/metaConversationView';
 import type { MetaSendProgress } from '@service-storage/generated/schemas/metaSendProgress';
 import {
   type Accessor,
@@ -31,8 +33,52 @@ export function createChannelInteraction(options: {
   binding: ReturnType<typeof useChannelMessagingBinding>;
 }) {
   const possible = () =>
-    !!options.binding.value() && options.binding.value() !== 'native';
+    !!options.binding.value() &&
+    options.binding.value() !== 'native' &&
+    options.binding.value() !== 'whatsapp_linked_group';
   const messagingQuery = useMetaBinding(() => options.channelId(), possible);
+  const isLinked = () => options.binding.value() === 'whatsapp_linked_group';
+  const linkedQuery = useLinkedChannel(() => options.channelId(), isLinked);
+  const linkedAccount = ():
+    | (MetaConversationView & {
+        transport: 'linked';
+        authorization_generation: number;
+      })
+    | undefined => {
+    if (!isLinked() || !queryReadyGate(linkedQuery)) return;
+    const view = linkedQuery.data;
+    return {
+      provider: 'whatsapp',
+      transport: 'linked',
+      authorization_generation: view.account.authorization_generation,
+      account_name:
+        view.account.identity_jid?.split('@')[0] ?? 'Your WhatsApp account',
+      status:
+        view.account.state === 'connected'
+          ? 'connected'
+          : view.account.state === 'connecting'
+            ? 'connecting'
+            : 'disconnected',
+      health_error:
+        view.account.state === 'offline' ? 'temporarily_offline' : null,
+      can_reply: view.can_reply,
+      capabilities: view.capabilities,
+      eligibility: view.eligibility,
+      sends: view.sends,
+      developer_account: false,
+      human_agent_approved: false,
+      media: view.capabilities.media,
+      text_limit: view.capabilities.text_limit,
+      text_limit_in_bytes: view.capabilities.text_limit_in_bytes,
+      conversation: {
+        channel_id: view.binding.channel_id,
+        connection_id: view.account.id,
+        customer_id: view.binding.group_jid,
+        kind: 'group',
+        group_status: view.binding.state === 'active' ? 'active' : 'suspended',
+      },
+    };
+  };
   const binding = createMemo<
     | {
         channelId: string;
@@ -61,11 +107,24 @@ export function createChannelInteraction(options: {
     }
     return previous?.channelId === channelId ? previous : undefined;
   });
-  const messaging = () => binding()?.account ?? undefined;
+  const messaging = () => linkedAccount() ?? binding()?.account ?? undefined;
   const interaction = (): ChannelInteraction => {
     if (!options.binding.value())
       return { kind: options.binding.error() ? 'error' : 'loading' };
     if (options.binding.error()) return { kind: 'error' };
+    if (isLinked()) {
+      const account = linkedAccount();
+      if (!account) return { kind: linkedQuery.isError ? 'error' : 'loading' };
+      return {
+        kind: 'external',
+        account: {
+          ...toConversationAccount(account),
+          transport: 'linked',
+          authorization_generation: account.authorization_generation,
+        },
+        available: !linkedQuery.isError,
+      };
+    }
     const known = binding();
     if (known) {
       if (known.group?.setup) return { kind: 'group_setup' };
@@ -90,7 +149,8 @@ export function createChannelInteraction(options: {
     refresh: () => {
       if (!options.binding.value() || options.binding.error()) {
         void options.binding.refetch();
-      } else if (possible()) void messagingQuery.refetch();
+      } else if (isLinked()) void linkedQuery.refetch();
+      else if (possible()) void messagingQuery.refetch();
     },
   };
 }
@@ -180,11 +240,28 @@ export function createChannelMessaging(options: {
   );
   const historyDelivery = useMetaDelivery(
     () => options.channelId(),
-    historyMessageIds
+    () =>
+      options.binding.value() === 'whatsapp_linked_group'
+        ? []
+        : historyMessageIds()
+  );
+  const linkedDelivery = useLinkedDelivery(
+    () => options.channelId(),
+    () =>
+      options.binding.value() === 'whatsapp_linked_group'
+        ? historyMessageIds()
+        : []
   );
   const deliveryByMessage = createMemo(() => {
     if (!messaging()) return new Map<string, MetaSendProgress>();
-    const history = queryReadyGate(historyDelivery) ? historyDelivery.data : [];
+    const history =
+      options.binding.value() === 'whatsapp_linked_group'
+        ? queryReadyGate(linkedDelivery)
+          ? linkedDelivery.data
+          : []
+        : queryReadyGate(historyDelivery)
+          ? historyDelivery.data
+          : [];
     return new Map([
       ...(history ?? [])
         .filter(

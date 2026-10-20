@@ -80,3 +80,7 @@ through the same service.
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/observability.md`
+
+## Personal WhatsApp linked devices
+
+Retried ingress, notification reads/digests and final websocket/push/email delivery re-filter linked-channel recipients against current access. New queued push/email payloads carry the original notification ID for this check; legacy payloads and silent clears remain compatible. Never let stored original recipients bypass later revocation. See `docs/WHATSAPP_LINKED_DEVICES.md`.

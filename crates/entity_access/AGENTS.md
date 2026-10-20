@@ -60,3 +60,7 @@ depended-on crates in the backend.
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/security.md`
   · Skill: `cloud-storage-hexagonal-architecture`
+
+## Personal WhatsApp linked devices
+
+Linked groups require current workspace/native participation and an explicitly granted, verified remote audience. Apply `whatsapp_linked_can_view` only behind `messaging_binding`; keep channel/source authorization uncached across revocation. Imported documents retain unrelated owner/direct/team/other-channel rights while group-derived access follows the binding. Public links alone cannot expose an imported original. See `docs/WHATSAPP_LINKED_DEVICES.md`.

@@ -66,3 +66,7 @@ conversation namespaces, current group setup and participant state. The channel
 Meta lifecycle policy stays in `meta_messaging`, not this schema owner.
 
 Completed group bindings retain the original creation subject and authorization generation for idempotent responses after setup removal. Existing bindings without this evidence cannot be adopted as creation results.
+
+## Personal WhatsApp linked devices
+
+The additive personal-device migration separates accounts, worker epochs, explicit group consent, native audiences, canonical external people/messages and private attachment reservations. Its notification/document audience helpers are shared read gates. Go writes only ownership and scalar outcome tables; Macro owns all native content/grants. See `docs/WHATSAPP_LINKED_DEVICES.md`.

@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT to_jsonb(s) AS \"data!\" FROM meta_messaging_send s WHERE channel_id=$1 AND linked_binding_id IS NOT NULL AND message_id=ANY($2) LIMIT 100",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "data!",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "4cd32372cacfdf3da296d677fcd801fd012514166fa13b36e64e85aab54e43bc"
+}

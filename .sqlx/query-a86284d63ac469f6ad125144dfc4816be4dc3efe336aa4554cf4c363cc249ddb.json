@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT c.id\n        FROM comms_channels c\n        INNER JOIN comms_channel_participants cp ON cp.channel_id = c.id\n        WHERE cp.user_id = $1 AND cp.left_at IS NULL\n        AND c.id = ANY($2::uuid[])\n        AND CASE WHEN c.messaging_binding='whatsapp_linked_group' THEN whatsapp_linked_can_view(c.id,$1) ELSE true END\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "a86284d63ac469f6ad125144dfc4816be4dc3efe336aa4554cf4c363cc249ddb"
+}

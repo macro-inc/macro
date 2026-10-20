@@ -68,6 +68,15 @@ impl NotificationRepository for SandboxNotificationRepository {
             .await
     }
 
+    async fn filter_delivery_recipients<'a>(
+        &self,
+        notification_id: Uuid,
+        recipients: &[MacroUserIdStr<'a>],
+    ) -> Result<HashSet<MacroUserIdStr<'static>>, Report> {
+        self.inner
+            .filter_delivery_recipients(notification_id, recipients)
+            .await
+    }
     async fn notification_is_withdrawn(&self, notification_id: Uuid) -> Result<bool, Report> {
         self.inner.notification_is_withdrawn(notification_id).await
     }

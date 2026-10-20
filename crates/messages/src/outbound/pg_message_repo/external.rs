@@ -108,6 +108,16 @@ impl PgMessageRepository {
         Ok(changed)
     }
 
+    /// Read a bounded quote inside the caller's canonical message transaction.
+    /// This avoids acquiring another pool connection while holding a group lock.
+    pub async fn external_quote_in(
+        tx: &mut Transaction<'_, Postgres>,
+        channel: Uuid,
+        message: Uuid,
+    ) -> Result<Option<String>, MessageError> {
+        sqlx::query_scalar!(r#"SELECT substring(content FOR 180) AS "content!" FROM comms_messages WHERE id=$1 AND parent_entity_type='channel' AND parent_entity_id=$2 AND deleted_at IS NULL"#,message,channel.to_string()).fetch_optional(&mut **tx).await.map_err(database_error)
+    }
+
     /// Append a document reference only to the exact integration-owned message.
     /// Caller first authorizes and grants the document through its owning services.
     pub async fn attach_external_file_in(
@@ -145,5 +155,46 @@ impl PgMessageRepository {
     ) -> Result<(), MessageError> {
         sqlx::query!("UPDATE comms_messages SET content=$5,updated_at=GREATEST(updated_at,now()) WHERE id=$1 AND parent_entity_type='channel' AND parent_entity_id=$2 AND import_metadata->>'connection_id'=$3 AND import_metadata->>'provider_message_id'=$4 AND edited_at IS NULL AND deleted_at IS NULL",message,channel.to_string(),connection.to_string(),provider_message,content).execute(&mut **tx).await.map_err(database_error)?;
         Ok(())
+    }
+}
+
+/// One source-ordered external reaction fact with its real actor.
+pub struct ExternalReaction<'a> {
+    /// Native target message.
+    pub message: Uuid,
+    /// External actor, never a fabricated Macro user.
+    pub sender: &'a ChannelSender<'static>,
+    /// Untrusted display label, rendered as text.
+    pub name: Option<&'a str>,
+    /// Empty removes the actor's current reaction.
+    pub emoji: &'a str,
+    /// Optional verified Macro association; not authentication authority.
+    pub user: Option<&'a str>,
+    /// Stable protocol fact ID for equal-timestamp ordering.
+    pub source: &'a str,
+    /// Source revision.
+    pub revision: i64,
+    /// Source observation time.
+    pub at: DateTime<Utc>,
+}
+
+impl PgMessageRepository {
+    /// Apply a source-ordered external reaction without manufacturing a Macro user.
+    pub async fn external_reaction_in(
+        tx: &mut Transaction<'_, Postgres>,
+        reaction: ExternalReaction<'_>,
+    ) -> Result<bool, MessageError> {
+        let ExternalReaction {
+            message,
+            sender,
+            name,
+            emoji,
+            user,
+            source,
+            revision,
+            at,
+        } = reaction;
+        let changed=sqlx::query!("INSERT INTO comms_external_reactions(message_id,sender_id,display_name,emoji,revision,updated_at,user_id,source_id) SELECT $1,$2,$3,$4,$5,$6,$7,$8 WHERE EXISTS(SELECT 1 FROM comms_messages WHERE id=$1 AND deleted_at IS NULL) ON CONFLICT(message_id,sender_id) DO UPDATE SET emoji=excluded.emoji,display_name=excluded.display_name,revision=excluded.revision,updated_at=excluded.updated_at,user_id=excluded.user_id,source_id=excluded.source_id WHERE (comms_external_reactions.revision,comms_external_reactions.source_id)<(excluded.revision,excluded.source_id)",message,sender.as_ref(),name,emoji,revision,at,user,source).execute(&mut **tx).await.map_err(database_error)?;
+        Ok(changed.rows_affected() == 1)
     }
 }

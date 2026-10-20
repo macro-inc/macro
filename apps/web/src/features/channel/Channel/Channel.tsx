@@ -42,7 +42,11 @@ import {
 import { FindBar } from '@core/component/FindBar';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { toast } from '@core/component/Toast/Toast';
-import { ENABLE_CALLS } from '@core/constant/featureFlags';
+import {
+  ENABLE_CALLS,
+  enableWhatsappLinked,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import {
   useChannel,
   useChannelActivity,
@@ -89,6 +93,7 @@ import {
 } from '@queries/messages/timeline';
 import { timelineEntryKey } from '@queries/messages/timeline-entries';
 import { usePostTypingUpdateMutation } from '@queries/messages/typing';
+import { useLinkedReply } from '@queries/whatsapp-linked';
 import { ChannelTypeEnum } from '@service-storage/client';
 import { useBeforeLeave } from '@solidjs/router';
 import { tourTarget } from '@ui/components/Tour';
@@ -207,6 +212,11 @@ export function Channel(props: ChannelProps) {
 
   const sendMessageMutation = useSendMessageMutation();
   const patchMessageMutation = usePatchMessageMutation();
+  const linkedReply = useLinkedReply(() => props.channelId);
+  const [linkedReplyTo, setLinkedReplyTo] = createSignal<{
+    id: string;
+    text: string;
+  }>();
   const deleteMessageMutation = useDeleteMessageMutation();
   const typingMutation = usePostTypingUpdateMutation();
   const addReactionMutation = useAddReactionMutation();
@@ -304,6 +314,23 @@ export function Channel(props: ChannelProps) {
     visibleRange: () => threadListScrollState()?.visibleRange,
   });
   const internalInteraction = () => messaging.interaction().kind === 'internal';
+  const isLinkedInteraction = () => {
+    const state = messaging.interaction();
+    return state.kind === 'external' && state.account.transport === 'linked';
+  };
+  const canSendLinked = () => {
+    const state = messaging.interaction();
+    return (
+      isFeatureEnabled(enableWhatsappLinked) &&
+      state.kind === 'external' &&
+      state.account.transport === 'linked' &&
+      state.available &&
+      state.account.can_reply &&
+      state.account.eligibility.modes.some(
+        (mode) => mode.mode === 'free_form' && mode.allowed
+      )
+    );
+  };
   const unread = createChannelUnreadNavigation({
     channelId: props.channelId,
     messages,
@@ -378,7 +405,26 @@ export function Channel(props: ChannelProps) {
   const messageEditor = createMessageEditor({
     parent: () => ({ type: 'channel', id: (() => props.channelId)() }),
 
-    patchMessage: patchMessageMutation.mutate,
+    patchMessage: (input) => {
+      if (isLinkedInteraction()) {
+        if (
+          input.attachmentsToAdd?.length ||
+          input.attachmentIDsToDelete?.length
+        ) {
+          toast.failure('WhatsApp attachment changes are unavailable.');
+          return;
+        }
+        linkedReply.mutate({
+          idempotency_key: crypto.randomUUID(),
+          message: {
+            type: 'mutation',
+            message_id: input.messageID,
+            operation: 'edit',
+            text: markdownToPlainText(input.content),
+          },
+        });
+      } else patchMessageMutation.mutate(input);
+    },
     onEditEnded: (message) => {
       // Clear any highlight left by tapping the edit flag's navigate action
       // (which selects and nav-targets the edited message's thread).
@@ -548,6 +594,63 @@ export function Channel(props: ChannelProps) {
     const actions = nativeMessageActions(message);
     // Customer conversations have one external composer. These native mutations
     // would only change Macro, so do not present them as customer-facing actions.
+    if (isLinkedInteraction()) {
+      const own =
+        message.sender_id === userId() ||
+        message.imported_author?.verified_user_id === userId();
+      const mutable =
+        own && Date.now() - Date.parse(message.created_at) < 10 * 60 * 1000;
+      return {
+        ...actions,
+        onReply: canSendLinked()
+          ? () => {
+              setLinkedReplyTo({
+                id: message.id,
+                text: markdownToPlainText(message.content).slice(0, 180),
+              });
+            }
+          : undefined,
+        onReact: canSendLinked()
+          ? (context: import('@core/messages/types').MessageActionContext) => {
+              if (context.emoji)
+                linkedReply.mutate({
+                  idempotency_key: crypto.randomUUID(),
+                  message: {
+                    type: 'mutation',
+                    message_id: message.id,
+                    operation: 'reaction',
+                    text: message.reactions.some(
+                      (reaction) =>
+                        reaction.emoji === context.emoji &&
+                        reaction.external_users?.some(
+                          (actor) => actor.user_id === userId()
+                        )
+                    )
+                      ? ''
+                      : context.emoji,
+                  },
+                });
+            }
+          : undefined,
+        onEdit:
+          canSendLinked() && mutable
+            ? () => messageEditor.start(message)
+            : undefined,
+        onDelete:
+          canSendLinked() && mutable
+            ? () =>
+                linkedReply.mutate({
+                  idempotency_key: crypto.randomUUID(),
+                  message: {
+                    type: 'mutation',
+                    message_id: message.id,
+                    operation: 'delete',
+                    text: null,
+                  },
+                })
+            : undefined,
+      };
+    }
     return !internalInteraction()
       ? {
           ...actions,
@@ -1197,7 +1300,12 @@ export function Channel(props: ChannelProps) {
                                 >
                                   <ChannelMessagingComposer
                                     channelId={props.channelId}
+                                    channelName={channelName()}
                                     interaction={messaging.interaction()}
+                                    replyTo={linkedReplyTo()}
+                                    onClearReply={() =>
+                                      setLinkedReplyTo(undefined)
+                                    }
                                     onRefresh={messaging.refresh}
                                     onRecoverReady={messaging.registerRecovery}
                                   />

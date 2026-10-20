@@ -1,6 +1,6 @@
 WITH user_source_ids AS (
     SELECT cp.channel_id::text as source_id FROM comms_channel_participants cp
-        WHERE cp.user_id = $1 AND cp.left_at IS NULL
+        WHERE cp.user_id = $1 AND cp.left_at IS NULL AND EXISTS(SELECT 1 FROM comms_channels linked_channel WHERE linked_channel.id=cp.channel_id AND CASE WHEN linked_channel.messaging_binding='whatsapp_linked_group' THEN whatsapp_linked_can_view(linked_channel.id,cp.user_id) ELSE true END)
     UNION ALL
     SELECT t.team_id::text FROM team_user t
         WHERE t.user_id = $1

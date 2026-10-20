@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE whatsapp_linked_account SET identity_jid=$3,state='connected',updated_at=now() WHERE id=$1 AND user_id=$2 AND authorization_generation=$4 AND (identity_jid IS NULL OR identity_jid=$3)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b762d035cb67d4a6321e478fdd02157ef484cd9bac4e791ebab6ad0e0cb69fbe"
+}

@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE whatsapp_group_audience v SET remote_member=false,reconciled=true,observed_at=$4 FROM whatsapp_group_binding b,whatsapp_linked_account a WHERE b.id=v.binding_id AND b.group_jid=$1 AND a.id=$2 AND a.authorization_generation=$3 AND v.user_id=a.user_id AND v.observed_at<=$4",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Int8",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "117a464307f360c868bcda1f5032548abbc3f9cd8b78f37a868cc9d981b87ef0"
+}

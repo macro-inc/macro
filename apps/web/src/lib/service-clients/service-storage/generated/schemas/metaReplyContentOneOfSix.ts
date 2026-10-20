@@ -4,19 +4,19 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { MetaProviderId } from './metaProviderId';
+import type { LinkedMutation } from './linkedMutation';
+import type { MetaReplyContentOneOfSixText } from './metaReplyContentOneOfSixText';
 import type { MetaReplyContentOneOfSixType } from './metaReplyContentOneOfSixType';
 
 /**
- * Approved WhatsApp template, resolved by ID against the sending account.
+ * Deliberate source-scoped mutation for a personal linked group.
  */
 export type MetaReplyContentOneOfSix = {
-  /** Exact approved language. */
-  language: string;
-  /** Ordered text parameters for header/body. Buttons and media templates
-are validated separately and never passed through as raw provider JSON. */
-  parameters: string[];
-  /** Account-scoped provider template identity. */
-  template_id: MetaProviderId;
+  /** Existing authorized native message; resolved to its canonical source by the server. */
+  message_id: string;
+  /** Explicit external operation. */
+  operation: LinkedMutation;
+  /** Replacement text or reaction; absent for deletion and empty to remove a reaction. */
+  text?: MetaReplyContentOneOfSixText;
   type: MetaReplyContentOneOfSixType;
 };

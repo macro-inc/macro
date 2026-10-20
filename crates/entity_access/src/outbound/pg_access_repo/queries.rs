@@ -54,15 +54,6 @@ pub struct SourceIds(pub Vec<String>);
 /// Grabs the users source ids for the entity access table
 /// NOTE: This could return an empty list in the event the user is not logged in and attempting to review a resource
 #[tracing::instrument(skip(pool), err)]
-#[cfg_attr(
-    not(test),
-    cached(
-        time = 10,
-        result = true,
-        key = "String",
-        convert = r#"{format!("{}", user_id.map(AsRef::as_ref).unwrap_or(""))}"#,
-    )
-)]
 pub async fn get_user_source_ids(
     pool: &Pool<Postgres>,
     user_id: Option<&MacroUserId<Lowercase<'_>>>,
@@ -71,8 +62,9 @@ pub async fn get_user_source_ids(
         // Fetch source IDs first
         let source_ids = sqlx::query_scalar!(
             r#"
-            SELECT cp.channel_id::text FROM comms_channel_participants cp
+            SELECT cp.channel_id::text FROM comms_channel_participants cp JOIN comms_channels c ON c.id=cp.channel_id
                 WHERE cp.user_id = $1 AND cp.left_at IS NULL
+                  AND CASE WHEN c.messaging_binding='whatsapp_linked_group' THEN whatsapp_linked_can_view(c.id,$1) ELSE true END
             UNION ALL
             SELECT t.team_id::text FROM team_user t
                 WHERE t.user_id = $1
@@ -137,6 +129,7 @@ pub async fn get_team_scope_source_ids(
         JOIN comms_channel_participants cp
           ON cp.user_id = $1
          AND cp.left_at IS NULL
+        JOIN comms_channels participant_channel ON participant_channel.id=cp.channel_id AND participant_channel.messaging_binding<>'whatsapp_linked_group'
         WHERE NOT EXISTS (
             SELECT 1
             FROM comms_channel_agents ca
@@ -217,8 +210,8 @@ pub(in crate::outbound::pg_access_repo) async fn get_entity_users(
         UNION ALL
 
         -- Channel Members
-        SELECT cp.user_id FROM comms_channel_participants cp
-        WHERE cp.left_at IS NULL AND cp.channel_id IN (
+        SELECT cp.user_id FROM comms_channel_participants cp JOIN comms_channels c ON c.id=cp.channel_id
+        WHERE cp.left_at IS NULL AND CASE WHEN c.messaging_binding='whatsapp_linked_group' THEN whatsapp_linked_can_view(c.id,cp.user_id) ELSE true END AND cp.channel_id IN (
             SELECT source_id::uuid FROM entity_access
             WHERE entity_id = $1 AND entity_type = $2 AND source_type = 'channel'
         )

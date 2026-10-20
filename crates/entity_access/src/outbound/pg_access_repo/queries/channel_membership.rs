@@ -21,6 +21,7 @@ pub async fn check_user_channel_membership(
         INNER JOIN comms_channel_participants cp ON cp.channel_id = c.id
         WHERE cp.user_id = $1 AND cp.left_at IS NULL
         AND c.id = ANY($2::uuid[])
+        AND CASE WHEN c.messaging_binding='whatsapp_linked_group' THEN whatsapp_linked_can_view(c.id,$1) ELSE true END
         "#,
         user_id,
         channel_ids

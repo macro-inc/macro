@@ -1,0 +1,48 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT message_id,deleted_at,revision_content,content_revision,revised_at FROM whatsapp_external_message WHERE binding_id=$1 AND person_id=$2 AND source_id=$3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "deleted_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "revision_content",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "content_revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "revised_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "f886cbcb2e5a5dc9647b0be9e2ddd5cbca65cb5074dabbb27a8d500139a69bb7"
+}

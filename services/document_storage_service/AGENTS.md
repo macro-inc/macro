@@ -80,3 +80,7 @@ and shares private upload plumbing. Reads retain readiness/content checks and re
 permissions after I/O; temporary staging rechecks file access. Native effects select
 authorized recipients and suppress history/revisions, then use the channels notification
 port for external author metadata, stable recovery IDs and delivery routing.
+
+## Personal WhatsApp linked devices
+
+`native_messaging/linked.rs` composes the optional hosted personal-session adapter. `native/linked.rs` shares native channels/messages/effects and `files/linked.rs` shares private documents. Adoption authorization stays within its short locked transaction; do not await another pool connection while holding a group lock. Pending attachment leases must keep the source event retryable. Configuration and operations are in `docs/WHATSAPP_LINKED_DEVICES.md`.

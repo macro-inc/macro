@@ -44,7 +44,7 @@ Build once in `apps/web` with local fixture routing:
 VITE_LOCAL_SERVERS=ALL VITE_LOCAL_BACKEND_ORIGIN=same-origin \
 VITE_ENABLE_GRAPHQL_SOUP=true VITE_DISABLE_BROWSER_TURSO_CACHE=true \
 VITE_ENABLE_IN_APP_TOURS=false VITE_ENABLE_BROWSER_OTEL=false just build-dev
-FUNCTIONAL_MESSAGING=1 bun run test:functional meta-messaging.spec.ts
+FUNCTIONAL_MESSAGING=1 bun run test:functional meta-messaging.spec.ts whatsapp-linked.spec.ts
 ```
 
 The shared runner defaults to lightweight Vite fixtures. `FUNCTIONAL_MESSAGING=1` adds the
@@ -114,3 +114,5 @@ logging and popup-compatible headers on the deployed origin; local tests cannot 
 - Group preflight fails: repair subscriptions/eligibility and retry; no service restart is needed.
 - Callback hostname or server variables changed: update the exact local configuration and recreate
   affected services while preserving unrelated endpoints. Never expose the entire local stack.
+
+The personal-device fixture build also sets `VITE_ENABLE_WHATSAPP_LINKED=true`. See [linked-device evidence](WHATSAPP_LINKED_VERIFICATION.md) for its Go/native/browser checks and the real-account qualification boundary.

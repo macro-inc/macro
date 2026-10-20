@@ -1,21 +1,9 @@
-#[cfg(not(test))]
-use cached::proc_macro::cached;
-
 use model::item::{ShareableItem, ShareableItemType, UserAccessibleItem};
 use sqlx::{Pool, Postgres};
 
 /// Given a list of shareable items, returns the subset that are accessible to the user,
 /// querying entity_access with the user's source IDs (user ID, team memberships, channel participations).
 #[tracing::instrument(skip(db, items), err)]
-#[cfg_attr(
-    not(test),
-    cached(
-        time = 10,
-        result = true,
-        key = "String",
-        convert = r#"{ format!("{}-{}", user_id, items.iter().map(|i| format!("{}-{}", i.item_type, i.item_id)).collect::<Vec<_>>().join("_")) }"#
-    )
-)]
 pub async fn validate_user_accessible_items(
     db: &Pool<Postgres>,
     user_id: &str,
@@ -49,7 +37,7 @@ pub async fn validate_user_accessible_items(
         r#"
         WITH user_source_ids AS (
             SELECT cp.channel_id::text as source_id FROM comms_channel_participants cp
-                WHERE cp.user_id = $1 AND cp.left_at IS NULL
+                WHERE cp.user_id = $1 AND cp.left_at IS NULL AND EXISTS(SELECT 1 FROM comms_channels linked_channel WHERE linked_channel.id=cp.channel_id AND CASE WHEN linked_channel.messaging_binding='whatsapp_linked_group' THEN whatsapp_linked_can_view(linked_channel.id,cp.user_id) ELSE true END)
             UNION ALL
             SELECT t.team_id::text FROM team_user t
                 WHERE t.user_id = $1
@@ -61,9 +49,9 @@ pub async fn validate_user_accessible_items(
             -- Documents the user has access to
             SELECT ea.entity_id::text as item_id, ea.entity_type as item_type
             FROM entity_access ea
-            LEFT JOIN "Document" d ON ea.entity_type = 'document' AND ea.entity_id::text = d.id
+            LEFT JOIN "Document" d ON ea.entity_type = 'document' AND whatsapp_linked_can_read_document(ea.entity_id,$1) AND ea.entity_id::text = d.id
             WHERE ea.source_id = ANY(SELECT source_id FROM user_source_ids)
-              AND ea.entity_type = 'document'
+              AND ea.entity_type = 'document' AND whatsapp_linked_can_read_document(ea.entity_id,$1)
               AND ea.entity_id::text = ANY($2)
               AND d."deletedAt" IS NULL
 

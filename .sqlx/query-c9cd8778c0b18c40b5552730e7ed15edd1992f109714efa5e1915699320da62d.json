@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT m.source_id,alias.jid FROM whatsapp_external_message m JOIN whatsapp_identity_alias alias ON alias.binding_id=m.binding_id AND alias.person_id=m.person_id WHERE m.binding_id=$1 AND m.message_id::text=$2 AND m.deleted_at IS NULL ORDER BY alias.jid LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "source_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "jid",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "c9cd8778c0b18c40b5552730e7ed15edd1992f109714efa5e1915699320da62d"
+}

@@ -16,10 +16,12 @@ import {
 import { queryReadyGate } from '@queries/gate';
 import { useMetaBinding } from '@queries/meta-messaging';
 import { useCurrentTeamQuery } from '@queries/team/teams';
+import { useLinkedActions } from '@queries/whatsapp-linked';
 import { ChannelType } from '@service-storage/generated/schemas/channelType';
 import { ParticipantRole } from '@service-storage/generated/schemas/participantRole';
 import { Panel } from '@ui';
 import { createSignal, Show } from 'solid-js';
+import { LinkedGroupControls } from '../../whatsapp-linked/views/group-controls';
 import { ChannelBotsPanel } from './ChannelBotsPanel';
 import { ChannelJoinLinkButton } from './ChannelJoinLinkButton';
 import { ChannelTeamSettingsPanel } from './ChannelTeamSettingsPanel';
@@ -53,6 +55,8 @@ export function ChannelParticipantsTab(props: {
   const currentTeamQuery = useCurrentTeamQuery();
   const patchChannelMutation = usePatchChannelMutation();
   const addParticipantsMutation = useAddParticipantsMutation();
+  const linkedActions = useLinkedActions();
+  const linked = () => channel()?.messaging_binding === 'whatsapp_linked_group';
   const removeParticipantsMutation = useRemoveParticipantsMutation();
   const getOrCreateDmMutation = useGetOrCreateDirectMessageMutation();
   const [searchQuery, setSearchQuery] = createSignal('');
@@ -78,6 +82,7 @@ export function ChannelParticipantsTab(props: {
   const supportsTeamSettings = () =>
     !!channel()?.messaging_binding &&
     channel()?.messaging_binding !== 'whatsapp_group' &&
+    !linked() &&
     (channelType() === ChannelType.private ||
       channelType() === ChannelType.public ||
       channelType() === ChannelType.team);
@@ -113,6 +118,13 @@ export function ChannelParticipantsTab(props: {
   const addParticipants = (participantIds: string[], onAdded?: () => void) => {
     if (!isEditable() || participantIds.length === 0) return;
 
+    if (linked()) {
+      linkedActions.grant.mutate(
+        { channel: props.channelId, users: participantIds },
+        { onSuccess: onAdded }
+      );
+      return;
+    }
     addParticipantsMutation.mutate(
       {
         channelId: props.channelId,
@@ -200,9 +212,13 @@ export function ChannelParticipantsTab(props: {
             <Panel depth={2} class="min-h-0 flex-1 overflow-hidden text-ink">
               <Panel.Header class="justify-between gap-2 px-6">
                 <div class="text-sm font-semibold">
-                  {group() ? 'Macro teammates' : 'Participants'}
+                  {linked()
+                    ? 'Macro access'
+                    : group()
+                      ? 'Macro teammates'
+                      : 'Participants'}
                 </div>
-                <Show when={channelType() === ChannelType.private}>
+                <Show when={channelType() === ChannelType.private && !linked()}>
                   <ChannelJoinLinkButton channelId={props.channelId} />
                 </Show>
               </Panel.Header>
@@ -242,21 +258,38 @@ export function ChannelParticipantsTab(props: {
             <Show when={group()}>
               <WhatsappGroupControls channelId={props.channelId} />
             </Show>
-            <Show when={props.botManagementEnabled}>{bots()}</Show>
+            <Show when={linked()}>
+              <LinkedGroupControls
+                channelId={props.channelId}
+                canManage={canManageChannel()}
+                userId={userId() ?? ''}
+              />
+            </Show>
+            <Show when={props.botManagementEnabled && !linked()}>{bots()}</Show>
           </div>
         </div>
       }
     >
       <ParticipantsMobileLayout
-        peopleLabel={group() ? 'Macro teammates' : undefined}
+        peopleLabel={
+          linked() ? 'Macro access' : group() ? 'Macro teammates' : undefined
+        }
         externalPeople={
-          group()
+          linked()
             ? () => (
-                <Show when={group()}>
-                  <WhatsappGroupControls channelId={props.channelId} />
-                </Show>
+                <LinkedGroupControls
+                  channelId={props.channelId}
+                  canManage={canManageChannel()}
+                  userId={userId() ?? ''}
+                />
               )
-            : undefined
+            : group()
+              ? () => (
+                  <Show when={group()}>
+                    <WhatsappGroupControls channelId={props.channelId} />
+                  </Show>
+                )
+              : undefined
         }
         search={() => (
           <ParticipantsSearchInput

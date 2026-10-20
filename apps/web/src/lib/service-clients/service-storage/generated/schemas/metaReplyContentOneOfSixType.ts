@@ -10,5 +10,5 @@ export type MetaReplyContentOneOfSixType =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const MetaReplyContentOneOfSixType = {
-  template: 'template',
+  mutation: 'mutation',
 } as const;

@@ -43,10 +43,13 @@ import { createReplyEligibility } from '../primitives/reply-eligibility';
 
 export type MessagingComposerProps = {
   channelId: string;
+  channelName?: string;
   interaction: ChannelInteraction;
   userId: string | undefined;
   createSource: (channelId: string) => ReplySource;
   onRefresh: () => void;
+  replyTo?: { id: string; text: string };
+  onClearReply?: () => void;
   onRecoverReady: (recover: (send: SendAttempt) => void) => () => void;
 };
 
@@ -54,7 +57,20 @@ export type MessagingComposerProps = {
 export function ChannelMessagingComposer(props: MessagingComposerProps) {
   return (
     <Show
-      when={props.channelId && JSON.stringify([props.userId, props.channelId])}
+      when={
+        props.channelId &&
+        JSON.stringify([
+          props.userId,
+          props.channelId,
+          props.interaction.kind === 'external' &&
+          props.interaction.account.transport === 'linked'
+            ? [
+                props.interaction.account.conversation.connection_id,
+                props.interaction.account.authorization_generation,
+              ]
+            : null,
+        ])
+      }
       keyed
     >
       {(_identity) => {
@@ -100,11 +116,15 @@ function MessagingComposer(
         {(interaction) => (
           <ExternalReply
             channelId={props.channelId}
+            channelName={props.channelName}
             userId={props.draftUserId}
             account={interaction().account}
             available={interaction().available}
             createSource={props.createSource}
             onRecoverReady={props.onRecoverReady}
+            replyTo={props.replyTo}
+            onClearReply={props.onClearReply}
+            onRefresh={props.onRefresh}
           />
         )}
       </Match>
@@ -114,14 +134,24 @@ function MessagingComposer(
 
 function ExternalReply(props: {
   channelId: string;
+  channelName?: string;
   userId: string | undefined;
   account: ConversationAccount;
   available: boolean;
+  replyTo?: { id: string; text: string };
+  onClearReply?: () => void;
+  onRefresh: () => void;
   createSource: (channelId: string) => ReplySource;
   onRecoverReady: (recover: (send: SendAttempt) => void) => () => void;
 }) {
   const source = props.createSource(props.channelId);
-  const [draft, setDraft] = createReplyDraft(props.userId, props.channelId);
+  const [draft, setDraft] = createReplyDraft(
+    props.userId,
+    props.channelId,
+    props.account.transport === 'linked'
+      ? `${props.account.conversation.connection_id}:${props.account.authorization_generation}`
+      : undefined
+  );
   const [error, setError] = createSignal('');
   createEffect(() => {
     const submitted = draft.submitted;
@@ -153,6 +183,7 @@ function ExternalReply(props: {
   onMount(() => onCleanup(props.onRecoverReady(restoreReply)));
   const eligible = createReplyEligibility(() => props.account.eligibility);
   const supports = (mode: 'approved_template' | 'human_support') =>
+    props.account.transport !== 'linked' &&
     props.account.capabilities.modes.includes(mode);
   const open = () => eligible('free_form');
   const connected = () => props.account.status === 'connected';
@@ -303,6 +334,9 @@ function ExternalReply(props: {
     setCheckedOriginalApp(false);
     match(send.payload.message)
       .with({ type: 'text' }, (value) => setDraft('text', value.text))
+      .with({ type: 'mutation' }, () =>
+        setError('Open the original message to make a new change.')
+      )
       .with({ type: 'media' }, (value) => {
         setDraft('attachment', {
           document_id: value.document_id,
@@ -328,6 +362,7 @@ function ExternalReply(props: {
   ): ReplyRequest {
     return {
       idempotency_key: snapshot.intent,
+      reply_to: snapshot.replyTo,
       human_support: snapshot.humanSupport,
       message: snapshot.templateMode
         ? {
@@ -359,6 +394,7 @@ function ExternalReply(props: {
       ? draft.submitted!
       : {
           ...snapshotReplyDraft(draft),
+          replyTo: props.replyTo?.id,
           intent: draft.intent ?? crypto.randomUUID(),
           humanSupport: mode() === 'human_support',
           templateMode: needsTemplate(),
@@ -380,6 +416,7 @@ function ExternalReply(props: {
     try {
       await source.send(request);
       if (!active) return;
+      props.onClearReply?.();
       setDraft('submitted', undefined);
       setCheckedOriginalApp(false);
     } catch (e) {
@@ -460,10 +497,24 @@ function ExternalReply(props: {
       >
         <Layout.Body>
           <Layout.Editor class="flex flex-col gap-2">
+            <Show when={props.replyTo}>
+              {(quote) => (
+                <div class="border-l-2 border-edge pl-2 text-xs text-ink-muted">
+                  <p>{quote().text}</p>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={props.onClearReply}
+                  >
+                    Cancel reply
+                  </Button>
+                </div>
+              )}
+            </Show>
             <Show when={!props.available}>
               <p role="status" class="text-sm text-ink-muted">
                 Connection unavailable. Your draft is saved here; sending will
-                resume when the connection returns.
+                be available when the connection returns.
               </p>
             </Show>
             <Show when={draft.uncertainReply}>
@@ -484,18 +535,23 @@ function ExternalReply(props: {
               <p role="status" class="text-sm text-ink-muted">
                 {props.account.status === 'connecting'
                   ? 'Finishing the account connection. You can write a draft while you wait.'
-                  : (accountHealthMessage(
-                      props.account.status,
-                      props.account.health_error,
-                      props.account.provider
-                    ) ??
-                    'This account needs attention. Ask a team admin to reconnect it in Settings before sending.')}
+                  : props.account.transport === 'linked'
+                    ? props.account.health_error === 'temporarily_offline'
+                      ? 'WhatsApp is temporarily offline. Your draft is saved; reconnecting automatically.'
+                      : 'Connect or reconnect your own WhatsApp account in Settings to send.'
+                    : (accountHealthMessage(
+                        props.account.status,
+                        props.account.health_error,
+                        props.account.provider
+                      ) ??
+                      'This account needs attention. Ask a team admin to reconnect it in Settings before sending.')}
               </p>
             </Show>
             <Show when={!props.account.can_reply}>
               <p class="text-sm text-ink-muted">
-                Only channel participants who belong to the connected account’s
-                team can reply externally.
+                {props.account.transport === 'linked'
+                  ? 'Sending requires your own connected WhatsApp account, current group membership, and Macro channel access.'
+                  : 'Only channel participants who belong to the connected account’s team can reply externally.'}
               </p>
             </Show>
             <Show
@@ -514,7 +570,13 @@ function ExternalReply(props: {
                         rows={1}
                         class="block w-full resize-none min-h-6 max-h-[225px] rounded-none border-0 bg-transparent p-0 text-base leading-6 text-composer-ink placeholder:text-ink-placeholder outline-none focus-visible:shadow-none"
                         aria-label="External customer reply"
-                        placeholder={`Message ${props.account.conversation.customer_display_name ?? props.account.conversation.customer_handle ?? props.account.conversation.customer_phone ?? props.account.conversation.customer_id}…`}
+                        placeholder={
+                          props.account.transport === 'linked'
+                            ? props.channelName
+                              ? `Message ${props.channelName}…`
+                              : 'Message…'
+                            : `Message ${props.account.conversation.customer_display_name ?? props.account.conversation.customer_handle ?? props.account.conversation.customer_phone ?? props.account.conversation.customer_id}…`
+                        }
                         onKeyDown={(event) => {
                           if (
                             event.key === 'Enter' &&
@@ -561,6 +623,14 @@ function ExternalReply(props: {
                         </p>
                       }
                     >
+                      <Match when={props.account.transport === 'linked'}>
+                        <p role="status" class="text-xs text-ink-muted">
+                          Sending is unavailable for this group.{' '}
+                          <Button size="sm" onClick={props.onRefresh}>
+                            Refresh
+                          </Button>
+                        </p>
+                      </Match>
                       <Match when={templateOffered()}>
                         <p class="text-xs text-ink-muted">
                           The reply window is closed. Send an approved template,

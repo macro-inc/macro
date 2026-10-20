@@ -51,3 +51,7 @@ retry. User operations retain the subscription guard through native deletion; at
 discard rejects a concurrently bound setup. Invite-link access and deletion require
 explicit human authority. App-level group callback configuration is checked during each create/retry preflight and recovers without restart. Completed creation retains its original subject/generation so authorized retries cannot create twice.
 See `docs/META_MESSAGING.md#whatsapp-groups` for the contract and scope.
+
+## Personal WhatsApp linked devices
+
+Personal linked devices use `domain/linked` and `outbound/linked`, independently of Meta business `Connection`. Shared sends select the authenticated actor through `account_for_sender`; never replace that selection with a binding owner/observer. Account authorization generations and process ownership epochs are separate. Recheck private-document access after transport preparation. See `docs/WHATSAPP_LINKED_DEVICES.md`.

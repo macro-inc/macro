@@ -51,3 +51,5 @@ tables behind channel/document conversations.
 ## Related
 
 - Rules: `.agents/rules/rust/db.md` · Docs: `docs/development/database.md`
+
+Search channel enumeration gates personal linked groups behind their native marker and current audience. Do not cache grants across revocation. See `docs/WHATSAPP_LINKED_DEVICES.md`.

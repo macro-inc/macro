@@ -59,6 +59,7 @@ mod steps;
 mod vars;
 mod web_app_check_main;
 mod web_artifact_paths;
+mod whatsapp_session;
 
 use std::fs;
 use std::path::PathBuf;
@@ -114,6 +115,11 @@ fn job_mut<'a>(root: &'a mut serde_yaml::Value, id: &str) -> Result<&'a mut serd
 
 /// Every workflow we generate. Add new workflows here.
 const WORKFLOWS: &[WorkflowFile] = &[
+    WorkflowFile {
+        slug: "whatsapp_session",
+        file_name: "whatsapp-session.yml",
+        render_yaml: || render_gh_workflow(whatsapp_session::whatsapp_session)(),
+    },
     WorkflowFile {
         slug: "export_ci_telemetry",
         file_name: "export-ci-telemetry.yml",

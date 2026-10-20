@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO whatsapp_participant_receipt(account_id,binding_id,source_id,participant_jid,receipt_state,source_at) SELECT $1,b.id,$4,$5,$6,$7 FROM whatsapp_group_binding b JOIN whatsapp_group_membership m ON m.binding_id=b.id JOIN whatsapp_linked_account a ON a.id=m.account_id WHERE b.group_jid=$2 AND m.account_id=$1 AND m.authorization_generation=$3 AND m.consent_ended_at IS NULL AND whatsapp_linked_can_view(b.channel_id,a.user_id) ON CONFLICT(account_id,binding_id,source_id,participant_jid,receipt_state) DO UPDATE SET source_at=GREATEST(whatsapp_participant_receipt.source_at,excluded.source_at)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int8",
+        "Text",
+        "Text",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "220214c2227f9521fbad1f6a6b3abb7c82c583ef8b77d8ba8e708e0626648659"
+}

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH user_channels AS (\n            SELECT DISTINCT c.id, c.created_at\n            FROM comms_channels c\n            INNER JOIN comms_channel_participants cp ON cp.channel_id = c.id\n            WHERE cp.user_id = $1 AND cp.left_at IS NULL\n            AND CASE WHEN c.messaging_binding='whatsapp_linked_group' THEN whatsapp_linked_can_view(c.id,$1) ELSE true END\n        )\n        SELECT\n            id as \"id!\"\n        FROM user_channels\n        ORDER BY created_at DESC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "1cf12b6f309c8bc3365535efd419b6b7b73cf5e28d6d6ecc6a63b5edfa15a7da"
+}

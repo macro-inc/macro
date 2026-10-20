@@ -90,6 +90,8 @@ fn fixture() -> (NativeEffect, MessageEvent, ChannelInfo, HashSet<String>) {
         thread_id: None,
         sender_id: ChannelSender::new_external(Uuid::now_v7()).unwrap(),
         imported_author: Some(ImportedAuthor {
+            origin: None,
+            verified_user_id: None,
             name: "Customer Name".into(),
         }),
         bot_profile: None,

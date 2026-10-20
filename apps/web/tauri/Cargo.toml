@@ -27,6 +27,9 @@ opt-level = 3
 debug-assertions = false
 
 [workspace.dependencies]
+webauthn-authenticator-rs = { git = "https://github.com/beeper/webauthn-rs", rev = "579f9144d37161bedf25ed1236d73486ce303de6", default-features = false }
+webauthn-rs-proto = { git = "https://github.com/beeper/webauthn-rs", rev = "579f9144d37161bedf25ed1236d73486ce303de6" }
+
 pollster = "0.4"
 reqwest = "0.13"
 rootcause = "0.12"

@@ -36,6 +36,12 @@ async function setupMessaging({
   baseURL: string | undefined;
 }) {
   const state = {
+    linked: false,
+    linkedGeneration: 1,
+    linkedOffline: false,
+    linkedConnecting: false,
+    linkedConnected: false,
+    pairingState: 'displayed',
     group: undefined as MetaGroupView | undefined,
     groupChannelId: '',
     groupRemovalFails: true,
@@ -62,7 +68,7 @@ async function setupMessaging({
   const unknown = new Set<string>();
   const metaRequests: string[] = [];
   page.on('request', (request) => {
-    if (new URL(request.url()).pathname.includes('/meta/'))
+    if (new URL(request.url()).pathname.startsWith('/dss/meta/'))
       metaRequests.push(request.url());
   });
   page.on('pageerror', (error) => errors.push(error.message));
@@ -96,6 +102,42 @@ async function setupMessaging({
     { id: id(102), name: 'WhatsApp customer', provider: 'whatsapp' },
     { id: id(103), name: 'Instagram customer', provider: 'instagram' },
   ];
+  const linkedGroup = {
+    jid: '120363100@g.us',
+    name: 'Existing group of nine',
+    participants: Array.from({ length: 9 }, (_, i) => ({
+      jid: `1555000000${i}@s.whatsapp.net`,
+      displayName: i === 7 ? 'External customer' : `Group member ${i + 1}`,
+      admin: i === 0,
+    })),
+    announce: false,
+    community: false,
+    disappearing: false,
+    version: 1,
+    observedAt: new Date().toISOString(),
+  };
+  const linkedBinding = () => ({
+    id: id(950),
+    team_id: id(800),
+    group_jid: linkedGroup.jid,
+    channel_id: channels[1].id,
+    user_id: state.activeUser,
+    state: 'active',
+    ownership_state: 'active',
+    adopted_at: time(0),
+  });
+  const linkedAccount = () => ({
+    id: id(951),
+    user_id: state.activeUser,
+    identity_jid: '15550000000@s.whatsapp.net',
+    authorization_generation: state.linkedGeneration,
+    owner_epoch: 1,
+    state: state.linkedConnecting
+      ? 'connecting'
+      : state.linkedOffline
+        ? 'offline'
+        : 'connected',
+  });
   const submissions: MetaSendReply[] = [];
   const sends = new Map<string, MetaSendProgress[]>();
   const seenNotifications = new Set<string>();
@@ -274,11 +316,13 @@ async function setupMessaging({
       displayName: channel.name,
       channelType: 'private',
       messagingBinding:
-        channel.id === state.groupChannelId
-          ? 'whatsapp_group'
-          : channel.provider
-            ? `${channel.provider}_direct`
-            : 'native',
+        state.linked && channel.id === channels[1].id
+          ? 'whatsapp_linked_group'
+          : channel.id === state.groupChannelId
+            ? 'whatsapp_group'
+            : channel.provider
+              ? `${channel.provider}_direct`
+              : 'native',
       ownerId: state.activeUser,
       organizationId: null,
       teamId: null,
@@ -381,6 +425,55 @@ async function setupMessaging({
           { user_id: 'macro|other-connector@example.com', role: 'owner' },
         ],
       });
+    if (path === '/dss/meta/linked/configuration')
+      return respond({ pairing: true, adoption: true, sending: true });
+    if (path === '/dss/meta/linked/account')
+      return respond({
+        account: state.linkedConnected ? linkedAccount() : null,
+      });
+    if (path === '/dss/meta/linked/connect') {
+      state.pairingState = 'displayed';
+      return respond({
+        id: id(952),
+        account_id: id(951),
+        user_id: state.activeUser,
+        authorization_generation: state.linkedGeneration,
+        state: 'created',
+        expires_at: new Date(Date.now() + 300000).toISOString(),
+        consumed_at: null,
+        expected_identity_jid: null,
+      });
+    }
+    if (path.startsWith('/dss/meta/linked/pairing/')) {
+      if (request.method() === 'DELETE') return route.fulfill({ status: 204 });
+      if (state.pairingState === 'connected') state.linkedConnected = true;
+      return respond({
+        state: state.pairingState,
+        qr:
+          state.pairingState === 'displayed'
+            ? 'controlled-local-qr-fixture'
+            : null,
+        code: null,
+        challenge: null,
+        identityJid:
+          state.pairingState === 'connected'
+            ? '15550000000@s.whatsapp.net'
+            : null,
+        expiresAt: new Date(Date.now() + 300000).toISOString(),
+      });
+    }
+    if (path === '/dss/meta/linked/groups') {
+      if (request.method() === 'POST') {
+        state.linked = true;
+        return respond(linkedBinding());
+      }
+      return respond([linkedGroup]);
+    }
+    if (path === '/dss/meta/linked/disconnect') {
+      state.linkedConnected = false;
+      state.linkedGeneration++;
+      return respond({ remote_unlink_confirmed: true });
+    }
     if (path === '/dss/meta/configuration')
       return respond({
         instagram_human_agent_approved: false,
@@ -581,19 +674,50 @@ async function setupMessaging({
         errors.push(...result.errors.map((error) => error.message));
       return respond(result);
     }
-    const meta = path.match(
-      /^\/dss\/meta\/channels\/([^/]+)(?:\/(replies|delivery|templates))?$/
+    const linked = path.match(
+      /^\/dss\/meta\/linked\/channels\/([^/]+)(?:\/(replies|delivery))?$/
     );
+    const meta =
+      linked ??
+      path.match(
+        /^\/dss\/meta\/channels\/([^/]+)(?:\/(replies|delivery|templates))?$/
+      );
     if (meta) {
       const channel = meta[1];
       if (!meta[2]) {
         if (state.holdBinding) return;
         return state.bindingError
           ? respond({}, 503)
-          : respond({
-              messaging: conversation(channel),
-              group: channel === state.groupChannelId ? state.group : null,
-            });
+          : linked
+            ? respond({
+                account: linkedAccount(),
+                binding: linkedBinding(),
+                roster: linkedGroup,
+                can_reply: !state.denied,
+                capabilities: {
+                  ...replyOptions('whatsapp').capabilities,
+                  modes: ['free_form'],
+                },
+                eligibility: {
+                  ...replyOptions('whatsapp').eligibility,
+                  modes: [
+                    {
+                      mode: 'free_form',
+                      allowed: !state.denied && !state.linkedOffline,
+                      reason: state.denied
+                        ? 'forbidden'
+                        : state.linkedOffline
+                          ? 'disconnected'
+                          : null,
+                    },
+                  ],
+                },
+                sends: sends.get(channel) ?? [],
+              })
+            : respond({
+                messaging: conversation(channel),
+                group: channel === state.groupChannelId ? state.group : null,
+              });
       }
       if (meta[2] === 'delivery') return respond(sends.get(channel) ?? []);
       if (meta[2] === 'templates')
@@ -642,7 +766,7 @@ async function setupMessaging({
           );
           native.created_at = attempt.created_at;
           native.updated_at = attempt.created_at;
-          native.imported_author = { name: 'Test Business' };
+          native.imported_author = linked ? null : { name: 'Test Business' };
           messages.get(channel)!.push(native);
           attempt.state = 'accepted';
           attempt.message_id = native.id;
@@ -708,11 +832,13 @@ async function setupMessaging({
           name: channel.name,
           channel_type: 'private',
           messaging_binding:
-            channel.id === state.groupChannelId
-              ? 'whatsapp_group'
-              : channel.provider
-                ? `${channel.provider}_direct`
-                : 'native',
+            state.linked && channel.id === channels[1].id
+              ? 'whatsapp_linked_group'
+              : channel.id === state.groupChannelId
+                ? 'whatsapp_group'
+                : channel.provider
+                  ? `${channel.provider}_direct`
+                  : 'native',
           owner_id: state.activeUser,
           created_at: time(0),
           updated_at: new Date().toISOString(),
@@ -789,11 +915,13 @@ async function setupMessaging({
         channel_type: 'private',
         auto_join_team: false,
         messaging_binding:
-          channel.id === state.groupChannelId
-            ? 'whatsapp_group'
-            : channel.provider
-              ? `${channel.provider}_direct`
-              : 'native',
+          state.linked && channel.id === channels[1].id
+            ? 'whatsapp_linked_group'
+            : channel.id === state.groupChannelId
+              ? 'whatsapp_group'
+              : channel.provider
+                ? `${channel.provider}_direct`
+                : 'native',
         participants: [
           {
             channel_id: channel.id,

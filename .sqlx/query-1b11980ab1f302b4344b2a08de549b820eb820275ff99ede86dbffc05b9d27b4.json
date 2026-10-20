@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO whatsapp_pairing(id,account_id,user_id,authorization_generation,state,expires_at,expected_identity_jid)\n            VALUES($1,$2,$3,$4,'created',clock_timestamp()+interval '5 minutes',$5) RETURNING to_jsonb(whatsapp_pairing) AS \"data!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "data!",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "1b11980ab1f302b4344b2a08de549b820eb820275ff99ede86dbffc05b9d27b4"
+}

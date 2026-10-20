@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT to_jsonb(b) AS \"data!\" FROM whatsapp_group_binding b\n          JOIN whatsapp_group_membership m ON m.binding_id=b.id\n          WHERE b.group_jid=$1 AND b.state='active'\n          AND m.account_id=$2 AND m.authorization_generation=$3 AND m.consent_ended_at IS NULL\n          AND m.remote_member AND m.reconciled AND whatsapp_linked_can_view(b.channel_id,$5) AND b.adopted_at<=$4 AND m.consent_at<=$4\n          ORDER BY b.id LIMIT 100",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "data!",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Int8",
+        "Timestamptz",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "489ed5ced49ce30612ce42081a2dc0da1288b025dedc5d324de6e3ebb2059b0b"
+}

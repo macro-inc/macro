@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { MetaReplyContentOneOf } from './metaReplyContentOneOf';
+import type { MetaReplyContentOneOfNine } from './metaReplyContentOneOfNine';
 import type { MetaReplyContentOneOfSix } from './metaReplyContentOneOfSix';
 import type { MetaReplyContentOneOfThree } from './metaReplyContentOneOfThree';
 
@@ -15,4 +16,5 @@ not accepted from clients as attachments.
 export type MetaReplyContent =
   | MetaReplyContentOneOf
   | MetaReplyContentOneOfThree
-  | MetaReplyContentOneOfSix;
+  | MetaReplyContentOneOfSix
+  | MetaReplyContentOneOfNine;

@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE whatsapp_pairing SET state='expired',consumed_at=clock_timestamp(),handoff_sha256=NULL WHERE consumed_at IS NULL AND expires_at<=clock_timestamp()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "b6710b4d61a3c5278f8845de5fe706c0f596e6bc47f58861beccb0859e3d0fa6"
+}

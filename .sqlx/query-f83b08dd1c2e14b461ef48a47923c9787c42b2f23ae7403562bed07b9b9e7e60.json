@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT b.id FROM whatsapp_group_binding b JOIN whatsapp_group_membership m ON m.binding_id=b.id JOIN whatsapp_group_audience v ON v.binding_id=b.id AND v.user_id=$3 JOIN comms_channel_participants cp ON cp.channel_id=b.channel_id AND cp.user_id=$3 JOIN team_user tu ON tu.team_id=b.team_id AND tu.user_id=$3 WHERE b.group_jid=$1 AND m.account_id=$2 AND m.consent_ended_at IS NULL AND m.authorization_generation=$4 AND v.revoked_at IS NULL AND cp.left_at IS NULL FOR SHARE OF b,m,v,cp,tu",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "f83b08dd1c2e14b461ef48a47923c9787c42b2f23ae7403562bed07b9b9e7e60"
+}

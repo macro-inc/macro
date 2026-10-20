@@ -34,6 +34,7 @@ pub async fn get_document_access(
             WHERE share_permission."linkShare" = 'PUBLIC'
               AND share_permission."linkShareAccessLevel" IS NOT NULL
               AND document_permission."documentId" = $1
+              AND NOT EXISTS(SELECT 1 FROM whatsapp_attachment WHERE document_id::text=$1)
             "#,
             &document_id.to_string()
         )
@@ -45,7 +46,8 @@ pub async fn get_document_access(
 
     // A separate statement on purpose: an owner grant settles the result, and
     // planning the union below costs more than executing it.
-    let is_direct_owner = sqlx::query_scalar!(
+    let user_id_str = user_id.map(AsRef::as_ref).unwrap_or("");
+    let ownership = sqlx::query!(
         r#"
         SELECT EXISTS (
             SELECT 1
@@ -54,15 +56,19 @@ pub async fn get_document_access(
               AND entity_type = 'document'
               AND source_id = ANY($2)
               AND access_level = 'owner'
-        ) AS "is_direct_owner!"
+        ) AS "is_direct_owner!", whatsapp_linked_can_read_document($1,$3) AS "linked_allowed!"
         "#,
         document_id,
         &source_ids.0,
+        user_id_str,
     )
     .fetch_one(pool)
     .await?;
 
-    if is_direct_owner {
+    if !ownership.linked_allowed {
+        return Ok(None);
+    }
+    if ownership.is_direct_owner {
         return Ok(Some(AccessLevel::Owner));
     }
 

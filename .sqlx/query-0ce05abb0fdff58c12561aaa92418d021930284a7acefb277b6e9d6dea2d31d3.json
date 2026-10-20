@@ -1,0 +1,49 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id,allocated_source_id,created_at+interval '10 minutes' AS expires_at,authorization_generation,owner_epoch FROM meta_messaging_send WHERE channel_id=$1 AND linked_account_id=$2 AND user_id=$3 AND idempotency_key=$4",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "allocated_source_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "expires_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "authorization_generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "owner_epoch",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      null,
+      true,
+      true
+    ]
+  },
+  "hash": "0ce05abb0fdff58c12561aaa92418d021930284a7acefb277b6e9d6dea2d31d3"
+}

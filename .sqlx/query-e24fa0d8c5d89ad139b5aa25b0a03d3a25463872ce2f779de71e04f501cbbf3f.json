@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_send SET state='failed',error_code='send_expired',lease_id=NULL,lease_until=NULL WHERE id=$1 AND lease_id=$2 AND dispatch_started_at IS NULL AND created_at<=clock_timestamp()-interval '10 minutes'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e24fa0d8c5d89ad139b5aa25b0a03d3a25463872ce2f779de71e04f501cbbf3f"
+}

@@ -5,3 +5,5 @@ pub mod repository;
 pub mod storage;
 
 pub mod temporary_media;
+
+pub mod linked;

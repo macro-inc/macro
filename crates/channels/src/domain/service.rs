@@ -388,7 +388,7 @@ where
             .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
         if info.messaging_binding.is_group() {
             return Err(ChannelMutationErr::Forbidden(
-                "Provider-managed owns this group name and private visibility".into(),
+                "Manage this group’s name and visibility in WhatsApp".into(),
             ));
         }
         if matches!(info.channel_type, ChannelType::DirectMessage) && req.channel_name.is_some() {
@@ -492,7 +492,7 @@ where
             .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
         if info.messaging_binding.is_group() {
             return Err(ChannelMutationErr::Forbidden(
-                "Provider-managed groups require explicit provider deletion".into(),
+                "Use the WhatsApp group controls to disconnect this channel".into(),
             ));
         }
         self.repo

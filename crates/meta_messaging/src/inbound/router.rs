@@ -1,6 +1,7 @@
 //! Thin HTTP adapters: typed access receipts flow to the domain service.
 
 mod groups;
+mod linked;
 
 use crate::domain::{
     connection::*,
@@ -47,6 +48,8 @@ pub struct WebhookConfiguration {
 pub struct MessagingRouterState<Eas, Auth> {
     /// Messaging use-case service.
     pub service: Arc<MetaService>,
+    /// Personal-account path, independently configured and feature-gated.
+    pub linked: Option<Arc<crate::domain::linked::service::LinkedService>>,
     /// Existing entity access authority.
     pub entity_access_service: Arc<Eas>,
     /// Existing authentication authority.
@@ -58,6 +61,7 @@ impl<Eas, Auth> Clone for MessagingRouterState<Eas, Auth> {
     fn clone(&self) -> Self {
         Self {
             service: self.service.clone(),
+            linked: self.linked.clone(),
             entity_access_service: self.entity_access_service.clone(),
             authorization_state: self.authorization_state.clone(),
             webhooks: self.webhooks.clone(),
@@ -84,6 +88,7 @@ where
 {
     Router::new()
         .merge(groups::router::<Eas, Auth>())
+        .merge(linked::router::<Eas, Auth>())
         .route("/configuration", get(configuration::<Eas, Auth>))
         .route("/connections", get(connections::<Eas, Auth>))
         .route("/authorize", post(begin::<Eas, Auth>))
@@ -472,6 +477,23 @@ async fn receive<E: Send + Sync + 'static, A: Send + Sync + 'static>(
 /// API contracts merged into DSS's generated OpenAPI document.
 #[derive(utoipa::OpenApi)]
 #[openapi(paths(
+    linked::configuration,
+    linked::account,
+    linked::connect,
+    linked::pair,
+    linked::cancel,
+    linked::passkey,
+    linked::confirm,
+    linked::disconnect,
+    linked::groups,
+    linked::adopt,
+    linked::channel,
+    linked::reply,
+    linked::delivery,
+    linked::detach,
+    linked::upload,
+    linked::grant,
+    linked::transfer,
     groups::delete,
     groups::discard,
     groups::create,

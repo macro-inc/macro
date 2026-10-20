@@ -1,3 +1,4 @@
+import { useSettingsState } from '@core/constant/SettingsState';
 import { getNativeMobilePlatform } from '@core/util/platform';
 import { setPostLoginRedirect } from '@core/util/postLoginRedirect';
 import { useNavigate } from '@solidjs/router';
@@ -14,6 +15,7 @@ type NavigateEvent = {
 /// this must be used as a child of router
 export function useTauriNavigationEffect() {
   const navigate = useNavigate();
+  const { openSettings } = useSettingsState();
 
   createEffect(() => {
     // Send side of the same `navigate` bridge as the listener below: route
@@ -24,6 +26,16 @@ export function useTauriNavigationEffect() {
 
     async function inner() {
       unsubscribe = await listen<NavigateEvent>('navigate', (ev) => {
+        const pairing = new URLSearchParams(ev.payload.query).get(
+          'whatsappPairing'
+        );
+        if (pairing && /^[0-9a-f-]{36}$/i.test(pairing)) {
+          navigate(`/?whatsappPairing=${encodeURIComponent(pairing)}`, {
+            replace: true,
+          });
+          openSettings('Connected');
+          return;
+        }
         const path = ev.payload.query
           ? `${ev.payload.path}?${ev.payload.query}`
           : ev.payload.path;

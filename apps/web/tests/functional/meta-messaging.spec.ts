@@ -91,7 +91,7 @@ test('ordinary channels and metadata recovery', async ({
       .getByRole('button', { name: 'Create channel', exact: true })
       .click();
     await expect(
-      page.getByText('Create a WhatsApp group', { exact: true })
+      page.getByText('Create a WhatsApp Business group', { exact: true })
     ).toBeVisible();
     await page.getByRole('button', { name: 'Close', exact: true }).click();
     assert.deepEqual(
@@ -378,7 +378,9 @@ test('account registration and mobile composition', async ({
       await page
         .getByRole('button', { name: 'Create channel', exact: true })
         .click();
-      await page.getByText('Create a WhatsApp group', { exact: true }).click();
+      await page
+        .getByText('Create a WhatsApp Business group', { exact: true })
+        .click();
       await expect(
         page.getByText(
           'Connect an eligible WhatsApp Platform account in Settings to create a group.'
@@ -522,7 +524,9 @@ test('WhatsApp group creation and desktop/mobile management', async ({
     await page
       .getByLabel('Name', { exact: true })
       .fill('Browser WhatsApp project');
-    await page.getByText('Create a WhatsApp group', { exact: true }).click();
+    await page
+      .getByText('Create a WhatsApp Business group', { exact: true })
+      .click();
     await expect(
       page.getByText('Connected account: Controlled Platform account')
     ).toBeVisible();
@@ -532,11 +536,15 @@ test('WhatsApp group creation and desktop/mobile management', async ({
     ).toBeVisible();
     // Group-only settings must not overwrite the ordinary creation choices.
     await page.getByRole('button', { name: 'Back', exact: true }).click();
-    await page.getByText('Create a WhatsApp group', { exact: true }).click();
+    await page
+      .getByText('Create a WhatsApp Business group', { exact: true })
+      .click();
     await page.getByRole('button', { name: 'Next', exact: true }).click();
     await expect(page.getByRole('radio', { name: /Team/ })).toBeChecked();
     await page.getByRole('button', { name: 'Back', exact: true }).click();
-    await page.getByText('Create a WhatsApp group', { exact: true }).click();
+    await page
+      .getByText('Create a WhatsApp Business group', { exact: true })
+      .click();
     await page.getByRole('button', { name: 'Next', exact: true }).click();
     await page.getByRole('button', { name: 'Create', exact: true }).click();
     await expect(page.getByRole('alert')).toContainText('group setup');

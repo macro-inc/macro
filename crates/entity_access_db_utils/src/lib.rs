@@ -19,7 +19,7 @@ pub use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::channel_share_permission::{
     UpdateChannelSharePermission, UpdateOperation,
 };
-pub use source_grants::delete_source_grants;
+pub use source_grants::{delete_channel_document_grant, delete_source_grants};
 use sqlx::{Executor, Postgres, QueryBuilder, Transaction};
 
 /// Inserts a row into the entity access table
