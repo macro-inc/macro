@@ -682,7 +682,12 @@ the shimmer.
   On the desktop app, **Runtimes** opens with a **This computer** card that sets
   up the bundled macrod daemon in one click: **Set up** detects installed agents,
   then **Start running agents here** configures, pairs (auto-approved, no code),
-  and starts it. The manual flow below remains for pairing other machines.
+  and starts it. Before this computer is paired, a dismissible **Run agents on
+  this computer** invitation appears above the Home input and the Agents
+  new-conversation and active-session inputs. Clicking it opens Runtimes;
+  dismissing it affects only this desktop installation and signed-in user.
+  Runtimes is available on desktop even when the newer Agents view is still
+  rolling out. The manual flow below remains for pairing other machines.
   **New runtime** shows three steps: install macrod with the shown `curl … |
   sh` (macOS, Linux) or `irm … | iex` (Windows) command, run `macrod` and
   configure your agent in Quickstart, then enter your pairing
