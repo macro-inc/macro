@@ -15,7 +15,9 @@ const mocks = vi.hoisted(() => ({
   desktop: true,
   supported: true,
   paired: false,
+  statusPhase: 'stopped',
   inspect: undefined as Promise<{ paired: boolean }> | undefined,
+  listen: undefined as Promise<() => void> | undefined,
   openSettings: vi.fn(),
   onStatus: undefined as ((status: { phase: string }) => void) | undefined,
   unlisten: vi.fn(),
@@ -33,9 +35,10 @@ vi.mock('@macro/tauri/macrod', () => ({
   macrodSupport: async () => ({ supported: mocks.supported }),
   macrodInspect: () =>
     mocks.inspect ?? Promise.resolve({ paired: mocks.paired }),
-  onMacrodStatus: async (callback: (status: { phase: string }) => void) => {
+  macrodStatus: async () => ({ phase: mocks.statusPhase }),
+  onMacrodStatus: (callback: (status: { phase: string }) => void) => {
     mocks.onStatus = callback;
-    return mocks.unlisten;
+    return mocks.listen ?? Promise.resolve(mocks.unlisten);
   },
 }));
 
@@ -43,7 +46,9 @@ beforeEach(() => {
   mocks.desktop = true;
   mocks.supported = true;
   mocks.paired = false;
+  mocks.statusPhase = 'stopped';
   mocks.inspect = undefined;
+  mocks.listen = undefined;
   mocks.openSettings.mockClear();
   mocks.unlisten.mockClear();
   mocks.onStatus = undefined;
@@ -110,6 +115,28 @@ describe('local runtime invitation', () => {
     mocks.supported = false;
     render(() => <LocalRuntimePrompt />);
     expect(screen.queryByText('Run agents on this computer')).toBeNull();
+  });
+
+  it('shows the invitation even while the status listener is pending', async () => {
+    mocks.listen = new Promise(() => {});
+    render(() => <LocalRuntimePrompt />);
+    expect(await screen.findByText('Run agents on this computer')).toBeTruthy();
+  });
+
+  it('hides a stale invitation when pairing finishes before the listener registers', async () => {
+    let finishListening: (stop: () => void) => void = () => {};
+    mocks.listen = new Promise((resolve) => {
+      finishListening = resolve;
+    });
+    render(() => <LocalRuntimePrompt />);
+    await screen.findByText('Run agents on this computer');
+
+    mocks.paired = true;
+    mocks.statusPhase = 'running';
+    finishListening(mocks.unlisten);
+    await waitFor(() =>
+      expect(screen.queryByText('Run agents on this computer')).toBeNull()
+    );
   });
 
   it('hides the invitation once this machine finishes pairing', async () => {

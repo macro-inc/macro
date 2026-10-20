@@ -4,6 +4,7 @@ import { isDesktopPlatform } from '@core/util/platform';
 import { createUserScopedStorage } from '@core/util/userScopedStorage';
 import {
   macrodInspect,
+  macrodStatus,
   macrodSupport,
   onMacrodStatus,
 } from '@macro/tauri/macrod';
@@ -44,29 +45,50 @@ export function LocalRuntimePrompt() {
     let disposed = false;
     let runningObserved = false;
     let unlisten: UnlistenFn | undefined;
+    let refreshVersion = 0;
     window.addEventListener(dismissalEvent, refreshDismissal);
     window.addEventListener('storage', onStorage);
+
+    const refresh = async () => {
+      const version = ++refreshVersion;
+      try {
+        const [config, status] = await Promise.all([
+          macrodInspect(),
+          macrodStatus(),
+        ]);
+        if (!disposed && !runningObserved && version === refreshVersion) {
+          setAvailable(!config.paired && status.phase !== 'running');
+        }
+      } catch (error) {
+        console.error('could not inspect the local agent runtime', error);
+      }
+    };
 
     const inspect = async () => {
       try {
         const support = await macrodSupport();
         if (!support.supported || disposed) return;
-        unlisten = await onMacrodStatus((status) => {
-          if (status.phase === 'running') {
-            runningObserved = true;
-            setAvailable(false);
+        void refresh();
+        void (async () => {
+          try {
+            const stop = await onMacrodStatus((status) => {
+              if (status.phase === 'running') {
+                runningObserved = true;
+                setAvailable(false);
+              }
+            });
+            if (disposed) {
+              stop();
+              return;
+            }
+            unlisten = stop;
+            await refresh();
+          } catch (error) {
+            console.error('could not watch the local agent runtime', error);
           }
-        });
-        if (disposed) {
-          unlisten();
-          return;
-        }
-        const config = await macrodInspect();
-        if (!disposed && !runningObserved && !config.paired) {
-          setAvailable(true);
-        }
+        })();
       } catch (error) {
-        console.error('could not inspect the local agent runtime', error);
+        console.error('could not check local agent support', error);
       }
     };
     void inspect();
