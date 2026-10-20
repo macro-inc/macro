@@ -1,6 +1,7 @@
 import { HoverCard } from '@core/component/HoverCard';
+import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { openExternalUrl } from '@core/util/url';
-import { useNativeSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import {
   $isBookingLinkMentionNode,
   type BookingLinkMentionDecoratorProps,
@@ -11,6 +12,7 @@ import {
 } from '@macro-inc/lexical-core';
 import OpenIcon from '@phosphor/arrows-out.svg';
 import CalendarBlank from '@phosphor/calendar-blank.svg';
+import CopyIcon from '@phosphor/copy.svg';
 import { cn, Surface } from '@ui';
 import {
   $getNodeByKey,
@@ -34,6 +36,45 @@ function fallbackLabel(props: BookingLinkMentionDecoratorProps): string {
   return 'Booking link';
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
+}
+
+async function copyBookingUrl(url: string) {
+  try {
+    await navigator.clipboard.writeText(url);
+    toast.success('Link copied to clipboard');
+  } catch (error) {
+    console.error('failed to copy booking link', error);
+    toast.failure('Failed to copy link');
+  }
+}
+
+/** Selecting the chip and copying should yield the booking URL, not its label. */
+function copySelectedBookingUrl(event: ClipboardEvent, url: string) {
+  const selection = document.getSelection();
+  const link = event.currentTarget;
+  if (!(link instanceof HTMLElement) || !event.clipboardData) return;
+  if (
+    !selection ||
+    selection.isCollapsed ||
+    !link.contains(selection.anchorNode) ||
+    !link.contains(selection.focusNode)
+  ) {
+    return;
+  }
+  event.preventDefault();
+  event.clipboardData.setData('text/plain', url);
+  event.clipboardData.setData(
+    'text/html',
+    `<a href="${escapeHtml(url)}">${escapeHtml(url)}</a>`
+  );
+}
+
 function BookingLinkPreviewCard(props: {
   label: string;
   url: string;
@@ -51,15 +92,33 @@ function BookingLinkPreviewCard(props: {
               </span>
               <span class="text-sm font-semibold truncate">{props.label}</span>
             </div>
-            <a
-              href={props.url}
-              target="_blank"
-              rel="noreferrer"
-              class="shrink-0 text-link hover:text-link-hover visited:text-link-visited"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <OpenIcon class="size-4" />
-            </a>
+            <div class="flex items-center gap-1 shrink-0">
+              <button
+                type="button"
+                aria-label="Copy link"
+                class="text-link hover:text-link-hover"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  fireAndForget(
+                    copyBookingUrl(props.url),
+                    'booking-link-mention'
+                  );
+                }}
+              >
+                <CopyIcon class="size-4" />
+              </button>
+              <a
+                href={props.url}
+                target="_blank"
+                rel="noreferrer"
+                aria-label="Open booking page"
+                class="text-link hover:text-link-hover visited:text-link-visited"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <OpenIcon class="size-4" />
+              </a>
+            </div>
           </div>
           <Show when={props.slug}>
             <div class="px-2 pb-2 text-xs text-ink-muted truncate">
@@ -132,7 +191,8 @@ export function BookingLinkMention(props: BookingLinkMentionDecoratorProps) {
 
   // Booking pages are full-page public routes outside the split layout, so
   // open the shareable URL the same way an unsynced PR falls back to GitHub.
-  const open = (_e: MouseEvent | KeyboardEvent | null) => {
+  const open = (e: MouseEvent | KeyboardEvent | null) => {
+    e?.preventDefault();
     openExternalUrl(props.url);
   };
 
@@ -152,24 +212,32 @@ export function BookingLinkMention(props: BookingLinkMentionDecoratorProps) {
     );
   }
 
-  const navHandlers = useNativeSplitNavigationHandler<HTMLSpanElement>((e) => {
-    e.stopPropagation();
-    open(e);
-  });
-
   return (
     <HoverCard
       trigger={
         <span class="relative">
-          <span
+          <a
+            href={props.url}
+            target="_blank"
+            rel="noreferrer"
             class={cn(
               'size-full py-0.5 cursor-default rounded-xs hover:bg-hover focus:bg-active',
               isSelectedAsNode() && 'bg-active text-ink'
             )}
-            {...navHandlers}
+            on:mousedown={(event) => {
+              // Keep the editor from taking focus. Leave the secondary button
+              // alone so the browser menu can copy this link's href.
+              if (event.button !== 0) return;
+              event.preventDefault();
+            }}
+            on:click={(event) => {
+              event.stopPropagation();
+              open(event);
+            }}
+            on:copy={(event) => copySelectedBookingUrl(event, props.url)}
           >
             <BookingLinkMentionContent {...props} />
-          </span>
+          </a>
           <MentionTooltip show={isSelectedAsNode()} text="Open" />
         </span>
       }

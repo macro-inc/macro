@@ -199,8 +199,10 @@ export function buildMentionMarkdownString(info: MentionInfo): string {
 }
 
 export {
+  bookingLinkMentionsToUrls,
   markdownToEmbeddingText,
   markdownToPlainText,
+  parseBookingLinkMentions,
   parseContactMentions,
   parseDateMentions,
   parseDocumentMentions,

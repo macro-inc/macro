@@ -1816,6 +1816,10 @@ tools; you should never be asked to enter a team ID, host ID or JSON.
 A successful result returns the saved URL, which the AI shares as a booking-link
 mention chip (`<m-booking-link-mention>`) rather than a bare URL. Pasting that
 same `/app/book/…` URL into chat, channels, or a document also becomes a chip.
+Hover the chip and choose `Copy link`, use the browser's copy-link command on
+the chip, or use the message action `Copy Text` to copy the booking URL without
+opening the page. The message action `Copy Link` still copies the channel
+message.
 Link creation itself sends no calendar invitations; guests receive an invitation
 when they book. Editing hours affects only that link. If another edit makes the
 revision stale, the AI reads the latest settings and confirms a fresh proposal.

@@ -317,7 +317,12 @@ Placeholder `Type @ to share with #<name>`. Click it, `type_text`, press Enter t
 The message renders immediately with avatar, email, timestamp. Composer extras: `Attach
 files` and the `Send message` button. Replies also include a close-reply control.
 
-Hover a message for its action menu. `Reply` on a top-level message opens that thread. On
+Hover a message for its action menu. `Copy Link` copies the channel message.
+`Copy Text` (mobile: `Copy message text`) copies the message, with each
+booking-link chip replaced by its public booking URL. The chip is an anchor to
+that URL, so the browser's copy-link command on the chip copies the booking
+page. Hover the chip and use `Copy link` for the same URL, without opening the
+page. `Reply` on a top-level message opens that thread. On
 an existing thread reply, it inserts a one-line reply-target reference into the composer;
 clicking the reference navigates back to that reply. References to the current
 channel navigate in place, including inside the preview panel, without opening

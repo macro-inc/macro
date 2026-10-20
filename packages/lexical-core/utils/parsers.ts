@@ -164,6 +164,52 @@ export function parseLinks(text: string): string {
   });
 }
 
+function replaceBookingLinkMentions(
+  text: string,
+  replacer: (match: string, json: string) => string
+): string {
+  return text.replace(
+    /<m-booking-link-mention>(.*?)<\/m-booking-link-mention>/gs,
+    replacer
+  );
+}
+
+export function parseBookingLinkMentions(text: string): string {
+  return replaceBookingLinkMentions(text, (_, json) => {
+    try {
+      const data = JSON.parse(json);
+      return data.label || data.slug || data.url || '';
+    } catch {
+      return '';
+    }
+  });
+}
+
+/**
+ * The shareable booking URL for each booking-link chip. Other mention tags
+ * stay in place so a copied message can still be pasted back into Macro.
+ * A message that is only booking links copies the URLs, without the tag
+ * whitespace around them.
+ */
+export function bookingLinkMentionsToUrls(text: string): string {
+  let replacedTag = false;
+  const replaced = replaceBookingLinkMentions(text, (match, json) => {
+    try {
+      const data = JSON.parse(json);
+      if (typeof data.url === 'string' && data.url) {
+        replacedTag = true;
+        return data.url;
+      }
+    } catch {
+      return match;
+    }
+    return match;
+  });
+  if (!replacedTag) return text;
+  const remainder = replaced.replace(/https?:\/\/\S+/g, '');
+  return remainder.trim() === '' ? replaced.trim() : replaced;
+}
+
 export function parseGroupMentions(text: string): string {
   return text.replace(
     /<m-group-mention>(.*?)<\/m-group-mention>/g,
@@ -255,6 +301,7 @@ export function stripAgentContext(text: string): string {
  * - Snapshots: documentName (base64-encoded payload)
  * - Group mentions: @groupAlias (e.g., @here)
  * - Links: text (fallback to url)
+ * - Booking links: label (fallback to slug, then url)
  * - Reply targets: displayText
  * - Cursor system notifications: the summary between the tags
  * - Agent activity: nothing; the steps of a reply are not its text
@@ -276,6 +323,7 @@ export function markdownToPlainText(markdown: string): string {
     parseSnapshots,
     parseDocumentCards,
     parseLinks,
+    parseBookingLinkMentions,
     parseReplyTargets,
     stripAgentContext,
   ];
@@ -295,6 +343,7 @@ type MentionTagPayload = {
   blockName?: string;
   blockParams?: { channel_message_id?: string };
   label?: string;
+  slug?: string;
   url?: string;
   text?: string;
   alt?: string;
@@ -436,6 +485,10 @@ export function markdownToEmbeddingText(markdown: string): string {
   text = replaceJsonTag(text, 'm-link', (data) =>
     data.url ? `[${data.text || data.url}](${data.url})` : data.text || ''
   );
+  text = replaceJsonTag(text, 'm-booking-link-mention', (data) => {
+    const label = data.label || data.slug || 'Booking link';
+    return data.url ? `[${label}](${data.url})` : label;
+  });
   text = replaceJsonTag(text, 'm-image', (data) => {
     // dss images get a stable id; urls elsewhere may be transient.
     const target =

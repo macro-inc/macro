@@ -127,6 +127,29 @@ describe('createChannelMessageActions', () => {
     });
   });
 
+  it('copies a booking link url from the message instead of its tag', async () => {
+    const copyToClipboard = vi.fn(async () => undefined);
+    const notifyCopyMessageTextSuccess = vi.fn();
+    const harness = buildHarness({
+      userId: 'user-1',
+      effects: { copyToClipboard, notifyCopyMessageTextSuccess },
+    });
+    const url = 'https://macro.com/app/book/profile/jacob-s-booking-link';
+    const message = buildMessage({
+      content: `<m-booking-link-mention>${JSON.stringify({
+        profileId: 'profile',
+        slug: 'jacob-s-booking-link',
+        label: 'jacob-s-booking-link',
+        url,
+      })}</m-booking-link-mention>`,
+    });
+
+    await harness.getMessageActions(message).onCopyMessageText?.({ message });
+
+    expect(copyToClipboard).toHaveBeenCalledWith(url);
+    expect(notifyCopyMessageTextSuccess).toHaveBeenCalledOnce();
+  });
+
   it('exposes reply action for thread replies', async () => {
     const onReply = vi.fn();
     const harness = buildHarness({ userId: 'user-1', onReply });

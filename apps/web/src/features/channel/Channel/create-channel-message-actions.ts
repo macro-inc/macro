@@ -1,6 +1,7 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { toast } from '@core/component/Toast/Toast';
 import { getWebOrigin } from '@core/util/webOrigin';
+import { bookingLinkMentionsToUrls } from '@macro-inc/lexical-core';
 import type { MessageParent } from '@service-storage/messages';
 import type { Accessor } from 'solid-js';
 import type {
@@ -185,7 +186,9 @@ export function createChannelMessageActions(
         !isDeleted && message.content
           ? async () => {
               try {
-                await effects.copyToClipboard(message.content);
+                await effects.copyToClipboard(
+                  bookingLinkMentionsToUrls(message.content)
+                );
                 effects.notifyCopyMessageTextSuccess();
               } catch (error) {
                 effects.notifyCopyMessageTextFailure(error);

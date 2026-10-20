@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  bookingLinkMentionsToUrls,
   markdownToEmbeddingText,
   markdownToPlainText,
+  parseBookingLinkMentions,
   parseContactMentions,
   parseDateMentions,
   parseDocumentMentions,
@@ -201,6 +203,75 @@ describe('parseTagMentions', () => {
   });
 });
 
+const bookingMention = (url: string, label = 'jacob-s-booking-link') =>
+  `<m-booking-link-mention>${JSON.stringify({
+    profileId: 'profile',
+    slug: 'jacob-s-booking-link',
+    label,
+    url,
+  })}</m-booking-link-mention>`;
+
+describe('parseBookingLinkMentions', () => {
+  it('uses the label, then the slug, then the url', () => {
+    const url = 'https://macro.com/app/book/profile/jacob-s-booking-link';
+    expect(parseBookingLinkMentions(`Book ${bookingMention(url)}`)).toBe(
+      'Book jacob-s-booking-link'
+    );
+    expect(
+      parseBookingLinkMentions(
+        `<m-booking-link-mention>${JSON.stringify({
+          slug: 'intro',
+          url,
+        })}</m-booking-link-mention>`
+      )
+    ).toBe('intro');
+    expect(
+      parseBookingLinkMentions(
+        `<m-booking-link-mention>${JSON.stringify({ url })}</m-booking-link-mention>`
+      )
+    ).toBe(url);
+  });
+
+  it('drops a tag whose payload is not json', () => {
+    expect(
+      parseBookingLinkMentions(
+        '<m-booking-link-mention>nope</m-booking-link-mention>'
+      )
+    ).toBe('');
+  });
+});
+
+describe('bookingLinkMentionsToUrls', () => {
+  const url = 'https://macro.com/app/book/profile/jacob-s-booking-link';
+
+  it('replaces a booking chip with its url and keeps surrounding text', () => {
+    expect(bookingLinkMentionsToUrls(`Book here ${bookingMention(url)}.`)).toBe(
+      `Book here ${url}.`
+    );
+  });
+
+  it('copies only the urls when the message is booking chips', () => {
+    const other = 'https://macro.com/app/book/profile/other';
+    expect(
+      bookingLinkMentionsToUrls(
+        `\n${bookingMention(url)}\n${bookingMention(other, 'other')}\n`
+      )
+    ).toBe(`${url}\n${other}`);
+  });
+
+  it('leaves a chip without a url, and other mention tags, unchanged', () => {
+    const input =
+      '<m-booking-link-mention>{"label":"intro"}</m-booking-link-mention> ' +
+      '<m-user-mention>{"email":"julia@macro.com"}</m-user-mention>';
+    expect(bookingLinkMentionsToUrls(input)).toBe(input);
+  });
+
+  it('leaves a plain url message untouched', () => {
+    const input = '  https://example.com  ';
+    expect(bookingLinkMentionsToUrls(input)).toBe(input);
+  });
+});
+
 describe('markdownToPlainText', () => {
   it('converts mixed content to plain text', () => {
     const input =
@@ -209,6 +280,13 @@ describe('markdownToPlainText', () => {
       'by <m-date-mention>{"displayFormat":"Friday"}</m-date-mention>.';
     expect(markdownToPlainText(input)).toBe(
       'Hello john, please review Report by Friday.'
+    );
+  });
+
+  it('handles text with booking links', () => {
+    const url = 'https://macro.com/app/book/profile/jacob-s-booking-link';
+    expect(markdownToPlainText(`See ${bookingMention(url)}.`)).toBe(
+      'See jacob-s-booking-link.'
     );
   });
 
@@ -287,6 +365,13 @@ describe('markdownToEmbeddingText', () => {
     const input =
       'Ship <m-tag>{"optionId":"tag-1","propertyDefinitionId":"prop-1","scope":"team","name":"Launch"}</m-tag>.';
     expect(markdownToEmbeddingText(input)).toBe('Ship #Launch.');
+  });
+
+  it('keeps booking link urls', () => {
+    const url = 'https://macro.com/app/book/profile/jacob-s-booking-link';
+    expect(markdownToEmbeddingText(`See ${bookingMention(url)}.`)).toBe(
+      `See [jacob-s-booking-link](${url}).`
+    );
   });
 
   it('keeps link urls', () => {
