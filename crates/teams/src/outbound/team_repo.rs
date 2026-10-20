@@ -17,6 +17,7 @@ use macro_user_id::{
     user_id::MacroUserIdStr,
 };
 use model_owner::Owner;
+use model_user::Language;
 use models_permissions::share_permission::LinkShare;
 use sqlx::{PgPool, Row};
 use std::str::FromStr;
@@ -86,7 +87,8 @@ impl TeamRepositoryImpl {
             INSERT INTO team (id, name, slug, owner_id, seat_count, subscription_id, paying)
             VALUES ($1, $2, $3, $4, 1, $5, $6)
             RETURNING id, name, slug, owner_id, enterprise, allow_non_admin_invites,
-                default_link_share as "default_link_share: LinkShare"
+                default_link_share as "default_link_share: LinkShare",
+                language as "language: Language"
             "#,
             id,
             team_name,
@@ -110,6 +112,7 @@ impl TeamRepositoryImpl {
                 enterprise: row.enterprise,
                 allow_non_admin_invites: row.allow_non_admin_invites,
                 default_link_share: row.default_link_share,
+                language: row.language,
             })
         })
         .fetch_one(&mut *transaction)
@@ -1073,6 +1076,7 @@ impl TeamRepository for TeamRepositoryImpl {
             SELECT t.id, t.name, t.slug, t.owner_id, t.auto_join_domain, t.enterprise,
                 t.allow_non_admin_invites,
                 t.default_link_share as "default_link_share: LinkShare",
+                t.language as "language: Language",
                 COALESCE(tcs.crm_enabled, FALSE) AS "crm_enabled!"
             FROM team t
             LEFT JOIN team_crm_settings tcs ON tcs.team_id = t.id
@@ -1093,6 +1097,7 @@ impl TeamRepository for TeamRepositoryImpl {
                 enterprise: row.enterprise,
                 allow_non_admin_invites: row.allow_non_admin_invites,
                 default_link_share: row.default_link_share,
+                language: row.language,
             })
         })
         .fetch_one(&self.pool)
@@ -1139,6 +1144,7 @@ impl TeamRepository for TeamRepositoryImpl {
             SELECT t.id, t.name, t.slug, t.owner_id, t.auto_join_domain, t.enterprise,
                 t.allow_non_admin_invites,
                 t.default_link_share as "default_link_share: LinkShare",
+                t.language as "language: Language",
                 COALESCE(tcs.crm_enabled, FALSE) AS "crm_enabled!"
             FROM team t
             JOIN team_user tu ON t.id = tu.team_id
@@ -1160,6 +1166,7 @@ impl TeamRepository for TeamRepositoryImpl {
                 enterprise: row.enterprise,
                 allow_non_admin_invites: row.allow_non_admin_invites,
                 default_link_share: row.default_link_share,
+                language: row.language,
             })
         })
         .fetch_all(&self.pool)
@@ -1270,15 +1277,23 @@ impl TeamRepository for TeamRepositoryImpl {
         // "keep".
         let default_link_share_provided = req.default_link_share.is_some();
         let default_link_share = req.default_link_share.flatten();
+        // Same for language: NULL means English.
+        let language_provided = req.language.is_some();
+        let language = req.language.flatten();
 
-        if req.name.is_some() || normalized_slug.is_some() || default_link_share_provided {
+        if req.name.is_some()
+            || normalized_slug.is_some()
+            || default_link_share_provided
+            || language_provided
+        {
             let result = sqlx::query!(
                 r#"
                 UPDATE team
                 SET
                     name = COALESCE($2, name),
                     slug = COALESCE($3, slug),
-                    default_link_share = CASE WHEN $4 THEN $5 ELSE default_link_share END
+                    default_link_share = CASE WHEN $4 THEN $5 ELSE default_link_share END,
+                    language = CASE WHEN $6 THEN $7 ELSE language END
                 WHERE id = $1
                 "#,
                 team_id,
@@ -1286,6 +1301,8 @@ impl TeamRepository for TeamRepositoryImpl {
                 normalized_slug.as_deref(),
                 default_link_share_provided,
                 default_link_share as Option<LinkShare>,
+                language_provided,
+                language as Option<Language>,
             )
             .execute(&self.pool)
             .await?;

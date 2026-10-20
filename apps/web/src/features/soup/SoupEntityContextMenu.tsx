@@ -97,7 +97,7 @@ export const SoupEntityContextMenu: FlowComponent<
           </ContextMenuTrigger>
           <ContextMenu.Portal>
             <Show when={props.entity}>
-              <ContextMenuContent class="w-64 text-xs text-ink-muted">
+              <ContextMenuContent class="min-w-64 max-w-[min(22rem,calc(100vw-1rem))] text-xs text-ink-muted">
                 <SoupEntityActionsMenu
                   entities={menuEntities()}
                   list={props.list}

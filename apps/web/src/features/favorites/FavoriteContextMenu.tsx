@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { favoriteSplitContent } from '@app/util/favorites';
 import { useSplitLayout } from '@components/app/split-layout/layout';
@@ -48,7 +49,7 @@ export function FavoriteContextMenu(props: FavoriteContextMenuProps) {
         <ContextMenuContent class="text-xs text-ink-muted">
           <MenuGroup>
             <MenuItem
-              text="Open in new split"
+              text={t('entityActions.openInNewSplit')}
               disabled={!canOpenInNewSplit()}
               onClick={() => {
                 if (canOpenInNewSplit()) openFavorite(true);
@@ -56,7 +57,7 @@ export function FavoriteContextMenu(props: FavoriteContextMenuProps) {
             />
             <Show when={canOpenFullscreen()}>
               <MenuItem
-                text="Open fullscreen"
+                text={t('entityActions.openFullscreen')}
                 onClick={() => {
                   layout.replaceAllSplits(content(), {
                     referredFrom: 'sidebar',
@@ -66,7 +67,7 @@ export function FavoriteContextMenu(props: FavoriteContextMenuProps) {
               />
             </Show>
             <MenuItem
-              text="Open in current split"
+              text={t('entityActions.openInCurrentSplit')}
               onClick={() => openFavorite(false)}
             />
           </MenuGroup>
@@ -74,7 +75,7 @@ export function FavoriteContextMenu(props: FavoriteContextMenuProps) {
           <MenuSeparator />
           <MenuGroup>
             <MenuItem
-              text="Remove from favorites"
+              text={t('entityActions.removeFromFavorites')}
               onClick={() =>
                 removeMutation.mutate({
                   entityType: props.favorite.entityType,

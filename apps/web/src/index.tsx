@@ -15,6 +15,7 @@ import { Telemetry } from '@macro-inc/observability';
 import { initMonochromeIcons } from '@ui/utils/monochromeIcons';
 import { ErrorBoundary, render } from 'solid-js/web';
 import { FatalError } from './components/app/FatalError';
+import { interfaceLanguageReady } from './lib/i18n';
 import { perfMark } from './observability/perf-marks';
 import { Root } from './routes/Root';
 
@@ -101,10 +102,21 @@ const renderApp = () => {
   render(() => <Root />, root);
 };
 
-async function main() {
-  perfMark('boot.main');
+async function observabilityReady() {
   await initializeBrowserObservability();
   perfMark('boot.observability-ready');
+}
+
+async function languageReady() {
+  await interfaceLanguageReady(1000);
+  perfMark('boot.language-ready');
+}
+
+async function main() {
+  perfMark('boot.main');
+  // A translated interface waits for its messages (already loading, cached
+  // after the first visit) so the first screen isn't English for a moment.
+  await Promise.all([observabilityReady(), languageReady()]);
 
   console.log('App Version ', import.meta.env.__APP_VERSION__);
 

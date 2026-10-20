@@ -23,6 +23,15 @@ describe('individual settings search', () => {
       target: 'signatures',
     });
   });
+  it('finds the interface language in English and in each language', () => {
+    for (const query of ['lang', 'language', 'Sprache', 'idioma', '言語']) {
+      expect(search(query)[0]).toMatchObject({
+        tab: 'Appearance',
+        title: 'Interface language',
+        target: 'language',
+      });
+    }
+  });
   it('tolerates transposed and wrong letters', () => {
     expect(search('singature')[0].title).toBe('Email signatures');
     expect(search('signoture')[0].title).toBe('Email signatures');
@@ -63,5 +72,22 @@ describe('individual settings search', () => {
   it('has no results for empty or unrelated queries', () => {
     expect(search('  ')).toEqual([]);
     expect(search('xyz123')).toEqual([]);
+  });
+  it('finds a page by its translated label and by its English label', () => {
+    const billing = SETTINGS_TAB_GROUPS.flatMap((group) => group.items).find(
+      (item) => item.tab === 'Billing'
+    );
+    if (!billing) throw new Error('Billing tab missing');
+    const groups = [
+      {
+        label: '個人',
+        items: [{ ...billing, label: '請求', englishLabel: 'Billing' }],
+      },
+    ];
+    expect(searchSettings(groups, '請求')[0]).toMatchObject({
+      tab: 'Billing',
+      title: '請求',
+    });
+    expect(searchSettings(groups, 'billing')[0]?.tab).toBe('Billing');
   });
 });

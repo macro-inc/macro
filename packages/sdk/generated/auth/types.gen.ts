@@ -1099,6 +1099,11 @@ export type InviteToTeamRequest = {
 };
 
 /**
+ * A language the app's interface is available in, as a BCP 47 tag.
+ */
+export type Language = 'en' | 'de' | 'fr' | 'es' | 'it' | 'nl' | 'pt-PT' | 'sv' | 'da' | 'nb' | 'fi' | 'pl' | 'ru' | 'ja' | 'ko' | 'zh-Hans' | 'zh-Hant' | 'hi' | 'id' | 'vi' | 'th';
+
+/**
  * Defines who can access an item through its share link.
  */
 export type LinkShare = 'PUBLIC' | 'TEAM';
@@ -1233,6 +1238,7 @@ export type PatchTeamMemberPlanRequest = {
  */
 export type PatchTeamRequest = {
     default_link_share?: null | LinkShare;
+    language?: null | Language;
     /**
      * The new name for the team
      */
@@ -1577,6 +1583,7 @@ export type Team = {
      */
     enterprise: boolean;
     id: string;
+    language?: null | Language;
     name: string;
     owner_id: string;
     slug: string;
@@ -1841,6 +1848,14 @@ export type UsageSnapshot = {
      * AI used by this user this period, in cents at provider cost.
      */
     used_cents: number;
+};
+
+/**
+ * The interface language a user picked for themselves. `None` follows their
+ * team's language.
+ */
+export type UserLanguage = {
+    language?: null | Language;
 };
 
 export type UserLinkResponse = {
@@ -3706,6 +3721,52 @@ export type PatchUserGroupResponses = {
 };
 
 export type PatchUserGroupResponse = PatchUserGroupResponses[keyof PatchUserGroupResponses];
+
+export type GetUserLanguageData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/user/language';
+};
+
+export type GetUserLanguageErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetUserLanguageError = GetUserLanguageErrors[keyof GetUserLanguageErrors];
+
+export type GetUserLanguageResponses = {
+    200: UserLanguage;
+};
+
+export type GetUserLanguageResponse = GetUserLanguageResponses[keyof GetUserLanguageResponses];
+
+export type PutUserLanguageData = {
+    body: UserLanguage;
+    path?: never;
+    query?: never;
+    url: '/user/language';
+};
+
+export type PutUserLanguageErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type PutUserLanguageError = PutUserLanguageErrors[keyof PutUserLanguageErrors];
+
+export type PutUserLanguageResponses = {
+    /**
+     * Language updated
+     */
+    204: void;
+};
+
+export type PutUserLanguageResponse = PutUserLanguageResponses[keyof PutUserLanguageResponses];
 
 export type GetLegacyUserPermissionsData = {
     body?: never;

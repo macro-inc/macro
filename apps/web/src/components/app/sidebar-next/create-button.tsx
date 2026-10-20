@@ -4,6 +4,7 @@ import {
 } from '@app/features/command/Launcher';
 import { APP_TOUR } from '@app/features/command/sidebar/tour';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { t } from '@app/lib/i18n';
 import { TOKENS } from '@core/hotkey/tokens';
 import PlusIcon from '@phosphor/plus.svg';
 import { Button } from '@ui';
@@ -19,7 +20,7 @@ export const SidebarRailCreateButton = () => {
       variant="ghost"
       class="size-10 [&_svg]:size-5"
       size="icon-md"
-      label="Create"
+      label={t('nav.create')}
       tooltipPlacement="right"
       hotkey={TOKENS.global.createCommand}
       aria-haspopup="dialog"

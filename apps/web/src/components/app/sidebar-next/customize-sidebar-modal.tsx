@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
@@ -122,7 +123,7 @@ function CustomizeNavRow(props: {
                 variant="ghost"
                 size="icon-sm"
                 class="size-6"
-                label={`Move ${props.item.label} up`}
+                label={t('nav.moveItemUp', { label: props.item.label })}
                 disabled={!canMoveUp()}
                 onClick={() => props.onMove(-1)}
               >
@@ -132,7 +133,7 @@ function CustomizeNavRow(props: {
                 variant="ghost"
                 size="icon-sm"
                 class="size-6"
-                label={`Move ${props.item.label} down`}
+                label={t('nav.moveItemDown', { label: props.item.label })}
                 disabled={!canMoveDown()}
                 onClick={() => props.onMove(1)}
               >
@@ -141,10 +142,10 @@ function CustomizeNavRow(props: {
             </div>
           }
         >
-          <Tooltip label="Drag to reorder">
+          <Tooltip label={t('nav.dragToReorder')}>
             <Button
               {...(sortable?.dragActivators ?? {})}
-              aria-label={`Reorder ${props.item.label}`}
+              aria-label={t('nav.reorderItem', { label: props.item.label })}
               variant="ghost"
               size="icon-sm"
               class="size-7 cursor-grab touch-none active:cursor-grabbing"
@@ -220,14 +221,13 @@ export function CustomizeSidebarModal(props: {
             <CloseIcon />
           </Dialog.CloseButton>
           <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
-            Customize sidebar
+            {t('nav.customizeSidebar')}
           </Dialog.Title>
         </Panel.Header>
 
         <Panel.Body scroll class="p-2">
           <Dialog.Description class="px-2 pb-2 text-sm text-ink-muted">
-            Choose which apps appear in the sidebar and drag to reorder them.
-            Home always stays first.
+            {t('nav.customizeSidebarDescription')}
           </Dialog.Description>
 
           <CustomizeNavList items={items()} onDragEnd={onDragEnd}>

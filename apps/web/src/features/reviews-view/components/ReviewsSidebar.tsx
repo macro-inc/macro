@@ -4,6 +4,7 @@ import {
   useViewTabHotkeys,
   ViewSidebar,
 } from '@app/components/view-shell';
+import { t } from '@app/lib/i18n';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { PrOriginIcon } from '@block-pr/component/PrLinks';
 import { PrStatusIcon } from '@block-pr/component/PrStatus';
@@ -86,10 +87,10 @@ function ReviewFavoriteRow(props: {
         </ViewSidebar.Item>
       </ContextMenu.Trigger>
       <ContextMenu.Portal>
-        <ContextMenuContent class="w-56 text-xs text-ink-muted">
+        <ContextMenuContent class="min-w-56 max-w-[22rem] text-xs text-ink-muted">
           <MenuItem
             icon={SplitIcon}
-            text="Open in new split"
+            text={t('entityActions.openInNewSplit')}
             disabled={!globalSplitManager()?.canAppendSplit()}
             onClick={() => {
               if (globalSplitManager()?.canAppendSplit())
@@ -98,7 +99,7 @@ function ReviewFavoriteRow(props: {
           />
           <MenuItem
             icon={StarIcon}
-            text="Remove from favorites"
+            text={t('entityActions.removeFromFavorites')}
             onClick={() =>
               removeFavorite.mutate({
                 entityType: 'foreign_entity',

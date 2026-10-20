@@ -1,5 +1,6 @@
 import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import { getIconConfig } from '@core/component/EntityIcon';
 import { enableCrm } from '@core/constant/featureFlags';
 import BellIcon from '@phosphor/bell.svg';
@@ -27,38 +28,72 @@ export type MobileDockView = {
 const MOBILE_DOCK_VIEWS: readonly MobileDockView[] = [
   {
     id: 'home',
-    label: 'Notifications',
+    get label() {
+      return t('nav.notifications');
+    },
     icon: BellIcon,
     iconActive: BellFillIcon,
   },
   {
     id: 'calendar',
-    label: 'Calendar',
+    get label() {
+      return t('nav.calendar');
+    },
     icon: getIconConfig('calendar').icon,
     iconActive: CalendarFillIcon,
   },
   {
     id: 'mail',
-    label: 'Email',
+    get label() {
+      return t('nav.email');
+    },
     icon: getIconConfig('email').icon,
     iconActive: EmailFillIcon,
   },
   {
     id: 'channels',
-    label: 'Channels',
+    get label() {
+      return t('nav.channels');
+    },
     icon: getIconConfig('channel').icon,
     iconActive: ChannelFillIcon,
   },
-  { id: 'agents', label: 'Agents', icon: getIconConfig('agent').icon },
+  {
+    id: 'agents',
+    get label() {
+      return t('nav.agents');
+    },
+    icon: getIconConfig('agent').icon,
+  },
   {
     id: 'documents',
-    label: 'Files',
+    get label() {
+      return t('nav.files');
+    },
     icon: getIconConfig('files').icon,
     iconActive: FilesFillIcon,
   },
-  { id: 'tasks', label: 'Tasks', icon: getIconConfig('task').icon },
-  { id: 'calls', label: 'Calls', icon: getIconConfig('call').icon },
-  { id: 'companies', label: 'CRM', icon: getIconConfig('company').icon },
+  {
+    id: 'tasks',
+    get label() {
+      return t('nav.tasks');
+    },
+    icon: getIconConfig('task').icon,
+  },
+  {
+    id: 'calls',
+    get label() {
+      return t('nav.calls');
+    },
+    icon: getIconConfig('call').icon,
+  },
+  {
+    id: 'companies',
+    get label() {
+      return t('mobile.crm');
+    },
+    icon: getIconConfig('company').icon,
+  },
 ];
 
 export function useMobileDockViews() {

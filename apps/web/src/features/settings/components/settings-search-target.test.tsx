@@ -10,7 +10,13 @@ const result: SettingsSearchResult = {
   title: 'Signatures',
   target: 'signatures',
   keywords: '',
-  page: { tab: 'Email', label: 'Email', keywords: [], icon: () => null },
+  page: {
+    tab: 'Email',
+    label: 'Email',
+    englishLabel: 'Email',
+    keywords: [],
+    icon: () => null,
+  },
 };
 afterEach(cleanup);
 describe('settings search navigation', () => {

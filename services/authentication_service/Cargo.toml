@@ -177,6 +177,7 @@ tower-http = { workspace = true }
 tracing = { workspace = true }
 url = { workspace = true }
 urlencoding = { workspace = true }
+user_language = { path = "../../crates/user_language", features = ["inbound", "postgres"] }
 user_quota = { path = "../../crates/user_quota" }
 utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true }

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT t.id, t.name, t.slug, t.owner_id, t.auto_join_domain, t.enterprise,\n                t.allow_non_admin_invites,\n                t.default_link_share as \"default_link_share: LinkShare\",\n                COALESCE(tcs.crm_enabled, FALSE) AS \"crm_enabled!\"\n            FROM team t\n            LEFT JOIN team_crm_settings tcs ON tcs.team_id = t.id\n            WHERE t.id = $1\n            ",
+  "query": "\n            SELECT t.id, t.name, t.slug, t.owner_id, t.auto_join_domain, t.enterprise,\n                t.allow_non_admin_invites,\n                t.default_link_share as \"default_link_share: LinkShare\",\n                t.language as \"language: Language\",\n                COALESCE(tcs.crm_enabled, FALSE) AS \"crm_enabled!\"\n            FROM team t\n            LEFT JOIN team_crm_settings tcs ON tcs.team_id = t.id\n            WHERE t.id = $1\n            ",
   "describe": {
     "columns": [
       {
@@ -45,6 +45,11 @@
       },
       {
         "ordinal": 8,
+        "name": "language: Language",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
         "name": "crm_enabled!",
         "type_info": "Bool"
       }
@@ -63,8 +68,9 @@
       false,
       false,
       true,
+      true,
       null
     ]
   },
-  "hash": "d3d2c5be6306450a0d59db117a3696cdff60e2bb8f5aa19d35c0c0b7007d0f15"
+  "hash": "ab5b1e5d861d8c5dbc0517924cd74546917240bd97500ccadc60e0ae73a04a94"
 }

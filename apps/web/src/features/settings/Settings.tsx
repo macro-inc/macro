@@ -1,5 +1,6 @@
 import { useViewShell, ViewShell } from '@app/components/view-shell';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import {
   useParams,
   useNavigate as useSplitNavigate,
@@ -125,7 +126,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
   // Register Escape key to close settings
   registerHotkey({
     keyDownHandler: handleEscapeKey,
-    description: 'Close settings',
+    description: () => t('settingsNav.closeSettings'),
     scopeId: settingsHotkeyScope,
     hotkey: 'escape',
   });
@@ -160,7 +161,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
       return navigateToTabIndex(keyNum - 1);
     }
     registerHotkey({
-      description: `Go to settings tab ${keyNum}`,
+      description: () => t('settingsNav.goToTab', { number: keyNum }),
       hotkey: `${keyNum}` as ValidHotkey,
       keyDownHandler: handleNumberKey,
       scopeId: settingsHotkeyScope,

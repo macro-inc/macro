@@ -1,4 +1,6 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
+import settingsNavMessages from '@app/lib/i18n/locales/en/settings-nav';
 import BellIcon from '@phosphor/bell-simple.svg';
 import BugIcon from '@phosphor/bug.svg';
 import BuildingsIcon from '@phosphor/buildings.svg';
@@ -41,7 +43,13 @@ import type { SettingsTab } from './SettingsState';
 
 export type SettingsTabItem = {
   tab: SettingsTab;
+  /** Shown in the interface language. */
   label: string;
+  /**
+   * The label in English. Search matches it as well as `label`, so English
+   * terms find a tab whatever the interface language.
+   */
+  englishLabel: string;
   icon: Component<{ class?: string; triggerAnimation?: boolean }>;
   /**
    * Extra search terms for this tab. The label is always searched too.
@@ -53,9 +61,29 @@ export type SettingsTabItem = {
 };
 
 export type SettingsTabGroup = {
+  /** Shown in the interface language. */
   label: string;
   items: SettingsTabItem[];
 };
+
+type SettingsNavMessage = keyof typeof settingsNavMessages;
+
+/**
+ * A nav item whose label reads `t` on every access, so it follows the
+ * interface language. Copy items by reference, never by spreading.
+ */
+function tabItem(
+  labelKey: SettingsNavMessage,
+  item: Omit<SettingsTabItem, 'label' | 'englishLabel'>
+): SettingsTabItem {
+  return {
+    ...item,
+    englishLabel: settingsNavMessages[labelKey],
+    get label() {
+      return t(`settingsNav.${labelKey}`);
+    },
+  };
+}
 
 /**
  * Single source of truth for the settings categories: ordering, labels, icons
@@ -69,148 +97,138 @@ export type SettingsTabGroup = {
  */
 export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
   {
-    label: 'Blocks',
+    get label() {
+      return t('settingsNav.groupBlocks');
+    },
     items: [
-      {
+      tabItem('tabEmail', {
         tab: 'Email',
-        label: 'Email',
         icon: EmailIcon,
         keywords: ['gmail', 'inbox', 'signature', 'sync'],
-      },
-      {
+      }),
+      tabItem('tabCalendar', {
         tab: 'Calendar',
-        label: 'Calendar',
         icon: CalendarIcon,
         keywords: ['google', 'accounts', 'visibility', 'colors'],
-      },
-      {
+      }),
+      tabItem('tabAgents', {
         tab: 'Agents',
-        label: 'Agents',
         icon: AgentIcon,
         keywords: ['ai', 'assistant', 'bot'],
-      },
-      {
+      }),
+      tabItem('tabCrm', {
         tab: 'CRM',
-        label: 'CRM',
         icon: BuildingsIcon,
         keywords: ['contacts', 'customers', 'deals'],
-      },
+      }),
     ],
   },
   {
-    label: 'Personal',
+    get label() {
+      return t('settingsNav.groupPersonal');
+    },
     items: [
-      {
+      tabItem('tabAccount', {
         tab: 'Account',
-        label: 'Account',
         icon: UserIconPhosphor,
         keywords: ['profile', 'user', 'email', 'name'],
-      },
-      {
+      }),
+      tabItem('tabAppearance', {
         tab: 'Appearance',
-        label: 'Appearance',
         icon: SwatchesIcon,
         keywords: ['theme', 'dark', 'light', 'color'],
-      },
-      {
+      }),
+      tabItem('tabNotifications', {
         tab: 'Notifications',
-        label: 'Notifications',
         icon: BellIcon,
         keywords: ['alerts', 'email', 'sound'],
-      },
-      {
+      }),
+      tabItem('tabShortcuts', {
         tab: 'Shortcuts',
-        label: 'Keyboard shortcuts',
         icon: KeyboardIcon,
         keywords: ['keyboard', 'hotkey', 'keybinding'],
-      },
-      {
+      }),
+      tabItem('tabUsage', {
         tab: 'Usage',
-        label: 'Usage',
         icon: GaugeIcon,
         keywords: ['ai', 'limit', 'credits', 'reload', 'usage'],
-      },
-      {
+      }),
+      tabItem('tabBilling', {
         tab: 'Billing',
-        label: 'Billing',
         icon: CreditCardIcon,
         keywords: ['payment', 'subscription', 'invoice', 'plan'],
-      },
-      {
+      }),
+      tabItem('tabDesktopApp', {
         tab: 'Desktop App',
-        label: 'Desktop App',
         icon: DesktopIcon,
         keywords: ['download', 'mac', 'macos', 'linux', 'version', 'update'],
-      },
-      {
+      }),
+      tabItem('tabMobileApp', {
         tab: 'Mobile App',
-        label: 'Mobile App',
         icon: DeviceMobileIcon,
         keywords: ['phone', 'ios', 'android'],
-      },
+      }),
     ],
   },
   {
-    label: 'Workspace',
+    get label() {
+      return t('settingsNav.groupWorkspace');
+    },
     items: [
-      {
+      tabItem('tabTeam', {
         tab: 'Team',
-        label: 'Team',
         icon: UsersThreeIcon,
         keywords: ['members', 'users', 'workspace'],
-      },
-      {
+      }),
+      tabItem('tabTags', {
         tab: 'Tags',
-        label: 'Tags',
         icon: TagIcon,
         keywords: ['label', 'category'],
-      },
-      {
+      }),
+      tabItem('tabIntegrations', {
         tab: 'Connected',
-        label: 'Integrations',
         icon: CpuIcon,
         keywords: ['integrations', 'apps', 'connections'],
-      },
+      }),
     ],
   },
   {
-    label: 'Developer',
+    get label() {
+      return t('settingsNav.groupDeveloper');
+    },
     items: [
-      {
+      tabItem('tabAgentConnections', {
         tab: 'Connections',
-        label: 'Agent connections',
         icon: PlugsConnectedIcon,
         keywords: ['agent', 'tools', 'apps', 'mcp'],
-      },
-      {
+      }),
+      tabItem('tabRuntimes', {
         tab: 'Harness',
-        label: 'Runtimes',
         icon: HardDrivesIcon,
         keywords: ['cursor', 'harness', 'runtime', 'credential', 'api key'],
-      },
-      {
+      }),
+      tabItem('tabMcpServer', {
         tab: 'Agent',
-        label: 'MCP server',
         icon: PlugIcon,
         keywords: ['mcp', 'server', 'protocol'],
-      },
-      {
+      }),
+      tabItem('tabApiKeys', {
         tab: 'API Keys',
-        label: 'API Keys',
         icon: KeyIcon,
         keywords: ['api', 'key', 'token', 'authentication'],
-      },
-      {
+      }),
+      tabItem('tabBots', {
         tab: 'Bots',
-        label: 'Bots',
         icon: BotIcon,
         keywords: ['routine', 'bot'],
-      },
+      }),
     ],
   },
   {
-    label: 'Admin',
-    items: [{ tab: 'Admin', label: 'Debug', icon: BugIcon, keywords: [] }],
+    get label() {
+      return t('settingsNav.groupAdmin');
+    },
+    items: [tabItem('tabDebug', { tab: 'Admin', icon: BugIcon, keywords: [] })],
   },
 ];
 
@@ -348,9 +366,13 @@ export const useSettingsTabAvailable = () => {
 export const useSettingsTabs = () => {
   const isAvailable = useSettingsTabAvailable();
 
+  // Labels are getters that follow the interface language; keep them live
+  // rather than copying the current text into the filtered groups.
   const searchGroups = createMemo<SettingsTabGroup[]>(() =>
     SETTINGS_TAB_GROUPS.map((group) => ({
-      label: group.label,
+      get label() {
+        return group.label;
+      },
       items: group.items.filter((item) => isAvailable(item.tab)),
     })).filter((group) => group.items.length > 0)
   );
@@ -358,7 +380,9 @@ export const useSettingsTabs = () => {
   const groups = createMemo<SettingsTabGroup[]>(() =>
     searchGroups()
       .map((group) => ({
-        ...group,
+        get label() {
+          return group.label;
+        },
         items: group.items.filter((item) => !item.searchOnly),
       }))
       .filter((group) => group.items.length > 0)

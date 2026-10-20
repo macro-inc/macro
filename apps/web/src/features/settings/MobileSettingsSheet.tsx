@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import './MobileSettingsSheet.css';
 import { SearchBar } from '@app/components/view-shell';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
@@ -60,9 +61,9 @@ export function MobileSettingsSheet(props: MobileSettingsSheetProps) {
     props.groups
       .flatMap((group) => group.items)
       .find((item) => item.tab === navigationPage())?.label ??
-    (props.page === 'Harness' ? 'Runtimes' : undefined) ??
+    (props.page === 'Harness' ? t('settingsNav.tabRuntimes') : undefined) ??
     props.page ??
-    'Settings';
+    t('settingsNav.settings');
 
   const navigate = (page?: SettingsTab, focusHeading = true) => {
     setSelection(undefined);
@@ -87,7 +88,7 @@ export function MobileSettingsSheet(props: MobileSettingsSheetProps) {
       <MobileDrawer.Portal>
         <MobileDrawer.Overlay />
         <MobileDrawer.Content
-          aria-label="Settings"
+          aria-label={t('settingsNav.settings')}
           targetHeight={94}
           maxHeight={94}
           class="mobile-settings-sheet overflow-hidden [--mobile-content-inset-top:0px] [--mobile-content-inset-bottom:0px]"
@@ -98,7 +99,7 @@ export function MobileSettingsSheet(props: MobileSettingsSheetProps) {
               <Button
                 variant="ghost"
                 size="icon-sm"
-                aria-label="Back to settings"
+                aria-label={t('settingsNav.backToSettings')}
                 class="size-11 bg-ink/6"
                 onClick={() => navigate()}
               >
@@ -116,7 +117,7 @@ export function MobileSettingsSheet(props: MobileSettingsSheetProps) {
               as={Button}
               variant="ghost"
               size="icon-sm"
-              aria-label="Close settings"
+              aria-label={t('settingsNav.closeSettings')}
               class="size-11 rounded-full bg-ink/6"
             >
               <XIcon class="size-5" />
@@ -137,7 +138,7 @@ export function MobileSettingsSheet(props: MobileSettingsSheetProps) {
               >
                 <button
                   type="button"
-                  aria-label="Edit profile"
+                  aria-label={t('settingsNav.editProfile')}
                   onClick={() => navigate('Account')}
                   class="mx-6 mb-7 flex shrink-0 flex-col items-center rounded-3xl px-4 pb-3 pt-2 text-center active:bg-ink/3"
                 >
@@ -158,8 +159,8 @@ export function MobileSettingsSheet(props: MobileSettingsSheetProps) {
                 </button>
                 <div class="flex flex-col gap-6 px-3">
                   <SearchBar
-                    label="Search settings"
-                    placeholder="Search settings"
+                    label={t('settingsNav.searchSettings')}
+                    placeholder={t('settingsNav.searchSettings')}
                     value={query()}
                     onValueChange={setQuery}
                     onEscape={() => setQuery('')}
@@ -216,7 +217,7 @@ export function MobileSettingsSheet(props: MobileSettingsSheetProps) {
                       class="min-h-13 gap-3.5 px-3.5 text-base text-failure"
                     >
                       <SignOutIcon class="size-5" />
-                      Log out
+                      {t('settingsNav.logOut')}
                     </MobileDrawer.Item>
                   </div>
                 </div>
@@ -233,9 +234,11 @@ export function MobileSettingsSheet(props: MobileSettingsSheetProps) {
                     fallback={(_error, reset) => (
                       <div class="flex h-full flex-col items-center justify-center gap-4 px-8 text-center">
                         <p class="text-sm text-ink-muted">
-                          This settings page couldn’t load.
+                          {t('settingsNav.pageLoadFailed')}
                         </p>
-                        <Button onClick={reset}>Try again</Button>
+                        <Button onClick={reset}>
+                          {t('settingsNav.tryAgain')}
+                        </Button>
                       </div>
                     )}
                   >
@@ -245,7 +248,7 @@ export function MobileSettingsSheet(props: MobileSettingsSheetProps) {
                           role="status"
                           class="p-8 text-center text-sm text-ink-muted"
                         >
-                          Loading settings…
+                          {t('settingsNav.loadingSettings')}
                         </div>
                       }
                     >
@@ -258,10 +261,10 @@ export function MobileSettingsSheet(props: MobileSettingsSheetProps) {
                         fallback={
                           <div class="flex h-full flex-col items-center justify-center gap-4 px-8 text-center">
                             <p role="status" class="text-sm text-ink-muted">
-                              This settings section is unavailable.
+                              {t('settingsNav.sectionUnavailable')}
                             </p>
                             <Button onClick={() => navigate()}>
-                              Back to settings
+                              {t('settingsNav.backToSettings')}
                             </Button>
                           </div>
                         }

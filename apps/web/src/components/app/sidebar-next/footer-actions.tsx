@@ -1,4 +1,5 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { t } from '@app/lib/i18n';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { SidebarOpenInSplitMenu } from '@components/app/app-sidebar/sidebar';
 import { UserIcon } from '@core/component/UserIcon';
@@ -61,8 +62,8 @@ const MobileAppButton = () => {
           'size-10 cursor-default rounded-xl',
           isActive() && 'bg-hover text-ink'
         )}
-        label="Get the mobile app"
-        tooltip="Get the mobile app"
+        label={t('nav.getMobileApp')}
+        tooltip={t('nav.getMobileApp')}
         tooltipPlacement="right"
         draggable={false}
         aria-current={isActive() ? 'page' : undefined}
@@ -138,11 +139,13 @@ export const FooterActions = (props: {
             'size-10 cursor-default rounded-xl',
             isSettingsActive() && 'bg-hover text-ink'
           )}
-          label="Settings"
+          label={t('nav.settings')}
           aria-description={
-            accountName() ? `Signed in as ${accountName()}` : undefined
+            accountName()
+              ? t('nav.signedInAs', { name: accountName() ?? '' })
+              : undefined
           }
-          tooltip="Settings"
+          tooltip={t('nav.settings')}
           tooltipPlacement="right"
           hotkey={TOKENS.global.toggleSettings}
           draggable={false}

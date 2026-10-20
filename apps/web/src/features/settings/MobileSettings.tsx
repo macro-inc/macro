@@ -1,4 +1,5 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import { useLogout } from '@core/auth/logout';
 import { UserIcon } from '@core/component/UserIcon';
 import { enableEmailSignatures } from '@core/constant/featureFlags';
@@ -24,7 +25,7 @@ export function MobileSettings() {
     return (
       [value?.first_name, value?.last_name].filter(isRealNamePart).join(' ') ||
       email()?.split('@')[0] ||
-      'Your account'
+      t('settingsNav.yourAccount')
     );
   };
 

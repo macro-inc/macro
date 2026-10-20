@@ -1,4 +1,5 @@
 import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
+import { t } from '@app/lib/i18n';
 import {
   favoriteSplitContent,
   useFavoriteDisplayName,
@@ -42,7 +43,7 @@ export function FavoritesCommands() {
       allowDuplicate: favorite.entityType === 'foreign_entity',
     });
     if (result.status === 'reused' && result.owner !== result.sourceOwner) {
-      toast.alert('Content already open');
+      toast.alert(t('commandMenu.contentAlreadyOpen'));
     }
     // Close the menu and clear the query once a favorite is opened.
     CommandState.close();
@@ -53,16 +54,15 @@ export function FavoritesCommands() {
   const dynamicGroup = createHotkeyGroup();
 
   staticGroup.addDisposer(
-    CommandState.registerCommandScopePlaceholder(
-      FAVORITES_COMMAND_SCOPE,
-      'Open favorite...'
+    CommandState.registerCommandScopePlaceholder(FAVORITES_COMMAND_SCOPE, () =>
+      t('commandMenu.openFavoritePlaceholder')
     )
   );
 
   staticGroup.add(
     registerHotkey({
       scopeId: 'global',
-      description: 'Favorites',
+      description: () => t('commands.favorites'),
       // An empty sub-view is a dead end, so hide the command until the user
       // has favorites.
       condition: () => (favoritesData()?.favorites.length ?? 0) > 0,

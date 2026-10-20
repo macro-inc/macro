@@ -10,7 +10,8 @@ event contract (schema, sanitization, delivery semantics).
 ## Start here
 
 - `src/domain/team_service.rs`: the main service — creation, invites,
-  membership, role changes, auto-join-domain toggle.
+  membership, role changes, auto-join-domain toggle. Team-wide settings
+  (default link share, interface language) are fields on `PatchTeamRequest`.
 - `src/domain/owned_entity_cleanup.rs` + `open_seat_release.rs`: account/team
   deletion side effects (owned-entity transfer, seat release).
 - `src/inbound/axum_router.rs` / `src/inbound/toolset.rs`: HTTP routes and AI

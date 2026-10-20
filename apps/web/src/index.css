@@ -668,6 +668,29 @@ body.tauri-ios {
   --sidepanel-label-width: 5.5rem;
 }
 
+/* Interface languages whose scripts Inter doesn't cover. Latin text keeps the
+   default faces; the script's glyphs come from each platform's native UI font
+   (macOS, Windows, then Noto on Linux/Android), and `lang` on <html> (set by
+   the interface language) picks the right regional Han forms. */
+html:lang(ja) {
+  --font-sans: -apple-system, BlinkMacSystemFont, "Inter Variable", Roboto, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", Meiryo, "Noto Sans CJK JP", "Noto Sans JP", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+}
+html:lang(ko) {
+  --font-sans: -apple-system, BlinkMacSystemFont, "Inter Variable", Roboto, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans CJK KR", "Noto Sans KR", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+}
+html:lang(zh-Hans) {
+  --font-sans: -apple-system, BlinkMacSystemFont, "Inter Variable", Roboto, "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+}
+html:lang(zh-Hant) {
+  --font-sans: -apple-system, BlinkMacSystemFont, "Inter Variable", Roboto, "PingFang TC", "Microsoft JhengHei UI", "Microsoft JhengHei", "Noto Sans CJK TC", "Noto Sans TC", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+}
+html:lang(hi) {
+  --font-sans: -apple-system, BlinkMacSystemFont, "Inter Variable", Roboto, "Kohinoor Devanagari", "Nirmala UI", "Noto Sans Devanagari", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+}
+html:lang(th) {
+  --font-sans: -apple-system, BlinkMacSystemFont, "Inter Variable", Roboto, Thonburi, "Leelawadee UI", "Noto Sans Thai", "Noto Sans Thai UI", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+}
+
 /* scuffed: might wan to use signals for this */
 @custom-variant touch (&:where(html[data-touch-device="true"] *));
 @custom-variant not-touch (&:where(html:not([data-touch-device="true"]) *));

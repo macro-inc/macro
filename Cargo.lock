@@ -2129,6 +2129,7 @@ dependencies = [
  "tracing",
  "url",
  "urlencoding",
+ "user_language",
  "user_quota",
  "utoipa",
  "utoipa-swagger-ui",
@@ -12968,6 +12969,9 @@ version = "0.1.0"
 dependencies = [
  "macro_user_id",
  "serde",
+ "serde_json",
+ "sqlx",
+ "strum 0.27.2",
  "utoipa",
  "uuid",
  "workspace-hack",
@@ -20846,6 +20850,25 @@ dependencies = [
  "tracing",
  "utoipa",
  "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "user_language"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_user_id",
+ "model-error-response",
+ "model_user",
+ "rootcause",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "utoipa",
  "workspace-hack",
 ]
 

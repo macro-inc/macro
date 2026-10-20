@@ -155,18 +155,25 @@ function CreateEntityDemo(props: LessonContentProps) {
   // Native projects aren't represented in the onboarding sandbox yet.
   const sandboxBlocks: CreatableBlock[] = CREATABLE_BLOCKS.filter(
     (block) => block.blockName !== 'initiative'
-  ).map((block) => ({
-    ...block,
-    keyDownHandler: () => {
-      const sandboxType = BLOCK_TO_SANDBOX[block.blockName];
-      if (sandboxType) {
-        const entity = createSandboxEntity(sandboxType);
-        addSandboxEntity(entity);
-      }
-      setLauncherOpen(false);
-      return true;
-    },
-  }));
+  ).map((block) =>
+    // Copies descriptors rather than spreading, so the translated label and
+    // hint getters stay live instead of freezing the current language.
+    Object.defineProperties({} as CreatableBlock, {
+      ...Object.getOwnPropertyDescriptors(block),
+      keyDownHandler: {
+        enumerable: true,
+        value: () => {
+          const sandboxType = BLOCK_TO_SANDBOX[block.blockName];
+          if (sandboxType) {
+            const entity = createSandboxEntity(sandboxType);
+            addSandboxEntity(entity);
+          }
+          setLauncherOpen(false);
+          return true;
+        },
+      },
+    })
+  );
 
   onCleanup(() => {
     setSharedSoup(undefined);

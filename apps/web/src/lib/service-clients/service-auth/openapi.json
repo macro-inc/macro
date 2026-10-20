@@ -4263,6 +4263,115 @@
         }
       }
     },
+    "/user/language": {
+      "get": {
+        "tags": ["user"],
+        "summary": "Get the caller's interface language.",
+        "operationId": "get_user_language",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserLanguage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["user"],
+        "summary": "Set the caller's interface language, or clear it to follow their team.",
+        "operationId": "put_user_language",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserLanguage"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Language updated"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/user/legacy_user_permissions": {
       "get": {
         "tags": ["user::get_legacy_user_permissions"],
@@ -6540,6 +6649,33 @@
           }
         }
       },
+      "Language": {
+        "type": "string",
+        "description": "A language the app's interface is available in, as a BCP 47 tag.",
+        "enum": [
+          "en",
+          "de",
+          "fr",
+          "es",
+          "it",
+          "nl",
+          "pt-PT",
+          "sv",
+          "da",
+          "nb",
+          "fi",
+          "pl",
+          "ru",
+          "ja",
+          "ko",
+          "zh-Hans",
+          "zh-Hant",
+          "hi",
+          "id",
+          "vi",
+          "th"
+        ]
+      },
       "LinkShare": {
         "type": "string",
         "description": "Defines who can access an item through its share link.",
@@ -6722,6 +6858,17 @@
               {
                 "$ref": "#/components/schemas/LinkShare",
                 "description": "The default link-share scope for items owned by the team. Omit to\nleave unchanged or pass `null` to default to link sharing off."
+              }
+            ]
+          },
+          "language": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Language",
+                "description": "The interface language for the team's members. Omit to leave\nunchanged or pass `null` to use English."
               }
             ]
           },
@@ -7191,6 +7338,17 @@
             "type": "string",
             "format": "uuid"
           },
+          "language": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Language",
+                "description": "The interface language for the team's members, unless a member picks\ntheir own. `None` means English."
+              }
+            ]
+          },
           "name": {
             "type": "string"
           },
@@ -7526,6 +7684,23 @@
             "type": "integer",
             "format": "int64",
             "description": "AI used by this user this period, in cents at provider cost."
+          }
+        }
+      },
+      "UserLanguage": {
+        "type": "object",
+        "description": "The interface language a user picked for themselves. `None` follows their\nteam's language.",
+        "properties": {
+          "language": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Language",
+                "description": "The user's language, or `None` to use the team's."
+              }
+            ]
           }
         }
       },

@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
@@ -77,16 +78,20 @@ function TagChip(props: {
           <ContextMenuContent class="text-xs text-ink-muted">
             <MenuItem
               icon={FunnelIcon}
-              text="View all items with tag"
+              text={t('entityActions.viewItemsWithTag')}
               onClick={viewTaggedItems}
             />
             <Show when={props.canEdit}>
               <MenuItem
                 icon={PencilIcon}
-                text="Edit tag"
+                text={t('entityActions.editTag')}
                 onClick={() => props.onEdit(props.tag)}
               />
-              <MenuItem icon={XIcon} text="Remove tag" onClick={removeTag} />
+              <MenuItem
+                icon={XIcon}
+                text={t('entityActions.removeTag')}
+                onClick={removeTag}
+              />
             </Show>
           </ContextMenuContent>
         </ContextMenu.Portal>

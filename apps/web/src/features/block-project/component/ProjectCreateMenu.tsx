@@ -4,6 +4,7 @@ import { createPsdDocument } from '@app/features/block-psd/queries/create-psd';
 import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives/use-spreadsheet-access';
 import { createSpreadsheetDocument } from '@app/features/block-spreadsheet/queries/create-spreadsheet';
 import { openChatWithAgent } from '@app/features/chat/ChatWithAgentButton';
+import { t } from '@app/lib/i18n';
 import type { BlockTool } from '@components/app/ResponsiveBlockToolbar';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import type { BlockAlias, BlockName } from '@core/block';
@@ -52,7 +53,9 @@ type CreateBlockSpec = {
 
 const BLOCK_CREATE_SPECS: CreateBlockSpec[] = [
   {
-    label: 'Spreadsheet',
+    get label() {
+      return t('create.spreadsheetLabel');
+    },
     blockName: 'spreadsheet',
     hotkeyToken: TOKENS.create.spreadsheet,
     icon: () => (
@@ -67,12 +70,14 @@ const BLOCK_CREATE_SPECS: CreateBlockSpec[] = [
     loading: true,
     createFn: async (projectId) => {
       const documentId = await createSpreadsheetDocument({ projectId });
-      if (!documentId) throw new Error('Failed to create spreadsheet');
+      if (!documentId) throw new Error(t('create.failedToCreateSpreadsheet'));
       return documentId;
     },
   },
   {
-    label: 'Note',
+    get label() {
+      return t('create.noteLabel');
+    },
     blockName: 'md' as BlockName,
     hotkeyToken: TOKENS.create.note,
     icon: () => (
@@ -87,13 +92,15 @@ const BLOCK_CREATE_SPECS: CreateBlockSpec[] = [
         content: '',
         projectId,
       });
-      if (!result) throw new Error('Failed to create markdown file');
+      if (!result) throw new Error(t('create.failedToCreateMarkdownFile'));
       return result;
     },
     params: { fromScratch: true },
   },
   {
-    label: 'Task',
+    get label() {
+      return t('create.taskLabel');
+    },
     blockName: 'task' as BlockAlias,
     hotkeyToken: TOKENS.create.task,
     icon: () => (
@@ -117,12 +124,14 @@ const BLOCK_CREATE_SPECS: CreateBlockSpec[] = [
           },
         ],
       });
-      if (!result) throw new Error('Failed to create task');
+      if (!result) throw new Error(t('create.failedToCreateTask'));
       return result;
     },
   },
   {
-    label: 'AI',
+    get label() {
+      return t('create.aiChatLabel');
+    },
     blockName: 'chat' as BlockName,
     hotkeyToken: TOKENS.create.chat,
     icon: () => (
@@ -134,13 +143,15 @@ const BLOCK_CREATE_SPECS: CreateBlockSpec[] = [
       const result = await createChat({ projectId });
       if ('error' in result) {
         console.error(result.error);
-        throw new Error('Failed to create chat');
+        throw new Error(t('create.failedToCreateChat'));
       }
       return result.chatId;
     },
   },
   {
-    label: 'Canvas',
+    get label() {
+      return t('create.canvasLabel');
+    },
     blockName: 'canvas' as BlockName,
     hotkeyToken: TOKENS.create.canvas,
     icon: () => (
@@ -157,13 +168,15 @@ const BLOCK_CREATE_SPECS: CreateBlockSpec[] = [
       });
       if ('error' in result) {
         console.error(result.error);
-        throw new Error('Failed to create canvas');
+        throw new Error(t('create.failedToCreateCanvas'));
       }
       return result.documentId;
     },
   },
   {
-    label: 'Photoshop file',
+    get label() {
+      return t('create.photoshopLabel');
+    },
     blockName: 'psd' as BlockName,
     hotkeyToken: TOKENS.create.photoshop,
     icon: () => (
@@ -174,12 +187,14 @@ const BLOCK_CREATE_SPECS: CreateBlockSpec[] = [
     loading: true,
     createFn: async (projectId) => {
       const id = await createPsdDocument({ projectId, source: 'project' });
-      if (!id) throw new Error('Failed to create Photoshop file');
+      if (!id) throw new Error(t('create.failedToCreatePhotoshopFile'));
       return id;
     },
   },
   {
-    label: 'Design',
+    get label() {
+      return t('create.designLabel');
+    },
     blockName: 'fig' as BlockName,
     hotkeyToken: TOKENS.create.design,
     icon: () => (
@@ -190,12 +205,14 @@ const BLOCK_CREATE_SPECS: CreateBlockSpec[] = [
     loading: true,
     createFn: async (projectId) => {
       const id = await createFigDocument({ projectId, source: 'project' });
-      if (!id) throw new Error('Failed to create design');
+      if (!id) throw new Error(t('create.failedToCreateDesign'));
       return id;
     },
   },
   {
-    label: 'Illustrator file',
+    get label() {
+      return t('create.illustratorLabel');
+    },
     blockName: 'ai' as BlockName,
     hotkeyToken: TOKENS.create.illustration,
     icon: () => (
@@ -206,12 +223,14 @@ const BLOCK_CREATE_SPECS: CreateBlockSpec[] = [
     loading: true,
     createFn: async (projectId) => {
       const id = await createAiDocument({ projectId, source: 'project' });
-      if (!id) throw new Error('Failed to create Illustrator file');
+      if (!id) throw new Error(t('create.failedToCreateIllustratorFile'));
       return id;
     },
   },
   {
-    label: 'Folder',
+    get label() {
+      return t('create.folderLabel');
+    },
     blockName: 'project' as BlockName,
     hotkeyToken: TOKENS.create.project,
     icon: () => (
@@ -224,7 +243,7 @@ const BLOCK_CREATE_SPECS: CreateBlockSpec[] = [
         name: 'New Project',
         parentId: projectId,
       });
-      if (!result) throw new Error('Failed to create folder');
+      if (!result) throw new Error(t('create.failedToCreateFolder'));
       return result;
     },
   },
@@ -313,7 +332,7 @@ function ProjectCreateDialog(props: {
         <div class="*:max-h-[75vh]">
           <div class="p-2">
             <Dialog.Title class="text-base font-semibold text-ink pb-3">
-              Create in {props.name}
+              {t('create.createInName', { name: props.name })}
             </Dialog.Title>
             <For each={BLOCK_CREATE_SPECS.filter(offered)}>
               {(spec) => (
@@ -426,7 +445,7 @@ export function useProjectCreateTools(
 
   const tools: BlockTool[] = [
     {
-      label: 'Create',
+      label: () => t('create.create'),
       icon: PlusIcon,
       // Using a setTimeout here so that the synthetic click event after the touch doesn't instantly select an item
       action: () => setTimeout(() => setOpen(true), 0),
@@ -458,7 +477,7 @@ export function ProjectCreateMenu(props: { id: string; name: string }) {
           depth={2}
         >
           <CirclePlus />
-          Create
+          {t('create.create')}
           <CaretDown />
         </Dropdown.Trigger>
       </div>

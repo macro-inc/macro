@@ -270,6 +270,15 @@ and applied immediately. Copy a theme with the clipboard button beside any
 theme pill, then import it on another device or share it in a message for
 others to copy and import.
 
+Appearance ends with **Language**. On a team, **Team language** sets the default
+interface language for every member; only admins and owners can change it, and
+others see it disabled with an explanation. **Your language** starts at **Use
+team language (…)** and overrides the team language for the signed-in person
+only; without a team it is the only dropdown. Menus, navigation, the command and
+create menus, and settings navigation switch language as soon as the setting
+saves; page contents and user data stay as written. The choice is remembered on
+the device, so the next launch starts in the same language.
+
 Existing settings URLs remain valid; `connections` still opens Integrations,
 `agent-connections` opens Agent connections, and `harness` aliases Runtimes.
 

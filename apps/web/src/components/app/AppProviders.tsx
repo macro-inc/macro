@@ -2,6 +2,7 @@ import { useAccessRequestInvalidations } from '@app/features/access-requests/use
 import { IncomingMeetingInvitationsProvider } from '@app/features/meetings/incoming-meeting-invitations';
 import { usePendingNotificationNavigationEffect } from '@app/features/notifications/PendingNotificationNavigationEffect';
 import { SearchProvider } from '@app/features/soup/search/context';
+import { useInterfaceLanguageSync } from '@app/lib/i18n/use-interface-language-sync';
 import { useCalendarCache } from '@app/lib/queries/calendar/graphql/use-calendar-cache';
 import { useInvalidateQueriesOnReconnect } from '@app/lib/queries/invalidate-on-reconnect';
 import { useSoupBackfills } from '@app/lib/queries/soup/backfill';
@@ -99,6 +100,7 @@ export function AppProviders(props: ParentProps) {
   useSoupBackfills(userId);
   useCalendarCache(() => userId() !== undefined);
   useGlobalAttachableHistory();
+  useInterfaceLanguageSync();
 
   return (
     <TeamContextProvider>

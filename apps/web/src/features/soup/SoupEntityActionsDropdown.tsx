@@ -56,7 +56,10 @@ export function SoupEntityActionsDropdown(
           {props.children}
         </Dropdown.Trigger>
         <Dropdown.Content
-          class={props.contentClass ?? 'w-64 text-xs text-ink-muted'}
+          class={
+            props.contentClass ??
+            'min-w-64 max-w-[min(22rem,calc(100vw-1rem))] text-xs text-ink-muted'
+          }
         >
           <Dropdown.Group>
             <SoupEntityActionsMenu

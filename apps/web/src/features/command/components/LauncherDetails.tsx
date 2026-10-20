@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { getIconConfig } from '@core/component/EntityIcon';
 import { Button, cn, Hotkey } from '@ui';
 import { createEffect, For, on, Show } from 'solid-js';
@@ -57,14 +58,14 @@ export function LauncherDetails(props: {
             role="status"
             class="flex flex-1 items-center justify-center text-sm text-ink-muted"
           >
-            No matching create options
+            {t('create.noMatchingCreateOptions')}
           </div>
         }
       >
         <div
           ref={list}
           role="listbox"
-          aria-label="Create options"
+          aria-label={t('create.createOptions')}
           class="w-[38%] min-w-0 shrink-0 overflow-y-auto p-2 sm:w-64"
         >
           <For each={props.sections}>
@@ -144,7 +145,7 @@ export function LauncherDetails(props: {
           <Show when={selected()}>
             {(item) => (
               <section
-                aria-label={`${item().label} details`}
+                aria-label={t('create.itemDetails', { label: item().label })}
                 class="flex min-h-full flex-col p-6"
               >
                 <div
@@ -169,9 +170,9 @@ export function LauncherDetails(props: {
                     !props.showHotkeys && 'invisible'
                   )}
                 >
-                  Shortcut
+                  {t('create.shortcut')}
                   <Hotkey shortcut="c" theme="subtle" class="border-ink/12" />
-                  then
+                  {t('create.shortcutThen')}
                   <Hotkey
                     token={item().hotkeyToken}
                     shortcut={shortcut(item())}
@@ -186,15 +187,20 @@ export function LauncherDetails(props: {
                       !props.shiftHeld && 'invisible'
                     )}
                   >
-                    In new split
+                    {t('create.inNewSplit')}
                   </span>
                   <Button
                     size="lg"
                     variant="strong"
-                    aria-label={`Create ${item().label}${props.shiftHeld ? ' in new split' : ''}`}
+                    aria-label={t(
+                      props.shiftHeld
+                        ? 'create.createItemInNewSplit'
+                        : 'create.createItem',
+                      { label: item().label }
+                    )}
                     onClick={() => props.onChoose(item())}
                   >
-                    Create {item().label}
+                    {t('create.createItem', { label: item().label })}
                     <Hotkey
                       shortcut={props.shiftHeld ? 'shift+enter' : 'enter'}
                       theme="current"

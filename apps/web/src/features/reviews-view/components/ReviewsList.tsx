@@ -6,6 +6,7 @@ import {
   useEntityActionHotkeys,
 } from '@app/features/next-soup/actions';
 import { DateGroupHeading } from '@app/features/next-soup/soup-view/date-group-heading';
+import { t } from '@app/lib/i18n';
 import { useInfiniteScrollSentinel } from '@app/lib/primitives/infinite-scroll-sentinel';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import {
@@ -148,10 +149,10 @@ function ReviewRow(props: {
         />
       </ContextMenu.Trigger>
       <ContextMenu.Portal>
-        <ContextMenuContent class="w-56 text-xs text-ink-muted">
+        <ContextMenuContent class="min-w-56 max-w-[22rem] text-xs text-ink-muted">
           <MenuItem
             icon={SplitIcon}
-            text="Open in new split"
+            text={t('entityActions.openInNewSplit')}
             disabled={!globalSplitManager()?.canAppendSplit()}
             onClick={() => {
               if (globalSplitManager()?.canAppendSplit())
@@ -162,8 +163,8 @@ function ReviewRow(props: {
             icon={StarIcon}
             text={
               props.favoriteAction.isFavorited(props.review)
-                ? 'Remove from favorites'
-                : 'Add to favorites'
+                ? t('entityActions.removeFromFavorites')
+                : t('entityActions.addToFavorites')
             }
             onClick={() =>
               fireAndForget(
@@ -174,14 +175,14 @@ function ReviewRow(props: {
           />
           <MenuItem
             icon={CopyIcon}
-            text="Copy link"
+            text={t('entityActions.copyLinkCommand')}
             onClick={() =>
               fireAndForget(copyLink.execute([props.review]), 'reviews-view')
             }
           />
           <MenuItem
             icon={ArrowSquareOutIcon}
-            text="Open on GitHub"
+            text={t('entityActions.openOnGitHub')}
             onClick={() =>
               window.open(
                 props.review.metadata.url,

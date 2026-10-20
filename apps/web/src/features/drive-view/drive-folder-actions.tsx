@@ -4,6 +4,7 @@ import {
   makeDeleteAction,
   makeFavoriteAction,
 } from '@app/features/next-soup/actions';
+import { t } from '@app/lib/i18n';
 import { MenuItem, MenuSeparator } from '@core/component/ContextMenu';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
@@ -42,10 +43,14 @@ export function DriveFolderActions(props: { folder: DriveFolderMetadata }) {
 
       onFinish: () => {
         fireAndForget(invalidateProjects(), 'drive-view');
-        toast.success(view === 'rename' ? 'Renamed' : 'Moved to folder');
+        toast.success(
+          view === 'rename'
+            ? t('entityActions.toastRenamed')
+            : t('entityActions.toastMovedToFolder')
+        );
       },
 
-      onError: () => toast.failure('Failed to update folder'),
+      onError: () => toast.failure(t('entityActions.toastFolderUpdateFailed')),
     });
   };
 
@@ -53,20 +58,27 @@ export function DriveFolderActions(props: { folder: DriveFolderMetadata }) {
     <>
       <MenuSeparator />
       <Show when={entity().ownerId === userId()}>
-        <MenuItem text="Rename" onClick={() => editFolder('rename')} />
+        <MenuItem
+          text={t('entityActions.rename')}
+          onClick={() => editFolder('rename')}
+        />
       </Show>
       <MenuItem
-        text={favorite.isFavorited(entity()) ? 'Unfavorite' : 'Favorite'}
+        text={
+          favorite.isFavorited(entity())
+            ? t('entityActions.unfavorite')
+            : t('entityActions.favorite')
+        }
         onClick={() =>
           fireAndForget(favorite.execute([entity()]), 'drive-view')
         }
       />
       <MenuItem
-        text="Move to folder"
+        text={t('entityActions.moveToFolder')}
         onClick={() => editFolder('moveToProject')}
       />
       <MenuItem
-        text="Copy Link"
+        text={t('entityActions.copyLink')}
         onClick={() =>
           fireAndForget(copyLink.execute([entity()]), 'drive-view')
         }
@@ -74,7 +86,7 @@ export function DriveFolderActions(props: { folder: DriveFolderMetadata }) {
       <Show when={deleteFolder.canExecute(entity())}>
         <MenuSeparator />
         <MenuItem
-          text="Delete"
+          text={t('entityActions.delete')}
           class="text-failure-ink"
           onClick={() =>
             fireAndForget(deleteFolder.execute([entity()]), 'drive-view')

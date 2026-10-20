@@ -112,6 +112,11 @@ export function SettingsPage(props: {
  */
 export function SettingsSection(props: {
   title?: JSX.Element;
+  /**
+   * The settings search target, when the title is translated or not a plain
+   * string. Defaults to the title.
+   */
+  target?: string;
   description?: string;
   /** Right-aligned controls beside the section heading. */
   actions?: JSX.Element;
@@ -122,9 +127,11 @@ export function SettingsSection(props: {
   return (
     <section
       data-settings-target={
-        typeof props.title === 'string'
-          ? settingsTarget(props.title)
-          : undefined
+        props.target
+          ? settingsTarget(props.target)
+          : typeof props.title === 'string'
+            ? settingsTarget(props.title)
+            : undefined
       }
       tabIndex={-1}
       class={cn('scroll-mt-4 outline-none rounded-[26.25px]', props.class)}

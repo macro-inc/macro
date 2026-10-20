@@ -22,6 +22,7 @@ import {
 } from '@app/features/next-soup/soup-view/sort-options';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { UserIcon } from '@core/component/UserIcon';
@@ -207,7 +208,7 @@ export const MobileFilterDrawer = (props: {
     const currentUserId = userId();
     const noAssigneeOption = {
       id: NO_ASSIGNEE,
-      label: 'Unassigned',
+      label: t('viewMenus.unassigned'),
       icon: () => <CircleDashedIcon class="size-3.5 text-ink-muted" />,
     };
     let meOption: typeof noAssigneeOption | undefined;
@@ -311,7 +312,9 @@ export const MobileFilterDrawer = (props: {
       >
         {/* Sort section */}
         <Show when={sortOptions().length > 0}>
-          <MobileDrawer.Label id="sort-section-label">Sort</MobileDrawer.Label>
+          <MobileDrawer.Label id="sort-section-label">
+            {t('viewMenus.sort')}
+          </MobileDrawer.Label>
           <MobileDrawer.Section
             role="radiogroup"
             aria-labelledby="sort-section-label"
@@ -345,13 +348,15 @@ export const MobileFilterDrawer = (props: {
               categories().length > 0 || isTasksView() || showInboxSection()
             }
           >
-            <MobileDrawer.Label class="pt-4">Filters</MobileDrawer.Label>
+            <MobileDrawer.Label class="pt-4">
+              {t('viewMenus.filters')}
+            </MobileDrawer.Label>
           </Show>
 
           <Show when={showInboxSection()}>
             <FilterDrawer.Section
               value="inboxes"
-              label="Inboxes"
+              label={t('viewMenus.inboxes')}
               activeCount={
                 inboxFilter() !== undefined ? picker.activeIds().length : 0
               }
@@ -380,12 +385,14 @@ export const MobileFilterDrawer = (props: {
                           class="shrink-0 rounded-xl px-3 text-xs text-ink-muted hover:text-ink hover:bg-ink/6 transition-colors"
                           aria-label={
                             isSole()
-                              ? 'Show all inboxes'
-                              : `Show only ${option.label}`
+                              ? t('viewMenus.showAllInboxes')
+                              : t('viewMenus.showOnlyInbox', {
+                                  label: option.label,
+                                })
                           }
                           onClick={() => picker.selectOnly(option.id)}
                         >
-                          {isSole() ? 'All' : 'Only'}
+                          {isSole() ? t('viewMenus.all') : t('viewMenus.only')}
                         </button>
                       </Show>
                     </div>
@@ -400,7 +407,9 @@ export const MobileFilterDrawer = (props: {
                   <span class="size-4 flex items-center justify-center shrink-0">
                     <PlusIcon class="size-4 text-ink-muted" />
                   </span>
-                  <span class="flex-1 truncate">Connect another account</span>
+                  <span class="flex-1 truncate">
+                    {t('viewMenus.connectAnotherAccount')}
+                  </span>
                 </MobileDrawer.Item>
               </Show>
             </FilterDrawer.Section>
@@ -447,7 +456,7 @@ export const MobileFilterDrawer = (props: {
           <Show when={isTasksView()}>
             <FilterDrawer.Section
               value="assignee"
-              label="Assignee"
+              label={t('viewMenus.assignee')}
               activeCount={assigneeFilter().length}
             >
               {/* Search */}
@@ -455,10 +464,10 @@ export const MobileFilterDrawer = (props: {
                 <SearchIcon class="size-3.5 text-ink-muted shrink-0" />
                 <input
                   type="text"
-                  aria-label="Search assignees"
+                  aria-label={t('viewMenus.searchAssigneesLabel')}
                   value={assigneeSearch()}
                   onInput={(e) => setAssigneeSearch(e.currentTarget.value)}
-                  placeholder="Search assignees..."
+                  placeholder={t('viewMenus.searchAssignees')}
                   class="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-ink-placeholder"
                 />
               </div>
@@ -480,7 +489,9 @@ export const MobileFilterDrawer = (props: {
               </div>
 
               <Show when={filteredAssigneeOptions().length === 0}>
-                <div class="px-4 py-2 text-sm text-ink-muted">No results</div>
+                <div class="px-4 py-2 text-sm text-ink-muted">
+                  {t('viewMenus.noResults')}
+                </div>
               </Show>
             </FilterDrawer.Section>
           </Show>
@@ -489,17 +500,17 @@ export const MobileFilterDrawer = (props: {
           <Show when={showCreatedByFilter()}>
             <FilterDrawer.Section
               value="created-by"
-              label="Created by"
+              label={t('viewMenus.createdBy')}
               activeCount={createdByIds().length}
             >
               <div class="flex min-h-11 items-center gap-2 rounded-[20px] px-3 py-2 bg-ink/5 mb-1">
                 <SearchIcon class="size-3.5 text-ink-muted shrink-0" />
                 <input
                   type="text"
-                  aria-label="Search creators"
+                  aria-label={t('viewMenus.searchCreatorsLabel')}
                   value={createdBySearch()}
                   onInput={(e) => setCreatedBySearch(e.currentTarget.value)}
-                  placeholder="Search creators..."
+                  placeholder={t('viewMenus.searchCreators')}
                   class="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-ink-placeholder"
                 />
               </div>
@@ -520,7 +531,9 @@ export const MobileFilterDrawer = (props: {
                 </For>
               </div>
               <Show when={filteredCreatedByOptions().length === 0}>
-                <div class="px-4 py-2 text-sm text-ink-muted">No results</div>
+                <div class="px-4 py-2 text-sm text-ink-muted">
+                  {t('viewMenus.noResults')}
+                </div>
               </Show>
             </FilterDrawer.Section>
           </Show>

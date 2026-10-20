@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import type { EntityData } from '@entity';
 import type { EntityActionListState } from './entity-action-context';
@@ -12,7 +13,7 @@ export const makeCopyEntityIdAction = () => {
    *  entity. */
   const executeById = async (id: string) => {
     await navigator.clipboard.writeText(id);
-    toast.success('ID copied to clipboard');
+    toast.success(t('entityActions.toastIdCopied'));
   };
 
   const execute = async (entities: EntityData[]) => {

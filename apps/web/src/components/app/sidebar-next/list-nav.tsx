@@ -1,5 +1,6 @@
 import { parseAgentsRoute } from '@app/features/agents-view/core/route';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { t } from '@app/lib/i18n';
 import { useSplitRouter } from '@app/lib/split-router';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import {
@@ -120,7 +121,7 @@ export const ListNav = (props: ListNavProps) => {
         <Show when={props.item.id !== 'home'}>
           <MenuSeparator />
           <MenuItem
-            text="Hide from sidebar"
+            text={t('nav.hideFromSidebar')}
             onClick={() => hideSidebarItem(props.item.id)}
           />
         </Show>
@@ -136,14 +137,14 @@ export const ListNav = (props: ListNavProps) => {
         label={props.item.label}
         aria-description={
           [
-            props.unread && 'Unread items',
-            props.activeCall && 'Active call',
-            props.badge && `Next meeting: ${props.badge}`,
+            props.unread && t('nav.unreadItems'),
+            props.activeCall && t('nav.activeCall'),
+            props.badge && t('nav.nextMeeting', { time: props.badge }),
           ]
             .filter(Boolean)
             .join('. ') || undefined
         }
-        tooltip={`Go to ${props.item.label}`}
+        tooltip={t('nav.goTo', { label: props.item.label })}
         tooltipPlacement="right"
         hotkey={
           props.item.hotkeyToken

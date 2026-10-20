@@ -6,6 +6,7 @@ use chrono::{DateTime, Utc};
 use macro_user_id::{
     cowlike::CowLike, email::Email, lowercased::Lowercase, user_id::MacroUserIdStr,
 };
+use model_user::Language;
 use models_permissions::share_permission::LinkShare;
 use roles_and_permissions::domain::model::{ProductTier, RoleId, UserRolesAndPermissionsError};
 
@@ -383,6 +384,10 @@ pub struct PatchTeamRequest {
     /// leave unchanged or pass `null` to default to link sharing off.
     #[serde(default, deserialize_with = "double_option")]
     pub default_link_share: Option<Option<LinkShare>>,
+    /// The interface language for the team's members. Omit to leave
+    /// unchanged or pass `null` to use English.
+    #[serde(default, deserialize_with = "double_option")]
+    pub language: Option<Option<Language>>,
 }
 
 /// Request to update the team plan
@@ -465,6 +470,9 @@ pub struct Team {
     /// shared via link without an explicit choice. `None` means link sharing
     /// is off by default. Defaults to [`LinkShare::Team`].
     pub(crate) default_link_share: Option<LinkShare>,
+    /// The interface language for the team's members, unless a member picks
+    /// their own. `None` means English.
+    pub(crate) language: Option<Language>,
 }
 
 impl Team {
@@ -488,6 +496,7 @@ impl Team {
             enterprise,
             allow_non_admin_invites: true,
             default_link_share: Some(LinkShare::Team),
+            language: None,
         }
     }
 }
@@ -537,6 +546,11 @@ impl Team {
     /// when link sharing is off by default
     pub fn default_link_share(&self) -> Option<LinkShare> {
         self.default_link_share
+    }
+
+    /// The interface language for the team's members, or `None` for English
+    pub fn language(&self) -> Option<Language> {
+        self.language
     }
 }
 

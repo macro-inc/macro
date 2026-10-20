@@ -1,4 +1,5 @@
 import { openBulkEditModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
+import { t } from '@app/lib/i18n';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { globalRemoveFromSplitHistory } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
@@ -37,17 +38,20 @@ function reportTrashedEmails(
   count: number
 ) {
   const toastId = toast.success(
-    count > 1 ? `Moved ${count} items to Trash` : 'Moved to Trash',
+    count > 1
+      ? t('entityActions.toastMovedCountToTrash', { count })
+      : t('entityActions.toastMovedToTrash'),
     {
       actions: [
         {
-          label: 'Undo',
+          label: t('entityActions.undo'),
           icon: ArrowCounterClockwise,
           onClick: () => {
             if (toastId != null) toast.dismiss(toastId);
             handle.undo().then(
-              () => toast.success('Restored from Trash'),
-              () => toast.failure('Failed to restore from Trash')
+              () => toast.success(t('entityActions.toastRestoredFromTrash')),
+              () =>
+                toast.failure(t('entityActions.toastRestoreFromTrashFailed'))
             );
           },
         },
@@ -58,7 +62,7 @@ function reportTrashedEmails(
 
   // Surface background API failures
   handle.done.catch(() => {
-    toast.failure('Failed to move to Trash');
+    toast.failure(t('entityActions.toastMoveToTrashFailed'));
   });
 }
 
@@ -134,7 +138,9 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
       onFinish: () => {
         const confirmed = cleanup.confirm(rest);
         toast.success(
-          rest.length > 1 ? `Deleted ${rest.length} items` : 'Deleted'
+          rest.length > 1
+            ? t('entityActions.toastDeletedCount', { count: rest.length })
+            : t('entityActions.toastDeleted')
         );
         if (confirmed.length > 0) options.onDeleted?.(confirmed);
       },
@@ -246,8 +252,10 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
           cleanup.confirm(nonEmailEntities);
           toast.success(
             nonEmailEntities.length > 1
-              ? `Deleted ${nonEmailEntities.length} items`
-              : 'Deleted'
+              ? t('entityActions.toastDeletedCount', {
+                  count: nonEmailEntities.length,
+                })
+              : t('entityActions.toastDeleted')
           );
 
           if (emailEntities.length > 0) {

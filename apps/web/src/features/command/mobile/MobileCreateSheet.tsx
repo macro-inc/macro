@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import CloseIcon from '@phosphor/x.svg';
 import { Button } from '@ui/components/Button';
@@ -21,13 +22,13 @@ export function MobileCreateSheet(props: {
           <MobileDrawer.Handle class="pb-1" />
           <header class="flex shrink-0 items-center justify-between gap-3 px-6 pb-5">
             <h2 id={titleId} class="text-lg font-semibold text-ink">
-              Create new
+              {t('create.createNewSheetTitle')}
             </h2>
             <MobileDrawer.Close
               as={Button}
               variant="ghost"
               size="icon-lg"
-              aria-label="Close create menu"
+              aria-label={t('create.closeCreateMenu')}
               class="rounded-full bg-ink/6"
             >
               <CloseIcon class="size-5" />

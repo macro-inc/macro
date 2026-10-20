@@ -1,4 +1,5 @@
 import { ViewSidebar } from '@app/components/view-shell';
+import { t } from '@app/lib/i18n';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
 import {
   ContextMenuContent,
@@ -144,7 +145,11 @@ export function ChannelLabelRow(props: { label: ChannelLabel }) {
             <Dropdown.Group>
               <MenuRow
                 icon={PencilSimpleIcon}
-                label={props.label.rule ? 'Edit smart label' : 'Rename'}
+                label={
+                  props.label.rule
+                    ? t('channelLabels.editSmartLabel')
+                    : t('entityActions.rename')
+                }
                 onSelect={() =>
                   fireAndForget(
                     props.label.rule
@@ -156,7 +161,7 @@ export function ChannelLabelRow(props: { label: ChannelLabel }) {
               />
               <MenuRow
                 icon={ChecksIcon}
-                label="Mark all as read"
+                label={t('channelLabels.markAllAsRead')}
                 disabled={state().unreadCount === 0}
                 onSelect={() => rail.markLabelRead(props.label)}
               />
@@ -165,7 +170,11 @@ export function ChannelLabelRow(props: { label: ChannelLabel }) {
             <Dropdown.Group>
               <MenuRow
                 icon={TrashIcon}
-                label={props.label.rule ? 'Delete smart label' : 'Delete label'}
+                label={
+                  props.label.rule
+                    ? t('channelLabels.deleteSmartLabel')
+                    : t('channelLabels.deleteLabel')
+                }
                 onSelect={() =>
                   fireAndForget(rail.deleteLabel(props.label), 'channels-view')
                 }
@@ -226,19 +235,19 @@ export function ChannelsCreateMenu() {
           <Dropdown.Group>
             <MenuRow
               icon={HashIcon}
-              label="New channel"
+              label={t('channelLabels.newChannel')}
               onSelect={openNewChannelModal}
             />
             <MenuRow
               icon={TagIcon}
-              label="New label"
+              label={t('channelLabels.newLabel')}
               onSelect={() =>
                 fireAndForget(rail.createLabel([]), 'channels-view')
               }
             />
             <MenuRow
               icon={FilterIcon}
-              label="New smart label"
+              label={t('channelLabels.newSmartLabel')}
               onSelect={() =>
                 fireAndForget(rail.createSmartTag(), 'channels-view')
               }
@@ -274,7 +283,7 @@ export function ChannelLabelMenuItems(props: { channel: ChannelEntity }) {
         {(label) => (
           <MenuItem
             icon={TagSimpleIcon}
-            text={`Ungroup from “${label().name}”`}
+            text={t('channelLabels.ungroupFrom', { label: label().name })}
             onClick={() => rail.setChannelLabel(props.channel.id, undefined)}
           />
         )}
@@ -282,9 +291,16 @@ export function ChannelLabelMenuItems(props: { channel: ChannelEntity }) {
       <ContextMenu.Sub>
         <SubTrigger
           icon={TagIcon}
-          text={currentLabel() ? 'Move to label' : 'Add to label'}
+          text={
+            currentLabel()
+              ? t('channelLabels.moveToLabel')
+              : t('channelLabels.addToLabel')
+          }
         />
-        <ContextMenuContent submenu class="w-56 text-xs text-ink-muted">
+        <ContextMenuContent
+          submenu
+          class="min-w-56 max-w-[22rem] text-xs text-ink-muted"
+        >
           {/* Kobalte radio items only work inside a RadioGroup. */}
           <ContextMenu.RadioGroup
             value={currentLabel()?.id ?? ''}
@@ -308,7 +324,7 @@ export function ChannelLabelMenuItems(props: { channel: ChannelEntity }) {
           </Show>
           <MenuItem
             icon={PlusIcon}
-            text="New label…"
+            text={t('channelLabels.newLabelEllipsis')}
             onClick={() =>
               fireAndForget(
                 rail.createLabel([props.channel.id]),

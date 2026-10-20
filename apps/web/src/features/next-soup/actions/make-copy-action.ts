@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import type { EntityData } from '@entity';
 import { createBulkCopyDssEntityMutation } from '@entity';
@@ -26,7 +27,9 @@ export const makeCopyAction = () => {
       name: (name) => name,
     });
     toast.success(
-      entities.length > 1 ? `Copied ${entities.length} items` : 'Copied'
+      entities.length > 1
+        ? t('entityActions.toastCopiedCount', { count: entities.length })
+        : t('entityActions.toastCopied')
     );
   };
 

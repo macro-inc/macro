@@ -1,4 +1,5 @@
 import { ViewSidebar } from '@app/components/view-shell';
+import { t } from '@app/lib/i18n';
 import { useUserId } from '@core/context/user';
 import UserPlusIcon from '@phosphor/user-plus.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
@@ -35,7 +36,7 @@ function CreateTeamAction() {
     <>
       <FooterItem
         icon={<UsersThreeIcon class="size-4" />}
-        label="Create a team"
+        label={t('settingsNav.createTeam')}
         onPress={() => setOpen(true)}
       />
       <Show when={open()}>
@@ -62,7 +63,7 @@ function InviteToTeamAction(props: { teamId: string }) {
     <Show when={canInvite()}>
       <FooterItem
         icon={<UserPlusIcon class="size-4" />}
-        label="Invite your team"
+        label={t('settingsNav.inviteTeam')}
         onPress={() => setOpen(true)}
       />
       <InviteToTeamDialog

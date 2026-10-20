@@ -3983,6 +3983,7 @@ async fn test_patch_team_rejects_owner_role_assignment() {
             role: TeamRole::Owner,
         }]),
         default_link_share: None,
+        language: None,
     };
 
     let receipt = test_team_receipt::<AdminTeamRole>(
@@ -4021,6 +4022,7 @@ async fn test_patch_team_rejects_owner_downgrade() {
             role: TeamRole::Member,
         }]),
         default_link_share: None,
+        language: None,
     };
 
     let receipt = test_team_receipt::<AdminTeamRole>(team_id, &owner_id);
@@ -4068,6 +4070,7 @@ async fn test_patch_team_applies_role_updates_and_name() {
             },
         ]),
         default_link_share: None,
+        language: None,
     };
 
     let receipt = test_team_receipt::<AdminTeamRole>(team_id, &owner_id);
@@ -4119,6 +4122,7 @@ async fn test_patch_team_empty_role_updates() {
         slug: None,
         user_role_updates: Some(Vec::new()),
         default_link_share: None,
+        language: None,
     };
 
     let receipt = test_team_receipt::<AdminTeamRole>(team_id, &owner_id);
@@ -4144,6 +4148,7 @@ async fn test_patch_team_metadata_publishes_updated_with_omitted_fields() {
         slug: None,
         user_role_updates: None,
         default_link_share: None,
+        language: None,
     };
 
     service
@@ -4188,6 +4193,7 @@ async fn test_patch_team_role_only_publishes_previous_role_without_updated_event
             role: TeamRole::Admin,
         }]),
         default_link_share: None,
+        language: None,
     };
 
     service
@@ -4243,6 +4249,7 @@ async fn test_patch_team_partial_role_failure_keeps_ordered_success_events() {
             },
         ]),
         default_link_share: None,
+        language: None,
     };
 
     assert!(
@@ -4273,6 +4280,7 @@ async fn test_patch_team_repository_failure_does_not_publish_updated() {
         slug: None,
         user_role_updates: None,
         default_link_share: None,
+        language: None,
     };
 
     assert!(

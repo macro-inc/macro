@@ -5,6 +5,7 @@ import {
   runCreateAction,
   useCreatableEnabled,
 } from '@app/features/command/Launcher';
+import { t } from '@app/lib/i18n';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import FolderIcon from '@phosphor/folder.svg';
 import PlusIcon from '@phosphor/plus.svg';
@@ -21,7 +22,7 @@ function SidebarTrigger(props: { label: string }) {
       <ViewSidebar.Icon>
         <PlusIcon class="size-4" />
       </ViewSidebar.Icon>
-      <span class="truncate">New</span>
+      <span class="truncate">{t('create.new')}</span>
       <ViewSidebar.Trailing>
         <CaretDownIcon class="size-3 shrink-0" />
       </ViewSidebar.Trailing>
@@ -33,7 +34,7 @@ function ToolbarTrigger(props: { label: string }) {
   return (
     <Dropdown.Trigger variant="outline" size="md" aria-label={props.label}>
       <PlusIcon class="size-4" />
-      <span>New</span>
+      <span>{t('create.new')}</span>
       <CaretDownIcon class="size-3" />
     </Dropdown.Trigger>
   );
@@ -53,7 +54,8 @@ export function DriveCreateMenu(props: {
   const destination = () =>
     driveCreateDestinationLabel(state.projectId(), sidebar.folders());
 
-  const label = () => `New file or folder in ${destination()}`;
+  const label = () =>
+    t('create.newFileOrFolderIn', { destination: destination() });
 
   const options = () =>
     CREATABLE_BLOCKS.filter(
@@ -91,7 +93,7 @@ export function DriveCreateMenu(props: {
       <Dropdown.Content class="min-w-48 max-w-72">
         <Dropdown.Group>
           <Dropdown.GroupLabel class="min-w-0 gap-1.5">
-            <span class="shrink-0">Create in</span>
+            <span class="shrink-0">{t('create.createIn')}</span>
             <FolderIcon aria-hidden="true" class="size-3.5 shrink-0" />
             <span class="min-w-0 truncate font-medium text-ink-muted">
               {destination()}
@@ -114,11 +116,11 @@ export function DriveCreateMenu(props: {
         <Dropdown.Group>
           <Dropdown.Item onSelect={actions.uploadFiles}>
             <UploadIcon aria-hidden="true" class="size-4 shrink-0" />
-            <span>Upload files</span>
+            <span>{t('create.uploadFiles')}</span>
           </Dropdown.Item>
           <Dropdown.Item onSelect={actions.uploadFolder}>
             <FolderIcon aria-hidden="true" class="size-4 shrink-0" />
-            <span>Upload folder</span>
+            <span>{t('create.uploadFolder')}</span>
           </Dropdown.Item>
         </Dropdown.Group>
       </Dropdown.Content>

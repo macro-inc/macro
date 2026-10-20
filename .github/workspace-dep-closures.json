@@ -2267,6 +2267,7 @@
       "crates/teams",
       "crates/trigger_context",
       "crates/unfurl",
+      "crates/user_language",
       "crates/user_quota",
       "crates/workspace-hack",
       "services/authentication_service"
@@ -13999,6 +14000,23 @@
       "crates/model_user",
       "crates/remote_env_var",
       "crates/user_api_key",
+      "crates/workspace-hack"
+    ],
+    "user_language": [
+      "crates/bot_id",
+      "crates/bot_token",
+      "crates/cowlike",
+      "crates/harness_id",
+      "crates/harness_token",
+      "crates/macro_auth",
+      "crates/macro_authorization",
+      "crates/macro_env",
+      "crates/macro_env_var",
+      "crates/macro_user_id",
+      "crates/model-error-response",
+      "crates/model_user",
+      "crates/remote_env_var",
+      "crates/user_language",
       "crates/workspace-hack"
     ],
     "user_link_cleanup_handler": [

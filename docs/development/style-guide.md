@@ -37,6 +37,7 @@ ID; deletions leave gaps and new rules take the next free number. A rule line re
 | [`web/mobile.md`](../../.agents/rules/web/mobile.md) | | `apps/web` UI and CSS on touch and phones |
 | [`web/ui-primitives.md`](../../.agents/rules/web/ui-primitives.md) | | `apps/web/src/components/ui` |
 | [`web/startup-bundle.md`](../../.agents/rules/web/startup-bundle.md) | | `apps/web/src` |
+| [`web/i18n.md`](../../.agents/rules/web/i18n.md) | | `apps/web/src` user-visible text in new UI, menus, and navigation |
 | [`web/lexical-nodes.md`](../../.agents/rules/web/lexical-nodes.md) | | Lexical nodes and decorators |
 | [`infra/pulumi.md`](../../.agents/rules/infra/pulumi.md) | | `infra/`, deploy config |
 

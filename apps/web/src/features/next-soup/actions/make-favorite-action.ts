@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import type { EntityData } from '@entity';
 import {
@@ -46,8 +47,6 @@ export const makeFavoriteAction = () => {
     if (addMutation.isPending || removeMutation.isPending) return;
 
     const shouldRemove = favoritable.every((entity) => isFavorited(entity));
-    const verb = shouldRemove ? 'Removed' : 'Added';
-    const preposition = shouldRemove ? 'from' : 'to';
 
     // On add, skip entities already favorited so counts reflect real work.
     const targets = shouldRemove
@@ -72,14 +71,28 @@ export const makeFavoriteAction = () => {
     if (failed === 0) {
       toast.success(
         succeeded > 1
-          ? `${verb} ${succeeded} items ${preposition} favorites`
-          : `${verb} ${preposition} favorites`
+          ? t(
+              shouldRemove
+                ? 'entityActions.toastRemovedCountFromFavorites'
+                : 'entityActions.toastAddedCountToFavorites',
+              { count: succeeded }
+            )
+          : t(
+              shouldRemove
+                ? 'entityActions.toastRemovedFromFavorites'
+                : 'entityActions.toastAddedToFavorites'
+            )
       );
     } else if (succeeded === 0) {
-      toast.failure('Failed to update favorites');
+      toast.failure(t('entityActions.toastFavoritesUpdateFailed'));
     } else {
       toast.failure(
-        `${verb} ${succeeded} of ${results.length} items ${preposition} favorites; ${failed} failed`
+        t(
+          shouldRemove
+            ? 'entityActions.toastRemovedSomeFromFavorites'
+            : 'entityActions.toastAddedSomeToFavorites',
+          { succeeded, total: results.length, failed }
+        )
       );
     }
   };

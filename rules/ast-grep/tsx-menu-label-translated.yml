@@ -1,0 +1,56 @@
+id: tsx-menu-label-translated
+language: tsx
+severity: error
+message: Render menu labels with t() so they show in the person's interface language.
+note: |-
+  .agents/rules/web/i18n.md. Add the English text under
+  apps/web/src/lib/i18n/locales/en/ and pass t('<namespace>.<key>'); the
+  translation update fills in the other languages. Editors (slides, canvas,
+  spreadsheet, database) are not translated yet and are excluded.
+files:
+  - apps/web/src/**/*.tsx
+ignores:
+  - apps/web/src/**/*.test.tsx
+  - apps/web/src/**/browser-test/**
+  - apps/web/src/**/debug/**
+  - apps/web/src/features/block-pptx/**
+  - apps/web/src/features/block-canvas/**
+  - apps/web/src/features/block-spreadsheet/**
+  - apps/web/src/features/database/**
+  - apps/web/src/features/ui-gallery/**
+rule:
+  kind: jsx_attribute
+  all:
+    - has:
+        kind: property_identifier
+        regex: ^(text|label)$
+    - any:
+        - has:
+            kind: string
+            has:
+              kind: string_fragment
+              regex: '[A-Za-z]'
+        - has:
+            kind: jsx_expression
+            has:
+              any:
+                - kind: string
+                - kind: template_string
+              stopBy: end
+              has:
+                any:
+                  - kind: string_fragment
+                  - kind: template_string
+                regex: '[A-Za-z]'
+                stopBy: end
+              not:
+                inside:
+                  kind: arguments
+                  stopBy: end
+  inside:
+    any:
+      - kind: jsx_opening_element
+      - kind: jsx_self_closing_element
+    has:
+      field: name
+      regex: (^|\.)(\w*MenuItem|\w*MenuRow|SubTrigger|Item|CheckboxItem|RadioItem)$

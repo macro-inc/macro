@@ -25,7 +25,16 @@ export function filterInboxGithubPrOption(
   return categories.map((category) =>
     category.id === 'type'
       ? {
-          ...category,
+          // Getters, not a spread: a spread would freeze the translated
+          // labels at the language active when this ran.
+          id: category.id,
+          get label() {
+            return category.label;
+          },
+          get labelPlural() {
+            return category.labelPlural;
+          },
+          multiple: category.multiple,
           options: category.options.filter(
             (option) => option.id !== 'github-pr'
           ),

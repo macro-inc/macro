@@ -1,4 +1,5 @@
 import { CommandState } from '@app/features/command';
+import { t } from '@app/lib/i18n';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import { TOKENS } from '@core/hotkey/tokens';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
@@ -27,7 +28,11 @@ export function SidebarSearchMenu(props: {
         }
       }}
     >
-      <Dropdown.Trigger size="icon-md" {...props.triggerProps} label="Search">
+      <Dropdown.Trigger
+        size="icon-md"
+        {...props.triggerProps}
+        label={t('nav.search')}
+      >
         <MagnifyingGlassIcon class="size-5" />
       </Dropdown.Trigger>
       <DropdownMenu.Portal>
@@ -50,14 +55,14 @@ export function SidebarSearchMenu(props: {
           }}
         >
           <MenuItem
-            text="Command Menu"
+            text={t('nav.commandMenu')}
             shortcut="cmd+k"
             onClick={() => {
               selectedAction = () => CommandState.open();
             }}
           />
           <MenuItem
-            text="Search everything"
+            text={t('nav.searchEverything')}
             hotkeyToken={TOKENS.sidebar.goTo.search}
             onClick={() => {
               const openInNewSplit = newSplit;

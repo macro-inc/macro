@@ -6,22 +6,19 @@ import { UnifiedFilterDropdown } from '@app/features/next-soup/soup-view/filters
 import { useFilterRefinements } from '@app/features/next-soup/soup-view/filters-bar/use-filter-refinements';
 import { NewCallButton } from '@app/features/next-soup/soup-view/NewCallButton';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
-import { VIEW_TAB_LISTS } from '@app/features/next-soup/soup-view/tab-lists';
-import { callViewLabel } from '../core/call-filters';
+import { t } from '@app/lib/i18n';
+import { match } from 'ts-pattern';
 
 /** Title, list controls, and active filter chips above the Calls list. */
 export function CallsHeader() {
   const view = useSoupView();
   const { consolidatedFiltersList, resetToTabDefaults } =
     useFilterRefinements();
-  const title = () => {
-    const tab = VIEW_TAB_LISTS.calls.find(
-      (item) => item.value === view.activeTab()
-    );
-    return !tab || tab.value === 'all'
-      ? 'Calls'
-      : `${callViewLabel(tab)} calls`;
-  };
+  const title = () =>
+    match(view.activeTab())
+      .with('missed', () => t('viewMenus.missedCalls'))
+      .with('unattended', () => t('viewMenus.unattendedCalls'))
+      .otherwise(() => t('viewMenus.calls'));
 
   return (
     <>

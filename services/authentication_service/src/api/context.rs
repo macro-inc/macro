@@ -56,6 +56,9 @@ use roles_and_permissions::{
 };
 use sqlx::PgPool;
 use tokio_util::task::TaskTracker;
+use user_language::{
+    domain::service::UserLanguageServiceImpl, outbound::pg_user_language_repo::PgUserLanguageRepo,
+};
 
 use crate::account_link_state::AccountLinkStateKey;
 use crate::domain::microsoft::MicrosoftAuth;
@@ -133,6 +136,8 @@ pub(crate) type ReferralServiceType = ReferralServiceImpl<
 
 pub(crate) type GtmInviteServiceType = GtmInviteServiceImpl<PgGtmInviteRepo>;
 
+pub(crate) type UserLanguageServiceType = UserLanguageServiceImpl<PgUserLanguageRepo>;
+
 pub(crate) type GithubLinkServiceType = GithubLinkServiceImpl<
     PgGithubRepo,
     GithubOauthImpl,
@@ -209,6 +214,7 @@ pub(crate) struct ApiContext {
     pub loops_client: Arc<LoopsClient>,
     pub referral_service: Arc<ReferralServiceType>,
     pub gtm_invite_service: Arc<GtmInviteServiceType>,
+    pub user_language_service: Arc<UserLanguageServiceType>,
     pub rate_limit_service: RateLimiter,
     /// The stripe price ids for each paid plan's seat
     pub stripe_prices: crate::api::user::stripe::StripePrices,

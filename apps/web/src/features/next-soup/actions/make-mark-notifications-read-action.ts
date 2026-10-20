@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import {
   enableGraphqlSoup,
@@ -96,14 +97,14 @@ export const makeMarkNotificationsReadAction = (
           : Promise.resolve(),
       ]);
     } catch {
-      toast.failure('Failed to mark as read');
+      toast.failure(t('entityActions.toastMarkReadFailed'));
       return;
     }
 
     toast.success(
       targetCount > 1
-        ? `Marked ${targetCount} items as read`
-        : 'Marked as read',
+        ? t('entityActions.toastMarkedReadCount', { count: targetCount })
+        : t('entityActions.toastMarkedRead'),
       { duration: 3_000, stack: true, hideOnMobile: true }
     );
   };

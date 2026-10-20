@@ -122,6 +122,8 @@
   "auth.getUserNames": "Get User Names",
   "auth.getUserNamesWithEmail": "Get User Names With Email",
   "auth.patchUserGroup": "Patch User Group",
+  "auth.getUserLanguage": "Get User Language",
+  "auth.putUserLanguage": "Put User Language",
   "auth.getLegacyUserPermissions": "Get Legacy User Permissions",
   "auth.getUserLinkExists": "Get User Link Exists",
   "auth.deleteUser": "Delete User",

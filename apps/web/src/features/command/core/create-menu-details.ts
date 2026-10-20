@@ -1,4 +1,6 @@
+import { type TranslationKey, t } from '@app/lib/i18n';
 import type { CreatableBlock } from '../types';
+import { creatableDescription, creatableId } from './creatable';
 
 export type CreateMenuGroupId =
   | 'docs'
@@ -16,20 +18,37 @@ export type CreateMenuGroup = {
   tagline: string;
 };
 
+/** Group headings; ids stay English, the getters translate on read. */
 export const CREATE_MENU_GROUPS: readonly CreateMenuGroup[] = [
-  { id: 'docs', label: 'Docs', tagline: 'Write and template' },
-  {
-    id: 'organization',
-    label: 'Organization',
-    tagline: 'Keep related work together',
-  },
-  { id: 'design', label: 'Design', tagline: 'Diagram, sketch, design' },
-  { id: 'data', label: 'Data', tagline: 'Collect, organize, analyze' },
-  { id: 'comms', label: 'Comms', tagline: 'Reach people' },
-  { id: 'tasks', label: 'Tasks', tagline: 'Stay on top of the work' },
-  { id: 'ai', label: 'AI', tagline: 'Put agents to work' },
-  { id: 'other', label: 'Other', tagline: 'Everything else' },
+  group('docs', 'create.groupDocsLabel', 'create.groupDocsTagline'),
+  group(
+    'organization',
+    'create.groupOrganizationLabel',
+    'create.groupOrganizationTagline'
+  ),
+  group('design', 'create.groupDesignLabel', 'create.groupDesignTagline'),
+  group('data', 'create.groupDataLabel', 'create.groupDataTagline'),
+  group('comms', 'create.groupCommsLabel', 'create.groupCommsTagline'),
+  group('tasks', 'create.groupTasksLabel', 'create.groupTasksTagline'),
+  group('ai', 'create.groupAiLabel', 'create.groupAiTagline'),
+  group('other', 'create.groupOtherLabel', 'create.groupOtherTagline'),
 ];
+
+function group(
+  id: CreateMenuGroup['id'],
+  label: TranslationKey,
+  tagline: TranslationKey
+): CreateMenuGroup {
+  return {
+    id,
+    get label() {
+      return t(label);
+    },
+    get tagline() {
+      return t(tagline);
+    },
+  };
+}
 
 export type CreateMenuDetails = {
   group: CreateMenuGroupId;
@@ -41,174 +60,184 @@ export type CreateMenuDetails = {
   examples: readonly string[];
 };
 
+/** Catalog entry whose display text is translated each time it is read. */
+function details(
+  groupId: CreateMenuGroupId,
+  tagline: TranslationKey,
+  description: TranslationKey,
+  examples: readonly TranslationKey[]
+): CreateMenuDetails {
+  return {
+    group: groupId,
+    get tagline() {
+      return t(tagline);
+    },
+    get details() {
+      return t(description);
+    },
+    get examples() {
+      return examples.map((key) => t(key));
+    },
+  };
+}
+
 /**
- * Keyed by label rather than block name: Message and Channel share the
- * `channel` block, and the two Agent entries (one per agents flag) are never
- * both shown.
+ * Keyed by the creatable's stable English id ({@link creatableId}) rather
+ * than block name: Message and Channel share the `channel` block, and the two
+ * Agent entries (one per agents flag) are never both shown.
  */
 const DETAILS: Record<string, CreateMenuDetails> = {
-  Document: {
-    group: 'docs',
-    tagline: 'Rich-text doc, edited live together',
-    details:
-      'A collaborative document for notes, specs and write-ups, with headings, tables, embeds, comments and AI editing.',
-    examples: ['Meeting notes', 'Product spec', 'Team wiki'],
-  },
-  Snippet: {
-    group: 'docs',
-    tagline: 'Reusable template for your writing',
-    details:
-      'Save reusable templates, checklists and replies so you can quickly add familiar content to new documents.',
-    examples: ['Doc template', 'Checklist', 'Canned reply'],
-  },
-  Code: {
-    group: 'other',
-    tagline: 'Code file with syntax highlighting',
-    details:
-      'A standalone source file for scripts, queries and config, in whatever language you need.',
-    examples: ['Python script', 'SQL query', 'Config file'],
-  },
-  Folder: {
-    group: 'organization',
-    tagline: 'Keep related files together',
-    details:
-      'Organize documents, files and other folders in one place, and share them together.',
-    examples: ['Client files', 'Archive', 'Team drive'],
-  },
-  Canvas: {
-    group: 'design',
-    tagline: 'Whiteboard for diagrams and sketches',
-    details:
-      'An infinite canvas for flowcharts, mind maps, architecture diagrams and freeform brainstorming.',
-    examples: ['Flowchart', 'Mind map', 'Architecture diagram'],
-  },
-  Design: {
-    group: 'design',
-    tagline: 'Figma-compatible design editor',
-    details:
-      'Create interface mockups and graphics with frames and vector shapes, then save your work as a Figma file.',
-    examples: ['App mockup', 'Social graphic', 'Design system'],
-  },
-  Database: {
-    group: 'data',
-    tagline: 'Structured records in tables and boards',
-    details:
-      'Organize structured records with custom fields, then explore them in tables and boards for trackers, inventories or customer lists.',
-    examples: ['CRM', 'Content calendar', 'Inventory'],
-  },
-  Spreadsheet: {
-    group: 'data',
-    tagline: 'Excel-style workbook with formulas',
-    details:
-      'A collaborative spreadsheet with formulas, multiple sheets and AI-assisted editing for models, budgets and analysis.',
-    examples: ['Budget', 'Financial model', 'Tracker'],
-  },
-  Form: {
-    group: 'data',
-    tagline: 'Collect responses',
-    details:
-      'Build a form to collect feedback, requests or survey answers, with every response saved into a database.',
-    examples: ['Survey', 'Intake form', 'Feedback'],
-  },
-  'Photoshop file': {
-    group: 'design',
-    tagline: 'Layered image editing',
-    details:
-      'Create and edit layered images for photo edits, composites and graphics, then save your work as a Photoshop file.',
-    examples: ['Photo edit', 'Composite', 'Banner'],
-  },
-  'Illustrator file': {
-    group: 'design',
-    tagline: 'Vector artwork',
-    details:
-      'Create scalable logos, icons and illustrations on artboards, then save your vector artwork as an Illustrator file.',
-    examples: ['Logo', 'Illustration', 'Icon set'],
-  },
-  Email: {
-    group: 'comms',
-    tagline: 'Compose from your connected inbox',
-    details:
-      'Write and send an email from your connected email account, with AI help drafting.',
-    examples: ['Follow-up', 'Intro', 'Update to a client'],
-  },
-  Message: {
-    group: 'comms',
-    tagline: 'Quick DM to a person or group',
-    details:
-      'Send a direct message to one or more teammates without setting up a channel.',
-    examples: ['Quick question', 'Heads-up', 'Group DM'],
-  },
-  Channel: {
-    group: 'comms',
-    tagline: 'Ongoing space for a team or topic',
-    details:
-      'Keep a team, project or topic in one shared conversation, with threaded discussions and files everyone can find.',
-    examples: ['#design', '#launch', '#support'],
-  },
-  Call: {
-    group: 'comms',
-    tagline: 'Start an audio or video call',
-    details:
-      'Jump into a call right away and invite teammates or external guests.',
-    examples: ['Quick sync', 'Pairing', 'Customer call'],
-  },
-  Task: {
-    group: 'tasks',
-    tagline: 'To-do with owner, status and due date',
-    details:
-      'Capture a piece of work, assign it, set a due date and track it through to done.',
-    examples: ['Bug', 'Follow-up', 'Review request'],
-  },
-  Project: {
-    group: 'tasks',
-    tagline: 'Group tasks toward a shared goal',
-    details:
-      'Collect related tasks under one goal and follow their progress together.',
-    examples: ['Launch', 'Quarterly goal', 'Migration'],
-  },
-  Reminder: {
-    group: 'tasks',
-    tagline: 'Nudge yourself at a time you pick',
-    details:
-      'Ask Macro to remind you about something later — no document or task required.',
-    examples: ['Call back', 'Check in Friday', 'Renew license'],
-  },
-  Agent: {
-    group: 'ai',
-    tagline: 'AI session that researches, writes and codes',
-    details:
-      'Start a dedicated AI session to research a topic, draft content or work through a coding task.',
-    examples: ['Research a topic', 'Draft a doc', 'Fix a bug'],
-  },
-  Routine: {
-    group: 'ai',
-    tagline: 'Run an agent on a schedule or trigger',
-    details:
-      'Automations that run a model or agent on a schedule, or whenever something happens in Macro.',
-    examples: ['Daily digest', 'Triage inbox', 'Weekly report'],
-  },
-  Skill: {
-    group: 'ai',
-    tagline: 'Reusable instructions for agents',
-    details:
-      'Give agents reusable instructions for a specific process, writing style or workflow so they can follow your preferred approach.',
-    examples: ['Brand voice', 'PR review', 'Report format'],
-  },
+  Document: details(
+    'docs',
+    'create.documentTagline',
+    'create.documentDetails',
+    [
+      'create.documentExample1',
+      'create.documentExample2',
+      'create.documentExample3',
+    ]
+  ),
+  Snippet: details('docs', 'create.snippetTagline', 'create.snippetDetails', [
+    'create.snippetExample1',
+    'create.snippetExample2',
+    'create.snippetExample3',
+  ]),
+  Code: details('other', 'create.codeTagline', 'create.codeDetails', [
+    'create.codeExample1',
+    'create.codeExample2',
+    'create.codeExample3',
+  ]),
+  Folder: details(
+    'organization',
+    'create.folderTagline',
+    'create.folderDetails',
+    ['create.folderExample1', 'create.folderExample2', 'create.folderExample3']
+  ),
+  Canvas: details('design', 'create.canvasTagline', 'create.canvasDetails', [
+    'create.canvasExample1',
+    'create.canvasExample2',
+    'create.canvasExample3',
+  ]),
+  Design: details('design', 'create.designTagline', 'create.designDetails', [
+    'create.designExample1',
+    'create.designExample2',
+    'create.designExample3',
+  ]),
+  Database: details(
+    'data',
+    'create.databaseTagline',
+    'create.databaseDetails',
+    [
+      'create.databaseExample1',
+      'create.databaseExample2',
+      'create.databaseExample3',
+    ]
+  ),
+  Spreadsheet: details(
+    'data',
+    'create.spreadsheetTagline',
+    'create.spreadsheetDetails',
+    [
+      'create.spreadsheetExample1',
+      'create.spreadsheetExample2',
+      'create.spreadsheetExample3',
+    ]
+  ),
+  Form: details('data', 'create.formTagline', 'create.formDetails', [
+    'create.formExample1',
+    'create.formExample2',
+    'create.formExample3',
+  ]),
+  'Photoshop file': details(
+    'design',
+    'create.photoshopTagline',
+    'create.photoshopDetails',
+    [
+      'create.photoshopExample1',
+      'create.photoshopExample2',
+      'create.photoshopExample3',
+    ]
+  ),
+  'Illustrator file': details(
+    'design',
+    'create.illustratorTagline',
+    'create.illustratorDetails',
+    [
+      'create.illustratorExample1',
+      'create.illustratorExample2',
+      'create.illustratorExample3',
+    ]
+  ),
+  Email: details('comms', 'create.emailTagline', 'create.emailDetails', [
+    'create.emailExample1',
+    'create.emailExample2',
+    'create.emailExample3',
+  ]),
+  Message: details('comms', 'create.messageTagline', 'create.messageDetails', [
+    'create.messageExample1',
+    'create.messageExample2',
+    'create.messageExample3',
+  ]),
+  Channel: details('comms', 'create.channelTagline', 'create.channelDetails', [
+    'create.channelExample1',
+    'create.channelExample2',
+    'create.channelExample3',
+  ]),
+  Call: details('comms', 'create.callTagline', 'create.callDetails', [
+    'create.callExample1',
+    'create.callExample2',
+    'create.callExample3',
+  ]),
+  Task: details('tasks', 'create.taskTagline', 'create.taskDetails', [
+    'create.taskExample1',
+    'create.taskExample2',
+    'create.taskExample3',
+  ]),
+  Project: details('tasks', 'create.projectTagline', 'create.projectDetails', [
+    'create.projectExample1',
+    'create.projectExample2',
+    'create.projectExample3',
+  ]),
+  Reminder: details(
+    'tasks',
+    'create.reminderTagline',
+    'create.reminderDetails',
+    [
+      'create.reminderExample1',
+      'create.reminderExample2',
+      'create.reminderExample3',
+    ]
+  ),
+  Agent: details('ai', 'create.agentTagline', 'create.agentDetails', [
+    'create.agentExample1',
+    'create.agentExample2',
+    'create.agentExample3',
+  ]),
+  Routine: details('ai', 'create.routineTagline', 'create.routineDetails', [
+    'create.routineExample1',
+    'create.routineExample2',
+    'create.routineExample3',
+  ]),
+  Skill: details('ai', 'create.skillTagline', 'create.skillDetails', [
+    'create.skillExample1',
+    'create.skillExample2',
+    'create.skillExample3',
+  ]),
 };
 
 export function createMenuDetails(
   item: CreatableBlock
 ): CreateMenuDetails | undefined {
-  return DETAILS[item.label];
+  return DETAILS[creatableId(item)];
 }
 
 /** The one-line description a variant shows under the title. */
 export function createMenuTagline(item: CreatableBlock): string {
-  const fallback =
-    typeof item.description === 'function'
-      ? item.description()
-      : item.description;
-  return createMenuDetails(item)?.tagline ?? item.launcherHint ?? fallback;
+  return (
+    createMenuDetails(item)?.tagline ??
+    item.launcherHint ??
+    creatableDescription(item)
+  );
 }
 
 /** Extra text that search should match on, beyond the block's own fields. */
@@ -235,7 +264,7 @@ export function groupCreateMenuItems(
 ): CreateMenuSection[] {
   const order = Object.keys(DETAILS);
   const rank = (item: CreatableBlock) => {
-    const index = order.indexOf(item.label);
+    const index = order.indexOf(creatableId(item));
     return index === -1 ? order.length : index;
   };
 
@@ -260,7 +289,11 @@ export function groupRecentCreateMenuItems(
   return recent.length
     ? [
         {
-          group: { id: 'recent', label: 'Recents', tagline: 'Recently used' },
+          group: {
+            id: 'recent',
+            label: t('create.groupRecentLabel'),
+            tagline: t('create.groupRecentTagline'),
+          },
           items: recent,
         },
         ...categories,
@@ -269,30 +302,31 @@ export function groupRecentCreateMenuItems(
 }
 
 /** Two-to-four word captions for compact cards. */
-const SHORT_TAGLINES: Record<string, string> = {
-  Document: 'Collaborative writing',
-  Snippet: 'Reusable template',
-  Code: 'Syntax-highlighted file',
-  Folder: 'Keep files together',
-  Canvas: 'Diagrams & whiteboard',
-  Design: 'Figma-compatible editor',
-  Spreadsheet: 'Formulas & sheets',
-  Database: 'Tables & boards',
-  Email: 'Compose from inbox',
-  Message: 'Quick DM',
-  Channel: 'Team discussion',
-  Call: 'Audio or video',
-  Task: 'Track work',
-  Project: 'Organize related tasks',
-  Reminder: 'Nudge yourself later',
-  Agent: 'Dedicated agent session',
-  Routine: 'Automate recurring work',
-  Skill: 'Reusable agent instructions',
-  Form: 'Collect responses',
-  'Photoshop file': 'Layered image editing',
-  'Illustrator file': 'Vector artwork',
+const SHORT_TAGLINES: Record<string, TranslationKey> = {
+  Document: 'create.documentShortTagline',
+  Snippet: 'create.snippetShortTagline',
+  Code: 'create.codeShortTagline',
+  Folder: 'create.folderShortTagline',
+  Canvas: 'create.canvasShortTagline',
+  Design: 'create.designShortTagline',
+  Spreadsheet: 'create.spreadsheetShortTagline',
+  Database: 'create.databaseShortTagline',
+  Email: 'create.emailShortTagline',
+  Message: 'create.messageShortTagline',
+  Channel: 'create.channelShortTagline',
+  Call: 'create.callShortTagline',
+  Task: 'create.taskShortTagline',
+  Project: 'create.projectShortTagline',
+  Reminder: 'create.reminderShortTagline',
+  Agent: 'create.agentShortTagline',
+  Routine: 'create.routineShortTagline',
+  Skill: 'create.skillShortTagline',
+  Form: 'create.formTagline',
+  'Photoshop file': 'create.photoshopTagline',
+  'Illustrator file': 'create.illustratorTagline',
 };
 
 export function createMenuShortTagline(item: CreatableBlock): string {
-  return SHORT_TAGLINES[item.label] ?? createMenuTagline(item);
+  const key = SHORT_TAGLINES[creatableId(item)];
+  return key ? t(key) : createMenuTagline(item);
 }

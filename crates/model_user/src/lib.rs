@@ -1,6 +1,10 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
+mod language;
+
+pub use language::Language;
+
 #[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug)]
 pub struct UserPermission {
     /// The role the permission is for
@@ -84,4 +88,12 @@ pub struct PutUserNameQueryParams {
     pub first_name: Option<String>,
     /// Last Name of user
     pub last_name: Option<String>,
+}
+
+/// The interface language a user picked for themselves. `None` follows their
+/// team's language.
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, utoipa::ToSchema)]
+pub struct UserLanguage {
+    /// The user's language, or `None` to use the team's.
+    pub language: Option<Language>,
 }

@@ -17,5 +17,6 @@ touches, in order, with the existing code to copy.
 | A backend endpoint to the TypeScript SDK | [`add-sdk-endpoint` skill](../../.agents/skills/add-sdk-endpoint/SKILL.md) |
 | A feature flag (web or backend) | [`feature-flags` skill](../../.agents/skills/feature-flags/SKILL.md) |
 | A view's feature tour | [`add-tour` skill](../../.agents/skills/add-tour/SKILL.md) |
+| Interface translations of new menu text | [`update-translations` skill](../../.agents/skills/update-translations/SKILL.md) |
 | Collaborative markdown on a feature | [`collab-surface-core` skill](../../.agents/skills/collab-surface-core/SKILL.md) |
 | A feature on shared database storage | [`database-core` skill](../../.agents/skills/database-core/SKILL.md) |

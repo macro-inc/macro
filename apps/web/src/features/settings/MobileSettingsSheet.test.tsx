@@ -44,7 +44,13 @@ const groups: SettingsTabGroup[] = [
   {
     label: 'Account',
     items: [
-      { tab: 'Account', label: 'Account', icon: () => <svg />, keywords: [] },
+      {
+        tab: 'Account',
+        label: 'Account',
+        englishLabel: 'Account',
+        icon: () => <svg />,
+        keywords: [],
+      },
     ],
   },
 ];

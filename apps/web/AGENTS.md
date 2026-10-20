@@ -110,6 +110,10 @@ ownership. Cancel, logout, and the ten-minute timeout retire pending callbacks.
 - Reactive GraphQL reads use `createLiveQuery` for a document and
   `useSoupAstItemsQuery` (backed by `createSoupLiveQuery`) for Soup lists; see
   [choosing a reactive read](docs/graphql-normalized-cache-plan.md#choosing-a-reactive-read).
+- Render user-visible text in new UI, and every menu and navigation label,
+  with `t()` from `@app/lib/i18n`, adding only the English to
+  `src/lib/i18n/locales/en/`. The periodic `update-translations` skill fills
+  in the other languages. See the [i18n rule](../../.agents/rules/web/i18n.md).
 - When adding or changing a feature flag, follow the `feature-flags` skill.
 - When adding or changing a view's feature tour, follow the `add-tour` skill.
 
@@ -117,7 +121,7 @@ ownership. Cancel, logout, and the ten-minute timeout retire pending callbacks.
 
 Conventions for this app live in `.agents/rules/web/` and load when you touch
 matching files: data fetching, Solid reactivity, architecture, UI, UI primitives,
-the startup bundle, and Lexical nodes.
+the startup bundle, Lexical nodes, and translated menu labels.
 
 ### Good Reference
 - https://github.com/solidjs-community/solid-primitives

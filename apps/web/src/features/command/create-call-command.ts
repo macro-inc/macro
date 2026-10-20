@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { TOKENS } from '@core/hotkey/tokens';
 import PhoneIcon from '@phosphor/phone.svg';
 import type { CreatableBlock } from './types';
@@ -9,9 +10,12 @@ export function createCallCommand(actions: {
   enabled: () => boolean;
 }): CreatableBlock {
   return {
-    label: 'Call',
+    id: 'Call',
+    get label() {
+      return t('create.callLabel');
+    },
     icon: PhoneIcon,
-    description: 'New Call',
+    description: () => t('create.callDescription'),
     keywords: ['new', 'create', 'meeting', 'video', 'call'],
     blockName: 'call',
     hotkeyToken: TOKENS.create.call,

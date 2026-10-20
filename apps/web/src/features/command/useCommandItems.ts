@@ -1,5 +1,6 @@
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { inEnglish } from '@app/lib/i18n';
 import { enableProjects } from '@core/constant/featureFlags';
 import type {
   EntityItem,
@@ -141,6 +142,15 @@ function makeAskAiItem(query: string): AskAiItem {
   };
 }
 
+function commandKey(command: CommandWithInfo): string {
+  const description = inEnglish(() =>
+    typeof command.description === 'function'
+      ? command.description()
+      : command.description
+  );
+  return description.replaceAll(' ', '-');
+}
+
 /**
  * Helper to convert commands to CommandItem format.
  * Deduplicates commands by description since commands with multiple hotkeys
@@ -157,11 +167,7 @@ function commandsToItems(
 ): CommandItem[] {
   const seen = new Set<string>();
   const dedupedCommands = commands.filter((command) => {
-    const description =
-      typeof command.description === 'function'
-        ? command.description()
-        : command.description;
-    const id = description.replaceAll(' ', '-');
+    const id = commandKey(command);
     if (seen.has(id)) {
       return false;
     }
@@ -176,7 +182,8 @@ function commandsToItems(
         : command.description;
     const tags = command.tags?.join(' ') ?? '';
     const keywords = command.keywords?.join(' ') ?? '';
-    const id = `command-${description.replaceAll(' ', '-')}`;
+    // Persisted recency keys stay English so they survive a language change.
+    const id = `command-${commandKey(command)}`;
     const lastUsedAt = getCommandLastUsedAt(id);
 
     return {

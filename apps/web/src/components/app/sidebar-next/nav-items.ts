@@ -1,5 +1,6 @@
 import { LIST_VIEW_PATHS } from '@app/constants/list-views';
 import { calendarPath } from '@app/features/calendar-view/calendar-url';
+import { t } from '@app/lib/i18n';
 import type { SidebarItem } from '@components/app/app-sidebar/sidebar';
 import { TOKENS } from '@core/hotkey/tokens';
 import BuildingsIcon from '@phosphor/buildings.svg';
@@ -60,7 +61,9 @@ export type SidebarNextMenuItem = Omit<
 export const SIDEBAR_NEXT_NAV_ITEMS = [
   {
     id: 'home',
-    label: 'Home',
+    get label() {
+      return t('nav.home');
+    },
     href: LIST_VIEW_PATHS.home,
     icon: HouseIcon,
     iconActive: HouseFillIcon,
@@ -69,7 +72,9 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
   },
   {
     id: 'documents',
-    label: 'Drive',
+    get label() {
+      return t('nav.drive');
+    },
     href: LIST_VIEW_PATHS.documents,
     icon: FolderSimpleIcon,
     iconActive: FolderSimpleFillIcon,
@@ -78,7 +83,9 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
   },
   {
     id: 'mail',
-    label: 'Email',
+    get label() {
+      return t('nav.email');
+    },
     href: LIST_VIEW_PATHS.mail,
     icon: EnvelopeIcon,
     iconActive: EnvelopeFillIcon,
@@ -87,7 +94,9 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
   },
   {
     id: 'channels',
-    label: 'Chat',
+    get label() {
+      return t('nav.chat');
+    },
     href: LIST_VIEW_PATHS.channels,
     icon: ChatsCircleIcon,
     iconActive: ChatsCircleFillIcon,
@@ -96,7 +105,9 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
   },
   {
     id: 'tasks',
-    label: 'Tasks',
+    get label() {
+      return t('nav.tasks');
+    },
     href: LIST_VIEW_PATHS.tasks,
     icon: ListChecksIcon,
     iconActive: ListChecksFillIcon,
@@ -105,7 +116,9 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
   },
   {
     id: 'calendar',
-    label: 'Calendar',
+    get label() {
+      return t('nav.calendar');
+    },
     href: calendarPath('timeGridWeek'),
     icon: CalendarBlankIcon,
     iconActive: CalendarBlankFillIcon,
@@ -114,7 +127,9 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
   },
   {
     id: 'agents',
-    label: 'Agents',
+    get label() {
+      return t('nav.agents');
+    },
     href: LIST_VIEW_PATHS.agents,
     icon: AgentIcon,
     iconActive: AgentFillIcon,
@@ -123,7 +138,9 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
   },
   {
     id: 'companies',
-    label: 'Customers',
+    get label() {
+      return t('nav.customers');
+    },
     href: LIST_VIEW_PATHS.companies,
     icon: BuildingsIcon,
     iconActive: BuildingsFillIcon,
@@ -132,7 +149,9 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
   },
   {
     id: 'calls',
-    label: 'Calls',
+    get label() {
+      return t('nav.calls');
+    },
     href: LIST_VIEW_PATHS.calls,
     icon: PhoneCallIcon,
     iconActive: PhoneCallFillIcon,
@@ -141,7 +160,9 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
   },
   {
     id: 'reviews',
-    label: 'Reviews',
+    get label() {
+      return t('nav.reviews');
+    },
     href: '/reviews',
     icon: GitPullRequestIcon,
     iconActive: GitPullRequestFillIcon,
@@ -150,7 +171,9 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
   },
   {
     id: 'booking-links',
-    label: 'Scheduling',
+    get label() {
+      return t('nav.scheduling');
+    },
     href: '/scheduling',
     icon: CalendarCheckIcon,
     iconActive: CalendarCheckFillIcon,

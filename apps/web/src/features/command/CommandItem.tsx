@@ -1,4 +1,5 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import { UserIcon } from '@core/component/UserIcon';
 import { hasValidHotkey } from '@core/hotkey/utils';
 import { type CrmContactEntity, Entity, type EntityData } from '@entity';
@@ -86,7 +87,9 @@ function CommandItemHotkey(props: { item: CommandMenuItem }) {
                 <>
                   {StepHotkey(step)}
                   <Show when={index() < (sequence()?.length ?? 0) - 1}>
-                    <span class="text-ink-extra-muted">then</span>
+                    <span class="text-ink-extra-muted">
+                      {t('commandMenu.hotkeyThen')}
+                    </span>
                   </Show>
                 </>
               )}
@@ -199,7 +202,7 @@ function SearchDisplay(props: { item: SearchItem }) {
         <SearchIcon class="size-4" />
       </div>
       <span class="truncate text-ink">
-        Search for <span class="text-ink">“{props.item.query}”</span>
+        {t('commandMenu.searchFor', { query: props.item.query })}
       </span>
     </div>
   );
@@ -212,7 +215,7 @@ function AskAiDisplay(props: { item: AskAiItem }) {
         <WideStar class="size-4" />
       </div>
       <span class="truncate text-ink">
-        Ask AI about <span class="text-ink">“{props.item.query}”</span>
+        {t('commandMenu.askAiAbout', { query: props.item.query })}
       </span>
     </div>
   );
@@ -226,14 +229,16 @@ export function ItemDisplay(props: { item: CommandMenuItem }) {
           <div class="flex items-center gap-2 flex-1 min-w-0">
             <ProjectIcon class="size-4 text-ink-muted shrink-0" />
             <span class="truncate">{item().name}</span>
-            <span class="ml-auto text-xs text-ink-muted">Project</span>
+            <span class="ml-auto text-xs text-ink-muted">
+              {t('commandMenu.projectBadge')}
+            </span>
           </div>
         )}
       </Match>
       <Match when={props.item.kind === 'new-project'}>
         <div class="flex items-center gap-2 flex-1 min-w-0">
           <PlusIcon class="size-4 text-ink-muted" />
-          <span>New project</span>
+          <span>{t('commandMenu.newProject')}</span>
         </div>
       </Match>
       <Match when={isSearchItem(props.item) && props.item}>

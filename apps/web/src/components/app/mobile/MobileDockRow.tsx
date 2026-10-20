@@ -1,6 +1,7 @@
 import { MobileSearchInput } from '@app/features/command/mobile/MobileSearchInput';
 import { SearchState } from '@app/features/command/mobile/mobileSearchState';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import {
   enableCalendarScheduling,
   enableTasksReviews,
@@ -46,18 +47,18 @@ function MoreViewsDrawer(props: {
     >
       <MobileDrawer.Trigger
         as={MobileDockButton}
-        ariaLabel="More views"
+        ariaLabel={t('mobile.moreViews')}
         icon={CaretUpIcon}
       />
       <MobileDrawer.Portal>
         <MobileDrawer.Overlay />
-        <MobileDrawer.Content aria-label="More views">
+        <MobileDrawer.Content aria-label={t('mobile.moreViews')}>
           <MobileDrawer.Handle />
           <MobileDrawer.ScrollBody>
             <div class="mx-3 flex flex-col gap-1 px-1">
               <MobileDrawer.Close
                 as={MobileDrawer.Item}
-                aria-label="Settings"
+                aria-label={t('nav.settings')}
                 class={settingsOpen() ? 'text-accent' : undefined}
                 onClick={() => {
                   hapticImpact('light');
@@ -65,7 +66,7 @@ function MoreViewsDrawer(props: {
                 }}
               >
                 <IconGear class="size-4 shrink-0" />
-                <span>Settings</span>
+                <span>{t('nav.settings')}</span>
               </MobileDrawer.Close>
               <Show
                 when={
@@ -96,7 +97,7 @@ function MoreViewsDrawer(props: {
               <Show when={reviewsFlag().enabled}>
                 <MobileDrawer.Close
                   as={MobileDrawer.Item}
-                  aria-label="Reviews"
+                  aria-label={t('nav.reviews')}
                   class={props.isActive('reviews') ? 'text-accent' : undefined}
                   aria-current={props.isActive('reviews') ? 'page' : undefined}
                   onClick={() => {
@@ -105,13 +106,13 @@ function MoreViewsDrawer(props: {
                   }}
                 >
                   <GitPullRequestIcon class="size-4 shrink-0" />
-                  <span>Reviews</span>
+                  <span>{t('nav.reviews')}</span>
                 </MobileDrawer.Close>
               </Show>
               <Show when={schedulingFlag().enabled}>
                 <MobileDrawer.Close
                   as={MobileDrawer.Item}
-                  aria-label="Scheduling"
+                  aria-label={t('nav.scheduling')}
                   class={
                     props.isActive('booking-links') ? 'text-accent' : undefined
                   }
@@ -124,16 +125,16 @@ function MoreViewsDrawer(props: {
                   }}
                 >
                   <CalendarCheckIcon class="size-4 shrink-0" />
-                  <span>Scheduling</span>
+                  <span>{t('nav.scheduling')}</span>
                 </MobileDrawer.Close>
               </Show>
               <div class="-mx-1 h-px shrink-0 bg-edge" />
               <MobileDrawer.Close
-                aria-label="Views"
+                aria-label={t('mobile.views')}
                 class="flex h-9 shrink-0 items-center px-3 text-sm font-medium text-ink-muted"
                 onClick={() => hapticImpact('light')}
               >
-                Views
+                {t('mobile.views')}
               </MobileDrawer.Close>
             </div>
           </MobileDrawer.ScrollBody>
@@ -195,7 +196,7 @@ function MobileNavigationDockRow() {
       <MobileDockIsland class="shrink-0">
         <MobileDockButton
           icon={SearchIcon}
-          ariaLabel="Search"
+          ariaLabel={t('nav.search')}
           onClick={() => {
             // Mount the real input first, then focus it in this same user
             // gesture. Deferring the focus transfer can lose iOS keyboard
