@@ -45,6 +45,8 @@ from user requests and defines the notification-only `<noop/>` contract.
 In-app replies use `m-document-mention` with `blockName: "routine"` for routines;
 external MCP replies use `/app/routines/<id>` URLs.
 
+- `src/privacy.rs` supplies generation/judge privacy policy; `compose` joins runtime memory sections without static lifetimes.
+
 ## Checks
 
 - `cargo test -p prompt` (`SQLX_OFFLINE` unset).

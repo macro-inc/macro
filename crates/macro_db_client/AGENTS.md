@@ -55,6 +55,8 @@ the scan does not retain the replacement migration's exclusive table lock.
   gate it behind a Cargo feature in `Cargo.toml` only if it's optional (see
   `account_merge_request`, `team`).
 
+- Composed-memory tables and refresh leases are owned by `crates/memory`; migrations leave legacy memory rows intact.
+
 ## Checks
 
 - `cargo test -p macro_db_client` (`SQLX_OFFLINE` unset; requires local MacroDB

@@ -21,6 +21,7 @@ pub mod email;
 pub mod math;
 pub mod mcp_item_links;
 pub mod mentions;
+pub mod privacy;
 pub mod pull_requests;
 pub mod skills;
 pub mod tasks;
@@ -407,4 +408,13 @@ mod tests {
         assert!(in_app.contains("non-Markdown documents"));
         assert!(in_app.contains("apply to your own conversational replies only"));
     }
+}
+
+/// Compose runtime sections in their supplied order without retaining their data.
+pub fn compose(sections: &[&dyn std::fmt::Display]) -> String {
+    sections
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join("\n")
 }

@@ -624,6 +624,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Revalidate Soup queries whose selected sort/group property or date predicate matches an edited definition; compute loaded date-group movement in TypeScript, then refetch authoritative counts and unloaded rows. Keep property sorts and date filters out of the timestamp-only WASM projection.
 - Keep REST grouped Soup item pools and `itemIds` keyed by raw entity IDs, matching Tasks readers and the normalized cache.
 
+- Memory tool results use expandable rows on desktop and mobile; explicit preferences and activity reports remain inspectable after each tool call.
+
 ## Rules
 
 Conventions for this app live in `.agents/rules/web/` and load when you touch

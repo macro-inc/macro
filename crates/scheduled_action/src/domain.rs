@@ -8,3 +8,4 @@ pub mod service;
 pub mod target_runner;
 pub mod target_validation;
 pub mod templates;
+pub mod lambda;
