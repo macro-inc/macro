@@ -303,6 +303,20 @@ This entity's reference for bulk property operations.
 
 ***
 
+### readReceipts()
+
+> **readReceipts**(): `Promise`\<[`EmailReadReceipt`](../interfaces/EmailReadReceipt.md)[]\>
+
+Opens recorded for messages sent from the caller's own or delegated
+inboxes with read receipts on, newest message first. Counts are
+approximate: some mail apps prefetch images and others block them.
+
+#### Returns
+
+`Promise`\<[`EmailReadReceipt`](../interfaces/EmailReadReceipt.md)[]\>
+
+***
+
 ### removeLabel()
 
 > **removeLabel**(`label`): `Promise`\<`void`\>
