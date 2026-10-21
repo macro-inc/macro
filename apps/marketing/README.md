@@ -1025,3 +1025,6 @@ The email-sharing result uses an inline email icon and linked subject from
 `DocMention`. Do not add a custom preview card, Live badge, sender summary,
 or reply-count footer. Opening the mention shows the complete sample thread,
 including subsequent replies.
+
+The landing-page CRM illustration has no playback footer or Pause/Replay controls;
+it still pauses offscreen and when a visitor enters the demo.

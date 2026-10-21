@@ -72,6 +72,7 @@ it('waits for the email body to be visible and pauses again below its threshold'
 
 it('waits for the CRM scene before moving a company and pauses below its threshold', () => {
   const view = render(() => <HomepageCrm />);
+  expect(view.queryByRole('button', { name: /CRM walkthrough/ })).toBeNull();
   const scene = view.getByRole('img', {
     name: /Claude moves Keystone Mechanical/,
   });

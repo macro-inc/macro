@@ -46,9 +46,7 @@ function DemoCard(props: { company: Company }) {
   );
 }
 
-export default function HomepageCrm(
-  props: { playbackControls?: boolean } = {}
-) {
+export default function HomepageCrm() {
   const [time, setTime] = createSignal(0);
   const [paused, setPaused] = createSignal(false);
   const [visible, setVisible] = createSignal(false);
@@ -201,33 +199,6 @@ export default function HomepageCrm(
             />
           </div>
         </div>
-        <Show when={!reduced() && props.playbackControls !== false}>
-          <div class="homepage-crm-footer">
-            <div class="flex gap-3 shrink-0">
-              <Show when={!complete()}>
-                <button
-                  type="button"
-                  onClick={() => setPaused((p) => !p)}
-                  aria-label={
-                    paused() ? 'Play CRM walkthrough' : 'Pause CRM walkthrough'
-                  }
-                >
-                  {paused() ? 'Play' : 'Pause'}
-                </button>
-              </Show>
-              <button
-                type="button"
-                onClick={() => {
-                  setTime(0);
-                  setPaused(false);
-                }}
-                aria-label="Replay CRM walkthrough"
-              >
-                Replay
-              </button>
-            </div>
-          </div>
-        </Show>
       </DocsGraphicFrame>
     </div>
   );
