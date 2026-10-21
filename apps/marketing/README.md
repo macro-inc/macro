@@ -75,6 +75,10 @@ The homepage carousel advances only when the visitor selects a highlight.
   fonts, videos, styling, and other static files.
 - `scripts/`: public build, prerendering, SEO, and architecture checks.
 
+Hero descriptions fill their available width up to the shared maximum rather
+than shrink-wrapping their text, so Safari does not wrap a planned desktop line
+before the explicit line break. Phone copy remains free to wrap.
+
 Email is the visual reference for product pages. Tasks, Channels, Documents,
 Agents, Calls, and Reviews use `ProductPage` on top of `FeaturePage`: centered
 Slab heroes, a 920px outer feature measure with 24px inset, left-aligned

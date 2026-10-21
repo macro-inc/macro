@@ -66,6 +66,21 @@ export async function verifyProductPages(browser: Browser, origin: string) {
         false
       );
       expect(errors, `${route}: no browser errors`).toEqual([]);
+      if (route === '/tasks') {
+        await page.setViewportSize({ width: 1000, height: 844 });
+        await page.evaluate(() => document.fonts.ready);
+        const lines = await page
+          .locator('.email-page-hero-description')
+          .evaluate(
+            (element) =>
+              element.clientHeight /
+              Number.parseFloat(getComputedStyle(element).lineHeight)
+          );
+        expect(
+          lines,
+          'Tasks desktop subheading stays on its two intended lines'
+        ).toBeCloseTo(2, 1);
+      }
       console.log(
         `[prerender] ${route}: ${count} mobile demos accept touch entry and return to page scrolling`
       );
