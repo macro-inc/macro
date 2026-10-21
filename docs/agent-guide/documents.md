@@ -234,6 +234,8 @@ folder option. Insertion uses the position captured when I is pressed. Verify
 keyboard selection, closing/reopening, upload cancellation, and placement after
 pan/zoom. The shortcut is inactive during text/embed editing and in read-only canvases.
 Reference cards register with the shared reference system when the canvas saves.
+In both editable and read-only canvases, click a reference card's title to open
+its document; selecting the rest of the card leaves the canvas in place.
 Verify the backlink on the target, duplicate cards retaining one reference, and
 removing the final card followed by undo/redo. Reload must preserve tracking.
 Existing untracked cards register on their next content save.
