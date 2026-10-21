@@ -20,12 +20,14 @@
 .site-menu { position: relative; display: flex; align-items: center; pointer-events: auto; }
 /* Keep the hover path connected across the gap to the dropdown. */
 .site-header[data-menu-open=true] .site-menu::after { content: ''; position: absolute; top: 100%; left: 0; width: min(560px, calc(100vw - 64px)); height: 12px; }
-.site-menu-toggle { display: none; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--nav-ink); cursor: pointer; }
-.site-menu-toggle svg { width: 18px; height: 18px; }
-.site-menu-toggle[aria-expanded=true] svg { transform: rotate(180deg); }
-@media (hover: none), (max-width: 767px) { .site-menu-toggle { display: grid; } }
 
 .site-menu-trigger { display: grid; place-items: center; width: 68px; height: 68px; margin-inline: -10px; padding: 0; border: 0; background: transparent; color: var(--nav-ink); border-radius: 50%; transition: background-color 180ms ease; }
+/* One hamburger on touch/narrow screens; desktop keeps its home/hover link. */
+.site-menu-toggle { display: none; cursor: pointer; }
+@media (hover: none), (max-width: 767px) {
+  .site-menu-home { display: none; }
+  .site-menu-toggle { display: grid; }
+}
 .site-menu-trigger:is(:hover, :focus-visible, [aria-expanded=true]) { background: color-mix(in srgb, var(--nav-ink) 8%, transparent); }
 .site-menu-mark { position: relative; display: block; width: 36px; height: 36px; }
 .site-menu-mark > span { position: absolute; inset: 0; background: currentColor; transition: clip-path 440ms cubic-bezier(.22,1,.36,1); }
@@ -129,11 +131,11 @@
   .site-menu-panel { animation: none; }
 }
 .site-menu-mark > span:nth-child(1) { clip-path: polygon(12.500% 20.833%, 50.000% 20.833%, 87.500% 20.833%, 87.500% 25.000%, 87.500% 29.167%, 50.000% 29.167%, 12.500% 29.167%, 12.500% 25.000%, 12.500% 20.833%); }
-.site-menu-trigger:is(:hover, :focus-visible, [aria-expanded=true]) .site-menu-mark > span:nth-child(1) { clip-path: polygon(0.000% 41.725%, 8.333% 38.392%, 20.704% 50.304%, 20.704% 79.883%, 12.363% 83.217%, 0.938% 72.200%, 0.000% 70.062%, 0.000% 50.000%, 0.000% 41.725%); }
+.site-menu-home:is(:hover, :focus-visible, [aria-expanded=true]) .site-menu-mark > span:nth-child(1) { clip-path: polygon(0.000% 41.725%, 8.333% 38.392%, 20.704% 50.304%, 20.704% 79.883%, 12.363% 83.217%, 0.938% 72.200%, 0.000% 70.062%, 0.000% 50.000%, 0.000% 41.725%); }
 .site-menu-mark > span:nth-child(2) { clip-path: polygon(12.500% 45.833%, 50.000% 45.833%, 87.500% 45.833%, 87.500% 50.000%, 87.500% 54.167%, 50.000% 54.167%, 12.500% 54.167%, 12.500% 50.000%, 12.500% 45.833%); }
-.site-menu-trigger:is(:hover, :focus-visible, [aria-expanded=true]) .site-menu-mark > span:nth-child(2) { clip-path: polygon(16.992% 20.000%, 25.325% 16.667%, 60.342% 50.417%, 60.346% 80.000%, 52.004% 83.333%, 22.658% 55.033%, 22.658% 49.562%, 16.992% 44.108%, 16.992% 20.000%); }
+.site-menu-home:is(:hover, :focus-visible, [aria-expanded=true]) .site-menu-mark > span:nth-child(2) { clip-path: polygon(16.992% 20.000%, 25.325% 16.667%, 60.342% 50.417%, 60.346% 80.000%, 52.004% 83.333%, 22.658% 55.033%, 22.658% 49.562%, 16.992% 44.108%, 16.992% 20.000%); }
 .site-menu-mark > span:nth-child(3) { clip-path: polygon(12.500% 70.833%, 50.000% 70.833%, 87.500% 70.833%, 87.500% 75.000%, 87.500% 79.167%, 50.000% 79.167%, 12.500% 79.167%, 12.500% 75.000%, 12.500% 70.833%); }
-.site-menu-trigger:is(:hover, :focus-visible, [aria-expanded=true]) .site-menu-mark > span:nth-child(3) { clip-path: polygon(56.642% 20.000%, 64.979% 16.667%, 99.062% 49.529%, 100.000% 51.750%, 100.000% 80.000%, 91.667% 83.333%, 62.254% 54.987%, 62.308% 49.571%, 56.642% 44.108%); }
+.site-menu-home:is(:hover, :focus-visible, [aria-expanded=true]) .site-menu-mark > span:nth-child(3) { clip-path: polygon(56.642% 20.000%, 64.979% 16.667%, 99.062% 49.529%, 100.000% 51.750%, 100.000% 80.000%, 91.667% 83.333%, 62.254% 54.987%, 62.308% 49.571%, 56.642% 44.108%); }
 
 .site-menu-panel[hidden] { display: none; }
 

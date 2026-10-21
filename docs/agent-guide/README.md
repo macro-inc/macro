@@ -54,3 +54,8 @@ hosted Google/SSO redirect allowlist does not include arbitrary hostnames.
 Email magic links retain the page's HTTP or HTTPS scheme and port.
 On allowed OAuth origins such as `https://localhost`, standalone Vite uses the
 session-code handoff to establish cookies on the local hostname after SSO.
+
+For the standalone marketing site, verify cold product-page navigation with the
+route module delayed: prerendered content must remain until the page is ready.
+On mobile, the single hamburger opens and closes navigation; there is no separate
+caret. Check Escape focus return and keyboard wrapping inside the open menu.

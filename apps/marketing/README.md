@@ -294,14 +294,18 @@ Keep cards at the three-column width with equal gaps, centering rows with one
 or two cards. Wrap at narrow widths without stretching the final row; stack
 full-width cards on phones. Allow height to grow when text needs more room.
 
-`SiteHeader` keeps the top-left mark as a normal `href="/"` link with
+`SiteHeader` keeps the desktop top-left mark as a normal `href="/"` link with
 `target="_self"`, so clicking returns to the landing page instead of signup.
 Mouse hover opens the navigation and preserves the existing logo morph; keep the
 hover path connected across the gap to the dropdown. Delay hover dismissal by
 350ms and cancel it on re-entry; keep navigation open while its links have focus.
 Outside clicks and Escape dismiss immediately. ArrowDown opens and focuses
-navigation from the home link. Touch and narrow layouts have a separate menu
-toggle, so tapping the mark still goes home. Escape returns focus to the opener.
+navigation from the home link. Touch and narrow layouts show a single hamburger
+button that opens navigation, without a separate caret. Escape and keyboard
+wrapping return focus to that button. Home remains available inside the menu.
+
+The product entry preloads the requested lazy route and its CSS before replacing
+prerendered HTML, avoiding a header-only flash on first load.
 
 Feature chapters rely on their heading, description, and working demo. Do not
 reintroduce unused feature-card guides or duplicate explanatory drawers.

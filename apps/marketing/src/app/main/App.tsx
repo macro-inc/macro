@@ -121,6 +121,22 @@ const RouteGithub = lazy(() =>
     })
   )
 );
+// Resolve the requested product module (including its CSS) before replacing
+// prerendered HTML. Otherwise the root paints only the header on a cold visit.
+export function preloadProductRoute(pathname: string) {
+  const routes = new Map([
+    ['/tasks', RouteTasks],
+    ['/email', RouteEmail],
+    ['/documents', RouteDocuments],
+    ['/channels', RouteChannels],
+    ['/calls', RouteCalls],
+    ['/crm', RouteCrm],
+    ['/agents', RouteAgents],
+    ['/github', RouteGithub],
+  ]);
+  return routes.get(pathname.replace(/\/$/, ''))?.preload();
+}
+
 const RoutePricing = lazy(() =>
   import('../routes/RoutePricing').then((module) => ({
     default: module.RoutePricing,
