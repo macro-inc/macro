@@ -309,6 +309,9 @@ wrapping return focus to that button. Home remains available inside the menu.
 The product entry preloads the requested lazy route and its CSS before replacing
 prerendered HTML, avoiding a header-only flash on first load.
 
+Keep the shared feature-section padding on mobile, including between the
+Documents/Tasks links and the Coding agents heading; do not zero that boundary.
+
 Feature chapters rely on their heading, description, and working demo. Do not
 reintroduce unused feature-card guides or duplicate explanatory drawers.
 

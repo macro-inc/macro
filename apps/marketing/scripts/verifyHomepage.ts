@@ -100,6 +100,19 @@ export async function verifyHomepage(directory: string): Promise<void> {
         if (viewport.width < 800) {
           await expect(desktopDemo).toHaveCount(0);
           await expect(page.locator('.homepage-mobile-story')).toBeVisible();
+          const featureGap = await page
+            .locator('#coding-agents .homepage-feature-title')
+            .evaluate((heading) => {
+              const links = document.querySelector(
+                '#documents .homepage-feature-more-group'
+              );
+              if (!links) throw new Error('Missing document feature links');
+              return (
+                heading.getBoundingClientRect().top -
+                links.getBoundingClientRect().bottom
+              );
+            });
+          expect(featureGap).toBeGreaterThanOrEqual(64);
         } else await expect(desktopDemo).toBeVisible();
         await page.evaluate(async () => {
           await document.fonts.ready;
