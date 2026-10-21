@@ -225,7 +225,7 @@ async fn a_claimed_colleague_gets_one_email_from_the_joiner() {
     );
     assert_eq!(
         request["build_email"]["content"]["subject"],
-        "Alice Example joined Macro"
+        "A team has been created for your organization"
     );
     assert_eq!(request["build_apns"], serde_json::Value::Null);
     assert_eq!(request["send_conn_gateway"], false);

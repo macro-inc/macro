@@ -1,4 +1,5 @@
-//! "x joined Macro" emails to colleagues who share a team's auto-join domain.
+//! One-time notices to colleagues who share a team's auto-join domain that a team
+//! now exists for their organization.
 //!
 //! Each address is claimed once per team, forever, before its email is enqueued. The claim
 //! decides eligibility. This module only shapes and sends the emails it accepted.
@@ -80,7 +81,7 @@ pub trait JoinAnnouncementRepository: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), Report<JoinAnnouncementError>>> + Send;
 }
 
-/// Tells colleagues that someone joined Macro.
+/// Tells colleagues that a team was set up for their organization.
 pub trait JoinAnnouncementService: Send + Sync + 'static {
     /// Emails each candidate other than `joined` whom
     /// [`JoinAnnouncementRepository::claim`] accepts. Every address is claimed before its
