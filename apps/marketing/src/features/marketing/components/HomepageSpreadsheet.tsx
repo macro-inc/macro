@@ -227,10 +227,6 @@ export default function HomepageSpreadsheet() {
         )}
       </Show>
       <div class="workspace-demo homepage-spreadsheet">
-        <div class="homepage-compose-status">
-          <span>{NAME}</span>
-          <span>Interactive demo</span>
-        </div>
         <section
           class="homepage-sheet-editor"
           aria-label={`${NAME} spreadsheet`}
