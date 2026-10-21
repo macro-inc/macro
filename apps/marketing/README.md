@@ -324,6 +324,9 @@ neutral website control accent. Comment anchors use the product’s yellow wash
 and underline; the sample date-check comment anchors to the launch date, leaving
 the checklist heading unmarked.
 
+Feature demos use the shared section padding for the next heading. Avoid
+extra bottom spacers on demo wrappers, including the homepage spreadsheet.
+
 Feature chapters rely on their heading, description, and working demo. Do not
 reintroduce unused feature-card guides or duplicate explanatory drawers.
 

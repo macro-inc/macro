@@ -212,7 +212,7 @@ export default function HomepageSpreadsheet() {
   }
 
   return (
-    <div class="relative pb-24">
+    <div class="relative">
       <Show when={record()}>
         {(reference) => (
           <Suspense>
