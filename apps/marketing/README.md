@@ -683,9 +683,14 @@ sales reporting is checked for those CRMs and partial for Macro’s agent summar
 Connected collaboration tools receive partial credit alongside Macro’s native workspace.
 Credit Macro’s Granola connection for reading captured notes, not for native
 recording of other meeting apps or every feature of the connected product. ClickUp
-stays in the migration overview. Overview links scroll to the matching product
-comparison; verify both initial-load and client-side navigation hashes. Keep cells to checks, crosses, or explained partial marks and label built-in tools explicitly. Retain detailed article links when an article exists. Source URLs
-are not shown in the UI. Icon-only comparison tables are not exported as prose
+stays in the migration overview. The migration overview uses the same framed
+`FeatureComparisons` renderer with plain, unlinked headers and row labels. Its
+verified rows and source URLs live in `core/migration-comparisons.ts`; CRM
+templates and Salesforce-backed Slack CRM receive explained partial marks.
+The wide overview remains horizontally scrollable on all viewport sizes. Keep
+cells to checks, crosses, or explained partial marks and label built-in tools
+explicitly. Detailed articles remain discoverable through navigation rather than
+comparison-table labels. Source URLs are not shown in the UI. Icon-only comparison tables are not exported as prose
 FAQ answers. Verify table columns, keyboard focus, scrolling, and existing
 functional FAQs after moving or adding a comparison.
 
