@@ -82,6 +82,8 @@ it('uses a single hamburger touch toggle and closes when leaving navigation', ()
   expect(toggle.querySelector('svg')).toBeNull();
   fireEvent.click(toggle);
   expect(screen.getByRole('navigation')).toBeTruthy();
+  expect(toggle.querySelector('svg')).toBeTruthy();
+  expect(toggle.querySelector('.site-menu-mark')).toBeNull();
   fireEvent.keyDown(toggle, { key: 'Escape' });
   expect(document.activeElement).toBe(toggle);
   expect(screen.queryByRole('navigation')).toBeNull();

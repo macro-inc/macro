@@ -301,7 +301,9 @@ hover path connected across the gap to the dropdown. Delay hover dismissal by
 350ms and cancel it on re-entry; keep navigation open while its links have focus.
 Outside clicks and Escape dismiss immediately. ArrowDown opens and focuses
 navigation from the home link. Touch and narrow layouts show a single hamburger
-button that opens navigation, without a separate caret. Escape and keyboard
+button that opens navigation, without a separate caret. It becomes an X while
+open. Mobile menus use an opaque, theme-matched surface and two-column link
+groups with 48px minimum tap targets, keeping every group easy to reach. Escape and keyboard
 wrapping return focus to that button. Home remains available inside the menu.
 
 The product entry preloads the requested lazy route and its CSS before replacing
