@@ -169,6 +169,12 @@ export async function verifyHomepage(directory: string): Promise<void> {
           const workspace = page.frameLocator(
             'iframe[title="Embedded Macro sample workspace"]'
           );
+          // Prerendered buttons can paint before they have handlers. Also wait
+          // for iframe load, whose carousel listener selects the initial view.
+          await expect(page.locator('.homepage-embedded-loading')).toHaveCount(
+            0
+          );
+          await workspace.locator('.dummy-route:not([data-hk])').waitFor();
           const chat = workspace
             .getByRole('navigation', { name: 'Workspace navigation' })
             .getByRole('button', { name: 'Chat', exact: true });
