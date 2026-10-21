@@ -97,7 +97,6 @@ num-bigint = { version = "0.4" }
 num-complex = { version = "0.4" }
 num-integer = { version = "0.1", features = ["i128"] }
 num-iter = { version = "0.1", default-features = false, features = ["i128", "std"] }
-num-rational = { version = "0.4", features = ["num-bigint-std"] }
 num-traits = { version = "0.2", features = ["i128", "libm"] }
 once_cell = { version = "1" }
 opentelemetry = { version = "0.31", default-features = false, features = ["internal-logs", "logs", "metrics", "testing"] }
@@ -121,6 +120,7 @@ rig-agent = { version = "0.41", features = ["test-utils"] }
 rig-core = { version = "0.41", features = ["test-utils"] }
 rmcp = { version = "1", features = ["auth", "client", "transport-streamable-http-client-reqwest", "transport-streamable-http-server"] }
 rsa = { version = "0.9", features = ["getrandom", "sha1"] }
+rust-embed-utils = { version = "8", default-features = false, features = ["debug-embed"] }
 rustc-hash = { version = "2" }
 rustls = { version = "0.23", default-features = false, features = ["logging", "prefer-post-quantum", "ring", "std", "tls12"] }
 rustls-webpki = { version = "0.103", default-features = false, features = ["aws-lc-rs", "ring", "std"] }
@@ -250,7 +250,6 @@ num-bigint = { version = "0.4" }
 num-complex = { version = "0.4" }
 num-integer = { version = "0.1", features = ["i128"] }
 num-iter = { version = "0.1", default-features = false, features = ["i128", "std"] }
-num-rational = { version = "0.4", features = ["num-bigint-std"] }
 num-traits = { version = "0.2", features = ["i128", "libm"] }
 once_cell = { version = "1" }
 opentelemetry = { version = "0.31", default-features = false, features = ["internal-logs", "logs", "metrics", "testing"] }
@@ -276,6 +275,7 @@ rig-agent = { version = "0.41", features = ["test-utils"] }
 rig-core = { version = "0.41", features = ["test-utils"] }
 rmcp = { version = "1", features = ["auth", "client", "transport-streamable-http-client-reqwest", "transport-streamable-http-server"] }
 rsa = { version = "0.9", features = ["getrandom", "sha1"] }
+rust-embed-utils = { version = "8", default-features = false, features = ["debug-embed"] }
 rustc-hash = { version = "2" }
 rustls = { version = "0.23", default-features = false, features = ["logging", "prefer-post-quantum", "ring", "std", "tls12"] }
 rustls-webpki = { version = "0.103", default-features = false, features = ["aws-lc-rs", "ring", "std"] }

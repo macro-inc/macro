@@ -217,15 +217,6 @@ macro_rules! env_var {
                     }
                 }
 
-                #[doc = "This is a const fn which will panic at compile time if the environment variable is not found"]
-                #[allow(dead_code)]
-                $v const fn new_comptime() -> Self {
-                    let val = std::option_env!($crate::paste::paste! { stringify!([<$n:snake:upper>]) });
-                    $crate::paste::paste! {
-                        Self::Comptime(val.expect(concat!("Failed to find the ", stringify!([<$n:snake:upper>]), " variable in environment at compile time")))
-                    }
-                }
-
 
                 #[doc = "Function used for testing purposes. Allows the caller to create a new Self via a static str"]
                 #[cfg(test)]
@@ -335,16 +326,6 @@ macro_rules! env_var {
                     Self {
                         $(
                             [<$field_name:snake>]: $field_name::unwrap_new(),
-                        )*
-                    }
-                }
-
-                #[doc = "Create a new instance of self with all the internal env vals set at compile time. Will fail to compile if any value is not set at compile time"]
-                #[allow(dead_code)]
-                $v const fn new_comptime() -> Self {
-                    Self {
-                        $(
-                            [<$field_name:snake>]: $field_name::new_comptime(),
                         )*
                     }
                 }
@@ -487,15 +468,6 @@ macro_rules! maybe_env_var {
                 $v fn new() -> Option<Self> {
                     let res = $crate::maybe_read_env($crate::paste::paste! { stringify!([<$n:snake:upper>]) })?;
                     Some(Self::Runtime(std::sync::Arc::from(res)))
-                }
-
-                #[doc = "Returns the value at compile time if present, otherwise `None`"]
-                #[allow(dead_code)]
-                $v const fn new_comptime() -> Option<Self> {
-                    match std::option_env!($crate::paste::paste! { stringify!([<$n:snake:upper>]) }) {
-                        Some(val) => Some(Self::Comptime(val)),
-                        None => None,
-                    }
                 }
 
                 #[doc = "Function used for testing purposes. Allows the caller to create a new Self via a static str"]
@@ -677,16 +649,6 @@ macro_rules! maybe_env_var {
                     Self {
                         $(
                             [<$field_name:snake>]: $field_name::new(),
-                        )*
-                    }
-                }
-
-                #[doc = "Create a new instance of self with all the internal env vals set at compile time. Each field is `Option<T>`."]
-                #[allow(dead_code)]
-                $v const fn new_comptime() -> Self {
-                    Self {
-                        $(
-                            [<$field_name:snake>]: $field_name::new_comptime(),
                         )*
                     }
                 }

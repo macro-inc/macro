@@ -1,7 +1,16 @@
 //! Corpus helpers for the CLI: the shared corpus types and a parallel map.
 
 pub use pptx_engine::fidelity::corpus::*;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
+
+/// The default corpus directory (inside the crate). Lives in the binary, not
+/// the library: `env!("CARGO_MANIFEST_DIR")` compiles this checkout's absolute
+/// path in, and a library carrying it never shares a kache entry across
+/// machines.
+pub fn default_corpus() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/corpus")
+}
 
 /// Maps `f` over `items` on `jobs` threads, keeping order.
 pub fn par_map<T: Sync, R: Send>(items: &[T], jobs: usize, f: impl Fn(&T) -> R + Sync) -> Vec<R> {

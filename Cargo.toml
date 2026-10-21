@@ -1,5 +1,7 @@
 [workspace]
 resolver = "2"
+# Patched third-party crates ([patch.crates-io]), not workspace members.
+exclude = ["vendor"]
 
 members = [
   "crates/access_requests",
@@ -270,7 +272,15 @@ http-body-util = "0.1.2"
 httpdate = "1"
 hyper = "1"
 hyper-util = { version = "0.1", features = ["tokio"] }
-image = "0.25"
+# image's default formats minus "avif": its AVIF encoder pulls in rav1e, whose
+# build script records whether it runs in CI, so rav1e and everything above it
+# (attachment, image_optimizer, ...) compiled differently on developer machines
+# and in CI. Nothing here decodes AVIF (that needs "avif-native"), so AVIF
+# inputs already failed before reaching the encoder.
+image = { version = "0.25", default-features = false, features = [
+  "rayon", "bmp", "dds", "exr", "ff", "gif", "hdr", "ico", "jpeg", "png", "pnm",
+  "qoi", "tga", "tiff", "webp",
+] }
 image-webp = "0.2"
 indexmap = "2"
 infer = "0.19.0"
@@ -422,7 +432,10 @@ utoipa = { version = "5.4.0", features = [
   "repr",
   "uuid",
 ] }
-utoipa-swagger-ui = { version = "9", features = ["axum", "vendored"] }
+# debug-embed: debug builds embed Swagger UI instead of compiling in the
+# absolute build-directory path they would read it from at runtime, which made
+# the crate and every service above it differ per checkout.
+utoipa-swagger-ui = { version = "9", features = ["axum", "vendored", "debug-embed"] }
 uuid = { version = "1.15.1", features = ["fast-rng", "serde", "v4", "v5", "v7"] }
 wiremock = "0.6.5"
 zeroize = "1.8.2"
@@ -475,6 +488,8 @@ subtle = "2.6.1"
 [patch.crates-io]
 # Only replaces tungstenite 0.27 (GraphQL subscriptions); 0.28/0.29 stay upstream.
 tungstenite = { git = "https://github.com/signalapp/tungstenite-rs", rev = "a1837ccfe96b6895a57352d7f0112e4557516c27" }
+# Writes a checkout-independent embed folder; see vendor/utoipa-swagger-ui/README-MACRO.md.
+utoipa-swagger-ui = { path = "vendor/utoipa-swagger-ui" }
 
 # cache-turso's storage tests load thousands of rows into the embedded SQL engine
 # to assert VM step budgets. Unoptimized, the engine made them the slowest tests
