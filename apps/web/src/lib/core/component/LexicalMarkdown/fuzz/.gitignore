@@ -1,0 +1,4 @@
+test-results/
+reports/
+.vite/
+.dist/
