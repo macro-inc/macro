@@ -992,6 +992,9 @@ section collapse, Threads navigation, and opening a mentioned source after
 switching channels. Message text uses the app's 15px/24px reading size; dark
 surface and edge tokens are frozen from `apps/web/src/index.css`.
 
+Keep Merge/Merged and Open session actions in the shared agent chip at the same
+24px height and pill radius, with touch resizing disabled for both.
+
 Cursor replies in the Agents, Channels, and GitHub walkthroughs share
 `DemoAgentChip`, adapted from the current `MagicChipView` in the app. It uses
 the settled 88px rounded session card, Open session action, and an output/PR

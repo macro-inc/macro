@@ -76,6 +76,7 @@ export default function HomepagePullRequest() {
                       <Button
                         variant="success"
                         size="sm"
+                        noTouchResize
                         class="homepage-agent-merge"
                         aria-label={
                           merged()
@@ -85,7 +86,7 @@ export default function HomepagePullRequest() {
                         disabled={merged()}
                         onClick={() => setMerged(true)}
                       >
-                        <GitMerge class="size-3.5" />
+                        <GitMerge class="size-3" />
                         {merged() ? 'Merged' : 'Merge'}
                       </Button>
                     }

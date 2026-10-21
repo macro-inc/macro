@@ -10,7 +10,7 @@
 .demo-cursor-check { display:flex; align-items:center; justify-content:center; flex:none; width:18px; height:18px; border-radius:50%; background:var(--color-success); color:var(--color-panel); }
 .demo-cursor-model { font-size:12px; color:var(--color-ink-muted); }
 .demo-cursor-status { border-radius:999px; padding:2px 8px; font-size:12px; color:var(--color-success); background:color-mix(in oklch,var(--color-success) 14%,transparent); }
-.demo-cursor-open { border-radius:999px; padding:3px 8px; font-size:12px; gap:4px; }
+.demo-cursor-open, .homepage-agent-merge { box-sizing:border-box; height:24px; min-height:0; border-radius:999px; padding:3px 8px; font-size:12px; line-height:16px; gap:4px; }
 .demo-cursor-output { display:flex; align-items:center; min-width:0; margin-top:8px; min-height:32px; border-radius:8px; background:var(--color-hover); }
 .demo-cursor-output > button { display:flex; align-items:center; gap:8px; width:100%; min-width:0; border:0; border-radius:8px; padding:6px 10px; margin:0; background:transparent; color:var(--color-ink-muted); text-align:left; font-size:13px; }
 .demo-cursor-output > button:hover { background:var(--color-active); }
