@@ -1038,3 +1038,8 @@ The landing CRM artboard fixes its card, header, and row dimensions in pixels to
 match its animation coordinates before applying the viewport scale. Its shared
 card surfaces are display-only: no hover transitions or cursor transform easing.
 Pickup and drop must preserve the card’s screen-space bounds on phones too.
+
+On phones, retain the final blog-row divider and hide the adjacent closing
+footer rule. The homepage document frame is 420px tall below 700px because its
+version-history band is hidden there; avoid retaining empty desktop fade space
+between the document and its Learn more links.
