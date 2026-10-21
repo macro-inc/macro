@@ -96,6 +96,27 @@ pub fn setup_rust_light() -> Step<Use> {
 /// Install Nix on a macOS runner. The Linux [`setup_nix`] action doesn't apply
 /// there, so Apple jobs (DMG signing, the iOS simulator preview) install it
 /// with the same script instead.
+/// A `bash` step whose output the job's closing "Comment on the PR" step
+/// quotes when the job fails. The step records its name in
+/// `$RUNNER_TEMP/last-step.name` and tees its stdout and stderr into
+/// `$RUNNER_TEMP/last-step.log`, both truncated at the step's start, so the
+/// files describe the failed step when the comment step runs (it checks the
+/// name against the API's failed step first: an unlogged step may have
+/// failed since). Only for steps whose output is messages — the comment is
+/// not secret-masked the way the log is, so a step that handles credentials
+/// or runs a build stays an ordinary step.
+pub fn logged_run(name: &str, script: impl AsRef<str>) -> Step<Run> {
+    Step::new(name)
+        .run(format!(
+            "printf '%s\\n' \"$LOGGED_STEP\" > \"$RUNNER_TEMP/last-step.name\"\n\
+             exec > >(tee \"$RUNNER_TEMP/last-step.log\") 2>&1\n\
+             {}",
+            script.as_ref()
+        ))
+        .shell("bash")
+        .add_env(("LOGGED_STEP", name))
+}
+
 pub fn install_nix_macos() -> Step<Run> {
     Step::new("Install Nix")
         .run(include_str!("scripts/install_nix_macos.sh"))

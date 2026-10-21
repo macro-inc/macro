@@ -26,14 +26,11 @@ fi
 # The gate compares the build's stamp with the native tree of the PR's merge
 # result, not of its head. A head that lacks iOS native code main gained since
 # the PR branched would go through App Review but could never pass the gate.
-merge=$(pr_merge_commit)
-native_tree_fetch "$merge"
-if [[ "$(native_tree_hash "$merge")" != "$(native_tree_hash HEAD)" ]]; then
-  echo "PR #${PR_NUMBER}'s merge result (${merge:0:10}) has iOS native code this head lacks: main changed native code since the PR branched." \
-    "Merge main into the PR, bump (doppler run --project ios-release --config prd -- just ios-bump), commit, and re-add ios-update." >&2
+if ! merge_result_native_check native_tree_hash native_tree_listing native_tree_fetch; then
+  echo "A build from this head could never pass the merge gate. Merge ${BASE_BRANCH} into the PR," \
+    "bump (doppler run --project ios-release --config prd -- just ios-bump), commit, and re-add ios-update." >&2
   exit 1
 fi
-echo "Native tree matches the merge result ${merge:0:10}."
 
 # Web App Status Check aggregates the gate, so it is red whenever the gate is;
 # its other inputs (Typecheck, Test, Build, ...) are separate checks and stay.

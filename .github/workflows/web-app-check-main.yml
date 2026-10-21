@@ -147,11 +147,11 @@ jobs:
               return 0
             fi
             if [[ "$mergeable" == "CONFLICTING" ]]; then
-              echo "::error::PR #${PR_NUMBER} conflicts with its base branch, so there is no merge result to check; resolve the conflicts first." >&2
+              echo "PR #${PR_NUMBER} conflicts with its base branch, so GitHub has no merge result for it." >&2
               return 1
             fi
             if (( $(date +%s) > deadline )); then
-              echo "::error::GitHub has not computed PR #${PR_NUMBER}'s merge commit yet (mergeable=${mergeable}); retry in a minute." >&2
+              echo "GitHub has not computed PR #${PR_NUMBER}'s merge commit yet (mergeable=${mergeable})." >&2
               return 1
             fi
             echo "Merge commit not computed yet (mergeable=${mergeable}); waiting." >&2
@@ -521,6 +521,7 @@ jobs:
             - '!apps/web/tauri/**/*.android.*'
             - '!apps/web/tauri/desktop-release.json'
             - '!apps/web/tauri/.helix/**'
+            - '!apps/web/tauri/**/*.md'
     - id: cache-wasm
       name: Detect a client cache wasm version bump
       run: |
@@ -650,8 +651,9 @@ jobs:
         # `android`, starts with `android_` / `android.`, or contains `.android.`
         # (the android_* plugins, every android/ directory, android.rs / android.json,
         # android_tls.rs, tauri.android.conf.json; the Rust ones are all behind
-        # cfg(target_os = "android")) — plus the desktop updater manifest and editor
-        # config. Plus one thing outside that tree: the version of the client cache
+        # cfg(target_os = "android")) — plus the desktop updater manifest, editor
+        # config, and Markdown (READMEs, generated permission references: never built).
+        # Plus one thing outside that tree: the version of the client cache
         # wasm package (crates/client/cache-wasm/Cargo.toml). The app compiles the
         # cache crates natively, and the team bumps that version when a cache change
         # must ship, so the bump — not every edit under crates/client — is the native
@@ -662,18 +664,22 @@ jobs:
         # detection (web_app_check_main/ios_native_check.rs).
         NATIVE_TREE_PATH=apps/web/tauri
         CACHE_WASM_MANIFEST=crates/client/cache-wasm/Cargo.toml
-        export NATIVE_TREE_EXCLUDE='(^|/)android([_./]|$)|\.android\.|^desktop-release\.json$|^\.helix/'
+        export NATIVE_TREE_EXCLUDE='(^|/)android([_./]|$)|\.android\.|^desktop-release\.json$|^\.helix/|\.md$'
 
-        # native_tree_hash <commit>: prints the hash, fails if the path is missing.
+        # native_tree_listing <commit>: what the hash covers — the filtered ls-tree
+        # lines plus the cache wasm version — fails if the path is missing.
         # (--full-tree: ls-tree otherwise narrows its output to the current directory,
         # which would silently hash nothing when run from apps/web.)
-        native_tree_hash() {
+        native_tree_listing() {
           git rev-parse -q --verify "$1:${NATIVE_TREE_PATH}" >/dev/null || return 1
-          {
-            git ls-tree -r --full-tree "$1:${NATIVE_TREE_PATH}" \
-              | awk -F'\t' '$2 !~ ENVIRON["NATIVE_TREE_EXCLUDE"]'
-            echo "cache-wasm-version $(cache_wasm_version "$1")"
-          } | git hash-object --stdin
+          git ls-tree -r --full-tree "$1:${NATIVE_TREE_PATH}" \
+            | awk -F'\t' '$2 !~ ENVIRON["NATIVE_TREE_EXCLUDE"]'
+          echo "cache-wasm-version $(cache_wasm_version "$1")"
+        }
+
+        # native_tree_hash <commit>: prints the hash of the listing.
+        native_tree_hash() {
+          native_tree_listing "$1" | git hash-object --stdin
         }
 
         # cache_wasm_version <commit>: the `version` of the client cache wasm package
@@ -714,11 +720,11 @@ jobs:
               return 0
             fi
             if [[ "$mergeable" == "CONFLICTING" ]]; then
-              echo "::error::PR #${PR_NUMBER} conflicts with its base branch, so there is no merge result to check; resolve the conflicts first." >&2
+              echo "PR #${PR_NUMBER} conflicts with its base branch, so GitHub has no merge result for it." >&2
               return 1
             fi
             if (( $(date +%s) > deadline )); then
-              echo "::error::GitHub has not computed PR #${PR_NUMBER}'s merge commit yet (mergeable=${mergeable}); retry in a minute." >&2
+              echo "GitHub has not computed PR #${PR_NUMBER}'s merge commit yet (mergeable=${mergeable})." >&2
               return 1
             fi
             echo "Merge commit not computed yet (mergeable=${mergeable}); waiting." >&2

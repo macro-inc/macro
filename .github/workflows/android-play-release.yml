@@ -11,6 +11,7 @@ jobs:
     name: Android Play Release
     runs-on: ubuntu-24.04
     permissions:
+      actions: read
       contents: read
       pull-requests: write
       checks: read
@@ -21,6 +22,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
       PR_NUMBER: ${{ github.event.pull_request.number }}
+      BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
     timeout-minutes: 90
     steps:
     - name: Checkout PR head
@@ -35,6 +37,8 @@ jobs:
     - id: preconditions
       name: Require the PR to be ready to merge
       run: |
+        printf '%s\n' "$LOGGED_STEP" > "$RUNNER_TEMP/last-step.name"
+        exec > >(tee "$RUNNER_TEMP/last-step.log") 2>&1
         # --- authenticated fetch ------------------------------------------------------
         # gh_fetch <sha|ref>: make a commit that is not in this checkout (the base
         # commit, a moved PR head, GitHub's test merge commit) available. Checkouts
@@ -65,16 +69,62 @@ jobs:
               return 0
             fi
             if [[ "$mergeable" == "CONFLICTING" ]]; then
-              echo "::error::PR #${PR_NUMBER} conflicts with its base branch, so there is no merge result to check; resolve the conflicts first." >&2
+              echo "PR #${PR_NUMBER} conflicts with its base branch, so GitHub has no merge result for it." >&2
               return 1
             fi
             if (( $(date +%s) > deadline )); then
-              echo "::error::GitHub has not computed PR #${PR_NUMBER}'s merge commit yet (mergeable=${mergeable}); retry in a minute." >&2
+              echo "GitHub has not computed PR #${PR_NUMBER}'s merge commit yet (mergeable=${mergeable})." >&2
               return 1
             fi
             echo "Merge commit not computed yet (mergeable=${mergeable}); waiting." >&2
             sleep 10
           done
+        }
+        # ------------------------------------------------------------------------------
+        # --- merge result native check ------------------------------------------------
+        # merge_result_native_check <hash> <listing> <fetch>: is the native code of
+        # PR #PR_NUMBER's merge result the native code of HEAD, the code this run
+        # built or is about to build? The merge gate hashes the merge result, so a
+        # build that differs from it could never pass the gate. <hash> / <listing>
+        # print a commit's native hash / the listing behind it; <fetch> makes a
+        # commit available (the iOS and Android helpers differ). Needs GH_TOKEN,
+        # GH_REPO, PR_NUMBER, BASE_BRANCH, and pr_merge_commit.
+        #
+        # GitHub's test merge commit answers directly when it exists. It doesn't for
+        # a PR that conflicts with its base, but the question still has an answer:
+        # if the base's native code hasn't moved since the PR branched, merging can
+        # only carry HEAD's native code, whatever files the conflicts are in. A
+        # refusal lists the native files the base changed.
+        merge_result_native_check() {
+          local hash=$1 listing=$2 fetch=$3 built merge tip merge_base why files
+          built=$(git rev-parse HEAD)
+          merge=""
+          if merge=$(pr_merge_commit); then
+            $fetch "$merge"
+            if [[ "$($hash "$merge")" == "$($hash "$built")" ]]; then
+              echo "Native code matches the merge result ${merge:0:10}."
+              return 0
+            fi
+            why="PR #${PR_NUMBER}'s merge result (${merge:0:10}) has native code this build (${built:0:10}) lacks"
+          fi
+          read -r tip merge_base < <(gh api "repos/${GH_REPO}/compare/${BASE_BRANCH}...${built}" \
+            --jq '"\(.base_commit.sha) \(.merge_base_commit.sha)"')
+          $fetch "$tip"
+          $fetch "$merge_base"
+          if [[ -z "$merge" ]]; then
+            if [[ "$($hash "$tip")" == "$($hash "$merge_base")" ]]; then
+              echo "PR #${PR_NUMBER} has no merge result (conflicts, or GitHub has not computed it), but ${BASE_BRANCH} (${tip:0:10})" \
+                "still has the native code the PR branched from (${merge_base:0:10}), so merging can only carry this build's native code."
+              return 0
+            fi
+            why="PR #${PR_NUMBER} has no merge result (conflicts, or GitHub has not computed it), and ${BASE_BRANCH} changed native code since the PR branched"
+          fi
+          files=$({ diff <($listing "$merge_base") <($listing "$tip") || true; } \
+            | sed -n -e 's/^[<>] [^\t]*\t/  /p' -e 's/^[<>] \(cache-wasm-version .*\)/  \1/p' | sort -u)
+          echo "${why}. Native changes on ${BASE_BRANCH} since ${merge_base:0:10}" \
+            "(https://github.com/${GH_REPO}/compare/${merge_base:0:10}...${tip:0:10}):" >&2
+          echo "${files:-  (none listed: an excluded path?)}" >&2
+          return 1
         }
         # ------------------------------------------------------------------------------
         set -euo pipefail
@@ -118,15 +168,13 @@ jobs:
         # result, not of its head. A head that lacks Android native code main gained
         # since the PR branched would be released but could never pass the gate — and
         # a Play release cannot be withdrawn. Refuse before the build instead.
-        merge=$(pr_merge_commit)
-        gh_fetch "$merge"
-        if [[ "$(bun scripts/android-native.mjs hash "$merge")" != "$(bun scripts/android-native.mjs hash HEAD)" ]]; then
-          echo "PR #${PR_NUMBER}'s merge result (${merge:0:10}) has Android native code this head lacks: main changed native code since the PR branched." \
-            "Merge main into the PR, bump (cd apps/web && just android-bump), commit, and re-add android-update." >&2
+        if ! merge_result_native_check "bun scripts/android-native.mjs hash" "bun scripts/android-native.mjs listing" gh_fetch; then
+          echo "A bundle from this head could never pass the merge gate. Merge ${BASE_BRANCH} into the PR," \
+            "bump (cd apps/web && just android-bump), commit, and re-add android-update." >&2
           exit 1
         fi
         echo "version_code=${version_code}" >> "$GITHUB_OUTPUT"
-        echo "Releasing Android version code ${version_code} (native hash matches the merge result ${merge:0:10})."
+        echo "Releasing Android version code ${version_code}."
 
         # (`gh pr checks` names are job names, not workflow names.)
         ours='^(Android Native Check|Android Play Release|Re-run the native check|Web App Status Check|Android Release Drift|iOS Native Check)'
@@ -153,6 +201,7 @@ jobs:
         done
       shell: bash
       env:
+        LOGGED_STEP: Require the PR to be ready to merge
         HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         WAIT_MINUTES: '30'
       working-directory: apps/web
@@ -222,6 +271,8 @@ jobs:
     - id: artifact
       name: Verify and collect App Bundle
       run: |
+        printf '%s\n' "$LOGGED_STEP" > "$RUNNER_TEMP/last-step.name"
+        exec > >(tee "$RUNNER_TEMP/last-step.log") 2>&1
         set -euo pipefail
         curl --fail --location --retry 3 \
           https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar \
@@ -253,11 +304,14 @@ jobs:
         echo "mapping=$GITHUB_WORKSPACE/android-artifacts/$mapping_filename" >> "$GITHUB_OUTPUT"
       shell: bash
       env:
+        LOGGED_STEP: Verify and collect App Bundle
         VERSION_CODE: ${{ steps.preconditions.outputs.version_code }}
         RELEASE_FILENAME: ${{ steps.metadata.outputs.filename }}
       working-directory: apps/web
     - name: Require the PR's Android native code to be unchanged since the build
       run: |
+        printf '%s\n' "$LOGGED_STEP" > "$RUNNER_TEMP/last-step.name"
+        exec > >(tee "$RUNNER_TEMP/last-step.log") 2>&1
         # --- authenticated fetch ------------------------------------------------------
         # gh_fetch <sha|ref>: make a commit that is not in this checkout (the base
         # commit, a moved PR head, GitHub's test merge commit) available. Checkouts
@@ -288,16 +342,62 @@ jobs:
               return 0
             fi
             if [[ "$mergeable" == "CONFLICTING" ]]; then
-              echo "::error::PR #${PR_NUMBER} conflicts with its base branch, so there is no merge result to check; resolve the conflicts first." >&2
+              echo "PR #${PR_NUMBER} conflicts with its base branch, so GitHub has no merge result for it." >&2
               return 1
             fi
             if (( $(date +%s) > deadline )); then
-              echo "::error::GitHub has not computed PR #${PR_NUMBER}'s merge commit yet (mergeable=${mergeable}); retry in a minute." >&2
+              echo "GitHub has not computed PR #${PR_NUMBER}'s merge commit yet (mergeable=${mergeable})." >&2
               return 1
             fi
             echo "Merge commit not computed yet (mergeable=${mergeable}); waiting." >&2
             sleep 10
           done
+        }
+        # ------------------------------------------------------------------------------
+        # --- merge result native check ------------------------------------------------
+        # merge_result_native_check <hash> <listing> <fetch>: is the native code of
+        # PR #PR_NUMBER's merge result the native code of HEAD, the code this run
+        # built or is about to build? The merge gate hashes the merge result, so a
+        # build that differs from it could never pass the gate. <hash> / <listing>
+        # print a commit's native hash / the listing behind it; <fetch> makes a
+        # commit available (the iOS and Android helpers differ). Needs GH_TOKEN,
+        # GH_REPO, PR_NUMBER, BASE_BRANCH, and pr_merge_commit.
+        #
+        # GitHub's test merge commit answers directly when it exists. It doesn't for
+        # a PR that conflicts with its base, but the question still has an answer:
+        # if the base's native code hasn't moved since the PR branched, merging can
+        # only carry HEAD's native code, whatever files the conflicts are in. A
+        # refusal lists the native files the base changed.
+        merge_result_native_check() {
+          local hash=$1 listing=$2 fetch=$3 built merge tip merge_base why files
+          built=$(git rev-parse HEAD)
+          merge=""
+          if merge=$(pr_merge_commit); then
+            $fetch "$merge"
+            if [[ "$($hash "$merge")" == "$($hash "$built")" ]]; then
+              echo "Native code matches the merge result ${merge:0:10}."
+              return 0
+            fi
+            why="PR #${PR_NUMBER}'s merge result (${merge:0:10}) has native code this build (${built:0:10}) lacks"
+          fi
+          read -r tip merge_base < <(gh api "repos/${GH_REPO}/compare/${BASE_BRANCH}...${built}" \
+            --jq '"\(.base_commit.sha) \(.merge_base_commit.sha)"')
+          $fetch "$tip"
+          $fetch "$merge_base"
+          if [[ -z "$merge" ]]; then
+            if [[ "$($hash "$tip")" == "$($hash "$merge_base")" ]]; then
+              echo "PR #${PR_NUMBER} has no merge result (conflicts, or GitHub has not computed it), but ${BASE_BRANCH} (${tip:0:10})" \
+                "still has the native code the PR branched from (${merge_base:0:10}), so merging can only carry this build's native code."
+              return 0
+            fi
+            why="PR #${PR_NUMBER} has no merge result (conflicts, or GitHub has not computed it), and ${BASE_BRANCH} changed native code since the PR branched"
+          fi
+          files=$({ diff <($listing "$merge_base") <($listing "$tip") || true; } \
+            | sed -n -e 's/^[<>] [^\t]*\t/  /p' -e 's/^[<>] \(cache-wasm-version .*\)/  \1/p' | sort -u)
+          echo "${why}. Native changes on ${BASE_BRANCH} since ${merge_base:0:10}" \
+            "(https://github.com/${GH_REPO}/compare/${merge_base:0:10}...${tip:0:10}):" >&2
+          echo "${files:-  (none listed: an excluded path?)}" >&2
+          return 1
         }
         # ------------------------------------------------------------------------------
         set -euo pipefail
@@ -322,26 +422,29 @@ jobs:
           fi
           echo "PR head moved to ${head_sha:0:10} but its Android native code is unchanged (${built:0:10})."
         fi
-        merge=$(pr_merge_commit)
-        gh_fetch "$merge"
-        merged=$(bun scripts/android-native.mjs hash "$merge")
-        if [[ "$merged" != "$built" ]]; then
-          echo "Android native code landed on main while this release was building: the merge result" \
-            "(${merge:0:10}) hashes ${merged:0:10}, the bundle ${built:0:10}. Not uploading a bundle the merge gate could never accept." >&2
-          echo "Merge main into the PR, bump (cd apps/web && just android-bump), commit, and re-add the android-update label." >&2
+        if ! merge_result_native_check "bun scripts/android-native.mjs hash" "bun scripts/android-native.mjs listing" gh_fetch; then
+          echo "Android native code landed on ${BASE_BRANCH} while this release was building. Not uploading the bundle" \
+            "(native hash ${built:0:10}): the merge gate could never accept it." >&2
+          echo "Merge ${BASE_BRANCH} into the PR, bump (cd apps/web && just android-bump), commit, and re-add the android-update label." >&2
           exit 1
         fi
-        echo "Merge result ${merge:0:10} matches the built native code (${built:0:10}); uploading."
+        echo "Uploading the bundle (native hash ${built:0:10})."
       shell: bash
+      env:
+        LOGGED_STEP: Require the PR's Android native code to be unchanged since the build
       working-directory: apps/web
     - name: Write the provenance stamp as release notes
       run: |
+        printf '%s\n' "$LOGGED_STEP" > "$RUNNER_TEMP/last-step.name"
+        exec > >(tee "$RUNNER_TEMP/last-step.log") 2>&1
         set -euo pipefail
         hash=$(bun scripts/android-native.mjs hash HEAD)
         mkdir -p "$RUNNER_TEMP/whatsnew"
         printf 'native tree %s for PR #%s\n' "$hash" "$PR_NUMBER" > "$RUNNER_TEMP/whatsnew/whatsnew-en-US"
         echo "Stamp: native tree ${hash} for PR #${PR_NUMBER}"
       shell: bash
+      env:
+        LOGGED_STEP: Write the provenance stamp as release notes
       working-directory: apps/web
     - name: Upload verified Android artifact
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -372,6 +475,8 @@ jobs:
         whatsNewDirectory: ${{ runner.temp }}/whatsnew
     - name: Promote to production
       run: |
+        printf '%s\n' "$LOGGED_STEP" > "$RUNNER_TEMP/last-step.name"
+        exec > >(tee "$RUNNER_TEMP/last-step.log") 2>&1
         set -euo pipefail
         for attempt in 1 2 3 4 5; do
           if node scripts/android-play-promote.mjs; then
@@ -384,6 +489,7 @@ jobs:
         exit 1
       shell: bash
       env:
+        LOGGED_STEP: Promote to production
         GOOGLE_PLAY_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
         VERSION_CODE: ${{ steps.preconditions.outputs.version_code }}
         CHANGES_NOT_SENT_FOR_REVIEW: 'false'
@@ -401,28 +507,62 @@ jobs:
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         script: |
+          const fs = require('fs');
+          const path = require('path');
           const versionCode = '${{ steps.preconditions.outputs.version_code }}' || '?';
           const releaseName = '${{ steps.metadata.outputs.release_name }}' || `version code ${versionCode}`;
           const runUrl =
             `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}` +
             `/actions/runs/${context.runId}`;
           const success = '${{ job.status }}' === 'success';
-          const body = success
-            ? [
-                `🤖 Android ${releaseName} was uploaded to Google Play internal testing and submitted for a full production rollout.`,
-                '',
-                'When Google approves it, the version goes live, the **Android Release Watch** workflow',
-                're-runs the **Android Native Check** on this PR within half an hour of that, and the PR',
-                'becomes mergeable. To merge it the moment that happens, click **Enable auto-merge** on this PR now (squash).',
-                'After merge, the next prod deploy applies the Android native build floor committed in `min-native-build.json`.',
-                '',
-                `[Workflow run](${runUrl})`,
-              ].join('\n')
-            : [
-                `🤖 Android Play release for ${releaseName} **failed** — see the [workflow run](${runUrl}).`,
-                '',
-                'Fix the problem, then remove and re-add the `android-update` label to retry.',
-              ].join('\n');
+          const SUCCESS_BODY = [
+            `🤖 Android ${releaseName} was uploaded to Google Play internal testing and submitted for a full production rollout.`,
+            '',
+            'When Google approves it, the version goes live, the **Android Release Watch** workflow',
+            're-runs the **Android Native Check** on this PR within half an hour of that, and the PR',
+            'becomes mergeable. To merge it the moment that happens, click **Enable auto-merge** on this PR now (squash).',
+            'After merge, the next prod deploy applies the Android native build floor committed in `min-native-build.json`.',
+            '',
+            `[Workflow run](${runUrl})`,
+          ].join('\n');
+          let body;
+          if (success) {
+            body = SUCCESS_BODY;
+          } else {
+            // Name the failed step and, when it is one that logs its
+            // output (steps::logged_run), quote the end of that output.
+            let failedStep = null;
+            try {
+              const { data } = await github.rest.actions.listJobsForWorkflowRunAttempt({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                run_id: context.runId,
+                attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
+              });
+              const job = data.jobs.find((j) => j.name === 'Android Play Release');
+              failedStep = job?.steps.find((s) => s.conclusion === 'failure')?.name ?? null;
+            } catch (error) {
+              core.warning(`Could not list this job's steps: ${error.message}`);
+            }
+            const read = (file) => {
+              try {
+                return fs.readFileSync(path.join(process.env.RUNNER_TEMP, file), 'utf8');
+              } catch {
+                return '';
+              }
+            };
+            let tail = '';
+            if (failedStep && read('last-step.name').trim() === failedStep) {
+              const lines = read('last-step.log').replace(/\x1b\[[0-9;]*m/g, '').trimEnd().split('\n');
+              tail = lines.slice(-30).join('\n').slice(-3000);
+            }
+            body = [
+              `🤖 Android Play release for ${releaseName} **failed**${failedStep ? ` at **${failedStep}**` : ''} — see the [workflow run](${runUrl}).`,
+              ...(tail ? ['', '```text', tail, '```'] : []),
+              '',
+              'Fix the problem, then remove and re-add the `android-update` label to retry.',
+            ].join('\n');
+          }
           await github.rest.issues.createComment({
             owner: context.repo.owner,
             repo: context.repo.repo,

@@ -141,7 +141,7 @@ const BOOLEAN_FLAGS = new Set(["require-live", "require-unused-build"]);
 /// Check's change detection.
 const NATIVE_TREE_PATH = "apps/web/tauri";
 const CACHE_WASM_MANIFEST = "crates/client/cache-wasm/Cargo.toml";
-const NATIVE_TREE_EXCLUDE = /(^|\/)android([_.\/]|$)|\.android\.|^desktop-release\.json$|^\.helix\//;
+const NATIVE_TREE_EXCLUDE = /(^|\/)android([_.\/]|$)|\.android\.|^desktop-release\.json$|^\.helix\/|\.md$/;
 const STAMP_RE = /native tree ([0-9a-f]{40})/;
 const STAMP_PR_RE = /for PR #(\d+)/;
 

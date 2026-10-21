@@ -57,6 +57,8 @@ fn release_job() -> Job {
         .timeout_minutes(90u32)
         .permissions(
             Permissions::default()
+                // The failure comment names the step that failed.
+                .actions(Level::Read)
                 .checks(Level::Read)
                 .contents(Level::Read)
                 .id_token(Level::Write)
@@ -67,6 +69,7 @@ fn release_job() -> Job {
         .add_env(("GH_TOKEN", "${{ github.token }}"))
         .add_env(("GH_REPO", "${{ github.repository }}"))
         .add_env(("PR_NUMBER", "${{ github.event.pull_request.number }}"))
+        .add_env(("BASE_BRANCH", "${{ github.event.pull_request.base.ref }}"))
         .add_step(checkout_pr_head())
         .add_step(setup_bun())
         .add_step(preconditions())
@@ -114,17 +117,19 @@ fn setup_bun() -> Step<Use> {
 /// PR must already be mergeable: not a draft, every other check on the head
 /// commit green (pending ones are waited on), and the version code bumped.
 fn preconditions() -> Step<Run> {
-    Step::new("Require the PR to be ready to merge")
-        .run(concat!(
+    steps::logged_run(
+        "Require the PR to be ready to merge",
+        concat!(
             include_str!("scripts/android_git_fetch.sh"),
             include_str!("scripts/pr_merge_commit.sh"),
+            include_str!("scripts/merge_result_native_check.sh"),
             include_str!("scripts/android_release_preconditions.sh")
-        ))
-        .id("preconditions")
-        .shell("bash")
-        .working_directory(xtask_paths::repo_dir!("apps/web"))
-        .add_env(("HEAD_SHA", "${{ github.event.pull_request.head.sha }}"))
-        .add_env(("WAIT_MINUTES", "30"))
+        ),
+    )
+    .id("preconditions")
+    .working_directory(xtask_paths::repo_dir!("apps/web"))
+    .add_env(("HEAD_SHA", "${{ github.event.pull_request.head.sha }}"))
+    .add_env(("WAIT_MINUTES", "30"))
 }
 
 fn install_android_sdk() -> Step<Run> {
@@ -219,8 +224,9 @@ fn preserve_build_log() -> Step<Use> {
 }
 
 fn verify_and_collect() -> Step<Run> {
-    Step::new("Verify and collect App Bundle")
-        .run(indoc::indoc! {r#"
+    steps::logged_run(
+        "Verify and collect App Bundle",
+        indoc::indoc! {r#"
             set -euo pipefail
             curl --fail --location --retry 3 \
               https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar \
@@ -250,40 +256,44 @@ fn verify_and_collect() -> Step<Run> {
             sha256sum "$mapping_filename" > "$mapping_filename.sha256"
             echo "bundle=$GITHUB_WORKSPACE/android-artifacts/$bundle_filename" >> "$GITHUB_OUTPUT"
             echo "mapping=$GITHUB_WORKSPACE/android-artifacts/$mapping_filename" >> "$GITHUB_OUTPUT"
-        "#})
-        .id("artifact")
-        .shell("bash")
-        .working_directory(xtask_paths::repo_dir!("apps/web"))
-        .add_env(("VERSION_CODE", "${{ steps.preconditions.outputs.version_code }}"))
-        .add_env(("RELEASE_FILENAME", "${{ steps.metadata.outputs.filename }}"))
+        "#},
+    )
+    .id("artifact")
+    .working_directory(xtask_paths::repo_dir!("apps/web"))
+    .add_env(("VERSION_CODE", "${{ steps.preconditions.outputs.version_code }}"))
+    .add_env(("RELEASE_FILENAME", "${{ steps.metadata.outputs.filename }}"))
 }
 
-/// Native code pushed while the build ran would make the bundle stale; don't
-/// upload it (the drift workflow also cancels runs after the fact).
+/// Native code pushed while the build ran, on the PR or on `main`, would make
+/// the bundle stale; don't upload it (the drift workflow also cancels runs
+/// after the fact).
 fn head_guard() -> Step<Run> {
-    Step::new("Require the PR's Android native code to be unchanged since the build")
-        .run(concat!(
+    steps::logged_run(
+        "Require the PR's Android native code to be unchanged since the build",
+        concat!(
             include_str!("scripts/android_git_fetch.sh"),
             include_str!("scripts/pr_merge_commit.sh"),
+            include_str!("scripts/merge_result_native_check.sh"),
             include_str!("scripts/android_release_head_guard.sh")
-        ))
-        .shell("bash")
-        .working_directory(xtask_paths::repo_dir!("apps/web"))
+        ),
+    )
+    .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 
 /// The release notes carry the native hash and PR number, which the gate and
 /// the watcher compare against the merge result (the TestFlight stamp's twin).
 fn provenance_stamp() -> Step<Run> {
-    Step::new("Write the provenance stamp as release notes")
-        .run(indoc::indoc! {r#"
+    steps::logged_run(
+        "Write the provenance stamp as release notes",
+        indoc::indoc! {r#"
             set -euo pipefail
             hash=$(bun scripts/android-native.mjs hash HEAD)
             mkdir -p "$RUNNER_TEMP/whatsnew"
             printf 'native tree %s for PR #%s\n' "$hash" "$PR_NUMBER" > "$RUNNER_TEMP/whatsnew/whatsnew-en-US"
             echo "Stamp: native tree ${hash} for PR #${PR_NUMBER}"
-        "#})
-        .shell("bash")
-        .working_directory(xtask_paths::repo_dir!("apps/web"))
+        "#},
+    )
+    .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 
 fn upload_workflow_artifact() -> Step<Use> {
@@ -345,8 +355,9 @@ fn upload_internal() -> Step<Use> {
 /// Internal → production, full rollout. Play can take a moment to show the
 /// internal release in a fresh edit, so the promotion is retried briefly.
 fn promote_production() -> Step<Run> {
-    Step::new("Promote to production")
-        .run(indoc::indoc! {r#"
+    steps::logged_run(
+        "Promote to production",
+        indoc::indoc! {r#"
             set -euo pipefail
             for attempt in 1 2 3 4 5; do
               if node scripts/android-play-promote.mjs; then
@@ -357,12 +368,12 @@ fn promote_production() -> Step<Run> {
             done
             echo "Could not promote version code ${VERSION_CODE} to production; promote it by hand with publish-android-play.yml (operation=promote-production)." >&2
             exit 1
-        "#})
-        .shell("bash")
-        .working_directory(xtask_paths::repo_dir!("apps/web"))
-        .add_env(("GOOGLE_PLAY_ACCESS_TOKEN", "${{ steps.auth.outputs.access_token }}"))
-        .add_env(("VERSION_CODE", "${{ steps.preconditions.outputs.version_code }}"))
-        .add_env(("CHANGES_NOT_SENT_FOR_REVIEW", "false"))
+        "#},
+    )
+    .working_directory(xtask_paths::repo_dir!("apps/web"))
+    .add_env(("GOOGLE_PLAY_ACCESS_TOKEN", "${{ steps.auth.outputs.access_token }}"))
+    .add_env(("VERSION_CODE", "${{ steps.preconditions.outputs.version_code }}"))
+    .add_env(("CHANGES_NOT_SENT_FOR_REVIEW", "false"))
 }
 
 fn remove_signing_material() -> Step<Run> {
@@ -390,28 +401,62 @@ fn pr_comment() -> Step<Use> {
         .add_with((
             "script",
             indoc::indoc! {r#"
+                const fs = require('fs');
+                const path = require('path');
                 const versionCode = '${{ steps.preconditions.outputs.version_code }}' || '?';
                 const releaseName = '${{ steps.metadata.outputs.release_name }}' || `version code ${versionCode}`;
                 const runUrl =
                   `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}` +
                   `/actions/runs/${context.runId}`;
                 const success = '${{ job.status }}' === 'success';
-                const body = success
-                  ? [
-                      `🤖 Android ${releaseName} was uploaded to Google Play internal testing and submitted for a full production rollout.`,
-                      '',
-                      'When Google approves it, the version goes live, the **Android Release Watch** workflow',
-                      're-runs the **Android Native Check** on this PR within half an hour of that, and the PR',
-                      'becomes mergeable. To merge it the moment that happens, click **Enable auto-merge** on this PR now (squash).',
-                      'After merge, the next prod deploy applies the Android native build floor committed in `min-native-build.json`.',
-                      '',
-                      `[Workflow run](${runUrl})`,
-                    ].join('\n')
-                  : [
-                      `🤖 Android Play release for ${releaseName} **failed** — see the [workflow run](${runUrl}).`,
-                      '',
-                      'Fix the problem, then remove and re-add the `android-update` label to retry.',
-                    ].join('\n');
+                const SUCCESS_BODY = [
+                  `🤖 Android ${releaseName} was uploaded to Google Play internal testing and submitted for a full production rollout.`,
+                  '',
+                  'When Google approves it, the version goes live, the **Android Release Watch** workflow',
+                  're-runs the **Android Native Check** on this PR within half an hour of that, and the PR',
+                  'becomes mergeable. To merge it the moment that happens, click **Enable auto-merge** on this PR now (squash).',
+                  'After merge, the next prod deploy applies the Android native build floor committed in `min-native-build.json`.',
+                  '',
+                  `[Workflow run](${runUrl})`,
+                ].join('\n');
+                let body;
+                if (success) {
+                  body = SUCCESS_BODY;
+                } else {
+                  // Name the failed step and, when it is one that logs its
+                  // output (steps::logged_run), quote the end of that output.
+                  let failedStep = null;
+                  try {
+                    const { data } = await github.rest.actions.listJobsForWorkflowRunAttempt({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      run_id: context.runId,
+                      attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
+                    });
+                    const job = data.jobs.find((j) => j.name === 'Android Play Release');
+                    failedStep = job?.steps.find((s) => s.conclusion === 'failure')?.name ?? null;
+                  } catch (error) {
+                    core.warning(`Could not list this job's steps: ${error.message}`);
+                  }
+                  const read = (file) => {
+                    try {
+                      return fs.readFileSync(path.join(process.env.RUNNER_TEMP, file), 'utf8');
+                    } catch {
+                      return '';
+                    }
+                  };
+                  let tail = '';
+                  if (failedStep && read('last-step.name').trim() === failedStep) {
+                    const lines = read('last-step.log').replace(/\x1b\[[0-9;]*m/g, '').trimEnd().split('\n');
+                    tail = lines.slice(-30).join('\n').slice(-3000);
+                  }
+                  body = [
+                    `🤖 Android Play release for ${releaseName} **failed**${failedStep ? ` at **${failedStep}**` : ''} — see the [workflow run](${runUrl}).`,
+                    ...(tail ? ['', '```text', tail, '```'] : []),
+                    '',
+                    'Fix the problem, then remove and re-add the `android-update` label to retry.',
+                  ].join('\n');
+                }
                 await github.rest.issues.createComment({
                   owner: context.repo.owner,
                   repo: context.repo.repo,

@@ -137,7 +137,8 @@ job of the web app PR checks enforce it:
 
 **`Android Native Check`** runs on every PR against `main`. It always
 requires a `versionCode` bump when the Android native code changed (see
-"Native release identity" above for what counts), and, when it changed, asks
+`scripts/android-native.mjs` defines what counts: the Tauri tree minus
+iOS/desktop-only paths and Markdown, plus the client cache wasm version), and, when it changed, asks
 Google Play whether that version code is a production release that Google
 has **published** (through review and available to users — the edit API's
 `status: completed` only describes the rollout, so the gate also reads the
@@ -156,8 +157,11 @@ To release:
    first refuses drafts, PRs with failing checks (pending ones are waited on,
    up to 30 minutes), PRs without a bump, and PRs whose head lacks Android
    native code that landed on `main` since they branched (the gate hashes
-   the merge result, so such a bundle could never pass it; merge `main`,
-   bump, re-add the label). It then builds the signed App Bundle from the PR
+   the merge result, so such a bundle could never pass it; the refusal lists
+   the native files `main` changed; merge `main`, bump, re-add the label).
+   When GitHub has no merge result (the PR conflicts with `main`, or GitHub
+   hasn't computed it yet) the check compares `main` with the PR's branch
+   point instead and goes ahead if `main`'s native code hasn't moved. It then builds the signed App Bundle from the PR
    head on a hosted Ubuntu runner (Android SDK, Nix, signing and Firebase
    config from Doppler `android-release/prd`), verifies it with bundletool,
    checks again that neither the PR head nor `main` changed native code
@@ -166,8 +170,9 @@ To release:
    (Google review applies). The bundle and R8 mapping are kept as a workflow
    artifact for 90 days. The release notes carry a provenance stamp,
    `native tree <hash> for PR #<n>`, the twin of the iOS TestFlight stamp.
-   The run comments the outcome on the PR; remove and re-add the label to
-   retry. Click **Enable auto-merge** on the PR to merge the moment it is
+   The run comments the outcome on the PR (a failure names the step that
+   failed and, for the checking steps, quotes the end of its output);
+   remove and re-add the label to retry. Click **Enable auto-merge** on the PR to merge the moment it is
    live. The label only works on a PR that is mergeable: GitHub does not
    run `pull_request` workflows on a PR that conflicts with `main`, so the
    release never starts there. The **`Release Label Check`** workflow
