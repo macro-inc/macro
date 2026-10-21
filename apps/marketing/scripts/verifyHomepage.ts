@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { chromium, expect } from '@playwright/test';
+import { verifyCrmMotion } from './verifyCrmMotion';
 import { verifyDemo } from './verifyDemo';
 import { verifyProductPages } from './verifyProductPages';
 
@@ -250,6 +251,7 @@ export async function verifyHomepage(directory: string): Promise<void> {
         await page.close();
       }
     }
+    await verifyCrmMotion(browser, origin);
     await verifyProductPages(browser, origin);
   } finally {
     await browser?.close();

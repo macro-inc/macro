@@ -29,6 +29,7 @@ type Company = (typeof CRM_DEMO_COMPANIES)[number];
 function DemoCard(props: { company: Company }) {
   return (
     <CompanyKanbanCardSurface
+      class="homepage-crm-card-surface"
       icon={
         <span class="homepage-crm-company-mark">{props.company.initials}</span>
       }
@@ -188,7 +189,7 @@ export default function HomepageCrm() {
               class="homepage-crm-drag"
               aria-hidden="true"
               style={{
-                transform: `translate3d(${(frame().x - 90 - camera()) * scale()}px, ${(frame().y - 28) * scale()}px, 0) scale(${scale() * 1.035})`,
+                transform: `translate3d(${(frame().x - 90 - camera()) * scale()}px, ${(frame().y - 28) * scale()}px, 0) scale(${scale()})`,
               }}
             >
               <DemoCard company={moving()} />

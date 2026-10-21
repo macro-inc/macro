@@ -1032,3 +1032,8 @@ it still pauses offscreen and when a visitor enters the demo.
 The landing CRM drag hides its source card while preserving its slot. The drag
 copy and pointer sit beside the panning canvas and use viewport-space transforms;
 use a box shadow rather than a moving drop-shadow filter to avoid ghosted trails.
+
+The landing CRM artboard fixes its card, header, and row dimensions in pixels to
+match its animation coordinates before applying the viewport scale. Its shared
+card surfaces are display-only: no hover transitions or cursor transform easing.
+Pickup and drop must preserve the card’s screen-space bounds on phones too.

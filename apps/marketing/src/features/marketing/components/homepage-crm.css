@@ -14,3 +14,16 @@
   .homepage-crm-header { padding: 16px 12px; }
   .homepage-crm-viewport { height: 280px; }
 }
+
+/* This fixed-coordinate illustration must not inherit rem-sized app geometry
+   or interactive hover transitions. Mobile scales the entire artboard once. */
+.homepage-crm-columns { box-sizing: border-box; pointer-events: none; }
+.homepage-crm-columns > div { box-sizing: border-box; }
+.homepage-crm-columns > div > div:first-child { box-sizing: border-box; height: 36px; flex: none; padding: 10px 12px; font-size: 12px; line-height: 16px; }
+.homepage-crm-columns > div > div:last-child { padding: 0 8px 8px; gap: 8px; }
+.homepage-crm-card-surface { box-sizing: border-box; height: 62px; padding: 10px; gap: 6px; font-size: 14px; line-height: 20px; pointer-events: none; transition: none; }
+.homepage-crm-card-surface > div:first-child { height: 20px; }
+.homepage-crm-card-surface > div:first-child > div:first-child { width: 16px; height: 16px; }
+.homepage-crm-card-surface > div:first-child > img { width: 20px; height: 20px; }
+.homepage-crm-card-surface > div:last-child { font-size: 12px; line-height: 16px; }
+.homepage-crm-cursor { transition: none; }
