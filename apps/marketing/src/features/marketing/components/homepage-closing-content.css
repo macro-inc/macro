@@ -52,7 +52,6 @@
   .homepage-blog h2 { color: var(--color-ink); font-family: 'Roboto Slab Variable', display, serif; font-size: 28px; font-weight: calc(315 + var(--cream-slab-weight-increase, 0)); line-height: 1.25; letter-spacing: -.035em; }
   .homepage-blog-track { flex-direction: column; overflow: visible; scroll-snap-type: none; }
   .homepage-blog-track > li, .homepage-blog-track > li:first-child, .homepage-blog-track > li:last-child { padding: 0; border-left: 0; border-top: 1px solid var(--color-edge-muted); }
-  .homepage-blog-track > li:last-child { border-bottom: 1px solid var(--color-edge-muted); }
   .homepage-blog-track a { gap: 14px; min-height: 60px; padding: 14px 0; }
   .homepage-blog h3 { overflow: visible; white-space: normal; font-size: 16px; line-height: 1.4; }
   .homepage-blog-controls { display: none; }
