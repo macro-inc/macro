@@ -312,6 +312,13 @@ prerendered HTML, avoiding a header-only flash on first load.
 Keep the shared feature-section padding on mobile, including between the
 Documents/Tasks links and the Coding agents heading; do not zero that boundary.
 
+Person and agent mentions use `--marketing-mention` with a soft tint in both
+palettes, including static homepage conversations and editable demo tokens. The
+light document graphic uses that accent for resolved mentions instead of the
+neutral website control accent. Comment anchors use the product’s yellow wash
+and underline; the sample date-check comment anchors to the launch date, leaving
+the checklist heading unmarked.
+
 Feature chapters rely on their heading, description, and working demo. Do not
 reintroduce unused feature-card guides or duplicate explanatory drawers.
 

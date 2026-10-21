@@ -196,6 +196,48 @@ export async function verifyHomepage(directory: string): Promise<void> {
         await expect(
           page.getByRole('textbox', { name: 'Email body', exact: true })
         ).toBeEditable();
+        if (colorScheme === 'light') {
+          await page.locator('#documents').scrollIntoViewIfNeeded();
+          await page.locator('#documents .mds-chip-person').first().waitFor();
+          await page.locator('#coding-agents').scrollIntoViewIfNeeded();
+          await page
+            .locator('#coding-agents .homepage-person-mention')
+            .waitFor();
+          for (const selector of [
+            '#email .demo-inline-mention.mention-person',
+            '#documents .mds-chip-person',
+            '#coding-agents .homepage-person-mention',
+          ]) {
+            const tint = await page
+              .locator(selector)
+              .first()
+              .evaluate((node) => {
+                const canvas = document.createElement('canvas');
+                canvas.width = canvas.height = 1;
+                const context = canvas.getContext('2d');
+                if (!context) throw new Error('Missing color test context');
+                context.fillStyle = '#fff';
+                context.fillRect(0, 0, 1, 1);
+                context.fillStyle = getComputedStyle(node).backgroundColor;
+                context.fillRect(0, 0, 1, 1);
+                const [red, , blue] = context.getImageData(0, 0, 1, 1).data;
+                return blue - red;
+              });
+            // The old neutral accent produced grey chips in the cream palette.
+            expect(
+              tint,
+              `${selector} needs a visible blue tint`
+            ).toBeGreaterThan(10);
+          }
+        }
+        await page.locator('#documents').scrollIntoViewIfNeeded();
+        const comment = page.getByRole('img', {
+          name: '1 comment on the launch date: Please check the date against Valentina’s email.',
+        });
+        await expect(comment).toBeVisible();
+        await expect(
+          page.locator('#documents .mds-line.h2 .mds-mark')
+        ).toHaveCount(0);
         if (errors.length)
           throw new Error(
             `Homepage demo failed (${label}): ${errors.join('; ')}`
