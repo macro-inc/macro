@@ -85,7 +85,7 @@ html[data-palette='cream'] .homepage-email-format button { background: #1d1c1a0a
 /* ---- Collaborative document ------------------------------------------ */
 /* Document object colors derive from a0. Keep them semantic even though the
    cream website uses a neutral accent for ordinary controls. */
-html[data-palette='cream'] .mdf-frame { --a0: var(--marketing-mention); }
+html[data-palette='cream'] .mds { --a0: var(--marketing-mention); }
 html[data-palette='cream'] .homepage-collaborative-doc .mds-card { background: var(--color-surface-1); box-shadow: 0 10px 40px -12px #1d1c1a26; }
 html[data-palette='cream'] .homepage-collaborative-doc .mds-card::before { background: linear-gradient(135deg, #ffffff80, transparent 45%) border-box; border-color: #1d1c1a0d; }
 html[data-palette='cream'] .homepage-history-caption { background: #f5f1e8; }

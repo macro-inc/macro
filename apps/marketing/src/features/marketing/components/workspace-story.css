@@ -67,6 +67,10 @@
 .homepage-closing-rule { position: absolute; top: 0; left: 0; width: 100%; margin: 0; border: 0; border-top: 1px solid var(--color-edge-muted); }
 .homepage-app-landing { height: 200px; }
 @media(max-width: 699px) { .homepage-sections-inner { width: calc(100% - 36px); } .homepage-feature { padding: 40px 0; } .homepage-conversation { gap: 24px; margin-bottom: 32px; font-size: 15px; } .homepage-message { max-width: 92%; } }
+@media (max-width: 699px) {
+  #documents { padding-bottom: 20px; }
+  #coding-agents { padding-top: 20px; }
+}
 .workspace-demo { color: var(--color-ink); font-family: var(--font-sans); }
 .homepage-compose-status { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 18px; font-size: 13px; color: var(--color-ink-muted); }
 .homepage-compose-status span:last-child { color: var(--color-ink-placeholder); }

@@ -309,8 +309,9 @@ wrapping return focus to that button. Home remains available inside the menu.
 The product entry preloads the requested lazy route and its CSS before replacing
 prerendered HTML, avoiding a header-only flash on first load.
 
-Keep the shared feature-section padding on mobile, including between the
-Documents/Tasks links and the Coding agents heading; do not zero that boundary.
+Keep 40px total mobile spacing between the Documents/Tasks links and Coding
+agents: 20px below Documents and 20px above Coding agents. Do not zero that
+boundary or double it to the full 80px section spacing.
 
 Person and agent mentions use `--marketing-mention` with a soft tint in both
 palettes, including static homepage conversations and editable demo tokens. The

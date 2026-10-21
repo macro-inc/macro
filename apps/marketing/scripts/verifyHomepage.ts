@@ -113,7 +113,8 @@ export async function verifyHomepage(directory: string): Promise<void> {
                 links.getBoundingClientRect().bottom
               );
             });
-          expect(featureGap).toBeGreaterThanOrEqual(64);
+          expect(featureGap).toBeGreaterThanOrEqual(32);
+          expect(featureGap).toBeLessThanOrEqual(56);
         } else await expect(desktopDemo).toBeVisible();
         await page.evaluate(async () => {
           await document.fonts.ready;
