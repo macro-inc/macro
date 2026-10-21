@@ -1,4 +1,5 @@
-.homepage-crm .mdf-frame { height: auto; padding: 48px 32px; }
+.homepage-crm .mdf-frame { height: auto; padding: 48px 32px; background: none; }
+.homepage-crm .mdf-frame::before { display: none; }
 .homepage-crm .mds-card { max-width: none; height: auto; overflow: hidden; }
 .homepage-crm-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; border-bottom: 1px solid var(--color-edge-muted); font-size: 14px; }
 .homepage-crm-viewport { height: 330px; overflow: hidden; position: relative; }

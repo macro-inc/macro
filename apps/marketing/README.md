@@ -1063,3 +1063,6 @@ The travelling Open app CTA switches to native footer dimensions, text, and SVG
 sizes after its landing transition settles, removing the compositor scale to
 avoid Safari retaining an enlarged low-resolution text layer. Reverse scrolling
 restores compact dimensions before the header reappears; keep one app link.
+
+The landing-page CRM illustration has a transparent outer frame with no
+decorative rim in either palette. Keep the inner CRM window surface and shadow.

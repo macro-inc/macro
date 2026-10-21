@@ -143,15 +143,6 @@ html[data-palette='cream'] .dummy-route {
   color-scheme: light;
 }
 
-/* ---- Demo backdrops ---------------------------------------------------
-   The frames fade from the ink color, which is near-black here; use a faint
-   ink wash instead. */
-html[data-palette='cream'] .homepage-crm .mdf-frame {
-  background: linear-gradient(to bottom, #1d1c1a12 0%, #1d1c1a08 45%, #1d1c1a03 78%, transparent 100%);
-}
-html[data-palette='cream'] .homepage-crm .mdf-frame::before {
-  background: linear-gradient(to bottom, #1d1c1a14 0%, #1d1c1a0a 45%, transparent 100%);
-}
 html[data-palette='cream'] .homepage-demo-slide-copy h2 { color: var(--color-ink); }
 
 /* ---- Chat bubbles ------------------------------------------------------
