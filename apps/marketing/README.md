@@ -376,6 +376,8 @@ sharing, draft edits, keyboard scope, reduced motion, and timer cleanup.
 `/crm` follows the same reading width, left-aligned slab headings, glass edges,
 and homepage closing animation. `WorkspaceDesktopDemo` supplies the shared
 hero dimensions, wallpaper, padding, and shadows on CRM as on the other product pages.
+Cream heroes reuse the dark Monterey wallpaper with a static ivory/stone filter
+and a softer warm window shadow; the surrounding cream page remains unchanged.
 CRM passes `windowChrome={false}` to omit the simulated browser bar; the content
 uses that space so the outer frame stays the same height. Do not add CRM-specific
 hero background or sizing overrides. CRM demonstrates message-driven
