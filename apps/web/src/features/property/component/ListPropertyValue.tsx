@@ -1,8 +1,10 @@
 import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
 import { Property } from '@property';
+import { DueDateLabel } from '@property/component/DueDateLabel';
 import { usePropertiesContext } from '@property/context/PropertiesContext';
 import type { Property as PropertyType } from '@property/types';
 import { getEntityValues, hasValue } from '@property/utils';
+import { readDueDate } from '@property/utils/due-date';
 import { Layer } from '@ui';
 import { Match, Show, Switch } from 'solid-js';
 
@@ -20,6 +22,7 @@ export function ListPropertyValue(props: {
     return getEntityValues(props.property).length;
   };
   const isEmpty = () => !hasValue(props.property);
+  const dueDate = () => readDueDate(props.property);
   const isInlineType = () =>
     props.property.valueType === 'STRING' ||
     props.property.valueType === 'NUMBER' ||
@@ -72,43 +75,58 @@ export function ListPropertyValue(props: {
                 </>
               }
             >
-              <Switch
+              <Show
+                when={dueDate()}
                 fallback={
-                  <Property.Icon
-                    property={props.property}
-                    class="size-3 shrink-0 @max-[840px]/u-list:size-4"
-                  />
+                  <>
+                    <Switch
+                      fallback={
+                        <Property.Icon
+                          property={props.property}
+                          class="size-3 shrink-0 @max-[840px]/u-list:size-4"
+                        />
+                      }
+                    >
+                      <Match when={userCount() > 1}>
+                        <div class="@max-[840px]/u-list:hidden">
+                          <Property.UserStack
+                            property={props.property}
+                            maxUsers={2}
+                          />
+                        </div>
+                        <div class="hidden @max-[840px]/u-list:flex">
+                          <Property.UserStack
+                            property={props.property}
+                            maxUsers={1}
+                            avatarClass="@max-[840px]/u-list:size-5"
+                          />
+                        </div>
+                      </Match>
+                      <Match when={isUserEntity()}>
+                        <Property.Icon
+                          property={props.property}
+                          class="@max-[840px]/u-list:size-5"
+                        />
+                      </Match>
+                    </Switch>
+                    <Property.Text
+                      property={props.property}
+                      resolveSingleEntity={
+                        props.property.specificEntityType === 'INITIATIVE'
+                      }
+                      class="min-w-0 max-w-full flex-1 @max-[840px]/u-list:hidden"
+                    />
+                  </>
                 }
               >
-                <Match when={userCount() > 1}>
-                  <div class="@max-[840px]/u-list:hidden">
-                    <Property.UserStack
-                      property={props.property}
-                      maxUsers={2}
-                    />
-                  </div>
-                  <div class="hidden @max-[840px]/u-list:flex">
-                    <Property.UserStack
-                      property={props.property}
-                      maxUsers={1}
-                      avatarClass="@max-[840px]/u-list:size-5"
-                    />
-                  </div>
-                </Match>
-                <Match when={isUserEntity()}>
-                  <Property.Icon
-                    property={props.property}
-                    class="@max-[840px]/u-list:size-5"
+                {(date) => (
+                  <DueDateLabel
+                    value={date()}
+                    class="min-w-0 flex-1"
+                    textClass="@max-[840px]/u-list:hidden"
                   />
-                </Match>
-              </Switch>
-              <Property.Text
-                property={props.property}
-                resolveSingleEntity={
-                  props.property.specificEntityType === 'INITIATIVE'
-                }
-                class="min-w-0 max-w-full flex-1 @max-[840px]/u-list:hidden"
-              />
+                )}
+              </Show>
             </Show>
             <Property.Caret class="@max-[840px]/u-list:hidden" />
           </Property.EditTrigger>

@@ -42,11 +42,12 @@ export const PropertyDateSelector = (props: DateSelectorProps) => {
   });
 
   const hasClear = () => props.selectedDate != null;
-  // When a date is set, replace the last suggestion with the Clear row so
-  // the section height stays the same.
+  // When a date is set and several suggestions are showing, drop the last
+  // one so the Clear row fits in the same height. A single match stays,
+  // otherwise searching "yesterday" on a set date would show nothing.
   const visibleDateOptions = createMemo(() => {
     const all = dateOptions();
-    return hasClear() && all.length > 0 ? all.slice(0, -1) : all;
+    return hasClear() && all.length > 1 ? all.slice(0, -1) : all;
   });
   const calendarOptionIndex = () => visibleDateOptions().length;
   const clearOptionIndex = () => visibleDateOptions().length + 1;

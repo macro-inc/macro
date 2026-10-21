@@ -1,6 +1,7 @@
 import CaretLeft from '@phosphor/caret-left.svg';
 import CaretRight from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
+import { cn } from '@ui';
 import { endOfDay } from 'date-fns/endOfDay';
 import { isAfter } from 'date-fns/isAfter';
 import { isBefore } from 'date-fns/isBefore';
@@ -13,6 +14,7 @@ type DatePickerUIProps = {
   disablePriorToDate?: Date;
   disableAfterDate?: Date;
   showTimePicker?: boolean;
+  class?: string;
 };
 
 const MONTHS = [
@@ -187,7 +189,7 @@ export function DatePickerUI(props: DatePickerUIProps) {
   };
 
   return (
-    <div class="p-4 w-80">
+    <div class={cn('w-80 p-4', props.class)}>
       <Show when={pickerMode() === 'calendar'}>
         {/* Month/Year header */}
         <div class="flex items-center justify-between mb-3">

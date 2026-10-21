@@ -1,6 +1,7 @@
 import { UserIcon } from '@core/component/UserIcon';
 import CalendarIcon from '@phosphor/calendar.svg';
 import EmptyIcon from '@phosphor/circle-dashed.svg';
+import FlagIcon from '@phosphor/flag.svg';
 import ProjectIcon from '@phosphor/stack.svg';
 import UsersIcon from '@phosphor/users.svg';
 import { Property } from '@property';
@@ -8,7 +9,9 @@ import { PropertyValueIcon } from '@property/component/propertyValue/PropertyVal
 import type { PropertySaveFn } from '@property/core/context';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { Property as PropertyValue } from '@property/types';
+import { dueDateFace, readDueDate } from '@property/utils/due-date';
 import { getEntityValues, getSelectValues } from '@property/utils/typeGuards';
+import { cn } from '@ui';
 import { Match, Show, Switch } from 'solid-js';
 import type { TaskBoardGrouping } from '../core/task-board';
 
@@ -63,6 +66,12 @@ export function TaskBoardProperty(props: {
   const isProject = () =>
     props.property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.PROJECT;
   const isDate = () => props.property.valueType === 'DATE';
+  const isDueDate = () =>
+    props.property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.DUE_DATE;
+  const dueFace = () => {
+    const date = readDueDate(props.property);
+    return date ? dueDateFace(date) : null;
+  };
   const hasSelectIcon = () => getSelectValues(props.property).length > 0;
   const showProjectIcon = () =>
     props.iconOnly || getEntityValues(props.property).length !== 1;
@@ -76,12 +85,18 @@ export function TaskBoardProperty(props: {
       <Property.Tooltip property={props.property}>
         <Property.Pill
           variant="ghost"
-          aria-label={props.property.displayName}
-          class={
+          aria-label={
+            dueFace()
+              ? `${props.property.displayName}, ${dueFace()?.text}`
+              : props.property.displayName
+          }
+          class={cn(
             props.iconOnly
               ? 'min-h-6 min-w-6 justify-center p-0.5'
-              : 'max-w-40 gap-1 px-1.5'
-          }
+              : 'max-w-40 gap-1 px-1.5',
+            dueFace()?.tone === 'today' && 'text-warning',
+            dueFace()?.tone === 'overdue' && 'text-failure'
+          )}
         >
           <Switch
             fallback={
@@ -105,6 +120,9 @@ export function TaskBoardProperty(props: {
                 <ProjectIcon class="size-3.5 shrink-0" />
               </Show>
             </Match>
+            <Match when={isDueDate()}>
+              <FlagIcon class="size-3.5 shrink-0" />
+            </Match>
             <Match when={isDate()}>
               <CalendarIcon class="size-3.5 shrink-0" />
             </Match>
@@ -116,12 +134,19 @@ export function TaskBoardProperty(props: {
             </Match>
           </Switch>
           <Show when={!props.iconOnly}>
-            <Property.Text
-              property={props.property}
-              resolveSingleEntity={isProject()}
-              class="min-w-0 truncate"
-              fallback={<span>{props.property.displayName}</span>}
-            />
+            <Show
+              when={dueFace()}
+              fallback={
+                <Property.Text
+                  property={props.property}
+                  resolveSingleEntity={isProject()}
+                  class="min-w-0 truncate"
+                  fallback={<span>{props.property.displayName}</span>}
+                />
+              }
+            >
+              {(face) => <span class="min-w-0 truncate">{face().text}</span>}
+            </Show>
           </Show>
         </Property.Pill>
       </Property.Tooltip>

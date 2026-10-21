@@ -1,9 +1,11 @@
 import { useMaybeBlockId } from '@core/block';
 import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
 import { Property } from '@property';
+import { DueDateLabel } from '@property/component/DueDateLabel';
 import { usePropertiesContext } from '@property/context/PropertiesContext';
 import type { Property as PropertyT } from '@property/types';
 import { getEntityValues, hasValue } from '@property/utils';
+import { readDueDate } from '@property/utils/due-date';
 import { cn, Layer } from '@ui';
 import { type Component, Match, Show, Switch } from 'solid-js';
 import './list-property-value.css';
@@ -29,6 +31,7 @@ export const ListPropertyValue: Component<ListPropertyValueProps> = (props) => {
     isUserEntity() ? getEntityValues(props.property).length : 0;
 
   const isEmpty = () => !hasValue(props.property);
+  const dueDate = () => readDueDate(props.property);
 
   // STRING / NUMBER / BOOLEAN / LINK edit in place rather than via the
   // EditTrigger + popover pair.
@@ -91,41 +94,56 @@ export const ListPropertyValue: Component<ListPropertyValueProps> = (props) => {
                 </>
               }
             >
-              <Switch
+              <Show
+                when={dueDate()}
                 fallback={
-                  <Property.Icon
-                    property={props.property}
-                    class="size-3 shrink-0"
-                  />
+                  <>
+                    <Switch
+                      fallback={
+                        <Property.Icon
+                          property={props.property}
+                          class="size-3 shrink-0"
+                        />
+                      }
+                    >
+                      <Match when={userCount() > 1}>
+                        {/* Wide: 2 avatars; narrow: collapse to 1 to fit the cell. */}
+                        <div class="@max-[840px]/u-list:hidden">
+                          <Property.UserStack
+                            property={props.property}
+                            maxUsers={2}
+                          />
+                        </div>
+                        <div class="hidden @max-[840px]/u-list:flex">
+                          <Property.UserStack
+                            property={props.property}
+                            maxUsers={1}
+                            avatarClass="@max-[840px]/u-list:size-4"
+                          />
+                        </div>
+                      </Match>
+                      <Match when={isUserEntity()}>
+                        <Property.Icon
+                          property={props.property}
+                          class="@max-[840px]/u-list:size-4"
+                        />
+                      </Match>
+                    </Switch>
+                    <Property.Text
+                      property={props.property}
+                      class="min-w-0 max-w-full flex-1 @max-[840px]/u-list:hidden"
+                    />
+                  </>
                 }
               >
-                <Match when={userCount() > 1}>
-                  {/* Wide: 2 avatars; narrow: collapse to 1 to fit the cell. */}
-                  <div class="@max-[840px]/u-list:hidden">
-                    <Property.UserStack
-                      property={props.property}
-                      maxUsers={2}
-                    />
-                  </div>
-                  <div class="hidden @max-[840px]/u-list:flex">
-                    <Property.UserStack
-                      property={props.property}
-                      maxUsers={1}
-                      avatarClass="@max-[840px]/u-list:size-4"
-                    />
-                  </div>
-                </Match>
-                <Match when={isUserEntity()}>
-                  <Property.Icon
-                    property={props.property}
-                    class="@max-[840px]/u-list:size-4"
+                {(date) => (
+                  <DueDateLabel
+                    value={date()}
+                    class="min-w-0 flex-1"
+                    textClass="@max-[840px]/u-list:hidden"
                   />
-                </Match>
-              </Switch>
-              <Property.Text
-                property={props.property}
-                class="min-w-0 max-w-full flex-1 @max-[840px]/u-list:hidden"
-              />
+                )}
+              </Show>
             </Show>
             <Property.Caret class="@max-[840px]/u-list:hidden" />
           </Property.Pill>

@@ -106,33 +106,38 @@ export function TaskBoardView(props: {
     readOnly: Accessor<boolean>,
     id: string,
     iconOnly: boolean,
-    includeEmpty = true
+    includeEmpty = true,
+    className?: string
   ) => (
     <Show when={props.data.property(task().id, id)}>
       {(property) => (
         <Show when={includeEmpty || hasValue(property())}>
-          <Suspense fallback={<span class="size-6" />}>
-            <TaskBoardProperty
-              property={property()}
-              taskId={task().id}
-              canEdit={!readOnly() && props.data.canEditProperty(task().id, id)}
-              iconOnly={iconOnly}
-              onSave={async (value, apiValues) => {
-                try {
-                  if (readOnly()) {
-                    throw new Error('Task is no longer editable');
-                  }
-
-                  await props.data.saveProperty(task().id, value, apiValues);
-                } catch (error) {
-                  toast.failure(
-                    `Could not update ${value.displayName.toLowerCase()}`
-                  );
-                  throw error;
+          <div class={className}>
+            <Suspense fallback={<span class="size-6" />}>
+              <TaskBoardProperty
+                property={property()}
+                taskId={task().id}
+                canEdit={
+                  !readOnly() && props.data.canEditProperty(task().id, id)
                 }
-              }}
-            />
-          </Suspense>
+                iconOnly={iconOnly}
+                onSave={async (value, apiValues) => {
+                  try {
+                    if (readOnly()) {
+                      throw new Error('Task is no longer editable');
+                    }
+
+                    await props.data.saveProperty(task().id, value, apiValues);
+                  } catch (error) {
+                    toast.failure(
+                      `Could not update ${value.displayName.toLowerCase()}`
+                    );
+                    throw error;
+                  }
+                }}
+              />
+            </Suspense>
+          </div>
         </Show>
       )}
     </Show>
@@ -166,7 +171,11 @@ export function TaskBoardView(props: {
       </TaskBoard.CardHeader>
       <TaskBoard.CardFields>
         <div data-kanban-no-drag class="contents">
-          <For each={cardPropertyIds()}>
+          <For
+            each={cardPropertyIds().filter(
+              (id) => id !== SYSTEM_PROPERTY_IDS.DUE_DATE
+            )}
+          >
             {(id) => {
               const iconOnly = id === SYSTEM_PROPERTY_IDS.PRIORITY;
               const includeEmpty = id === SYSTEM_PROPERTY_IDS.PRIORITY;
@@ -174,6 +183,16 @@ export function TaskBoardView(props: {
               return renderProperty(task, readOnly, id, iconOnly, includeEmpty);
             }}
           </For>
+          <Show when={cardPropertyIds().includes(SYSTEM_PROPERTY_IDS.DUE_DATE)}>
+            {renderProperty(
+              task,
+              readOnly,
+              SYSTEM_PROPERTY_IDS.DUE_DATE,
+              false,
+              false,
+              'ml-auto'
+            )}
+          </Show>
         </div>
       </TaskBoard.CardFields>
     </>

@@ -33,6 +33,15 @@ export const TASK_GRID_COLUMNS = [
     specificEntityType: EntityType.USER,
     width: 'var(--task-col-assignees, 7rem)',
   },
+  {
+    id: 'dueDate',
+    label: 'Due Date',
+    defId: SYSTEM_PROPERTY_IDS.DUE_DATE,
+    dataType: DataType.DATE,
+    isMultiSelect: false,
+    specificEntityType: null,
+    width: 'var(--task-col-due-date, 8rem)',
+  },
 ] as const;
 
 /** Width for the "Created By" column - only shown on wide containers */

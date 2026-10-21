@@ -4,6 +4,7 @@ import { useListLayout } from '@entity/composed/list-entity/shared';
 import StatusInProgress from '@icon/square-task-in-progress-circle.svg';
 import PriorityHigh from '@icon/wide-priority-high.svg';
 import ArrowDownIcon from '@phosphor/arrow-down.svg';
+import FlagIcon from '@phosphor/flag.svg';
 import UsersIcon from '@phosphor/users.svg';
 import { Tooltip } from '@ui';
 import { cn } from '@ui/utils/classname';
@@ -24,6 +25,7 @@ const COLUMN_ICONS: Record<string, () => JSX.Element> = {
   status: () => <StatusInProgress class={HEADER_ICON_CLASS} />,
   priority: () => <PriorityHigh class={HEADER_ICON_CLASS} />,
   assignees: () => <UsersIcon class={HEADER_ICON_CLASS} />,
+  dueDate: () => <FlagIcon class={HEADER_ICON_CLASS} />,
 };
 
 /** Which `TASK_GRID_COLUMNS.id` values map to a sort key (others are read-only). */

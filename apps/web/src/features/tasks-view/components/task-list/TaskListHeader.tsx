@@ -73,6 +73,7 @@ export function TaskListHeader() {
       <SortableHeader label="Status" area="status" />
       <SortableHeader label="Priority" area="priority" />
       <SortableHeader label="Assignees" area="assignees" />
+      <SortableHeader label="Due Date" area="dueDate" />
       <Show when={projectsEnabled()}>
         <SortableHeader label="Project" area="initiative" />
       </Show>

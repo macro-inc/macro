@@ -642,7 +642,7 @@ export function ProjectsCollection(props: {
                           {(group) => (
                             <TaskGroupHeader
                               row={group()}
-                              columnCount={taskGridColumnCount(true)}
+                              columnCount={taskGridColumnCount(false)}
                               groupBy={collection.groupBy()}
                               expanded={collection.disclosure.isExpanded(
                                 group().groupId
@@ -716,7 +716,7 @@ export function ProjectsCollection(props: {
                             <div role="row" id={more().id}>
                               <div
                                 role="gridcell"
-                                aria-colspan={taskGridColumnCount(true)}
+                                aria-colspan={taskGridColumnCount(false)}
                                 class="flex justify-center py-2"
                               >
                                 <Button

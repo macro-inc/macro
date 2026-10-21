@@ -688,6 +688,16 @@ already in this project are excluded. Adding a task moves it from its previous
 project. A partial failure keeps only
 failed tasks selected for retry, and a request failure preserves the selection.
 
+The regular Tasks list includes a Due Date column after Assignees, and the
+project list uses the same column. An empty cell shows `Due Date`. A set date
+shows a flag with `Today`, `Yesterday`, `Tomorrow`, or a short date. Today
+uses the warning color, and a past date uses the failure color. Narrow lists
+keep the colored flag and hide the words. Board cards use the same wording
+and colors, with the due date at the right end of the card's bottom row.
+Clicking a due date opens shortcuts for `Today`, `Tomorrow`, `Next week`, and
+`In 2 weeks`, plus `Clear` when a date is set, above the month calendar.
+Other date properties keep the search picker.
+
 The regular Tasks list includes a Project column. Its cell is a regular property
 cell: clicking it opens the same entity dropdown as the other property columns,
 listing projects. Narrow lists show Project as a compact pill after the row's

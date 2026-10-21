@@ -32,6 +32,15 @@ export const TASK_GRID_COLUMNS = [
     specificEntityType: EntityType.USER,
     width: 'var(--task-col-assignees, 7rem)',
   },
+  {
+    id: 'dueDate',
+    label: 'Due Date',
+    defId: SYSTEM_PROPERTY_IDS.DUE_DATE,
+    dataType: DataType.DATE,
+    isMultiSelect: false,
+    specificEntityType: null,
+    width: 'var(--task-col-due-date, 8rem)',
+  },
 ] as const;
 
 /** The task's project, shown only while Projects is enabled. */
@@ -75,4 +84,4 @@ export function taskGridTemplate(options: {
 }
 
 /** Column span for full-width rows such as group headers. */
-export const taskGridColumnCount = (project: boolean) => (project ? 8 : 7);
+export const taskGridColumnCount = (project: boolean) => (project ? 9 : 8);

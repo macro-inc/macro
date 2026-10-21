@@ -1,8 +1,10 @@
 import { fireAndForget } from '@core/util/fireAndForget';
+import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { createSignal, Show } from 'solid-js';
 import { useProperty } from '../../core/context';
 import type { DateProperty } from '../../types';
 import { isDateProperty } from '../../utils';
+import { DueDateSelector } from '../selectors/DueDateSelector';
 import { PropertyDateSelector } from '../selectors/PropertyDateSelector';
 import { EditorPopover } from './EditorPopover';
 
@@ -39,16 +41,38 @@ function DateEditorBody() {
     }
   };
 
+  const dueDate = () =>
+    property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.DUE_DATE;
+
   return (
-    <EditorPopover>
-      <PropertyDateSelector
-        property={property}
-        selectedDate={selectedDate()}
-        onSelectDate={(date) => {
-          fireAndForget(commit(date), 'property-editor');
-        }}
-        onClose={() => ctx.closeEditor()}
-      />
+    <EditorPopover
+      class={
+        dueDate()
+          ? 'max-h-[min(36rem,var(--kb-popper-content-available-height))] max-w-[22rem] overflow-y-auto'
+          : undefined
+      }
+    >
+      <Show
+        when={dueDate()}
+        fallback={
+          <PropertyDateSelector
+            property={property}
+            selectedDate={selectedDate()}
+            onSelectDate={(date) => {
+              fireAndForget(commit(date), 'property-editor');
+            }}
+            onClose={() => ctx.closeEditor()}
+          />
+        }
+      >
+        <DueDateSelector
+          selectedDate={selectedDate()}
+          onSelectDate={(date) => {
+            fireAndForget(commit(date), 'property-editor');
+          }}
+          onClose={() => ctx.closeEditor()}
+        />
+      </Show>
     </EditorPopover>
   );
 }

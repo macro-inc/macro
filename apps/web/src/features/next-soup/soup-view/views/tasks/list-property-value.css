@@ -2,6 +2,7 @@
   --task-col-status: 7.25rem;
   --task-col-priority: 7rem;
   --task-col-assignees: 9rem;
+  --task-col-due-date: 8rem;
   --task-col-created-by: 7rem;
   --task-col-timestamp: 5rem;
 }
@@ -19,6 +20,7 @@
     --task-col-status: 1.5rem;
     --task-col-priority: 1.5rem;
     --task-col-assignees: 2.25rem;
+    --task-col-due-date: 1.5rem;
     --task-col-created-by: 0rem;
     --task-col-timestamp: 5rem;
   }

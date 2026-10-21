@@ -8,22 +8,20 @@ import StackIcon from '@phosphor/stack.svg';
 import { ListPropertyValue } from '@property/component/ListPropertyValue';
 import { Modals } from '@property/component/modal';
 import { PropertiesProvider } from '@property/context/PropertiesContext';
-import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { Property, PropertyApiValues } from '@property/types';
 import { cn } from '@ui';
 import { For, Show, Suspense } from 'solid-js';
 import type { ProjectRow as ProjectRowData } from '../context/projects-context';
 import { canEditProject } from '../core/project';
 
-// Projects reuse the task grid; its project column holds the due date.
-const gridStyle = taskGridTemplate({ indicator: true, project: true });
+// Projects reuse the task grid without the task's Project column.
+const gridStyle = taskGridTemplate({ indicator: true, project: false });
 const columns = [
   { area: 'content', label: 'Project' },
   ...TASK_GRID_COLUMNS.map((column) => ({
     area: column.id,
     label: column.label,
   })),
-  { area: 'initiative', label: 'Due date' },
   { area: 'createdBy', label: 'Tasks' },
   { area: 'timestamp', label: 'Updated' },
 ];
@@ -144,16 +142,6 @@ export function ProjectRow(props: {
               </Entity.Slot>
             )}
           </For>
-          <Entity.Slot placement="initiative" class="min-w-0 text-xs">
-            <Show when={propertyFor(SYSTEM_PROPERTY_IDS.DUE_DATE)}>
-              {(property) => (
-                <ListPropertyValue
-                  entityId={props.row.project.id}
-                  property={property()}
-                />
-              )}
-            </Show>
-          </Entity.Slot>
           <Entity.Slot
             placement="createdBy"
             class="min-w-0 text-xs text-ink-muted @max-[1220px]/u-list:hidden"
