@@ -8,6 +8,8 @@ pub struct Settings {
     /// `null` to leave unchanged (both deserialize to `None`); pass an empty
     /// string to clear it. The column cannot be set to SQL NULL via patch.
     pub signature: Option<String>,
+    /// Whether messages sent from this inbox carry an open-tracking pixel.
+    pub read_receipts_enabled: Option<bool>,
 }
 
 impl From<crate::email::service::settings::Settings> for Settings {
@@ -15,6 +17,7 @@ impl From<crate::email::service::settings::Settings> for Settings {
         Settings {
             signature_on_replies_forwards: Some(service_settings.signature_on_replies_forwards),
             signature: service_settings.signature,
+            read_receipts_enabled: Some(service_settings.read_receipts_enabled),
         }
     }
 }
