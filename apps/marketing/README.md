@@ -1050,3 +1050,8 @@ On phones, retain the final blog-row divider and hide the adjacent closing
 footer rule. The homepage document frame is 420px tall below 700px because its
 version-history band is hidden there; avoid retaining empty desktop fade space
 between the document and its Learn more links.
+
+The travelling Open app CTA switches to native footer dimensions, text, and SVG
+sizes after its landing transition settles, removing the compositor scale to
+avoid Safari retaining an enlarged low-resolution text layer. Reverse scrolling
+restores compact dimensions before the header reappears; keep one app link.
