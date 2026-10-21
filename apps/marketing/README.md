@@ -1028,3 +1028,7 @@ including subsequent replies.
 
 The landing-page CRM illustration has no playback footer or Pause/Replay controls;
 it still pauses offscreen and when a visitor enters the demo.
+
+The landing CRM drag hides its source card while preserving its slot. The drag
+copy and pointer sit beside the panning canvas and use viewport-space transforms;
+use a box shadow rather than a moving drop-shadow filter to avoid ghosted trails.

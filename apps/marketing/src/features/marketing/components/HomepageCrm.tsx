@@ -129,7 +129,7 @@ export default function HomepageCrm() {
           <div
             class="homepage-crm-canvas"
             style={{
-              transform: `scale(${scale()}) translateX(${-camera()}px)`,
+              transform: `translate3d(${-camera() * scale()}px, 0, 0) scale(${scale()})`,
             }}
             aria-hidden="true"
           >
@@ -166,10 +166,10 @@ export default function HomepageCrm() {
                           data-crm-stage={label}
                           class="homepage-crm-card"
                           style={{
-                            opacity:
+                            visibility:
                               frame().dragging && frame().company === company.id
-                                ? 0.18
-                                : 1,
+                                ? 'hidden'
+                                : 'visible',
                           }}
                         >
                           <DemoCard company={company} />
@@ -180,24 +180,27 @@ export default function HomepageCrm() {
                 )}
               </For>
             </div>
-            <Show when={frame().dragging}>
-              <div
-                class="homepage-crm-drag"
-                style={{
-                  transform: `translate(${frame().x - 90}px, ${frame().y - 28}px) rotate(-2deg) scale(1.035)`,
-                }}
-              >
-                <DemoCard company={moving()} />
-              </div>
-            </Show>
-            <DemoCursor
-              class="homepage-crm-cursor"
-              style={{
-                transform: `translate(${frame().x}px, ${frame().y}px)`,
-                opacity: frame().opacity,
-              }}
-            />
           </div>
+          {/* Keep moving objects outside the panning board so each has one
+              viewport-space transform rather than nested moving layers. */}
+          <Show when={frame().dragging}>
+            <div
+              class="homepage-crm-drag"
+              aria-hidden="true"
+              style={{
+                transform: `translate3d(${(frame().x - 90 - camera()) * scale()}px, ${(frame().y - 28) * scale()}px, 0) scale(${scale() * 1.035})`,
+              }}
+            >
+              <DemoCard company={moving()} />
+            </div>
+          </Show>
+          <DemoCursor
+            class="homepage-crm-cursor"
+            style={{
+              transform: `translate3d(${(frame().x - camera()) * scale()}px, ${frame().y * scale()}px, 0) scale(${scale()})`,
+              opacity: frame().opacity,
+            }}
+          />
         </div>
       </DocsGraphicFrame>
     </div>

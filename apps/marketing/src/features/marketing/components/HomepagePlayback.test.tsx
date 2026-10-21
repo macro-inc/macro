@@ -82,8 +82,14 @@ it('waits for the CRM scene before moving a company and pauses below its thresho
   vi.advanceTimersByTime(15000);
   expect(northwind().getAttribute('data-crm-stage')).toBe('Qualified');
   show(scene, 0.3);
-  vi.advanceTimersByTime(5200);
+  vi.advanceTimersByTime(2600);
+  expect(northwind().getAttribute('style')).toContain('visibility: hidden');
+  const dragged = view.container.querySelector('.homepage-crm-drag')!;
+  expect(dragged.parentElement?.className).toBe('homepage-crm-viewport');
+  expect(dragged.getAttribute('style')).toContain('translate3d');
+  vi.advanceTimersByTime(2600);
   expect(northwind().getAttribute('data-crm-stage')).toBe('Proposal');
+  expect(northwind().getAttribute('style')).toContain('visibility: visible');
   show(scene, 0.05);
   vi.advanceTimersByTime(15000);
   expect(

@@ -7,8 +7,8 @@
 .homepage-crm-columns > div { flex: none; width: 272px; }
 .homepage-crm-card { height: 62px; flex-shrink: 0; }
 .homepage-crm-company-mark { display: flex; width: 16px; height: 16px; align-items: center; justify-content: center; border-radius: 4px; background: var(--color-surface-4); font-size: 10px; color: var(--color-ink-muted); }
-.homepage-crm-drag { position: absolute; top: 0; left: 0; width: 256px; z-index: 2; pointer-events: none; filter: drop-shadow(0 16px 18px rgb(0 0 0 / 0.4)); }
-.homepage-crm-cursor { z-index: 3; }
+.homepage-crm-drag { position: absolute; top: 0; left: 0; width: 256px; z-index: 2; pointer-events: none; border-radius: 8px; box-shadow: 0 12px 24px rgb(0 0 0 / 0.22); transform-origin: top left; will-change: transform; }
+.homepage-crm-cursor { z-index: 3; transform-origin: top left; will-change: transform; }
 @media (max-width: 699px) {
   .homepage-crm .mdf-frame { padding: 24px 12px; }
   .homepage-crm-header { padding: 16px 12px; }
