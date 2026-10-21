@@ -76,11 +76,10 @@ fn colleague_joined_puts_long_multiline_names_on_one_capped_line() {
     }
     .format_email();
     assert_eq!(email.subject, COLLEAGUE_SUBJECT);
-    assert!(
-        email
-            .body
-            .contains(&format!("Alice Example {} (alice@acme.com)", "x".repeat(50)))
-    );
+    assert!(email.body.contains(&format!(
+        "Alice Example {} (alice@acme.com)",
+        "x".repeat(50)
+    )));
 }
 
 #[test]
