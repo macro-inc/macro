@@ -1,11 +1,17 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { enableEmailSignatures } from '@core/constant/featureFlags';
+import { toast } from '@core/component/Toast/Toast';
+import {
+  enableEmailReadReceipts,
+  enableEmailSignatures,
+} from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useSettingsTabAvailable } from '@core/constant/settingsTabsConfig';
 import { useUserId } from '@core/context/user';
 import { useEmailLinks } from '@core/email-link';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { Button } from '@ui';
+import { useUpdateEmailSettingsMutation } from '@queries/email/settings';
+import type { Link as EmailLink } from '@service-email/generated/schemas';
+import { Button, ToggleSwitch } from '@ui';
 import { For, Show, Suspense } from 'solid-js';
 import { EmailCard } from './Email';
 import {
@@ -18,6 +24,7 @@ import { SignatureSection } from './SignatureSection';
 
 export function EmailSettings() {
   const signatures = useFeatureFlag(enableEmailSignatures);
+  const readReceipts = useFeatureFlag(enableEmailReadReceipts);
   const { openSettings } = useSettingsState();
   const isAvailable = useSettingsTabAvailable();
   return (
@@ -52,6 +59,22 @@ export function EmailSettings() {
             }
           >
             <EmailSignatures />
+          </Suspense>
+        </SettingsSection>
+      </Show>
+      <Show when={readReceipts().enabled}>
+        <SettingsSection
+          title="Read receipts"
+          description="See when recipients open messages you send. Macro adds an invisible image to each message, so opens are approximate: some mail apps load images automatically and others block them. Only people with access to the inbox see its opens."
+        >
+          <Suspense
+            fallback={
+              <p role="status" class="text-sm text-ink-muted">
+                Loading accounts…
+              </p>
+            }
+          >
+            <EmailReadReceipts />
           </Suspense>
         </SettingsSection>
       </Show>
@@ -148,5 +171,75 @@ function EmailSignatures() {
         </For>
       </Show>
     </Show>
+  );
+}
+
+function EmailReadReceipts() {
+  const userId = useUserId();
+  const { query } = useEmailLinks();
+  const links = () =>
+    query.isSuccess
+      ? query.data.links.filter((link) => link.macro_id === userId())
+      : [];
+  return (
+    <Show
+      when={!query.isError}
+      fallback={
+        <SettingsCard>
+          <SettingsRow label="Couldn't load accounts">
+            <Button
+              variant="outline"
+              onClick={() => fireAndForget(query.refetch(), 'email-settings')}
+            >
+              Try again
+            </Button>
+          </SettingsRow>
+        </SettingsCard>
+      }
+    >
+      <Show
+        when={!query.isPending}
+        fallback={
+          <p role="status" class="text-sm text-ink-muted">
+            Loading accounts…
+          </p>
+        }
+      >
+        <SettingsCard>
+          <For
+            each={links()}
+            fallback={
+              <SettingsRow label="Connect an email account above to use read receipts." />
+            }
+          >
+            {(link) => <ReadReceiptsRow link={link} />}
+          </For>
+        </SettingsCard>
+      </Show>
+    </Show>
+  );
+}
+
+function ReadReceiptsRow(props: { link: EmailLink }) {
+  const updateSettings = useUpdateEmailSettingsMutation();
+  return (
+    <SettingsRow label={props.link.email_address}>
+      <ToggleSwitch
+        size="md"
+        label={`Read receipts for ${props.link.email_address}`}
+        labelClass="sr-only"
+        checked={props.link.settings.read_receipts_enabled ?? false}
+        disabled={updateSettings.isPending}
+        onChange={(checked) =>
+          updateSettings.mutate(
+            {
+              linkId: props.link.id,
+              settings: { read_receipts_enabled: checked },
+            },
+            { onError: () => toast.failure('Failed to update read receipts.') }
+          )
+        }
+      />
+    </SettingsRow>
   );
 }

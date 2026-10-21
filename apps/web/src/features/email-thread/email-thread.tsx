@@ -44,6 +44,7 @@ import type {
 import type { EmailThreadOrganizationStatus } from './context/email-thread-view-context';
 import { EmailThreadOperations } from './email-thread-operations';
 import { createOptimisticThreadSend } from './primitives/optimistic-send';
+import { createThreadReadReceipts } from './read-receipts';
 import { createThreadActionAdapter } from './thread-action-adapter';
 import {
   EmailThreadSurface,
@@ -143,6 +144,7 @@ export function EmailThread(props: EmailThreadProps) {
       renderAvatar: (message: EmailMessage) => (
         <EmailSenderIcon message={message} />
       ),
+      readReceipt: createThreadReadReceipts(() => props.threadId()),
     },
   };
   const rendering = createEmailRenderingContext();

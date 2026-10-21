@@ -19,6 +19,8 @@ import {
 } from '../core/calendar-invitation';
 import { type EmailAttachment, isCalendarFile } from '../core/email-message';
 import { inlineContentIds, normalizeContentId } from '../core/inline-images';
+import type { ReadReceipt } from '../core/read-receipt';
+
 export interface InvitationRenderOptions {
   /** Called before a card action opens something else in the app. */
   onNavigate?: () => void;
@@ -35,6 +37,7 @@ export interface EmailMessageViewProps {
   ) => JSX.Element;
   renderOperation?: (message: EmailMessage) => JSX.Element;
   renderAvatar?: (message: EmailMessage) => JSX.Element;
+  readReceipt?: ReadReceipt;
   viewerEmail?: string;
   isTouch: boolean;
   isPersonal: boolean;
@@ -186,6 +189,7 @@ export function EmailMessageView(props: EmailMessageViewProps) {
             onReply={props.onReply}
             isTouch={props.isTouch}
             viewerEmail={props.viewerEmail}
+            readReceipt={props.readReceipt}
             hiddenActions={
               props.onReply ? undefined : ['reply', 'reply-all', 'forward']
             }

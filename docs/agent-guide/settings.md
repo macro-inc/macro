@@ -109,6 +109,13 @@ Trace signature actions under `email.signature.save`, `email.signature.clear`,
 or `email.signature.import`; the REST write and `email.settings.refresh` run
 under that action, including the account catalog's durable refresh.
 
+### Email read receipts
+
+Behind `enable-email-read-receipts` (on in dev), **Settings → Email → Read
+receipts** lists each owned inbox with a switch that saves immediately. It is
+off by default. Messages sent from an inbox with it on carry an invisible
+pixel; see [read receipts in a thread](email.md#read-receipts) for the status.
+
 ### Notification permission prompt
 
 After onboarding, an eligible desktop app user sees **Enable Desktop

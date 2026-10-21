@@ -795,6 +795,20 @@ Macro Markdown messages retain document mentions. Ordinary HTML bodies use an
 open shadow root: Playwright text locators can reach them, but a card's ordinary
 `innerText` or `querySelector` does not traverse that root.
 
+### Read receipts
+
+With `enable-email-read-receipts` on and read receipts turned on for an inbox
+(see [Settings](settings.md#email-read-receipts)), messages sent from that
+inbox show **Opened** or **Not opened** beside the date in the expanded
+message header. The desktop tooltip and the expanded header details (tap the
+header caret on touch) give the count and first and last open times. Only
+people with access to the sending inbox see it, and the thread refreshes it
+about once a minute. Macro never loads its own pixels, in the reader or in
+quoted replies and forwards, so viewing in Macro does not count as an open;
+recipients who read in Macro are not counted either. An open requires a
+recipient mail client outside Macro to load the pixel from the email service's
+public URL, which the local Docker stack cannot serve.
+
 Sending a reply from an inbox thread marks that thread done but stays on it.
 Send and mark done (Shift+Cmd+Enter) and Mark done open the next email, counted
 from where the thread sat when it was opened (a reply draft lifts its thread to
