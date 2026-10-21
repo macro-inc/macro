@@ -62,3 +62,9 @@ html[data-palette='cream'] .homepage-demo-slide-dot[aria-pressed=true] span { ba
 /* Keep the restored agent composer above the decorative caption and fade. */
 .homepage-embedded-demo:has(.homepage-demo-carousel[data-active-scene='Agents']) .homepage-embedded-window { box-sizing: border-box; padding-bottom: 136px; }
 .homepage-embedded-demo:has(.homepage-demo-carousel[data-active-scene='Agents']) .homepage-embedded-stage::after { inset: calc(100% - 160px) 0 -1px; }
+
+/* Match HomepageOpenSource's viewport gate before hydration. The server sends
+   desktop markup; phones must never paint it before the mobile branch mounts. */
+@media (max-width: 799px) {
+  .homepage-embedded-demo { display: none; }
+}

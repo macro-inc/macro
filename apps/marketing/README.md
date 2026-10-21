@@ -514,6 +514,9 @@ backing, and ISO/SOC 2/CASA badges. A continuous grainy gradient funnels into th
 GitHub mark on scroll, then drains away. Verify the flow in both scroll directions
 and after resizing. Reduced motion skips the flow
 and shows the finished GitHub treatment.
+The 800px desktop-demo breakpoint is also enforced by CSS on prerendered HTML,
+so phones never paint the desktop carousel before hydration switches layouts.
+The production smoke checks visibility before and after releasing JavaScript.
 Below 800px, the homepage keeps the original sequence: feature bubbles, the full
 open-source section, then a curved connector into the abbreviated sidebar diagram.
 The embedded demo, carousel, liquid transition, and demo launch button do not mount

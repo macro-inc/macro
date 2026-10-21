@@ -78,6 +78,12 @@ export async function verifyHomepage(directory: string): Promise<void> {
             `Homepage SSR root height is ${rootHeight}, expected viewport height ${viewport.height} (${label})`
           );
 
+        // The SSR fallback is desktop, but CSS must hide it on phones before
+        // hydration replaces it with the mobile story. Otherwise it flashes in.
+        const desktopDemo = page.locator('.homepage-embedded-demo');
+        if (viewport.width < 800) await expect(desktopDemo).toBeHidden();
+        else await expect(desktopDemo).toBeVisible();
+
         releaseScripts();
         await page.waitForLoadState('load');
         if (errors.length)
@@ -91,6 +97,10 @@ export async function verifyHomepage(directory: string): Promise<void> {
             timeout: 10000,
           }
         );
+        if (viewport.width < 800) {
+          await expect(desktopDemo).toHaveCount(0);
+          await expect(page.locator('.homepage-mobile-story')).toBeVisible();
+        } else await expect(desktopDemo).toBeVisible();
         await page.evaluate(async () => {
           await document.fonts.ready;
           await new Promise<void>((resolve) =>

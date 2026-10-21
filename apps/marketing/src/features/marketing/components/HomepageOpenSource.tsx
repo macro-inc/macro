@@ -160,6 +160,8 @@ export function HomepageOpenSource(props: {
   children: JSX.Element;
   showSidebarBreakdown: boolean;
 }) {
+  // CSS applies this same breakpoint to server markup before hydration can
+  // replace it with the mobile story. Keep the two thresholds aligned.
   const desktop = createMediaQuery('(min-width: 800px)', true);
   return (
     <Show
