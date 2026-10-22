@@ -81,7 +81,7 @@ export async function verifyHomepage(directory: string): Promise<void> {
         await expect(page.locator('.macro-feature-tile')).toHaveCount(6);
         await expect(page.locator('.macro-homepage')).toHaveCSS(
           'background-color',
-          colorScheme === 'light' ? 'rgb(255, 255, 255)' : 'rgb(16, 16, 19)'
+          colorScheme === 'light' ? 'rgb(255, 255, 255)' : 'rgb(0, 0, 0)'
         );
 
         releaseScripts();
@@ -174,14 +174,14 @@ export async function verifyHomepage(directory: string): Promise<void> {
         await expect(previewBody).toHaveText(/\S+/);
         await expect(previewBody).toHaveCSS(
           'color',
-          colorScheme === 'light' ? 'rgb(36, 36, 40)' : 'rgb(238, 238, 240)'
+          colorScheme === 'light' ? 'rgb(36, 36, 40)' : 'rgb(255, 255, 255)'
         );
         await page.emulateMedia({
           colorScheme: colorScheme === 'light' ? 'dark' : 'light',
         });
         await expect(previewBody).toHaveCSS(
           'color',
-          colorScheme === 'light' ? 'rgb(238, 238, 240)' : 'rgb(36, 36, 40)'
+          colorScheme === 'light' ? 'rgb(255, 255, 255)' : 'rgb(36, 36, 40)'
         );
         await page.emulateMedia({ colorScheme });
         const dimensions = await page

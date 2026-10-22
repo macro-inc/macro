@@ -3,7 +3,7 @@
   <head><link rel="preload" href="/fonts/roboto-slab-variable.woff2" as="font" type="font/woff2" crossorigin /><link rel="preload" href="/fonts/inter-variable.woff2" as="font" type="font/woff2" crossorigin /><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>Macro — One unified interface for all your work.</title>
     <link rel="icon" href="/macro-favicon.svg" type="image/svg+xml" />
     <meta name="theme-color" content="#000000" />
-    <style>html,body{margin:0;background:#000;color:#fff}html[data-palette=cream],html[data-palette=cream] body{background:#f5f1e8;color:#1d1c1a}html[data-homepage]{color-scheme:dark}html[data-homepage][data-theme-light=true]{color-scheme:light}html[data-homepage],html[data-homepage] body{background:light-dark(#fff,#101013);color:light-dark(#1d1d1f,#eeeef0)}</style>
+    <style>html,body{margin:0;background:#000;color:#fff}html[data-palette=cream],html[data-palette=cream] body{background:#f5f1e8;color:#1d1c1a}html[data-homepage]{color-scheme:dark}html[data-homepage][data-theme-light=true]{color-scheme:light}html[data-homepage],html[data-homepage] body{background:light-dark(#fff,#000000);color:light-dark(#1d1d1f,#fff)}</style>
     <script>
       // First-paint palette. Keep in sync with src/features/setup/sitePalette.ts.
       (function () {
@@ -15,7 +15,7 @@
         if (homepage) root.setAttribute('data-homepage', '');
         else if (light) root.dataset.palette = 'cream';
         document.querySelector('meta[name="theme-color"]').content = homepage
-          ? (light ? '#ffffff' : '#101013')
+          ? (light ? '#ffffff' : '#000000')
           : (light ? '#f5f1e8' : '#000000');
       })();
     </script>
