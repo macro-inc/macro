@@ -8,11 +8,13 @@ components. Application UI changes must not alter the website.
 The homepage follows the system color scheme with neutral white and black
 backgrounds, native SF Pro
 on Apple platforms (with a system sans-serif fallback elsewhere), the supplied
-text-only vector Macro wordmark with rounded upper M corners, centered Roboto Slab headings at weight 400, and contrasting pill
+text-only vector Macro wordmark with rounded upper M corners, Roboto Slab headings at weight 400, and contrasting pill
 calls to action. `?theme=dark` pins dark mode; `?theme=cream` pins the white
 homepage while retaining cream on product pages. The first-paint script and
-`sitePalette.ts` must apply the same preference before and after hydration. The hero promotes the product-description copy to its main slab
-headline. Dark mode reuses the live site’s black canvas, neutral native surface
+`sitePalette.ts` must apply the same preference before and after hydration. The homepage reads as a sales letter: a direct headline and product summary,
+a short explanation of the problem, then narrow left-aligned feature copy followed
+by wider native demonstrations. Open-source information, the existing testimonial,
+and a project-sized starting point lead into the retained blog and closing sections. Dark mode reuses the live site’s black canvas, neutral native surface
 tokens, warm-white actions, and original email-composer fill and rim; do not
 introduce a separate blue-gray palette. Hero icons use rounded squircle tiles, fine highlighted rims,
 and soft cast shadows that echo the native compose surface. Graphics layer theme-matched product surfaces with fine neutral borders and restrained shadows. `components/homepage/macro-homepage.css`
@@ -20,7 +22,7 @@ scopes that treatment to `.macro-homepage`; product pages, blog, sample workspac
 and signup retain their existing system/cream/dark palettes.
 
 `MacroHero` uses a larger desktop composition with readable labels and a dedicated
-gap above the wordmark, scaling down to fit phones. Fine concentric rings frame
+gap beneath the hero introduction, scaling down to fit phones. Fine concentric rings frame
 the full, variable-sized welcome constellation. It gathers those tools into the Macro mark, then
 unfolds it into connected native features. Its 16-second sequence pauses offscreen,
 in hidden tabs, or through the accessible pause button. Reduced motion shows the
@@ -30,9 +32,9 @@ scroll-driven header CTA landing animation.
 Use product names for feature headings and describe concrete actions in the copy,
 following the live site; avoid slogans and vague benefit claims.
 
-`HomepageTiles` presents six product feature panels in one column on desktop and
+`HomepageTiles` presents six product sections in one column on desktop and
 mobile: email and chat, documents and tasks, agents, sheets and databases, CRM,
-and calls. Panels use a gray-50 background at 50% opacity in light mode, a neutral near-black
+and calls. Only the demo art uses a gray-50 background at 50% opacity in light mode, a neutral near-black
 background in dark mode, and no outer border.
 `HomepageProductPreview` layers readable fragments of the existing product UI
 with local sample data; never shrink a whole desktop window into a card.

@@ -1,6 +1,6 @@
 html[data-homepage] { color-scheme: dark; }
 html[data-homepage][data-theme-light='true'] { color-scheme: light; }
-html[data-homepage][data-theme-light='false'] .macro-home-hero h1 img { filter: invert(1); }
+html[data-homepage][data-theme-light='false'] .macro-home-wordmark img { filter: invert(1); }
 .macro-homepage {
   --color-surface: light-dark(#fff, #000);
   --color-ink: light-dark(#1d1d1f, #fff);
@@ -38,12 +38,14 @@ html[data-homepage][data-theme-light='false'] .macro-home-hero h1 img { filter: 
 .macro-homepage .site-header .site-nav-open { background: light-dark(#f5f5f7, #f5f3ee); color: #1d1d1f; border: 0; font-family: inherit; }
 .macro-homepage .site-header[data-menu-open=true]::before { background: light-dark(#fff, #121214); }
 .macro-homepage a:focus-visible, .macro-homepage button:focus-visible { outline: 3px solid #4384db; outline-offset: 5px; }
-.macro-home-hero { display: flex; align-items: center; flex-direction: column; padding: 109px 24px 94px; text-align: center; }
-.macro-home-hero h1 { width: min(360px, 76vw); margin: 50px 0 38px; line-height: 1; }
-.macro-home-hero h1 img { display: block; width: 100%; height: auto; }
+.macro-home-hero { display: flex; align-items: center; flex-direction: column; padding: 134px 24px 46px; text-align: center; }
+.macro-home-wordmark { width: 220px; margin-bottom: 36px; }
+.macro-home-hero h1 { max-width: 760px; margin: 0; font-family: 'Roboto Slab Variable', serif; font-size: clamp(40px, 4.5vw, 58px); font-weight: 400; line-height: 1.13; letter-spacing: -.045em; text-wrap: balance; }
+.macro-home-wordmark img { display: block; width: 100%; height: auto; }
 .macro-homepage .macro-home-button { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 11px 37px; background: light-dark(#000, #f5f3ee); border-radius: 100px; color: light-dark(#fff, #1d1c1a); text-decoration: none; font-family: inherit; font-size: 19px; line-height: 1.3; font-weight: 600; letter-spacing: -.025em; transition: background 180ms ease, transform 180ms ease; }
 .macro-homepage .macro-home-button:hover { background: light-dark(#292929, #fff); transform: translateY(-1px); }
-.macro-home-tagline { max-width: 650px; text-wrap: balance; margin: 40px 0 0; font-family: 'Roboto Slab Variable', serif; font-size: clamp(30px, 3.5vw, 44px); line-height: 1.2; letter-spacing: -.04em; font-weight: 400; }
+.macro-home-tagline { max-width: 580px; text-wrap: pretty; margin: 24px 0 30px; font-size: 20px; line-height: 1.55; color: var(--color-ink-muted); }
+.macro-home-hero > .macro-hero-art { margin-top: 48px; }
 .macro-hero-art { position: relative; width: 468px; height: 390px; flex-shrink: 0; }
 .macro-hero-scene { position: absolute; width: 360px; height: 300px; inset: 0; transform: scale(1.3); transform-origin: top left; }
 .macro-hero-aura { position: absolute; width: 212px; height: 212px; left: 74px; top: 44px; border-radius: 50%; border: 1px solid light-dark(#e4e4e7, #ffffff14); background: radial-gradient(circle, #f0f0f2, light-dark(#fff, #fff) 70%); opacity: .8; animation: macro-aura 16s ease-in-out infinite; }
@@ -75,17 +77,17 @@ html[data-homepage][data-theme-light='false'] .macro-home-hero h1 img { filter: 
 @keyframes macro-mark { 0%, 13%, 44%, 75%, 100% { transform: scale(1); } 29%, 34%, 86% { transform: scale(1.17); } }
 @keyframes macro-aura { 0%, 12%, 100% { transform: scale(1.06); opacity: .75; } 29%, 34%, 86% { transform: scale(.6); opacity: .9; } 46%, 75% { transform: scale(1.18); opacity: .45; } }
 @keyframes macro-connect { 0%, 34%, 83%, 100% { opacity: 0; stroke-dasharray: 3 5; stroke-dashoffset: 20; } 48%, 73% { opacity: .5; stroke-dasharray: 3 5; stroke-dashoffset: 0; } }
-.macro-feature-grid { width: min(800px, calc(100% - 64px)); margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; }
-.macro-feature-tile { min-width: 0; aspect-ratio: auto; display: flex; flex-direction: column; background: light-dark(rgb(249 250 251 / .5), rgb(20 20 20 / .5)); border-radius: 16px; border: 0; overflow: hidden; }
-.macro-tile-art { height: 450px; min-height: 450px; flex: none; position: relative; isolation: isolate; }
-.macro-tile-copy { padding: 8px 40px 36px; text-align: center; }
-.macro-tile-copy h2 { max-width: 410px; margin: 0 auto 15px; font-family: 'Roboto Slab Variable', serif; font-size: clamp(25px, 2.5vw, 31px); font-weight: 400; line-height: 1.2; letter-spacing: -.04em; text-wrap: balance; }
-.macro-tile-copy p { margin: 0 auto; max-width: 410px; font-size: 16px; line-height: 1.45; color: light-dark(#6e6e73, #aaa); letter-spacing: -.016em; }
-.macro-tile-links { display: flex; justify-content: center; flex-wrap: wrap; gap: 20px; margin-top: 19px; }
-.macro-tile-links a { display: inline-flex; align-items: center; gap: 3px; min-height: 28px; font-size: 14px; font-weight: 550; color: light-dark(#252529, #fff); text-decoration: none; }
+.macro-feature-grid { width: min(800px, calc(100% - 64px)); margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 88px; }
+.macro-feature-tile { min-width: 0; display: flex; flex-direction: column; background: transparent; border: 0; }
+.macro-tile-art { height: 450px; min-height: 450px; flex: none; position: relative; isolation: isolate; overflow: hidden; border-radius: 16px; background: light-dark(rgb(249 250 251 / .5), rgb(20 20 20 / .5)); }
+.macro-tile-copy { width: min(640px, 100%); margin: 0 auto 28px; text-align: left; }
+.macro-letter-prose h2, .macro-tile-copy h2 { margin: 0 0 24px; font-family: 'Roboto Slab Variable', serif; font-size: 36px; font-weight: 400; line-height: 1.22; letter-spacing: -.04em; text-wrap: balance; }
+.macro-letter-prose p, .macro-tile-copy p { margin: 0 0 20px; font-size: 19px; line-height: 1.65; letter-spacing: -.012em; color: var(--color-ink-muted); text-wrap: pretty; }
+.macro-tile-links { display: flex; flex-wrap: wrap; gap: 24px; margin-top: 24px; }
+.macro-tile-links a { display: inline-flex; align-items: center; gap: 3px; min-height: 28px; font-size: 16px; font-weight: 550; color: var(--color-ink); text-decoration: none; }
 .macro-tile-links a:hover { text-decoration: underline; }
 .macro-tile-links svg { width: 14px; height: 14px; }
-.macro-home-bottom { width: min(1000px, calc(100% - 48px)); margin: 80px auto 0; }
+.macro-home-bottom { width: min(1000px, calc(100% - 48px)); margin: 88px auto 0; }
 .macro-home-bottom .homepage-testimonials blockquote { font-weight: 400; }
 .macro-home-bottom .homepage-blog h2 { font-family: 'Roboto Slab Variable', serif; font-weight: 400; }
 .macro-home-bottom .homepage-blog a { color: inherit; text-decoration: none; }
@@ -98,30 +100,38 @@ html[data-homepage][data-theme-light='false'] .macro-home-hero h1 img { filter: 
 .macro-home-footer nav a { display: inline-flex; align-items: center; min-height: 40px; font-size: 12px; text-decoration: none; color: light-dark(#6e6e73, #aaa); }
 .macro-home-footer nav a:hover { text-decoration: underline; }
 .macro-home-footer > span { font-size: 11px; color: light-dark(#86868b, #aaa); }
-@media (max-width: 1000px) and (min-width: 701px) {
-  .macro-feature-tile { aspect-ratio: auto; min-height: 510px; }
-  .macro-tile-art { min-height: 450px; }
-  .macro-tile-copy { padding: 5px 27px 28px; }
-}
+.macro-letter-prose { width: min(640px, calc(100% - 48px)); margin-inline: auto; }
+.macro-letter-prose a { color: inherit; text-underline-offset: 4px; }
+.macro-letter-intro { margin-bottom: 80px; }
+.macro-letter-prose .macro-letter-transition { color: var(--color-ink); margin-top: 32px; }
+.macro-letter-proof { margin-bottom: 48px; }
+.macro-letter-close { margin-top: 64px; margin-bottom: 100px; }
+.macro-letter-close .macro-home-button { margin: 8px 0 24px; }
+.macro-letter-prose .macro-letter-postscript { font-size: 16px; }
+.macro-home-bottom .macro-letter-prose { width: min(640px, 100%); }
+.macro-home-bottom .homepage-testimonials { max-width: 640px; margin-inline: auto; }
 @media (max-width: 700px) {
-  .macro-home-hero { padding: 85px 20px 67px; }
+  .macro-home-hero { padding: 112px 24px 32px; }
+  .macro-home-wordmark { width: 180px; margin-bottom: 30px; }
+  .macro-home-hero h1 { font-size: 39px; }
+  .macro-home-tagline { font-size: 18px; margin: 22px 0 26px; }
+  .macro-home-hero > .macro-hero-art { margin-top: 36px; }
   .macro-hero-art { width: 340px; height: 294px; }
   .macro-hero-scene { transform: scale(.944444); transform-origin: top left; }
   .macro-motion-toggle { right: -4px; bottom: 8px; width: 44px; height: 44px; background: transparent; }
-  .macro-home-hero h1 { width: min(290px, 78vw); margin-top: 39px; margin-bottom: 31px; }
-  .macro-home-tagline { margin-top: 31px; font-size: 30px; }
-  .macro-feature-grid { width: calc(100% - 32px); grid-template-columns: 1fr; gap: 22px; max-width: 540px; }
-  .macro-feature-tile { aspect-ratio: auto; min-height: 500px; border-radius: 16px; }
+  .macro-letter-intro { margin-bottom: 64px; }
+  .macro-letter-prose p, .macro-tile-copy p { font-size: 18px; line-height: 1.6; }
+  .macro-letter-prose h2, .macro-tile-copy h2 { font-size: 31px; margin-bottom: 20px; }
+  .macro-feature-grid { width: calc(100% - 32px); gap: 64px; max-width: 540px; }
+  .macro-tile-copy { width: calc(100% - 16px); margin-bottom: 20px; }
   .macro-tile-art { height: 470px; min-height: 470px; }
-  .macro-tile-copy { padding: 4px 26px 27px; }
-  .macro-tile-copy h2 { font-size: 29px; }
-  .macro-tile-copy p { font-size: 15px; }
-  .macro-tile-links { margin-top: 13px; }
+  .macro-tile-links { margin-top: 16px; }
   .macro-tile-links a { min-height: 44px; }
-  .macro-home-bottom { width: calc(100% - 36px); margin-top: 48px; }
+  .macro-home-bottom { width: calc(100% - 48px); margin-top: 64px; }
+  .macro-letter-close { margin-top: 48px; margin-bottom: 64px; }
   .macro-home-footer { padding-inline: 26px; }
 }
-@media (max-width: 380px) { .macro-home-tagline { font-size: 29px; } .macro-hero-art { width: 310px; height: 270px; } .macro-hero-scene { transform: scale(.861111); } }
+@media (max-width: 380px) { .macro-home-hero h1 { font-size: 36px; } .macro-hero-art { width: 310px; height: 270px; } .macro-hero-scene { transform: scale(.861111); } }
 @media (prefers-reduced-motion: reduce) {
   .macro-hero-scene * { animation: none !important; }
   .macro-hero-tool { display: none; }
