@@ -7,11 +7,12 @@ components. Application UI changes must not alter the website.
 
 The homepage follows the system color scheme with neutral white and black
 backgrounds, native SF Pro
-on Apple platforms (with a system sans-serif fallback elsewhere), the supplied
-text-only vector Macro wordmark with rounded upper M corners, Roboto Slab headings at weight 400, and contrasting pill
+on Apple platforms (with a system sans-serif fallback elsewhere), Roboto Slab
+headings at weight 400, and contrasting pill
 calls to action. `?theme=dark` pins dark mode; `?theme=cream` pins the white
 homepage while retaining cream on product pages. The first-paint script and
-`sitePalette.ts` must apply the same preference before and after hydration. The homepage reads as a sales letter: a direct headline and product summary,
+`sitePalette.ts` must apply the same preference before and after hydration. The hero omits the wordmark and keeps its summary on two lines on desktop,
+with natural wrapping on phones. The homepage reads as a sales letter: a direct headline and product summary,
 a first-person explanation of why we built Macro, then one concise paragraph per
 feature followed
 by wider native demonstrations. Open-source information, the existing testimonial,

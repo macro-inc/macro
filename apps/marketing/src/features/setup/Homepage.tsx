@@ -1,6 +1,5 @@
 import Logo from '@icon/macro-logo.svg';
 import { For } from 'solid-js';
-import wordmark from '../../assets/logos/macro-wordmark.svg?url';
 import { HomepageBlog } from '../marketing/components/HomepageBlog';
 import { HomepageClosing } from '../marketing/components/HomepageClosing';
 import { HomepageTestimonials } from '../marketing/components/HomepageTestimonials';
@@ -22,15 +21,12 @@ export function Homepage() {
       <SiteHeader />
       <main class="macro-home-scroll" data-onboarding-scroll>
         <section class="macro-home-hero" aria-labelledby="macro-home-title">
-          <div class="macro-home-wordmark">
-            <img src={wordmark} alt="Macro" width="632" height="85" />
-          </div>
           <h1 id="macro-home-title" data-welcome-heading>
             Why we built Macro.
           </h1>
           <p class="macro-home-tagline">
-            Email, chat, docs, tasks, CRM, calls, and sheets. One workspace for
-            your team and your agents.
+            Email, chat, docs, tasks, CRM, calls, and sheets. <br />
+            One workspace for your team and your agents.
           </p>
           <a
             class="macro-home-button"

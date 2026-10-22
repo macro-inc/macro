@@ -1,6 +1,5 @@
 html[data-homepage] { color-scheme: dark; }
 html[data-homepage][data-theme-light='true'] { color-scheme: light; }
-html[data-homepage][data-theme-light='false'] .macro-home-wordmark img { filter: invert(1); }
 .macro-homepage {
   --color-surface: light-dark(#fff, #000);
   --color-ink: light-dark(#1d1d1f, #fff);
@@ -39,9 +38,7 @@ html[data-homepage][data-theme-light='false'] .macro-home-wordmark img { filter:
 .macro-homepage .site-header[data-menu-open=true]::before { background: light-dark(#fff, #121214); }
 .macro-homepage a:focus-visible, .macro-homepage button:focus-visible { outline: 3px solid #4384db; outline-offset: 5px; }
 .macro-home-hero { display: flex; align-items: center; flex-direction: column; padding: 134px 24px 46px; text-align: center; }
-.macro-home-wordmark { width: 220px; margin-bottom: 36px; }
 .macro-home-hero h1 { max-width: 760px; margin: 0; font-family: 'Roboto Slab Variable', serif; font-size: clamp(40px, 4.5vw, 58px); font-weight: 400; line-height: 1.13; letter-spacing: -.045em; text-wrap: balance; }
-.macro-home-wordmark img { display: block; width: 100%; height: auto; }
 .macro-homepage .macro-home-button { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 11px 37px; background: light-dark(#000, #f5f3ee); border-radius: 100px; color: light-dark(#fff, #1d1c1a); text-decoration: none; font-family: inherit; font-size: 19px; line-height: 1.3; font-weight: 600; letter-spacing: -.025em; transition: background 180ms ease, transform 180ms ease; }
 .macro-homepage .macro-home-button:hover { background: light-dark(#292929, #fff); transform: translateY(-1px); }
 .macro-home-tagline { max-width: 580px; text-wrap: pretty; margin: 24px 0 30px; font-size: 20px; line-height: 1.55; color: var(--color-ink-muted); }
@@ -112,9 +109,9 @@ html[data-homepage][data-theme-light='false'] .macro-home-wordmark img { filter:
 .macro-home-bottom .homepage-testimonials { max-width: 640px; margin-inline: auto; }
 @media (max-width: 700px) {
   .macro-home-hero { padding: 112px 24px 32px; }
-  .macro-home-wordmark { width: 180px; margin-bottom: 30px; }
   .macro-home-hero h1 { font-size: 39px; }
   .macro-home-tagline { font-size: 18px; margin: 22px 0 26px; }
+  .macro-home-tagline br { display: none; }
   .macro-home-hero > .macro-hero-art { margin-top: 36px; }
   .macro-hero-art { width: 340px; height: 294px; }
   .macro-hero-scene { transform: scale(.944444); transform-origin: top left; }
