@@ -1,6 +1,7 @@
 mod access_request;
 pub use access_request::{
-    EntityAccessGrantedMetadata, EntityAccessRequestedMetadata, RequestedAccessLevel,
+    ChannelAccessRequestedMetadata, EntityAccessGrantedMetadata, EntityAccessRequestedMetadata,
+    RequestedAccessLevel,
 };
 use chrono::{DateTime, NaiveDate, Utc};
 pub use invite_email::{ChannelInviteMetadata, ColleagueJoinedMacro, InviteToTeamMetadata};

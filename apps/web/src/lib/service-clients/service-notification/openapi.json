@@ -1352,6 +1352,30 @@
           }
         }
       },
+      "ChannelAccessRequestedMetadata": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/CommonChannelMetadata",
+            "description": "Channel the requester asked to join."
+          },
+          {
+            "type": "object",
+            "required": ["requestId"],
+            "properties": {
+              "requestId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The attempt to join, which is also this notification's id."
+              },
+              "senderProfilePictureUrl": {
+                "type": ["string", "null"],
+                "description": "Optional requester profile picture URL."
+              }
+            }
+          }
+        ],
+        "description": "A person asked to join a channel the recipient participates in."
+      },
       "ChannelInviteMetadata": {
         "type": "object",
         "description": "Metadata for when a user is invited to a channel.",
@@ -2856,6 +2880,21 @@
               "tag": {
                 "type": "string",
                 "enum": ["channel_message_reaction"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Someone asked to join a channel the user participates in.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/ChannelAccessRequestedMetadata",
+                "description": "Someone asked to join a channel the user participates in."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["channel_access_requested"]
               }
             }
           }

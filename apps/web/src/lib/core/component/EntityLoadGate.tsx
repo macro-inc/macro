@@ -46,6 +46,8 @@ type EntityLoadGateProps<Data> = {
   onRetry?: () => void;
   /** Entity-specific title for the `LOAD_FAILED` state. */
   loadErrorTitle?: string;
+  /** Entity-specific view for `UNAUTHORIZED` and `FORBIDDEN`, such as a way to ask for access. */
+  unauthorized?: JSX.Element;
   children: JSX.Element;
 };
 
@@ -141,7 +143,7 @@ export function EntityLoadGate<Data>(props: EntityLoadGateProps<Data>) {
         }
       >
         <Match when={error() === 'UNAUTHORIZED' || error() === 'FORBIDDEN'}>
-          <Unauthorized />
+          {props.unauthorized ?? <Unauthorized />}
         </Match>
         <Match when={error() === 'NOT_FOUND'}>
           <NotFound />

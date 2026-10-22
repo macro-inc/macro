@@ -85,6 +85,11 @@ function NotificationRowContent(props: {
           to join the channel
         </span>
       </Match>
+      <Match when={tag() === 'channel_access_requested'}>
+        <span class="text-xs text-ink-muted/80 italic">
+          approve or deny it in the channel
+        </span>
+      </Match>
       <Match when={tag() === 'invite_to_team'}>
         <span class="text-xs text-ink-muted/80 italic">to join the team</span>
       </Match>

@@ -151,7 +151,10 @@ impl ToolActivityAction {
             RecordedAction::Known(Action::TaskAdded(_)) => Self::TaskAdded,
             RecordedAction::Known(Action::TaskRemoved(_)) => Self::TaskRemoved,
             RecordedAction::Known(
-                action @ (Action::Renamed(_) | Action::PictureChanged | Action::CallEnded(_)),
+                action @ (Action::Renamed(_)
+                | Action::PictureChanged
+                | Action::CallEnded(_)
+                | Action::AccessRequested(_)),
             ) => {
                 let (tag, payload) = action.to_columns();
                 Self::Unknown {

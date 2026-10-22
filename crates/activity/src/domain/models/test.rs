@@ -79,6 +79,13 @@ fn every_action_maps_to_stable_columns() {
             "call_started",
             Some(json!({ "call_id": "call-1" })),
         ),
+        (
+            Action::AccessRequested(AccessRequest {
+                request_id: Uuid::from_u128(1),
+            }),
+            "access_requested",
+            Some(json!({ "request_id": "00000000-0000-0000-0000-000000000001" })),
+        ),
     ];
 
     for (action, expected_tag, expected_payload) in cases {

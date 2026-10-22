@@ -1,6 +1,6 @@
 # Type Alias: ChannelTopicEvent
 
-> **ChannelTopicEvent** = \{ `event_type`: `"channel.picture_changed"`; `metadata`: [`ChannelPictureChangedMetadata`](ChannelPictureChangedMetadata.md); \} \| \{ `event_type`: `"channel.created"`; `metadata`: [`ChannelCreatedMetadata`](ChannelCreatedMetadata.md); \} \| \{ `event_type`: `"channel.updated"`; `metadata`: [`ChannelUpdatedMetadata`](ChannelUpdatedMetadata.md); \} \| \{ `event_type`: `"channel.deleted"`; `metadata`: [`ChannelDeletedMetadata`](ChannelDeletedMetadata.md); \} \| \{ `event_type`: `"channel.participant_added"`; `metadata`: [`ChannelParticipantAddedMetadata`](ChannelParticipantAddedMetadata.md); \} \| \{ `event_type`: `"channel.participant_removed"`; `metadata`: [`ChannelParticipantRemovedMetadata`](ChannelParticipantRemovedMetadata.md); \}
+> **ChannelTopicEvent** = \{ `event_type`: `"channel.picture_changed"`; `metadata`: [`ChannelPictureChangedMetadata`](ChannelPictureChangedMetadata.md); \} \| \{ `event_type`: `"channel.created"`; `metadata`: [`ChannelCreatedMetadata`](ChannelCreatedMetadata.md); \} \| \{ `event_type`: `"channel.updated"`; `metadata`: [`ChannelUpdatedMetadata`](ChannelUpdatedMetadata.md); \} \| \{ `event_type`: `"channel.deleted"`; `metadata`: [`ChannelDeletedMetadata`](ChannelDeletedMetadata.md); \} \| \{ `event_type`: `"channel.participant_added"`; `metadata`: [`ChannelParticipantAddedMetadata`](ChannelParticipantAddedMetadata.md); \} \| \{ `event_type`: `"channel.participant_removed"`; `metadata`: [`ChannelParticipantRemovedMetadata`](ChannelParticipantRemovedMetadata.md); \} \| \{ `event_type`: `"channel.access_requested"`; `metadata`: [`ChannelAccessRequestedMetadata`](ChannelAccessRequestedMetadata.md); \}
 
 Events that can be published to [`MacroChannelsTopic`].
 
@@ -69,3 +69,14 @@ Events that can be published to [`MacroChannelsTopic`].
 | ------ | ------ | ------ |
 | `event_type` | `"channel.participant_removed"` | - |
 | `metadata` | [`ChannelParticipantRemovedMetadata`](ChannelParticipantRemovedMetadata.md) | Participants were removed from a channel (admin removal or self-leave). |
+
+***
+
+### Type Literal
+
+\{ `event_type`: `"channel.access_requested"`; `metadata`: [`ChannelAccessRequestedMetadata`](ChannelAccessRequestedMetadata.md); \}
+
+| Name | Type | Description |
+| ------ | ------ | ------ |
+| `event_type` | `"channel.access_requested"` | - |
+| `metadata` | [`ChannelAccessRequestedMetadata`](ChannelAccessRequestedMetadata.md) | Someone outside a channel asked to join it. |

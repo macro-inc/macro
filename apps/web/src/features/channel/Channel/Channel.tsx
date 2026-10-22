@@ -98,6 +98,7 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import { ChannelAccessDenied } from '../ChannelAccessDenied';
 import {
   createInputAttachmentTracker,
   type InputHandle,
@@ -728,6 +729,14 @@ export function Channel(props: ChannelProps) {
         result={messagesLoadResult}
         loadErrorTitle="Unable to load this channel"
         onRetry={() => fireAndForget(messagesQuery.refetch(), 'channel')}
+        unauthorized={
+          <ChannelAccessDenied
+            channelId={props.channelId}
+            onAccessGranted={() =>
+              fireAndForget(messagesQuery.refetch(), 'channel')
+            }
+          />
+        }
       >
         <DebugSuspense name="Channel.root">
           <deleteConfirmation.ConfirmationDialog />
@@ -825,6 +834,7 @@ export function Channel(props: ChannelProps) {
                                             listMeta={listMetaByKey()[item.id]}
                                           >
                                             <SystemActivity
+                                              channelId={props.channelId}
                                               event={decodeSystemActivity(
                                                 activity()
                                               )}

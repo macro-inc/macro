@@ -3,6 +3,7 @@ import ArrowLeftIcon from '@phosphor/arrow-left.svg';
 import ArrowRightIcon from '@phosphor/arrow-right.svg';
 import ImageIcon from '@phosphor/image.svg';
 import PencilIcon from '@phosphor/pencil-simple.svg';
+import UserPlusIcon from '@phosphor/user-plus.svg';
 import PhoneIcon from '@phosphor-fill/phone-fill.svg';
 import { cn, Tooltip } from '@ui';
 import { Show } from 'solid-js';
@@ -19,6 +20,7 @@ const ACTIVITY_ICONS = {
   participant_added: ArrowRightIcon,
   participant_removed: ArrowLeftIcon,
   call_ended: PhoneIcon,
+  access_requested: UserPlusIcon,
   unknown: PencilIcon,
 } satisfies Record<SystemActivity['action']['kind'], typeof PencilIcon>;
 

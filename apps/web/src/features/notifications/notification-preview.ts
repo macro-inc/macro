@@ -14,6 +14,7 @@ export const NOTIFICATION_LABEL_BY_TYPE: Record<NotificationType, string> = {
   initiative_discussion: 'COMMENT',
   crm_discussion: 'COMMENT',
   channel_invite: 'INVITE',
+  channel_access_requested: 'JOIN REQUEST',
   new_email: 'EMAIL',
   invite_to_team: 'INVITE',
   task_assigned: 'ASSIGNED',

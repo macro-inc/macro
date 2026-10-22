@@ -10,6 +10,7 @@ export type SystemActivity = {
     | { kind: 'participant_added'; participant: string }
     | { kind: 'participant_removed'; participant: string }
     | { kind: 'call_ended'; durationMs: number }
+    | { kind: 'access_requested'; requestId: string }
     | { kind: 'unknown' };
 };
 
@@ -48,6 +49,9 @@ export function systemActivityDescription(
     )
     .with({ kind: 'call_ended' }, ({ durationMs }) => ({
       verb: `started a call that lasted ${callDuration(durationMs)}`,
+    }))
+    .with({ kind: 'access_requested' }, () => ({
+      verb: 'asked to join the channel',
     }))
     .with({ kind: 'unknown' }, () => ({ verb: 'updated the channel' }))
     .exhaustive();

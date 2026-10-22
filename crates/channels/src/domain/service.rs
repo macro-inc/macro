@@ -26,6 +26,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use uuid::Uuid;
 
+mod access_requests;
 mod import;
 
 #[cfg(test)]

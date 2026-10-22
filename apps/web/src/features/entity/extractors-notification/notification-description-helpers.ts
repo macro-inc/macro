@@ -113,6 +113,7 @@ export function getActionVerb(type: NotificationType): string {
       .with('ai_response', () => 'AI responded')
       .with('new_email', () => 'sent an email')
       .with('channel_invite', () => 'invited you')
+      .with('channel_access_requested', () => 'asked to join')
       .with('invite_to_team', () => 'invited you')
       .with('task_assigned', () => 'assigned you')
       .with('github_pr_status_changed', () => 'updated a pull request')
@@ -167,6 +168,9 @@ export function getTypeNoun(type: NotificationType, count: number): string {
     )
     .with('new_email', () => (count === 1 ? 'email' : 'emails'))
     .with('channel_invite', () => (count === 1 ? 'invite' : 'invites'))
+    .with('channel_access_requested', () =>
+      count === 1 ? 'request to join' : 'requests to join'
+    )
     .with('invite_to_team', () => (count === 1 ? 'invite' : 'invites'))
     .with('task_assigned', () => (count === 1 ? 'task' : 'tasks'))
     .with('github_pr_status_changed', () =>

@@ -4247,6 +4247,360 @@
         }
       }
     },
+    "/channels/{channel_id}/access-requests/mine": {
+      "get": {
+        "tags": ["channels"],
+        "summary": "Handler for `GET /channels/{channel_id}/access-requests/mine`.",
+        "operationId": "get_my_channel_access_request",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelAccessRequestState"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["channels"],
+        "summary": "Handler for `PUT /channels/{channel_id}/access-requests/mine`.",
+        "operationId": "request_channel_access",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelAccessRequest"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["channels"],
+        "summary": "Handler for `DELETE /channels/{channel_id}/access-requests/mine`.",
+        "operationId": "cancel_channel_access_request",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel_id}/access-requests/{request_id}": {
+      "get": {
+        "tags": ["channels"],
+        "summary": "Handler for `GET /channels/{channel_id}/access-requests/{request_id}`.",
+        "operationId": "get_channel_access_request",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "request_id",
+            "in": "path",
+            "description": "Access request ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelAccessRequest"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel_id}/access-requests/{request_id}/resolve": {
+      "post": {
+        "tags": ["channels"],
+        "summary": "Handler for `POST /channels/{channel_id}/access-requests/{request_id}/resolve`.",
+        "operationId": "resolve_channel_access_request",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "request_id",
+            "in": "path",
+            "description": "Access request ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveChannelAccessRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelAccessRequest"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/channels/{channel_id}/attachments": {
       "get": {
         "tags": ["channels::inbound::axum_router"],
@@ -22237,6 +22591,116 @@
           }
         }
       },
+      "ChannelAccessDecision": {
+        "type": "string",
+        "description": "A participant's answer to a pending request.",
+        "enum": ["approve", "deny"]
+      },
+      "ChannelAccessRequest": {
+        "type": "object",
+        "description": "One attempt to join a channel. Attempts are never reused, so each timeline\nentry keeps showing the outcome of the attempt it announced.",
+        "required": [
+          "id",
+          "channel_id",
+          "requester_id",
+          "status",
+          "created_at"
+        ],
+        "properties": {
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Channel the requester asked to join."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the requester asked."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Attempt id."
+          },
+          "requester_id": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "Person asking to join."
+          },
+          "resolved_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the attempt stopped being pending."
+          },
+          "resolved_by": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "Participant who approved or denied it."
+              }
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/ChannelAccessRequestStatus",
+            "description": "Current outcome."
+          }
+        }
+      },
+      "ChannelAccessRequestState": {
+        "type": "object",
+        "description": "A requester's view of their access to a channel they cannot read.",
+        "required": ["can_request"],
+        "properties": {
+          "can_request": {
+            "type": "boolean",
+            "description": "Whether this channel accepts requests."
+          },
+          "request": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ChannelAccessRequest",
+                "description": "The caller's latest attempt, if any."
+              }
+            ]
+          },
+          "retry_after": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Earliest time the caller may ask again, while they must wait."
+          }
+        }
+      },
+      "ChannelAccessRequestStatus": {
+        "type": "string",
+        "description": "Outcome of one attempt to join.",
+        "enum": ["pending", "approved", "denied", "cancelled"]
+      },
+      "ChannelAccessRequestedMetadata": {
+        "type": "object",
+        "description": "Metadata for [`ChannelTopicEvent::AccessRequested`].",
+        "required": ["channel_id", "request_id", "requester_id"],
+        "properties": {
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Channel the requester asked to join."
+          },
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The attempt; channel participants read its current outcome by id."
+          },
+          "requester_id": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "Person asking to join."
+          }
+        }
+      },
       "ChannelCreatedMetadata": {
         "type": "object",
         "description": "Metadata for [`ChannelTopicEvent::Created`].",
@@ -22872,6 +23336,21 @@
               "metadata": {
                 "$ref": "#/components/schemas/ChannelParticipantRemovedMetadata",
                 "description": "Participants were removed from a channel (admin removal or self-leave)."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Someone outside a channel asked to join it.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["channel.access_requested"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/ChannelAccessRequestedMetadata",
+                "description": "Someone outside a channel asked to join it."
               }
             }
           }
@@ -35995,6 +36474,17 @@
           }
         ],
         "description": "A layout as an op asks for it: a board may leave its card title out."
+      },
+      "ResolveChannelAccessRequest": {
+        "type": "object",
+        "description": "Body of a participant's answer.",
+        "required": ["decision"],
+        "properties": {
+          "decision": {
+            "$ref": "#/components/schemas/ChannelAccessDecision",
+            "description": "The answer."
+          }
+        }
       },
       "ResolveRequest": {
         "type": "object",

@@ -235,6 +235,7 @@ function getSupportedHandler(
       })
       .with(
         'channel_invite',
+        'channel_access_requested',
         () =>
           async (lm: SplitManager, newSplit: boolean = false) =>
             openSplitIfNotOpen(lm, 'channel', notification.entity_id, {

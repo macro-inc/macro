@@ -7,13 +7,18 @@ use crate::domain::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_notifications::{
-    ChannelInviteMetadata, ChannelMentionMetadata, ChannelMessageReactionMetadata,
-    ChannelMessageSendMetadata, ChannelReplyMetadata, CommonChannelMetadata,
-    DocumentMentionMetadata, NotificationDocumentSubType,
+    ChannelAccessRequestedMetadata, ChannelInviteMetadata, ChannelMentionMetadata,
+    ChannelMessageReactionMetadata, ChannelMessageSendMetadata, ChannelReplyMetadata,
+    CommonChannelMetadata, DocumentMentionMetadata, NotificationDocumentSubType,
 };
 use model_owner::Owner;
 use notification_hex::domain::{
-    models::SendNotificationRequestBuilder, service::NotificationIngress,
+    models::{
+        SendNotificationRequestBuilder,
+        request::{NotificationStatus, UpdateNotificationsRequest},
+    },
+    ports::NotificationWithdrawal,
+    service::{NotificationIngress, NotificationReader},
 };
 use std::{collections::HashSet, sync::Arc};
 use uuid::Uuid;
@@ -22,15 +27,113 @@ use uuid::Uuid;
 mod test;
 
 /// Notification ingress adapter for channel notification effects.
-#[derive(Clone)]
-pub struct NotificationChannelSender<I> {
+pub struct NotificationChannelSender<I, C = UnavailableNotificationCompletion> {
     ingress: Arc<I>,
+    completion: C,
+}
+
+impl<I, C: Clone> Clone for NotificationChannelSender<I, C> {
+    fn clone(&self) -> Self {
+        Self {
+            ingress: self.ingress.clone(),
+            completion: self.completion.clone(),
+        }
+    }
 }
 
 impl<I> NotificationChannelSender<I> {
     /// Create a notification sender adapter.
     pub fn new(ingress: Arc<I>) -> Self {
-        Self { ingress }
+        Self {
+            ingress,
+            completion: UnavailableNotificationCompletion,
+        }
+    }
+}
+
+impl<I, C> NotificationChannelSender<I, C> {
+    /// Complete notifications whose workflow was resolved, such as a request to join.
+    pub fn with_completion<C2: CompleteNotifications>(
+        self,
+        completion: C2,
+    ) -> NotificationChannelSender<I, C2> {
+        NotificationChannelSender {
+            ingress: self.ingress,
+            completion,
+        }
+    }
+}
+
+/// Marks a resolved workflow's notification done for everyone who received it.
+pub trait CompleteNotifications: Clone + Send + Sync + 'static {
+    /// Complete one notification for each recipient, including delayed deliveries.
+    fn complete(
+        &self,
+        notification_id: Uuid,
+        recipients: HashSet<MacroUserIdStr<'static>>,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+}
+
+/// Fail-closed completion for contexts that never resolve channel workflows.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct UnavailableNotificationCompletion;
+
+impl CompleteNotifications for UnavailableNotificationCompletion {
+    async fn complete(
+        &self,
+        _notification_id: Uuid,
+        _recipients: HashSet<MacroUserIdStr<'static>>,
+    ) -> anyhow::Result<()> {
+        anyhow::bail!("notification completion is not configured")
+    }
+}
+
+/// Withdraws a notification so delayed deliveries are dropped, then marks it
+/// done for each recipient.
+pub struct NotificationReaderCompletion<N, W> {
+    reader: Arc<N>,
+    withdrawal: Arc<W>,
+}
+
+impl<N, W> NotificationReaderCompletion<N, W> {
+    /// Complete through the notification reader and withdrawal adapters.
+    pub fn new(reader: Arc<N>, withdrawal: Arc<W>) -> Self {
+        Self { reader, withdrawal }
+    }
+}
+
+impl<N, W> Clone for NotificationReaderCompletion<N, W> {
+    fn clone(&self) -> Self {
+        Self {
+            reader: self.reader.clone(),
+            withdrawal: self.withdrawal.clone(),
+        }
+    }
+}
+
+impl<N: NotificationReader, W: NotificationWithdrawal> CompleteNotifications
+    for NotificationReaderCompletion<N, W>
+{
+    async fn complete(
+        &self,
+        notification_id: Uuid,
+        recipients: HashSet<MacroUserIdStr<'static>>,
+    ) -> anyhow::Result<()> {
+        self.withdrawal
+            .withdraw(notification_id)
+            .await
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+        for user_id in recipients {
+            self.reader
+                .update_notifications(UpdateNotificationsRequest {
+                    user_id,
+                    notification_ids: &[notification_id],
+                    status: NotificationStatus::Done(true),
+                })
+                .await
+                .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+        }
+        Ok(())
     }
 }
 
@@ -135,9 +238,10 @@ fn to_channel_mention_metadata(mention: ChannelMentionNotification) -> ChannelMe
     }
 }
 
-impl<I> ChannelNotificationSender for NotificationChannelSender<I>
+impl<I, C> ChannelNotificationSender for NotificationChannelSender<I, C>
 where
     I: NotificationIngress + 'static,
+    C: CompleteNotifications,
 {
     type Err = anyhow::Error;
 
@@ -357,6 +461,41 @@ where
                     },
                 )
                 .await?;
+            }
+            ChannelNotificationEffect::AccessRequested {
+                request,
+                sender_profile_picture_url,
+                metadata,
+                recipient_ids,
+            } => {
+                // The attempt id is the notification id, so resolving the
+                // attempt can complete it for every participant.
+                self.ingress
+                    .send_notification(
+                        SendNotificationRequestBuilder {
+                            notification_entity: model_entity::EntityType::Channel
+                                .with_entity_string(request.channel_id.to_string()),
+                            secondary_notification_entity: None,
+                            notification: ChannelAccessRequestedMetadata {
+                                request_id: request.id,
+                                common: to_common_metadata(metadata),
+                                sender_profile_picture_url,
+                            },
+                            sender_id: Some(request.requester_id),
+                            recipient_ids,
+                        }
+                        .into_request_with_id(request.id)
+                        .with_apns()
+                        .with_conn_gateway(),
+                    )
+                    .await
+                    .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+            }
+            ChannelNotificationEffect::AccessRequestResolved {
+                request_id,
+                recipient_ids,
+            } => {
+                self.completion.complete(request_id, recipient_ids).await?;
             }
         }
 

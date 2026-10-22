@@ -6,6 +6,7 @@ mod references;
 #[cfg(test)]
 mod tests;
 
+mod access_requests;
 mod agent_dm;
 mod channel_agents;
 
@@ -48,6 +49,53 @@ use std::collections::{HashMap, HashSet};
 
 use indexmap::IndexMap;
 use uuid::Uuid;
+
+/// Add or revive an active participant, returning whether membership changed.
+async fn add_participant<'e>(
+    executor: impl Executor<'e, Database = Postgres>,
+    channel_id: Uuid,
+    user_id: &str,
+    role: ParticipantRole,
+) -> anyhow::Result<bool> {
+    let result = sqlx::query!(
+        r#"
+        INSERT INTO comms_channel_participants (channel_id, user_id, role)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (channel_id, user_id) DO UPDATE
+        SET role = EXCLUDED.role,
+            joined_at = now(),
+            left_at = NULL
+        WHERE comms_channel_participants.left_at IS NOT NULL
+        "#,
+        channel_id,
+        user_id,
+        role as ParticipantRole,
+    )
+    .execute(executor)
+    .await
+    .context("unable to add participant to channel")?;
+    Ok(result.rows_affected() > 0)
+}
+
+/// Record channel activity so the channel sorts as recently updated.
+async fn touch_channel_updated_at<'e>(
+    executor: impl Executor<'e, Database = Postgres>,
+    channel_id: Uuid,
+) -> anyhow::Result<()> {
+    sqlx::query!(
+        r#"
+        UPDATE comms_channels
+        SET updated_at = $2
+        WHERE id = $1
+        "#,
+        channel_id,
+        Utc::now(),
+    )
+    .execute(executor)
+    .await
+    .context("unable to update the channel updated_at timestamp")?;
+    Ok(())
+}
 
 /// Postgres-backed repository for channels.
 #[derive(Clone)]
@@ -2800,24 +2848,7 @@ impl ChannelRepo for PgChannelsRepo {
         user_id: MacroUserIdStr<'_>,
         role: ParticipantRole,
     ) -> Result<bool, Self::Err> {
-        let result = sqlx::query!(
-            r#"
-            INSERT INTO comms_channel_participants (channel_id, user_id, role)
-            VALUES ($1, $2, $3)
-            ON CONFLICT (channel_id, user_id) DO UPDATE
-            SET role = EXCLUDED.role,
-                joined_at = now(),
-                left_at = NULL
-            WHERE comms_channel_participants.left_at IS NOT NULL
-            "#,
-            channel_id,
-            user_id.as_ref(),
-            role as ParticipantRole,
-        )
-        .execute(&self.pool)
-        .await
-        .context("unable to add participant to channel")?;
-        Ok(result.rows_affected() > 0)
+        add_participant(&self.pool, channel_id, user_id.as_ref(), role).await
     }
 
     async fn remove_participant(&self, channel_id: Uuid, user_id: String) -> Result<(), Self::Err> {
@@ -2836,19 +2867,7 @@ impl ChannelRepo for PgChannelsRepo {
     }
 
     async fn touch_channel_updated_at(&self, channel_id: Uuid) -> Result<(), Self::Err> {
-        sqlx::query!(
-            r#"
-            UPDATE comms_channels
-            SET updated_at = $2
-            WHERE id = $1
-            "#,
-            channel_id,
-            Utc::now(),
-        )
-        .execute(&self.pool)
-        .await
-        .context("unable to update the channel updated_at timestamp")?;
-        Ok(())
+        touch_channel_updated_at(&self.pool, channel_id).await
     }
 
     async fn create_entity_mention(

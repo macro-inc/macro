@@ -20,6 +20,7 @@ import {
 import { entitySearch } from '../search';
 import type { Team } from '../teams/team';
 import type { User } from '../users/user';
+import { ChannelAccessRequest } from './access-request';
 import { ChannelActivity } from './activity';
 import { Message } from './message';
 import type { ChannelPicture } from './picture';
@@ -254,6 +255,55 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
       }),
     );
     return join_code;
+  }
+
+  /**
+   * The current user's latest request to join this channel, whether the
+   * channel accepts requests, and when they may ask again after a denial or
+   * withdrawal. Works without access to the channel.
+   */
+  async myAccessRequest(): Promise<{
+    request?: ChannelAccessRequest;
+    canRequest: boolean;
+    retryAfter?: string;
+  }> {
+    const state = unwrap(
+      await this.client.storage.getMyChannelAccessRequest({
+        path: { channel_id: this.id },
+      }),
+    );
+    return {
+      request: state.request
+        ? ChannelAccessRequest.from(this.client, this, state.request)
+        : undefined,
+      canRequest: state.can_request,
+      retryAfter: state.retry_after ?? undefined,
+    };
+  }
+
+  /**
+   * Ask this private or team channel's participants to let the current user
+   * join. Asking again while a request is pending returns that request.
+   */
+  async requestAccess(): Promise<ChannelAccessRequest> {
+    return ChannelAccessRequest.from(
+      this.client,
+      this,
+      unwrap(
+        await this.client.storage.requestChannelAccess({
+          path: { channel_id: this.id },
+        }),
+      ),
+    );
+  }
+
+  /** Withdraw the current user's pending request to join this channel. */
+  async cancelAccessRequest(): Promise<void> {
+    unwrap(
+      await this.client.storage.cancelChannelAccessRequest({
+        path: { channel_id: this.id },
+      }),
+    );
   }
 
   /** Leave the channel as the current user. */

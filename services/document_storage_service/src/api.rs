@@ -237,7 +237,11 @@ fn api_router(state: ApiContext) -> Router {
         ))
         .nest(
             "/channels",
-            channels::inbound::axum_router::channels_router(state.channels_state.clone()),
+            channels::inbound::axum_router::channels_router(state.channels_state.clone()).merge(
+                channels::inbound::axum_router::channel_access_requests_router(
+                    state.channels_state.clone(),
+                ),
+            ),
         )
         .nest(
             "/messages",

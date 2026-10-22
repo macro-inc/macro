@@ -253,6 +253,7 @@ const tagBubbleIcon = (tag: NotificationTag) =>
       'entity_access_requested',
       'entity_access_granted',
       'channel_invite',
+      'channel_access_requested',
       'invite_to_team',
       () => () => <UserPlusIcon class={AVATAR_GLYPH_CLASS} />
     )

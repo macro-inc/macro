@@ -35,9 +35,10 @@ use channels::{
     outbound::{
         connection_gateway_realtime::ConnectionGatewayChannelRealtimePublisher,
         contacts_dispatcher::ContactsChannelDispatcher,
-        notification_sender::NotificationChannelSender,
+        notification_sender::{NotificationChannelSender, NotificationReaderCompletion},
         pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions,
-        pg_channels_repo::PgChannelsRepo, pg_side_effect_context::PgChannelSideEffectContext,
+        pg_channels_repo::PgChannelsRepo,
+        pg_side_effect_context::PgChannelSideEffectContext,
     },
 };
 use connection::{
@@ -419,7 +420,13 @@ pub(crate) type DssChannelService = ChannelServiceImpl<
         ChannelSideEffectService<
             PgChannelSideEffectContext,
             ConnectionGatewayChannelRealtimePublisher,
-            NotificationChannelSender<NotificationIngressType>,
+            NotificationChannelSender<
+                NotificationIngressType,
+                NotificationReaderCompletion<
+                    ai_tools::ToolNotificationService,
+                    notification::outbound::withdrawal::PgNotificationWithdrawal,
+                >,
+            >,
             ContactsChannelDispatcher<SqsContactsIngress<SqsContactsQueue>>,
             DssEventBroker,
         >,

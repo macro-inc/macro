@@ -329,6 +329,11 @@ use utoipa::OpenApi;
         channels::inbound::axum_router::delete_mention_handler,
         channels::inbound::axum_router::get_attachment_references_handler,
         channels::inbound::axum_router::get_activity_handler,
+        channels::inbound::axum_router::access_requests::my_access_request_handler,
+        channels::inbound::axum_router::access_requests::request_access_handler,
+        channels::inbound::axum_router::access_requests::cancel_access_request_handler,
+        channels::inbound::axum_router::access_requests::get_access_request_handler,
+        channels::inbound::axum_router::access_requests::resolve_access_request_handler,
         channels::inbound::axum_router::post_activity_handler,
 
         // harnesses
@@ -846,6 +851,11 @@ use utoipa::OpenApi;
             channels::domain::models::GetOrCreateChannelResponse,
             channels::domain::models::PatchChannelRequest,
             channels::domain::models::AddParticipantsRequest,
+            channels::domain::access_requests::ChannelAccessRequest,
+            channels::domain::access_requests::ChannelAccessRequestStatus,
+            channels::domain::access_requests::ChannelAccessRequestState,
+            channels::domain::access_requests::ChannelAccessDecision,
+            channels::domain::access_requests::ResolveChannelAccessRequest,
             channels::domain::models::RemoveParticipantsRequest,
             channels::domain::models::GetBatchChannelPreviewRequest,
             channels::domain::models::GetBatchChannelPreviewResponse,

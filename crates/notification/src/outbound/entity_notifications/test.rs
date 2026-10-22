@@ -19,6 +19,11 @@ struct Call;
 impl Notification for Call {
     const TYPE_NAME: &'static str = "call_started";
 }
+#[derive(Clone, Serialize, Deserialize)]
+struct AccessRequested;
+impl Notification for AccessRequested {
+    const TYPE_NAME: &'static str = "channel_access_requested";
+}
 
 async fn insert<T: Notification + Serialize + Send + Sync>(
     pool: &PgPool,
@@ -578,4 +583,40 @@ async fn channel_feed_preserves_mention_duplicates_and_does_not_scope_thread_edg
         .await
         .unwrap();
     assert_eq!(rows[&channel][0].notification_id, root);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn channel_feed_badges_requests_to_join(pool: PgPool) {
+    let viewer = MacroUserIdStr::try_from_email("viewer@test.com").unwrap();
+    let channel = EntityType::Channel.with_entity_string(Uuid::now_v7().to_string());
+    insert(
+        &pool,
+        &viewer,
+        channel.clone(),
+        None,
+        Reaction {
+            message_id: "reacted".into(),
+        },
+    )
+    .await;
+    let request = insert(&pool, &viewer, channel.clone(), None, AccessRequested).await;
+    let rows = get_filtered_entity_notifications(
+        &pool,
+        viewer,
+        vec![channel.clone()],
+        EntityNotificationQuery {
+            states: vec![NotificationState::Unseen],
+            channel_feed_only: true,
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        rows[&channel]
+            .iter()
+            .map(|row| row.notification_id)
+            .collect::<Vec<_>>(),
+        vec![request]
+    );
 }

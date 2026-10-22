@@ -567,6 +567,12 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 		channelMessageReactionChannelName: channelName
 		channelMessageReactionSenderProfilePictureUrl: senderProfilePictureUrl
 	}
+	... on GraphqlChannelAccessRequestedMetadata {
+		channelAccessRequestedRequestId: requestId
+		channelAccessRequestedChannelType: channelType
+		channelAccessRequestedChannelName: channelName
+		channelAccessRequestedSenderProfilePictureUrl: senderProfilePictureUrl
+	}
 	... on GraphqlChannelReplyMetadata {
 		channelReplyThreadId: threadId
 		channelReplyMessageId: messageId

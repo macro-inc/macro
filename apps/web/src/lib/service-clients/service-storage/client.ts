@@ -48,6 +48,9 @@ import type { CalendarMentionPreviewRequest } from './generated/schemas/calendar
 import type { CalendarMentionPreviewResponse } from './generated/schemas/calendarMentionPreviewResponse';
 import type { CalendarOccurrenceResponse } from './generated/schemas/calendarOccurrenceResponse';
 import type { CallRecordPreview } from './generated/schemas/callRecordPreview';
+import type { ChannelAccessDecision } from './generated/schemas/channelAccessDecision';
+import type { ChannelAccessRequest } from './generated/schemas/channelAccessRequest';
+import type { ChannelAccessRequestState } from './generated/schemas/channelAccessRequestState';
 import type { ChannelJoinCodeResponse } from './generated/schemas/channelJoinCodeResponse';
 import type { ChannelLabel } from './generated/schemas/channelLabel';
 import type { ChannelLabelRule } from './generated/schemas/channelLabelRule';
@@ -1056,6 +1059,46 @@ export const storageServiceClient = {
     return await dssFetch(`/channels/join/${args.join_code}`, {
       method: 'POST',
     });
+  },
+
+  async getMyChannelAccessRequest(args: WithChannelId) {
+    return await dssFetch<ChannelAccessRequestState>(
+      `/channels/${args.channel_id}/access-requests/mine`
+    );
+  },
+
+  async requestChannelAccess(args: WithChannelId) {
+    return await dssFetch<ChannelAccessRequest>(
+      `/channels/${args.channel_id}/access-requests/mine`,
+      { method: 'PUT' }
+    );
+  },
+
+  async cancelChannelAccessRequest(args: WithChannelId) {
+    return await dssFetch(`/channels/${args.channel_id}/access-requests/mine`, {
+      method: 'DELETE',
+    });
+  },
+
+  async getChannelAccessRequest(args: WithChannelId & { request_id: string }) {
+    return await dssFetch<ChannelAccessRequest>(
+      `/channels/${args.channel_id}/access-requests/${args.request_id}`
+    );
+  },
+
+  async resolveChannelAccessRequest(
+    args: WithChannelId & {
+      request_id: string;
+      decision: ChannelAccessDecision;
+    }
+  ) {
+    return await dssFetch<ChannelAccessRequest>(
+      `/channels/${args.channel_id}/access-requests/${args.request_id}/resolve`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ decision: args.decision }),
+      }
+    );
   },
 
   async leaveChannel(args: WithChannelId) {

@@ -8,6 +8,10 @@ pub use initiative_discussion::GraphqlInitiativeDiscussionMetadata;
 mod crm_discussion;
 pub use crm_discussion::GraphqlCrmDiscussionMetadata;
 
+/// Request-to-join-a-channel notification metadata.
+mod channel_access_request;
+pub use channel_access_request::GraphqlChannelAccessRequestedMetadata;
+
 use async_graphql::{Enum, ID, Object, Union};
 use model_notifications::{
     AgentSessionMentionedMetadata, AgentSessionNotificationRef, AgentSessionSettledMetadata,
@@ -1294,6 +1298,8 @@ pub enum GraphqlNotifEvent {
     AgentSessionWaitingForInput(GraphqlAgentSessionWaitingForInputMetadata),
     /// Agent session mention metadata.
     AgentSessionMentioned(GraphqlAgentSessionMentionedMetadata),
+    /// Request-to-join-a-channel metadata.
+    ChannelAccessRequested(GraphqlChannelAccessRequestedMetadata),
 }
 
 impl From<NotifEvent> for GraphqlNotifEvent {
@@ -1307,6 +1313,9 @@ impl From<NotifEvent> for GraphqlNotifEvent {
             }
             NotifEvent::EntityAccessGranted(metadata) => {
                 Self::EntityAccessGranted(GraphqlEntityAccessGrantedMetadata(metadata))
+            }
+            NotifEvent::ChannelAccessRequested(metadata) => {
+                Self::ChannelAccessRequested(GraphqlChannelAccessRequestedMetadata(metadata))
             }
             NotifEvent::DocumentMention(metadata) => {
                 Self::DocumentMention(GraphqlDocumentMentionMetadata(metadata))

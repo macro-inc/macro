@@ -1237,6 +1237,21 @@ function mapGraphqlNotificationMetadata(
         }) satisfies NotifEventMember<'channel_message_reaction'>
     )
     .with(
+      { __typename: 'GraphqlChannelAccessRequestedMetadata' },
+      (metadata) =>
+        ({
+          tag: 'channel_access_requested',
+          content: {
+            requestId: metadata.channelAccessRequestedRequestId,
+            channelType:
+              metadata.channelAccessRequestedChannelType.toLowerCase() as ChannelType,
+            channelName: metadata.channelAccessRequestedChannelName,
+            senderProfilePictureUrl:
+              metadata.channelAccessRequestedSenderProfilePictureUrl,
+          },
+        }) satisfies NotifEventMember<'channel_access_requested'>
+    )
+    .with(
       { __typename: 'GraphqlChannelReplyMetadata' },
       (metadata) =>
         ({

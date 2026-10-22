@@ -54,6 +54,7 @@ function getNotificationIcon(
     .with('entity_access_requested', () => UserPlusIcon)
     .with('entity_access_granted', () => CheckIcon)
     .with('channel_invite', () => UserPlusIcon)
+    .with('channel_access_requested', () => UserPlusIcon)
     .with('invite_to_team', () => UserPlusIcon)
     .with('task_assigned', () => CheckIcon)
     .with('ai_response', () => ChatIcon)

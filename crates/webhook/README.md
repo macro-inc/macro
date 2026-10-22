@@ -82,7 +82,9 @@ and `macro.agent_session_lifecycle`. It supports these event names:
 - Documents: `document.created`, `document.updated`, `document.deleted`, and
   `document.copied`.
 - Channels: `channel.created`, `channel.updated`, `channel.deleted`,
-  `channel.participant_added`, and `channel.participant_removed`.
+  `channel.participant_added`, `channel.participant_removed`, and
+  `channel.access_requested` (someone outside a private or team channel asked
+  to join; the payload carries the request id).
 - Messages, on channels and document discussions alike: `message.posted`,
   `message.patched`, `message.deleted`, `message.attachment_created`,
   `message.attachment_removed`, and `message.mentioned`. Each payload carries

@@ -701,6 +701,28 @@ brings that row back into the inbox, displays the reaction and channel name, and
 opens the reacted-to message. Marking the row done should clear its reaction
 notifications along with the other notifications for that thread.
 
+## Requests to join
+
+Opening a private or team channel you are not in shows **You don't have access
+to this channel**, the signed-in email, and **Ask to join**. Public channels are
+open to everyone, and direct messages offer no request. Sending shows **Request
+sent** with **Withdraw request**. After withdrawing, asking again waits a
+minute; after a denial it waits 24 hours, and the panel shows when.
+
+The request appears in the channel timeline as "<name> asked to join the
+channel" with **Approve** and **Deny** for any participant. Every participant
+also gets a **Requests to join** notification (turn it off under notification
+settings) that opens the channel and marks it unread. The first answer wins: the
+row then shows **Approved by** or **Denied by** for everyone, a withdrawn request
+shows **Request withdrawn**, and the other participants' notifications are marked
+done. Approval adds the requester, who gets the usual "added you" invite
+notification, and the timeline shows the usual added row. A requester waiting on
+the denied view is taken into the channel when the approval arrives.
+
+Verify with two accounts: ask from a non-member, approve or deny from a member
+in another tab, and check the row, the requester's view, and the member's inbox
+update without reloading. Check the panel and the row's buttons at phone width.
+
 ## Chat navigation rail
 
 Following a channel mention or browser notification for the conversation already

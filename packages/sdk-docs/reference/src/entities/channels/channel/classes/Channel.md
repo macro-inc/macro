@@ -68,6 +68,18 @@ The attachments posted in this channel, auto-paginated.
 
 ***
 
+### cancelAccessRequest()
+
+> **cancelAccessRequest**(): `Promise`\<`void`\>
+
+Withdraw the current user's pending request to join this channel.
+
+#### Returns
+
+`Promise`\<`void`\>
+
+***
+
 ### delete()
 
 > **delete**(): `Promise`\<`void`\>
@@ -232,6 +244,20 @@ A shared message thread scoped to this resource.
 
 ***
 
+### myAccessRequest()
+
+> **myAccessRequest**(): `Promise`\<\{ `canRequest`: `boolean`; `request?`: [`ChannelAccessRequest`](../../access-request/classes/ChannelAccessRequest.md); `retryAfter?`: `string`; \}\>
+
+The current user's latest request to join this channel, whether the
+channel accepts requests, and when they may ask again after a denial or
+withdrawal. Works without access to the channel.
+
+#### Returns
+
+`Promise`\<\{ `canRequest`: `boolean`; `request?`: [`ChannelAccessRequest`](../../access-request/classes/ChannelAccessRequest.md); `retryAfter?`: `string`; \}\>
+
+***
+
 ### participants()
 
 > **participants**(): `Promise`\<[`ApiChannelParticipant`](../../../../../generated/storage/types.gen/type-aliases/ApiChannelParticipant.md)[]\>
@@ -350,6 +376,19 @@ Rename the channel.
 #### Returns
 
 `Promise`\<`void`\>
+
+***
+
+### requestAccess()
+
+> **requestAccess**(): `Promise`\<[`ChannelAccessRequest`](../../access-request/classes/ChannelAccessRequest.md)\>
+
+Ask this private or team channel's participants to let the current user
+join. Asking again while a request is pending returns that request.
+
+#### Returns
+
+`Promise`\<[`ChannelAccessRequest`](../../access-request/classes/ChannelAccessRequest.md)\>
 
 ***
 

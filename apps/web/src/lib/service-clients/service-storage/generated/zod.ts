@@ -3711,6 +3711,151 @@ export const patchChannelBody = zod
   .describe('Request to patch a channel.');
 
 /**
+ * @summary Handler for `GET /channels/{channel_id}/access-requests/mine`.
+ */
+export const getMyChannelAccessRequestParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+});
+
+export const getMyChannelAccessRequestResponse = zod
+  .object({
+    can_request: zod
+      .boolean()
+      .describe('Whether this channel accepts requests.'),
+    request: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            channel_id: zod
+              .uuid()
+              .describe('Channel the requester asked to join.'),
+            created_at: zod.iso
+              .datetime({})
+              .describe('When the requester asked.'),
+            id: zod.uuid().describe('Attempt id.'),
+            requester_id: zod.string(),
+            resolved_at: zod.iso
+              .datetime({})
+              .nullish()
+              .describe('When the attempt stopped being pending.'),
+            resolved_by: zod.union([zod.null(), zod.string()]).optional(),
+            status: zod
+              .enum(['pending', 'approved', 'denied', 'cancelled'])
+              .describe('Outcome of one attempt to join.'),
+          })
+          .describe(
+            'One attempt to join a channel. Attempts are never reused, so each timeline\nentry keeps showing the outcome of the attempt it announced.'
+          ),
+      ])
+      .optional(),
+    retry_after: zod.iso
+      .datetime({})
+      .nullish()
+      .describe(
+        'Earliest time the caller may ask again, while they must wait.'
+      ),
+  })
+  .describe(
+    "A requester's view of their access to a channel they cannot read."
+  );
+
+/**
+ * @summary Handler for `PUT /channels/{channel_id}/access-requests/mine`.
+ */
+export const requestChannelAccessParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+});
+
+export const requestChannelAccessResponse = zod
+  .object({
+    channel_id: zod.uuid().describe('Channel the requester asked to join.'),
+    created_at: zod.iso.datetime({}).describe('When the requester asked.'),
+    id: zod.uuid().describe('Attempt id.'),
+    requester_id: zod.string(),
+    resolved_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When the attempt stopped being pending.'),
+    resolved_by: zod.union([zod.null(), zod.string()]).optional(),
+    status: zod
+      .enum(['pending', 'approved', 'denied', 'cancelled'])
+      .describe('Outcome of one attempt to join.'),
+  })
+  .describe(
+    'One attempt to join a channel. Attempts are never reused, so each timeline\nentry keeps showing the outcome of the attempt it announced.'
+  );
+
+/**
+ * @summary Handler for `DELETE /channels/{channel_id}/access-requests/mine`.
+ */
+export const cancelChannelAccessRequestParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+});
+
+/**
+ * @summary Handler for `GET /channels/{channel_id}/access-requests/{request_id}`.
+ */
+export const getChannelAccessRequestParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+  request_id: zod.uuid().describe('Access request ID'),
+});
+
+export const getChannelAccessRequestResponse = zod
+  .object({
+    channel_id: zod.uuid().describe('Channel the requester asked to join.'),
+    created_at: zod.iso.datetime({}).describe('When the requester asked.'),
+    id: zod.uuid().describe('Attempt id.'),
+    requester_id: zod.string(),
+    resolved_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When the attempt stopped being pending.'),
+    resolved_by: zod.union([zod.null(), zod.string()]).optional(),
+    status: zod
+      .enum(['pending', 'approved', 'denied', 'cancelled'])
+      .describe('Outcome of one attempt to join.'),
+  })
+  .describe(
+    'One attempt to join a channel. Attempts are never reused, so each timeline\nentry keeps showing the outcome of the attempt it announced.'
+  );
+
+/**
+ * @summary Handler for `POST /channels/{channel_id}/access-requests/{request_id}/resolve`.
+ */
+export const resolveChannelAccessRequestParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+  request_id: zod.uuid().describe('Access request ID'),
+});
+
+export const resolveChannelAccessRequestBody = zod
+  .object({
+    decision: zod
+      .enum(['approve', 'deny'])
+      .describe("A participant's answer to a pending request."),
+  })
+  .describe("Body of a participant's answer.");
+
+export const resolveChannelAccessRequestResponse = zod
+  .object({
+    channel_id: zod.uuid().describe('Channel the requester asked to join.'),
+    created_at: zod.iso.datetime({}).describe('When the requester asked.'),
+    id: zod.uuid().describe('Attempt id.'),
+    requester_id: zod.string(),
+    resolved_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When the attempt stopped being pending.'),
+    resolved_by: zod.union([zod.null(), zod.string()]).optional(),
+    status: zod
+      .enum(['pending', 'approved', 'denied', 'cancelled'])
+      .describe('Outcome of one attempt to join.'),
+  })
+  .describe(
+    'One attempt to join a channel. Attempts are never reused, so each timeline\nentry keeps showing the outcome of the attempt it announced.'
+  );
+
+/**
  * @summary Handler for `GET /channels/{channel_id}/attachments`.
  */
 export const getChannelAttachmentsParams = zod.object({

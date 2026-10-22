@@ -2511,6 +2511,81 @@ export type Channel = {
 };
 
 /**
+ * A participant's answer to a pending request.
+ */
+export type ChannelAccessDecision = 'approve' | 'deny';
+
+/**
+ * One attempt to join a channel. Attempts are never reused, so each timeline
+ * entry keeps showing the outcome of the attempt it announced.
+ */
+export type ChannelAccessRequest = {
+    /**
+     * Channel the requester asked to join.
+     */
+    channel_id: string;
+    /**
+     * When the requester asked.
+     */
+    created_at: string;
+    /**
+     * Attempt id.
+     */
+    id: string;
+    /**
+     * Person asking to join.
+     */
+    requester_id: MacroUserIdStr;
+    /**
+     * When the attempt stopped being pending.
+     */
+    resolved_at?: string | null;
+    resolved_by?: null | MacroUserIdStr;
+    /**
+     * Current outcome.
+     */
+    status: ChannelAccessRequestStatus;
+};
+
+/**
+ * A requester's view of their access to a channel they cannot read.
+ */
+export type ChannelAccessRequestState = {
+    /**
+     * Whether this channel accepts requests.
+     */
+    can_request: boolean;
+    request?: null | ChannelAccessRequest;
+    /**
+     * Earliest time the caller may ask again, while they must wait.
+     */
+    retry_after?: string | null;
+};
+
+/**
+ * Outcome of one attempt to join.
+ */
+export type ChannelAccessRequestStatus = 'pending' | 'approved' | 'denied' | 'cancelled';
+
+/**
+ * Metadata for [`ChannelTopicEvent::AccessRequested`].
+ */
+export type ChannelAccessRequestedMetadata = {
+    /**
+     * Channel the requester asked to join.
+     */
+    channel_id: string;
+    /**
+     * The attempt; channel participants read its current outcome by id.
+     */
+    request_id: string;
+    /**
+     * Person asking to join.
+     */
+    requester_id: MacroUserIdStr;
+};
+
+/**
  * Metadata for [`ChannelTopicEvent::Created`].
  */
 export type ChannelCreatedMetadata = {
@@ -2915,6 +2990,12 @@ export type ChannelTopicEvent = {
      * Participants were removed from a channel (admin removal or self-leave).
      */
     metadata: ChannelParticipantRemovedMetadata;
+} | {
+    event_type: 'channel.access_requested';
+    /**
+     * Someone outside a channel asked to join it.
+     */
+    metadata: ChannelAccessRequestedMetadata;
 };
 
 /**
@@ -11023,6 +11104,16 @@ export type RequestedLayout = {
 };
 
 /**
+ * Body of a participant's answer.
+ */
+export type ResolveChannelAccessRequest = {
+    /**
+     * The answer.
+     */
+    decision: ChannelAccessDecision;
+};
+
+/**
  * Owner's decision; omission of a granted level means deny.
  */
 export type ResolveRequest = {
@@ -17162,6 +17253,145 @@ export type PatchChannelResponses = {
 };
 
 export type PatchChannelResponse = PatchChannelResponses[keyof PatchChannelResponses];
+
+export type CancelChannelAccessRequestData = {
+    body?: never;
+    path: {
+        /**
+         * Channel ID
+         */
+        channel_id: string;
+    };
+    query?: never;
+    url: '/channels/{channel_id}/access-requests/mine';
+};
+
+export type CancelChannelAccessRequestErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CancelChannelAccessRequestError = CancelChannelAccessRequestErrors[keyof CancelChannelAccessRequestErrors];
+
+export type CancelChannelAccessRequestResponses = {
+    200: unknown;
+};
+
+export type GetMyChannelAccessRequestData = {
+    body?: never;
+    path: {
+        /**
+         * Channel ID
+         */
+        channel_id: string;
+    };
+    query?: never;
+    url: '/channels/{channel_id}/access-requests/mine';
+};
+
+export type GetMyChannelAccessRequestErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetMyChannelAccessRequestError = GetMyChannelAccessRequestErrors[keyof GetMyChannelAccessRequestErrors];
+
+export type GetMyChannelAccessRequestResponses = {
+    200: ChannelAccessRequestState;
+};
+
+export type GetMyChannelAccessRequestResponse = GetMyChannelAccessRequestResponses[keyof GetMyChannelAccessRequestResponses];
+
+export type RequestChannelAccessData = {
+    body?: never;
+    path: {
+        /**
+         * Channel ID
+         */
+        channel_id: string;
+    };
+    query?: never;
+    url: '/channels/{channel_id}/access-requests/mine';
+};
+
+export type RequestChannelAccessErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    429: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type RequestChannelAccessError = RequestChannelAccessErrors[keyof RequestChannelAccessErrors];
+
+export type RequestChannelAccessResponses = {
+    200: ChannelAccessRequest;
+};
+
+export type RequestChannelAccessResponse = RequestChannelAccessResponses[keyof RequestChannelAccessResponses];
+
+export type GetChannelAccessRequestData = {
+    body?: never;
+    path: {
+        /**
+         * Channel ID
+         */
+        channel_id: string;
+        /**
+         * Access request ID
+         */
+        request_id: string;
+    };
+    query?: never;
+    url: '/channels/{channel_id}/access-requests/{request_id}';
+};
+
+export type GetChannelAccessRequestErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetChannelAccessRequestError = GetChannelAccessRequestErrors[keyof GetChannelAccessRequestErrors];
+
+export type GetChannelAccessRequestResponses = {
+    200: ChannelAccessRequest;
+};
+
+export type GetChannelAccessRequestResponse = GetChannelAccessRequestResponses[keyof GetChannelAccessRequestResponses];
+
+export type ResolveChannelAccessRequestData = {
+    body: ResolveChannelAccessRequest;
+    path: {
+        /**
+         * Channel ID
+         */
+        channel_id: string;
+        /**
+         * Access request ID
+         */
+        request_id: string;
+    };
+    query?: never;
+    url: '/channels/{channel_id}/access-requests/{request_id}/resolve';
+};
+
+export type ResolveChannelAccessRequestErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ResolveChannelAccessRequestError = ResolveChannelAccessRequestErrors[keyof ResolveChannelAccessRequestErrors];
+
+export type ResolveChannelAccessRequestResponses = {
+    200: ChannelAccessRequest;
+};
+
+export type ResolveChannelAccessRequestResponse = ResolveChannelAccessRequestResponses[keyof ResolveChannelAccessRequestResponses];
 
 export type GetChannelAttachmentsData = {
     body?: never;
