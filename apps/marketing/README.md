@@ -41,7 +41,8 @@ as a letter from the team, explaining each design choice once rather than
 repeating a feature summary in a second paragraph.
 
 `HomepageTiles` presents nine product sections in one column on desktop and
-mobile. A small Inter feature index begins beside the first feature section,
+mobile. Feature headings use compact copy and weight-400 slab type at 32px on
+desktop and 28px on phones; the hero and letter headings keep their own sizes. A small Inter feature index begins beside the first feature section,
 below the hero and intro. It stays on the left while scrolling the features on
 desktop and stops before the closing content. The section at the reading line
 below the fixed header gets a contrasting link and dot, with `aria-current="location"`.

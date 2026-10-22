@@ -137,35 +137,35 @@ export function HomepageTiles() {
       <div class="macro-feature-grid">
         <Tile
           id="email"
-          title="Email tightly integrated with your team chat and tasks"
+          title="Brilliantly fast email"
           description="Share the actual email in a channel. Your team sees the whole thread, including replies that arrive later. Discuss it, draft a response, or create a task without copying the conversation into another app."
           links={[{ href: '/email', label: 'Email' }]}
           preview="email"
         />
         <Tile
           id="chat"
-          title="Team chat with the work right there"
+          title="Focused team chat with agents"
           description="Share emails, documents, and tasks in a channel. Your team can open the original, reply in a thread, and mention an agent when they need a hand. The conversation stays with the work."
           links={[{ href: '/channels', label: 'Chat' }]}
           preview="chat"
         />
         <Tile
           id="documents"
-          title="Documents your team and agents can edit together"
+          title="Lightweight markdown docs"
           description="We wanted the simplicity of Markdown without giving up live collaboration. People and agents can write in the same document, with live cursors. Mention the email or task you’re writing about. Keep editing if your connection drops."
           links={[{ href: '/documents', label: 'Docs' }]}
           preview="documents"
         />
         <Tile
           id="tasks"
-          title="A task manager that keeps itself up to date"
+          title="Automatic task management"
           description="Create a task from the message, email, or checklist where the work came up. The source stays linked in both directions. Agents can handle updates, and linked pull requests move tasks into review and mark them complete when merged."
           links={[{ href: '/tasks', label: 'Tasks' }]}
           preview="tasks"
         />
         <Tile
           id="coding-agents"
-          title="Assign agents tasks. Mention them in channels just like colleagues."
+          title="Bring your favorite agents"
           description="An agent should know what your team is working on, not just what you told it in a chat. Macro’s shared memory brings together email, docs, tasks, channels, and calls. Choose a model or bring your own agent, then put it to work."
           links={[
             { href: '/agents', label: 'Agents' },
@@ -175,14 +175,14 @@ export function HomepageTiles() {
         />
         <Tile
           id="spreadsheet"
-          title="Sheets your team can work in together"
+          title="Link work together with sheets"
           description="Bring in your Google Sheets and work on them with your team and agents. Link cells to people, companies, and documents, so the numbers stay connected to the work behind them."
           links={[{ href: '/demo', label: 'Explore the workspace' }]}
           preview="spreadsheet"
         />
         <Tile
           id="databases"
-          title="Organize your work in databases"
+          title="Migrate your Notion databases"
           description="Track projects, customers, or whatever your team needs. Add your own fields, filter and sort the records, and update them together. Each record has a place for the details."
           links={[{ href: '/demo', label: 'Explore the workspace' }]}
           preview="databases"
@@ -196,7 +196,7 @@ export function HomepageTiles() {
         />
         <Tile
           id="calls"
-          title="Calls and transcripts"
+          title="Team-level memory for calls"
           description="Important decisions happen on calls. Your agents should be able to use them. Start a call from a channel or send a meeting link. Macro records and transcribes it, so you can revisit what was said and ask an agent to handle the follow-up."
           links={[{ href: '/calls', label: 'Calls' }]}
           preview="calls"

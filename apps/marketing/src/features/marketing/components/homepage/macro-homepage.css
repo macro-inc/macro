@@ -61,6 +61,7 @@ html[data-homepage][data-theme-light='true'] { color-scheme: light; }
 .macro-tile-art { height: 450px; min-height: 450px; flex: none; position: relative; isolation: isolate; overflow: hidden; border-radius: 16px; background: transparent; }
 .macro-tile-copy { width: min(640px, 100%); margin: 0 auto 28px; text-align: left; }
 .macro-letter-prose h2, .macro-tile-copy h2 { margin: 0 0 24px; font-family: 'Roboto Slab Variable', serif; font-size: 36px; font-weight: 400; line-height: 1.22; letter-spacing: -.04em; text-wrap: balance; }
+.macro-tile-copy h2 { font-size: 32px; }
 .macro-letter-prose p, .macro-tile-copy p { margin: 0 0 20px; font-size: 19px; line-height: 1.65; letter-spacing: -.012em; color: var(--color-ink-muted); text-wrap: pretty; }
 .macro-tile-links { display: flex; flex-wrap: wrap; gap: 24px; margin-top: 24px; }
 .macro-tile-links a { display: inline-flex; align-items: center; gap: 3px; min-height: 28px; font-size: 16px; font-weight: 550; color: var(--color-ink); text-decoration: none; }
@@ -99,6 +100,7 @@ html[data-homepage][data-theme-light='true'] { color-scheme: light; }
   .macro-letter-intro { margin-bottom: 64px; }
   .macro-letter-prose p, .macro-tile-copy p { font-size: 18px; line-height: 1.6; }
   .macro-letter-prose h2, .macro-tile-copy h2 { font-size: 31px; margin-bottom: 20px; }
+  .macro-tile-copy h2 { font-size: 28px; }
   .macro-feature-grid { --feature-section-gap: 64px; width: calc(100% - 32px); max-width: 540px; }
   .macro-tile-copy { width: calc(100% - 16px); margin-bottom: 20px; }
   .macro-tile-art { height: 470px; min-height: 470px; }
