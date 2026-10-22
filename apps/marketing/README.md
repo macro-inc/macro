@@ -43,7 +43,10 @@ self-updating tasks, agents, sheets and databases, CRM, and calls. Demo art has
 no flat gray backdrop or outer border. Use the onboarding radial accent glow and
 shared `WorkspaceTexture` grain behind each composition: blue email, purple
 documents, green tasks, coral agents, teal sheets, amber CRM, and rose calls.
-Keep the texture static and behind the opaque UI so text remains readable;
+Keep the glow weak and diffuse, with visible onboarding dots and grain spread
+beyond the panels. `WorkspaceTexture` exposes mask and opacity CSS variables
+with unchanged onboarding defaults. Keep the texture static and behind the
+opaque UI so text remains readable;
 reduce the wash opacity in light mode.
 `HomepageProductPreview` layers readable fragments of the existing product UI
 with local sample data; never shrink a whole desktop window into a card. Dark

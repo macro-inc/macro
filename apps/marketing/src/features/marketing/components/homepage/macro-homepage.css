@@ -136,6 +136,9 @@ html[data-homepage][data-theme-light='true'] { color-scheme: light; }
 .macro-tile-crm { --feature-glow: #f4c65c; }
 .macro-tile-calls { --feature-glow: #e99cbb; }
 .macro-tile-ambience {
+  --workspace-texture-mask: radial-gradient(ellipse 65% 70% at center, #000 12%, #0009 40%, transparent 80%);
+  --workspace-grain-opacity: .24;
+  --workspace-dots-opacity: .32;
   position: absolute;
   inset: 0;
   z-index: -1;
@@ -147,11 +150,10 @@ html[data-homepage][data-theme-light='true'] { color-scheme: light; }
   position: absolute;
   inset: 0;
   background: radial-gradient(ellipse 80% 80% at 45% 50%,
-    color-mix(in srgb, var(--feature-glow) 32%, transparent) 0%,
-    color-mix(in srgb, var(--feature-glow) 20%, transparent) 35%,
-    color-mix(in srgb, var(--feature-glow) 8%, transparent) 60%,
+    color-mix(in srgb, var(--feature-glow) 18%, transparent) 0%,
+    color-mix(in srgb, var(--feature-glow) 10%, transparent) 35%,
+    color-mix(in srgb, var(--feature-glow) 4%, transparent) 60%,
     transparent 80%);
-  filter: blur(12px);
+  filter: blur(28px);
 }
-.macro-tile-ambience [data-workspace-texture] { mix-blend-mode: soft-light; }
 html[data-theme-light='true'] .macro-tile-ambience { opacity: .6; }
