@@ -25,6 +25,9 @@ in hidden tabs, or through the accessible pause button. Reduced motion shows the
 connected state immediately. The hero never intercepts scrolling. The original closing section retains its
 scroll-driven header CTA landing animation.
 
+Use product names for feature headings and describe concrete actions in the copy,
+following the live site; avoid slogans and vague benefit claims.
+
 `HomepageTiles` presents six product feature panels in one column on desktop and
 mobile: email and chat, documents and tasks, agents, sheets and databases, CRM,
 and calls. Panels use a gray-50 background at 50% opacity in light mode, a soft charcoal

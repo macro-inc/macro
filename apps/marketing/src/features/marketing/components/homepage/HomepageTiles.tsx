@@ -51,8 +51,8 @@ export function HomepageTiles() {
     <div class="macro-feature-grid">
       <Tile
         id="email"
-        title="Good conversations. Less back-and-forth."
-        description="Email and team chat, connected. Share a live email thread in a channel and work on the reply together."
+        title="Email and chat"
+        description="Share live email threads in channels. Ask agents to draft from your emails, documents, and calls."
         links={[
           { href: '/email', label: 'Email' },
           { href: '/channels', label: 'Chat' },
@@ -61,8 +61,8 @@ export function HomepageTiles() {
       />
       <Tile
         id="documents"
-        title="From the first thought to the final done."
-        description="Write together in live documents. Turn messages into tasks, link the plan, and keep everyone on the same page."
+        title="Documents and tasks"
+        description="CRDT documents with live agent edits. Create tasks from messages and link them to the specification."
         links={[
           { href: '/documents', label: 'Docs' },
           { href: '/tasks', label: 'Tasks' },
@@ -71,8 +71,8 @@ export function HomepageTiles() {
       />
       <Tile
         id="coding-agents"
-        title="A helping hand. With the whole picture."
-        description="Bring your agents into the conversation. They can read your work, edit documents, and take a task through to a pull request."
+        title="Coding agents"
+        description="Use your coding agent subscriptions in channels. Read the diff and follow the task through to a pull request."
         links={[
           { href: '/agents', label: 'Agents' },
           { href: '/github', label: 'GitHub' },
@@ -81,22 +81,22 @@ export function HomepageTiles() {
       />
       <Tile
         id="spreadsheet"
-        title="Everything adds up. Together."
-        description="Sheets and databases your whole team can work in. Bring in your Google Sheets and let agents help with the next step."
+        title="Sheets and databases"
+        description="Live collaboration with humans and agents. Import your Google Sheets and Notion databases."
         links={[{ href: '/demo', label: 'Explore the workspace' }]}
         preview="spreadsheet"
       />
       <Tile
         id="crm"
-        title="A little more personal. A lot less admin."
-        description="A CRM built from your email. Keep companies, contacts, and conversations connected, with agents to help with the follow-up."
+        title="CRM"
+        description="Companies and contacts created from email. Agents update deal stages and draft customer follow-ups."
         links={[{ href: '/crm', label: 'CRM' }]}
         preview="crm"
       />
       <Tile
         id="calls"
-        title="Be in the conversation. Keep every detail."
-        description="Calls, transcripts, and calendar in your workspace. Ask an agent to turn the conversation into a plan and a follow-up."
+        title="Calls and transcripts"
+        description="Record and transcribe calls in Macro. Ask agents to create tasks and draft follow-ups from the transcript."
         links={[{ href: '/calls', label: 'Calls' }]}
         preview="calls"
       />
