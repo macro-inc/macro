@@ -38,7 +38,9 @@ scroll-driven header CTA landing animation.
 Use concrete product capabilities for feature headings and describe actions in
 the copy, following the live site; avoid slogans and vague benefit claims. Write the homepage
 as a letter from the team, explaining each design choice once rather than
-repeating a feature summary in a second paragraph.
+repeating a feature summary in a second paragraph. Keep each feature description
+to one or two direct sentences that support its heading with concrete actions;
+omit marketing filler.
 
 `HomepageTiles` presents nine product sections in one column on desktop and
 mobile. Feature headings use compact copy and weight-400 slab type at 32px on
