@@ -169,3 +169,26 @@
 }
 
 .macro-workflow-channel { overflow: hidden; }
+
+/* Animate native state changes without moving the whole composition. */
+.macro-workflow-modal { opacity: 0; visibility: hidden; transform: translateY(10px) scale(.975); transition: opacity 350ms ease, transform 500ms cubic-bezier(.22,1,.36,1), visibility 0s 500ms; }
+.macro-workflow-modal[data-open=true] { opacity: 1; visibility: visible; transform: translateY(0) scale(1); transition-delay: 0s; }
+.macro-workflow-modal .mail-share-form { animation: none; }
+.macro-workflow-modal .mail-recipient-chip, .macro-workflow-modal [data-share-message] { animation: macro-control-enter 400ms cubic-bezier(.22,1,.36,1) both; }
+.macro-workflow-channel .mail-staged-messages { width: 100%; }
+.macro-workflow-channel .mail-message-step { display: grid; grid-template-rows: 0fr; opacity: 0; translate: 0 8px; transition: grid-template-rows 650ms cubic-bezier(.22,1,.36,1), opacity 450ms ease, translate 650ms cubic-bezier(.22,1,.36,1); }
+.macro-workflow-channel .mail-message-step[data-visible=true] { grid-template-rows: 1fr; opacity: 1; translate: 0 0; }
+.macro-workflow-channel .mail-message-step > div { min-height: 0; overflow: hidden; }
+.macro-workflow-channel .mail-message-step + .mail-message-step .homepage-conversation { padding-top: 16px; }
+.macro-workflow-channel .mail-message-step .homepage-conversation { width: 100%; margin: 0; }
+.macro-workflow-channel .mail-message-step .homepage-message, .macro-workflow-channel .mail-message-step [data-user-message-bubble] { animation: none; }
+.macro-workflow-result, .macro-workflow-agent-result { animation: macro-result-enter 650ms cubic-bezier(.22,1,.36,1) both; }
+.macro-selection-menu, [data-created-task], .macro-workflow-agent [data-tool-group] { animation: macro-control-enter 450ms cubic-bezier(.22,1,.36,1) both; }
+.macro-task-selection { transition: background 350ms ease; }
+.macro-product-canvas[data-paused=true] * { animation-play-state: paused; }
+@keyframes macro-control-enter { from { opacity: 0; translate: 0 4px; } to { opacity: 1; translate: 0 0; } }
+@keyframes macro-result-enter { from { opacity: 0; translate: 0 12px; } to { opacity: 1; translate: 0 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .macro-workflow-modal { transform: none; }
+  .macro-workflow-channel .mail-message-step { translate: none; }
+}

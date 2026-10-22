@@ -24,7 +24,7 @@ export function Homepage() {
         <section class="macro-home-hero" aria-labelledby="macro-home-title">
           <MacroHero />
           <h1 id="macro-home-title" data-welcome-heading>
-            <img src={wordmark} alt="Macro" width="867" height="126" />
+            <img src={wordmark} alt="Macro" width="632" height="85" />
           </h1>
           <a
             class="macro-home-button"
@@ -34,11 +34,6 @@ export function Homepage() {
             Get started
           </a>
           <p class="macro-home-tagline">
-            Your people. Your projects.
-            <br />
-            Your AI. All together.
-          </p>
-          <p class="macro-home-description">
             Email, chat, docs, tasks, and agents.
             <br />
             One beautifully connected workspace.

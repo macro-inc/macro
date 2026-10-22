@@ -36,19 +36,18 @@
 .macro-homepage .site-header[data-menu-open=true]::before { background: #fff; }
 .macro-homepage a:focus-visible, .macro-homepage button:focus-visible { outline: 3px solid #4384db; outline-offset: 5px; }
 .macro-home-hero { display: flex; align-items: center; flex-direction: column; padding: 109px 24px 94px; text-align: center; }
-.macro-home-hero h1 { width: min(440px, 80vw); margin: 33px 0 38px; line-height: 1; }
+.macro-home-hero h1 { width: min(360px, 76vw); margin: 33px 0 38px; line-height: 1; }
 .macro-home-hero h1 img { display: block; width: 100%; height: auto; }
 .macro-homepage .macro-home-button { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 11px 37px; background: #000; border-radius: 100px; color: #fff; text-decoration: none; font-family: inherit; font-size: 19px; line-height: 1.3; font-weight: 600; letter-spacing: -.025em; transition: background 180ms ease, transform 180ms ease; }
 .macro-homepage .macro-home-button:hover { background: #292929; transform: translateY(-1px); }
-.macro-home-tagline { margin: 35px 0 0; font-family: 'Roboto Slab Variable', serif; font-size: clamp(30px, 3.5vw, 44px); line-height: 1.2; letter-spacing: -.04em; font-weight: 400; }
-.macro-home-description { margin: 23px 0 0; font-size: 18px; line-height: 1.5; color: #6e6e73; letter-spacing: -.018em; }
+.macro-home-tagline { max-width: 940px; margin: 40px 0 0; font-family: 'Roboto Slab Variable', serif; font-size: clamp(30px, 3.5vw, 44px); line-height: 1.2; letter-spacing: -.04em; font-weight: 400; }
 .macro-hero-art { position: relative; width: 360px; height: 288px; flex-shrink: 0; }
 .macro-hero-scene { position: absolute; width: 360px; height: 300px; inset: 0; }
 .macro-hero-aura { position: absolute; width: 212px; height: 212px; left: 74px; top: 44px; border-radius: 50%; border: 1px solid #e4e4e7; background: radial-gradient(circle, #f0f0f2, #fff 70%); opacity: .8; animation: macro-aura 16s ease-in-out infinite; }
-.macro-hero-mark { position: absolute; left: 135px; top: 105px; width: 90px; height: 90px; display: grid; place-items: center; border: 1px solid #36363a; border-radius: 18px; color: #fff; background: linear-gradient(145deg, #333337, #111113 65%); box-shadow: 0 12px 24px #00000028, inset 0 1px 0 #ffffff30; animation: macro-mark 16s cubic-bezier(.22,1,.36,1) infinite; z-index: 3; }
+.macro-hero-mark { position: absolute; left: 135px; top: 105px; width: 90px; height: 90px; display: grid; place-items: center; border: 1px solid #36363a; border-radius: 30px; corner-shape: squircle; color: #fff; background: linear-gradient(145deg, #414145, #18181b 60%, #0e0e10); box-shadow: 0 18px 30px -8px #00000045, 0 4px 7px -2px #00000036, inset 0 2px 2px #ffffff35, inset 0 -2px 3px #00000080; animation: macro-mark 16s cubic-bezier(.22,1,.36,1) infinite; z-index: 3; }
 .macro-hero-mark svg { width: 47px; height: 47px; }
 .macro-hero-tool, .macro-hero-surface { position: absolute; left: 150px; top: 120px; width: 60px; height: 60px; color: #343439; }
-.macro-hero-tool, .macro-hero-surface > div { display: grid; place-items: center; background: linear-gradient(155deg, #fff, #f6f6f7); border: 1px solid #dedee2; border-radius: 12px; box-shadow: 0 4px 8px #00000009, inset 0 1px 0 #fff; }
+.macro-hero-tool, .macro-hero-surface > div { display: grid; place-items: center; background: linear-gradient(150deg, #fff 12%, #f5f5f7 65%, #e9e9ed); border: 1px solid #d8d8df; border-radius: 21px; corner-shape: squircle; box-shadow: 0 10px 18px -6px #22222b26, 0 3px 5px -2px #22222b20, inset 0 2px 2px #fff, inset 0 -2px 3px #d1d1db6b; }
 .macro-hero-tool { animation: macro-gather 16s cubic-bezier(.65,0,.25,1) infinite; }
 .macro-hero-tool svg { width: 29px; height: 29px; }
 .macro-hero-surface { opacity: 0; animation: macro-unfold 16s cubic-bezier(.22,1,.36,1) infinite; }
@@ -106,9 +105,8 @@
   .macro-hero-art { width: 300px; height: 250px; }
   .macro-hero-scene { transform: scale(.84); transform-origin: top left; }
   .macro-motion-toggle { right: -4px; bottom: 8px; width: 44px; height: 44px; background: transparent; }
-  .macro-home-hero h1 { width: min(320px, 83vw); margin-top: 25px; margin-bottom: 31px; }
+  .macro-home-hero h1 { width: min(290px, 78vw); margin-top: 25px; margin-bottom: 31px; }
   .macro-home-tagline { margin-top: 31px; font-size: 30px; }
-  .macro-home-description { font-size: 16px; margin-top: 20px; }
   .macro-feature-grid { width: calc(100% - 32px); grid-template-columns: 1fr; gap: 22px; max-width: 540px; }
   .macro-feature-tile { aspect-ratio: auto; min-height: 500px; border-radius: 16px; }
   .macro-tile-art { height: 470px; min-height: 470px; }
@@ -137,3 +135,9 @@
 
 .macro-homepage .site-nav-open-footer { background: #000; color: #fff; box-shadow: none; font-family: inherit; }
 .macro-homepage .site-nav-open-footer::after { display: none; }
+
+/* The same bevel and masked rim used by the large compose surface. */
+.macro-hero-mark::after, .macro-hero-tool::after, .macro-hero-surface > div::after { content: ''; position: absolute; inset: 1px; border-radius: inherit; corner-shape: inherit; pointer-events: none; padding: 1px; background: linear-gradient(145deg, #ffffffb3, #ffffff08 55%, #00000014); mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); mask-composite: exclude; }
+.macro-hero-surface > div { position: relative; }
+.macro-hero-tool svg, .macro-hero-surface svg { filter: drop-shadow(0 1px 0 #fff); }
+.macro-hero-mark svg { filter: drop-shadow(0 2px 2px #00000050); }

@@ -3,7 +3,7 @@ import Hash from '@phosphor/hash.svg';
 import PaperPlane from '@phosphor/paper-plane-tilt.svg';
 import X from '@phosphor/x.svg';
 import { Button } from '@ui';
-import { createSignal, Show } from 'solid-js';
+import { createSignal, For, Show } from 'solid-js';
 import { meetingEmail, meetingReply } from '../../core/email-demo-story';
 import { homepagePeople } from '../../core/homepage-demo-people';
 import { createDemoPointer } from '../../primitives/createDemoPointer';
@@ -128,6 +128,7 @@ export function ShareForm(props: {
 }
 
 export function ChannelResult(props: {
+  staged?: boolean;
   shared: boolean;
   updated: boolean;
   onOpen: () => void;
@@ -177,14 +178,37 @@ export function ChannelResult(props: {
         </div>
       </header>
       <div class="mail-channel-messages">
-        <HomepageConversation
-          messages={[
-            question,
-            ...(props.shared ? [sharedEmail] : []),
-            ...(props.updated ? [followUp] : []),
-            ...messages(),
-          ]}
-        />
+        <Show
+          when={props.staged}
+          fallback={
+            <HomepageConversation
+              messages={[
+                question,
+                ...(props.shared ? [sharedEmail] : []),
+                ...(props.updated ? [followUp] : []),
+                ...messages(),
+              ]}
+            />
+          }
+        >
+          <div class="mail-staged-messages">
+            <For each={[question, sharedEmail, followUp]}>
+              {(message, index) => (
+                <div
+                  class="mail-message-step"
+                  data-visible={
+                    index() === 0 ||
+                    (index() === 1 ? props.shared : props.updated)
+                  }
+                >
+                  <div>
+                    <HomepageConversation messages={[message]} />
+                  </div>
+                </div>
+              )}
+            </For>
+          </div>
+        </Show>
       </div>
       <div class="mail-channel-composer">
         <ChannelComposer

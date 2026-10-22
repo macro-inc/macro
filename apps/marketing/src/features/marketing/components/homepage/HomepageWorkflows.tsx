@@ -38,22 +38,24 @@ export function EmailWorkflow(props: {
         data-complete={props.phase >= 6}
       >
         <ChannelResult
+          staged
           shared={props.phase >= 6}
           updated={props.phase >= 7}
           onOpen={() => props.advance(0)}
         />
       </div>
-      <Show when={props.phase >= 2 && props.phase < 6}>
-        <div class="macro-workflow-modal">
-          <ShareForm
-            phase={props.phase}
-            query="launch"
-            message={props.phase >= 4 ? 'Here’s the email for Thursday.' : ''}
-            advance={() => props.advance(props.phase < 3 ? 3 : 6)}
-            cancel={() => props.advance(0)}
-          />
-        </div>
-      </Show>
+      <div
+        class="macro-workflow-modal"
+        data-open={props.phase >= 2 && props.phase < 6}
+      >
+        <ShareForm
+          phase={Math.min(5, Math.max(2, props.phase))}
+          query="launch"
+          message={props.phase >= 4 ? 'Here’s the email for Thursday.' : ''}
+          advance={() => props.advance(props.phase < 3 ? 3 : 6)}
+          cancel={() => props.advance(0)}
+        />
+      </div>
     </>
   );
 }

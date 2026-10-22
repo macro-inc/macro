@@ -7,8 +7,10 @@ components. Application UI changes must not alter the website.
 
 The homepage uses a white background in every system color scheme, native SF Pro
 on Apple platforms (with a system sans-serif fallback elsewhere), the supplied
-vector Macro wordmark, centered Roboto Slab headings at weight 400, and black pill
-calls to action. Graphics layer white product surfaces with fine neutral borders and restrained shadows. `components/homepage/macro-homepage.css`
+text-only vector Macro wordmark, centered Roboto Slab headings at weight 400, and black pill
+calls to action. The hero promotes the product-description copy to its main slab
+headline. Hero icons use rounded squircle tiles, inset highlights, beveled edges,
+and layered neutral shadows that echo the compose surface. Graphics layer white product surfaces with fine neutral borders and restrained shadows. `components/homepage/macro-homepage.css`
 scopes that treatment to `.macro-homepage`; product pages, blog, sample workspace,
 and signup retain their existing system/cream/dark palettes.
 
@@ -33,7 +35,10 @@ for 14 seconds. The CRM retains its existing deal-movement sequence within the
 loop. Motion pauses offscreen, in hidden tabs, or through each preview's accessible
 pause control. Reduced motion shows the completed result immediately. Keep text
 at a stable readable size throughout; demonstrate actions and their results rather
-than moving decorative cards.
+than moving decorative cards. Keep the share dialog mounted for smooth entry/exit,
+and expand staged chat messages with grid-row and opacity transitions so the
+conversation grows continuously. Reuse native demo content; avoid stacking a
+second bubble animation on top of the message entrance.
 The previews load near the viewport through `DeferredDemo`; frozen app styles
 and neutral light tokens are scoped to their canvases, independent of the system theme. The homepage does not apply the cream palette. The original testimonial, blog
 carousel, closing CTA, and security section follow the grid. The shared navigation

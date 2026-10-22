@@ -122,6 +122,7 @@ export default function HomepageProductPreview(props: {
         class={`macro-product-canvas workspace-demo macro-product-${props.kind}`}
         data-theme-light="true"
         data-phase={phase()}
+        data-paused={!playback.playing()}
         data-cycle={cycle()}
         aria-hidden="true"
         inert
