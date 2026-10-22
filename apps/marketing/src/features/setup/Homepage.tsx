@@ -42,24 +42,16 @@ export function Homepage() {
           aria-label="Why Macro"
         >
           <p>
-            We built Macro because we wanted one system that actually worked
-            together. Fast email, good team chat, simple docs and tasks. Each
-            should be useful on its own, and better because the others are
-            there.
+            We built Macro so a small team can run the company without juggling
+            a dozen apps. Email, chat, docs, tasks, and customer records live
+            together. Turn a customer conversation into a task, share it with
+            your team, and keep the context attached.
           </p>
           <p>
-            You shouldn’t have to screenshot an email to discuss it with your
-            team. Or copy a conversation into a task, then go back and update
-            everyone when it’s done. In Macro, you can mention the original. The
-            link works in both directions, and sharing it in a channel gives
-            that channel access.
-          </p>
-          <p>
-            That matters for agents, too. They need more than your chat history.
-            Macro builds shared memory from the work your team is doing, with
-            tools to search it and act on it. Emails, messages, assignments, and
-            agent replies come back to one inbox, split into Signal and Noise.
-            Less time keeping the software up to date. More time doing the work.
+            Your agents work in that same system. Ask them to draft a reply,
+            update a document, or take on a task using what your team already
+            knows. Less copying, fewer status updates, and no explaining your
+            company from scratch in every AI chat.
           </p>
         </section>
         <HomepageTiles />
