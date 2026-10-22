@@ -41,7 +41,8 @@ repeating a feature summary in a second paragraph.
 mobile: email integrated with chat and tasks, collaborative documents,
 self-updating tasks, agents, sheets and databases, CRM, and calls. Demo art has
 no flat gray backdrop or outer border. Separate feature sections with viewport-wide
-1px rules at 18% ink, matching the product pages. Use the onboarding radial accent glow and
+1px rules at 5.4% ink (30% of the product-page intensity), with 20px more space
+below each rule than above. Use the onboarding radial accent glow and
 shared `WorkspaceTexture` grain behind each composition: blue email, purple
 documents, green tasks, coral agents, teal sheets, amber CRM, and rose calls.
 Keep the glow weak and diffuse, with visible onboarding dots and grain spread

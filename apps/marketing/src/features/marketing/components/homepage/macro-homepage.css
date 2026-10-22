@@ -46,16 +46,16 @@ html[data-homepage][data-theme-light='true'] { color-scheme: light; }
 .macro-motion-toggle { position: absolute; right: 0; bottom: 0; width: 36px; height: 36px; border: 0; border-radius: 50%; background: light-dark(#f5f5f7, #141414); color: light-dark(#86868b, #aaa); display: grid; place-items: center; transition: color 160ms; }
 .macro-motion-toggle:hover { color: light-dark(#1d1d1f, #fff); }
 .macro-motion-toggle svg { width: 13px; height: 13px; }
-.macro-feature-grid { --feature-section-gap: 88px; width: min(800px, calc(100% - 64px)); margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--feature-section-gap); }
+.macro-feature-grid { --feature-section-gap: 88px; width: min(800px, calc(100% - 64px)); margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: calc(var(--feature-section-gap) + 20px); }
 .macro-feature-tile { position: relative; min-width: 0; display: flex; flex-direction: column; background: transparent; border: 0; }
 .macro-feature-tile + .macro-feature-tile::before {
   content: '';
   position: absolute;
-  top: calc(var(--feature-section-gap) / -2);
+  top: calc(var(--feature-section-gap) / -2 - 20px);
   left: 50%;
   width: 100vw;
   transform: translateX(-50%);
-  border-top: 1px solid color-mix(in srgb, var(--color-ink) 18%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--color-ink) 5.4%, transparent);
   pointer-events: none;
 }
 .macro-tile-art { height: 450px; min-height: 450px; flex: none; position: relative; isolation: isolate; overflow: hidden; border-radius: 16px; background: transparent; }
