@@ -109,8 +109,8 @@ export function RouteAgents() {
           product="Agents"
           title={['Agents that know', 'what your team is doing.']}
           description={[
-            'Give agents your company’s context',
-            'to get things done alongside your team.',
+            'Shared memory across your team’s work.',
+            'Tools to do something with it.',
           ]}
           cta="agents_hero_get_started"
         />
@@ -125,7 +125,7 @@ export function RouteAgents() {
       <nav class="feature-page-jump-links" aria-label="On this page">
         <a onClick={revisitSection} href="#agent-sources">
           <ContextGraphic />
-          <span>Your personal agent</span>
+          <span>Shared memory</span>
         </a>
         <a onClick={revisitSection} href="#agent-actions">
           <EditingGraphic />
@@ -142,8 +142,8 @@ export function RouteAgents() {
       </nav>
       <FeaturePageSection
         id="agent-sources"
-        title={['Give your agent the full', 'context of your team’s work.']}
-        description="Macro gives your agent access to your team’s calendar, conversations, and files, so it can use the full context of your work to help you get more done."
+        title={['Memory beyond', 'your chat history.']}
+        description="Macro builds memory from email, docs, tasks, channels, and calls, including what your teammates are working on. Your agent can use that shared understanding to prepare for a meeting, find who owns a project, or work out who should handle a request."
       >
         <DemoInteractionBoundary
           class="feature-page-visual"
@@ -152,8 +152,8 @@ export function RouteAgents() {
       </FeaturePageSection>
       <FeaturePageSection
         id="agent-actions"
-        title={['Work with your agent', 'across the workspace.']}
-        description="Work with your agent in the chats and documents your team already uses. Add context, ask for updates, and review the result without leaving your workspace."
+        title={['Good context needs', 'good tools.']}
+        description="We put the same care into the agent’s tools as the interface you use. It can search across the workspace, edit a doc, draft an email, or update a customer record. One set of tools, instead of stitching together searches from separate apps."
       >
         <DemoInteractionBoundary
           class="feature-page-visual"
@@ -162,8 +162,8 @@ export function RouteAgents() {
       </FeaturePageSection>
       <FeaturePageSection
         id="agent-collaboration"
-        title={['Turn conversations', 'into finished work.']}
-        description="Bring design and implementation into the team conversation. Ask Macro for a mockup, give feedback together, then tag Cursor to build it using the context already in the channel."
+        title={['Give your agent a task', 'in the conversation.']}
+        description="Ask Macro for a mockup, discuss it with your team, then mention Cursor to build it. Hosted agents keep working when you close the app; pick up the result on another device. The discussion and the work stay together."
       >
         <DemoInteractionBoundary
           class="feature-page-visual"
@@ -173,7 +173,7 @@ export function RouteAgents() {
       <FeaturePageSection
         id="existing-agents"
         title="Bring your own agent."
-        description="Give the agent you already use access to the context and tools in Macro."
+        description="Choose among model providers in Macro without starting your workspace memory over. Or connect the agent you already use. We want the context and tools to work with your choice of model, not lock you into ours."
       >
         <div class="agents-connections">
           <div class="agents-connection-paths">

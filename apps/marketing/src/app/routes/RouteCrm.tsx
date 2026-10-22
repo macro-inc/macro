@@ -107,10 +107,10 @@ export function RouteCrm() {
     <ProductPage>
       <ProductHero
         product="CRM"
-        title={['The CRM connected', 'to your team’s work.']}
+        title={['A CRM you don’t have', 'to keep updating.']}
         description={[
-          'Agents update customer records',
-          'from emails, calls, chats, and tasks.',
+          'Built from your email. Kept current with agents.',
+          'Part of the workspace your team already uses.',
         ]}
         cta="crm_hero_get_started"
       />
@@ -160,7 +160,7 @@ export function RouteCrm() {
       <FeaturePageSection
         id="crm-from-email"
         title={['Keep your CRM', 'up to date with agents.']}
-        description="Your agent can read customer emails, calls, and chats, then update stages, owners, and next steps in your CRM."
+        description="The problem with a CRM is keeping it current. Ask your agent to read the latest emails, calls, and discussion, then update the stage, owner, and next steps. The CRM sits beside that work instead of being another system to check."
       >
         <DemoInteractionBoundary
           class="feature-page-visual"
@@ -170,7 +170,7 @@ export function RouteCrm() {
       <FeaturePageSection
         id="crm-enrichment"
         title={['Automatically add and', 'enrich new contacts.']}
-        description="When you email someone new, Macro creates the contact and company from their domain. Public company details fill in the record, so you have a starting point before the first meeting."
+        description="Macro creates companies and contacts from your team’s connected email and adds public company information. Agents can combine that information with your own conversations to summarize the relationship. Less research and data entry before the first meeting."
       >
         <DemoInteractionBoundary
           class="feature-page-visual"
@@ -179,8 +179,8 @@ export function RouteCrm() {
       </FeaturePageSection>
       <FeaturePageSection
         id="crm-context"
-        title={['Connect calls, emails, and', 'tasks to each customer.']}
-        description="Open a company to see the people, emails, calls, files, and tasks behind the relationship. Keep notes on the record so your team understands what happened and what comes next."
+        title={['Keep the discussion', 'on the customer record.']}
+        description="Emails on the left, properties on the right, a summary at the top. Leave a threaded comment on the company or contact, using the same chat your team already knows. The conversation stays attached to the customer instead of getting lost in a separate app."
       >
         <DemoInteractionBoundary
           class="feature-page-visual"
@@ -189,8 +189,8 @@ export function RouteCrm() {
       </FeaturePageSection>
       <FeaturePageSection
         id="crm-agents"
-        title={['Draft follow-ups and plan', 'next steps with your agent.']}
-        description="Your agent can read the full customer relationship across emails, calls, chats, files, tasks, and GitHub pull requests. Use that context to draft better follow-up emails and move deals forward."
+        title={['Your agent can work', 'in the CRM, too.']}
+        description="Ask an agent to research a company, update a record, or draft a follow-up from the latest call. We treat MCP as part of the product, so agents you connect can read customer context and update records, too."
       >
         <DemoInteractionBoundary
           class="feature-page-visual crm-agent-scene"

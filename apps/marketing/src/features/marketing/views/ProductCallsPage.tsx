@@ -100,10 +100,10 @@ export function RouteCalls() {
         <ProductHero
           cta="calls_hero_get_started"
           product="Calls"
-          title={['Call from anywhere in Macro', 'with every call recorded.']}
+          title={['Calls your team and', 'agents can refer back to.']}
           description={[
-            'Macro records and transcribes your calls',
-            'so your agent can handle what comes next.',
+            'Start a call from the conversation.',
+            'Give your team and agents a record of what was decided.',
           ]}
         />
         <DemoInteractionBoundary render={() => <CallHeroDemo />} />
@@ -123,11 +123,8 @@ export function RouteCalls() {
         </nav>
         <FeaturePageSection
           id="call-start"
-          title={[
-            'Start a call in channels, DMs,',
-            'or through meeting links.',
-          ]}
-          description="You can start calls from channels, DMs, or through meeting links. People outside of Macro can join your meeting links. Create your own booking links so people can set up times with you."
+          title={['A quick call with the team.', 'A link for everyone else.']}
+          description="Start from a channel or DM, like a huddle. Send a meeting link when someone outside the team needs to join; it opens in their browser without an install. Use a booking link when you need to find a time first."
         >
           <DemoInteractionBoundary
             class="feature-page-visual"
@@ -136,8 +133,8 @@ export function RouteCalls() {
         </FeaturePageSection>
         <FeaturePageSection
           id="call-followup"
-          title={['Turn what was said on', 'your calls into next steps.']}
-          description="Tell your agent to turn what was said on a call into tasks, follow-up emails, and CRM updates. Your agent can read the transcript and determine who said what."
+          title={['Let your agent use', 'what you just agreed.']}
+          description="Ask your agent to turn the decisions into tasks, a follow-up email, or a CRM update. Transcripts distinguish speakers, and summaries give agents a shorter account to work from. You shouldn’t have to explain the meeting again in a prompt."
         >
           <DemoInteractionBoundary
             class="feature-page-visual"
@@ -146,8 +143,8 @@ export function RouteCalls() {
         </FeaturePageSection>
         <FeaturePageSection
           id="call-default"
-          title={['View call recordings', 'after they finish.']}
-          description="After calls finish, you can go back and watch the recording, review the transcript, or get a summary of what was said. Call recordings are shareable across your team."
+          title={['Remembering to share', 'shouldn’t be another task.']}
+          description="Macro records and transcribes calls. Channel calls share with the creator’s team by default, unless you turn that off. Revisit the recording, read the summary, or let an agent use the transcript. Standalone meetings stay with their participants unless shared."
         >
           <DemoInteractionBoundary
             class="feature-page-visual"

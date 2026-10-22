@@ -80,7 +80,7 @@ export function RouteDocuments() {
         <ProductHero
           product="Docs"
           title={['Fast collaborative docs', 'for your team and agents.']}
-          description="Link emails, chats, tasks, and files to your documents."
+          description="The simplicity of Markdown, with live collaboration for people and agents. We didn’t want to choose between a plain text editor and a shared document."
           cta="documents_hero_get_started"
         />
         <WorkspaceDesktopDemo
@@ -108,8 +108,8 @@ export function RouteDocuments() {
         </nav>
         <FeaturePageSection
           id="document-agents"
-          title={['Edit docs with your', 'agent in real time.']}
-          description="Ask your agent to update a doc and watch it update in real time. You and your team can continue editing the document while the agent writes."
+          title={['Your agent has a cursor,', 'just like you.']}
+          description="Ask an agent to update a section while you keep writing. You can see its cursor and changes in the same document as your teammates. If your connection drops, keep editing; Macro merges your changes when you reconnect."
         >
           <DemoInteractionBoundary
             class="feature-page-visual"
@@ -118,8 +118,8 @@ export function RouteDocuments() {
         </FeaturePageSection>
         <FeaturePageSection
           id="document-links"
-          title={['Tag emails, files,', 'and chats in your docs.']}
-          description="Link to the work you’re writing about and open it beside your document. Read the original email, task, or conversation while you write."
+          title={['Mention the work', 'you’re writing about.']}
+          description="A document rarely tells the whole story. Mention the customer email, task, call, or conversation behind it. Each source links back to the doc, and you can open it alongside what you’re writing. Share the doc in a channel to give the channel access."
         >
           <DemoInteractionBoundary
             class="feature-page-visual docs-wide-demo"
@@ -129,7 +129,7 @@ export function RouteDocuments() {
         <FeaturePageSection
           id="document-organization"
           title={['Organize docs', 'with folders and tags.']}
-          description="Keep documents in folders and use tags to find them across projects. A brief can stay in its home folder while appearing beside related emails and tasks under the tags your team uses."
+          description="Keep the files where you expect them. Use folders for structure and tags when a document belongs to several projects. Write in Markdown and export it as Markdown; the document is still yours."
         >
           <DemoInteractionBoundary
             class="feature-page-visual"

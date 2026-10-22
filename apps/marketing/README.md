@@ -1007,3 +1007,13 @@ Its artboard fixes its card, header, and row dimensions in pixels to
 match its animation coordinates before applying the viewport scale. Its shared
 card surfaces are display-only: no hover transitions or cursor transform easing.
 Pickup and drop must preserve the card’s screen-space bounds on phones too.
+
+### Product copy
+
+Use [Jacob’s product notes](https://macro.com/app/drive/md/019ef55a-ea39-7fef-9014-da8e4b25c845)
+as the source for the homepage and feature-page voice: explain why we built
+the feature, name the workflow it improves, and describe what actually happens.
+Give each page its own argument rather than repeating the suite pitch. Keep
+claims consistent with current behavior and access rules; the notes are product
+context, not authority to promise competitor superiority or unsupported features.
+Keep the slab typography and live demos when editing copy.

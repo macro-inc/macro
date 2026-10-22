@@ -26,7 +26,7 @@ export function Homepage() {
           </h1>
           <p class="macro-home-tagline">
             Email, chat, docs, tasks, CRM, calls, and sheets. <br />
-            One workspace for your team and your agents.
+            Built together, so they actually work together.
           </p>
           <a
             class="macro-home-button"
@@ -42,19 +42,24 @@ export function Homepage() {
           aria-label="Why Macro"
         >
           <p>
-            We built Macro because the pieces of a project belong together: the
-            email that started it, the discussion, the plan, and the work
-            itself.
+            We built Macro because we wanted one system that actually worked
+            together. Fast email, good team chat, simple docs and tasks. Each
+            should be useful on its own, and better because the others are
+            there.
           </p>
           <p>
-            Spread those across separate apps and you become the connection
-            between them. You copy things over, find the right link, and explain
-            the background again.
+            You shouldn’t have to screenshot an email to discuss it with your
+            team. Or copy a conversation into a task, then go back and update
+            everyone when it’s done. In Macro, you can mention the original. The
+            link works in both directions, and sharing it in a channel gives
+            that channel access.
           </p>
           <p>
-            We want software to do more of that work. And we want agents to
-            participate with the context they need to be useful. That’s why
-            we’re building these tools as one system.
+            That matters for agents, too. They need more than your chat history.
+            Macro builds shared memory from the work your team is doing, with
+            tools to search it and act on it. Emails, messages, assignments, and
+            agent replies come back to one inbox, split into Signal and Noise.
+            Less time keeping the software up to date. More time doing the work.
           </p>
         </section>
         <HomepageTiles />

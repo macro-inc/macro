@@ -79,10 +79,10 @@ export function RouteGithub() {
       <div class="github-page">
         <ProductHero
           product="for GitHub"
-          title={['Write code, review PRs,', 'and ship in Macro.']}
+          title={['Your pull requests,', 'with the rest of your work.']}
           description={[
-            'Read the discussion, inspect code changes,',
-            'and keep linked tasks up to date.',
+            'Keep GitHub. Bring PRs into your team’s',
+            'conversations, tasks, and inbox.',
           ]}
           cta="github_hero_get_started"
         />
@@ -112,8 +112,8 @@ export function RouteGithub() {
         </nav>
         <FeaturePageSection
           id="pr-links"
-          title={['Review pull requests', 'without leaving chat.']}
-          description="Share a GitHub pull request in chat and open it from the conversation. Read the discussion and inspect the code changes while the linked PR’s status stays up to date."
+          title={['Open the PR', 'beside the conversation.']}
+          description="Paste a GitHub link into a channel or document and it becomes a live reference to the PR. See its status, open the diff, and read the discussion side by side. Your repositories and code stay on GitHub."
         >
           <DemoInteractionBoundary
             class="feature-page-visual"
@@ -123,7 +123,7 @@ export function RouteGithub() {
         <FeaturePageSection
           id="pr-tasks"
           title={['Link pull requests', 'to tasks.']}
-          description="Keep implementation and task tracking connected. Link a pull request to its task, then let opening, merging, or closing the PR update the task’s status."
+          description="The task explains why; the PR shows what changed. Link them in either direction. Opening the PR moves the task into review, merging marks it done, and closing without merging returns it to Not Started."
         >
           <DemoInteractionBoundary
             class="feature-page-visual"
@@ -133,7 +133,7 @@ export function RouteGithub() {
         <FeaturePageSection
           id="coding-agents"
           title={['Turn bug reports and', 'feature requests into PRs.']}
-          description="Ask your coding agent to fix a bug as it comes up in your team conversations. It’ll see what was said and understand your request, then put up a PR."
+          description="Mention your coding agent where the bug is being discussed. Give it the conversation and linked work as context, then review the pull request it prepares. You shouldn’t have to write the same bug report in three places."
         >
           <div class="feature-page-visual">
             <GithubConversationDemo agent />
@@ -141,8 +141,8 @@ export function RouteGithub() {
         </FeaturePageSection>
         <FeaturePageSection
           id="review-inbox"
-          title={['See review requests', 'in one inbox.']}
-          description="Find GitHub mentions, comments, and requested reviews alongside the rest of your work."
+          title={['One inbox for', 'the work waiting on you.']}
+          description="PR comments, mentions, and review requests arrive alongside emails, messages, and task assignments. See what needs your attention without checking another notifications page."
         >
           <DemoInteractionBoundary
             class="feature-page-visual"

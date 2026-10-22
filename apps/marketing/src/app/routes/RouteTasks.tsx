@@ -93,8 +93,8 @@ export function RouteTasks() {
           product="Tasks"
           title={['Task tracking without', 'the busywork.']}
           description={[
-            'Turn requests from chat, email, and docs',
-            'into tasks your team can act on.',
+            'Simple to create, assign, and close.',
+            'Linked to the conversation where the work started.',
           ]}
         />
         <TaskHeroDemo />
@@ -137,7 +137,7 @@ export function RouteTasks() {
         <FeaturePageSection
           id="from-a-message"
           title={['Turn requests in chat', 'into tasks.']}
-          description="Turn a request in chat into a task without copying it into another tool. Give it an owner, set the priority, and keep the original conversation close by."
+          description="Click Create task on the message where the request came up. Set an owner and priority, and get back to the conversation. The task links to the message and the message links to the task. Paste it into a channel to show its current status."
         >
           <DemoInteractionBoundary
             class="feature-page-visual"
@@ -147,7 +147,7 @@ export function RouteTasks() {
         <FeaturePageSection
           id="ask-macro"
           title={['Keep your tasks', 'up to date with agents.']}
-          description="Tell your agent what your team needs to get done in your team channels. The agent can create tasks, change who’s assigned, and check what tasks are still incomplete."
+          description="Mention Macro in the channel and ask it to create the tasks you just discussed. It can create several at once, assign people, update them as plans change, and check what’s still open. You can assign work to an agent, too."
         >
           <DemoInteractionBoundary
             class="feature-page-visual"
@@ -156,8 +156,8 @@ export function RouteTasks() {
         </FeaturePageSection>
         <FeaturePageSection
           id="from-docs-and-email"
-          title={['Attach files, people,', 'and emails to your task.']}
-          description="Tag emails, documents, images, and team discussion directly to your task so your team has the context it needs to complete the task."
+          title={['Keep the source', 'with the task.']}
+          description="Create a task from an email, or select checklist items in a document to turn them into tasks. Each keeps a link to its source. Add the files and people involved so whoever picks it up has more than a title to go on."
         >
           <DemoInteractionBoundary
             class="feature-page-visual"
@@ -167,7 +167,7 @@ export function RouteTasks() {
         <FeaturePageSection
           id="github"
           title={['Keep tasks in sync', 'with your code.']}
-          description="Connect a task to its pull request and let the code update its status. The task moves into review when the PR opens and completes when the change merges."
+          description="Link the pull request and stop updating the same status twice. Opening it moves the task into review; merging completes it. Open the PR from the task, or the task from the PR, to see why the change was made."
         >
           <DemoInteractionBoundary
             class="feature-page-visual"

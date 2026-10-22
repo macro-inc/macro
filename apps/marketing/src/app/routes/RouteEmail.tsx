@@ -120,8 +120,9 @@ export function RouteEmail() {
           <span>humans and agents.</span>
         </h1>
         <p class="email-page-hero-description">
-          Keep your inbox clean, move through emails quickly, and have agents
-          draft good replies.
+          We wanted a fast email client that could multitask, draft with agents,
+          and share the actual conversation with our team. So we built one into
+          the workspace.
         </p>
         <FeaturePageCta name="email_hero_get_started" />
       </header>
@@ -132,7 +133,7 @@ export function RouteEmail() {
       >
         <a href="#auto-tags">
           <AutoTagsGraphic />
-          <span>Tags</span>
+          <span>All your inboxes</span>
         </a>
         <a href="#email-sharing">
           <EmailSharingGraphic />
@@ -140,7 +141,7 @@ export function RouteEmail() {
         </a>
         <a href="#keyboard-speed">
           <KeyboardSpeedGraphic />
-          <span>Superhuman speed</span>
+          <span>Keyboard-first</span>
         </a>
         <a href="#agentic-editing">
           <AgenticEditingGraphic />
@@ -149,8 +150,8 @@ export function RouteEmail() {
       </nav>
       <FeaturePageSection
         id="auto-tags"
-        title={['Keep all your inboxes', 'organized.']}
-        description="Connect your personal and work inboxes across Gmail, Outlook, and more. Organize them with tags for customers, projects, and follow-ups."
+        title={['All your accounts.', 'One inbox to work through.']}
+        description="Bring your personal and work Gmail accounts into one inbox, with one search across them. Signal separates important conversations from newsletters and other Noise. Use tags to group the customers and projects you’re working on."
       >
         <DemoInteractionBoundary
           class="feature-page-visual"
@@ -159,8 +160,8 @@ export function RouteEmail() {
       </FeaturePageSection>
       <FeaturePageSection
         id="email-sharing"
-        title={['Share email threads', 'with your team.']}
-        description="Share email threads in a channel so your team can read the full conversation, discuss it, and keep new replies linked."
+        title={['Share the email.', 'Skip the screenshot.']}
+        description="Paste an email into a channel and your team can read the entire thread, including future replies. They won’t have to ask what happened after the screenshot. Discuss it there, or turn the request into a linked task."
       >
         <DemoInteractionBoundary
           class="feature-page-visual"
@@ -169,8 +170,8 @@ export function RouteEmail() {
       </FeaturePageSection>
       <FeaturePageSection
         id="keyboard-speed"
-        title={['Manage your inbox', 'with keyboard shortcuts.']}
-        description="Open, reply to, and archive emails with keyboard shortcuts so you can move through your inbox faster."
+        title={['Fast to search.', 'Fast to get through.']}
+        description="Macro imports and indexes your mail instead of waiting on Gmail’s API for every search. Use J, K, and E to move through it. Open emails side by side when you need to compare a thread, check a detail, or draft more than one reply."
       >
         <DemoInteractionBoundary
           class="feature-page-visual"
@@ -180,7 +181,7 @@ export function RouteEmail() {
       <FeaturePageSection
         id="agentic-editing"
         title={['Draft emails in your', 'voice with agents.']}
-        description="Ask an agent to prepare a reply using the email thread, relevant documents, meeting transcripts, and team conversations. Review and edit the draft before sending."
+        description="A good reply needs context. Your agent can search past conversations and use your workspace memory, docs, and calls before it drafts. Work on the wording together, review it, and send from the agent conversation."
       >
         <DemoInteractionBoundary
           class="feature-page-visual"

@@ -32,8 +32,8 @@ export function RouteChannels() {
         product="Chat"
         title={['Team chat connected to', 'the rest of your work.']}
         description={[
-          '@mention a doc, task, person, or company',
-          'and the whole channel can open it natively.',
+          'Your team already works through conversations.',
+          'The rest of the software should keep up.',
         ]}
         cta="channels_hero_get_started"
       />
@@ -59,7 +59,7 @@ export function RouteChannels() {
       <FeaturePageSection
         id="shared-work"
         title={['Open all your work', 'straight from chat.']}
-        description="Share work in your team channels. Click on a document, task, email, company, person, or any file to see it beside your chat."
+        description="Mention a document, email, task, or customer and open it beside the conversation. Create a task from a message when something needs doing. Both the task and the message link back to each other, so the reason for the work stays with it."
       >
         <DemoInteractionBoundary
           class="feature-page-visual channel-wide-demo"
@@ -68,8 +68,8 @@ export function RouteChannels() {
       </FeaturePageSection>
       <FeaturePageSection
         id="channel-access"
-        title={['Easily share files', 'with your team.']}
-        description="After sharing files in a conversation, anyone in that chat automatically gets access. Anyone added later will gain access, and anyone you remove will lose access."
+        title={['Share it in the channel.', 'The channel gets access.']}
+        description="Nobody should have to ask for access to a file you just sent them. Channel members get access to the work shared there. Join the channel and gain that access; leave and lose the access it granted."
       >
         <DemoInteractionBoundary
           class="feature-page-visual"
@@ -79,7 +79,7 @@ export function RouteChannels() {
       <FeaturePageSection
         id="channel-agents"
         title={['Bring your agents', 'into the conversation.']}
-        description="Tag your agent to ask for help, add context, assign a task, or get something done. You can use the Macro agent or bring your own."
+        description="Mention an agent the way you’d mention a colleague. Ask it to answer a question, update the plan, or create tasks from the discussion. Use Macro’s agent or bring your own, with the conversation already there as context."
       >
         <DemoInteractionBoundary
           class="feature-page-visual"
@@ -88,8 +88,8 @@ export function RouteChannels() {
       </FeaturePageSection>
       <FeaturePageSection
         id="catch-up"
-        title={['Read and reply to', 'every thread inline.']}
-        description="Read replies inline, follow the full thread, and respond without opening each conversation."
+        title={['Read the thread.', 'Reply when you’re ready.']}
+        description="We wanted chat that was easier to keep up with. Replies appear inline, and messages wait in an actual inbox until you mark them done. Put the channels that matter in Signal and the rest in Noise. Read doesn’t have to mean dealt with."
       >
         <span id="channel-threads" />
         <span id="chat-inbox" />

@@ -57,7 +57,7 @@ export function HomepageTiles() {
       <Tile
         id="email"
         title="Email tightly integrated with your team chat and tasks"
-        description="Share a live email thread in a channel, work on the reply together, and create tasks from the conversation."
+        description="Share the actual email in a channel. Your team sees the whole thread, including replies that arrive later. Discuss it, draft a response, or create a task without copying the conversation into another app."
         links={[
           { href: '/email', label: 'Email' },
           { href: '/channels', label: 'Chat' },
@@ -67,21 +67,21 @@ export function HomepageTiles() {
       <Tile
         id="documents"
         title="Documents your team and agents can edit together"
-        description="Write with your teammates in the same document. Ask an agent to draft a section or update the plan using the context in your workspace."
+        description="We wanted the simplicity of Markdown without giving up live collaboration. People and agents can write in the same document, with live cursors. Mention the email or task you’re writing about. Keep editing if your connection drops."
         links={[{ href: '/documents', label: 'Docs' }]}
         preview="documents"
       />
       <Tile
         id="tasks"
         title="A task manager that keeps itself up to date"
-        description="Keep tasks linked to the work. A pull request moves its task into review when it opens and marks it complete when it merges."
+        description="Create a task from the message, email, or checklist where the work came up. The source stays linked in both directions. Agents can handle updates, and linked pull requests move tasks into review and mark them complete when merged."
         links={[{ href: '/tasks', label: 'Tasks' }]}
         preview="tasks"
       />
       <Tile
         id="coding-agents"
         title="Assign agents tasks. Mention them in channels just like colleagues."
-        description="Bring the agents you already use into Macro. Give them the context, let them do the work, and review their changes alongside the conversation."
+        description="An agent should know what your team is working on, not just what you told it in a chat. Macro’s shared memory brings together email, docs, tasks, channels, and calls. Choose a model or bring your own agent, then put it to work."
         links={[
           { href: '/agents', label: 'Agents' },
           { href: '/github', label: 'GitHub' },
@@ -91,21 +91,21 @@ export function HomepageTiles() {
       <Tile
         id="spreadsheet"
         title="Organize with sheets and databases"
-        description="Bring in your Google Sheets and Notion databases. Link records to emails, documents, and people, and edit them with teammates and agents."
+        description="Some work belongs in a table. Bring in your Google Sheets and Notion databases, link the rows to people and work in Macro, and edit them with your team and agents."
         links={[{ href: '/demo', label: 'Explore the workspace' }]}
         preview="spreadsheet"
       />
       <Tile
         id="crm"
         title="Auto-updating, hands-free CRM"
-        description="Macro creates companies and contacts from your email. Agents can update deal stages and draft follow-ups from the latest conversation."
+        description="A CRM is useful when it’s up to date. Keeping it that way shouldn’t be another job. Macro creates records from your team’s email and enriches them with public information. Agents can update the deal and draft the follow-up, right beside the conversation."
         links={[{ href: '/crm', label: 'CRM' }]}
         preview="crm"
       />
       <Tile
         id="calls"
         title="Calls and transcripts"
-        description="The decisions made on a call should be available afterward. Record and transcribe it, return to the relevant moment, and ask an agent to turn the next steps into tasks."
+        description="Important decisions happen on calls. Your agents should be able to use them. Start a call from a channel or send a meeting link. Macro records and transcribes it, so you can revisit what was said and ask an agent to handle the follow-up."
         links={[{ href: '/calls', label: 'Calls' }]}
         preview="calls"
       />
