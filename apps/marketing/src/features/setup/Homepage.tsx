@@ -69,28 +69,6 @@ export function Homepage() {
             </a>
           </section>
           <HomepageTestimonials />
-          <section
-            class="macro-letter-prose macro-letter-close"
-            aria-labelledby="macro-start-title"
-          >
-            <h2 id="macro-start-title">Start with one project.</h2>
-            <p>
-              Try it with something you’re already working on. We’d love to hear
-              what works for you and what still gets in the way.
-            </p>
-            <p>— The Macro team</p>
-            <a
-              class="macro-home-button"
-              href="/app/signup"
-              onClick={routePhoneToMobileSignup}
-            >
-              Get started
-            </a>
-            <p class="macro-letter-postscript">
-              Already have a workspace elsewhere?{' '}
-              <a href="/migrate">Read the migration guide.</a>
-            </p>
-          </section>
           <HomepageBlog />
           <HomepageClosing root={() => closingRoot} />
         </div>

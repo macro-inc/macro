@@ -17,8 +17,8 @@ summary, and CTA on desktop and phones. The homepage reads as a sales letter: a 
 two short first-person paragraphs on small-team coordination and agents working
 from shared context, then one concise paragraph per
 feature followed
-by wider native demonstrations. Open-source information, the existing testimonial,
-and a project-sized starting point lead into the retained blog and closing sections. Dark mode reuses the live site’s black canvas, neutral native surface
+by wider native demonstrations. Open-source information and the existing testimonial lead directly into the
+retained blog and closing sections. Dark mode reuses the live site’s black canvas, neutral native surface
 tokens, warm-white actions, and original email-composer fill and rim; do not
 introduce a separate blue-gray palette. Hero icons retain the original circular glass surfaces and soft cast shadows. Graphics layer theme-matched product surfaces with fine neutral borders and restrained shadows. `components/homepage/macro-homepage.css`
 scopes that treatment to `.macro-homepage`; product pages, blog, sample workspace,

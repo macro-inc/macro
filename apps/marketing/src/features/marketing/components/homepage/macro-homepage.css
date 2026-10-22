@@ -78,9 +78,6 @@ html[data-homepage][data-theme-light='true'] { color-scheme: light; }
 .macro-letter-intro { margin-bottom: 80px; }
 .macro-letter-prose .macro-letter-transition { color: var(--color-ink); margin-top: 32px; }
 .macro-letter-proof { margin-bottom: 48px; }
-.macro-letter-close { margin-top: 64px; margin-bottom: 100px; }
-.macro-letter-close .macro-home-button { margin: 8px 0 24px; }
-.macro-letter-prose .macro-letter-postscript { font-size: 16px; }
 .macro-home-bottom .macro-letter-prose { width: min(640px, 100%); }
 .macro-home-bottom .homepage-testimonials { max-width: 880px; margin-inline: auto; }
 @media (max-width: 700px) {
@@ -100,7 +97,6 @@ html[data-homepage][data-theme-light='true'] { color-scheme: light; }
   .macro-tile-links { margin-top: 16px; }
   .macro-tile-links a { min-height: 44px; }
   .macro-home-bottom { width: calc(100% - 48px); margin-top: 64px; }
-  .macro-letter-close { margin-top: 48px; margin-bottom: 64px; }
 }
 @media (max-width: 380px) { .macro-home-hero h1 { font-size: 36px; } }
 @media (prefers-reduced-motion: reduce) {
