@@ -7,14 +7,15 @@ components. Application UI changes must not alter the website.
 
 The homepage uses a white background in every system color scheme, native SF Pro
 on Apple platforms (with a system sans-serif fallback elsewhere), the supplied
-text-only vector Macro wordmark, centered Roboto Slab headings at weight 400, and black pill
+text-only vector Macro wordmark with rounded upper M corners, centered Roboto Slab headings at weight 400, and black pill
 calls to action. The hero promotes the product-description copy to its main slab
 headline. Hero icons use rounded squircle tiles, inset highlights, beveled edges,
 and layered neutral shadows that echo the compose surface. Graphics layer white product surfaces with fine neutral borders and restrained shadows. `components/homepage/macro-homepage.css`
 scopes that treatment to `.macro-homepage`; product pages, blog, sample workspace,
 and signup retain their existing system/cream/dark palettes.
 
-`MacroHero` gathers the existing welcome constellation into the Macro mark, then
+`MacroHero` uses a larger desktop composition with readable labels and a dedicated
+gap above the wordmark, scaling down to fit phones. It gathers the existing welcome constellation into the Macro mark, then
 unfolds it into connected native features. Its 16-second sequence pauses offscreen,
 in hidden tabs, or through the accessible pause button. Reduced motion shows the
 connected state immediately. The hero never intercepts scrolling. The original closing section retains its
