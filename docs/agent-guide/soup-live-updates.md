@@ -86,7 +86,10 @@ reappear in its request nor be retried by Redo. Partial feedback keeps an Undo
 action. A reply with no matching notification IDs must release that target's
 optimistic hide and notification overrides immediately, even if Undo was never
 clicked and mounted readers remain stale. Do not wait for acknowledgement or a
-timer when there is no receipt. Accepted siblings keep their own display intent;
+timer when there is no receipt. The exception is an entity-wide Done with the
+normalized cache: the rows it left out were already done on the server, so they
+are written as done into the cache and the hide stays until readers acknowledge
+it; that target has nothing to undo. Accepted siblings keep their own display intent;
 a no-op target cannot borrow their IDs to restore its row. Mixed accepted/no-op
 results replace the optimistic full-count toast with the actual completed count
 and retain Undo for accepted writes. An empty notification receipt alone must not

@@ -13,7 +13,10 @@ import {
   HomeUnreadPresenceDocument,
   type HomeUnreadPresenceQuery,
 } from '@service-storage/graphql/generated/graphql';
-import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
+import {
+  getGraphqlSoupClient,
+  hasGraphqlCacheHost,
+} from '@service-storage/graphql-soup';
 import { type Accessor, createMemo, onCleanup } from 'solid-js';
 import { buildHomeQuery } from './home-query';
 import { hasHomeUnreadWitness } from './home-unread';
@@ -68,7 +71,16 @@ export function useHomeUnreadQuery(
       ]),
     },
   }));
-  onCleanup(registerGraphqlSoupRevalidations(queries, getGraphqlSoupClient));
+  // Unread is read from each witness's cached state.
+  onCleanup(
+    registerGraphqlSoupRevalidations(
+      queries,
+      getGraphqlSoupClient,
+      hasGraphqlCacheHost
+    )
+  );
+  // Not maintained for list refreshes: a delivered reminder adds to a
+  // thread's `unreadReminders` edge, which no cached write fills.
   onCleanup(registerActiveGraphqlSoupQuery({ isEnabled: enabled, refresh }));
   onCleanup(
     registerActivityRevalidator({

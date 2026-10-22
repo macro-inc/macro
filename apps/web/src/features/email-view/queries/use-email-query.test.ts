@@ -499,6 +499,16 @@ describe('Email list query transitions', () => {
     expect(source.isLoading()).toBe(false);
   });
 
+  it('keeps archived hits when searching Signal and Noise', () => {
+    const { source, setState, setSearchEntities } = mount('invoice');
+    const archived = { ...email('archived'), done: true };
+    const active = { ...email('active'), done: false };
+    setSearchEntities([archived, active]);
+    expect(ids(source)).toEqual(['archived', 'active']);
+    setState('tab', 'important');
+    expect(ids(source)).toEqual(['archived', 'active']);
+  });
+
   it('trims archived search results to done threads', () => {
     const { source, setState, setSearchEntities } = mount('invoice');
     const archived = { ...email('archived'), done: true };

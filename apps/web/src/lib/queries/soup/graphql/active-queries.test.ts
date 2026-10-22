@@ -292,4 +292,49 @@ describe('active GraphQL Soup queries', () => {
     expect(other).not.toHaveBeenCalled();
     expect(unbodied).not.toHaveBeenCalled();
   });
+
+  it('skips lists the cache maintains when only the others need a read', async () => {
+    const maintained = vi.fn(async () => {});
+    const grouped = vi.fn(async () => {});
+    let current = true;
+    register({
+      isEnabled: () => true,
+      refresh: maintained,
+      cacheMaintained: () => current,
+    });
+    register({ isEnabled: () => true, refresh: grouped });
+
+    await refreshActiveGraphqlSoupQueries({ unmaintainedOnly: true });
+    expect(maintained).not.toHaveBeenCalled();
+    expect(grouped).toHaveBeenCalledOnce();
+
+    // A list whose local evaluation stopped working reads the server again.
+    current = false;
+    await refreshActiveGraphqlSoupQueries({ unmaintainedOnly: true });
+    expect(maintained).toHaveBeenCalledOnce();
+
+    // Without the option every list is read, as for writes the cache lacks.
+    current = true;
+    await refreshActiveGraphqlSoupQueries();
+    expect(maintained).toHaveBeenCalledTimes(2);
+  });
+
+  it('leaves maintained pages out of the revalidations a write carries', () => {
+    const document = gql`query Soup($input: SoupInput!) { soup(input: $input) { nextCursor } }`;
+    const mail = { document, variables: { input: { initial: { mail: 1 } } } };
+    const grouped = { document, variables: { input: { initial: { g: 1 } } } };
+    onTestFinished(
+      registerGraphqlSoupRevalidations(
+        () => [mail],
+        undefined,
+        () => true
+      )
+    );
+    onTestFinished(registerGraphqlSoupRevalidations(() => [grouped]));
+
+    expect(
+      getActiveGraphqlSoupRevalidations(undefined, { unmaintainedOnly: true })
+    ).toEqual([grouped]);
+    expect(getActiveGraphqlSoupRevalidations()).toEqual([mail, grouped]);
+  });
 });

@@ -201,6 +201,25 @@ export async function ensureNotificationSourceLoaded(
 }
 
 /**
+ * The entity's notifications this client shows as unseen, from the row's own
+ * edges when it has them. A GraphQL feed that has not started shows nothing
+ * yet, and reading it would start the full notification feed.
+ */
+export function shownUnseenNotificationIds(
+  notificationSource: NotificationSource,
+  entity: Entity,
+  attached?: readonly UnifiedNotification[]
+): string[] {
+  const shown =
+    attached ??
+    (notificationSource._notificationsQuery.isStarted
+      ? notificationSource.notificationsByEntity()[compositeEntity(entity)]
+      : undefined) ??
+    [];
+  return shown.filter(({ state }) => state === 'unseen').map(({ id }) => id);
+}
+
+/**
  * Marks all notifications for an entity as read
  * @param notificationSource
  * @param entity
@@ -215,6 +234,10 @@ export async function markNotificationsForEntityAsRead(
     await updateNotificationsForEntities({
       entities: [entityRef],
       operation: 'MARK_SEEN',
+      expectedNotificationIds: shownUnseenNotificationIds(
+        notificationSource,
+        entity
+      ),
     });
     return;
   }

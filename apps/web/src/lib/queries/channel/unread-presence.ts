@@ -4,7 +4,10 @@ import {
   type ChannelUnreadPresenceQuery,
   type SoupInput,
 } from '@service-storage/graphql/generated/graphql';
-import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
+import {
+  getGraphqlSoupClient,
+  hasGraphqlCacheHost,
+} from '@service-storage/graphql-soup';
 import { type Accessor, onCleanup } from 'solid-js';
 import {
   registerActiveGraphqlSoupQuery,
@@ -39,7 +42,9 @@ export function createChannelUnreadQuery(
         enabled()
           ? [{ document: ChannelUnreadPresenceDocument, variables }]
           : [],
-      getGraphqlSoupClient
+      getGraphqlSoupClient,
+      // Unread is read from each witness's cached state.
+      hasGraphqlCacheHost
     )
   );
   const refresh = registerChannelNotificationRefresh(() => ({
@@ -54,6 +59,12 @@ export function createChannelUnreadQuery(
         : [],
     },
   }));
-  onCleanup(registerActiveGraphqlSoupQuery({ isEnabled: enabled, refresh }));
+  onCleanup(
+    registerActiveGraphqlSoupQuery({
+      isEnabled: enabled,
+      refresh,
+      cacheMaintained: hasGraphqlCacheHost,
+    })
+  );
   return query;
 }

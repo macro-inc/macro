@@ -25,6 +25,7 @@ vi.mock('@app/lib/analytics/posthog', () => ({
 }));
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: mocks.client,
+  hasGraphqlCacheHost: () => false,
 }));
 vi.mock('./use-home-query', () => ({ useHomeEntitiesQuery: mocks.legacy }));
 vi.mock('@service-storage/websocket', () => ({

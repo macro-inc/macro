@@ -56,6 +56,7 @@ vi.mock('../../../graphql-cache/exchange/normalized-cache-exchange', () => ({
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: getGraphqlSoupClientMock,
   getGraphqlSoupCacheHost: getGraphqlSoupCacheHostMock,
+  hasGraphqlCacheHost: () => getGraphqlSoupCacheHostMock() !== undefined,
   graphqlSoupProjectionSupported: () => true,
   mapGraphqlSoupItem: mapGraphqlSoupItemMock,
 }));
@@ -377,6 +378,75 @@ describe('createGraphqlSoupAstItemsQuery', () => {
         expect(query.data()).toBe(rows);
         expect(readRecordsByKeysMock).not.toHaveBeenCalled();
         expect(fake.executions).toHaveLength(1);
+      } finally {
+        dispose();
+      }
+    }
+  );
+
+  it.each([
+    { localReconciliation: undefined, maintained: true },
+    { localReconciliation: 'without-email' as const, maintained: false },
+  ])(
+    'reports a live list cache-maintained only once its query is ready ($localReconciliation)',
+    async ({ localReconciliation, maintained }) => {
+      const fake = makeFakeClient();
+      getGraphqlSoupClientMock.mockReturnValue(fake.client);
+      const record = {
+        __typename: 'GraphqlSoupDocument',
+        id: 'one',
+        documentName: 'Doc',
+        createdAt: '2026-01-01T00:00:00Z',
+        updatedAt: '2026-01-01T00:00:00Z',
+      };
+      const key = 'GraphqlSoupDocument:one';
+      getGraphqlSoupCacheHostMock.mockReturnValue({
+        liveQueries: true,
+        currentRevision: async () => REVISION_1,
+        entityFilter: entityFilterMock,
+        onCacheChanged: () => () => {},
+        onCacheGenerationChanged: () => () => {},
+      });
+      const firstEvaluation = deferred<unknown>();
+      entityFilterMock.mockImplementation(async (args) =>
+        args.liveQuery?.release
+          ? { kind: 'unsupported' }
+          : firstEvaluation.promise
+      );
+      const { query, dispose } = createRoot((dispose) => ({
+        dispose,
+        query: createSoupLiveQuery(
+          () => ({ filters: {}, sortMethod: 'UPDATED_AT', limit: 50 }),
+          () => ({ localReconciliation })
+        ),
+      }));
+      try {
+        fake.executions[0].next(
+          graphqlSoupPage({ items: [record], next_cursor: null }),
+          { source: 'live-network', revision: REVISION_1 }
+        );
+        await vi.waitFor(() =>
+          expect(entityFilterMock).toHaveBeenCalledWith(
+            expect.objectContaining({ liveQuery: expect.anything() })
+          )
+        );
+        // Still loading, the list shows the server page: writes read it again.
+        expect(query.cacheMaintained?.()).toBe(false);
+        firstEvaluation.resolve({
+          kind: 'live-query',
+          revision: REVISION_1,
+          reset: true,
+          keys: [key],
+          upserts: [{ recordKey: key, record }],
+          patches: [],
+          removed: [],
+          retainedKeys: [],
+          optimistic: false,
+        });
+        // A folder list keeps its email rows from the server.
+        await vi.waitFor(() =>
+          expect(query.cacheMaintained?.()).toBe(maintained)
+        );
       } finally {
         dispose();
       }
@@ -1913,6 +1983,285 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     }
   });
 
+  it('keeps the server page fetched behind a local Mail list out of its loading and error state', async () => {
+    const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    getGraphqlSoupCacheHostMock.mockReturnValue({
+      currentRevision: async () => REVISION_0,
+      entityFilter: entityFilterMock,
+      onCacheChanged: () => () => {},
+      onCacheGenerationChanged: () => () => {},
+    });
+    entityFilterMock.mockImplementation(async (args) => ({
+      kind: 'mail-page',
+      revision: REVISION_0,
+      keys: [`GraphqlSoupEmailThread:${args.mail.cursor ? 'two' : 'one'}`],
+      sortTimestamps: ['2025-01-01T00:00:00.000001Z'],
+      nextCursor: args.mail.cursor ? null : 'local-next',
+      // Only the first page shows a pending write.
+      optimistic: !args.mail.cursor,
+    }));
+    readRecordsByKeysMock.mockImplementation(
+      async (_host, _selection, requested) => ({
+        revision: REVISION_0,
+        records: requested.map((key: string) => ({
+          recordKey: key,
+          record: {
+            __typename: 'GraphqlSoupEmailThread',
+            id: key.split(':')[1],
+            name: key,
+            mailAllPreview: {
+              id: `${key}-preview`,
+              subject: key,
+              snippet: 'canonical',
+              isDraft: false,
+              senderEmail: null,
+              senderName: null,
+              senderPhotoUrl: null,
+            },
+            mailDraftPreview: null,
+            mailSentPreview: null,
+          },
+        })),
+      })
+    );
+    let dispose!: () => void;
+    let query!: ReturnType<typeof createGraphqlSoupAstItemsQuery>;
+    createRoot((d) => {
+      dispose = d;
+      makeGraphqlSoupInputMock.mockReturnValue({
+        initial: { emailView: 'ALL', sortMethod: 'UPDATED_AT', limit: 1 },
+      });
+      query = createGraphqlSoupAstItemsQuery(
+        () => ({ params: {}, body: {} }) as never,
+        () => ({ enabled: true })
+      );
+    });
+    try {
+      await vi.waitFor(() => expect(query.data()?.cachedMail).toBe(true));
+      fake.executions[0].next(
+        graphqlSoupPage({ items: [], next_cursor: 'server-cursor' }),
+        { source: 'normalized-cache-hit', revision: REVISION_0 }
+      );
+      await query.fetchNextPage();
+      expect(query.data()?.entities.map((entity) => entity.id)).toEqual([
+        'one',
+        'two',
+      ]);
+      // The server page behind the list is requested but not waited on.
+      expect(fake.executions).toHaveLength(2);
+      expect(query.isFetchingNextPage()).toBe(false);
+      fake.executions[1].fail(
+        new CombinedError({ networkError: new Error('offline') })
+      );
+      expect(query.error()).toBeUndefined();
+      expect(query.data()?.entities).toHaveLength(2);
+      // The write still pending on the first page keeps the local list up.
+      expect(query.data()?.cachedMail).toBe(true);
+    } finally {
+      dispose();
+      online.mockRestore();
+    }
+  });
+
+  it('stays cache-maintained across a stale retry and stops on an engine handoff', async () => {
+    const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    let revision = REVISION_0;
+    let notifyGeneration: () => void = () => undefined;
+    getGraphqlSoupCacheHostMock.mockReturnValue({
+      currentRevision: async () => revision,
+      entityFilter: entityFilterMock,
+      onCacheChanged: () => () => undefined,
+      onCacheGenerationChanged: (callback: () => void) => {
+        notifyGeneration = callback;
+        return () => undefined;
+      },
+    });
+    entityFilterMock.mockImplementation(async () => ({
+      kind: 'mail-page',
+      revision,
+      keys: ['GraphqlSoupEmailThread:a'],
+      sortTimestamps: ['2025-01-01T00:00:00.000001Z'],
+      nextCursor: null,
+      optimistic: false,
+    }));
+    // The first read races a write: its records come from a newer revision.
+    let reads = 0;
+    readRecordsByKeysMock.mockImplementation(
+      async (_host, _selection, requested: string[]) => {
+        reads += 1;
+        if (reads === 1) revision = REVISION_1;
+        return {
+          revision,
+          records: requested.map((key) => ({
+            recordKey: key,
+            record: {
+              __typename: 'GraphqlSoupEmailThread',
+              id: key.split(':')[1],
+              name: key,
+              mailAllPreview: {
+                id: `${key}-preview`,
+                subject: key,
+                snippet: 'canonical',
+                isDraft: false,
+                senderEmail: null,
+                senderName: null,
+                senderPhotoUrl: null,
+              },
+              mailDraftPreview: null,
+              mailSentPreview: null,
+            },
+          })),
+        };
+      }
+    );
+    let dispose!: () => void;
+    let query!: ReturnType<typeof createGraphqlSoupAstItemsQuery>;
+    createRoot((d) => {
+      dispose = d;
+      makeGraphqlSoupInputMock.mockReturnValue({
+        initial: { emailView: 'INBOX', sortMethod: 'UPDATED_AT', limit: 2 },
+      });
+      query = createGraphqlSoupAstItemsQuery(
+        () => ({ params: {}, body: {} }) as never,
+        () => ({ enabled: true })
+      );
+    });
+    try {
+      await vi.waitFor(() =>
+        expect(query.data()?.entities.map(({ id }) => id)).toEqual(['a'])
+      );
+      expect(reads).toBeGreaterThan(1);
+      // The retry succeeded, so cache writes keep this page current.
+      expect(query.cacheMaintained?.()).toBe(true);
+
+      // A new engine generation has not evaluated the page yet.
+      entityFilterMock.mockImplementation(() => new Promise(() => {}));
+      notifyGeneration();
+      expect(query.cacheMaintained?.()).toBe(false);
+    } finally {
+      dispose();
+      online.mockRestore();
+    }
+  });
+
+  it('keeps a paged Mail list as deep when cache writes land under it', async () => {
+    const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    let revision = REVISION_0;
+    let notifyCacheChanged: (revision: string) => void = () => undefined;
+    getGraphqlSoupCacheHostMock.mockReturnValue({
+      currentRevision: async () => revision,
+      entityFilter: entityFilterMock,
+      onCacheChanged: (callback: (revision: string) => void) => {
+        notifyCacheChanged = callback;
+        return () => undefined;
+      },
+      onCacheGenerationChanged: () => () => {},
+    });
+    const all = ['a', 'b', 'c', 'd', 'e', 'f'].map(
+      (id) => `GraphqlSoupEmailThread:${id}`
+    );
+    // The index's cursor is a position at a revision; any write stales it.
+    entityFilterMock.mockImplementation(
+      async (args: { limit: number; mail: { cursor?: string } }) => {
+        const [position, cursorRevision] = (args.mail.cursor ?? '0@').split(
+          '@'
+        );
+        if (args.mail.cursor && cursorRevision !== revision)
+          return { kind: 'stale-cursor', revision };
+        const start = Number(position);
+        const keys = all.slice(start, start + args.limit);
+        const end = start + keys.length;
+        return {
+          kind: 'mail-page',
+          revision,
+          keys,
+          sortTimestamps: keys.map(() => '2025-01-01T00:00:00.000001Z'),
+          nextCursor: end < all.length ? `${end}@${revision}` : null,
+          optimistic: false,
+        };
+      }
+    );
+    readRecordsByKeysMock.mockImplementation(
+      async (_host, _selection, requested: string[]) => ({
+        revision,
+        records: requested.map((key) => ({
+          recordKey: key,
+          record: {
+            __typename: 'GraphqlSoupEmailThread',
+            id: key.split(':')[1],
+            name: key,
+            mailAllPreview: {
+              id: `${key}-preview`,
+              subject: key,
+              snippet: 'canonical',
+              isDraft: false,
+              senderEmail: null,
+              senderName: null,
+              senderPhotoUrl: null,
+            },
+            mailDraftPreview: null,
+            mailSentPreview: null,
+          },
+        })),
+      })
+    );
+    let dispose!: () => void;
+    let query!: ReturnType<typeof createGraphqlSoupAstItemsQuery>;
+    createRoot((d) => {
+      dispose = d;
+      makeGraphqlSoupInputMock.mockReturnValue({
+        initial: {
+          emailView: 'INBOX',
+          sortMethod: 'UPDATED_AT',
+          limit: 2,
+          filters: {},
+        },
+      });
+      query = createGraphqlSoupAstItemsQuery(
+        () => ({ params: {}, body: {} }) as never,
+        () => ({ enabled: true })
+      );
+    });
+    const ids = () => query.data()?.entities.map((entity) => entity.id);
+    try {
+      await vi.waitFor(() => expect(ids()).toEqual(['a', 'b']));
+      const requestsBeforePage = entityFilterMock.mock.calls.length;
+      await query.fetchNextPage();
+      expect(ids()).toEqual(['a', 'b', 'c', 'd']);
+      // A write re-evaluates the page; it must not fall back to the first page.
+      revision = REVISION_1;
+      notifyCacheChanged(REVISION_1);
+      await vi.waitFor(() =>
+        expect(entityFilterMock.mock.calls.at(-1)?.[0]).toMatchObject({
+          limit: 4,
+          mail: { view: 'INBOX' },
+        })
+      );
+      expect(ids()).toEqual(['a', 'b', 'c', 'd']);
+      // Loading the page read only that page, and the write one evaluation:
+      // the deeper list the page left was already current, so nothing
+      // evaluated it again in between.
+      expect(entityFilterMock.mock.calls.length - requestsBeforePage).toBe(2);
+
+      // A write between evaluating and paging stales the cursor: the next
+      // page still arrives, read deeper at the new revision.
+      revision = REVISION_2;
+      await query.fetchNextPage();
+      await vi.waitFor(() =>
+        expect(ids()).toEqual(['a', 'b', 'c', 'd', 'e', 'f'])
+      );
+    } finally {
+      dispose();
+      online.mockRestore();
+    }
+  });
+
   it.each([
     { mail: true, kind: 'mail-page' },
     { mail: true, kind: 'incomplete' },
@@ -1969,6 +2318,9 @@ describe('createGraphqlSoupAstItemsQuery', () => {
         if (kind === 'mail-page' || kind === 'reconciled') {
           await vi.waitFor(() => expect(query.data()?.entities).toEqual([]));
           expect(query.data()?.cachedMail).toBe(mail);
+          // A local Mail page that evaluates keeps itself current: writes
+          // that update the cache need not read it again.
+          if (mail) expect(query.cacheMaintained?.()).toBe(true);
           if (!mail)
             expect(entityFilterMock.mock.calls.at(-1)?.[0].baseline).toEqual(
               []
@@ -1995,6 +2347,8 @@ describe('createGraphqlSoupAstItemsQuery', () => {
         } else {
           expect(query.data()?.cachedMail).not.toBe(true);
           expect(query.error()).toBe(offlineError);
+          // An incomplete or unsupported page still needs the server.
+          if (mail) expect(query.cacheMaintained?.()).toBe(false);
         }
       } finally {
         dispose();
