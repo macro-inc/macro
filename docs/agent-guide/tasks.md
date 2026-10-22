@@ -515,7 +515,8 @@ filter sheets. Desktop uses the centered composer dialog.
    set, the task is still created and a toast says it wasn't added to the project.
    The `Share with <team name>` switch in the footer's left corner (hidden when you
    aren't on a team) defaults to on and remembers your
-   choice in local storage across composer openings and page reloads. Hovering it
+   choice in local storage across composer openings and page reloads. Recovered
+   submissions use their saved sharing choice without changing this default. Hovering it
    explains whether the task will be visible to your whole team or only to you and
    the people you share it with. The choice also applies to Create More, continuing
    in a split, and tasks created from a project.
@@ -535,8 +536,8 @@ Customers supplies its preset when PostHog `enable-crm-activity` is enabled:
 **Companies** and **Contacts** replace Status in the initial row; Status still
 starts as Not Started on the saved task. Record-level task creation prefills the
 company or contact, including the contact's company when already loaded. With the
-CRM flag off or loading, CRM supplies no preset; record-level creation still
-associates the task with its record. **Add property** opens the same property
+CRM flag off or loading, record-level creation uses the standard property row
+while retaining its record-scoped draft and associations. **Add property** opens the same property
 editor as the document/task side panel: search by name or type, select a property
 and enter its value, or create a property from an unmatched search. Assignments
 and values stay in the task draft until creation; opening or closing the editor
@@ -546,6 +547,22 @@ records; reopening restores added properties as well as their values. **Clear Dr
 restores that view's preset.
 Later flag, focus or record changes leave the open draft and associations intact,
 even between launch and mount. The next opening uses the current context.
+
+Task creation requires a connection. Before any create request, the composer
+saves a separate copy of the title, description/editor state, properties, and
+sharing choice on this device. Pending submissions do not expire and survive an
+app restart. Reopen the same task composer context and choose **Recover: <title>**
+to continue an unconfirmed draft; **Clear Draft** discards that recovered copy.
+Explicit logout removes these account-scoped copies. Recovery does not submit
+anything automatically: check Tasks before retrying because a lost response may
+mean the task already exists. A submission still in flight cannot be recovered
+or submitted again. Recovered drafts create one task at a time.
+
+**Create More** keeps newer input separate from its pending submission. A late
+success removes only the confirmed submission; failure leaves it recoverable
+without replacing newer text. Continuing in a split has the same durable save.
+A confirmed create retires its saved copy before history/project follow-up work,
+so a failure in that follow-up does not present an already-created task for retry.
 
 Tasks are documents under the hood (creation hits `POST /dss/documents/create_task`), so they
 also show up in Files/`All` and in AI-chat document listings.

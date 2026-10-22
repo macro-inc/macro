@@ -1,35 +1,17 @@
-import { makePersistedState } from '@app/lib/persistence';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
+import { COMPOSER_STORAGE_CLEARED } from '@core/auth/clear-composer-storage';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
-import { EmojiMenu } from '@core/component/LexicalMarkdown/component/menu/EmojiMenu';
-import { TagsMenu } from '@core/component/LexicalMarkdown/component/menu/TagsMenu';
-import { createLexicalWrapper } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
-import {
-  autoRegister,
-  emojisPlugin,
-  singleLinePlugin,
-  tagsPlugin,
-} from '@core/component/LexicalMarkdown/plugins';
 import { addMediaFromFile } from '@core/component/LexicalMarkdown/plugins/media';
-import type { TagMentionLifecycle } from '@core/component/LexicalMarkdown/plugins/tags';
-import { createMenuOperations } from '@core/component/LexicalMarkdown/shared/inlineMenu';
-import {
-  $getCaretRect,
-  forceSetTextContent,
-  initializeEditorEmpty,
-  isRectFlushWith,
-  trimWhitespace,
-} from '@core/component/LexicalMarkdown/utils';
+import { initializeEditorEmpty } from '@core/component/LexicalMarkdown/utils';
 import type { PortalScope } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { buildSimpleEntityUrl } from '@core/util/url';
-import { mergeRegister } from '@lexical/utils';
 import { Telemetry } from '@macro-inc/observability';
 import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
 import ArrowsOutIcon from '@phosphor/arrows-out.svg';
@@ -44,32 +26,18 @@ import type { PropertyApiValues } from '@property/types';
 import { queryReadyGate } from '@queries/gate';
 import { useUpsertToHistoryMutation } from '@queries/history/history';
 import { useUserTeamsQuery } from '@queries/team/teams';
-import { onElementConnect } from '@solid-primitives/lifecycle';
 import { debounce } from '@solid-primitives/scheduled';
+import { useQueryClient } from '@tanstack/solid-query';
 import { Button, EntityComposer, Scroll, ToggleSwitch, Tooltip } from '@ui';
+import type { LexicalEditor } from 'lexical';
 import {
-  $getRoot,
-  $getSelection,
-  $isRangeSelection,
-  COMMAND_PRIORITY_NORMAL,
-  KEY_ARROW_DOWN_COMMAND,
-  KEY_ARROW_RIGHT_COMMAND,
-  KEY_BACKSPACE_COMMAND,
-  KEY_ENTER_COMMAND,
-  KEY_ESCAPE_COMMAND,
-  type LexicalEditor,
-} from 'lexical';
-import {
-  type Accessor,
   createEffect,
   createSignal,
   For,
-  on,
   onCleanup,
   onMount,
   Show,
   Suspense,
-  untrack,
 } from 'solid-js';
 import { reconcile, unwrap } from 'solid-js/store';
 import { tabbable } from 'tabbable';
@@ -83,12 +51,25 @@ import {
 } from '../util/taskComposerProperties';
 import {
   clearTaskComposerDraft,
+  createTaskComposerSharing,
   loadTaskComposerDraft,
   saveTaskComposerDraft,
   taskComposerContextStorage,
 } from '../util/taskComposerStorage';
+import {
+  clearTaskSubmission,
+  createTaskSubmissionList,
+  submitTaskDraft,
+  taskSubmissionDraftStorage,
+  taskSubmissionKey,
+} from '../util/taskComposerSubmissions';
+import { ComposeTaskTitleEditor } from './ComposeTaskTitleEditor';
+
+export { ComposeTaskTitleEditor } from './ComposeTaskTitleEditor';
+
 import { EditorSystemMessage } from './EditorSystemMessage';
 import { InlinePropertyValue } from './InlinePropertyValue';
+import { RecoverTaskDrafts } from './RecoverTaskDrafts';
 import { TaskComposerPropertyEditor } from './TaskComposerPropertyEditor';
 import { SimilarTasksSection } from './TaskDuplicateList';
 
@@ -101,235 +82,6 @@ type ComposerTagLayoutMode = 'bottom' | 'title';
  * `text-xl/7` line box of {@link ComposeTaskTitleEditor}; keep the two in sync.
  */
 export const COMPOSER_TITLE_LINE_CLASS = 'flex h-7 shrink-0 items-center';
-
-function composerTitleNavigationPlugin(
-  bodyEditor: Accessor<LexicalEditor | undefined>,
-  ignoreNavigation: Accessor<boolean>
-) {
-  const focusBodyStart = (event: KeyboardEvent | null) => {
-    if (ignoreNavigation()) return true;
-    const editor = bodyEditor();
-    if (!editor) return false;
-    event?.preventDefault();
-    event?.stopPropagation();
-    editor.update(() => {
-      const firstChild = $getRoot().getFirstChild();
-      firstChild?.selectStart();
-    });
-    editor.focus();
-    return true;
-  };
-
-  return (titleEditor: LexicalEditor) =>
-    mergeRegister(
-      titleEditor.registerCommand(
-        KEY_ENTER_COMMAND,
-        (event) => focusBodyStart(event),
-        COMMAND_PRIORITY_NORMAL
-      ),
-      titleEditor.registerCommand(
-        KEY_ARROW_DOWN_COMMAND,
-        (event) => {
-          if (ignoreNavigation()) return true;
-          const rect = titleEditor.getRootElement()?.getBoundingClientRect();
-          if (!rect) return false;
-          const caret = $getCaretRect() ?? rect;
-          if (!isRectFlushWith(caret, rect, 'bottom', 5)) return false;
-          return focusBodyStart(event);
-        },
-        COMMAND_PRIORITY_NORMAL
-      ),
-      titleEditor.registerCommand(
-        KEY_ARROW_RIGHT_COMMAND,
-        (event) => {
-          if (ignoreNavigation()) return true;
-          const selection = $getSelection();
-          if (!$isRangeSelection(selection) || !selection.isCollapsed()) {
-            return false;
-          }
-          const anchorNode = selection.anchor.getNode();
-          const len = anchorNode.getTextContent().length;
-          if (selection.anchor.offset !== len) return false;
-          if (anchorNode.getParent()?.getLastChild() !== anchorNode) {
-            return false;
-          }
-          return focusBodyStart(event);
-        },
-        COMMAND_PRIORITY_NORMAL
-      )
-    );
-}
-
-function isTitleSelectionAtStart() {
-  const selection = $getSelection();
-  if (
-    !$isRangeSelection(selection) ||
-    !selection.isCollapsed() ||
-    selection.anchor.offset !== 0
-  ) {
-    return false;
-  }
-
-  const root = $getRoot();
-  let topLevel = selection.anchor.getNode();
-  while (topLevel.getParent() !== root) {
-    const parent = topLevel.getParent();
-    if (!parent) return false;
-    topLevel = parent;
-  }
-
-  let previous = topLevel.getPreviousSibling();
-  while (previous) {
-    if (previous.getTextContent().length > 0) return false;
-    previous = previous.getPreviousSibling();
-  }
-
-  return true;
-}
-
-export function ComposeTaskTitleEditor(props: {
-  placeholder?: string;
-  value: Accessor<string>;
-  onChange: (value: string) => void;
-  disabled: Accessor<boolean>;
-  bodyEditor: Accessor<LexicalEditor | undefined>;
-  containerRef: Accessor<HTMLDivElement | undefined>;
-  onUserInput: () => void;
-  onTagSelected: (tag: TagMentionLifecycle) => void;
-  onDeleteTagsAtStart: () => boolean;
-  portalScope?: PortalScope;
-  ref?: (el: HTMLDivElement) => void;
-}) {
-  const [state, setState] = createSignal(props.value());
-  const [showPlaceholder, setShowPlaceholder] = createSignal(
-    props.value().trim() === ''
-  );
-  const [rootConnected, setRootConnected] = createSignal(false);
-
-  const { editor, plugins, cleanup } = createLexicalWrapper({
-    namespace: 'task-composer-title',
-    type: 'title',
-    isInteractable: () => !props.disabled(),
-  });
-
-  const emojiMenuOperations = createMenuOperations();
-  const tagMenuOperations = createMenuOperations();
-  const inlineMenuOpen = () =>
-    emojiMenuOperations.isOpen() || tagMenuOperations.isOpen();
-
-  initializeEditorEmpty(editor);
-  forceSetTextContent(editor, props.value());
-
-  plugins
-    .plainText()
-    .history(400)
-    .use(singleLinePlugin())
-    .use(emojisPlugin({ menu: emojiMenuOperations }))
-    .use(
-      tagsPlugin({
-        menu: tagMenuOperations,
-        insertTags: false,
-        onCreateTag: props.onTagSelected,
-      })
-    )
-    .use(composerTitleNavigationPlugin(props.bodyEditor, inlineMenuOpen))
-    .state<string>(setState, 'plain');
-
-  plugins.onUpdate(({ editorState }) => {
-    if (!editorState) return;
-    setShowPlaceholder(
-      editorState.read(() => $getRoot().getTextContent().trim() === '')
-    );
-  });
-
-  createEffect(() => {
-    editor.setEditable(!props.disabled());
-  });
-
-  createEffect(
-    on(
-      state,
-      (next) => {
-        if (next === props.value()) return;
-        props.onUserInput();
-        props.onChange(next);
-      },
-      { defer: true }
-    )
-  );
-
-  createEffect(() => {
-    const next = props.value();
-    if (!untrack(rootConnected)) return;
-    if (next === untrack(state)) return;
-    forceSetTextContent(editor, next);
-  });
-
-  autoRegister(
-    mergeRegister(
-      editor.registerCommand(
-        KEY_BACKSPACE_COMMAND,
-        (event) => {
-          if (!isTitleSelectionAtStart()) return false;
-          if (!props.onDeleteTagsAtStart()) return false;
-          event?.preventDefault();
-          event?.stopPropagation();
-          return true;
-        },
-        COMMAND_PRIORITY_NORMAL
-      ),
-      editor.registerCommand(
-        KEY_ESCAPE_COMMAND,
-        (event) => {
-          props.containerRef()?.focus();
-          event?.preventDefault();
-          event?.stopPropagation();
-          return true;
-        },
-        COMMAND_PRIORITY_NORMAL
-      )
-    )
-  );
-
-  const onConnect = (el: HTMLDivElement) => {
-    editor.setRootElement(el);
-    setRootConnected(true);
-    onCleanup(() => {
-      trimWhitespace(editor, { trailing: true });
-      cleanup();
-    });
-  };
-
-  return (
-    <div class="relative w-full">
-      <div
-        contentEditable={!props.disabled()}
-        class="ph-no-capture w-full text-xl/7 font-medium outline-none whitespace-pre-wrap wrap-break-word [&_p]:my-0! [&_p:empty]:min-h-7"
-        ref={(el) => {
-          props.ref?.(el);
-          onElementConnect(el, () => onConnect(el));
-        }}
-      />
-      <EmojiMenu
-        editor={editor}
-        menu={emojiMenuOperations}
-        useBlockBoundary={true}
-        portalScope={props.portalScope}
-      />
-      <TagsMenu
-        editor={editor}
-        menu={tagMenuOperations}
-        useBlockBoundary={true}
-        portalScope={props.portalScope}
-      />
-      <Show when={showPlaceholder()}>
-        <div class="pointer-events-none absolute top-0 text-xl/7 font-medium text-ink-placeholder">
-          {props.placeholder ?? 'New task'}
-        </div>
-      </Show>
-    </div>
-  );
-}
 
 /**
  * Toast preview component for successful task creation.
@@ -348,6 +100,8 @@ export interface ComposeTaskProps {
   createTask?: typeof createTaskWithProperties;
   onCreateTask?: (title: string, content: string) => void;
   onClose?: () => void;
+  /** Identity of a locally retained, unconfirmed submission. */
+  recoveredDraftId?: string;
   initialTitle?: string;
   initialContent?: string;
   placeholder?: string;
@@ -379,9 +133,21 @@ export function ComposeTask(props: ComposeTaskProps) {
   const splitPanel = useSplitPanelOrThrow();
   const { popoverSplit, openWithSplit } = useSplitLayout();
   const currentUserId = useUserId();
-  const draftStorage = props.composerContext
-    ? taskComposerContextStorage(props.composerContext.key)
-    : undefined;
+  const queryClient = useQueryClient();
+  const draftOwner = currentUserId() ?? '';
+  const submissions = createTaskSubmissionList(
+    queryClient,
+    draftOwner,
+    props.composerContext?.key
+  );
+  const recovered = submissions().find(
+    (draft) => draft.id === props.recoveredDraftId
+  );
+  const draftStorage = recovered
+    ? taskSubmissionDraftStorage(draftOwner, recovered.id)
+    : props.composerContext
+      ? taskComposerContextStorage(props.composerContext.key)
+      : undefined;
 
   const getDefaultPropertyValues = (): Record<string, PropertyApiValues> => {
     const ids = (() => {
@@ -418,6 +184,10 @@ export function ComposeTask(props: ComposeTaskProps) {
 
   // draft init logic
   const initializeFromDraft = () => {
+    if (recovered) {
+      const draft = loadTaskComposerDraft(draftStorage) ?? recovered.draft;
+      return { ...draft, isDraftLoaded: true };
+    }
     if (
       !props.initialTitle &&
       !props.initialContent &&
@@ -460,22 +230,8 @@ export function ComposeTask(props: ComposeTaskProps) {
     initialState.isDraftLoaded
   );
   const [createMore, setCreateMore] = createSignal(false);
-  const [shareWithTeam, setShareWithTeam] = makePersistedState(
-    createSignal(true),
-    {
-      storages: {
-        restore: () => {
-          const stored = localStorage.getItem('task-composer-share-with-team');
-          return stored === 'true'
-            ? true
-            : stored === 'false'
-              ? false
-              : undefined;
-        },
-        write: (value) =>
-          localStorage.setItem('task-composer-share-with-team', String(value)),
-      },
-    }
+  const [shareWithTeam, setShareWithTeam] = createTaskComposerSharing(
+    recovered?.shareWithTeam
   );
   const [errorMessage, setErrorMessage] = createSignal<string>('');
   const userTeams = useUserTeamsQuery();
@@ -537,10 +293,22 @@ export function ComposeTask(props: ComposeTaskProps) {
   // draft saving logic
   let hasInitializedFromDraft = isDraftLoaded();
   let skipNextDraftSave = false;
+  let submittedInput = false;
+  let draftSessionActive = true;
   const debouncedSave = debounce(
-    (draft: Parameters<typeof saveTaskComposerDraft>[0]) =>
-      saveTaskComposerDraft(draft, draftStorage),
+    (draft: Parameters<typeof saveTaskComposerDraft>[0]) => {
+      if (draftSessionActive && currentUserId() === draftOwner)
+        saveTaskComposerDraft(draft, draftStorage);
+    },
     300
+  );
+  const retireDraftSession = () => {
+    draftSessionActive = false;
+    debouncedSave.clear();
+  };
+  window.addEventListener(COMPOSER_STORAGE_CLEARED, retireDraftSession);
+  onCleanup(() =>
+    window.removeEventListener(COMPOSER_STORAGE_CLEARED, retireDraftSession)
   );
   const draftSnapshot = () => ({
     title: title(),
@@ -552,7 +320,12 @@ export function ComposeTask(props: ComposeTaskProps) {
   onCleanup(() => {
     debouncedSave.clear();
     // Escape and backdrop dismissal bypass the close button. Flush before disposal.
-    if (!isCreating() && hasDraftChanges()) {
+    if (
+      draftSessionActive &&
+      currentUserId() === draftOwner &&
+      (!isCreating() || !submittedInput) &&
+      hasDraftChanges()
+    ) {
       saveTaskComposerDraft(draftSnapshot(), draftStorage);
     }
   });
@@ -651,112 +424,155 @@ export function ComposeTask(props: ComposeTaskProps) {
     });
   };
 
-  // A retry keeps its host context and creation policy, not one-shot editor callbacks.
-  const reopenForRetry = () =>
+  const recoverDraft = (id: string) => {
+    if (currentUserId() !== draftOwner) return;
     popoverSplit({
       type: 'component',
       id: 'task-compose',
       params: {
-        createTask: props.createTask,
         composerContext: props.composerContext,
-        initialProjectId: props.initialProjectId,
+        recoveredDraftId: id,
       },
     });
+  };
 
-  const handleCreateTask = async () => {
-    if (isCreating()) return;
-
+  const createTask = async (inSplit: boolean) => {
+    if (
+      !draftSessionActive ||
+      isCreating() ||
+      currentUserId() !== draftOwner ||
+      !draftOwner
+    )
+      return;
     const taskTitle = title().trim();
     const taskContent = content().trim();
-
-    if (!taskTitle) {
+    if (!inSplit && !taskTitle) {
       setErrorMessage('Please give this task a title');
       return;
     }
+    const id = recovered?.id ?? crypto.randomUUID();
+    if (
+      queryClient.isMutating({ mutationKey: taskSubmissionKey(draftOwner, id) })
+    )
+      return;
     setErrorMessage('');
-
     setIsCreating(true);
-
+    const keepOpen = createMore() && !inSplit && !recovered;
+    submittedInput = true;
     const properties = structuredClone(Object.entries(unwrap(propertyValues)));
-    const resetTitleAndBody = () => {
-      clearDraft();
-      skipNextDraftSave = true;
-      setTitle('');
-      setContent('');
-      setIsDraftLoaded(false);
-      const ed = bodyEditor();
-      ed && initializeEditorEmpty(ed);
-      requestAnimationFrame(() => titleEditorRoot?.focus());
-    };
-
-    if (!createMore()) {
-      // Snapshot the draft locally, then clear localStorage so a new dialog
-      // opened while this creation is in flight starts blank.
-      const snapshot = draftSnapshot();
-      clearDraft();
-      const createdTask = await (props.createTask ?? createTaskWithProperties)(
-        taskTitle,
-        taskContent,
-        properties,
-        createDefinitions(),
-        (params) => upsertToHistoryMutation.mutate(params),
+    const definitions = createDefinitions();
+    const snapshot = draftSnapshot();
+    const shareWithTeam = sharesWithTeam();
+    let split: ReturnType<typeof openWithSplit>['split'];
+    let started = false;
+    let createdTask: Awaited<ReturnType<typeof createTaskWithProperties>> =
+      null;
+    try {
+      createdTask = await submitTaskDraft(
+        queryClient,
         {
-          shareWithTeam: sharesWithTeam(),
-          onMutate: () => {
-            splitPanel.handle.close();
-            props.onClose?.();
-            props.onCreateStart?.({ title: taskTitle, content: taskContent });
-          },
+          id,
+          userId: draftOwner,
+          contextKey: props.composerContext?.key,
+          draft: snapshot,
+          shareWithTeam,
+        },
+        (confirm) => {
+          if (currentUserId() !== draftOwner) return Promise.resolve(null);
+          started = true;
+          return (props.createTask ?? createTaskWithProperties)(
+            taskTitle,
+            taskContent,
+            properties,
+            definitions,
+            (params) => {
+              if (currentUserId() === draftOwner)
+                upsertToHistoryMutation.mutate(params);
+            },
+            {
+              shareWithTeam,
+              showFailureToast: false,
+              onCreated: confirm,
+              onMutate: () => {
+                clearDraft();
+                if (keepOpen) {
+                  submittedInput = false;
+                  skipNextDraftSave = true;
+                  setTitle('');
+                  setContent('');
+                  setIsDraftLoaded(false);
+                  const editor = bodyEditor();
+                  if (editor) initializeEditorEmpty(editor);
+                  requestAnimationFrame(() => titleEditorRoot?.focus());
+                } else {
+                  splitPanel.handle.close();
+                  props.onClose?.();
+                  if (inSplit) {
+                    split = openWithSplit(
+                      { type: 'component', id: 'loading' },
+                      { referredFrom: 'launcher', preferNewSplit: true }
+                    ).split;
+                  } else {
+                    props.onCreateStart?.({
+                      title: taskTitle,
+                      content: taskContent,
+                    });
+                  }
+                }
+              },
+            }
+          );
         }
       );
-
+    } catch (error) {
+      Telemetry.error(error, { surface: 'compose-task' });
+    } finally {
       setIsCreating(false);
+    }
 
-      if (!createdTask) {
-        props.onCreateFailure?.();
-        // Restore the draft and re-open so the user can retry
-        debouncedSave.clear();
-        saveTaskComposerDraft(snapshot, draftStorage);
-        reopenForRetry();
+    if (currentUserId() !== draftOwner) return;
+    if (!createdTask) {
+      if (!started) {
+        setErrorMessage(
+          'Unable to save this draft on your device. Keep the composer open and try again.'
+        );
         return;
       }
-
-      const { documentId, initialSnapshot } = createdTask;
-      if (props.onSuccess) {
-        props.onSuccess({ documentId, title: taskTitle, content: taskContent });
+      if (!inSplit && !keepOpen) props.onCreateFailure?.();
+      split?.goBack();
+      if (currentUserId() === draftOwner) {
+        toast.failure('Task creation was not confirmed', {
+          subtext:
+            'Your draft is saved on this device. Check Tasks before retrying.',
+          actions: [
+            { label: 'Recover draft', onClick: () => recoverDraft(id) },
+          ],
+        });
+      }
+      return;
+    }
+    if (currentUserId() !== draftOwner) return;
+    const { documentId, initialSnapshot } = createdTask;
+    if (inSplit) {
+      const snapshotParams = initialSnapshot
+        ? {
+            params: { optimisticSnapshot: initialSnapshot },
+            preserveParams: true as const,
+          }
+        : {};
+      if (split) {
+        split.replace({
+          next: { type: 'task', id: documentId, ...snapshotParams },
+          mergeHistory: true,
+          referredFrom: 'launcher',
+        });
       } else {
-        fireAndForget(
-          showTaskCreatedToast(documentId, initialSnapshot),
-          'compose-task'
+        openWithSplit(
+          { type: 'task', id: documentId, ...snapshotParams },
+          { referredFrom: 'launcher', preferNewSplit: true }
         );
       }
-      props.onCreateTask?.(taskTitle, taskContent);
-      return;
-    }
-
-    const createdTask = await (props.createTask ?? createTaskWithProperties)(
-      taskTitle,
-      taskContent,
-      properties,
-      createDefinitions(),
-      (params) => upsertToHistoryMutation.mutate(params),
-      {
-        shareWithTeam: sharesWithTeam(),
-        onMutate: () => {
-          resetTitleAndBody();
-          setIsCreating(false);
-        },
-      }
-    );
-
-    if (!createdTask) {
-      return;
-    }
-
-    // Success: clear draft and notify
-    clearDraft();
-    const { documentId, initialSnapshot } = createdTask;
-    if (props.onSuccess) {
+    } else if (props.onSuccess) {
       props.onSuccess({ documentId, title: taskTitle, content: taskContent });
     } else {
       fireAndForget(
@@ -766,74 +582,8 @@ export function ComposeTask(props: ComposeTaskProps) {
     }
     props.onCreateTask?.(taskTitle, taskContent);
   };
-
-  const handleContinueInSplit = async () => {
-    if (isCreating()) return;
-
-    const taskTitle = title().trim();
-    const taskContent = content().trim();
-
-    setErrorMessage('');
-    setIsCreating(true);
-
-    const properties = structuredClone(Object.entries(unwrap(propertyValues)));
-    const snapshot = draftSnapshot();
-    clearDraft();
-
-    let split: ReturnType<typeof openWithSplit>['split'];
-
-    const createdTask = await (props.createTask ?? createTaskWithProperties)(
-      taskTitle,
-      taskContent,
-      properties,
-      createDefinitions(),
-      (params) => upsertToHistoryMutation.mutate(params),
-      {
-        shareWithTeam: sharesWithTeam(),
-        onMutate: () => {
-          splitPanel.handle.close();
-          props.onClose?.();
-          split = openWithSplit(
-            { type: 'component', id: 'loading' },
-            { referredFrom: 'launcher', preferNewSplit: true }
-          ).split;
-        },
-      }
-    );
-
-    setIsCreating(false);
-
-    if (!createdTask) {
-      split?.goBack();
-      debouncedSave.clear();
-      saveTaskComposerDraft(snapshot, draftStorage);
-      reopenForRetry();
-      return;
-    }
-
-    const { documentId, initialSnapshot } = createdTask;
-    const snapshotParams = initialSnapshot
-      ? {
-          params: { optimisticSnapshot: initialSnapshot },
-          preserveParams: true as const,
-        }
-      : {};
-
-    if (split) {
-      split.replace({
-        next: { type: 'task', id: documentId, ...snapshotParams },
-        mergeHistory: true,
-        referredFrom: 'launcher',
-      });
-    } else {
-      openWithSplit(
-        { type: 'task', id: documentId, ...snapshotParams },
-        { referredFrom: 'launcher', preferNewSplit: true }
-      );
-    }
-
-    props.onCreateTask?.(taskTitle, taskContent);
-  };
+  const handleCreateTask = () => createTask(false);
+  const handleContinueInSplit = () => createTask(true);
 
   const handleClose = () => {
     splitPanel.handle.close();
@@ -852,6 +602,7 @@ export function ComposeTask(props: ComposeTaskProps) {
   };
 
   const handleClearDraft = () => {
+    if (recovered) clearTaskSubmission(draftOwner, recovered.id);
     clearDraft();
     skipNextDraftSave = true;
     setTitle('');
@@ -975,6 +726,7 @@ export function ComposeTask(props: ComposeTaskProps) {
         <Show when={hasDraftChanges()}>
           <Button
             onMouseDown={handleClearDraft}
+            disabled={isCreating()}
             tabIndex={-1}
             tooltip="Clear Draft"
             size="sm"
@@ -996,6 +748,17 @@ export function ComposeTask(props: ComposeTaskProps) {
           </Button>
         </Show>
       </EntityComposer.Header>
+      <RecoverTaskDrafts
+        userId={draftOwner}
+        drafts={submissions().filter((draft) => draft.id !== recovered?.id)}
+        onOpen={recoverDraft}
+      />
+      <Show when={recovered}>
+        <div class="border-b border-edge-muted p-3 text-sm">
+          Recovered on this device. Task creation requires a connection. Check
+          Tasks before retrying to avoid creating a duplicate.
+        </div>
+      </Show>
       <EntityComposer.Main>
         <EntityComposer.Title>
           <Show when={tagLayoutMode() === 'title'}>
@@ -1165,6 +928,7 @@ export function ComposeTask(props: ComposeTaskProps) {
           <ToggleSwitch
             labelClass="text-xs text-ink-muted font-normal whitespace-nowrap"
             onChange={setCreateMore}
+            disabled={!!recovered || isCreating()}
             checked={createMore()}
             label="Create More"
           />

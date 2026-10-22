@@ -125,7 +125,15 @@ export async function createTaskWithProperties(
   options?: {
     revalidateSoup?: boolean;
     shareWithTeam?: boolean;
+    /** Disable when the caller provides its own recovery notification. */
+    showFailureToast?: boolean;
     onMutate?: () => void;
+    /** The create response arrived, before history/project follow-up work. */
+    onCreated?: (
+      task: NonNullable<
+        Awaited<ReturnType<typeof createTaskWithInitialSnapshot>>
+      >
+    ) => void;
   }
 ) {
   options?.onMutate?.();
@@ -151,9 +159,12 @@ export async function createTaskWithProperties(
   });
 
   if (!createdTask) {
-    toast.failure('Failed to create Task');
+    if (options?.showFailureToast !== false)
+      toast.failure('Failed to create Task');
     return null;
   }
+
+  options?.onCreated?.(createdTask);
 
   // createTaskWithInitialSnapshot already revalidates Soup; just update history.
   upsertToHistory({

@@ -5,7 +5,6 @@ import {
   TasksViewProvider,
   useTasksView,
 } from '@app/features/tasks-view/tasks-view-context';
-import { createTaskWithProperties } from '@block-md/util/taskComposerProperties';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import {
   enableCrmActivity,
@@ -70,24 +69,11 @@ function RecordTasksBody(props: { scope: CrmRecordScope }) {
       type: 'component',
       id: 'task-compose',
       params: {
-        composerContext: adaptive ? context : undefined,
-        // Keep the existing record associations with the standard composer.
-        createTask: adaptive
-          ? undefined
-          : (
-              ...[title, content, properties, ...rest]: Parameters<
-                typeof createTaskWithProperties
-              >
-            ) =>
-              createTaskWithProperties(
-                title,
-                content,
-                [
-                  ...properties,
-                  ...Object.entries(context.initialPropertyValues ?? {}),
-                ],
-                ...rest
-              ),
+        // Record identity/associations must survive a restart even with the
+        // standard property row; they cannot live only in a create callback.
+        composerContext: adaptive
+          ? context
+          : { ...context, visiblePropertyIds: undefined },
       },
     });
   };

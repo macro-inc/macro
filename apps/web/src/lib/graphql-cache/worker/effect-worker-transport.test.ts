@@ -155,10 +155,19 @@ describe('Effect worker transport', () => {
     endpoint.ready();
     await transport.ready;
 
+    const posted = Promise.withResolvers<void>();
+    const postMessage = endpoint.postMessage.bind(endpoint);
+    vi.spyOn(endpoint, 'postMessage').mockImplementation(
+      (message, transfers) => {
+        postMessage(message, transfers);
+        posted.resolve();
+      }
+    );
     const channel = new MessageChannel();
     await Effect.runPromise(
       transport.send({ port: channel.port1 }, [channel.port1])
     );
+    await posted.promise;
     const framed = endpoint.sent[0]?.message as
       | [number, { port: MessagePort }]
       | undefined;

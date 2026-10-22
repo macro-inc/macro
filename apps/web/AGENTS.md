@@ -158,6 +158,10 @@ ownership. Cancel, logout, and the ten-minute timeout retire pending callbacks.
   move between inboxes).
 - Keep email card resize motion on its content wrapper so message and inline
   reply transitions preserve the card's focus target and return to natural height.
+- Task composer submissions retain an account/context-scoped local copy until
+  the create response confirms success; never clear newer composer input from a
+  late callback or automatically retry an uncertain create. Keep recovery copies
+  through restarts and remove them on explicit logout. See the Tasks walkthrough.
 - Shared server-state queries and mutations live in `src/lib/queries`; keep
   feature-specific query orchestration with its owning feature.
 - Refresh the channel list's bounded unread edge when opening a conversation,
