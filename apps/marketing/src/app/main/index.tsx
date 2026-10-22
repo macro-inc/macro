@@ -13,13 +13,19 @@ if (import.meta.env.DEV && !(root instanceof HTMLElement)) {
   );
 }
 
-// Keep the existing first paint until the requested page and its styles exist.
-await preloadProductRoute(window.location.pathname);
+async function startWebsite() {
+  // Keep the first paint until the requested page and its styles exist.
+  // Do not await this at module scope: a lazy route may import shared code
+  // Rollup placed in this entry, so the entry must finish evaluating first.
+  await preloadProductRoute(window.location.pathname);
 
-// Prerendered builds ship static HTML inside #root for crawlers and first
-// paint; Solid's render() appends rather than hydrates, so drop it first.
-const finishHeroHandoff = preserveHeroEntrance(root!);
-root!.textContent = '';
+  // Solid render appends rather than hydrates product pages.
+  const finishHeroHandoff = preserveHeroEntrance(root!);
+  root!.textContent = '';
+  render(() => <App />, root!);
+  finishHeroHandoff();
+}
 
-render(() => <App />, root!);
-finishHeroHandoff();
+startWebsite().catch((error) => {
+  console.error('Unable to initialize the public website', error);
+});

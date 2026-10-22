@@ -2,10 +2,10 @@ import { createSignal, onCleanup } from 'solid-js';
 import { isServer } from 'solid-js/web';
 
 /**
- * The public website and `/start` render in the cream palette
+ * Product pages and `/start` render in the cream palette
  * (cream-preview.css) when the visitor's OS or browser prefers a light color
  * scheme, and in the dark palette otherwise. `?theme=cream` or `?theme=dark`
- * pins either one.
+ * pins either one. The homepage always has a white surface.
  *
  * start.html and index.html apply the same choice in an inline <head> script
  * so prerendered pages paint in the right palette; keep them in sync.
@@ -36,12 +36,14 @@ export function preferredPalette(): SitePalette {
 /** Marks <html> with the palette; light glass is keyed off `data-theme-light`. */
 export function applyPalette(palette: SitePalette) {
   const root = document.documentElement;
+  const homepage = window.location.pathname === '/';
+  root.toggleAttribute('data-homepage', homepage);
   if (palette === 'cream') root.dataset.palette = 'cream';
   else delete root.dataset.palette;
   root.dataset.themeLight = palette === 'cream' ? 'true' : 'false';
   document
     .querySelector('meta[name="theme-color"]')
-    ?.setAttribute('content', THEME_COLOR[palette]);
+    ?.setAttribute('content', homepage ? '#ffffff' : THEME_COLOR[palette]);
 }
 
 /** Calls `listener` with the preferred palette whenever the OS scheme changes. */

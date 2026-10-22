@@ -5,49 +5,25 @@ It shares the repository with the authenticated application, but has its own
 package manifest, Vite entry points, TypeScript aliases, styles, assets, and UI
 components. Application UI changes must not alter the website.
 
-The public site, product pages, blog, sample workspace, and signup introduction
-follow the visitor's system color scheme. `?theme=cream` and `?theme=dark` pin a
-palette. `features/setup/cream-preview.css` owns the light palette; the shared
-router applies it across navigation, and each HTML entry applies it before
-first paint. Sample workspace styles read that HTML palette before route code
-runs. Check both palettes when changing a shared demo or surface.
-Cream slab typography adds 45 to the base font weight; utility-class slab text
-uses weight 360, and the Tasks founder heading uses 445.
-Slab display copy uses warm near-black (`#1d1c1a`) in the cream palette.
+The homepage uses a white background in every system color scheme, native SF Pro
+on Apple platforms (with a system sans-serif fallback elsewhere), large centered
+copy, and black pill calls to action. `components/homepage/macro-homepage.css`
+scopes that treatment to `.macro-homepage`; product pages, blog, sample workspace,
+and signup retain their existing system/cream/dark palettes.
 
-Public calls to action use the shared `site-nav-start` treatment: warm white,
-soft pill corners, a fine border, and a 2px arrow shift on hover. `Book a demo` is a
-soft grey secondary action; the header's `Open app` uses a warm-white fill with
-near-black text, a fine border, and no arrow. Its fill fades with the header label during
-the footer transition. As it lands in the footer, the same link reveals the
-original wider white pill, glass rim, and arrow. It follows the existing scroll
-animation and fits within phone widths. Its header label fades out completely
-before the footer presentation fades in, so the two labels never overlap.
-The homepage primary adds a subtle satin gradient and inset edge, a quieter
-18px arrow, and a 1px hover lift; it remains a single link.
-Feedback uses 140ms CSS transitions, respects reduced motion, and does not
-track the pointer. Mobile header actions retain 44px touch targets. The homepage scroll cue is a
-16px arrow inside a 44px button, inset 20px from the bottom while respecting safe areas.
+`MacroHero` gathers the existing welcome constellation into the Macro mark, then
+unfolds it into connected native features. Its 16-second sequence pauses offscreen,
+in hidden tabs, or through the accessible pause button. Reduced motion shows the
+connected state immediately. There is no scroll interception or scroll-driven
+transition on the homepage.
 
-The homepage keeps the original colored constellation and grainy demo backdrop,
-with “with Macro” in the unification heading. The original sample workspace is
-embedded at `/demo?embedded=true`; shared UI fixes and corrected sample names
-remain in place. Compact arrows and dots sit above the original, fuller captions
-at the bottom of the frame. Slide selection is manual: arrows, dots, caption
-swipes, and page-level left/right keys. There is no timed cycling or oversized
-side-arrow treatment. The existing scroll entrance, reduced-motion behavior,
-and interaction boundary remain. The primary button keeps its larger satin
-finish but has no looping glimmer. Cream typography from PR #8299 is preserved.
-
-The homepage feature sections retain the original centered headings, descriptions,
-conversations, and demos, with rules beside the descriptions. The CRM section
-uses the original standalone pipeline illustration and corrected fictional company names.
-A shared Learn more label and styled product links open the full product pages in
-the same tab. Email and Chat link separately to `/email` and `/channels`, as do
-Documents and Tasks to their routes. Agents and CRM each have one link. Sheets
-has no dedicated product page, so it has no extra link. These are normal anchors,
-with browser Back and modifier-click behavior; the homepage no longer opens
-product pages in side panels or iframes.
+`HomepageTiles` presents six illustrated feature panels in two columns: email and
+chat, documents and tasks, agents, sheets and databases, CRM, and calls. Desktop
+panels are square; narrower layouts allow extra height for readable copy. Phones
+stack them in one column. Illustrations are decorative, with real product links
+beneath each description. Interactive demos remain on the product pages and
+`/demo`; the homepage no longer embeds the sample workspace or inline editors.
+The shared navigation and phone signup routing remain in use.
 
 Marketing demos use `DemoInteractionBoundary`: wheel and touch gestures scroll
 the surrounding page until the visitor clicks or enters with the keyboard. The
@@ -59,7 +35,6 @@ moving keyboard focus outside returns to preview mode and preserves demo state.
 Nested previews share one boundary; the standalone `/demo` route uses
 `DemoInteractionScope` and remains immediately interactive. Apply this shared
 boundary to new marketing demos rather than adding custom wheel handlers.
-The homepage carousel advances only when the visitor selects a highlight.
 
 ## Ownership and dependency boundary
 
@@ -79,7 +54,7 @@ Email is the visual reference for product pages. Tasks, Channels, Documents,
 Agents, Calls, and Reviews use `ProductPage` on top of `FeaturePage`: centered
 Slab heroes, a 920px outer feature measure with 24px inset, left-aligned
 feature copy, small illustrated navigation, practical FAQs, and the shared
-homepage closing CTA. The Email and CRM compositions remain independent.
+shared product closing CTA. The Email and CRM compositions remain independent.
 Focused `ProductDemo` subgraphics also share Email's cool glow, fine dotted
 texture, and bottom fade. The fade sits below the content so editors and
 reply controls remain readable.
@@ -172,26 +147,6 @@ Local preview data must not be presented as server-backed account state.
 The preview proceeds from integration selection directly to workspace setup;
 Back from workspace setup returns to integrations.
 
-The homepage document and version timeline share a single playhead. Verify that
-dragging the blue handle restores earlier and later edits, remains paused after
-release, and supports arrow keys/Home/End. Repeat with reduced motion, which
-starts finished but permits manual scrubbing. Below 768px the existing compact
-layout continues to hide the timeline.
-
-Homepage email playback waits until at least 20% of its scene is visible and
-pauses again below that threshold. The landing-page CRM uses a compact,
-three-stage Kanban without a sidebar or database toolbar. Its visible-only
-walkthrough moves two deals, opens a company record and its email history,
-then returns to the board. Pointer or keyboard interaction stops playback;
-reduced motion presents the updated board without animating. Visitors can move
-cards and open records themselves. Desktop lanes fit the frame; phones scroll
-only the three stages. There is no wallpaper, replay button, or status caption.
-The CRM product
-page retains its separate animated walkthrough. Enabling reduced motion
-mid-playback settles an untouched document at its completed state. After visitor
-takeover, the current document/history position stays intact. Manual history
-scrubbing remains available. Scroll-driven entrances keep their native pacing.
-
 ## Develop and validate
 
 From this directory:
@@ -234,8 +189,9 @@ prerendered demos include their UI utilities before the client bundle loads.
 Build verification checks sample workspace controls, icons, avatars, and layout
 with the client bundle blocked in dark and cream palettes on desktop and mobile.
 It also checks that the homepage's first-painted heading retains its DOM node and
-geometry, then exercises navigation, the embedded workspace, and the deferred
-email demo.
+geometry, then exercises navigation, product links, animation controls, and phone
+signup routing. The standalone sample workspace and product demos are checked
+separately.
 
 Architecture regression tests create real temporary source graphs, CSS files,
 assets, and package symlinks. They verify that valid website references pass
@@ -274,7 +230,7 @@ changes to application routes, components, or providers.
 URLs as the production CDN. `/crm` must serve `dist/crm/index.html`, never the
 homepage hydration entry. Unknown preview routes return 404. The build smoke
 check verifies phone touch entry and exit for every product demo, in addition
-to homepage hydration and initial styling in dark and cream palettes.
+to homepage hydration and its white surface in both system color schemes.
 
 ## Feature-page pattern
 
@@ -307,14 +263,13 @@ groups with 48px minimum tap targets, keeping every group easy to reach. Escape 
 wrapping return focus to that button. Home remains available inside the menu.
 
 The product entry preloads the requested lazy route and its CSS before replacing
-prerendered HTML, avoiding a header-only flash on first load.
-
-Keep 40px total mobile spacing between the Documents/Tasks links and Coding
-agents: 20px below Documents and 20px above Coding agents. Do not zero that
-boundary or double it to the full 80px section spacing.
+prerendered HTML, avoiding a header-only flash on first load. Run this preload
+inside the asynchronous startup function, never with a module-level await:
+Rollup can place route dependencies in the entry chunk, which must finish
+evaluating before those routes can load.
 
 Person and agent mentions use `--marketing-mention` with a soft tint in both
-palettes, including static homepage conversations and editable demo tokens. The
+palettes, including static demo conversations and editable demo tokens. The
 light document graphic uses that accent for resolved mentions instead of the
 neutral website control accent. Comment anchors use the product’s yellow wash
 and underline; the sample date-check comment anchors to the launch date, leaving
@@ -385,13 +340,13 @@ Keep message objects stable across walkthrough steps; only newly appended messag
 should mount and animate, preserving existing bubbles, controls, and composer state.
 The agent story shows the request, its call/document context, and the editable
 draft in the actual chat order. Rich sample links use the existing composer’s
-optional `bodyContent`; ordinary drafts and the homepage keep their current behavior.
+optional `bodyContent`; ordinary drafts keep their current behavior.
 Use one neutral surface, fixed-height frames, scoped vertical scrolling, and short
 opacity transitions. Test both palettes and mobile account selection, plus local
 sharing, draft edits, keyboard scope, reduced motion, and timer cleanup.
 
 `/crm` follows the same reading width, left-aligned slab headings, glass edges,
-and homepage closing animation. `WorkspaceDesktopDemo` supplies the shared
+and the shared product closing animation. `WorkspaceDesktopDemo` supplies the shared
 hero dimensions, wallpaper, padding, and shadows on CRM as on the other product pages.
 Cream heroes reuse the dark Monterey wallpaper with a static ivory/stone filter
 and a softer warm window shadow; the surrounding cream page remains unchanged.
@@ -463,7 +418,7 @@ Retain FAQ class markers so prerendering emits matching FAQPage structured data.
 
 `/tour` (`features/marketing/views/SalesPage.tsx`) is the Instagram ad landing
 page. It is prerendered, `noindex`, out of the sitemap, and not linked from the
-navigation. It has four parts, top to bottom: the homepage hero markup
+navigation. It has four parts, top to bottom: the original welcome hero markup
 (`WelcomeStep` with `ContextScene`), the expanded `FeatureConstellation`, a
 savings calculator, and a closing "Pick a time" button.
 
@@ -481,7 +436,7 @@ search controls; old `?tag=` links still reach the complete list. Article URLs,
 metadata, and the chronological ordering stay unchanged.
 
 `posts-shell.css`, `posts-index.css`, and `post-reading.css` keep the blog aligned
-with the homepage: slab titles, monochrome accents, and the onboarding security
+with product pages: slab titles, monochrome accents, and the onboarding security
 section’s Inter reading measure. Comparison FAQs use `PostFaqItem` with native
 `details` disclosures; retain its FAQ class markers for prerendered FAQPage data.
 Check the index and article layouts at desktop and mobile widths, verify the
@@ -497,52 +452,10 @@ Verify typing `@`, keyboard and mouse selection, category drilldown, multiple
 references, paste, and sending a local channel message. References retain their
 formatting after sending; pasted HTML is treated as plain text.
 
-On desktop (800px and wider), the homepage embeds `/demo?embedded=true` at
-`#interactive-demo` in a 1200px-max
-noisy gradient stage using the feature bubbles’ violet, teal, green, and amber
-palette. As the page scrolls, the bubbles converge and fade into the expanding
-stage, followed by the workspace. Reduced motion shows the finished state.
-Interacting with the frame settles the entrance permanently for that mount.
-Embedded mode hides the demo banner; the normal `/demo` route keeps it. Verify
-navigation and the mobile sidebar inside the frame, forward/backward scrolling,
-and interaction during the reveal. The desktop iframe renders at 85% scale inside
-the same frame. An IntersectionObserver sets the iframe's source as it nears the
-viewport. Do not use native `loading="lazy"` for the sample workspace: Safari
-can ignore the router's history updates in lazy frames and fail to boot. Verify
-the embedded workspace in native Safari as well as Chromium after a production
-build; a correctly styled standalone `/demo` does not prove the iframe boots.
-
-A benefit carousel fades the live preview into slab-serif headlines. The first
-highlight opens an email inside Home’s mixed activity feed; subsequent highlights
-show Chat, Docs, CRM, Tasks, and Agents. Arrows, dots, left/right keys, and swiping
-the caption select highlights without reloading the frame. Page-level left/right keys work while at least 35% of the carousel is visible, without first focusing an arrow. Editors, other focused controls, open dialogs, modified keys, and keys inside the iframe keep their native behavior. Horizontal drags
-capture the pointer; vertical gestures keep scrolling the page. The carousel never advances on a timer.
-The shared interaction boundary keeps the page scrollable until entry. Clicking or typing inside it keeps the fade,
-headline, controls, and layout intact. Sidebar navigation updates the active
-highlight without overriding the visitor’s navigation. Slab headlines sit directly
-below the blue indicator and chevrons, without small category headers. Verify direct
-interaction, slide navigation, and reduced motion when changing this section.
-Below the carousel, the original open-source section shows GitHub stars, a16z
-backing, and ISO/SOC 2/CASA badges. A continuous grainy gradient funnels into the
-GitHub mark on scroll, then drains away. Verify the flow in both scroll directions
-and after resizing. Reduced motion skips the flow
-and shows the finished GitHub treatment.
-The 800px desktop-demo breakpoint is also enforced by CSS on prerendered HTML,
-so phones never paint the desktop carousel before hydration switches layouts.
-The production smoke checks visibility before and after releasing JavaScript.
-Below 800px, the homepage keeps the original sequence: feature bubbles, the full
-open-source section, then a curved connector into the abbreviated sidebar diagram.
-The embedded demo, carousel, liquid transition, and demo launch button do not mount
-on mobile. Resize across 800px to verify both compositions and animation cleanup.
-The desktop sidebar graphic remains behind `SHOW_SIDEBAR_BREAKDOWN = false` in
-`HomepageSections.tsx`.
-
-When that flag is enabled, the Interactive demo button below the sidebar graphic opens `/demo`
-in a 90vw × 90dvh modal. The iframe mounts only after activation. Check the
-animated 150px connector, traffic-light and top-right close controls, focus
-return, and Escape inside the iframe (an inner menu should consume Escape first).
-Reduced-motion preferences disable hover transitions and modal animation, and
-show the connector fully drawn.
+`/demo?embedded=true` remains available for embedded previews. The current
+homepage links to `/demo` from the sheets panel rather than mounting the former
+carousel. The retained `HomepageInteractiveDemo`, carousel, sidebar, and
+`HomepageSections` components are not mounted by `Homepage`.
 
 `/demo` provides a session-only workspace with Home, tasks, email, channels, DMs,
 documents, a Customers board/list, Calendar, and a scripted agent. It is prerendered for direct links and marked `noindex`;
@@ -777,7 +690,7 @@ is visible, hold the completed edits for eight seconds before replaying, and cle
 remote carets on the first activation or edit.
 This is a local illustrative walkthrough, not a live CRDT session or a latency
 benchmark; the visitor can type directly in its existing editable document.
-The homepage retains the original checklist sequence. Keep the speed message
+Keep the speed message
 in the hero copy and the Edit together card, rather than adding a fourth
 section. Agent editing, linked sources, and organization retain their own demos.
 The FAQ explains offline editing and simultaneous edits in plain language. All examples use a page-owned Website brief,
@@ -1007,13 +920,13 @@ automation; reduced motion opens the saved summary. Verify the checkbox,
 recording navigation, transcript seeking, and phone layout. CRM linking remains
 on the CRM page; this scene demonstrates channel-call team sharing only.
 
-On the landing page, Valentina is an external contact at `coparse.com` and
+In the retained email demo, Valentina is an external contact at `coparse.com` and
 Julia’s Cc address is `julia@macro.com`. Spreadsheet and pipeline contacts use
 their company’s domain; fictional companies use reserved `.example` domains.
 
-Homepage feature dividers align with the heading text, above the description; coding agent logos sit in a separate row above the dividers. The document animation renders saved scheduling links as calendar mentions with a short label, matching Macro’s booking link presentation.
+The document animation renders saved scheduling links as calendar mentions with a short label, matching Macro’s booking link presentation.
 
-### Linked homepage spreadsheet cells
+### Retained spreadsheet and CRM demo components
 
 The company and person cells in `HomepageSpreadsheet` use the editor’s mention
 presentation. They open a local company record or its Team section through
@@ -1027,19 +940,14 @@ The email-sharing result uses an inline email icon and linked subject from
 or reply-count footer. Opening the mention shows the complete sample thread,
 including subsequent replies.
 
-The landing-page CRM illustration has no playback footer or Pause/Replay controls;
+The retained `HomepageCrm` illustration has no playback footer or Pause/Replay controls;
 it still pauses offscreen and when a visitor enters the demo.
 
-The landing CRM drag hides its source card while preserving its slot. The drag
+Its drag hides its source card while preserving its slot. The drag
 copy and pointer sit beside the panning canvas and use viewport-space transforms;
 use a box shadow rather than a moving drop-shadow filter to avoid ghosted trails.
 
-The landing CRM artboard fixes its card, header, and row dimensions in pixels to
+Its artboard fixes its card, header, and row dimensions in pixels to
 match its animation coordinates before applying the viewport scale. Its shared
 card surfaces are display-only: no hover transitions or cursor transform easing.
 Pickup and drop must preserve the card’s screen-space bounds on phones too.
-
-On phones, retain the final blog-row divider and hide the adjacent closing
-footer rule. The homepage document frame is 420px tall below 700px because its
-version-history band is hidden there; avoid retaining empty desktop fade space
-between the document and its Learn more links.

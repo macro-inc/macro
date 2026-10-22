@@ -1,86 +1,85 @@
-import ArrowRight from '@phosphor/arrow-right.svg';
-import { createSignal } from 'solid-js';
-import { HomepageScrollCue } from '../marketing/components/HomepageScrollCue';
-import { HomepageSections } from '../marketing/components/HomepageSections';
-import { HomepageUnification } from '../marketing/components/HomepageUnification';
-import { routePhoneToMobileSignup } from '../marketing/core/navigation';
-import { OnboardingShell } from './components/OnboardingShell';
-import { WelcomeStep } from './components/WelcomeSteps';
+import Logo from '@icon/macro-logo.svg';
+import { For } from 'solid-js';
+import { HomepageTiles } from '../marketing/components/homepage/HomepageTiles';
+import { MacroHero } from '../marketing/components/homepage/MacroHero';
+import { SiteHeader } from '../marketing/components/SiteHeader';
+import {
+  FEATURE_PAGES,
+  RESOURCE_PAGES,
+  routePhoneToMobileSignup,
+} from '../marketing/core/navigation';
+import '../marketing/components/homepage/macro-homepage.css';
 
 /** Shared build-time and browser tree: hydration preserves the first-painted hero. */
 export function Homepage() {
-  const [motionSpeed, setMotionSpeed] = createSignal(1);
-  let replayHero: ((duration: number) => void) | undefined;
   return (
-    <>
-      <OnboardingShell
-        wide
-        landing
-        heroFooter={<HomepageScrollCue />}
-        below={
-          <>
-            <HomepageUnification
-              onPreviewReady={
-                import.meta.env.DEV
-                  ? (replay) => {
-                      replayHero = replay;
-                    }
-                  : undefined
-              }
-            />
-            <HomepageSections />
-          </>
-        }
-      >
-        <WelcomeStep
-          onContinue={() => {}}
-          action={
-            <div class="homepage-hero-action mt-6 flex justify-center pb-5">
-              <a
-                class="site-nav-start homepage-hero-cta homepage-primary-cta"
-                href="/app/signup"
-                onClick={routePhoneToMobileSignup}
-              >
-                <span>Get started</span>
-                <ArrowRight aria-hidden="true" />
-              </a>
-            </div>
-          }
-        />
-      </OnboardingShell>
-      {import.meta.env.DEV && (
-        <details class="fixed bottom-3 right-5 z-modal rounded-2xl border border-edge bg-surface p-2 text-[10px] text-ink-muted">
-          <summary>Preview controls</summary>
+    <div class="macro-homepage">
+      <SiteHeader />
+      <main class="macro-home-scroll" data-onboarding-scroll>
+        <section class="macro-home-hero" aria-labelledby="macro-home-title">
+          <MacroHero />
+          <h1 id="macro-home-title" data-welcome-heading>
+            Macro
+          </h1>
           <a
-            href="/onboarding-preview.html"
-            class="block rounded-full px-2 py-1"
+            class="macro-home-button"
+            href="/app/signup"
+            onClick={routePhoneToMobileSignup}
           >
-            Preview onboarding
+            Get started
           </a>
-          <button
-            type="button"
-            class="rounded-full px-2 py-1"
-            onClick={() => replayHero?.(1400 / motionSpeed())}
+          <p class="macro-home-tagline">
+            Your people. Your projects.
+            <br />
+            Your AI. All together.
+          </p>
+          <p class="macro-home-description">
+            Email, chat, docs, tasks, and agents.
+            <br />
+            One beautifully connected workspace.
+          </p>
+        </section>
+        <HomepageTiles />
+        <section
+          class="macro-home-closing"
+          aria-labelledby="macro-closing-title"
+        >
+          <Logo aria-hidden="true" />
+          <h2 id="macro-closing-title">A place for your best work.</h2>
+          <a
+            class="macro-home-button"
+            href="/app/signup"
+            onClick={routePhoneToMobileSignup}
           >
-            Replay hero → features
-          </button>
-          <label>
-            Motion speed{' '}
-            <select
-              aria-label="Motion speed"
-              class="bg-surface"
-              value={motionSpeed()}
-              onChange={(event) =>
-                setMotionSpeed(Number(event.currentTarget.value))
-              }
+            Get started
+          </a>
+          <a class="macro-home-pricing" href="/pricing">
+            Explore plans and pricing
+          </a>
+        </section>
+        <footer class="macro-home-footer">
+          <a class="macro-footer-brand" href="/" aria-label="Macro home">
+            <Logo aria-hidden="true" />
+            Macro
+          </a>
+          <nav aria-label="Footer navigation">
+            <For
+              each={[
+                ...FEATURE_PAGES,
+                ...RESOURCE_PAGES,
+                { href: '/pricing', label: 'Pricing' },
+                { href: '/partners', label: 'Partners' },
+                { href: '/privacy', label: 'Privacy' },
+                { href: '/terms', label: 'Terms' },
+                { href: '/delete-account', label: 'Delete account' },
+              ]}
             >
-              <option value="1">1×</option>
-              <option value="0.25">¼×</option>
-              <option value="0.1">⅒×</option>
-            </select>
-          </label>
-        </details>
-      )}
-    </>
+              {(link) => <a href={link.href}>{link.label}</a>}
+            </For>
+          </nav>
+          <span>Made for working together.</span>
+        </footer>
+      </main>
+    </div>
   );
 }

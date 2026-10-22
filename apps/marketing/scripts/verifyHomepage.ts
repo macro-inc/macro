@@ -1,6 +1,5 @@
 import path from 'node:path';
 import { chromium, expect } from '@playwright/test';
-import { verifyCrmMotion } from './verifyCrmMotion';
 import { verifyDemo } from './verifyDemo';
 import { verifyProductPages } from './verifyProductPages';
 
@@ -79,11 +78,11 @@ export async function verifyHomepage(directory: string): Promise<void> {
             `Homepage SSR root height is ${rootHeight}, expected viewport height ${viewport.height} (${label})`
           );
 
-        // The SSR fallback is desktop, but CSS must hide it on phones before
-        // hydration replaces it with the mobile story. Otherwise it flashes in.
-        const desktopDemo = page.locator('.homepage-embedded-demo');
-        if (viewport.width < 800) await expect(desktopDemo).toBeHidden();
-        else await expect(desktopDemo).toBeVisible();
+        await expect(page.locator('.macro-feature-tile')).toHaveCount(6);
+        await expect(page.locator('.macro-homepage')).toHaveCSS(
+          'background-color',
+          'rgb(255, 255, 255)'
+        );
 
         releaseScripts();
         await page.waitForLoadState('load');
@@ -92,30 +91,12 @@ export async function verifyHomepage(directory: string): Promise<void> {
             `Homepage hydration failed (${label}): ${errors.join('; ')}`
           );
         await page.waitForSelector(
-          '#root[data-public-ready="true"] .homepage-feature',
+          '#root[data-public-ready="true"] .macro-feature-tile',
           {
             state: 'attached',
             timeout: 10000,
           }
         );
-        if (viewport.width < 800) {
-          await expect(desktopDemo).toHaveCount(0);
-          await expect(page.locator('.homepage-mobile-story')).toBeVisible();
-          const featureGap = await page
-            .locator('#coding-agents .homepage-feature-title')
-            .evaluate((heading) => {
-              const links = document.querySelector(
-                '#documents .homepage-feature-more-group'
-              );
-              if (!links) throw new Error('Missing document feature links');
-              return (
-                heading.getBoundingClientRect().top -
-                links.getBoundingClientRect().bottom
-              );
-            });
-          expect(featureGap).toBeGreaterThanOrEqual(32);
-          expect(featureGap).toBeLessThanOrEqual(56);
-        } else await expect(desktopDemo).toBeVisible();
         await page.evaluate(async () => {
           await document.fonts.ready;
           await new Promise<void>((resolve) =>
@@ -145,6 +126,7 @@ export async function verifyHomepage(directory: string): Promise<void> {
 
         if (viewport.width >= 768)
           await page
+            .locator('.site-header')
             .getByRole('link', { name: 'Macro home', exact: true })
             .hover();
         else
@@ -159,106 +141,65 @@ export async function verifyHomepage(directory: string): Promise<void> {
           await page
             .getByRole('button', { name: 'Close navigation', exact: true })
             .tap();
-        if (viewport.width >= 800) {
-          await page.locator('#interactive-demo').scrollIntoViewIfNeeded();
-          await page
-            .getByRole('button', {
-              name: /^Interact with Macro sample workspace/,
-            })
-            .click();
-          const workspace = page.frameLocator(
-            'iframe[title="Embedded Macro sample workspace"]'
-          );
-          // Prerendered buttons can paint before they have handlers. Also wait
-          // for iframe load, whose carousel listener selects the initial view.
-          await expect(page.locator('.homepage-embedded-loading')).toHaveCount(
-            0
-          );
-          await workspace.locator('.dummy-route:not([data-hk])').waitFor();
-          const chat = workspace
-            .getByRole('navigation', { name: 'Workspace navigation' })
-            .getByRole('button', { name: 'Chat', exact: true });
-          await chat.click();
-          await expect(chat).toHaveAttribute('aria-current', 'page');
-          await expect(
-            workspace.getByRole('complementary', { name: 'Chat navigation' })
-          ).toBeVisible();
-          await page
-            .getByRole('button', { name: 'Show Docs highlight', exact: true })
-            .click();
-          await expect(
-            workspace
-              .getByRole('navigation', { name: 'Workspace navigation' })
-              .getByRole('button', { name: 'Drive', exact: true })
-          ).toHaveAttribute('aria-current', 'page');
-        }
+        // Reduced motion is complete and static, with no meaningless pause control.
+        await expect(
+          page.getByRole('button', { name: 'Pause animation' })
+        ).toBeHidden();
+        await expect(page.locator('.macro-hero-surface').first()).toHaveCSS(
+          'opacity',
+          '1'
+        );
+        await page.emulateMedia({ reducedMotion: 'no-preference' });
+        const pause = page.getByRole('button', { name: 'Pause animation' });
+        await pause.click();
+        await expect(
+          page.getByRole('button', { name: 'Play animation' })
+        ).toHaveAttribute('aria-pressed', 'true');
+        await expect(page.locator('.macro-hero-mark')).toHaveCSS(
+          'animation-play-state',
+          'paused'
+        );
+        await page.getByRole('button', { name: 'Play animation' }).click();
+        await expect(page.locator('.macro-hero-mark')).toHaveCSS(
+          'animation-play-state',
+          'running'
+        );
         await page.locator('#email').scrollIntoViewIfNeeded();
+        await expect(page.locator('.macro-hero-mark')).toHaveCSS(
+          'animation-play-state',
+          'paused'
+        );
+        const dimensions = await page
+          .locator('.macro-feature-grid')
+          .evaluate((grid) => ({
+            columns:
+              getComputedStyle(grid).gridTemplateColumns.split(' ').length,
+            overflow: document.documentElement.scrollWidth > window.innerWidth,
+          }));
+        expect(dimensions.columns).toBe(viewport.width < 701 ? 1 : 2);
+        expect(dimensions.overflow).toBe(false);
         await page
-          .locator('[data-email-demo-body]')
-          .waitFor({ state: 'visible' });
-        const entry = page.getByRole('button', {
-          name: /^Interact with Email and chat/,
-        });
-        if (viewport.width < 768) await entry.tap();
-        else await entry.click();
-        await expect(
-          page.getByRole('textbox', { name: 'Email body', exact: true })
-        ).toBeEditable();
-        if (colorScheme === 'light') {
-          await page.locator('#documents').scrollIntoViewIfNeeded();
-          await page.locator('#documents .mds-chip-person').first().waitFor();
-          await page.locator('#coding-agents').scrollIntoViewIfNeeded();
-          await page
-            .locator('#coding-agents .homepage-person-mention')
-            .waitFor();
-          for (const selector of [
-            '#email .demo-inline-mention.mention-person',
-            '#documents .mds-chip-person',
-            '#coding-agents .homepage-person-mention',
-          ]) {
-            const tint = await page
-              .locator(selector)
-              .first()
-              .evaluate((node) => {
-                const canvas = document.createElement('canvas');
-                canvas.width = canvas.height = 1;
-                const context = canvas.getContext('2d');
-                if (!context) throw new Error('Missing color test context');
-                context.fillStyle = '#fff';
-                context.fillRect(0, 0, 1, 1);
-                context.fillStyle = getComputedStyle(node).backgroundColor;
-                context.fillRect(0, 0, 1, 1);
-                const [red, , blue] = context.getImageData(0, 0, 1, 1).data;
-                return blue - red;
-              });
-            // The old neutral accent produced grey chips in the cream palette.
-            expect(
-              tint,
-              `${selector} needs a visible blue tint`
-            ).toBeGreaterThan(10);
-          }
-        }
-        await page.locator('#documents').scrollIntoViewIfNeeded();
-        const comment = page.getByRole('img', {
-          name: '1 comment on the launch date: Please check the date against Valentina’s email.',
-        });
-        await expect(comment).toBeVisible();
-        await expect(
-          page.locator('#documents .mds-line.h2 .mds-mark')
-        ).toHaveCount(0);
+          .locator('#email')
+          .getByRole('link', { name: 'Email', exact: true })
+          .click();
+        await expect(page).toHaveURL(`${origin}/email`);
+        await page.goBack();
+        await page.locator('.macro-home-hero .macro-home-button').click();
+        await expect(page).toHaveURL(
+          `${origin}${viewport.width < 640 ? '/mobile-signup' : '/app/signup'}`
+        );
         if (errors.length)
           throw new Error(
             `Homepage demo failed (${label}): ${errors.join('; ')}`
           );
         console.log(
-          `[prerender] Homepage ${label}: SSR heading identity and layout, hydration, navigation, sample workspace, and email demo verified`
+          `[prerender] Homepage ${label}: SSR heading identity and layout, hydration, navigation, feature links, animation, and signup routing verified`
         );
       } finally {
         releaseScripts();
         await page.close();
       }
     }
-    await verifyCrmMotion(browser, origin);
     await verifyProductPages(browser, origin);
   } finally {
     await browser?.close();
