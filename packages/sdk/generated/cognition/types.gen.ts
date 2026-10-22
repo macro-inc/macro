@@ -1245,6 +1245,16 @@ export type NotionTaskFields = {
  */
 export type OnboardingRow = {
     /**
+     * The MCP client that led setup (its registered name, e.g.
+     * `claude-code`), when known.
+     */
+    agent_client?: string | null;
+    /**
+     * When the person's own AI agent took over setup over MCP. `Some` means
+     * the account is agent-led: it skips the web flow.
+     */
+    agent_led_at?: string | null;
+    /**
      * When the flow completed, if it has.
      */
     completed_at?: string | null;

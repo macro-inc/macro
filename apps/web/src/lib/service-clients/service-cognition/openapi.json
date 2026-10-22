@@ -4681,6 +4681,15 @@
         "description": "One user's onboarding row.",
         "required": ["status", "skipped", "started_at"],
         "properties": {
+          "agent_client": {
+            "type": ["string", "null"],
+            "description": "The MCP client that led setup (its registered name, e.g.\n`claude-code`), when known."
+          },
+          "agent_led_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the person's own AI agent took over setup over MCP. `Some` means\nthe account is agent-led: it skips the web flow."
+          },
           "completed_at": {
             "type": ["string", "null"],
             "format": "date-time",

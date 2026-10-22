@@ -69,6 +69,7 @@ import {
   TasksRouteView,
 } from './lazy-route-views';
 import {
+  AgentConnectPage,
   BookingReceiptRoutePage,
   EmailCallback,
   EmailLinkCallback,
@@ -83,6 +84,7 @@ import {
 import {
   activityRoute,
   agentChatsRoute,
+  agentConnectRoute,
   agentsRoute,
   agentsViewRoute,
   appRoute,
@@ -247,6 +249,7 @@ export function AppRouterView() {
           component={MobileWebSignup}
         />
         <Route definition={onboardingRoute} component={OnboardingPage} />
+        <Route definition={agentConnectRoute} component={AgentConnectPage} />
         <Route definition={inviteRoute} component={InviteWelcome} />
         <Route
           definition={internalInviteLinksRoute}

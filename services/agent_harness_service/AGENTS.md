@@ -24,6 +24,13 @@ Pulumi stacks; they do not host extra agent processes.
 - `src/internal_mcp.rs`: the internal MCP server exposed to running sessions.
 - `src/public_mcp.rs` + `src/public_mcp/`: public workspace MCP and OAuth;
   reuses the harness tool context and retains bearer authentication.
+  Agent-led setup (behind `ENABLE_AGENT_SETUP`, off by default) is composed in
+  `public_mcp.rs` from `ToolServiceContext::agent_setup_parts`:
+  `public_mcp/sign_in.rs` (sign-in hook), `agent_led.rs` (handover),
+  `setup_prompt.rs` (per-person setup hint, `setup` prompt), `setup_ports.rs`
+  (the account adapter for `crates/agent_setup`), and `telemetry.rs`,
+  `request_observer.rs`, `client_attribution.rs` (PostHog MCP analytics, only
+  with setup on and `POSTHOG_API_KEY` set).
 - `OPENAI_SUBMISSION.md` + `openai-plugin-package/`: OpenAI submission assets;
   `src/public_mcp.rs` preserves the domain verification endpoint configured by
   `OPENAI_DOMAIN_VERIFICATION_TOKEN`.
@@ -91,8 +98,9 @@ All feature configs read the same harness `APP_SECRETS_JSON`; the harness
 Doppler validation binary validates each config. `MCP_PUBLIC_URL` is the public
 server origin (`mcp-server[-dev].macro.com`); `MCP_CLIENT_PUBLIC_URL` is the
 integrations callback origin (`document-cognition[-dev].macro.com`). The shared
-gateway preserves these hostnames and internally rewrites cognition paths. Both settings are required; keep them separate. `POSTHOG_API_KEY` and `POSTHOG_HOST` remain
-available for feature flags and future analytics; MCP emits no analytics events.
+gateway preserves these hostnames and internally rewrites cognition paths. Both settings are required; keep them separate. `POSTHOG_API_KEY` and `POSTHOG_HOST` serve
+feature flags, and MCP analytics while `ENABLE_AGENT_SETUP` is on; with it off MCP emits no
+analytics events.
 In deployed configs, `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY`
 is cognition's Secrets Manager reference; AI tools resolve the separate
 `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME` reference.
@@ -105,6 +113,17 @@ listener failure shuts down the process so ECS can replace the task.
 
 ## Gotchas
 
+- With `ENABLE_AGENT_SETUP` off, public MCP clients get exactly the
+  instructions, tools and capabilities they had before agent-led setup; a test
+  in `public_mcp/tool_service/test.rs` pins the text literally, so keep it in
+  step when the preamble changes. `claude.com` among the default redirect
+  hosts, and the auth proxy reading the client's registered name at sign-in,
+  apply either way.
+- Agent-led setup reaches, at sign-in, only accounts the sign-in created
+  (`NEW_ACCOUNT_WINDOW`); the setup hint treats an account whose row hasn't
+  landed yet as new. Someone who already had Macro gets one line of setup in
+  the instructions, and the Setup tools hand over any account that never
+  finished web onboarding if they ask.
 - Keep two tasks and rolling replacements in both environments. Preview
   control uses shared Postgres state. SSH claims a tunnel owner; browser HTTP/WS
   forwards directly to that owner. Keep preview security-group self-ingress on

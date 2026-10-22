@@ -4,6 +4,8 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
+import type { OnboardingRowAgentClient } from './onboardingRowAgentClient';
+import type { OnboardingRowAgentLedAt } from './onboardingRowAgentLedAt';
 import type { OnboardingRowCompletedAt } from './onboardingRowCompletedAt';
 import type { OnboardingStatus } from './onboardingStatus';
 
@@ -11,6 +13,12 @@ import type { OnboardingStatus } from './onboardingStatus';
  * One user's onboarding row.
  */
 export interface OnboardingRow {
+  /** The MCP client that led setup (its registered name, e.g.
+`claude-code`), when known. */
+  agent_client?: OnboardingRowAgentClient;
+  /** When the person's own AI agent took over setup over MCP. `Some` means
+the account is agent-led: it skips the web flow. */
+  agent_led_at?: OnboardingRowAgentLedAt;
   /** When the flow completed, if it has. */
   completed_at?: OnboardingRowCompletedAt;
   /** Whether the user skipped rather than finished. */

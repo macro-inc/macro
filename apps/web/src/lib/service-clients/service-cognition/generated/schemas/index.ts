@@ -202,6 +202,8 @@ export * from './notionTaskFieldsDue';
 export * from './notionTaskFieldsPriority';
 export * from './notionTaskFieldsStatus';
 export * from './onboardingRow';
+export * from './onboardingRowAgentClient';
+export * from './onboardingRowAgentLedAt';
 export * from './onboardingRowCompletedAt';
 export * from './onboardingState';
 export * from './onboardingStateSuggestedTeamDomain';

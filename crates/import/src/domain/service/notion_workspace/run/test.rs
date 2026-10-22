@@ -331,7 +331,7 @@ async fn approved(
         owner,
         ImportSource::Notion,
         review,
-        AgentSessionId::new_from_uuid(session),
+        Some(AgentSessionId::new_from_uuid(session)),
     )
     .await
     .unwrap();
@@ -960,7 +960,7 @@ async fn presented_while_planning(
     repo.start_run(owner, ImportSource::Notion, &[])
         .await
         .unwrap();
-    repo.attach_review(owner, ImportSource::Notion, review, session)
+    repo.attach_review(owner, ImportSource::Notion, review, Some(session))
         .await
         .unwrap();
     (review, session, rows)

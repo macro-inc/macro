@@ -402,7 +402,7 @@ async fn a_reviewed_run_reports_its_review_and_a_cancel_survives_the_write_endin
         &alice,
         ImportSource::Notion,
         review,
-        AgentSessionId::new_from_uuid(session),
+        Some(AgentSessionId::new_from_uuid(session)),
     )
     .await
     .unwrap();

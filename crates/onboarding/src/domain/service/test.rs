@@ -13,6 +13,9 @@ fn active_row() -> OnboardingRow {
         skipped: false,
         started_at: chrono::Utc::now(),
         completed_at: None,
+        agent_led_at: None,
+        agent_client: None,
+        agent_setup_done_at: None,
     }
 }
 
@@ -59,6 +62,23 @@ impl OnboardingRepo for MockRepo {
             completed_at: Some(chrono::Utc::now()),
             ..active_row()
         })
+    }
+
+    async fn mark_agent_led(
+        &self,
+        _user: &MacroUserIdStr<'static>,
+        client: Option<&str>,
+    ) -> Result<Option<OnboardingRow>> {
+        Ok(Some(OnboardingRow {
+            status: OnboardingStatus::Completed,
+            agent_led_at: Some(chrono::Utc::now()),
+            agent_client: client.map(str::to_owned),
+            ..active_row()
+        }))
+    }
+
+    async fn finish_agent_setup(&self, _user: &MacroUserIdStr<'static>) -> Result<()> {
+        Ok(())
     }
 
     async fn delete_row(&self, _user: &MacroUserIdStr<'static>) -> Result<()> {

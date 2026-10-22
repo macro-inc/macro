@@ -35,7 +35,7 @@ impl NotionPlanRepo for Recorder {
         _: &MacroUserIdStr<'static>,
         _: ImportSource,
         _: Uuid,
-        _: agent_session::domain::model::AgentSessionId,
+        _: Option<agent_session::domain::model::AgentSessionId>,
     ) -> Result<u64> {
         unreachable!("recording a scan never attaches a review")
     }

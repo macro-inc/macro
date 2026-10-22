@@ -13,8 +13,8 @@
 use super::models::*;
 use super::ports::{
     CanonicalImportRepo, EntityCreator, ImportError, ImportRepo, ImportedDocumentProperties,
-    ImportedDocumentProperty, ImportedDocumentPropertyValue, ImportedTaskProperties, NotionLinks,
-    Result, SlackSourceError, SlackWorkspaceSource,
+    ImportedDocumentProperty, ImportedDocumentPropertyValue, ImportedTaskProperties,
+    LinearIssueSource, NotionLinks, Result, SlackSourceError, SlackWorkspaceSource,
 };
 use crate::inbound::toolset::{ImportToolContext, notion_import_toolset};
 use agent::types::{ChatMessage, ChatMessageContent, Role};
@@ -32,6 +32,7 @@ use std::time::Duration;
 use uuid::Uuid;
 
 mod admission;
+mod linear_discovery;
 mod notion_workspace;
 mod prompts;
 mod slack;
@@ -143,8 +144,9 @@ pub trait ImportService: Send + Sync + 'static {
         user: MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<ImportState>> + Send;
 
-    /// User-triggered discovery that stages everything visible. Only Slack is
-    /// supported. Returns whether a run started.
+    /// User-triggered discovery that stages everything visible: Slack
+    /// channels, and open Linear issues in hosts that attached a Linear
+    /// source. Returns whether a run started.
     fn start_discovery(
         &self,
         user: MacroUserIdStr<'static>,
@@ -278,12 +280,12 @@ pub trait NotionWorkspaceImporter: Send + Sync + 'static {
 
     /// Tie the staged plan to the review presenting it in agent session
     /// `session_id`, which then hears when the plan is ready and when its
-    /// write ends.
+    /// write ends. `None` ties it to a review approved outside a session.
     fn attach_notion_review(
         &self,
         user: &MacroUserIdStr<'static>,
         review_id: Uuid,
-        session_id: agent_session::domain::model::AgentSessionId,
+        session_id: Option<agent_session::domain::model::AgentSessionId>,
     ) -> impl Future<Output = Result<u64>> + Send;
 
     /// Write the plan tied to `review_id` with the owner's `choices`.
@@ -309,6 +311,7 @@ pub struct ImportServiceImpl<R, S, C, W = NoSlackSource, N = NoNotionConnections
     repo: R,
     notion: Arc<N>,
     slack_source: Arc<W>,
+    linear_source: Option<Arc<dyn LinearIssueSource>>,
     mcp_tools: Arc<S>,
     creator: Arc<C>,
     recorder: Arc<dyn ai_usage::UsageRecorder>,
@@ -343,6 +346,7 @@ impl<R: Clone, S, C, W: SlackWorkspaceSource, N> Clone for ImportServiceImpl<R, 
             repo: self.repo.clone(),
             notion: self.notion.clone(),
             slack_source: self.slack_source.clone(),
+            linear_source: self.linear_source.clone(),
             mcp_tools: self.mcp_tools.clone(),
             creator: self.creator.clone(),
             recorder: self.recorder.clone(),
@@ -365,6 +369,7 @@ impl<R, S, C> ImportServiceImpl<R, S, C> {
             repo,
             notion: Arc::new(NoNotionConnections),
             slack_source: Arc::new(NoSlackSource),
+            linear_source: None,
             mcp_tools,
             creator,
             recorder,
@@ -391,7 +396,15 @@ impl<R, S, C, W: SlackWorkspaceSource, N: Send + Sync + 'static> ImportServiceIm
             notifier: self.notifier,
             jobs: self.jobs,
             slack_source: source,
+            linear_source: self.linear_source,
         }
+    }
+
+    /// List people's open Linear issues through `source`, so Linear
+    /// discovery (`start_discovery`) stages them for a plan.
+    pub fn with_linear_source(mut self, source: Arc<dyn LinearIssueSource>) -> Self {
+        self.linear_source = Some(source);
+        self
     }
 
     /// Push state-change nudges through the given notifier.
@@ -430,6 +443,7 @@ impl<R, S, C, W: SlackWorkspaceSource, N: Send + Sync + 'static> ImportServiceIm
             notifier: self.notifier,
             jobs: self.jobs,
             slack_source: self.slack_source,
+            linear_source: self.linear_source,
         }
     }
 
@@ -886,7 +900,8 @@ where
         user: MacroUserIdStr<'static>,
         source: ImportSource,
     ) -> Result<bool> {
-        if source != ImportSource::Slack {
+        let linear = source == ImportSource::Linear && self.linear_source.is_some();
+        if source != ImportSource::Slack && !linear {
             return Err(ImportError::UnsupportedDiscovery(source));
         }
         let from = [
@@ -898,7 +913,10 @@ where
         self.reap_stale_runs(&user).await;
         let won = self.repo.start_run(&user, source, &from).await?;
         if won {
-            self.spawn_slack_discovery(user.clone());
+            match source {
+                ImportSource::Linear => self.spawn_linear_discovery(user.clone()),
+                _ => self.spawn_slack_discovery(user.clone()),
+            }
             self.notify(&user).await;
         }
         Ok(won)

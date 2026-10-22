@@ -45,6 +45,14 @@ from user requests and defines the notification-only `<noop/>` contract.
 
 - `cargo test -p prompt` (`SQLX_OFFLINE` unset).
 
+## Gotchas
+
+- MCP instructions: Claude Code keeps only the first
+  `MCP_INSTRUCTIONS_VISIBLE_CHARS`, so `mcp_instructions_for` puts the setup
+  flow (`mcp_setup.rs`), then usage (`mcp_usage.rs`) and reply linking, first;
+  tests pin what must stay visible. `legacy_mcp_instructions` is what clients
+  get while agent-led setup is off: don't edit it.
+
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`

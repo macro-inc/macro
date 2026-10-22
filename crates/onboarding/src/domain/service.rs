@@ -29,6 +29,31 @@ pub trait OnboardingService: Send + Sync + 'static {
         user: MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<OnboardingState>> + Send;
 
+    /// The user's onboarding row, without creating one. `None` means the
+    /// user never entered either flow.
+    fn row(
+        &self,
+        user: MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<Option<OnboardingRow>>> + Send;
+
+    /// Hand setup to the person's AI agent (see
+    /// [`OnboardingRepo::mark_agent_led`]): an account that has not finished
+    /// web onboarding is marked agent-led and its web flow is completed.
+    /// Idempotent. Returns `None`, changing nothing, for an account that
+    /// already finished onboarding on the web.
+    fn mark_agent_led(
+        &self,
+        user: MacroUserIdStr<'static>,
+        client: Option<String>,
+    ) -> impl Future<Output = Result<Option<OnboardingRow>>> + Send;
+
+    /// Record that an agent-led account's setup reached its final report, so
+    /// the agent stops leading with setup. Idempotent.
+    fn finish_agent_setup(
+        &self,
+        user: MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<()>> + Send;
+
     /// Finish the flow (`skipped` records how).
     fn complete(
         &self,
@@ -103,6 +128,25 @@ where
             connected_servers,
             suggested_team_domain: suggested_team_domain(&user),
         })
+    }
+
+    #[tracing::instrument(skip(self, user), err)]
+    async fn row(&self, user: MacroUserIdStr<'static>) -> Result<Option<OnboardingRow>> {
+        self.repo.get_row(&user).await
+    }
+
+    #[tracing::instrument(skip(self, user), err)]
+    async fn mark_agent_led(
+        &self,
+        user: MacroUserIdStr<'static>,
+        client: Option<String>,
+    ) -> Result<Option<OnboardingRow>> {
+        self.repo.mark_agent_led(&user, client.as_deref()).await
+    }
+
+    #[tracing::instrument(skip(self, user), err)]
+    async fn finish_agent_setup(&self, user: MacroUserIdStr<'static>) -> Result<()> {
+        self.repo.finish_agent_setup(&user).await
     }
 
     #[tracing::instrument(skip(self, user), err)]

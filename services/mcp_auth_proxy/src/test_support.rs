@@ -13,12 +13,13 @@ use sha2::{Digest, Sha256};
 use crate::domain::{
     models::{
         AccessToken, AuthorizeRequest, CallbackRequest, ClientRegistrationRequest,
-        IssuedAuthorizationCode, PendingAuthorization, RefreshToken, RegisteredClient,
+        IssuedAuthorizationCode, PendingAuthorization, RefreshToken, RegisteredClient, SignIn,
         UpstreamTokens,
     },
     ports::{
-        BoundClientIdFuture, ClientRegistrationStore, OAuthProvider, RefreshTokenBindingStore,
-        RegisteredClientFuture, StoreWriteFuture, UpstreamTokensFuture,
+        BoundClientIdFuture, ClientRegistrationStore, OAuthProvider, ObserveFuture,
+        RefreshTokenBindingStore, RegisteredClientFuture, SignInObserver, StoreWriteFuture,
+        UpstreamTokensFuture,
     },
     redirect_uri::RedirectUriPolicy,
     service::{
@@ -254,6 +255,29 @@ impl OAuthProvider for FakeOAuthProvider {
     }
 }
 
+/// A [`SignInObserver`] that records what it was told.
+#[derive(Default)]
+pub struct RecordingSignInObserver {
+    seen: std::sync::Mutex<Vec<SignIn>>,
+}
+
+impl RecordingSignInObserver {
+    /// The sign-ins observed so far, oldest first.
+    pub fn seen(&self) -> Vec<SignIn> {
+        self.seen.lock().expect("sign-in log poisoned").clone()
+    }
+}
+
+impl SignInObserver for RecordingSignInObserver {
+    fn signed_in(&self, sign_in: SignIn) -> ObserveFuture<'_> {
+        self.seen
+            .lock()
+            .expect("sign-in log poisoned")
+            .push(sign_in);
+        Box::pin(async {})
+    }
+}
+
 /// A broker service wired to in-memory stores, trusting only `claude.ai` for
 /// `https` redirect URIs.
 pub struct Harness {
@@ -263,6 +287,8 @@ pub struct Harness {
     pub inflight: Arc<FakeInflightAuth>,
     /// The client registry the service was built with.
     pub registry: Arc<FakeClientRegistry>,
+    /// Every sign-in the service reported.
+    pub sign_ins: Arc<RecordingSignInObserver>,
 }
 
 impl Harness {
@@ -275,6 +301,7 @@ impl Harness {
     pub fn with_provider(provider: FakeOAuthProvider) -> Self {
         let inflight = Arc::new(FakeInflightAuth::default());
         let registry = Arc::new(FakeClientRegistry::default());
+        let sign_ins = Arc::new(RecordingSignInObserver::default());
         let service = McpAuthProxyServiceImpl::new(McpAuthProxyServiceDeps {
             public_url: "https://mcp.macro.com".to_owned(),
             redirect_uri_policy: RedirectUriPolicy::new(["claude.ai"]),
@@ -282,12 +309,14 @@ impl Harness {
             client_registrations: Arc::clone(&registry) as Arc<dyn ClientRegistrationStore>,
             refresh_token_bindings: Arc::clone(&registry) as Arc<dyn RefreshTokenBindingStore>,
             oauth_provider: Arc::new(provider),
+            sign_in_observer: Arc::clone(&sign_ins) as Arc<dyn SignInObserver>,
         });
 
         Self {
             service,
             inflight,
             registry,
+            sign_ins,
         }
     }
 

@@ -76,9 +76,9 @@ pub use tool_context::{
     ChannelSideEffectClients, FormsToolConfig, MaybeToolEventBroker, NoOpCallRtcClient,
     NoOpConnectionService, NoOpNotificationIngress, NoOpNotificationService,
     NoOpSnsEndpointManager, NoOpTaskProperties, RequestContext, RoutineToolContext,
-    TaskPropertiesAdapter, ToolActivityToolContext, ToolBookingLinkService,
-    ToolBookingLinkToolContext, ToolBookingManagementToolContext, ToolBotService,
-    ToolBotToolContext, ToolCalendarMutationService, ToolCalendarReadService,
+    TaskPropertiesAdapter, ToolActivityToolContext, ToolAgentSetupParts, ToolAgentSetupToolContext,
+    ToolBookingLinkService, ToolBookingLinkToolContext, ToolBookingManagementToolContext,
+    ToolBotService, ToolBotToolContext, ToolCalendarMutationService, ToolCalendarReadService,
     ToolCalendarToolContext, ToolCallRecordQueryService, ToolCallService, ToolCallToolContext,
     ToolChannelEventDispatcher, ToolChannelMediaUploadToolContext, ToolChannelMessagesService,
     ToolChannelToolContext, ToolChatService, ToolChatToolContext, ToolCodingAgentToolContext,
@@ -261,14 +261,14 @@ pub const EAGER_TOOLS: &[&str] = &[
 /// Assemble the toolset and tool-use prompt for a host. These are actually
 /// sent to the AI provider.
 pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
-    tools_for_inner(host, false)
+    tools_for_inner(host, false, false)
 }
 
 /// Direct tools retained when an agent can use the full Macro SDK through code.
 /// Filtering happens before discovery and prompt construction, so lazy loading
 /// cannot reintroduce the hidden SDK methods as direct tools.
 pub fn tools_for_agent_code_mode() -> ToolSetWithPrompt {
-    tools_for_inner(AiHost::AgentSession, true)
+    tools_for_inner(AiHost::AgentSession, true, false)
 }
 
 /// Existing agent-session tools exposed through the code-mode capability policy.
@@ -276,7 +276,14 @@ pub fn code_mode_tools() -> Arc<AiToolSet> {
     tools_for(AiHost::AgentSession).toolset
 }
 
-fn tools_for_inner(host: AiHost, code_mode_direct: bool) -> ToolSetWithPrompt {
+/// The MCP toolset with the agent-led Setup tools, for when setup is switched
+/// on. They serve a person's own agent setting up their workspace over MCP;
+/// inside Macro the person is already set up and the web app connects tools.
+pub fn mcp_tools_with_agent_setup() -> ToolSetWithPrompt {
+    tools_for_inner(AiHost::Mcp, false, true)
+}
+
+fn tools_for_inner(host: AiHost, code_mode_direct: bool, agent_setup: bool) -> ToolSetWithPrompt {
     let toolset = subagent_toolset()
         .add_subtoolset::<ToolBookingManagementToolContext>(booking_management_toolset())
         .add_subtoolset::<ToolNotificationToolContext>(notification_toolset())
@@ -306,6 +313,12 @@ fn tools_for_inner(host: AiHost, code_mode_direct: bool) -> ToolSetWithPrompt {
             .add_tool::<SearchTools, ToolServiceContext>()
             .add_tool::<LoadTools, ToolServiceContext>(),
         AiHost::Mcp => toolset,
+    };
+    let toolset = match host {
+        AiHost::Mcp if agent_setup => toolset.add_subtoolset::<ToolAgentSetupToolContext>(
+            agent_setup::inbound::toolset::setup_toolset(),
+        ),
+        AiHost::Mcp | AiHost::Chat | AiHost::AgentSession | AiHost::ChannelBot => toolset,
     };
     let toolset = match host {
         AiHost::Chat | AiHost::AgentSession => {

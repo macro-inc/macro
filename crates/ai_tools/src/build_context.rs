@@ -557,7 +557,7 @@ pub async fn build_tool_service_context_from_env(
     let admission =
         ai_billing::composition::pg_admission_service(pool.clone(), enforcement, pricing);
     let pipedream_client = crate::mcp_app_catalog::pipedream_client_from_env()?;
-    let import_tool_context = if let Some(secret_name) = maybe_env
+    let (import_tool_context, agent_setup_parts) = if let Some(secret_name) = maybe_env
         .mcp_credentials_key_secret_name
         .as_ref()
         .and_then(|key| key.value())
@@ -604,11 +604,17 @@ pub async fn build_tool_service_context_from_env(
                 recorder.clone(),
             )
             .with_slack_source(Arc::new(
-                import::outbound::mcp_slack_source::McpSlackSource::new(mcp_selector),
+                import::outbound::mcp_slack_source::McpSlackSource::new(mcp_selector.clone()),
             ))
             .with_notion_connections(Arc::new(
                 import_notion::outbound::pipedream::PipedreamNotionConnections::new(
-                    pipedream_connections,
+                    pipedream_connections.clone(),
+                    pipedream_client.clone(),
+                ),
+            ))
+            .with_linear_source(Arc::new(
+                import::outbound::pipedream_linear::PipedreamLinearIssues::new(
+                    pipedream_connections.clone(),
                     pipedream_client.clone(),
                 ),
             ))
@@ -618,9 +624,27 @@ pub async fn build_tool_service_context_from_env(
             ))
             .with_job_shutdown(import_jobs.shutdown, import_jobs.tracker),
         );
-        ToolImportToolContext::wired(import_service)
+        let agent_setup_parts = crate::ToolAgentSetupParts {
+            imports: Arc::new(agent_setup::outbound::import::ImportServiceSetup::new(
+                import_service.clone(),
+            )),
+            connections: Arc::new(
+                agent_setup::outbound::pipedream::ConnectorSetupConnections::new(
+                    mcp_selector,
+                    pipedream_connections,
+                    pipedream_client.clone(),
+                ),
+            ),
+            inbox: Arc::new(agent_setup::outbound::email::EmailSetupInbox::new(
+                user_email_service.clone(),
+            )),
+        };
+        (
+            ToolImportToolContext::wired(import_service),
+            Some(agent_setup_parts),
+        )
     } else {
-        ToolImportToolContext::unwired()
+        (ToolImportToolContext::unwired(), None)
     };
 
     Ok(ToolServiceContext {
@@ -673,6 +697,8 @@ pub async fn build_tool_service_context_from_env(
         forms_tool_context,
         databases_sql_tool_context,
         import_tool_context,
+        agent_setup_tool_context: crate::ToolAgentSetupToolContext::unavailable(),
+        agent_setup_parts,
         chat_tool_context,
         channel_tool_context,
         channel_media_upload_tool_context: crate::build_channel_media_upload_tool_context()?,

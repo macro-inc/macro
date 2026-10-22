@@ -267,6 +267,32 @@ Max checkout stays disabled until prices can be loaded with the retry action.
 Both completion paths preserve an original `next` destination and otherwise land on Home (`/app/home`). Old saved email,
 connector, building, and summary step names are migrated on resume.
 
+## Agent-led setup links
+
+Accounts set up by the person's own AI agent over MCP are agent-led. While
+agent-led setup is switched on (`ENABLE_AGENT_SETUP` on the MCP server), an
+MCP sign-in that created the account, or the person's first Setup tool call,
+marks the onboarding row agent-led and completes the tutorial, so
+`/app/onboarding` is never forced on them. Accounts people already had are left
+as they were.
+`GET /onboarding` exposes `agent_led_at` and `agent_client` for a first-visit
+view.
+
+The agent sends the person to `/app/connect/:app?account=<email>&expires=<unix>`
+to connect one tool (`notion`, `linear`, `slack`, `gmail`, `outlook`, or
+another connectable app slug). The page renders in the auth shell. A browser
+that never signed in to the web app (the agent's MCP sign-in doesn't) shows
+**Sign in to Macro** and returns to the link. The page refuses an account other
+than `account`, shows an expired message once `expires` has passed, and
+otherwise opens the tool's consent flow right away: Pipedream Connect for
+apps, the inbox-link redirect for `gmail` (Google) and `outlook` (Microsoft),
+both asking for mail and calendar, with no provider chooser (the inbox
+callback returns to the link). If consent never leaves the page (paywall or a
+failed start), it shows **Connect** to retry. Failures show a fixed message,
+never the provider's error text. Once connected it tells the person to go back
+to their agent. Opening a link for an app that is already connected shows the
+connected state without starting a flow.
+
 ## Public onboarding preview
 
 The standalone marketing development route `/onboarding-preview.html` continues

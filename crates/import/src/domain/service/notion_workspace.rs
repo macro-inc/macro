@@ -224,7 +224,7 @@ where
         &self,
         user: &MacroUserIdStr<'static>,
         review_id: Uuid,
-        session_id: AgentSessionId,
+        session_id: Option<AgentSessionId>,
     ) -> Result<u64> {
         let attached = self
             .repo

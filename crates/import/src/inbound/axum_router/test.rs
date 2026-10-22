@@ -78,7 +78,7 @@ impl NotionWorkspaceImporter for FakeImportService {
         &self,
         _user: &MacroUserIdStr<'static>,
         _review_id: Uuid,
-        _session_id: agent_session::domain::model::AgentSessionId,
+        _session_id: Option<agent_session::domain::model::AgentSessionId>,
     ) -> Result<u64> {
         unimplemented!("routes never attach reviews")
     }

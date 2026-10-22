@@ -25,6 +25,10 @@ name = "scheduled_action_openapi"
 path = "src/scheduling_openapi.rs"
 
 [dependencies]
+agent_setup = { path = "../../crates/agent_setup" }
+analytics_client = { path = "../../crates/analytics_client" }
+base64 = { workspace = true }
+lru = { workspace = true }
 models_ai_projection = { path = "../../crates/models_ai_projection" }
 activity = { path = "../../crates/activity", default-features = false }
 agent = { path = "../../crates/agent", features = ["debug-messages"] }
@@ -86,7 +90,7 @@ document_sub_type = { path = "../../crates/document_sub_type" }
 documents = { path = "../../crates/documents", features = ["ai_tools", "attachment", "outbound", "ports"] }
 doppleganger = { workspace = true }
 doppler-config = { workspace = true }
-email = { path = "../../crates/email", features = ["attachment", "outbound"] }
+email = { path = "../../crates/email", features = ["attachment", "http_client", "outbound"] }
 email_service_client = { path = "../../crates/email_service_client" }
 entity_access = { path = "../../crates/entity_access", features = ["inbound", "outbound"] }
 entity_access_db_utils = { path = "../../crates/entity_access_db_utils" }
@@ -167,6 +171,7 @@ search_service_client = { path = "../../crates/search_service_client" }
 secretsmanager_client = { path = "../../crates/secretsmanager_client" }
 serde = { workspace = true }
 serde_json = { workspace = true }
+sha2 = { workspace = true }
 share_permission_db_utils = { path = "../../crates/share_permission_db_utils" }
 soup = { path = "../../crates/soup", features = ["outbound"] }
 sqlx = { workspace = true }
@@ -178,6 +183,7 @@ stream = { path = "../../crates/stream" }
 strum = { workspace = true }
 sync_service_client = { path = "../../crates/sync_service_client" }
 system_properties = { path = "../../crates/system_properties" }
+system_skills = { path = "../../crates/system_skills" }
 teams = { path = "../../crates/teams", default-features = false, features = ["outbound", "ports"] }
 tempfile = { workspace = true }
 thiserror = { workspace = true }

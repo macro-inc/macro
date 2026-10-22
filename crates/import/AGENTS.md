@@ -59,6 +59,12 @@ from this import's other databases into it are not linked.
   discovery, staging, and acceptance logic.
 - `src/outbound/mcp_slack_source.rs`: Slack discovery via MCP tool calls, with
   `fixtures/*.json` backing its tests.
+- `src/outbound/pipedream_linear.rs` + `src/domain/service/linear_discovery.rs`:
+  Linear discovery, open issues updated in the last 90 days read over Linear's
+  GraphQL API through the user's Pipedream grant (`with_linear_source`), staged
+  for a plan: the whole workspace's for a Linear admin, otherwise those
+  assigned to or created by the user. Hosts without a Linear source refuse
+  Linear discovery.
 - `src/domain/service/notion_workspace.rs` (+ `plan`, `triage`, `sharing`,
   `object`, `write`, `values`, `report`): the Notion workspace import —
   planning, the decision model, who sees what, writing one object (claim,
@@ -70,8 +76,8 @@ from this import's other databases into it are not linked.
 
 ## Scope
 
-- Owns: the import ledger, Slack discovery, admission logic, and the AI-chat
-  and HTTP entry points into it.
+- Owns: the import ledger, Slack and Linear discovery, admission logic, and
+  the AI-chat and HTTP entry points into it.
 - Not here: live references to external items that never get copied in →
   `crates/foreign_entity`.
 
@@ -79,10 +85,12 @@ from this import's other databases into it are not linked.
 
 - Depends on: `agent_session` (system events for the session presenting a
   review), `ai_toolset`, `ai_usage`, `ai_billing`, `connection_gateway_client`,
-  `mcp_select`, `properties`, `import_notion` (Notion REST), `models_databases`
-  (database ops the workspace import writes).
-- Used by: `ai_tools`, `slack_integration`, `services/agent_harness_service`
-  (cognition `/import/*` routes, the Notion sweeper, import reviews).
+  `mcp_select`, `pipedream_mcp` (the Linear reader's proxy), `properties`,
+  `import_notion` (Notion REST), `models_databases` (database ops the
+  workspace import writes).
+- Used by: `ai_tools`, `agent_setup`, `slack_integration`,
+  `services/agent_harness_service` (cognition `/import/*` routes, the Notion
+  sweeper, import reviews).
 
 ## Recipes
 
@@ -155,7 +163,9 @@ from this import's other databases into it are not linked.
   its write ends however it ended, including a resumed write and a stalled
   one given up on. A cancel from another process keeps the run `dismissed`,
   so the write's end reports it cancelled. `attach_review` records the
-  session (`import_run.review_session_id`); hosts that run Notion imports
+  session (`import_run.review_session_id`); a plan approved outside an agent
+  session (agent-led setup over MCP) is attached without one and produces no
+  events. Hosts that run Notion imports
   build the ledger with `ai_tools::build_import_repo`, which wires the
   writer. Left open: a writer whose process dies after a cancel never ends,
   so that cancel is not reported.

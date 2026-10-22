@@ -489,6 +489,7 @@ dependencies = [
  "agent_runtime_protocol",
  "agent_session",
  "agent_session_realtime",
+ "agent_setup",
  "agent_trigger",
  "aho-corasick",
  "ai_billing",
@@ -496,6 +497,7 @@ dependencies = [
  "ai_tools",
  "ai_toolset",
  "ai_usage",
+ "analytics_client",
  "anyhow",
  "async-openai",
  "async-stream",
@@ -509,6 +511,7 @@ dependencies = [
  "aws-sdk-sqs",
  "axum",
  "axum-extra",
+ "base64 0.22.1",
  "bot_id",
  "bots",
  "call",
@@ -566,6 +569,7 @@ dependencies = [
  "lexical_client",
  "lexical_mention_extractor",
  "log",
+ "lru 0.16.4",
  "macro_auth",
  "macro_authorization",
  "macro_aws_config",
@@ -620,6 +624,7 @@ dependencies = [
  "secretsmanager_client",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "share_permission_db_utils",
  "soup",
  "sqlx",
@@ -631,6 +636,7 @@ dependencies = [
  "strum 0.27.2",
  "sync_service_client",
  "system_properties",
+ "system_skills",
  "teams",
  "tempfile",
  "thiserror 2.0.18",
@@ -858,6 +864,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "agent_setup"
+version = "0.1.0"
+dependencies = [
+ "ai_toolset",
+ "anyhow",
+ "async-trait",
+ "base64 0.22.1",
+ "chrono",
+ "email",
+ "import",
+ "import_notion",
+ "macro_user_id",
+ "mcp_select",
+ "pipedream_mcp",
+ "rootcause",
+ "schemars 1.2.1",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "urlencoding",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "agent_trigger"
 version = "0.1.0"
 dependencies = [
@@ -1081,6 +1115,7 @@ dependencies = [
  "agent",
  "agent_code_mode",
  "agent_session",
+ "agent_setup",
  "ai_billing",
  "ai_toolset",
  "ai_usage",
@@ -1184,6 +1219,7 @@ dependencies = [
  "strum 0.27.2",
  "sync_service_client",
  "system_properties",
+ "system_skills",
  "teams",
  "thiserror 2.0.18",
  "tokio",
@@ -10424,6 +10460,7 @@ dependencies = [
  "connection_gateway_client",
  "dateparser",
  "futures",
+ "http 1.4.0",
  "import_notion",
  "macro_authorization",
  "macro_db_migrator",
@@ -10433,6 +10470,7 @@ dependencies = [
  "model_user",
  "models_databases",
  "models_properties",
+ "pipedream_mcp",
  "properties",
  "regex",
  "rootcause",

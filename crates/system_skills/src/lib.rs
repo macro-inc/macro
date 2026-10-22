@@ -17,6 +17,7 @@ use uuid::Uuid;
 
 pub mod catch_me_up;
 pub mod configure_agent;
+pub mod macro_setup;
 pub mod what_i_did_yesterday;
 
 #[cfg(test)]
@@ -56,6 +57,8 @@ pub static SYSTEM_SKILLS: &[&SystemSkill] = &[
     &catch_me_up::SKILL,
     &what_i_did_yesterday::SKILL,
     &configure_agent::SKILL,
+    // `macro_setup::SKILL` joins once agent-led setup launches; until then the
+    // MCP `setup` prompt carries its checklist and no one else sees it.
 ];
 
 /// Look up a system skill by its well-known id.

@@ -594,6 +594,8 @@ async fn run() -> anyhow::Result<()> {
             &secrets,
         )
         .await?,
+        pool.clone(),
+        mcp_servers.clone(),
         event_broker_tracker.clone(),
         service_shutdown.clone(),
     )

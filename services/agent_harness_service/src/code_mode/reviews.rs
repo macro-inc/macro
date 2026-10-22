@@ -119,7 +119,7 @@ impl<S: AgentSessionRepo, H: AgentSessionNotificationRecipient> ReviewActions fo
             // The plan is tied to the review before the card appears, so the
             // card never shows a plan it cannot approve.
             self.import_service()?
-                .attach_notion_review(owner, record.id.0, record.session_id)
+                .attach_notion_review(owner, record.id.0, Some(record.session_id))
                 .await
                 .map_err(|error| {
                     tracing::warn!(error = ?error, review = %record.id.0, "could not tie the import plan to its review");

@@ -4,3 +4,4 @@ pub mod document_properties;
 pub mod gateway_notifier;
 pub mod mcp_slack_source;
 pub mod pg_import_repo;
+pub mod pipedream_linear;

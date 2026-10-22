@@ -44,7 +44,8 @@ macro_env_var::env_vars!(
 );
 
 macro_env_var::maybe_env_vars!(
-    /// PostHog project token for feature flags; reserved for future MCP analytics. No MCP events are emitted.
+    /// PostHog project token for feature flags, and for MCP analytics while
+    /// agent-led setup is on.
     pub struct PosthogApiKey;
     /// Regional PostHog ingestion origin; defaults to the US origin.
     pub struct PosthogHost;
@@ -59,6 +60,36 @@ macro_env_var::maybe_env_vars!(
     /// `ENABLE_AI_USAGE_BILLING` is true; otherwise unused.
     pub struct AuthenticationServiceSecretKey;
 );
+
+/// Whether agent-led setup is switched on (`ENABLE_AGENT_SETUP`): the Setup
+/// tools, the setup instructions and `setup` prompt, handing a new agent
+/// sign-up's account to their agent, and MCP analytics. Off unless set to
+/// `true`, so public MCP behaves exactly as it did before agent-led setup.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum AgentSetup {
+    /// Serve MCP as before agent-led setup.
+    #[default]
+    Disabled,
+    /// Serve agent-led setup.
+    Enabled,
+}
+
+impl AgentSetup {
+    /// Whether agent-led setup is switched on.
+    pub const fn is_enabled(self) -> bool {
+        matches!(self, Self::Enabled)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for AgentSetup {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Ok(if bool::deserialize(deserializer)? {
+            Self::Enabled
+        } else {
+            Self::Disabled
+        })
+    }
+}
 
 /// The Pipedream project environment matching this deployment: production in
 /// prd, development everywhere else.
@@ -96,6 +127,9 @@ pub struct Config {
     pub fusionauth_public_url: FusionauthPublicUrl,
     /// Additional trusted client callback hosts, overriding the built-in list.
     pub mcp_allowed_redirect_hosts: McpAllowedRedirectHosts,
+    /// Agent-led setup over public MCP. Off unless `ENABLE_AGENT_SETUP=true`.
+    #[macro_config_default(AgentSetup::Disabled)]
+    pub enable_agent_setup: AgentSetup,
 
     /// Hide agent DM contexts from standalone lists. Enable only after all
     /// replicas use the independent for_warming lifecycle marker.

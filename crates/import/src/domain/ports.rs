@@ -2,9 +2,10 @@
 
 use super::models::{
     AdoptedRun, ImportEntity, ImportKind, ImportRun, ImportSource, ImportSourceBinding,
-    ImportStatus, ImportTargetKey, ImportTargetKind, ImportTargetReservation, Initiator, NotionJob,
-    ReviewedRun, RunStatus, ScanCounts, SlackConversationId, SlackConversationPage,
-    SlackMemberPage, SlackUserPage, SlackWorkspaceId, TeamClaim, WrittenObject,
+    ImportStatus, ImportTargetKey, ImportTargetKind, ImportTargetReservation, Initiator,
+    LinearIssueMeta, NotionJob, ReviewedRun, RunStatus, ScanCounts, SlackConversationId,
+    SlackConversationPage, SlackMemberPage, SlackUserPage, SlackWorkspaceId, TeamClaim,
+    WrittenObject,
 };
 use agent_session::domain::model::AgentSessionId;
 use agent_session::domain::notifications::PendingNotification;
@@ -84,6 +85,34 @@ pub enum SlackSourceError {
     /// Any other source failure.
     #[error(transparent)]
     Other(#[from] anyhow::Error),
+}
+
+/// Errors reading a person's Linear workspace.
+#[derive(Debug, Error)]
+pub enum LinearSourceError {
+    /// Linear asked us to slow down.
+    #[error("Linear rate limit exceeded")]
+    RateLimited,
+    /// Linear refused or answered something unreadable.
+    #[error("{0}")]
+    Api(String),
+    /// Reaching Linear failed.
+    #[error("reaching Linear: {0:?}")]
+    Transport(rootcause::Report),
+}
+
+/// Lists a person's open Linear issues for discovery.
+// `async_trait`: the import service holds it as `Arc<dyn LinearIssueSource>`,
+// so adding Linear doesn't add a type parameter to every host's service.
+#[async_trait::async_trait]
+pub trait LinearIssueSource: Send + Sync + 'static {
+    /// Open issues updated in the last 90 days, newest first, at most
+    /// `limit`. `None` when the person hasn't connected Linear.
+    async fn open_issues(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        limit: usize,
+    ) -> std::result::Result<Option<Vec<LinearIssueMeta>>, LinearSourceError>;
 }
 
 /// Opens live Slack workspace sessions for import discovery and membership reads.
@@ -733,13 +762,15 @@ pub trait NotionPlanRepo: Send + Sync + 'static {
     /// staged rows, and the run while it is still planning (`running`), so
     /// rows staged later are tied too. The first review presenting a plan
     /// keeps its session, which hears when the plan is ready and when its
-    /// write ends. Returns how many rows it tied.
+    /// write ends. Without a session (a plan approved outside an agent
+    /// session, such as setup over MCP) nobody is told. Returns how many
+    /// rows it tied.
     fn attach_review(
         &self,
         user: &MacroUserIdStr<'static>,
         source: ImportSource,
         review_id: Uuid,
-        session_id: AgentSessionId,
+        session_id: Option<AgentSessionId>,
     ) -> impl Future<Output = Result<u64>> + Send;
 
     /// Move `user`'s run for `source` to `to` when it is in one of `from`,

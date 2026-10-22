@@ -852,6 +852,8 @@ pub async fn build(
         import_tool_context: import::inbound::toolset::ImportToolContext::wired(
             import_service.clone(),
         ),
+        agent_setup_tool_context: ai_tools::ToolAgentSetupToolContext::unavailable(),
+        agent_setup_parts: None,
         chat_tool_context,
         channel_tool_context,
         channel_media_upload_tool_context: ai_tools::build_channel_media_upload_tool_context()?,

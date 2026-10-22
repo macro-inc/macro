@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE user_onboarding\n            SET agent_setup_done_at = COALESCE(agent_setup_done_at, NOW()), updated_at = NOW()\n            WHERE user_id = $1 AND agent_led_at IS NOT NULL\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "92f5a7d81650bd94fafd0b9fbb05c6e8dafa5a98d47e355fa44145b7116270e1"
+}

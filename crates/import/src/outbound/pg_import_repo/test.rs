@@ -1026,7 +1026,9 @@ async fn a_review_ties_only_the_staged_plan_and_runs_move_only_from_the_given_st
             &actor,
             ImportSource::Notion,
             review,
-            agent_session::domain::model::AgentSessionId::new_from_uuid(session),
+            Some(agent_session::domain::model::AgentSessionId::new_from_uuid(
+                session
+            )),
         )
         .await
         .unwrap(),

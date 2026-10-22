@@ -17,13 +17,16 @@ onboarding does not start an import.
 
 ## Scope
 
-- Owns: the per-user onboarding flag/state.
+- Owns: the per-user onboarding flag/state, including whether the person's
+  own AI agent set the account up over MCP (`agent_led_at`, `agent_client`,
+  `agent_setup_done_at`; marking a row agent-led completes the web flow).
 - Not here: importing from connected apps → `import`.
 
 ## Boundaries
 
 - Depends on: `mcp_client`, `generic_email_domains`, `macro_authorization`.
-- Used by: `services/agent_harness_service`,
+- Used by: `services/agent_harness_service` (its public MCP marks agent-led
+  accounts),
   `services/authentication_service` (onboarding deletes its row during
   account deletion).
 

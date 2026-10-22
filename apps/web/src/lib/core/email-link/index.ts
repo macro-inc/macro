@@ -225,6 +225,9 @@ function isTooManyPendingLinks(
 const TOO_MANY_PENDING_LINKS_MESSAGE =
   'Too many inbox connections in progress.';
 
+/** How an add-inbox attempt ended; see {@link useAddInboxFlow}. */
+export type AddInboxOutcome = 'left' | 'finished' | 'stopped';
+
 /**
  * Starts the add-inbox flow: fetches the selected provider's authorization URL and
  * navigates the browser to the OAuth consent page. The callback returns to
@@ -296,12 +299,13 @@ export function useAddInboxFlow() {
         })
       : initGmailLink.mutateAsync({ originalUrl, scopes, reconnectLinkId });
 
+  /** Whether the native flow got as far as completing the link. */
   const startNativeFlow = async (
     scopes: ConsentScopes,
     provider: 'GMAIL' | 'OUTLOOK',
     reconnectLinkId?: string,
     emailAddress?: string
-  ) => {
+  ): Promise<boolean> => {
     const session = createNativeAuthSession('inbox-link-callback');
     const result = await initialize(
       session.callbackUrl,
@@ -312,14 +316,14 @@ export function useAddInboxFlow() {
     if (result.isErr()) {
       if (isPaymentRequired(result.error)) {
         showPaywall(PaywallKey.MULTI_INBOX);
-        return;
+        return false;
       }
       if (isTooManyPendingLinks(result.error)) {
         toast.failure(TOO_MANY_PENDING_LINKS_MESSAGE);
-        return;
+        return false;
       }
       toast.failure('Failed to start inbox connection');
-      return;
+      return false;
     }
 
     const auth = await session.authenticate(
@@ -329,29 +333,36 @@ export function useAddInboxFlow() {
       if (auth.error !== 'User canceled login') {
         toast.failure('Failed to add inbox');
       }
-      return;
+      return false;
     }
 
     await completeNativeLink(result.value.link_id, false);
+    return true;
   };
 
+  /**
+   * Resolves `'left'` when consent continues outside this page (a web
+   * redirect or the system browser), `'finished'` when the native flow ran
+   * here, and `'stopped'` when nothing started (no provider chosen, paywall,
+   * or a failure already shown as a toast).
+   */
   return async (options?: {
     scopes?: ConsentScopes;
     provider?: 'GMAIL' | 'OUTLOOK';
     reconnectLinkId?: string;
     emailAddress?: string;
-  }) => {
+  }): Promise<AddInboxOutcome> => {
     const scopes = options?.scopes ?? 'gmail';
     const provider = options?.provider ?? (await selectEmailProvider(owner));
-    if (!provider) return;
+    if (!provider) return 'stopped';
     if (isNativeMobilePlatform()) {
-      await startNativeFlow(
+      const completed = await startNativeFlow(
         scopes,
         provider,
         options?.reconnectLinkId,
         options?.emailAddress
       );
-      return;
+      return completed ? 'finished' : 'stopped';
     }
 
     const desktop = isPlatform('desktop');
@@ -375,26 +386,33 @@ export function useAddInboxFlow() {
         options?.emailAddress
       );
       if (desktop) {
-        await Telemetry.span('email.link.open_browser', async (span) => {
-          span.setAttr('email.link.id', result.value.link_id);
-          const opened = await openDesktopAuthSession(authorizationUrl);
-          if (!opened.success) {
-            span.error('Unable to open account connection browser');
-            toast.failure(
-              'Failed to open the browser to connect your account. Please try again.'
-            );
+        const opened = await Telemetry.span(
+          'email.link.open_browser',
+          async (span) => {
+            span.setAttr('email.link.id', result.value.link_id);
+            const opened = await openDesktopAuthSession(authorizationUrl);
+            if (!opened.success) {
+              span.error('Unable to open account connection browser');
+              toast.failure(
+                'Failed to open the browser to connect your account. Please try again.'
+              );
+            }
+            return opened.success;
           }
-        });
-        return;
+        );
+        return opened ? 'left' : 'stopped';
       }
       window.location.href = authorizationUrl;
-    } else if (isPaymentRequired(result.error)) {
+      return 'left';
+    }
+    if (isPaymentRequired(result.error)) {
       showPaywall(PaywallKey.MULTI_INBOX);
     } else if (isTooManyPendingLinks(result.error)) {
       toast.failure(TOO_MANY_PENDING_LINKS_MESSAGE);
     } else {
       toast.failure('Failed to start inbox connection');
     }
+    return 'stopped';
   };
 }
 

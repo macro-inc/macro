@@ -8,6 +8,8 @@ version = "0.1.0"
 agent_runtime_protocol = { path = "../agent_runtime_protocol", default-features = false }
 agent_session = { path = "../agent_session", default-features = false }
 ai_billing = { path = "../ai_billing" }
+http = { workspace = true }
+pipedream_mcp = { path = "../pipedream_mcp" }
 rootcause = { workspace = true }
 agent = { path = "../agent" }
 ai_toolset = { path = "../ai_toolset" }

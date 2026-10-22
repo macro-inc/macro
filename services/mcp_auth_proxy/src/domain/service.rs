@@ -14,10 +14,10 @@ use std::{
 use super::{
     models::{
         AuthorizeRequest, CallbackRequest, ClientRegistrationRequest, ClientRegistrationResponse,
-        IssuedAuthorizationCode, PendingAuthorization, RefreshToken, RegisteredClient,
+        IssuedAuthorizationCode, PendingAuthorization, RefreshToken, RegisteredClient, SignIn,
         TokenRequest, TokenResponse,
     },
-    ports::{ClientRegistrationStore, OAuthProvider, RefreshTokenBindingStore},
+    ports::{ClientRegistrationStore, OAuthProvider, RefreshTokenBindingStore, SignInObserver},
     redirect_uri::RedirectUriPolicy,
 };
 
@@ -115,6 +115,8 @@ pub struct McpAuthProxyServiceDeps<I> {
     pub refresh_token_bindings: Arc<dyn RefreshTokenBindingStore>,
     /// Upstream OAuth provider the broker fronts.
     pub oauth_provider: Arc<dyn OAuthProvider>,
+    /// Told about every successful sign-in.
+    pub sign_in_observer: Arc<dyn SignInObserver>,
 }
 
 /// Streamable HTTP resource URL advertised in protected-resource metadata.
@@ -137,6 +139,7 @@ pub struct McpAuthProxyServiceImpl<I> {
     client_registrations: Arc<dyn ClientRegistrationStore>,
     refresh_token_bindings: Arc<dyn RefreshTokenBindingStore>,
     oauth_provider: Arc<dyn OAuthProvider>,
+    sign_in_observer: Arc<dyn SignInObserver>,
     redirect_uri_policy: RedirectUriPolicy,
     public_url: String,
 }
@@ -148,6 +151,7 @@ impl<I> Clone for McpAuthProxyServiceImpl<I> {
             client_registrations: Arc::clone(&self.client_registrations),
             refresh_token_bindings: Arc::clone(&self.refresh_token_bindings),
             oauth_provider: Arc::clone(&self.oauth_provider),
+            sign_in_observer: Arc::clone(&self.sign_in_observer),
             redirect_uri_policy: self.redirect_uri_policy.clone(),
             public_url: self.public_url.clone(),
         }
@@ -167,6 +171,7 @@ where
             client_registrations,
             refresh_token_bindings,
             oauth_provider,
+            sign_in_observer,
         } = deps;
 
         Self {
@@ -174,6 +179,7 @@ where
             client_registrations,
             refresh_token_bindings,
             oauth_provider,
+            sign_in_observer,
             redirect_uri_policy,
             public_url,
         }
@@ -514,6 +520,26 @@ where
         // `expires_in`.
         let access_token_expires_at =
             SystemTime::now().checked_add(Duration::from_secs(tokens.expires_in));
+
+        // The name is only for attribution, so a registry miss just leaves it
+        // unknown rather than failing a sign-in that already succeeded.
+        let client_name = self
+            .client_registrations
+            .find_client(&pending.client_id)
+            .await
+            .inspect_err(|error| {
+                tracing::warn!(error=?error, "failed to read client registration for sign-in");
+            })
+            .ok()
+            .flatten()
+            .map(|client| client.client_name);
+        self.sign_in_observer
+            .signed_in(SignIn {
+                access_token: tokens.access_token.clone(),
+                client_id: pending.client_id.clone(),
+                client_name,
+            })
+            .await;
 
         let issued_code = uuid::Uuid::new_v4().to_string();
         self.inflight_auth

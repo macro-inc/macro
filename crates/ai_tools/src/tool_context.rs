@@ -1905,6 +1905,22 @@ pub type ToolImportService = import::domain::service::ImportServiceImpl<
     >,
 >;
 
+/// The agent-led setup tools' context: wired on MCP, unavailable elsewhere.
+pub type ToolAgentSetupToolContext = agent_setup::inbound::toolset::SetupToolContext;
+
+/// What agent-led setup is built from in a host that built the import
+/// service. The public MCP adds the person's account and serves the Setup
+/// tools; other hosts ignore it.
+#[derive(Clone)]
+pub struct ToolAgentSetupParts {
+    /// The import service, as setup uses it.
+    pub imports: Arc<dyn agent_setup::domain::ports::SetupImports>,
+    /// The person's app connections.
+    pub connections: Arc<dyn agent_setup::domain::ports::SetupConnections>,
+    /// The person's inboxes.
+    pub inbox: Arc<dyn agent_setup::domain::ports::SetupInbox>,
+}
+
 /// Type alias for the import tool context, wired by hosts with connector access.
 pub type ToolImportToolContext = import::inbound::toolset::ImportToolContext<ToolImportService>;
 
@@ -1982,6 +1998,13 @@ pub struct ToolServiceContext {
     /// Import staging/tracking tools. `unwired` in hosts that can't build
     /// the import service — calls there fail with a clear error.
     pub import_tool_context: ToolImportToolContext,
+    /// Agent-led setup tools. Wired only where an outside agent drives setup
+    /// (MCP); `unavailable` everywhere else.
+    pub agent_setup_tool_context: ToolAgentSetupToolContext,
+    /// What the public MCP builds agent-led setup from; `None` where the
+    /// import service isn't built.
+    #[from_ref(skip)]
+    pub agent_setup_parts: Option<ToolAgentSetupParts>,
     /// Built per-request via a manual `FromRef` below so it can carry the
     /// running chat's id — the derive's field-clone would freeze it at
     /// startup with no chat id set.

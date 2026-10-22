@@ -689,3 +689,47 @@ fn protected_resource_metadata_does_not_double_the_mcp_path() {
         })
     );
 }
+
+#[tokio::test]
+async fn callback_reports_the_sign_in_with_the_client_it_came_through() {
+    let harness = Harness::new();
+    let client_id = harness.register(&[LOOPBACK_REDIRECT_URI]).await;
+
+    harness
+        .complete_flow_to_code(&client_id, LOOPBACK_REDIRECT_URI, VICTIM_CODE_VERIFIER)
+        .await;
+
+    let seen = harness.sign_ins.seen();
+    assert_eq!(seen.len(), 1);
+    assert_eq!(seen[0].client_id, client_id);
+    assert_eq!(seen[0].client_name.as_deref(), Some("test-client"));
+    assert_eq!(seen[0].access_token.as_str(), UPSTREAM_ACCESS_TOKEN);
+}
+
+#[tokio::test]
+async fn upstream_errors_are_not_reported_as_sign_ins() {
+    let harness = Harness::new();
+    let client_id = harness.register(&[LOOPBACK_REDIRECT_URI]).await;
+    harness
+        .service
+        .start_authorization(harness.authorize_request(
+            &client_id,
+            LOOPBACK_REDIRECT_URI,
+            &code_challenge_for(VICTIM_CODE_VERIFIER),
+        ))
+        .await
+        .expect("authorize should succeed");
+
+    harness
+        .service
+        .complete_callback(CallbackRequest {
+            code: None,
+            state: Some(harness.inflight.only_pending_session_id()),
+            error: Some("access_denied".to_owned()),
+            error_description: None,
+        })
+        .await
+        .expect("an upstream error still redirects back to the client");
+
+    assert!(harness.sign_ins.seen().is_empty());
+}

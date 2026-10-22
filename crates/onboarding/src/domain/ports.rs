@@ -41,6 +41,25 @@ pub trait OnboardingRepo: Send + Sync + 'static {
         skipped: bool,
     ) -> impl Future<Output = Result<OnboardingRow>> + Send;
 
+    /// Hand the account to the person's AI agent: mark it agent-led and
+    /// complete the web flow so it is never shown. Only an account that has
+    /// not finished web onboarding qualifies — no row yet, an `active` row,
+    /// or a row that is already agent-led (idempotent; keeps the first
+    /// marking and client). Returns `None` when the account already finished
+    /// onboarding on the web, which leaves its row untouched.
+    fn mark_agent_led(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        client: Option<&str>,
+    ) -> impl Future<Output = Result<Option<OnboardingRow>>> + Send;
+
+    /// Record that an agent-led account's setup reached its final report.
+    /// Idempotent (keeps the first time); a no-op for other accounts.
+    fn finish_agent_setup(
+        &self,
+        user: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<()>> + Send;
+
     /// Remove the user's onboarding row and dismissed prompts, for account
     /// deletion. Idempotent: a user who never entered the flow (or whose
     /// data is already gone from an earlier attempt) is not an error.

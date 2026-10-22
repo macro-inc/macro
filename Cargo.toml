@@ -5,7 +5,7 @@ members = [
   "crates/access_requests",
   "crates/routines",
   "crates/activity",
-  "crates/agent", "crates/agent_changes", "crates/agent_egress", "crates/folds/agent_fold", "crates/folds/claude_fold", "crates/folds/codex_fold",
+  "crates/agent", "crates/agent_changes", "crates/agent_setup", "crates/agent_egress", "crates/folds/agent_fold", "crates/folds/claude_fold", "crates/folds/codex_fold",
   "crates/agent_harness",
   "crates/trigger_context",
   "crates/agent_preview",

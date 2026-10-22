@@ -766,3 +766,59 @@ fn conversation_tools_only_advertise_new_sessions() {
     }
     assert!(!subagent_toolset().tools.contains_key("ReadChat"));
 }
+
+/// Agent-led setup tools serve an outside agent setting up a workspace over
+/// MCP, and only once setup is switched on. Inside Macro the person is already
+/// set up, so other hosts never list them.
+#[test]
+fn setup_tools_are_mcp_only_and_off_by_default() {
+    let setup_tools = [
+        "SetupGetState",
+        "SetupConnect",
+        "SetupDiscover",
+        "SetupProposePlan",
+        "SetupImport",
+        "SetupGetStatus",
+    ];
+    let mcp = mcp_tools_with_agent_setup();
+    for name in setup_tools {
+        assert!(mcp.toolset.tools.contains_key(name), "MCP missing {name}");
+    }
+    for host in [
+        AiHost::Mcp,
+        AiHost::Chat,
+        AiHost::AgentSession,
+        AiHost::ChannelBot,
+    ] {
+        let tools = tools_for(host);
+        for name in setup_tools {
+            assert!(
+                !tools.toolset.tools.contains_key(name),
+                "{host:?} lists {name}"
+            );
+        }
+    }
+}
+
+/// The Macro Setup skill and the server instructions name Setup tools; every
+/// one they name must exist on MCP, where an outside agent follows them.
+#[test]
+fn setup_guidance_names_only_tools_mcp_has() {
+    let mcp = mcp_tools_with_agent_setup();
+    let guidance = format!(
+        "{}\n{}",
+        system_skills::macro_setup::SKILL.render_content(),
+        prompt::mcp_setup::render(prompt::mcp_setup::SetupHint::NotSetUp)
+    );
+    let named: Vec<&str> = guidance
+        .split(|c: char| !c.is_ascii_alphanumeric())
+        .filter(|word| word.starts_with("Setup") && word.len() > "Setup".len())
+        .collect();
+    assert!(!named.is_empty());
+    for name in named {
+        assert!(
+            mcp.toolset.tools.contains_key(name),
+            "guidance names missing tool {name}"
+        );
+    }
+}

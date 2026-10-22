@@ -159,7 +159,7 @@ impl NotionPlanRepo for PgImportRepo {
         user: &MacroUserIdStr<'static>,
         source: ImportSource,
         review_id: Uuid,
-        session_id: AgentSessionId,
+        session_id: Option<AgentSessionId>,
     ) -> Result<u64> {
         let mut transaction = self.pool.begin().await?;
         // First, so a plan being staged right now finishes before the rows
@@ -175,7 +175,7 @@ impl NotionPlanRepo for PgImportRepo {
             user.as_ref(),
             source.as_ref(),
             review_id,
-            session_id.as_uuid(),
+            session_id.map(|session| session.as_uuid()),
         )
         .execute(&mut *transaction)
         .await?;
