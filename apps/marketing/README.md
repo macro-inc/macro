@@ -219,7 +219,12 @@ Install workspace dependencies from the repository root first. The public dev
 server runs independently of the authenticated app. It serves the homepage,
 public feature and blog routes, `/download`, and `/start`;
 `/onboarding-preview.html` remains a development review entry. It does not host
-the authenticated `/app/*` routes.
+the authenticated `/app/*` routes. In standalone dev and preview servers,
+GET/HEAD navigation to `/app` or `/app/*` redirects to the same path and query
+on `VITE_APP_BASE_URL` (default `https://macro.com`), where signup and the real
+app run. Set it to the separate `apps/web` origin for local signup testing. This prevents Vite's
+website fallback from rendering an empty shell for app links. Production routing
+is unchanged; run `apps/web` separately when testing local signup changes.
 
 `/download` is headed “Download Macro Alpha”, says “Available for macOS and
 Linux”, and has one download button.

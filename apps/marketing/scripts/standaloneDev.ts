@@ -1,13 +1,44 @@
 import { existsSync, readFileSync } from 'node:fs';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import path from 'node:path';
 import type { Plugin } from 'vite';
+import { resolveAppBaseUrl } from '../src/app/utils/appBaseUrl';
+
+/** The standalone website does not serve the authenticated application. */
+function redirectAppRequest(
+  request: IncomingMessage,
+  response: ServerResponse,
+  next: () => void,
+  appBaseUrl: string
+) {
+  const url = new URL(request.url ?? '/', 'http://localhost');
+  if (
+    !['GET', 'HEAD'].includes(request.method ?? '') ||
+    (url.pathname !== '/app' && !url.pathname.startsWith('/app/'))
+  ) {
+    next();
+    return;
+  }
+  response.writeHead(302, {
+    Location: new URL(`${url.pathname}${url.search}`, appBaseUrl).href,
+    'Cache-Control': 'no-store',
+  });
+  response.end();
+}
 
 /** Website routes run without the app dev server, authentication, or WASM. */
 export function standaloneDev(): Plugin {
+  let appBaseUrl: string;
   return {
     name: 'standalone-website-routes',
     apply: 'serve',
+    configResolved(config) {
+      appBaseUrl = resolveAppBaseUrl(config.env.VITE_APP_BASE_URL);
+    },
     configurePreviewServer(server) {
+      server.middlewares.use((request, response, next) =>
+        redirectAppRequest(request, response, next, appBaseUrl)
+      );
       const directory = path.resolve(
         server.config.root,
         server.config.build.outDir
@@ -38,6 +69,9 @@ export function standaloneDev(): Plugin {
       });
     },
     configureServer(server) {
+      server.middlewares.use((request, response, next) =>
+        redirectAppRequest(request, response, next, appBaseUrl)
+      );
       server.middlewares.use(async (request, response, next) => {
         const pathname = new URL(request.url ?? '/', 'http://localhost')
           .pathname;
