@@ -16,6 +16,7 @@ import HomepageCrm from '../HomepageCrm';
 import {
   AgentWorkflow,
   CallWorkflow,
+  ChatWorkflow,
   DocumentWorkflow,
   EmailWorkflow,
   SheetWorkflow,
@@ -24,9 +25,13 @@ import {
 import lightPalette from './homepage-preview-light.css?inline';
 import './homepage-product-preview.css';
 import './homepage-email-story.css';
+import { HomepageDatabaseWorkflow } from './HomepageDatabaseWorkflow';
+import './homepage-feature-splits.css';
 
 export type HomepagePreviewKind =
   | 'email'
+  | 'chat'
+  | 'databases'
   | 'documents'
   | 'tasks'
   | 'agents'
@@ -83,6 +88,13 @@ export default function HomepageProductPreview(props: {
     const step = phase();
     if (step === 0 || step >= 7) return undefined;
     switch (props.kind) {
+      case 'databases':
+        return step <= 2
+          ? '[data-demo-status]'
+          : step < 5
+            ? '[data-demo-done]'
+            : undefined;
+      case 'chat':
       case 'email':
         return undefined;
       case 'documents':
@@ -126,6 +138,12 @@ export default function HomepageProductPreview(props: {
         <Switch>
           <Match when={props.kind === 'email'}>
             <EmailWorkflow phase={phase()} />
+          </Match>
+          <Match when={props.kind === 'chat'}>
+            <ChatWorkflow phase={phase()} />
+          </Match>
+          <Match when={props.kind === 'databases'}>
+            <HomepageDatabaseWorkflow phase={phase()} />
           </Match>
           <Match when={props.kind === 'documents'}>
             <DocumentWorkflow phase={phase()} />

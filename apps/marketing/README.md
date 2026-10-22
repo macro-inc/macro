@@ -38,16 +38,17 @@ the copy, following the live site; avoid slogans and vague benefit claims. Write
 as a letter from the team, explaining each design choice once rather than
 repeating a feature summary in a second paragraph.
 
-`HomepageTiles` presents seven product sections in one column on desktop and
-mobile. A small Inter feature index stays on the left at desktop widths and
-wraps above the demos below 1240px; its anchors leave room for the fixed header.
-The sections cover email integrated with chat and tasks, collaborative documents,
-self-updating tasks, agents, sheets and databases, CRM, and calls. Demo art has
+`HomepageTiles` presents nine product sections in one column on desktop and
+mobile. A small Inter feature index stays on the left from the first screen
+through the feature sections on desktop, stopping before the closing content.
+It wraps above the demos below 1240px; anchors leave room for the fixed header.
+Email and Chat have separate sections and index entries, as do Sheets and
+Databases. The other sections cover documents, tasks, agents, CRM, and calls. Demo art has
 no flat gray backdrop or outer border. Separate feature sections with viewport-wide
 1px rules at 5.4% ink (30% of the product-page intensity), with 20px more space
 below each rule than above. Use the onboarding radial accent glow and
-shared `WorkspaceTexture` grain behind each composition: blue email, purple
-documents, green tasks, coral agents, teal sheets, amber CRM, and rose calls.
+shared `WorkspaceTexture` grain behind each composition: blue email, indigo chat, purple
+documents, green tasks, coral agents, teal sheets, olive databases, amber CRM, and rose calls.
 Keep the glow weak and diffuse, with visible onboarding dots and grain spread
 beyond the panels. `WorkspaceTexture` exposes mask and opacity CSS variables
 with unchanged onboarding defaults. Keep the texture static and behind the
@@ -65,7 +66,11 @@ tool groups, linked customer cells, and call transcript controls.
 The email sequence reveals the request, composer, and draft paragraphs with
 linked source documents. Keep recipient fields and the inset send button visible;
 do not wrap this scene in stacked thread or channel windows. All composer controls
-remain inside the inert preview. The document sequence shows Julia and Claude
+remain inside the inert preview. The separate Chat sequence uses `ChannelResult`
+to show the shared email arriving and a teammate replying. Databases uses a frozen
+`DatabaseTable`-style grid with native option pills, showing a status selection
+and saved record. Sheets keeps the spreadsheet editor and linked customer cell.
+The document sequence shows Julia and Claude
 editing the same launch plan. The task sequence links a pull request, moves the task into review, then marks it
 complete after the pull request merges. It starts `TaskNotebook` with
 `initialPanelOpen={false}` so status and linked work stay readable. These are

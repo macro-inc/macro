@@ -15,6 +15,7 @@ import { trainingReview } from '../calls/call-fixtures';
 import { CompanyKanbanCardSurface } from '../DemoCompanyKanban';
 import { DocMention } from '../documents/DocMention';
 import { DocumentFrame } from '../documents/DocumentFrame';
+import { ChannelResult } from '../email/EmailSharingDemo';
 import { HomepageConversation } from '../HomepageConversation';
 import HomepageEmailCompose from '../HomepageEmailCompose';
 import { HomepageMention } from '../HomepageMention';
@@ -103,6 +104,20 @@ export function EmailWorkflow(props: { phase: number }) {
           }
         />
       </div>
+    </div>
+  );
+}
+
+/** The real channel presentation reveals a shared email and the team's reply. */
+export function ChatWorkflow(props: { phase: number }) {
+  return (
+    <div class="macro-preview-back macro-workflow-channel macro-chat-channel">
+      <ChannelResult
+        staged
+        shared={props.phase >= 2}
+        updated={props.phase >= 5}
+        onOpen={() => {}}
+      />
     </div>
   );
 }

@@ -50,38 +50,52 @@ function Tile(props: {
   );
 }
 
+export function HomepageFeatureToc(props: { mobile?: boolean }) {
+  return (
+    <aside
+      class={`macro-feature-toc ${props.mobile ? 'macro-feature-toc-mobile' : 'macro-feature-toc-desktop'}`}
+    >
+      <nav aria-label="Key features">
+        <span>Features</span>
+        <For
+          each={[
+            { id: 'email', label: 'Email' },
+            { id: 'chat', label: 'Chat' },
+            { id: 'documents', label: 'Documents' },
+            { id: 'tasks', label: 'Tasks' },
+            { id: 'coding-agents', label: 'Agents' },
+            { id: 'spreadsheet', label: 'Sheets' },
+            { id: 'databases', label: 'Databases' },
+            { id: 'crm', label: 'CRM' },
+            { id: 'calls', label: 'Calls' },
+          ]}
+        >
+          {(feature) => <a href={`#${feature.id}`}>{feature.label}</a>}
+        </For>
+      </nav>
+    </aside>
+  );
+}
+
 /** The same product UI used by the detailed demos, framed as compact previews. */
 export function HomepageTiles() {
   return (
     <div class="macro-feature-layout">
-      <aside class="macro-feature-toc">
-        <nav aria-label="Key features">
-          <span>Features</span>
-          <For
-            each={[
-              { id: 'email', label: 'Email & chat' },
-              { id: 'documents', label: 'Documents' },
-              { id: 'tasks', label: 'Tasks' },
-              { id: 'coding-agents', label: 'Agents' },
-              { id: 'spreadsheet', label: 'Sheets & databases' },
-              { id: 'crm', label: 'CRM' },
-              { id: 'calls', label: 'Calls' },
-            ]}
-          >
-            {(feature) => <a href={`#${feature.id}`}>{feature.label}</a>}
-          </For>
-        </nav>
-      </aside>
+      <HomepageFeatureToc mobile />
       <div class="macro-feature-grid">
         <Tile
           id="email"
           title="Email tightly integrated with your team chat and tasks"
           description="Share the actual email in a channel. Your team sees the whole thread, including replies that arrive later. Discuss it, draft a response, or create a task without copying the conversation into another app."
-          links={[
-            { href: '/email', label: 'Email' },
-            { href: '/channels', label: 'Chat' },
-          ]}
+          links={[{ href: '/email', label: 'Email' }]}
           preview="email"
+        />
+        <Tile
+          id="chat"
+          title="Team chat with the work right there"
+          description="Share emails, documents, and tasks in a channel. Your team can open the original, reply in a thread, and mention an agent when they need a hand. The conversation stays with the work."
+          links={[{ href: '/channels', label: 'Chat' }]}
+          preview="chat"
         />
         <Tile
           id="documents"
@@ -109,10 +123,17 @@ export function HomepageTiles() {
         />
         <Tile
           id="spreadsheet"
-          title="Organize with sheets and databases"
-          description="Some work belongs in a table. Bring in your Google Sheets and Notion databases, link the rows to people and work in Macro, and edit them with your team and agents."
+          title="Sheets your team can work in together"
+          description="Bring in your Google Sheets and work on them with your team and agents. Link cells to people, companies, and documents, so the numbers stay connected to the work behind them."
           links={[{ href: '/demo', label: 'Explore the workspace' }]}
           preview="spreadsheet"
+        />
+        <Tile
+          id="databases"
+          title="Organize your work in databases"
+          description="Track projects, customers, or whatever your team needs. Add your own fields, filter and sort the records, and update them together. Each record has a place for the details."
+          links={[{ href: '/demo', label: 'Explore the workspace' }]}
+          preview="databases"
         />
         <Tile
           id="crm"

@@ -1,0 +1,61 @@
+/* Full-size channel messages, using the same bubbles as the email story. */
+.macro-product-chat .macro-chat-channel { width: 100%; height: auto; min-height: 350px; transform: none; }
+.macro-chat-channel .mail-channel > header { height: 58px; padding-inline: 24px; border-bottom: 1px solid var(--color-edge-muted); font-size: 16px; }
+.macro-chat-channel .mail-channel-messages { padding: 24px; }
+.macro-product-chat .homepage-conversation { font-size: 16px; line-height: 1.65; }
+.macro-chat-channel .homepage-message { width: fit-content; }
+.macro-product-chat .homepage-message [data-user-message-bubble] { font-size: inherit; line-height: inherit; }
+.macro-chat-channel .mail-message-step + .mail-message-step .homepage-conversation { padding-top: 24px; }
+
+/* Match the database's typed columns, numbered rows, and outline option pills. */
+.macro-product-databases .macro-database { width: 100%; height: auto; transform: none; overflow: visible; }
+.macro-database-heading { display: flex; align-items: center; gap: 10px; padding: 24px; font-size: 18px; }
+.macro-database-heading svg { width: 20px; height: 20px; color: var(--color-ink-muted); }
+.macro-database-toolbar { display: flex; align-items: center; justify-content: space-between; padding: 0 18px 14px 24px; font-size: 14px; }
+.macro-database-toolbar > span { display: flex; align-items: center; gap: 8px; }
+.macro-database-toolbar svg { width: 16px; height: 16px; }
+.macro-database-table { position: relative; font-size: 14px; }
+.macro-database-row { display: grid; grid-template-columns: 34px minmax(0, 1fr) 145px 130px; min-height: 46px; border-bottom: 1px solid var(--color-edge-muted); }
+.macro-database-row > * { min-width: 0; display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-right: 1px solid var(--color-edge-muted); }
+.macro-database-row > :last-child { border-right: 0; }
+.macro-database-columns { min-height: 40px; color: var(--color-ink-muted); border-top: 1px solid var(--color-edge-muted); }
+.macro-database-number { justify-content: center; color: var(--color-ink-muted); font-size: 12px; }
+.macro-database-owner img { width: 22px; height: 22px; border-radius: 50%; }
+.macro-database-status { gap: 6px; font-weight: 400; }
+.macro-database-status i { width: 7px; height: 7px; border-radius: 50%; background: #929292; }
+.macro-database-status[data-status='In progress'] i { background: #d1a34b; }
+.macro-database-status[data-status='Done'] i { background: #58ae83; }
+.macro-database-add { display: flex; align-items: center; gap: 8px; padding: 14px; color: var(--color-ink-muted); }
+.macro-database-add svg { width: 16px; height: 16px; }
+.macro-database-options { position: absolute; top: 82px; right: 100px; width: 190px; padding: 6px; border: 1px solid var(--color-edge-muted); border-radius: 12px; background: var(--color-panel); box-shadow: var(--glass-shadow), 0 12px 32px #0003; opacity: 0; transform: translateY(-4px); transition: opacity 450ms ease, transform 600ms cubic-bezier(.22,1,.36,1); }
+.macro-database-options[data-visible='true'] { opacity: 1; transform: none; }
+.macro-database-option { padding: 6px; border-radius: 6px; transition: background 300ms ease; }
+.macro-database-option[data-selected='true'] { background: var(--color-hover); }
+.macro-database footer { display: flex; justify-content: space-between; padding: 14px 24px; border-top: 1px solid var(--color-edge-muted); color: var(--color-ink-muted); font-size: 12px; }
+.macro-database-saved { display: flex; align-items: center; gap: 4px; opacity: 0; transition: opacity 500ms ease; }
+.macro-database-saved[data-visible='true'] { opacity: 1; }
+.macro-database-saved svg { width: 14px; height: 14px; color: #58ae83; }
+@media (max-width: 700px) {
+  .macro-feature-tile#chat .macro-tile-art { height: 560px; }
+  .macro-chat-channel .mail-channel-messages { padding: 18px 12px; }
+  .macro-database-heading { padding: 20px 14px; }
+  .macro-database-toolbar { padding-inline: 14px; }
+  .macro-database-row { grid-template-columns: 24px minmax(0, 1fr) 116px; min-height: 58px; }
+  .macro-database-row > * { padding-inline: 8px; }
+  .macro-database-row > .macro-database-owner { display: none; }
+  .macro-database-status { font-size: 12px; }
+  .macro-database-options { top: 116px; right: 8px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .macro-database-options, .macro-database-option, .macro-database-saved { transition: none; }
+}
+
+/* Leave room for the table footer and the finished conversation at every phase. */
+.macro-feature-tile#databases .macro-tile-art { height: 540px; }
+.macro-database-table { font-size: 16px; }
+.macro-database-row { min-height: 50px; }
+@media (max-width: 700px) {
+  .macro-feature-tile#databases .macro-tile-art { height: 620px; }
+  .macro-feature-tile#chat .macro-tile-art { height: 600px; }
+  .macro-database-row { min-height: 62px; }
+}
