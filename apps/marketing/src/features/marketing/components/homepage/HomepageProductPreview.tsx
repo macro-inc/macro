@@ -8,6 +8,7 @@ import { createEmailWalkthrough } from '../../primitives/createEmailWalkthrough'
 import { createCallPlayback } from '../calls/CallRecord';
 import { trainingReview } from '../calls/call-fixtures';
 import '../calls/call-stories.css';
+import { createSitePalette } from '../../../setup/sitePalette';
 import { DemoCursor } from '../DemoCursor';
 import { DocMention } from '../documents/DocMention';
 import { HomepageConversation } from '../HomepageConversation';
@@ -40,6 +41,7 @@ const stepDelays = [1600, 1000, 1400, 1400, 1300, 1100, 1000];
 export default function HomepageProductPreview(props: {
   kind: HomepagePreviewKind;
 }) {
+  const sitePalette = createSitePalette();
   let canvas!: HTMLDivElement;
   const [phase, setPhase] = createSignal(0);
   const [cycle, setCycle] = createSignal(1);
@@ -124,7 +126,7 @@ export default function HomepageProductPreview(props: {
       <div
         ref={canvas}
         class={`macro-product-canvas workspace-demo macro-product-${props.kind}`}
-        data-theme-light="true"
+        data-theme-light={sitePalette() === 'cream'}
         data-phase={phase()}
         data-paused={!playback.playing()}
         data-cycle={cycle()}

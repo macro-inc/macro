@@ -5,16 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#000000" />
     <script>
-      // First-paint palette for every public website route.
-      // Mirrors src/features/setup/sitePalette.ts.
+      // First-paint palette. Keep in sync with src/features/setup/sitePalette.ts.
       (function () {
         var theme = new URLSearchParams(location.search).get('theme');
-        var cream = theme === 'cream' || (theme !== 'dark' && matchMedia('(prefers-color-scheme: light)').matches);
-        if (!cream) return;
+        var light = theme === 'cream' || (theme !== 'dark' && matchMedia('(prefers-color-scheme: light)').matches);
+        var homepage = location.pathname === '/';
         var root = document.documentElement;
-        root.dataset.palette = 'cream';
-        root.dataset.themeLight = 'true';
-        document.querySelector('meta[name="theme-color"]').content = '#f5f1e8';
+        root.dataset.themeLight = String(light);
+        if (homepage) root.setAttribute('data-homepage', '');
+        else if (light) root.dataset.palette = 'cream';
+        document.querySelector('meta[name="theme-color"]').content = homepage
+          ? (light ? '#ffffff' : '#101013')
+          : (light ? '#f5f1e8' : '#000000');
       })();
     </script>
     <title>Macro — The Unified System for Work</title>

@@ -28,7 +28,7 @@ export async function verifyHomepage(directory: string): Promise<void> {
     browser = await chromium.launch();
     const origin = `http://127.0.0.1:${server.port}`;
     await verifyDemo(browser, origin);
-    // Light mode renders the cream palette (src/features/setup/sitePalette.ts).
+    // Verify both neutral homepage palettes before and after hydration.
     for (const [viewport, colorScheme] of [
       [{ width: 1440, height: 1000 }, 'dark'],
       [{ width: 390, height: 844 }, 'light'],
@@ -81,7 +81,7 @@ export async function verifyHomepage(directory: string): Promise<void> {
         await expect(page.locator('.macro-feature-tile')).toHaveCount(6);
         await expect(page.locator('.macro-homepage')).toHaveCSS(
           'background-color',
-          'rgb(255, 255, 255)'
+          colorScheme === 'light' ? 'rgb(255, 255, 255)' : 'rgb(16, 16, 19)'
         );
 
         releaseScripts();
@@ -169,21 +169,29 @@ export async function verifyHomepage(directory: string): Promise<void> {
           'animation-play-state',
           'paused'
         );
-        // The layered previews stay light and readable in either OS theme.
+        // Native previews follow live system theme changes without remounting.
         const previewBody = page.locator('#email .mail-thread-body').first();
         await expect(previewBody).toHaveText(/\S+/);
-        await expect(previewBody).toHaveCSS('color', 'rgb(36, 36, 40)');
+        await expect(previewBody).toHaveCSS(
+          'color',
+          colorScheme === 'light' ? 'rgb(36, 36, 40)' : 'rgb(238, 238, 240)'
+        );
         await page.emulateMedia({
           colorScheme: colorScheme === 'light' ? 'dark' : 'light',
         });
-        await expect(previewBody).toHaveCSS('color', 'rgb(36, 36, 40)');
+        await expect(previewBody).toHaveCSS(
+          'color',
+          colorScheme === 'light' ? 'rgb(238, 238, 240)' : 'rgb(36, 36, 40)'
+        );
         await page.emulateMedia({ colorScheme });
         const dimensions = await page
           .locator('.macro-feature-grid')
           .evaluate((grid) => ({
             columns:
               getComputedStyle(grid).gridTemplateColumns.split(' ').length,
-            overflow: document.documentElement.scrollWidth > window.innerWidth,
+            overflow:
+              (document.querySelector('.macro-home-scroll')?.scrollWidth ?? 0) >
+              window.innerWidth,
           }));
         expect(dimensions.columns).toBe(1);
         expect(dimensions.overflow).toBe(false);

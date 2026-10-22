@@ -3,22 +3,20 @@
   <head><link rel="preload" href="/fonts/roboto-slab-variable.woff2" as="font" type="font/woff2" crossorigin /><link rel="preload" href="/fonts/inter-variable.woff2" as="font" type="font/woff2" crossorigin /><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>Macro — One unified interface for all your work.</title>
     <link rel="icon" href="/macro-favicon.svg" type="image/svg+xml" />
     <meta name="theme-color" content="#000000" />
-    <style>html,body{margin:0;background:#000;color:#fff}html[data-palette=cream],html[data-palette=cream] body{background:#f5f1e8;color:#1d1c1a}html[data-homepage],html[data-homepage] body{background:#fff;color:#1d1d1f}</style>
+    <style>html,body{margin:0;background:#000;color:#fff}html[data-palette=cream],html[data-palette=cream] body{background:#f5f1e8;color:#1d1c1a}html[data-homepage]{color-scheme:dark}html[data-homepage][data-theme-light=true]{color-scheme:light}html[data-homepage],html[data-homepage] body{background:light-dark(#fff,#101013);color:light-dark(#1d1d1f,#eeeef0)}</style>
     <script>
-      // First-paint palette, so the prerendered homepage never flashes dark in
-      // light mode. Mirrors src/features/setup/sitePalette.ts.
+      // First-paint palette. Keep in sync with src/features/setup/sitePalette.ts.
       (function () {
         var theme = new URLSearchParams(location.search).get('theme');
-        var cream = location.pathname !== '/' && (theme === 'cream' || (theme !== 'dark' && matchMedia('(prefers-color-scheme: light)').matches));
+        var light = theme === 'cream' || (theme !== 'dark' && matchMedia('(prefers-color-scheme: light)').matches);
+        var homepage = location.pathname === '/';
         var root = document.documentElement;
-        root.dataset.themeLight = String(cream);
-        if (location.pathname === '/') {
-          root.setAttribute('data-homepage', '');
-          document.querySelector('meta[name="theme-color"]').content = '#ffffff';
-        }
-        if (!cream) return;
-        root.dataset.palette = 'cream';
-        if (location.pathname !== '/') document.querySelector('meta[name="theme-color"]').content = '#f5f1e8';
+        root.dataset.themeLight = String(light);
+        if (homepage) root.setAttribute('data-homepage', '');
+        else if (light) root.dataset.palette = 'cream';
+        document.querySelector('meta[name="theme-color"]').content = homepage
+          ? (light ? '#ffffff' : '#101013')
+          : (light ? '#f5f1e8' : '#000000');
       })();
     </script>
     <script>

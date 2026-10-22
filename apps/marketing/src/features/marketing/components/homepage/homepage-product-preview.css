@@ -1,6 +1,6 @@
 .macro-product-preview { position: absolute; inset: 26px 24px 16px; pointer-events: none; }
 .macro-product-canvas { position: relative; width: 100%; height: 100%; color: var(--color-ink); font-family: var(--font-sans); text-align: left; letter-spacing: normal; }
-.macro-preview-back, .macro-preview-front { position: absolute; border: 1px solid #e4e4e8; border-radius: 12px; background: #fff; box-shadow: 0 12px 28px -12px #20202b2b, 0 2px 5px #20202b05; }
+.macro-preview-back, .macro-preview-front { position: absolute; border: 1px solid #e4e4e8; border-radius: 12px; background: light-dark(#fff, #1b1b21); box-shadow: 0 12px 28px -12px #20202b2b, 0 2px 5px #20202b05; }
 .macro-preview-back { top: 8px; left: 0; width: 94%; height: 224px; overflow: hidden; transform: rotate(-3deg); }
 .macro-preview-front { z-index: 2; right: 0; bottom: 10px; width: 84%; transform: rotate(2deg); box-shadow: 0 16px 32px -12px #20202b38, 0 2px 5px #20202b08; }
 .macro-preview-message { padding: 14px; }
@@ -9,23 +9,23 @@
 .macro-product-canvas .homepage-message[data-side=self] { grid-template-columns: minmax(0, 1fr) 26px; }
 .macro-product-canvas .homepage-message-name { padding-inline: 10px; }
 .macro-product-canvas .homepage-message-person [data-slot=avatar] { width: 26px; height: 26px; }
-.macro-product-canvas .homepage-message [data-user-message-bubble] { border: 1px solid var(--color-edge-muted); border-radius: 16px; background: #fafafa; box-shadow: none; padding: 8px 10px; }
+.macro-product-canvas .homepage-message [data-user-message-bubble] { border: 1px solid var(--color-edge-muted); border-radius: 16px; background: light-dark(#fafafa, #222229); box-shadow: none; padding: 8px 10px; }
 .macro-product-canvas .homepage-compose-status { display: none; }
 .macro-product-canvas .homepage-email-demo { --homepage-email-height: 320px; }
-.macro-product-canvas .homepage-email-surface { min-height: 320px; border: 0; border-radius: 0; padding: 18px 22px; background: #fff; color: #242428; box-shadow: none; }
+.macro-product-canvas .homepage-email-surface { min-height: 320px; border: 0; border-radius: 0; padding: 18px 22px; background: light-dark(#fff, #1b1b21); color: light-dark(#242428, #eeeef0); box-shadow: none; }
 .macro-product-email .homepage-email-surface { padding-top: 12px; }
 .macro-product-email .macro-preview-message { padding: 10px 14px; }
 .macro-product-email .homepage-email-surface::after { display: none; }
-.macro-product-email .homepage-email-row { border-color: #ebebee; }
+.macro-product-email .homepage-email-row { border-color: light-dark(#ebebee, #34343e); }
 .macro-product-email .homepage-email-row:not(.homepage-email-subject),
 .macro-product-email .homepage-email-subject .homepage-email-label { display: none; }
-.macro-product-email .homepage-email-subject input { font-size: 17px; font-weight: 500; color: #242428; }
+.macro-product-email .homepage-email-subject input { font-size: 17px; font-weight: 500; color: light-dark(#242428, #eeeef0); }
 .macro-product-email .homepage-email-body p { font-size: 15px; line-height: 24px; }
 .macro-product-email .homepage-email-body-wrap { margin-top: 6px; }
 .macro-product-email .homepage-email-body p:first-child { margin-top: 0; }
 .macro-product-email .macro-preview-front { bottom: 0; }
 .macro-product-canvas .mdf-frame { width: 100%; max-width: none; height: 360px; margin: 0; padding: 0; left: auto; transform: none; background: transparent; mask-image: none; }
-.macro-product-canvas .mds-card { max-width: none; border: 0; background: #fff; box-shadow: none; }
+.macro-product-canvas .mds-card { max-width: none; border: 0; background: light-dark(#fff, #1b1b21); box-shadow: none; }
 .macro-product-documents .macro-preview-back { left: auto; right: 0; transform: rotate(3deg); }
 .macro-product-documents .macro-preview-front { right: auto; left: 0; transform: rotate(-2deg); }
 .macro-product-documents .mds { --mds-body: 16px; padding: 22px; }
@@ -41,33 +41,33 @@
 .macro-product-agents .homepage-agent-story .homepage-message:first-child { display: none; }
 .macro-product-agents .homepage-message { width: 100%; transform: rotate(-2deg); }
 .macro-product-agents .homepage-message-body { width: 100%; }
-.macro-product-agents .homepage-message [data-user-message-bubble] { padding: 16px; background: #fff; box-shadow: 0 12px 24px -12px #20202b28; }
+.macro-product-agents .homepage-message [data-user-message-bubble] { padding: 16px; background: light-dark(#fff, #1b1b21); box-shadow: 0 12px 24px -12px #20202b28; }
 .macro-product-agents .homepage-message-reply { margin: -2px 0 0 -25px; padding: 0; transform: translateX(9px) rotate(4deg); }
 .macro-product-agents .homepage-message-reply::before,
 .macro-product-agents .demo-cursor-origin,
 .macro-product-agents .demo-cursor-quote,
 .macro-product-agents .homepage-agent-merge { display: none; }
-.macro-product-agents .demo-cursor-card { padding: 17px; background: #fff; border-color: #dedee3; box-shadow: 0 18px 32px -12px #20202b38; }
+.macro-product-agents .demo-cursor-card { padding: 17px; background: light-dark(#fff, #1b1b21); border-color: light-dark(#dedee3, #3a3a44); box-shadow: 0 18px 32px -12px #20202b38; }
 .macro-product-agents .demo-cursor-output { margin-top: 13px; }
 /* Keep the sheet's cells at their readable zoom; clip only the extra columns. */
 .macro-product-spreadsheet .macro-preview-back { height: 235px; }
 .macro-preview-sheet { width: 640px; transform: scale(1.15); transform-origin: top left; }
 .macro-product-canvas .homepage-spreadsheet { height: 320px; }
-.macro-product-canvas .homepage-sheet-editor { background: #fff; color: #242428; }
+.macro-product-canvas .homepage-sheet-editor { background: light-dark(#fff, #1b1b21); color: light-dark(#242428, #eeeef0); }
 .macro-product-canvas .homepage-sheet-toolbar { display: none; }
 .macro-product-canvas .homepage-sheet-formula,
 .macro-product-canvas .homepage-sheet-formula input:first-child,
 .macro-product-canvas .homepage-sheet-column-row > div,
 .macro-product-canvas .homepage-sheet-row > [role=rowheader],
-.macro-product-canvas .homepage-sheet-cell { border-color: #e7e7eb; }
-.macro-product-canvas .homepage-sheet-formula input { color: #242428; }
+.macro-product-canvas .homepage-sheet-cell { border-color: light-dark(#e7e7eb, #34343e); }
+.macro-product-canvas .homepage-sheet-formula input { color: light-dark(#242428, #eeeef0); }
 .macro-product-canvas .homepage-sheet-column-row,
-.macro-product-canvas .homepage-sheet-row > [role=rowheader] { background: #f7f7f8; color: #75757d; }
-.macro-product-canvas .homepage-sheet-column-row > div { color: #75757d; }
+.macro-product-canvas .homepage-sheet-row > [role=rowheader] { background: light-dark(#f7f7f8, #222229); color: light-dark(#75757d, #a5a5b0); }
+.macro-product-canvas .homepage-sheet-column-row > div { color: light-dark(#75757d, #a5a5b0); }
 .macro-product-canvas .homepage-sheet-cell[aria-selected=true] { box-shadow: inset 0 0 0 2px #2871bb; }
 .macro-product-canvas .homepage-sheet-cell[aria-selected=true]::after { background: #2871bb; }
 .macro-preview-company { width: 71%; bottom: 16px; padding: 7px; }
-.macro-preview-company [data-layer] > div { background: #fff; box-shadow: none; font-size: 16px; gap: 12px; }
+.macro-preview-company [data-layer] > div { background: light-dark(#fff, #1b1b21); box-shadow: none; font-size: 16px; gap: 12px; }
 .macro-preview-company [data-layer] > div > div:last-child { font-size: 13px; }
 .macro-product-crm .macro-preview-back { height: 234px; }
 .macro-product-canvas .homepage-crm .mdf-frame { padding: 0; }
@@ -77,8 +77,8 @@
 .macro-product-calls .macro-preview-back { left: auto; right: 0; width: 84%; height: 188px; transform: rotate(3deg); }
 .macro-product-calls .macro-preview-front { right: auto; left: 0; width: 90%; transform: rotate(-2deg); }
 .macro-preview-recording .call-bar { min-height: 40px; padding-inline: 12px; }
-.macro-preview-recording .call-poster { position: relative; height: 150px; min-height: 0; border-radius: 0; background: #f0f0f2; }
-.macro-preview-recording .call-poster-tile { min-height: 0; background: #e9e9ed; }
+.macro-preview-recording .call-poster { position: relative; height: 150px; min-height: 0; border-radius: 0; background: light-dark(#f0f0f2, #222229); }
+.macro-preview-recording .call-poster-tile { min-height: 0; background: light-dark(#e9e9ed, #2a2a32); }
 .macro-preview-recording .call-poster-name { color: #fff; }
 .macro-call-transcript .call-transcript { margin: 0; border: 0; }
 .macro-call-transcript .call-transcript-row { padding-top: 12px; }
@@ -107,23 +107,23 @@
 .macro-product-canvas .macro-workflow-document .doc-story-body { font-size: 15px; line-height: 1.6; }
 .macro-product-canvas .macro-workflow-document .doc-story-body h2 { font-size: 17px; margin: 18px 0 10px; }
 .macro-task-selection { display: flex; align-items: center; gap: 8px; border-radius: 3px; }
-.macro-task-selection[data-selected=true] { background: #d8e8fa; }
-.macro-selection-menu { position: absolute; top: 125px; right: 20px; padding: 4px; background: #fff; border: 1px solid #e3e3e7; border-radius: 8px; box-shadow: 0 5px 14px #00000014; }
+.macro-task-selection[data-selected=true] { background: light-dark(#d8e8fa, #304563); }
+.macro-selection-menu { position: absolute; top: 125px; right: 20px; padding: 4px; background: light-dark(#fff, #1b1b21); border: 1px solid light-dark(#e3e3e7, #3a3a44); border-radius: 8px; box-shadow: 0 5px 14px #00000014; }
 .macro-workflow-modal { position: absolute; inset: 0; z-index: 4; display: flex; justify-content: center; align-items: center; }
 .macro-workflow-modal .mail-share-scrim { position: relative; inset: auto; padding: 0; background: none; width: min(440px, 94%); }
-.macro-workflow-modal .mail-share-form { width: 100%; background: #fff; box-shadow: 0 20px 60px #20202b25; border-color: #e3e3e7; }
-.macro-workflow-email .mail-thread { height: 100%; background: #fff; }
-.macro-workflow-email .mail-thread-body { padding: 14px 22px; color: #242428; font-size: 15px; }
+.macro-workflow-modal .mail-share-form { width: 100%; background: light-dark(#fff, #1b1b21); box-shadow: 0 20px 60px #20202b25; border-color: light-dark(#e3e3e7, #3a3a44); }
+.macro-workflow-email .mail-thread { height: 100%; background: light-dark(#fff, #1b1b21); }
+.macro-workflow-email .mail-thread-body { padding: 14px 22px; color: light-dark(#242428, #eeeef0); font-size: 15px; }
 .macro-workflow-email .mail-thread-body > h3 { display: none; }
-.macro-workflow-channel .mail-channel { min-height: 0; height: auto; padding-bottom: 0; background: #fff; }
+.macro-workflow-channel .mail-channel { min-height: 0; height: auto; padding-bottom: 0; background: light-dark(#fff, #1b1b21); }
 .macro-workflow-channel .mail-channel-messages { padding: 14px; }
 .macro-workflow-channel .mail-channel-composer { display: none; }
 .macro-workflow-channel .homepage-conversation { gap: 14px; }
 .macro-workflow-channel .homepage-message { width: 100%; }
-.macro-workflow-channel .homepage-message[data-side=self] [data-user-message-bubble] { background: #f3f5f8; }
+.macro-workflow-channel .homepage-message[data-side=self] [data-user-message-bubble] { background: light-dark(#f3f5f8, #292932); }
 .macro-workflow-pointer { position: absolute; top: 0; left: 0; z-index: 8; transition: transform 650ms cubic-bezier(.22,1,.36,1); }
-.macro-workflow-toggle { position: absolute; bottom: -20px; right: -12px; width: 32px; height: 32px; display: grid; place-items: center; border: 0; border-radius: 50%; background: transparent; color: #85858b; pointer-events: auto; }
-.macro-workflow-toggle:hover { background: #eeeeef; color: #242428; }
+.macro-workflow-toggle { position: absolute; bottom: -20px; right: -12px; width: 32px; height: 32px; display: grid; place-items: center; border: 0; border-radius: 50%; background: transparent; color: light-dark(#85858b, #a5a5b0); pointer-events: auto; }
+.macro-workflow-toggle:hover { background: light-dark(#eeeeef, #2c2c35); color: light-dark(#242428, #eeeef0); }
 .macro-workflow-toggle:focus-visible { outline: 2px solid #2871bb; outline-offset: 2px; }
 .macro-workflow-toggle svg { width: 14px; height: 14px; }
 .macro-product-canvas .macro-workflow-agent { padding: 22px; height: 320px; }
@@ -137,16 +137,16 @@
 .macro-workflow-agent-result .homepage-message-reply { margin: 0; transform: rotate(3deg); }
 .macro-product-spreadsheet .macro-preview-back { height: 300px; }
 .macro-preview-company { width: 58%; }
-.macro-company-detail { display: grid; gap: 12px; padding: 12px 17px; font-size: 15px; border-top: 1px solid #ebebee; }
-.macro-company-detail > span:nth-child(odd) { color: #75757d; font-size: 12px; }
+.macro-company-detail { display: grid; gap: 12px; padding: 12px 17px; font-size: 15px; border-top: 1px solid light-dark(#ebebee, #34343e); }
+.macro-company-detail > span:nth-child(odd) { color: light-dark(#75757d, #a5a5b0); font-size: 12px; }
 .macro-product-crm .macro-preview-back { width: 100%; height: 315px; }
 .macro-product-calls .macro-preview-back { height: 270px; width: 78%; }
 .macro-workflow-recording .call-player { height: 235px; width: 100%; }
-.macro-workflow-recording .call-poster { background: #f0f0f2; }
-.macro-workflow-recording .call-poster-tile { background: #e9e9ed; }
+.macro-workflow-recording .call-poster { background: light-dark(#f0f0f2, #222229); }
+.macro-workflow-recording .call-poster-tile { background: light-dark(#e9e9ed, #2a2a32); }
 .macro-workflow-recording .call-poster-name { color: #fff; }
 .macro-product-calls .macro-preview-front { width: 70%; }
-.macro-call-transcript .call-transcript-row[data-selected] { background: #edf4fb; }
+.macro-call-transcript .call-transcript-row[data-selected] { background: light-dark(#edf4fb, #253449); }
 @media (max-width: 700px) {
   .macro-product-preview { inset: 24px 14px 28px; }
   .macro-preview-back { width: 95%; height: 285px; transform: rotate(-2deg); }
@@ -195,9 +195,9 @@
 
 /* The live site's composer finish: a soft cast shadow and one continuous rim. */
 .macro-preview-back, .macro-preview-front, .macro-workflow-modal .mail-share-form {
-  border: 1px solid #d9d9e24d;
+  border: 1px solid light-dark(#d9d9e24d, #ffffff16);
   border-radius: 24px;
-  background: #fff;
+  background: light-dark(#fff, #1b1b21);
   box-shadow: 0 0 0 .5px #b8b8c21f, 0 3px 8px -4px #25253512, 0 20px 48px -20px #25253538;
 }
 .macro-preview-back { transform: rotate(-1.5deg); }
@@ -206,24 +206,24 @@
 .macro-product-documents .macro-preview-front, .macro-product-calls .macro-preview-front { transform: rotate(-1.5deg); }
 .macro-product-agents .homepage-message { transform: none; }
 .macro-workflow-agent-result .homepage-message-reply { transform: rotate(1.5deg); }
-.macro-product-agents .demo-cursor-card { border-radius: 22px; border-color: #dedee480; box-shadow: 0 3px 8px -4px #25253512, 0 22px 50px -24px #25253545; }
-.macro-product-canvas .homepage-message [data-user-message-bubble] { border-color: #e8e8ed80; background: #f8f8fa; box-shadow: inset 0 1px 0 #fff; }
+.macro-product-agents .demo-cursor-card { border-radius: 22px; border-color: light-dark(#dedee480, #ffffff20); box-shadow: 0 3px 8px -4px #25253512, 0 22px 50px -24px #25253545; }
+.macro-product-canvas .homepage-message [data-user-message-bubble] { border-color: light-dark(#e8e8ed80, #ffffff0d); background: light-dark(#f8f8fa, #25252d); box-shadow: inset 0 1px 0 light-dark(#fff, #ffffff08); }
 .macro-workflow-modal .mail-share-form { box-shadow: 0 0 0 .5px #b8b8c226, 0 5px 14px -5px #25253525, 0 30px 70px -24px #25253555; overflow: hidden; }
 .macro-workflow-composer { position: absolute; top: 6px; left: 0; width: 82%; z-index: 3; transform: rotate(-1.5deg); }
 .macro-product-canvas .macro-workflow-composer .homepage-email-demo { min-height: 0; --homepage-email-height: 0px; }
-.macro-product-canvas .macro-workflow-composer .homepage-email-surface { min-height: 0; padding: 16px 22px; border-radius: 26.25px; background: linear-gradient(145deg, #fff, #fcfcfe); box-shadow: 0 0 0 .75px #d9d9e280, 0 2px 8px #2525350c, 0 20px 54px -18px #25253540; }
-.macro-product-canvas .macro-workflow-composer .homepage-email-surface::after { display: block; border-color: #ffffffa0; background: linear-gradient(135deg, #fff, #ffffff00 45%, #dcdce560) border-box; }
-.macro-product-canvas .macro-workflow-composer .homepage-email-row { display: flex; min-height: 30px; border-color: #e9e9ef; }
-.macro-product-canvas .macro-workflow-composer .homepage-email-label { display: block; flex-basis: 50px; color: #8b8b95; font-size: 12px; }
-.macro-product-canvas .macro-workflow-composer .homepage-email-row input { padding: 7px 0; color: #33333b; font-size: 13px; line-height: 18px; }
-.macro-product-canvas .macro-workflow-composer .homepage-email-sender { padding: 2px 0; color: #33333b; background: none; font-size: 13px; }
+.macro-product-canvas .macro-workflow-composer .homepage-email-surface { min-height: 0; padding: 16px 22px; border-radius: 26.25px; background: linear-gradient(145deg, light-dark(#fff, #1b1b21), light-dark(#fcfcfe, #19191f)); box-shadow: 0 0 0 .75px light-dark(#d9d9e280, #ffffff20), 0 2px 8px #2525350c, 0 20px 54px -18px #25253540; }
+.macro-product-canvas .macro-workflow-composer .homepage-email-surface::after { display: block; border-color: light-dark(#ffffffa0, #ffffff18); background: linear-gradient(135deg, light-dark(#fff, #1b1b21), #ffffff00 45%, light-dark(#dcdce560, #ffffff08)) border-box; }
+.macro-product-canvas .macro-workflow-composer .homepage-email-row { display: flex; min-height: 30px; border-color: light-dark(#e9e9ef, #34343e); }
+.macro-product-canvas .macro-workflow-composer .homepage-email-label { display: block; flex-basis: 50px; color: light-dark(#8b8b95, #a5a5b0); font-size: 12px; }
+.macro-product-canvas .macro-workflow-composer .homepage-email-row input { padding: 7px 0; color: light-dark(#33333b, #dedee7); font-size: 13px; line-height: 18px; }
+.macro-product-canvas .macro-workflow-composer .homepage-email-sender { padding: 2px 0; color: light-dark(#33333b, #dedee7); background: none; font-size: 13px; }
 .macro-workflow-composer .homepage-email-sender img { width: 20px; height: 20px; }
 .macro-product-canvas .macro-workflow-composer .homepage-email-body-wrap { margin-top: 16px; }
 .macro-product-canvas .macro-workflow-composer .homepage-email-body { min-height: 0; }
 .macro-product-canvas .macro-workflow-composer .homepage-email-body p { font-size: 15px; line-height: 24px; margin: 0 0 12px; }
 .macro-workflow-composer .homepage-email-toolbar { margin-top: 0; }
-.macro-workflow-composer .homepage-email-toolbar button { color: #878791; }
-.macro-workflow-composer .homepage-email-toolbar .homepage-email-send { background: #24242a; color: #fff; opacity: 1; }
+.macro-workflow-composer .homepage-email-toolbar button { color: light-dark(#878791, #a5a5b0); }
+.macro-workflow-composer .homepage-email-toolbar .homepage-email-send { background: light-dark(#24242a, #eeeef0); color: light-dark(#fff, #1b1b21); opacity: 1; }
 .macro-product-email[data-phase="7"] > .macro-preview-back { opacity: 0; }
 .macro-product-email > .macro-preview-back { transition: opacity 450ms ease; }
 .macro-product-email[data-phase="7"] .macro-workflow-channel { z-index: 1; }

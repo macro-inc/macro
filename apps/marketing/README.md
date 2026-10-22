@@ -5,12 +5,15 @@ It shares the repository with the authenticated application, but has its own
 package manifest, Vite entry points, TypeScript aliases, styles, assets, and UI
 components. Application UI changes must not alter the website.
 
-The homepage uses a white background in every system color scheme, native SF Pro
+The homepage follows the system color scheme with neutral white and charcoal
+backgrounds, native SF Pro
 on Apple platforms (with a system sans-serif fallback elsewhere), the supplied
-text-only vector Macro wordmark with rounded upper M corners, centered Roboto Slab headings at weight 400, and black pill
-calls to action. The hero promotes the product-description copy to its main slab
+text-only vector Macro wordmark with rounded upper M corners, centered Roboto Slab headings at weight 400, and contrasting pill
+calls to action. `?theme=dark` pins dark mode; `?theme=cream` pins the white
+homepage while retaining cream on product pages. The first-paint script and
+`sitePalette.ts` must apply the same preference before and after hydration. The hero promotes the product-description copy to its main slab
 headline. Hero icons use rounded squircle tiles, fine highlighted rims,
-and soft cast shadows that echo the native compose surface. Graphics layer white product surfaces with fine neutral borders and restrained shadows. `components/homepage/macro-homepage.css`
+and soft cast shadows that echo the native compose surface. Graphics layer theme-matched product surfaces with fine neutral borders and restrained shadows. `components/homepage/macro-homepage.css`
 scopes that treatment to `.macro-homepage`; product pages, blog, sample workspace,
 and signup retain their existing system/cream/dark palettes.
 
@@ -24,7 +27,8 @@ scroll-driven header CTA landing animation.
 
 `HomepageTiles` presents six product feature panels in one column on desktop and
 mobile: email and chat, documents and tasks, agents, sheets and databases, CRM,
-and calls. Panels use a gray-50 background at 50% opacity and no outer border.
+and calls. Panels use a gray-50 background at 50% opacity in light mode, a soft charcoal
+background in dark mode, and no outer border.
 `HomepageProductPreview` layers readable fragments of the existing product UI
 with local sample data; never shrink a whole desktop window into a card.
 `HomepageWorkflows` reuses the email share form and channel result, document task
@@ -44,7 +48,8 @@ and expand staged chat messages with grid-row and opacity transitions so the
 conversation grows continuously. Reuse native demo content; avoid stacking a
 second bubble animation on top of the message entrance.
 The previews load near the viewport through `DeferredDemo`; frozen app styles
-and neutral light tokens are scoped to their canvases, independent of the system theme. The homepage does not apply the cream palette. The original testimonial, blog
+and neutral light or native dark tokens are scoped to their canvases, following
+live system theme changes without resetting the workflows. The homepage does not apply the cream palette. The original testimonial, blog
 carousel, closing CTA, and security section follow the grid. The shared navigation
 and phone signup routing remain in use.
 
@@ -253,7 +258,8 @@ changes to application routes, components, or providers.
 URLs as the production CDN. `/crm` must serve `dist/crm/index.html`, never the
 homepage hydration entry. Unknown preview routes return 404. The build smoke
 check verifies phone touch entry and exit for every product demo, in addition
-to homepage hydration and its white surface in both system color schemes.
+to homepage hydration, first-paint colors, and live theme changes in its shell
+and native previews.
 
 ## Feature-page pattern
 
