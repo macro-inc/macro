@@ -1,5 +1,6 @@
 import Arrow from '@phosphor/arrow-up-right.svg';
-import { For, lazy } from 'solid-js';
+import { createUniqueId, For, lazy } from 'solid-js';
+import { WorkspaceTexture } from '../../../setup/components/WorkspaceTexture';
 import { DeferredDemo, DemoPlaceholder } from '../DeferredDemo';
 import type { HomepagePreviewKind } from './HomepageProductPreview';
 
@@ -13,6 +14,7 @@ function Tile(props: {
   links: { href: string; label: string }[];
   preview: HomepagePreviewKind;
 }) {
+  const textureId = createUniqueId();
   return (
     <section
       class={`macro-feature-tile macro-tile-${props.id}`}
@@ -34,6 +36,9 @@ function Tile(props: {
         </div>
       </div>
       <div class="macro-tile-art">
+        <div class="macro-tile-ambience" aria-hidden="true">
+          <WorkspaceTexture accent="var(--feature-glow)" filterId={textureId} />
+        </div>
         <DeferredDemo
           preload={loadPreview}
           fallback={<DemoPlaceholder label={`${props.title} preview`} />}

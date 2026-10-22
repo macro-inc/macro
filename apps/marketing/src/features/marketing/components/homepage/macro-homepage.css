@@ -48,7 +48,7 @@ html[data-homepage][data-theme-light='true'] { color-scheme: light; }
 .macro-motion-toggle svg { width: 13px; height: 13px; }
 .macro-feature-grid { width: min(800px, calc(100% - 64px)); margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 88px; }
 .macro-feature-tile { min-width: 0; display: flex; flex-direction: column; background: transparent; border: 0; }
-.macro-tile-art { height: 450px; min-height: 450px; flex: none; position: relative; isolation: isolate; overflow: hidden; border-radius: 16px; background: light-dark(rgb(249 250 251 / .5), rgb(20 20 20 / .5)); }
+.macro-tile-art { height: 450px; min-height: 450px; flex: none; position: relative; isolation: isolate; overflow: hidden; border-radius: 16px; background: transparent; }
 .macro-tile-copy { width: min(640px, 100%); margin: 0 auto 28px; text-align: left; }
 .macro-letter-prose h2, .macro-tile-copy h2 { margin: 0 0 24px; font-family: 'Roboto Slab Variable', serif; font-size: 36px; font-weight: 400; line-height: 1.22; letter-spacing: -.04em; text-wrap: balance; }
 .macro-letter-prose p, .macro-tile-copy p { margin: 0 0 20px; font-size: 19px; line-height: 1.65; letter-spacing: -.012em; color: var(--color-ink-muted); text-wrap: pretty; }
@@ -126,3 +126,32 @@ html[data-homepage][data-theme-light='true'] { color-scheme: light; }
 @media (max-width: 700px) {
   .macro-feature-tile#documents .macro-tile-art { height: 570px; min-height: 570px; }
 }
+
+/* The onboarding accent wash and shared grain sit behind the native UI. */
+.macro-tile-email { --feature-glow: #7abde5; }
+.macro-tile-documents { --feature-glow: #b8a1ed; }
+.macro-tile-tasks { --feature-glow: #65d8ac; }
+.macro-tile-coding-agents { --feature-glow: #f77d67; }
+.macro-tile-spreadsheet { --feature-glow: #56c9c6; }
+.macro-tile-crm { --feature-glow: #f4c65c; }
+.macro-tile-calls { --feature-glow: #e99cbb; }
+.macro-tile-ambience {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  mask-image: radial-gradient(ellipse 60% 70% at center, #000 45%, transparent 80%);
+  pointer-events: none;
+}
+.macro-tile-ambience::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 80% 80% at 45% 50%,
+    color-mix(in srgb, var(--feature-glow) 32%, transparent) 0%,
+    color-mix(in srgb, var(--feature-glow) 20%, transparent) 35%,
+    color-mix(in srgb, var(--feature-glow) 8%, transparent) 60%,
+    transparent 80%);
+  filter: blur(12px);
+}
+.macro-tile-ambience [data-workspace-texture] { mix-blend-mode: soft-light; }
+html[data-theme-light='true'] .macro-tile-ambience { opacity: .6; }

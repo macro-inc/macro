@@ -39,8 +39,12 @@ repeating a feature summary in a second paragraph.
 
 `HomepageTiles` presents seven product sections in one column on desktop and
 mobile: email integrated with chat and tasks, collaborative documents,
-self-updating tasks, agents, sheets and databases, CRM, and calls. Only the demo art uses a gray-50 background at 50% opacity in light mode, a neutral near-black
-background in dark mode, and no outer border.
+self-updating tasks, agents, sheets and databases, CRM, and calls. Demo art has
+no flat gray backdrop or outer border. Use the onboarding radial accent glow and
+shared `WorkspaceTexture` grain behind each composition: blue email, purple
+documents, green tasks, coral agents, teal sheets, amber CRM, and rose calls.
+Keep the texture static and behind the opaque UI so text remains readable;
+reduce the wash opacity in light mode.
 `HomepageProductPreview` layers readable fragments of the existing product UI
 with local sample data; never shrink a whole desktop window into a card. Dark
 preview panels retain the live site's glass highlight, shaded lower edge, and
