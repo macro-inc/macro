@@ -82,6 +82,20 @@ impl TaskDocumentId {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    /// The lexical mention chip that renders this task in Macro Markdown.
+    pub fn mention(&self) -> String {
+        let payload = serde_json::json!({
+            "documentId": self.0,
+            "documentName": "",
+            "blockName": "task",
+            "blockParams": {},
+        })
+        .to_string()
+        .replace('<', "\\u003c")
+        .replace('>', "\\u003e");
+        format!("<m-document-mention>{payload}</m-document-mention>")
+    }
 }
 
 /// A task as its viewer sees it.
@@ -109,6 +123,8 @@ pub struct LinkedTask {
     pub url: String,
     /// Put this in the pull request description so GitHub activity reaches the task.
     pub reference: String,
+    /// Paste this `<m-document-mention>` chip whenever you name the task.
+    pub mention: String,
     /// The session's pull request, now linked to the task, if it has one.
     pub pull_request: Option<String>,
 }
@@ -321,11 +337,13 @@ where
                 if let Some(url) = &pull_request {
                     self.link_pull_request(url, &facts).await?;
                 }
+                let mention = facts.id.mention();
                 Ok(LinkedTask {
                     url: format!("{}/{}", self.task_url_base, facts.id.as_str()),
                     task_id: facts.id.0,
                     title: facts.title,
                     reference: facts.reference,
+                    mention,
                     pull_request,
                 })
             }

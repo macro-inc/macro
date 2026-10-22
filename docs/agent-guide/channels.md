@@ -557,6 +557,9 @@ session header (and the side panel's **Task** row) shows a task chip before the
 PR chip: the task title, or `Task` while loading or without access. Clicking it
 opens the task in a new split (in place on touch devices). Linking a different
 task sends the same session-update notification, so mounted headers refresh.
+When the agent names that task in a reply — after creating or linking it, or
+later — the reply includes an `<m-document-mention>` task chip, not a URL or
+`MACRO-` id.
 
 When the agent stops to ask a question the question takes the area in the passage's
 place, cropped and expandable the same way: the prompt, then what is asked - a form's

@@ -74,6 +74,9 @@ impl SessionTasks for FixedTasks {
                 title: "Fix the thing".into(),
                 url: format!("https://macro.com/app/task/{task}"),
                 reference: "ENG-42".into(),
+                mention: format!(
+                    r#"<m-document-mention>{{"documentId":"{task}","documentName":"","blockName":"task","blockParams":{{}}}}</m-document-mention>"#
+                ),
                 pull_request: None,
             })
         })
@@ -293,6 +296,7 @@ async fn each_harness_gets_only_internal_tools_and_writes_only_its_session() {
                 "title": "Fix the thing",
                 "url": "https://macro.com/app/task/MACRO-abc",
                 "reference": "ENG-42",
+                "mention": "<m-document-mention>{\"documentId\":\"MACRO-abc\",\"documentName\":\"\",\"blockName\":\"task\",\"blockParams\":{}}</m-document-mention>",
                 "pull_request": null,
             })
         );

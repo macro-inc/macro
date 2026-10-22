@@ -11,6 +11,9 @@ between the sandbox and the rest of the product.
 
 - `src/domain/service.rs` + `src/domain/ports.rs`: the harness service and
   the ports every runtime/container provider implements.
+- `src/domain/model/coding_preferences/`: workflows injected into coding
+  sessions (create-tasks, open-pull-requests). Task mentions use the lexical
+  `<m-document-mention>` chip.
 - `src/domain/codex.rs`: per-runtime session setup.
 - `src/outbound/sidecar.rs` + `sidecar_pump.rs`: the container sidecar
   transport that speaks `agent_runtime_protocol`.
