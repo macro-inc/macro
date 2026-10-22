@@ -107,7 +107,7 @@ export function toEmailThread(thread: ApiThread): EmailThread {
 export function createEmailThreadSource(
   threadId: Accessor<string>,
   query: ThreadQueryResult<ThreadQueryData>
-): EmailThreadSource {
+): EmailThreadSource & { isLocalDraft: Accessor<boolean> } {
   // Status guards prevent a pending Solid resource from suspending its owner.
   const snapshot = createMemo<{ requested: string; thread?: EmailThread }>(
     (previous) => {
@@ -227,6 +227,22 @@ export function createEmailThreadSource(
   return {
     id: () => thread()?.db_id ?? query.resolvedThreadId ?? threadId(),
     thread,
+    // A first-use working copy may not have reached the mutation queue, so
+    // its temporary thread ID can still return NOT_FOUND from the server.
+    isLocalDraft: () =>
+      query.transport === 'graphql' &&
+      query.resolvedThreadId === threadId() &&
+      !!thread() &&
+      local
+        .drafts()
+        .some(
+          (draft) =>
+            draft.threadId === threadId() &&
+            !draft.serverDraftId &&
+            !draft.serverThreadId &&
+            !draft.content.replying_to_id &&
+            draft.status !== 'synced'
+        ),
     isError: () =>
       query.isError && (query.transport !== 'graphql' || !thread()),
     isLoading: () =>

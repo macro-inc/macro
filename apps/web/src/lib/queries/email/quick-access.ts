@@ -1,3 +1,4 @@
+import type { LocalDraft } from '@app/features/email-compose/core/local-draft';
 import type { EntityItem } from '@core/context/quickAccess/types';
 import type { EmailEntity } from '@entity';
 import {
@@ -7,6 +8,7 @@ import {
   selectRecords,
 } from '@graphql-cache/index';
 import { EmailQuickAccessFieldsFragmentDoc } from '@service-storage/graphql/generated/graphql';
+import { localDraftEntities } from './local-draft-entities';
 
 /** Materialize cached thread hits only; matching uses the projection's subject/sender text. */
 export async function materializeCachedEmailItems(
@@ -62,4 +64,19 @@ export async function materializeCachedEmailItems(
       },
     ];
   });
+}
+
+/** Unsynced working copies have no normalized thread/search record yet. */
+export function localDraftQuickAccessItems(
+  drafts: readonly LocalDraft[]
+): EntityItem<EmailEntity>[] {
+  return localDraftEntities(drafts).map((email) => ({
+    id: email.id,
+    kind: 'entity',
+    bucket: 'email',
+    searchText: [email.name, email.senderEmail].filter(Boolean).join(' '),
+    sortTimestamp: new Date(email.updatedAt ?? 0).getTime(),
+    timestamps: { updatedAt: email.updatedAt, createdAt: email.createdAt },
+    data: email,
+  }));
 }

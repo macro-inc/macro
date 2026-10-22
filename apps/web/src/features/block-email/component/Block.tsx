@@ -74,6 +74,7 @@ export default function BlockEmail() {
             result={threadLoadResult}
             notificationSource={notificationSource}
             threadId={threadId()}
+            isLocalDraft={source.isLocalDraft()}
             linkId={threadData()?.link_id}
             debounceTime={100}
             onRetry={() => fireAndForget(threadQuery.refetch(), 'email-thread')}

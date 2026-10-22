@@ -1,3 +1,4 @@
+import type { LocalDraft } from '@app/features/email-compose/core/local-draft';
 import type {
   CrmCompanyEntity,
   CrmContactEntity,
@@ -43,6 +44,14 @@ import {
   type QuickAccessContextValue,
   type QuickAccessListOptions,
 } from './types';
+
+const localDrafts = vi.hoisted(() => ({ read: (): LocalDraft[] => [] }));
+vi.mock('@queries/email/local-draft-source', async () => ({
+  createLocalDraftSource: (enabled: () => boolean) => ({
+    drafts: () => (enabled() ? localDrafts.read() : []),
+    ready: () => true,
+  }),
+}));
 
 const mocks = vi.hoisted(() => ({
   search: vi.fn<(args: SearchCacheArgs) => Promise<SearchCachePage>>(),
@@ -238,6 +247,7 @@ function page(start: number, count: number, more = false): SearchCachePage {
   };
 }
 beforeEach(() => {
+  localDrafts.read = () => [];
   vi.clearAllMocks();
   vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
   mocks.history = [];
@@ -1425,4 +1435,107 @@ describe('database command discovery', () => {
     });
     expect(mocks.history).toEqual([]);
   });
+});
+
+it('finds an unqueued first-use draft by title without a cached thread and retires it after sync', async () => {
+  const [copies, setCopies] = createSignal<LocalDraft[]>([
+    {
+      key: 'local-draft',
+      draftId: 'local-draft',
+      threadId: 'local-thread',
+      accountId: 'viewer',
+      generation: 'generation',
+      revision: 1,
+      acknowledgedRevision: 0,
+      content: { subject: 'Offline receipt' },
+      attachments: [],
+      status: 'dirty',
+      updatedAt: 1,
+    },
+  ]);
+  localDrafts.read = copies;
+  const [term, setTerm] = createSignal('receipt');
+  const { source, list, notes } = setup((source) => ({
+    source,
+    list: source.useList({ buckets: ['email'], searchTerm: term }),
+    notes: source.useList({ buckets: ['note'], searchTerm: term }),
+  }));
+  expect(list.items().map((item) => item.id)).toEqual(['local-thread']);
+  expect(source.getById('local-thread')?.data.name).toBe('Offline receipt');
+  expect(notes.items()).toEqual([]);
+  setTerm('unrelated');
+  expect(list.items()).toEqual([]);
+  setTerm('receipt');
+  setCopies([{ ...copies()[0], status: 'synced', acknowledgedRevision: 1 }]);
+  expect(list.items()).toEqual([]);
+  expect(source.getById('local-thread')).toBeUndefined();
+});
+
+it('keeps a cached sender hit when the same thread has an unmatched local draft', async () => {
+  localDrafts.read = () => [
+    {
+      key: 'reply',
+      draftId: 'reply',
+      threadId: 'thread-1',
+      accountId: 'viewer',
+      generation: 'generation',
+      revision: 1,
+      acknowledgedRevision: 0,
+      content: { subject: 'Weekly update' },
+      attachments: [],
+      status: 'dirty',
+      updatedAt: 1,
+    },
+  ];
+  mocks.search.mockResolvedValue({
+    documents: [
+      {
+        profile: 'quick-access-v1',
+        recordKey: 'GraphqlSoupEmailThread:thread-1',
+        bucket: 'email',
+        searchText: 'weekly update | teo | teo@example.com',
+        timestampMs: 1,
+        sourceHash: 'hash',
+      },
+    ],
+    nextCursor: null,
+  });
+  mocks.readRecordsByKeys.mockResolvedValue({
+    revision: INITIAL_CACHE_REVISION,
+    records: [
+      {
+        recordKey: 'GraphqlSoupEmailThread:thread-1',
+        record: {
+          __typename: 'GraphqlSoupEmailThread',
+          id: 'thread-1',
+          name: 'Weekly update',
+          ownerId: 'viewer',
+          createdAt: '2026-01-01T00:00:00Z',
+          updatedAt: '2026-01-01T00:00:00Z',
+          viewedAt: null,
+          senderName: 'Teo',
+          senderEmail: 'teo@example.com',
+          linkId: 'inbox',
+          isRead: true,
+          isDraft: false,
+          isImportant: false,
+          inboxVisible: true,
+        },
+      },
+    ],
+  });
+  const loaded = Promise.withResolvers<void>();
+  const list = setup((source) => {
+    const list = source.useList({
+      buckets: ['email'],
+      searchTerm: () => 'teo',
+    });
+    createRenderEffect(() => {
+      if (!list.isLoading()) loaded.resolve();
+    });
+    return list;
+  });
+  await loaded.promise;
+  expect(list.items().map((item) => item.id)).toEqual(['thread-1']);
+  expect(list.items()[0].searchText).toContain('teo@example.com');
 });

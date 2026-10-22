@@ -6,6 +6,7 @@ import type { MailAccountsQuery } from '@service-storage/graphql/generated/graph
 import { QueryClient } from '@tanstack/solid-query';
 import { type Client, createClient, fetchExchange } from '@urql/core';
 import { ok } from 'neverthrow';
+import { createEffect, createRoot } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { emailKeys } from './keys';
 import { useMailAccountsQuery } from './mail-accounts';
@@ -69,8 +70,9 @@ function accounts(signature: string, replySignature = true): MailAccountsQuery {
   };
 }
 
-function setupCatalog() {
-  let stored: unknown = accounts('Old signature');
+function setupCatalog(initial: unknown = accounts('Old signature')) {
+  let stored: unknown = initial;
+  const persisted = Promise.withResolvers<void>();
   let server = accounts('Old signature');
   let offline = false;
   let persistence: Promise<void> | undefined;
@@ -88,10 +90,14 @@ function setupCatalog() {
     onCacheGenerationChanged: () => () => {},
     onMutationSettled: () => () => {},
     claimNextMutation: async () => undefined,
-    readQuery: async () => ({ kind: 'hit', data: structuredClone(stored) }),
+    readQuery: async () =>
+      stored === null
+        ? { kind: 'miss' }
+        : { kind: 'hit', data: structuredClone(stored) },
     writeQuery: async (args) => {
       await persistence;
       stored = structuredClone(args.data);
+      persisted.resolve();
       return {
         revision: INITIAL_CACHE_REVISION,
         revisionAdvanced: false,
@@ -127,6 +133,7 @@ function setupCatalog() {
   return {
     fetch,
     stored: () => stored,
+    persisted: persisted.promise,
     setServer: (data: MailAccountsQuery) => {
       server = data;
     },
@@ -259,4 +266,34 @@ describe('email settings account reconciliation', () => {
       links: [{ id: 'inbox-1', settings: { signature: 'Saved signature' } }],
     });
   });
+});
+
+it('warms an empty sender catalog before first composition and reopens it offline', async () => {
+  const catalog = setupCatalog(null);
+  const disposeBackground = createRoot((dispose) => {
+    useMailAccountsQuery(() => true);
+    return dispose;
+  });
+  await catalog.persisted;
+  expect(catalog.stored()).toEqual(accounts('Old signature'));
+  disposeBackground();
+  catalog.goOffline();
+  catalog.newClient();
+  const composer = mountComposerAccounts();
+  const loaded = Promise.withResolvers<void>();
+  const stop = createRoot((dispose) => {
+    createEffect(() => {
+      if (composer.inboxes.inboxes().length) loaded.resolve();
+    });
+    return dispose;
+  });
+  try {
+    await loaded.promise;
+    expect(composer.inboxes.inboxes()[0]?.id).toBe('inbox-1');
+    expect(composer.inboxes.inboxes()[0]?.email_address).toBe(
+      'self@example.com'
+    );
+  } finally {
+    stop();
+  }
 });

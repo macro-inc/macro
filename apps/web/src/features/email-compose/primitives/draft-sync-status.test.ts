@@ -109,10 +109,15 @@ it('acknowledges saved edits only after input pauses and stays stable through ba
     'queued',
     'synced',
   ] as const) {
-    setLocal({ ...draft, status: phase });
+    setLocal({
+      ...draft,
+      status: phase,
+      acknowledgedRevision: phase === 'synced' ? 1 : 0,
+    });
+    const message = phase === 'synced' ? 'Draft saved' : 'Saved on this device';
     changed();
     setDisk('saved');
-    await vi.waitFor(() => expect(status.state()?.message).toBe('Draft saved'));
+    await vi.waitFor(() => expect(status.state()?.message).toBe(message));
     expect(status.state()?.savedVersion).toBeUndefined();
     setInputIdle(true);
     const version = status.state()?.savedVersion;
@@ -127,7 +132,7 @@ it('acknowledges saved edits only after input pauses and stays stable through ba
     expect(status.state()?.savedVersion).toBeUndefined();
     setDisk('saving');
     expect(status.state()).toMatchObject({
-      message: 'Draft saved',
+      message,
       failed: false,
     });
     expect(status.state()?.action).toBeUndefined();

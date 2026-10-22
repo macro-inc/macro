@@ -16,12 +16,17 @@ import { withEntityNotifications } from '@app/features/soup/entity-notifications
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useUserId } from '@core/context/user';
 import { arrayEquals } from '@core/util/compareUtils';
+import { matchesTokenSubsequences } from '@core/util/string';
 import {
   type EmailEntity,
   type EntityData,
   isEmailEntity,
   type WithNotification,
 } from '@entity';
+import {
+  createLocalDraftSource,
+  localDraftEntities,
+} from '@queries/email/local-draft-source';
 import { useFavoritesQuery } from '@queries/favorites/favorites';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
 import { useSearchSoupQuery } from '@queries/soup/search';
@@ -156,6 +161,9 @@ export function useEmailDataSource(
   const query = useSoupAstItemsQuery(queryArgs, () => ({
     enabled: sourceEnabled(),
   }));
+  const localDrafts = createLocalDraftSource(
+    () => query.transport === 'graphql'
+  );
   const isListPending = () =>
     !filtersReady() || query.isPending || query.isPlaceholderData;
 
@@ -176,8 +184,7 @@ export function useEmailDataSource(
     return selected;
   };
 
-  // The quick-access pool behind local search holds no email threads, so
-  // every search result comes from the search service.
+  // Mail search retains server relevance; recoverable local drafts are merged below.
   const search = createSearchState({
     text: () => state.search,
     enabled: () => sourceEnabled() && searchFavoritesReady(),
@@ -398,7 +405,82 @@ export function useEmailDataSource(
     },
     { scope: '', items: [], resolved: new Map() }
   );
-  const entities = () => publication().items;
+  // Working copies can exist before sender metadata allows a GraphQL save.
+  // Keep them discoverable without waiting for the remote list/search.
+  const recoverable = () =>
+    state.tab === 'drafts' || (state.tab === 'all' && !!state.search.trim())
+      ? localDraftEntities(localDrafts.drafts()).filter(
+          (email) => email.ownerId === userId()
+        )
+      : [];
+  // Resolve recovery threads independently of the active filters. Otherwise an
+  // excluded thread could reappear with the synthetic first-use draft flags.
+  const recoveryBatches = createMemo(() =>
+    emailAdmissionBatches(recoverable())
+  );
+  const recoveryQueries = indexArray(recoveryBatches, (ids) =>
+    useSoupAstItemsQuery(
+      () => ({
+        ...buildEmailQuery(
+          {
+            tab: 'all',
+            inboxIds: undefined,
+            facets: {},
+            facetContext: facetContext(),
+          },
+          ids()
+        ),
+        transport: 'graphql',
+      }),
+      () => ({ enabled: sourceEnabled(), keepPreviousData: false })
+    )
+  );
+  const localRows = () => {
+    if (!filtersReady()) return [];
+    const remote = new Map(
+      [
+        ...recoveryQueries().flatMap((query) =>
+          !query.isPending && !query.isPlaceholderData
+            ? (query.data?.entities.filter(isEmailEntity) ?? [])
+            : []
+        ),
+        ...rawEntities().filter(isEmailEntity),
+        ...publication().items,
+      ].map((email) => [email.id, email])
+    );
+    return recoverable()
+      .map((email) => {
+        const confirmed = remote.get(email.id);
+        return confirmed
+          ? {
+              ...confirmed,
+              name: email.name,
+              snippet: email.snippet,
+              updatedAt: email.updatedAt,
+            }
+          : email;
+      })
+      .filter(
+        (email) =>
+          email.ownerId === userId() &&
+          (!state.inboxIds?.length ||
+            (!!email.linkId && state.inboxIds.includes(email.linkId))) &&
+          (!state.aliasFilter ||
+            (email.linkId === state.aliasFilter.inboxId &&
+              email.senderEmail?.toLowerCase() ===
+                state.aliasFilter.emailAddress.toLowerCase())) &&
+          testFacets(state.facets, EMAIL_FACETS, email, facetContext()) &&
+          matchesTokenSubsequences(email.name, state.search.trim())
+      );
+  };
+  const entities = () => {
+    const recovered = localRows();
+    const ids = new Set(recovered.map((email) => email.id));
+    return [
+      ...recovered,
+      ...publication().items.filter((email) => !ids.has(email.id)),
+    ];
+  };
 
   const listEntities = createMemo((): WithNotification<EntityData>[] =>
     entities().map((email) =>
@@ -464,6 +546,7 @@ export function useEmailDataSource(
   const items = createSoupRowStore(builtItems);
 
   const isLoading = () => {
+    if (localRows().length > 0) return false;
     if (search.isSearching() && showsFavorites() && favorites.isError)
       return false;
     if (!filtersReady()) return true;

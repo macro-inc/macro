@@ -65,7 +65,12 @@ export function createDraftSyncStatus(options: {
         return previous && { ...previous, savedVersion: undefined };
       if (!draft && !saved.latest?.draft) return;
       return {
-        message: 'Draft saved',
+        message:
+          draft &&
+          (draft.status !== 'synced' ||
+            draft.acknowledgedRevision < draft.revision)
+            ? 'Saved on this device'
+            : 'Draft saved',
         savedVersion:
           disk === 'saved' && options.acknowledgeSaved()
             ? draft

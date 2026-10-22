@@ -1,6 +1,7 @@
 import { normalizedCacheResultMetadata } from '@graphql-cache/exchange/normalized-cache-exchange';
 import { MailAccountsDocument } from '@service-storage/graphql/generated/graphql';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
+import type { Accessor } from 'solid-js';
 import { createLiveQuery } from '../../graphql-cache/solid/create-live-query';
 
 /** Reconcile account edits with mounted composers and the durable catalog. */
@@ -17,11 +18,12 @@ export async function refreshMailAccounts(): Promise<void> {
 
 /** One identity-scoped GraphQL catalog for inboxes and their verified senders.
  * Alias failures are per inbox; a partial response still exposes healthy accounts. */
-export function useMailAccountsQuery() {
+export function useMailAccountsQuery(enabled: Accessor<boolean> = () => true) {
   const query = createLiveQuery(
     MailAccountsDocument,
     () => ({}),
     () => ({
+      enabled: enabled(),
       client: getGraphqlSoupClient(),
       requestPolicy: 'cache-and-network' as const,
       select: (data) => ({

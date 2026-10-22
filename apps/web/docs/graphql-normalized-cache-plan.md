@@ -829,9 +829,16 @@ message bodies are excluded. The frontend materializes only matched thread keys
 with `EmailQuickAccessFields` and uses the projection text for ranking and pending
 query filtering; cache hydration, visibility, and deletion changes refresh rows.
 Desktop Command K explicitly excludes the email bucket; mobile Search includes it.
+Unsynced email working copies merge into that bucket before any normalized
+thread exists, using the same account-scoped recovery source as Drafts. Local
+subjects take precedence over stale cached copies; sync retires the recovery row.
+The backfill leader also warms `MailAccounts` concurrently with paged hydration
+so first-use offline composition can resolve sender ownership and aliases.
 
-Email Quick Access requires the existing `enable-graphql-soup` rollout and a healthy
-normalized cache; the legacy REST sources do not supply email Quick Access rows.
+Normalized email Quick Access results require the existing `enable-graphql-soup`
+rollout and a healthy normalized cache; local recovery rows remain available while
+that rollout is enabled even if the cache host is unavailable. The legacy REST
+sources do not supply email Quick Access rows.
 Quick Access observes flag loading reactively so a cold launch can attach the cache
 after PostHog responds. For a local native preview without PostHog configuration,
 build with `VITE_ENABLE_GRAPHQL_SOUP=true` to exercise this path; do not change the

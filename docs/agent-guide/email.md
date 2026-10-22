@@ -467,11 +467,29 @@ inbox after inboxes load. Repeat on mobile using the expanded `Cc/Bcc, From:` ro
 With GraphQL draft queuing enabled, working copies and pending attachment bytes
 are saved on this device independently of the mutation queue. A failed server
 save must leave the draft discoverable in **Drafts** (including grouped views)
-and in its reply thread. **Draft saved** sits immediately left of the desktop
+and in its reply thread. Unqueued first-use drafts also appear in mobile name
+search and the current Mail view's Drafts search, without requiring a cached
+thread record. A working copy preserves confirmed thread flags for facet filters,
+and a subject mismatch never hides a matching server body or cached sender hit.
+Inbox, alias, and facet selections still apply; a draft without
+an inbox is visible with All inboxes selected. Sender metadata warms alongside
+GraphQL backfill, before opening a composer. Test an empty sender catalog too:
+create a draft offline, restart, find it in Drafts/name search, and reopen its
+subject and body. Reconnect, select the sending inbox, edit, and verify it syncs
+without a duplicate row. Reopen an unqueued local draft while online too: its
+temporary thread's server 404 must not hide the local composer or mark that
+temporary ID read. Confirmed server threads still respect deletion/access errors;
+local working copies do not override authentication or permission failures.
+
+**Saved on this device** distinguishes an unsynced working copy from **Draft
+saved** after server confirmation. The status sits immediately left of the desktop
 delete button after editing pauses for 500 ms and the latest local save completes,
-then fades out after two seconds, including offline saves. Resuming typing hides
+then fades out after two seconds. Resuming typing hides
 it immediately; another pause and saved version restart the timer. Background
-sync updates do not. Failures replace it with persistent **Retry** in the same place; hover for details.
+sync updates do not. Local-save failures and rejected server saves replace it
+with persistent **Retry** in the same place; hover for details. If sender metadata
+is still unavailable, retain the local draft, reconnect, and select an inbox
+before editing to resume synchronization.
 Clicking Send must not show the badge for its preparatory draft save, including
 when delivery fails. Later edits can show it again after the usual pause.
 Verify the label does not cycle through saving/syncing text on each edit and

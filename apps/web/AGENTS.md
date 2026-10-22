@@ -152,6 +152,9 @@ ownership. Cancel, logout, and the ten-minute timeout retire pending callbacks.
 - Keep desktop Gmail and Outlook inbox consent in the system browser with a
   `macro:///inbox-link-callback` return; webview origins are not desktop callbacks.
 - Touch email replies and forwards use the full-screen composer with the shared new-email header actions; preserve thread state underneath and flush local edits before closing.
+- Include unsynced email working copies in Drafts and mobile name search even
+  before a GraphQL save; warm sending accounts alongside backfill and distinguish
+  local persistence from server confirmation. Preserve inbox, alias, and facet scope.
 - Draft autosaves preserve active email thread messages; evict inactive legacy
   caches on save and the active cache on thread exit. Revalidate GraphQL thread
   pages only when a save cannot patch the message list (missing snapshot or a

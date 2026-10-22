@@ -584,11 +584,15 @@ export function createReplyComposer(
     operation: 'save' | 'delete'
   ) {
     props.notices.reportError(error);
+    const failureMessage =
+      operation === 'save' && props.drafts.saveLocalDraft
+        ? 'Draft could not be synced'
+        : `Failed to ${operation} draft`;
     if (!session.serverConfirmed()) {
       // A best-effort pre-send save may fail while delivery still succeeds.
       // Background saves and explicit draft actions report their own failure.
       if (schedule?.pending() || !submitting()) {
-        props.notices.feedback.failure(`Failed to ${operation} draft`);
+        props.notices.feedback.failure(failureMessage);
       }
       return;
     }
@@ -609,7 +613,7 @@ export function createReplyComposer(
       );
       return;
     }
-    props.notices.feedback.failure(`Failed to ${operation} draft`);
+    props.notices.feedback.failure(failureMessage);
   }
 
   // Reset notifications must not autosave the draft that was just discarded.

@@ -39,7 +39,11 @@ import {
   type CachedGraphqlChannel,
   materializeCachedGraphqlChannels,
 } from '@queries/channel/graphql';
-import { materializeCachedEmailItems } from '@queries/email/quick-access';
+import { createLocalDraftSource } from '@queries/email/local-draft-source';
+import {
+  localDraftQuickAccessItems,
+  materializeCachedEmailItems,
+} from '@queries/email/quick-access';
 import { queryReadyGate } from '@queries/gate';
 import { materializeCachedGraphqlHistoryItems } from '@queries/history/graphql';
 import { type HistoryItem, useHistoryQuery } from '@queries/history/history';
@@ -401,6 +405,10 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     const graphqlCacheHost = getGraphqlSoupCacheHost();
     return graphqlCacheHost?.disabled ? undefined : graphqlCacheHost;
   });
+  const localDrafts = createLocalDraftSource(() => graphqlFlag().enabled);
+  const draftItems = createMemo(() =>
+    localDraftQuickAccessItems(localDrafts.drafts())
+  );
   const [manualRefreshRevision, setManualRefreshRevision] = createSignal(0);
   const cachedChannelsQuery = useCachedGraphqlChannelsQuery(cacheHost);
   createEffect(() => {
@@ -1019,7 +1027,9 @@ export function createQuickAccessValue(): QuickAccessContextValue {
   });
 
   const getById = (id: string): QuickAccessItem | undefined => {
-    return itemCache.get(id)?.item;
+    return (
+      draftItems().find((item) => item.id === id) ?? itemCache.get(id)?.item
+    );
   };
 
   const resolveEntries = (entries: IndexEntry[]): QuickAccessItem[] => {
@@ -1133,7 +1143,10 @@ export function createQuickAccessValue(): QuickAccessContextValue {
         }
       }
 
-      return resolveEntries(indices);
+      return [
+        ...(activeBuckets.includes('email') ? draftItems() : []),
+        ...resolveEntries(indices),
+      ];
     });
 
     const localItems = createLazyMemo(() =>
@@ -1276,8 +1289,15 @@ export function createQuickAccessValue(): QuickAccessContextValue {
 
       // Search describes cached contents, not corpus completeness. Merge known
       // rows before sorting recency so hydration cannot promote older items.
+      const matched = new Set(local);
+      const localDraftIds = new Set(
+        draftItems()
+          .filter((item) => matched.has(item))
+          .map((item) => item.id)
+      );
       const ranked = projected
         .items()
+        .filter((item) => !localDraftIds.has(item.id))
         .map((item) => itemCache.get(item.id)?.item ?? item);
       const seen = new Set(ranked.map((item) => item.id));
       const combined = ranked.concat(
