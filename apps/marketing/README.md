@@ -1066,3 +1066,10 @@ restores compact dimensions before the header reappears; keep one app link.
 
 The landing-page CRM illustration has a transparent outer frame with no
 decorative rim in either palette. Keep the inner CRM window surface and shadow.
+
+Prerender product routes must link the styles for their actual lazy module before
+JavaScript runs. Keep the route asset map aligned with App imports; shared Vite
+dynamic entries can have generated manifest keys, so resolve their unique entry
+names and fail on missing/ambiguous entries. Product logos carry intrinsic 20px
+dimensions. The production product checks hold scripts and verify styled heroes
+and correctly sized logos before releasing them.
