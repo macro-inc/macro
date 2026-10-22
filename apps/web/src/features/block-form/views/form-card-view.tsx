@@ -11,9 +11,9 @@ import { createPollVoting } from '../primitives/create-poll-voting';
 import { RespondView } from './respond-view';
 
 /**
- * A poll's card body: vote and see the tally. "Responses" takes editors to
- * the Responses tab; respondents, who cannot read the table, see the tally
- * spelled out in place.
+ * A poll's card body: vote and see the tally. "Responses" takes editors, and
+ * respondents when responses are shared, to the Responses tab; other
+ * respondents see the tally spelled out in place.
  */
 function PollCardBody(props: {
   detail: FormDetail;
@@ -22,6 +22,8 @@ function PollCardBody(props: {
 }) {
   const context = useFormContext();
   const isEditor = () => props.detail.access !== 'view';
+  const canReadResponses = () =>
+    isEditor() || props.detail.form.responsesVisible;
   const [showingResults, setShowingResults] = createSignal(false);
   const availability = () =>
     formAvailability(props.detail.form, props.detail.tableGone, new Date());
@@ -63,7 +65,7 @@ function PollCardBody(props: {
           fireAndForget(voting.vote(optionId), 'poll-voting')
         }
         results={
-          isEditor()
+          canReadResponses()
             ? {
                 label: 'Responses',
                 expanded: undefined,

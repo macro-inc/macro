@@ -25,6 +25,8 @@ const registration = {
     respondentColumnId: null,
     audience: 'members',
     tallyVisible: false,
+    responsesVisible: false,
+    respondentHidden: false,
     status: 'open',
     closesAt: null,
     confirmationMessage: 'See you there!',

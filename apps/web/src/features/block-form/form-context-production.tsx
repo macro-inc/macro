@@ -163,6 +163,7 @@ export function createAppFormContext(host: FormHostActions): FormContext {
         <FormResponsesGrid
           databaseId={props.databaseId}
           tableId={props.tableId}
+          hideColumnId={props.hideColumnId}
           onOpenRelated={host.openRelated}
         />
       ),

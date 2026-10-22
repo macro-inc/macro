@@ -26,10 +26,13 @@ decides who may respond.
 - In a channel composer, `/form` creates a form and opens the builder beside
   the channel; its card joins the draft once the builder saves a question.
   `/poll` opens the poll dialog (question, at least two options, **Multiple
-  answers**, **Show results to respondents**); **Post poll** puts the poll's
-  card in the message and sends it. Closing the dialog while it posts sends
-  nothing and trashes the poll. With results hidden, respondents answer
-  without counts and editors review votes in the Responses tab.
+  answers**, **Show results to respondents**, **Share responses with team**,
+  **Anonymous**); **Post poll** puts the poll's card in the message and sends
+  it. Closing the dialog while it posts sends nothing and trashes the poll.
+  With results hidden, respondents answer without counts and editors review
+  votes in the Responses tab. **Share responses with team** lets everyone who
+  can vote open that table. **Anonymous** still records who voted so they
+  cannot vote twice, but leaves names off the table.
 
 ## The form page
 
@@ -135,9 +138,9 @@ submitting are not recorded; answers stay in the browser until Submit.
 **Who can respond**: Invited people (sign in, one response each, editable
 while open) or Anyone with the link (anonymous; no file questions). The
 respond link with Copy, Accepting responses, Close automatically, Show results
-to respondents, Confirmation message, and **Manage access** (the share dialog,
+to respondents, Share responses with team, Anonymous, Confirmation message, and **Manage access** (the share dialog,
 which also shows the audience panel). Anyone with the link: visitors who aren't signed in respond anonymously;
-people signed in to Macro respond as themselves. Roles: View can respond; Edit can change
+people signed in to Macro respond as themselves. Roles: View can respond; when responses are shared it also reads the linked database (view only). Edit can change
 questions and also edits the linked database (its response rows and columns)
 through derived access; Owner can also change the audience, close and trash.
 Posting a form in a channel grants that channel View, which means it can
@@ -200,8 +203,8 @@ is disabled.
 In a message or document, a form card fills in place; a poll card shows one
 bar per option, your vote marked, and "N votes · one vote each". Click an
 option to vote; click another to change it. **Responses** opens the Responses
-tab for editors; respondents get **Results**, the counts as a table in the
-card. In a draft, the card menu's **Convert to Inline Mention** minimizes it;
+tab for editors and, when responses are shared, for everyone who can vote;
+other respondents get **Results**, the counts as a table in the card. In a draft, the card menu's **Convert to Inline Mention** minimizes it;
 in a sent message, **Collapse / Expand** hides the body for you only. Arrow
 keys move between poll options; Space or Enter votes. Polls can also be voted
 on directly in mobile channels. In New poll, Add option focuses the new
@@ -218,7 +221,8 @@ content-sized layout.
 
 Use the Responses tab grid, or open the database (`/app/database/<uuid>`) linked
 in the form's banner. Each submission is a row; the `Submitted` and
-`Respondent` columns are written by the form. They can be renamed and moved,
+`Respondent` columns are written by the form, except that an anonymous form
+leaves Respondent empty. They can be renamed and moved,
 but their types cannot change and they cannot be deleted while the form exists
 (including while it is in the trash). Permanently deleting the form releases
 those protections and preserves its database, columns, and answer rows.
@@ -261,8 +265,11 @@ response summaries and hidden booking destinations. Authoring summaries contain
 counts, never response rows.
 
 The owner calls `SetFormAccess` with complete audience, open/closed, deadline and
-tally settings. It executes directly without a sharing review card. Channel View
-allows responding. Channel Edit also permits reading and editing the entire
+tally settings. Optional `responsesVisible` lets View holders read response rows;
+optional `respondentHidden` withholds names from those rows while still recording
+who responded. It executes directly without a sharing review card. Channel View
+allows responding. When responses are shared it also grants database View.
+Channel Edit also permits reading and editing the entire
 backing database, including columns the form does not ask. Explicit grant deltas
 leave other grants unchanged and do not post messages or send invitations.
 A passed deadline keeps an otherwise open form closed to responses. Settings and

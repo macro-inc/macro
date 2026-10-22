@@ -19,6 +19,8 @@ export type PollDraft = {
   options: string[];
   multi: boolean;
   showResults: boolean;
+  shareResponses: boolean;
+  anonymous: boolean;
 };
 
 /** What a half-made poll leaves behind, for the caller to put in the trash. */
@@ -97,9 +99,11 @@ export function publishPoll(
             })
         )
         .andThen(() =>
-          updateForm(formId, { tallyVisible: draft.showResults }).mapErr(
-            writeFailureOf
-          )
+          updateForm(formId, {
+            tallyVisible: draft.showResults,
+            responsesVisible: draft.shareResponses,
+            respondentHidden: draft.anonymous,
+          }).mapErr(writeFailureOf)
         )
         .orElse(abandon)
         .map(() => ({

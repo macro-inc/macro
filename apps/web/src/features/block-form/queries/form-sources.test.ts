@@ -39,6 +39,8 @@ vi.mock('@queries/storage/forms', () => ({
         status: 'open',
         closesAt: null,
         tallyVisible: true,
+        responsesVisible: false,
+        respondentHidden: false,
         confirmationMessage: '',
         submittedColumnId: null,
         respondentColumnId: null,
