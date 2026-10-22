@@ -1,5 +1,12 @@
 import Arrow from '@phosphor/arrow-up-right.svg';
-import { createUniqueId, For, lazy } from 'solid-js';
+import {
+  createSignal,
+  createUniqueId,
+  For,
+  lazy,
+  onCleanup,
+  onMount,
+} from 'solid-js';
 import { WorkspaceTexture } from '../../../setup/components/WorkspaceTexture';
 import { DeferredDemo, DemoPlaceholder } from '../DeferredDemo';
 import type { HomepagePreviewKind } from './HomepageProductPreview';
@@ -50,7 +57,7 @@ function Tile(props: {
   );
 }
 
-function HomepageFeatureToc() {
+function HomepageFeatureToc(props: { active?: string }) {
   return (
     <aside class="macro-feature-toc">
       <nav aria-label="Key features">
@@ -68,7 +75,16 @@ function HomepageFeatureToc() {
             { id: 'calls', label: 'Calls' },
           ]}
         >
-          {(feature) => <a href={`#${feature.id}`}>{feature.label}</a>}
+          {(feature) => (
+            <a
+              href={`#${feature.id}`}
+              aria-current={
+                props.active === feature.id ? 'location' : undefined
+              }
+            >
+              {feature.label}
+            </a>
+          )}
         </For>
       </nav>
     </aside>
@@ -77,9 +93,47 @@ function HomepageFeatureToc() {
 
 /** The same product UI used by the detailed demos, framed as compact previews. */
 export function HomepageTiles() {
+  let layout!: HTMLDivElement;
+  const [active, setActive] = createSignal<string>();
+  onMount(() => {
+    const scrollRoot = layout.closest<HTMLElement>('.macro-home-scroll');
+    if (!scrollRoot) return;
+    const sections = [
+      ...layout.querySelectorAll<HTMLElement>('.macro-feature-tile'),
+    ];
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      // Follow the section at the reading line below the fixed site header.
+      const line = scrollRoot.getBoundingClientRect().top + 112;
+      let current: string | undefined;
+      for (const section of sections) {
+        const rect = section.getBoundingClientRect();
+        if (rect.top > line) break;
+        current = section.id;
+      }
+      const last = sections[sections.length - 1];
+      if (last && last.getBoundingClientRect().bottom <= line)
+        current = undefined;
+      setActive(current);
+    };
+    const schedule = () => {
+      if (!frame) frame = requestAnimationFrame(update);
+    };
+    scrollRoot.addEventListener('scroll', schedule, { passive: true });
+    const resize = new ResizeObserver(schedule);
+    resize.observe(scrollRoot);
+    for (const section of sections) resize.observe(section);
+    update();
+    onCleanup(() => {
+      scrollRoot.removeEventListener('scroll', schedule);
+      resize.disconnect();
+      cancelAnimationFrame(frame);
+    });
+  });
   return (
-    <div class="macro-feature-layout">
-      <HomepageFeatureToc />
+    <div class="macro-feature-layout" ref={layout}>
+      <HomepageFeatureToc active={active()} />
       <div class="macro-feature-grid">
         <Tile
           id="email"
