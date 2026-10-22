@@ -41,8 +41,9 @@ as a letter from the team, explaining each design choice once rather than
 repeating a feature summary in a second paragraph.
 
 `HomepageTiles` presents nine product sections in one column on desktop and
-mobile. A small Inter feature index stays on the left from the first screen
-through the feature sections on desktop, stopping before the closing content.
+mobile. A small Inter feature index begins beside the first feature section,
+below the hero and intro. It stays on the left while scrolling the features on
+desktop and stops before the closing content.
 It wraps above the demos below 1240px; anchors leave room for the fixed header.
 Email and Chat have separate sections and index entries, as do Sheets and
 Databases. The other sections cover documents, tasks, agents, CRM, and calls. Demo art has

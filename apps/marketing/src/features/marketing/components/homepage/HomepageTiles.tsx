@@ -50,11 +50,9 @@ function Tile(props: {
   );
 }
 
-export function HomepageFeatureToc(props: { mobile?: boolean }) {
+function HomepageFeatureToc() {
   return (
-    <aside
-      class={`macro-feature-toc ${props.mobile ? 'macro-feature-toc-mobile' : 'macro-feature-toc-desktop'}`}
-    >
+    <aside class="macro-feature-toc">
       <nav aria-label="Key features">
         <span>Features</span>
         <For
@@ -81,7 +79,7 @@ export function HomepageFeatureToc(props: { mobile?: boolean }) {
 export function HomepageTiles() {
   return (
     <div class="macro-feature-layout">
-      <HomepageFeatureToc mobile />
+      <HomepageFeatureToc />
       <div class="macro-feature-grid">
         <Tile
           id="email"
