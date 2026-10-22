@@ -437,6 +437,10 @@ Split focus mode (`Shift+Esc`) floats the active split in a rounded, bordered
 panel over the same glass scrim as dialogs. Click the scrim or use the shortcut
 again to restore the split layout.
 
+On desktop, when navigation replaces a pane's content, keyboard focus moves into the active
+pane. If the destination editor or input focuses itself, it keeps focus. A
+focused search or other input outside the panes remains focused while it is open.
+
 Image lightboxes, channel media viewers, sharing, and onboarding dialogs use
 the standard glass scrim. Scroll-edge indicators fade smoothly toward content
 and disappear at the corresponding scroll boundary. Image and video error

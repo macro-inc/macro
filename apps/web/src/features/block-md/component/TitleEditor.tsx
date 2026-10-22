@@ -1,3 +1,4 @@
+import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { EmojiMenu } from '@core/component/LexicalMarkdown/component/menu/EmojiMenu';
 import { TagsMenu } from '@core/component/LexicalMarkdown/component/menu/TagsMenu';
 import { createLexicalWrapper } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
@@ -50,6 +51,7 @@ import {
 } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 import { useMarkdownName } from './MarkdownNameProvider';
+import { shouldAutofocusDocument } from './should-autofocus-document';
 
 /**
  * Use the plugin architecture to set up command handlers on both the
@@ -147,11 +149,13 @@ function titleNavigationPlugin(
 export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
   const {
     documentId,
+    element: blockElement,
     kind,
     documentSource,
     permissions,
     state: documentState,
   } = useMarkdownDocument();
+  const panel = useSplitPanel();
   const canEdit = permissions.canEdit;
   const { md: mdData, setMd: setMdData } = documentState.editor;
   const renameDocumentMutation = createRenameDssEntityMutation();
@@ -359,11 +363,26 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
     )
   );
 
-  // Autofocus the title if it is empty and we didn't navigate here via J/K.
+  // Autofocus a new document's empty title once its metadata has loaded.
+  let didAutoFocus = false;
   createEffect(() => {
-    if (props.autoFocusOnMount && rootConnected() && dataReady()) {
-      if (untrack(mdDocumentName) === '') {
-        editor.focus();
+    const name = mdDocumentName();
+    if (
+      !didAutoFocus &&
+      props.autoFocusOnMount &&
+      rootConnected() &&
+      dataReady() &&
+      name !== undefined
+    ) {
+      didAutoFocus = true;
+      if (name === '') {
+        if (
+          shouldAutofocusDocument(
+            blockElement() ?? null,
+            panel?.panelRef() ?? null
+          )
+        )
+          editor.focus();
       }
     }
   });

@@ -68,12 +68,9 @@ const FOCUS_DEBOUNCE_MS = 50;
  * up from URL contents (last split active), then the focus tracker mounts
  * and processes the trailing Insert event.
  */
-function mountFreshLoad() {
+function mountFreshLoad(url = '/home/~/channels') {
   return createRoot((dispose) => {
-    const manager = createRoutedSplitLayout(
-      createMockOrchestrator(),
-      '/home/~/channels'
-    );
+    const manager = createRoutedSplitLayout(createMockOrchestrator(), url);
 
     const panelRefs = new Map<SplitId, HTMLDivElement>(
       manager.splits().map((split) => [split.id, createPanel()])
@@ -146,6 +143,37 @@ describe('createSplitFocusTracker', () => {
     vi.advanceTimersByTime(FOCUS_DEBOUNCE_MS);
 
     expect(document.activeElement).toBe(panelRefs.get(last.id));
+    dispose();
+  });
+
+  it('focuses a reused pane after its old content is replaced', async () => {
+    const { dispose, manager, panelRefs } = mountFreshLoad('/home');
+    const last = manager.splits().at(-1)!;
+    const panel = panelRefs.get(last.id)!;
+    const oldInput = document.createElement('input');
+    panel.append(oldInput);
+    oldInput.focus();
+
+    manager.openWithSplit({ type: 'component', id: 'channels' });
+    oldInput.remove();
+    await vi.runAllTimersAsync();
+
+    expect(document.activeElement).toBe(panel);
+    dispose();
+  });
+
+  it('keeps focus claimed by the destination before the pane focus runs', async () => {
+    const { dispose, manager, panelRefs } = mountFreshLoad('/home');
+    const last = manager.splits().at(-1)!;
+    const panel = panelRefs.get(last.id)!;
+
+    manager.openWithSplit({ type: 'component', id: 'channels' });
+    const editor = document.createElement('input');
+    panel.append(editor);
+    editor.focus();
+    await vi.runAllTimersAsync();
+
+    expect(document.activeElement).toBe(editor);
     dispose();
   });
 
