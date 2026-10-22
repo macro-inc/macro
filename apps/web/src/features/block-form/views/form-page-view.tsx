@@ -115,7 +115,8 @@ function EditorTabs(props: {
 }
 
 /**
- * The form page: editors get Build, Responses and Share; viewers land on the respond page.
+ * The form page: editors get Build, Responses and Share; viewers land on
+ * the respond page, or the Responses table when those rows are shared.
  */
 type FormPageProps = {
   source: FormDetailSource;
@@ -213,17 +214,26 @@ export function FormPageView(props: FormPageProps) {
           <Show
             when={detail().access !== 'view'}
             fallback={
-              <div
-                ref={respondScroll}
-                class="h-full min-h-0 overflow-y-auto touch:pb-(--mobile-content-inset-bottom)"
+              <Show
+                when={
+                  props.tab === 'responses' && detail().form.responsesVisible
+                }
+                fallback={
+                  <div
+                    ref={respondScroll}
+                    class="h-full min-h-0 overflow-y-auto touch:pb-(--mobile-content-inset-bottom)"
+                  >
+                    <RespondView
+                      detail={detail()}
+                      refetch={props.source.refetch}
+                      compact={false}
+                      scrollContainer={() => respondScroll}
+                    />
+                  </div>
+                }
               >
-                <RespondView
-                  detail={detail()}
-                  refetch={props.source.refetch}
-                  compact={false}
-                  scrollContainer={() => respondScroll}
-                />
-              </div>
+                <ResponsesView detail={detail()} />
+              </Show>
             }
           >
             <EditorPanels {...props} detail={detail()} tabsId={tabsId} />

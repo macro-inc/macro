@@ -38,6 +38,8 @@ function detail(layout: FormLayout): FormDetail {
       status: 'open',
       closesAt: null,
       tallyVisible: false,
+      responsesVisible: false,
+      respondentHidden: false,
       confirmationMessage: '',
       submittedColumnId: 'column-submitted',
       respondentColumnId: 'column-respondent',

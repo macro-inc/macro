@@ -38,8 +38,14 @@ a form attached to an existing table has its own name. */
   /** Its owner. */
   ownerId: string;
   /** The person column each signed-in submission names its respondent in;
-`null` once deleted. */
+`null` once deleted. When `respondent_hidden`, the form still owns
+this column but does not write it. */
   respondentColumnId: FormRespondentColumnId;
+  /** Whether respondent identity is withheld from response rows. The
+ledger still records who responded so they cannot submit twice. */
+  respondentHidden: boolean;
+  /** Whether people with View may read individual response rows. */
+  responsesVisible: boolean;
   /** Whether its owner closed it. */
   status: FormStatus;
   /** The date column each submission stamps; `null` once deleted. */

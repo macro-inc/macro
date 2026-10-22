@@ -43,12 +43,16 @@ describe('PollComposer', () => {
     });
     fireEvent.click(screen.getByLabelText('Multiple answers'));
     fireEvent.click(screen.getByLabelText('Show results to respondents'));
+    fireEvent.click(screen.getByLabelText('Share responses with team'));
+    fireEvent.click(screen.getByLabelText('Anonymous'));
     fireEvent.submit(screen.getByRole('form', { name: 'New poll' }));
     expect(post).toHaveBeenCalledWith({
       question: 'Where should we meet?',
       options: ['Office', 'Cafe', 'Online'],
       multi: true,
       showResults: false,
+      shareResponses: true,
+      anonymous: true,
     });
   });
 

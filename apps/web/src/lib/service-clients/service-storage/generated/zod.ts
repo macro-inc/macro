@@ -22538,8 +22538,16 @@ export const listFormsResponseItem = zod
       .uuid()
       .nullable()
       .describe(
-        'The person column each signed-in submission names its respondent in;\n`null` once deleted.'
+        'The person column each signed-in submission names its respondent in;\n`null` once deleted. When `respondent_hidden`, the form still owns\nthis column but does not write it.'
       ),
+    respondentHidden: zod
+      .boolean()
+      .describe(
+        'Whether respondent identity is withheld from response rows. The\nledger still records who responded so they cannot submit twice.'
+      ),
+    responsesVisible: zod
+      .boolean()
+      .describe('Whether people with View may read individual response rows.'),
     status: zod
       .enum(['open', 'closed'])
       .describe(
@@ -22610,7 +22618,7 @@ export const listAccessibleFormsResponseItem = zod
     access: zod
       .enum(['view', 'edit', 'owner'])
       .describe(
-        "The caller's level on a form: view responds, edit changes questions and\nreads responses, owner also sets the audience, closes and trashes it."
+        "The caller's level on a form: view responds (and reads responses when\nthey are shared), edit changes questions and reads responses, owner\nalso sets the audience, closes and trashes it."
       ),
     form: zod
       .object({
@@ -22647,7 +22655,17 @@ export const listAccessibleFormsResponseItem = zod
           .uuid()
           .nullable()
           .describe(
-            'The person column each signed-in submission names its respondent in;\n`null` once deleted.'
+            'The person column each signed-in submission names its respondent in;\n`null` once deleted. When `respondent_hidden`, the form still owns\nthis column but does not write it.'
+          ),
+        respondentHidden: zod
+          .boolean()
+          .describe(
+            'Whether respondent identity is withheld from response rows. The\nledger still records who responded so they cannot submit twice.'
+          ),
+        responsesVisible: zod
+          .boolean()
+          .describe(
+            'Whether people with View may read individual response rows.'
           ),
         status: zod
           .enum(['open', 'closed'])
@@ -22692,7 +22710,7 @@ export const getFormResponse = zod
     access: zod
       .enum(['view', 'edit', 'owner'])
       .describe(
-        "The caller's level on a form: view responds, edit changes questions and\nreads responses, owner also sets the audience, closes and trashes it."
+        "The caller's level on a form: view responds (and reads responses when\nthey are shared), edit changes questions and reads responses, owner\nalso sets the audience, closes and trashes it."
       ),
     form: zod
       .object({
@@ -22729,7 +22747,17 @@ export const getFormResponse = zod
           .uuid()
           .nullable()
           .describe(
-            'The person column each signed-in submission names its respondent in;\n`null` once deleted.'
+            'The person column each signed-in submission names its respondent in;\n`null` once deleted. When `respondent_hidden`, the form still owns\nthis column but does not write it.'
+          ),
+        respondentHidden: zod
+          .boolean()
+          .describe(
+            'Whether respondent identity is withheld from response rows. The\nledger still records who responded so they cannot submit twice.'
+          ),
+        responsesVisible: zod
+          .boolean()
+          .describe(
+            'Whether people with View may read individual response rows.'
           ),
         status: zod
           .enum(['open', 'closed'])
@@ -23190,6 +23218,14 @@ export const updateFormBody = zod
       .optional()
       .describe('Its new confirmation message.'),
     description: zod.string().optional().describe('Its new description.'),
+    respondentHidden: zod
+      .boolean()
+      .optional()
+      .describe('Whether respondent identity is withheld from response rows.'),
+    responsesVisible: zod
+      .boolean()
+      .optional()
+      .describe('Whether people with View may read individual response rows.'),
     status: zod
       .enum(['open', 'closed'])
       .optional()
@@ -23238,8 +23274,16 @@ export const updateFormResponse = zod
       .uuid()
       .nullable()
       .describe(
-        'The person column each signed-in submission names its respondent in;\n`null` once deleted.'
+        'The person column each signed-in submission names its respondent in;\n`null` once deleted. When `respondent_hidden`, the form still owns\nthis column but does not write it.'
       ),
+    respondentHidden: zod
+      .boolean()
+      .describe(
+        'Whether respondent identity is withheld from response rows. The\nledger still records who responded so they cannot submit twice.'
+      ),
+    responsesVisible: zod
+      .boolean()
+      .describe('Whether people with View may read individual response rows.'),
     status: zod
       .enum(['open', 'closed'])
       .describe(
@@ -23278,7 +23322,7 @@ export const collaborateFormResponse = zod
         access: zod
           .enum(['view', 'edit', 'owner'])
           .describe(
-            "The caller's level on a form: view responds, edit changes questions and\nreads responses, owner also sets the audience, closes and trashes it."
+            "The caller's level on a form: view responds (and reads responses when\nthey are shared), edit changes questions and reads responses, owner\nalso sets the audience, closes and trashes it."
           ),
         form: zod
           .object({
@@ -23317,7 +23361,17 @@ export const collaborateFormResponse = zod
               .uuid()
               .nullable()
               .describe(
-                'The person column each signed-in submission names its respondent in;\n`null` once deleted.'
+                'The person column each signed-in submission names its respondent in;\n`null` once deleted. When `respondent_hidden`, the form still owns\nthis column but does not write it.'
+              ),
+            respondentHidden: zod
+              .boolean()
+              .describe(
+                'Whether respondent identity is withheld from response rows. The\nledger still records who responded so they cannot submit twice.'
+              ),
+            responsesVisible: zod
+              .boolean()
+              .describe(
+                'Whether people with View may read individual response rows.'
               ),
             status: zod
               .enum(['open', 'closed'])
@@ -24195,7 +24249,7 @@ export const putFormLayoutResponse = zod
         access: zod
           .enum(['view', 'edit', 'owner'])
           .describe(
-            "The caller's level on a form: view responds, edit changes questions and\nreads responses, owner also sets the audience, closes and trashes it."
+            "The caller's level on a form: view responds (and reads responses when\nthey are shared), edit changes questions and reads responses, owner\nalso sets the audience, closes and trashes it."
           ),
         form: zod
           .object({
@@ -24234,7 +24288,17 @@ export const putFormLayoutResponse = zod
               .uuid()
               .nullable()
               .describe(
-                'The person column each signed-in submission names its respondent in;\n`null` once deleted.'
+                'The person column each signed-in submission names its respondent in;\n`null` once deleted. When `respondent_hidden`, the form still owns\nthis column but does not write it.'
+              ),
+            respondentHidden: zod
+              .boolean()
+              .describe(
+                'Whether respondent identity is withheld from response rows. The\nledger still records who responded so they cannot submit twice.'
+              ),
+            responsesVisible: zod
+              .boolean()
+              .describe(
+                'Whether people with View may read individual response rows.'
               ),
             status: zod
               .enum(['open', 'closed'])

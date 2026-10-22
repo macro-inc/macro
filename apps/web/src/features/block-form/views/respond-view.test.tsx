@@ -33,6 +33,8 @@ function offsite(): FormDetail {
       status: 'open',
       closesAt: null,
       tallyVisible: false,
+      responsesVisible: false,
+      respondentHidden: false,
       confirmationMessage: 'See you there!',
       submittedColumnId: null,
       respondentColumnId: null,
