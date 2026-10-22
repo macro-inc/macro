@@ -26,12 +26,11 @@ export function Homepage() {
             <img src={wordmark} alt="Macro" width="632" height="85" />
           </div>
           <h1 id="macro-home-title" data-welcome-heading>
-            One workspace for your team and your agents.
+            Why we built Macro.
           </h1>
           <p class="macro-home-tagline">
-            Email, chat, docs, tasks, CRM, calls, and sheets. In Macro, they
-            share the same workspace, so you and your agents can work across
-            them.
+            Email, chat, docs, tasks, CRM, calls, and sheets. One workspace for
+            your team and your agents.
           </p>
           <a
             class="macro-home-button"
@@ -47,20 +46,20 @@ export function Homepage() {
           aria-label="Why Macro"
         >
           <p>
-            A customer sends an email. You discuss it in chat, write a plan in a
-            document, create tasks, and update the CRM.
+            We built Macro because the pieces of a project belong together: the
+            email that started it, the discussion, the plan, and the work
+            itself.
           </p>
           <p>
-            When each step lives in a different app, someone has to carry the
-            context between them. You forward the thread, paste the link, and
-            explain the same thing again when you ask an agent for help.
+            Spread those across separate apps and you become the connection
+            between them. You copy things over, find the right link, and explain
+            the background again.
           </p>
           <p>
-            Macro puts that work in one workspace. Share the email in a channel.
-            Link the plan to the task. Give an agent the conversation and the
-            documents it needs to act.
+            We want software to do more of that work. And we want agents to
+            participate with the context they need to be useful. That’s why
+            we’re building these tools as one system.
           </p>
-          <p class="macro-letter-transition">Here’s how that works.</p>
         </section>
         <HomepageTiles />
         <div class="macro-home-bottom" ref={closingRoot}>
@@ -70,8 +69,9 @@ export function Homepage() {
           >
             <h2 id="macro-open-source-title">Open source.</h2>
             <p>
-              Macro’s source code is on GitHub. You can inspect the code, report
-              issues, and contribute changes.
+              We’re asking you to trust Macro with your work. You should be able
+              to inspect how it works and build on it. We’d want that as users,
+              so we made the code open source.
             </p>
             <a
               href="https://github.com/macro-inc/macro"
@@ -88,11 +88,10 @@ export function Homepage() {
           >
             <h2 id="macro-start-title">Start with one project.</h2>
             <p>
-              Bring in the email, the plan, and the people working on it. Share
-              a thread, create a task, and ask an agent to help with the next
-              step. You can try the workflow before moving the rest of your
-              team’s work.
+              Try it with something you’re already working on. We’d love to hear
+              what works for you and what still gets in the way.
             </p>
+            <p>— The Macro team</p>
             <a
               class="macro-home-button"
               href="/app/signup"

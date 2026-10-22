@@ -10,7 +10,6 @@ function Tile(props: {
   id: string;
   title: string;
   description: string;
-  detail: string;
   links: { href: string; label: string }[];
   preview: HomepagePreviewKind;
 }) {
@@ -23,7 +22,6 @@ function Tile(props: {
       <div class="macro-tile-copy">
         <h2 id={`${props.id}-title`}>{props.title}</h2>
         <p>{props.description}</p>
-        <p>{props.detail}</p>
         <div class="macro-tile-links">
           <For each={props.links}>
             {(link) => (
@@ -54,58 +52,52 @@ export function HomepageTiles() {
       <Tile
         id="email"
         title="Email and chat"
-        description="Share live email threads in channels. Ask agents to draft from your emails, documents, and calls."
+        description="We put email and team chat together so you can discuss a customer’s message with your team without forwarding copies around. Share the live thread in a channel and work on the reply there."
         links={[
           { href: '/email', label: 'Email' },
           { href: '/channels', label: 'Chat' },
         ]}
-        detail="The thread stays linked to the conversation. Your team can discuss the reply in the channel, and an agent can use the relevant documents and call transcript to draft it."
         preview="email"
       />
       <Tile
         id="documents"
         title="Documents and tasks"
-        description="CRDT documents with live agent edits. Create tasks from messages and link them to the specification."
+        description="A task should carry the reason it exists. Create one from a message or document, keep the source linked, and edit the plan together as the work changes."
         links={[
           { href: '/documents', label: 'Docs' },
           { href: '/tasks', label: 'Tasks' },
         ]}
-        detail="Keep the plan and its tasks linked. People and agents can edit the same document, and the team can return to the specification when it needs the details behind a task."
         preview="documents"
       />
       <Tile
         id="coding-agents"
         title="Coding agents"
-        description="Use your coding agent subscriptions in channels. Read the diff and follow the task through to a pull request."
+        description="We want you to use the coding agents you already pay for. Bring them into a channel, give them a task, and review the diff and pull request alongside the conversation."
         links={[
           { href: '/agents', label: 'Agents' },
           { href: '/github', label: 'GitHub' },
         ]}
-        detail="Give the agent a task in the channel where you’re already discussing it. Follow its work, inspect the changes, and review the pull request without losing the original conversation."
         preview="agents"
       />
       <Tile
         id="spreadsheet"
         title="Sheets and databases"
-        description="Live collaboration with humans and agents. Import your Google Sheets and Notion databases."
+        description="Some work belongs in rows and columns. Bring in your Google Sheets and Notion databases, link records to the rest of your work, and edit them with teammates and agents."
         links={[{ href: '/demo', label: 'Explore the workspace' }]}
-        detail="Link a customer in a sheet to their company record. Move from the row to the related email or contact without searching through another app."
         preview="spreadsheet"
       />
       <Tile
         id="crm"
         title="CRM"
-        description="Companies and contacts created from email. Agents update deal stages and draft customer follow-ups."
+        description="Keeping a CRM current shouldn’t be a second job. Macro creates companies and contacts from email; agents can update deal stages and draft the next follow-up."
         links={[{ href: '/crm', label: 'CRM' }]}
-        detail="A call or an email contains the next step for a deal. Ask an agent to update the stage and prepare the follow-up from that conversation."
         preview="crm"
       />
       <Tile
         id="calls"
         title="Calls and transcripts"
-        description="Record and transcribe calls in Macro. Ask agents to create tasks and draft follow-ups from the transcript."
+        description="The decisions made on a call should be available afterward. Record and transcribe it, return to the relevant moment, and ask an agent to turn the next steps into tasks."
         links={[{ href: '/calls', label: 'Calls' }]}
-        detail="Return to a specific moment in the transcript when you need to check a decision. Use that same record to give an agent context for the work that follows."
         preview="calls"
       />
     </div>

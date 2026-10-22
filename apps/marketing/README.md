@@ -12,7 +12,8 @@ text-only vector Macro wordmark with rounded upper M corners, Roboto Slab headin
 calls to action. `?theme=dark` pins dark mode; `?theme=cream` pins the white
 homepage while retaining cream on product pages. The first-paint script and
 `sitePalette.ts` must apply the same preference before and after hydration. The homepage reads as a sales letter: a direct headline and product summary,
-a short explanation of the problem, then narrow left-aligned feature copy followed
+a first-person explanation of why we built Macro, then one concise paragraph per
+feature followed
 by wider native demonstrations. Open-source information, the existing testimonial,
 and a project-sized starting point lead into the retained blog and closing sections. Dark mode reuses the live site’s black canvas, neutral native surface
 tokens, warm-white actions, and original email-composer fill and rim; do not
@@ -30,7 +31,9 @@ connected state immediately. The hero never intercepts scrolling. The original c
 scroll-driven header CTA landing animation.
 
 Use product names for feature headings and describe concrete actions in the copy,
-following the live site; avoid slogans and vague benefit claims.
+following the live site; avoid slogans and vague benefit claims. Write the homepage
+as a letter from the team, explaining each design choice once rather than
+repeating a feature summary in a second paragraph.
 
 `HomepageTiles` presents six product sections in one column on desktop and
 mobile: email and chat, documents and tasks, agents, sheets and databases, CRM,
