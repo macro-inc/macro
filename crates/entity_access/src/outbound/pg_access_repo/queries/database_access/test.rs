@@ -340,6 +340,34 @@ async fn owning_a_form_grants_only_edit_on_its_database(pool: PgPool) {
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../../fixtures", scripts("user_team"))
 )]
+async fn viewing_a_form_that_shares_responses_grants_view_on_its_database(pool: PgPool) {
+    let database_id = insert_database(&pool).await;
+    let form_id = insert_form_over(&pool, database_id, MEMBER, "user", "view").await;
+    sqlx::query!(
+        r#"UPDATE forms SET responses_visible = TRUE WHERE id = $1"#,
+        form_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let member = source_ids(&pool, "member@team.com").await;
+    assert_eq!(
+        get_database_access(&pool, &database_id, &member)
+            .await
+            .unwrap(),
+        Some(AccessLevel::View)
+    );
+    assert_eq!(
+        list_database_access(&pool, &member).await.unwrap(),
+        vec![(database_id, AccessLevel::View)]
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../../fixtures", scripts("user_team"))
+)]
 async fn viewing_a_form_grants_nothing_on_its_database(pool: PgPool) {
     let database_id = insert_database(&pool).await;
     insert_form_over(&pool, database_id, MEMBER, "user", "view").await;

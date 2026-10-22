@@ -296,6 +296,8 @@ fn seed_rsvp(world: &Shared, audience: Audience) {
             created_at: now,
             updated_at: now,
             is_hidden_in_drive: false,
+            responses_visible: false,
+            respondent_hidden: false,
         },
         trashed_at: None,
         name_follows_database: false,

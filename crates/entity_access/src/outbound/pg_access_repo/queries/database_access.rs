@@ -16,8 +16,9 @@ use uuid::Uuid;
 mod test;
 
 /// The highest access level `source_ids` hold on a database: its own grants,
-/// and Edit through edit or owner on any live form over it, so form editors
-/// can read and change their responses. View on a form grants nothing here.
+/// Edit through edit or owner on any live form over it, so form editors
+/// can read and change their responses, and View through view on a live form
+/// that shares its responses. View on a form grants nothing here otherwise.
 /// Databases have no share link, so there is no public-sharing arm; a team
 /// share is a team-source grant like any other.
 /// Both grant paths require an app entity; core storage alone is not shareable.
@@ -50,6 +51,18 @@ pub async fn get_database_access(
         AND f.trashed_at IS NULL
         AND ea.source_id = ANY($2)
         AND ea.access_level IN ('edit', 'owner')
+
+        UNION ALL
+
+        SELECT 'view'
+        FROM forms f
+        JOIN database_entities d ON d.database_id = f.database_id
+        JOIN entity_access ea ON ea.entity_id = f.id AND ea.entity_type = 'form'
+        WHERE f.database_id = $1
+        AND f.trashed_at IS NULL
+        AND f.responses_visible
+        AND ea.source_id = ANY($2)
+        AND ea.access_level = 'view'
         "#,
         database_id,
         &source_ids.0,
@@ -76,9 +89,9 @@ pub(super) fn highest_access_level(
 }
 
 /// The highest access level a user has on every database their source ids
-/// reach, directly or as Edit through a live form they edit, ordered by
-/// database id. Trash is the databases domain's concern: a trashed database's
-/// grants are still listed.
+/// reach, directly, as Edit through a live form they edit, or as View through
+/// a live form that shares its responses, ordered by database id. Trash is
+/// the databases domain's concern: a trashed database's grants are still listed.
 #[tracing::instrument(err, skip(pool, source_ids))]
 pub async fn list_database_access(
     pool: &PgPool,
@@ -105,6 +118,18 @@ pub async fn list_database_access(
         WHERE ea.entity_type = 'form'
         AND ea.source_id = ANY($1)
         AND ea.access_level IN ('edit', 'owner')
+        AND f.trashed_at IS NULL
+
+        UNION ALL
+
+        SELECT f.database_id, 'view'::"AccessLevel"
+        FROM entity_access ea
+        JOIN forms f ON f.id = ea.entity_id
+        JOIN database_entities d ON d.database_id = f.database_id
+        WHERE ea.entity_type = 'form'
+        AND ea.source_id = ANY($1)
+        AND ea.access_level = 'view'
+        AND f.responses_visible
         AND f.trashed_at IS NULL
         "#,
         &source_ids.0,
@@ -146,7 +171,10 @@ pub async fn explain_database_access(
         WHERE f.database_id = $1
         AND f.trashed_at IS NULL
         AND ea.source_id = ANY($2)
-        AND ea.access_level IN ('edit', 'owner')
+        AND (
+            ea.access_level IN ('edit', 'owner')
+            OR (ea.access_level = 'view' AND f.responses_visible)
+        )
         ORDER BY f.id
         "#,
         database_id,

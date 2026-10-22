@@ -56,10 +56,12 @@ fn insert_cells(
             value: CellValue::Date(submitted_at),
         });
     }
-    if let (Some(column), Respondent::Member(user)) = (
-        writable(columns, form.respondent_column_id, respondent_kind()),
-        respondent,
-    ) {
+    if !form.respondent_hidden
+        && let (Some(column), Respondent::Member(user)) = (
+            writable(columns, form.respondent_column_id, respondent_kind()),
+            respondent,
+        )
+    {
         cells.push(CellWrite {
             column,
             value: CellValue::Entities(vec![EntityRef {
@@ -291,9 +293,12 @@ where
             FormResponseSubmittedMetadata {
                 form_id: form.id,
                 response_id: response,
+                // Hidden respondents stay in the ledger so they cannot vote
+                // twice, but the event names nobody — activity would leak
+                // who responded.
                 respondent: match respondent {
-                    Respondent::Member(user) => Some(user),
-                    Respondent::Anonymous => None,
+                    Respondent::Member(user) if !form.respondent_hidden => Some(user),
+                    Respondent::Member(_) | Respondent::Anonymous => None,
                 },
                 row_id: Some(row),
                 submitted_at: now,

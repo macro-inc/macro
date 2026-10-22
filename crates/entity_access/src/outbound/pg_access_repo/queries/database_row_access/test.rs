@@ -144,7 +144,7 @@ async fn a_row_belongs_to_the_database_of_its_table(pool: PgPool) {
 }
 
 /// A form over the table holding `row_id`, granting `MEMBER` `level` on it.
-async fn insert_form_over_row(pool: &PgPool, row_id: Uuid, level: &str, trashed: bool) {
+async fn insert_form_over_row(pool: &PgPool, row_id: Uuid, level: &str, trashed: bool) -> Uuid {
     let form_id = Uuid::now_v7();
     sqlx::query!(
         r#"
@@ -174,6 +174,7 @@ async fn insert_form_over_row(pool: &PgPool, row_id: Uuid, level: &str, trashed:
     .execute(pool)
     .await
     .unwrap();
+    form_id
 }
 
 #[sqlx::test(
@@ -246,5 +247,43 @@ async fn a_direct_database_grant_above_edit_wins_over_a_form_on_rows(pool: PgPoo
             .await
             .unwrap(),
         HashMap::from([(row_id, AccessLevel::Owner)])
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../../fixtures", scripts("user_team"))
+)]
+async fn viewing_a_form_that_shares_responses_views_the_rows_of_its_database(pool: PgPool) {
+    let (_, shared) = insert_row(&pool).await;
+    let (_, hidden) = insert_row(&pool).await;
+    let form_id = insert_form_over_row(&pool, shared, "view", false).await;
+    insert_form_over_row(&pool, hidden, "view", false).await;
+    sqlx::query!(
+        r#"UPDATE forms SET responses_visible = TRUE WHERE id = $1"#,
+        form_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let member = source_ids(&pool, "member@team.com").await;
+    assert_eq!(
+        get_database_row_access(&pool, &shared, &member)
+            .await
+            .unwrap(),
+        Some(AccessLevel::View)
+    );
+    assert_eq!(
+        get_database_row_access(&pool, &hidden, &member)
+            .await
+            .unwrap(),
+        None
+    );
+    assert_eq!(
+        get_database_rows_access(&pool, &[shared, hidden], &member)
+            .await
+            .unwrap(),
+        HashMap::from([(shared, AccessLevel::View)])
     );
 }
