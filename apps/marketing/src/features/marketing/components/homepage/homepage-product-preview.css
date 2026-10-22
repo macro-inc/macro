@@ -1,0 +1,20 @@
+.macro-product-preview { position: absolute; inset: 28px 20px 20px; overflow: hidden; pointer-events: none; border: 1px solid #303034; border-radius: 10px; background: #111; box-shadow: 0 8px 22px #00000012; }
+.macro-product-canvas { position: absolute; top: 0; left: 0; width: 640px; height: 460px; transform-origin: top left; color: var(--color-ink); font-family: var(--font-sans); text-align: left; letter-spacing: normal; }
+.macro-product-canvas .homepage-email-demo { --homepage-email-height: 460px; }
+.macro-product-canvas .homepage-compose-status { display: none; }
+.macro-product-canvas .homepage-email-surface { min-height: 460px; border: 1px solid #333; }
+.macro-product-canvas .mdf-frame { width: 100%; max-width: none; height: 460px; margin: 0; padding: 0; left: auto; transform: none; background: transparent; mask-image: none; }
+.macro-product-canvas .mds-card { max-width: none; border: 1px solid #333; }
+.macro-product-canvas .homepage-doc-timeline { display: none; }
+.macro-product-canvas .homepage-agent-story { padding: 22px; border: 1px solid #333; border-radius: 14px; background: var(--color-surface-0); }
+.macro-product-canvas .homepage-conversation { gap: 18px; margin-bottom: 0; }
+.macro-product-canvas .homepage-message { max-width: 100%; }
+.macro-product-canvas .homepage-crm .mdf-frame { padding: 0; }
+.macro-product-canvas .homepage-crm-viewport { height: 370px; }
+.macro-product-canvas .homepage-spreadsheet { height: 460px; }
+.macro-product-canvas .product-demo-stage { padding: 0; }
+.macro-product-canvas .product-demo { height: 460px; border: 1px solid #333; border-radius: 14px; background: var(--color-surface-0); overflow: hidden; }
+.macro-product-canvas .dummy-main { height: 100%; }
+
+/* Focus the compact agent crop on its response and session card. */
+.macro-product-agents .homepage-message:first-child { display: none; }

@@ -6,24 +6,31 @@ package manifest, Vite entry points, TypeScript aliases, styles, assets, and UI
 components. Application UI changes must not alter the website.
 
 The homepage uses a white background in every system color scheme, native SF Pro
-on Apple platforms (with a system sans-serif fallback elsewhere), large centered
-copy, and black pill calls to action. `components/homepage/macro-homepage.css`
+on Apple platforms (with a system sans-serif fallback elsewhere), the supplied
+vector Macro wordmark, centered Roboto Slab headings at weight 400, and black pill
+calls to action. Graphics use graphite surfaces and fine neutral borders. `components/homepage/macro-homepage.css`
 scopes that treatment to `.macro-homepage`; product pages, blog, sample workspace,
 and signup retain their existing system/cream/dark palettes.
 
 `MacroHero` gathers the existing welcome constellation into the Macro mark, then
 unfolds it into connected native features. Its 16-second sequence pauses offscreen,
 in hidden tabs, or through the accessible pause button. Reduced motion shows the
-connected state immediately. There is no scroll interception or scroll-driven
-transition on the homepage.
+connected state immediately. The hero never intercepts scrolling. The original closing section retains its
+scroll-driven header CTA landing animation.
 
-`HomepageTiles` presents six illustrated feature panels in two columns: email and
+`HomepageTiles` presents six product feature panels in two columns: email and
 chat, documents and tasks, agents, sheets and databases, CRM, and calls. Desktop
 panels are square; narrower layouts allow extra height for readable copy. Phones
-stack them in one column. Illustrations are decorative, with real product links
-beneath each description. Interactive demos remain on the product pages and
-`/demo`; the homepage no longer embeds the sample workspace or inline editors.
-The shared navigation and phone signup routing remain in use.
+stack them in one column. `HomepageProductPreview` reuses the existing email
+composer, collaborative document, agent conversation, spreadsheet, CRM pipeline,
+and call demos with local sample data. These cropped previews are inert; product
+links beneath each description open the full interactive demos. Keep the UI
+faithful to those shared components rather than drawing separate mock interfaces.
+The previews load near the viewport through `DeferredDemo`; frozen app styles
+and dark tokens are scoped to their canvases. The homepage does not apply the
+cream palette, so its dark previews keep their contrast in a light system theme. The original testimonial, blog
+carousel, closing CTA, and security section follow the grid. The shared navigation
+and phone signup routing remain in use.
 
 Marketing demos use `DemoInteractionBoundary`: wheel and touch gestures scroll
 the surrounding page until the visitor clicks or enters with the keyboard. The

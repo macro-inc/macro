@@ -169,6 +169,14 @@ export async function verifyHomepage(directory: string): Promise<void> {
           'animation-play-state',
           'paused'
         );
+        // A light OS theme must not leak cream text colors into dark previews.
+        const previewBody = page.locator('#email .homepage-email-body');
+        await expect(previewBody).toHaveCSS('color', 'rgb(255, 255, 255)');
+        await page.emulateMedia({
+          colorScheme: colorScheme === 'light' ? 'dark' : 'light',
+        });
+        await expect(previewBody).toHaveCSS('color', 'rgb(255, 255, 255)');
+        await page.emulateMedia({ colorScheme });
         const dimensions = await page
           .locator('.macro-feature-grid')
           .evaluate((grid) => ({

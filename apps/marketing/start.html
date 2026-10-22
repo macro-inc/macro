@@ -9,7 +9,7 @@
       // light mode. Mirrors src/features/setup/sitePalette.ts.
       (function () {
         var theme = new URLSearchParams(location.search).get('theme');
-        var cream = theme === 'cream' || (theme !== 'dark' && matchMedia('(prefers-color-scheme: light)').matches);
+        var cream = location.pathname !== '/' && (theme === 'cream' || (theme !== 'dark' && matchMedia('(prefers-color-scheme: light)').matches));
         var root = document.documentElement;
         root.dataset.themeLight = String(cream);
         if (location.pathname === '/') {

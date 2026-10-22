@@ -16,48 +16,36 @@ const surfaces = [
     label: 'Email',
     x: -126,
     y: -36,
-    color: '#e2efff',
-    ink: '#4384db',
   },
   {
     icon: Chat,
     label: 'Chat',
     x: -72,
     y: -109,
-    color: '#e7e6ff',
-    ink: '#7a70d4',
   },
   {
     icon: Doc,
     label: 'Docs',
     x: 66,
     y: -110,
-    color: '#fff0c9',
-    ink: '#c19532',
   },
   {
     icon: Task,
     label: 'Tasks',
     x: 129,
     y: -27,
-    color: '#ffe5de',
-    ink: '#da8069',
   },
   {
     icon: Sparkle,
     label: 'Agents',
     x: 76,
     y: 99,
-    color: '#f6e5ff',
-    ink: '#ae73cb',
   },
   {
     icon: Calendar,
     label: 'Calendar',
     x: -71,
     y: 99,
-    color: '#dff4e9',
-    ink: '#539e78',
   },
 ];
 
@@ -100,7 +88,7 @@ export function MacroHero() {
           <For each={surfaces}>
             {(surface) => (
               <path
-                d={`M 0 0 Q ${surface.x * 0.65} 0 ${surface.x} ${surface.y}`}
+                d={`M 0 0 L ${surface.x * 0.5} 0 L ${surface.x} ${surface.y}`}
               />
             )}
           </For>
@@ -113,9 +101,7 @@ export function MacroHero() {
               style={{
                 '--x': `${(tool.x - 50) * 3.1}px`,
                 '--y': `${(tool.y - 50) * 2.7}px`,
-                '--turn': `${index() % 2 === 0 ? -9 : 9}deg`,
-                '--tile': surfaces[index() % surfaces.length].color,
-                '--tile-ink': surfaces[index() % surfaces.length].ink,
+                '--turn': `${index() % 2 === 0 ? -3 : 3}deg`,
               }}
             >
               <tool.icon />
@@ -130,8 +116,6 @@ export function MacroHero() {
               style={{
                 '--x': `${surface.x}px`,
                 '--y': `${surface.y}px`,
-                '--tile': surface.color,
-                '--tile-ink': surface.ink,
               }}
             >
               <div>
