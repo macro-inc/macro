@@ -46,6 +46,8 @@ export interface BaseListEntityProps<E extends EntityData = EntityData>
   titleTrailing?: JSX.Element;
   /** Caller-owned metadata ahead of the entity's own, in wide rows only. */
   meta?: JSX.Element;
+  /** Caller-owned metadata after the entity's own, in wide rows only. */
+  metaEnd?: JSX.Element;
   hideContentHits?: boolean;
   /** Resolved app display name for a linked GitHub PR author, when available. */
   authorDisplayName?: string;
@@ -86,6 +88,7 @@ export interface LayoutProps {
   /** Supporting text after the title in the standard content slot. */
   titleTrailing?: JSX.Element;
   meta?: JSX.Element;
+  metaEnd?: JSX.Element;
   checked?: boolean;
   authorDisplayName?: string;
   hideCheckbox?: boolean;

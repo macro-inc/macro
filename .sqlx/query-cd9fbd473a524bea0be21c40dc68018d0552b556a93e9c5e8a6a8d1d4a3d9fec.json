@@ -1,0 +1,59 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT f.thread_id, f.is_focus, f.category, f.importance, f.needs_reply,\n                   f.needs_follow_up, f.classified_at\n            FROM email_thread_focus f\n            WHERE f.thread_id = ANY($1)\n              AND f.link_id IN (\n                  SELECT el.id FROM email_links el WHERE el.macro_id = $2\n                  UNION\n                  SELECT mul.link_id FROM macro_user_links mul WHERE mul.primary_macro_id = $2\n              )\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "thread_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "is_focus",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "category",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "importance",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 4,
+        "name": "needs_reply",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "needs_follow_up",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 6,
+        "name": "classified_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "cd9fbd473a524bea0be21c40dc68018d0552b556a93e9c5e8a6a8d1d4a3d9fec"
+}

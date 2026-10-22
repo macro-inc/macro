@@ -340,6 +340,7 @@ export function WideLayout(props: LayoutProps) {
         >
           {(entity) => <ChannelJoinButton entity={entity()} />}
         </Show>
+        {props.metaEnd}
       </Entity.Slot>
       <Entity.Slot
         placement="timestamp"

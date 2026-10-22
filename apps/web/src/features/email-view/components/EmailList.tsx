@@ -71,6 +71,12 @@ import { EMAIL_TOUR } from '../tour';
 import { useEmailListHotkeys } from '../use-email-list-hotkeys';
 import { EmailDateGroupHeader } from './EmailDateGroupHeader';
 import { EmailEmptyState } from './EmailEmptyState';
+import {
+  EmailFocusFlags,
+  EmailFocusNarrowScore,
+  EmailFocusScore,
+  emailFocusOf,
+} from './EmailFocusBadges';
 import { EmailRowActions, EmailStarAction } from './EmailRowActions';
 
 type EmailActionRow = {
@@ -661,6 +667,41 @@ export function EmailList(props: EmailListProps) {
                                     <ListEntity
                                       entity={entityRow().entity}
                                       onFilterByTag={filterByTag}
+                                      titleLeading={
+                                        <Show
+                                          when={emailFocusOf(
+                                            entityRow().entity
+                                          )}
+                                        >
+                                          {(focus) => (
+                                            <EmailFocusNarrowScore
+                                              focus={focus()}
+                                            />
+                                          )}
+                                        </Show>
+                                      }
+                                      meta={
+                                        <Show
+                                          when={emailFocusOf(
+                                            entityRow().entity
+                                          )}
+                                        >
+                                          {(focus) => (
+                                            <EmailFocusFlags focus={focus()} />
+                                          )}
+                                        </Show>
+                                      }
+                                      metaEnd={
+                                        <Show
+                                          when={emailFocusOf(
+                                            entityRow().entity
+                                          )}
+                                        >
+                                          {(focus) => (
+                                            <EmailFocusScore focus={focus()} />
+                                          )}
+                                        </Show>
+                                      }
                                       scheduleStatus={
                                         <Show
                                           when={source.reminderForThread?.(

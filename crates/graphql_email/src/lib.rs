@@ -2,6 +2,7 @@
 //! and the DataLoader-backed Soup email-message edge.
 #![deny(missing_docs)]
 
+mod focus;
 mod loaders;
 mod mutation;
 mod objects;
@@ -9,6 +10,11 @@ mod operation;
 mod user_objects;
 mod user_query;
 
+pub use focus::{
+    EmailFocusContext, EmailFocusReader, EmailThreadFocusLoader, GraphqlEmailFocusCategory,
+    GraphqlEmailThreadFocus, email_thread_focus_loader, load_email_focus_thread_ids,
+    load_email_thread_focus,
+};
 pub use loaders::{
     EmailContentKey, EmailContentLoad, EmailContentLoader, EmailContentMessage,
     EmailServiceEmailContentReader, EmailThreadMailProjectionLoad, EmailThreadMailProjectionLoader,

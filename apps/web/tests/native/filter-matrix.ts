@@ -92,9 +92,10 @@ const emailTabSources = {
   shared: 'soup',
   archived: 'soup',
   all: 'soup',
+  focus: 'focus-list',
 } as const satisfies Record<
   (typeof EMAIL_TABS)[number]['id'],
-  'soup' | 'scheduled-message-service' | 'reminder-collection'
+  'soup' | 'scheduled-message-service' | 'reminder-collection' | 'focus-list'
 >;
 const taskTabSources = {
   'my-tasks': 'soup',
@@ -202,7 +203,7 @@ function* cases(scope?: Scope): Generator<Case> {
   );
   assert(
     EMAIL_FACETS.map((facet) => facet.id).join() ===
-      'read,done,attachments,calendar,tags',
+      'read,done,attachments,calendar,focus,tags',
     'Add new Email facets to the matrix'
   );
   assert(

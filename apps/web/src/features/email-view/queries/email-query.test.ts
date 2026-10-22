@@ -165,6 +165,7 @@ describe('buildEmailQuery', () => {
       ['shared', 'all'],
       ['archived', 'all'],
       ['all', 'all'],
+      ['focus', 'all'],
     ]);
 
     for (const tab of EMAIL_TAB_IDS) {
