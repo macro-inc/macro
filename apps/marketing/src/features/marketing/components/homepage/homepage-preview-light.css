@@ -1,0 +1,25 @@
+/* Scoped after the frozen app tokens, independent of the visitor's OS theme. */
+:scope {
+  color-scheme: light;
+  --color-surface-0: #fff;
+  --color-surface-1: #fafafa;
+  --color-surface-2: #f5f5f6;
+  --color-surface-3: #f0f0f2;
+  --color-surface-4: #e9e9ec;
+  --color-content-0: #242428;
+  --color-content-1: #62626a;
+  --color-content-2: #75757d;
+  --color-content-3: #919199;
+  --color-content-4: #a2a2aa;
+  --color-edge: #dedee3;
+  --color-edge-muted: #ebebee;
+  --color-accent: #2871bb;
+  --color-green: #238451;
+  --color-amber: #9c731c;
+  --color-red: #cc4949;
+  --color-chrome: #fafafa;
+  --marketing-mention: #2871bb;
+  --b0: #fff; --b1: #fafafa; --b2: #f5f5f6; --b3: #f0f0f2; --b4: #e9e9ec;
+  --c0: #242428; --c1: #242428; --c2: #62626a; --c3: #75757d; --c4: #919199;
+  --a0: #2871bb;
+}

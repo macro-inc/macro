@@ -5,7 +5,7 @@ import { isServer } from 'solid-js/web';
  * Product pages and `/start` render in the cream palette
  * (cream-preview.css) when the visitor's OS or browser prefers a light color
  * scheme, and in the dark palette otherwise. `?theme=cream` or `?theme=dark`
- * pins either one. The homepage uses a white shell with dark product previews in either system theme.
+ * pins either one. The homepage uses a white shell with light product previews in either system theme.
  *
  * start.html and index.html apply the same choice in an inline <head> script
  * so prerendered pages paint in the right palette; keep them in sync.

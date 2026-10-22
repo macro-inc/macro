@@ -8,7 +8,7 @@ components. Application UI changes must not alter the website.
 The homepage uses a white background in every system color scheme, native SF Pro
 on Apple platforms (with a system sans-serif fallback elsewhere), the supplied
 vector Macro wordmark, centered Roboto Slab headings at weight 400, and black pill
-calls to action. Graphics use graphite surfaces and fine neutral borders. `components/homepage/macro-homepage.css`
+calls to action. Graphics layer white product surfaces with fine neutral borders and restrained shadows. `components/homepage/macro-homepage.css`
 scopes that treatment to `.macro-homepage`; product pages, blog, sample workspace,
 and signup retain their existing system/cream/dark palettes.
 
@@ -27,12 +27,11 @@ and call transcript with local sample data. Keep each crop focused on its useful
 detail at readable UI size: reply and document links, task mentions, completed
 agent session, linked customer cells, deal cards, and transcript lines. Do not
 shrink whole desktop windows to fit the cards. The email, document, and call transcript
-show settled content immediately. These cropped previews are inert; product
+show settled content immediately. Compose overlapping fragments of the actual UI instead of enclosing a full screenshot in a box. These layered previews are inert; product
 links beneath each description open the full interactive demos. Keep the UI
 faithful to those shared components rather than drawing separate mock interfaces.
 The previews load near the viewport through `DeferredDemo`; frozen app styles
-and dark tokens are scoped to their canvases. The homepage does not apply the
-cream palette, so its dark previews keep their contrast in a light system theme. The original testimonial, blog
+and neutral light tokens are scoped to their canvases, independent of the system theme. The homepage does not apply the cream palette. The original testimonial, blog
 carousel, closing CTA, and security section follow the grid. The shared navigation
 and phone signup routing remain in use.
 

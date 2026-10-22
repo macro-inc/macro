@@ -76,7 +76,6 @@
 .macro-feature-grid { width: min(1120px, calc(100% - 64px)); margin: 0 auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; }
 .macro-feature-tile { min-width: 0; aspect-ratio: 1; display: flex; flex-direction: column; background: #fff; border-radius: 16px; border: 1px solid #e3e3e7; box-shadow: 0 2px 4px #00000003; overflow: hidden; }
 .macro-tile-art { height: 55%; min-height: 290px; flex: 1; position: relative; isolation: isolate; }
-.macro-tile-art::before { content: ''; position: absolute; inset: 24px 24px 0; background: linear-gradient(#f6f6f8, #fff); mask-image: linear-gradient(#000, transparent); border-radius: 10px; z-index: -1; }
 .macro-tile-copy { padding: 8px 40px 36px; text-align: center; }
 .macro-tile-copy h2 { max-width: 410px; margin: 0 auto 15px; font-family: 'Roboto Slab Variable', serif; font-size: clamp(25px, 2.5vw, 31px); font-weight: 400; line-height: 1.2; letter-spacing: -.04em; text-wrap: balance; }
 .macro-tile-copy p { margin: 0 auto; max-width: 410px; font-size: 16px; line-height: 1.45; color: #6e6e73; letter-spacing: -.016em; }
