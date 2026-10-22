@@ -42,7 +42,8 @@ import { flattenConsecutiveParagraphs } from './flatten-consecutive-paragraphs';
 
 export { TOGGLE_APPEND_EMAIL_THREAD_COMMAND } from './email-editor-commands';
 
-// The composer renders quoted images, which would count as an open.
+// Quotes always drop Macro pixels: the composer would count an open, and a
+// reply or forward must not carry the original's pixel to new recipients.
 const QUOTED_IMAGES: ImagePolicy = {
   remote: 'allow',
   hiddenUrlPrefixes: readReceiptPixelPrefixes(EMAIL_SERVICE_EMBEDDED_HOSTS),

@@ -484,7 +484,8 @@ export const enableEmailSignatures = defineFlag({
 });
 
 // Email read receipts: the per-inbox switch in Settings › Email and the
-// opened status on sent messages. Macro's own pixels stay hidden either way.
+// opened status on sent messages. Which copies load Macro's pixels, and so
+// count as opens, does not depend on this flag.
 export const enableEmailReadReceipts = defineFlag({
   key: 'enable-email-read-receipts',
   env: 'ENABLE_EMAIL_READ_RECEIPTS',

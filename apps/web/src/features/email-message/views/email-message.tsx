@@ -38,6 +38,7 @@ export interface EmailMessageViewProps {
   renderOperation?: (message: EmailMessage) => JSX.Element;
   renderAvatar?: (message: EmailMessage) => JSX.Element;
   readReceipt?: ReadReceipt;
+  showReadReceiptPixel?: boolean;
   viewerEmail?: string;
   isTouch: boolean;
   isPersonal: boolean;
@@ -114,6 +115,7 @@ export function EmailMessageView(props: EmailMessageViewProps) {
         setFocusedMessageId={() => props.onSelect?.()}
         showFullContent={props.showFullContent}
         isFocused={props.isSelected}
+        showReadReceiptPixel={props.showReadReceiptPixel}
       />
     </div>
   );

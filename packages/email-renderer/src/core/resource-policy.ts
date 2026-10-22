@@ -5,7 +5,7 @@ export interface ImagePolicy {
    * CSS/background images retain direct URLs under the remote policy. */
   proxyUrl?: string;
   /** HTTP(S) img[src] values starting with one of these are dropped before
-   * proxying, so a host never fetches its own tracking pixels. */
+   * proxying, so a host can withhold its own tracking pixels. */
   hiddenUrlPrefixes?: readonly string[];
 }
 

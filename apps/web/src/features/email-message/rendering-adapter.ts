@@ -18,9 +18,8 @@ export function createEmailRenderingContext(): EmailRenderingContextValue {
       proxyUrl: ENABLE_PROXY_EMAIL_IMAGES
         ? `${SERVER_HOSTS['image-proxy-service']}/proxy`
         : undefined,
-      // Viewing a tracked message in Macro must not count as an open.
-      hiddenUrlPrefixes: readReceiptPixelPrefixes(EMAIL_SERVICE_EMBEDDED_HOSTS),
     },
+    readReceiptPixels: readReceiptPixelPrefixes(EMAIL_SERVICE_EMBEDDED_HOSTS),
     prepareLinks: interceptMailtoLinks,
     async resolveImages(root, attachments, lifetime) {
       const blobUrls: string[] = [];

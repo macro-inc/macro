@@ -10,6 +10,8 @@ import type { EmailAttachment } from '../core/email-message';
 export interface EmailRenderingContextValue {
   theme: Accessor<ThemeColorParams>;
   images?: ImagePolicy;
+  /** Macro read-receipt pixel URL prefixes, hidden unless a body may count an open. */
+  readReceiptPixels?: readonly string[];
   prepareLinks?: (container: HTMLElement) => void;
   resolveImages(
     root: ShadowRoot,

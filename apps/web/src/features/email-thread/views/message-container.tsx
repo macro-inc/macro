@@ -103,6 +103,7 @@ export function MessageContainer(props: MessageContainerProps) {
       renderAvatar={rendering.renderAvatar}
       renderOperation={rendering.renderOperation}
       readReceipt={rendering.readReceipt?.(props.message)}
+      showReadReceiptPixel={rendering.showReadReceiptPixel?.(props.message)}
       viewerEmail={threadContext.viewerEmail()}
       isTouch={threadContext.isTouch()}
       isPersonal={isPersonalMessage(

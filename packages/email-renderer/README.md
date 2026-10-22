@@ -118,8 +118,10 @@ There is no implicit fetch client or native-platform detection in this package.
   the same allow/block policy but keep direct URLs; authenticated backgrounds
   are not supported by that native adapter. Escaped CSS URL functions that the
   parser cannot normalize as URL nodes are excluded. `hiddenUrlPrefixes` drops
-  matching HTTP(S) `img[src]` values before proxying; the app passes Macro's
-  read-receipt pixel URLs so neither the reader nor quoted replies fetch them.
+  matching HTTP(S) `img[src]` values before proxying. The app passes Macro's
+  read-receipt pixel URLs for every quoted reply or forward, and in the reader
+  for every copy except one a recipient received, so only a recipient's view
+  counts as an open.
 - Links open with `target="_blank"` and `rel="noopener noreferrer"`; the host
   may intercept mailto links. Shadow containment bounds layout and paint. It is
   not an iframe security boundary; sanitization remains essential.
