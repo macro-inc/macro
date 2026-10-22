@@ -59,8 +59,9 @@ pub enum FormStatus {
     Closed,
 }
 
-/// The caller's level on a form: view responds, edit changes questions and
-/// reads responses, owner also sets the audience, closes and trashes it.
+/// The caller's level on a form: view responds (and reads responses when
+/// they are shared), edit changes questions and reads responses, owner
+/// also sets the audience, closes and trashes it.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(
     Debug,
@@ -77,7 +78,7 @@ pub enum FormStatus {
 )]
 #[serde(rename_all = "camelCase")]
 pub enum FormAccess {
-    /// May respond.
+    /// May respond, and read response rows when they are shared.
     View,
     /// May change the questions and read the responses.
     Edit,
@@ -110,13 +111,19 @@ pub struct Form {
     #[schema(value_type = Option<Uuid>, required = true)]
     pub submitted_column_id: Option<ColumnId>,
     /// The person column each signed-in submission names its respondent in;
-    /// `null` once deleted.
+    /// `null` once deleted. When `respondent_hidden`, the form still owns
+    /// this column but does not write it.
     #[schema(value_type = Option<Uuid>, required = true)]
     pub respondent_column_id: Option<ColumnId>,
     /// Who may respond.
     pub audience: Audience,
     /// Whether respondents may read option tallies.
     pub tally_visible: bool,
+    /// Whether people with View may read individual response rows.
+    pub responses_visible: bool,
+    /// Whether respondent identity is withheld from response rows. The
+    /// ledger still records who responded so they cannot submit twice.
+    pub respondent_hidden: bool,
     /// Whether its owner closed it.
     pub status: FormStatus,
     /// When it stops taking responses, if it does.
@@ -227,6 +234,16 @@ pub struct UpdateForm {
     #[schema(nullable = false)]
     #[specta(optional)]
     pub tally_visible: Option<bool>,
+    /// Whether people with View may read individual response rows.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(nullable = false)]
+    #[specta(optional)]
+    pub responses_visible: Option<bool>,
+    /// Whether respondent identity is withheld from response rows.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(nullable = false)]
+    #[specta(optional)]
+    pub respondent_hidden: Option<bool>,
 }
 
 impl UpdateForm {
@@ -236,6 +253,8 @@ impl UpdateForm {
             || self.status.is_some()
             || self.closes_at.is_some()
             || self.tally_visible.is_some()
+            || self.responses_visible.is_some()
+            || self.respondent_hidden.is_some()
     }
 }
 

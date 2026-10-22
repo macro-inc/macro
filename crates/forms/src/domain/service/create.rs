@@ -470,6 +470,8 @@ where
                     is_hidden_in_drive: true
                 }
             ),
+            responses_visible: false,
+            respondent_hidden: false,
         };
         match self
             .repository

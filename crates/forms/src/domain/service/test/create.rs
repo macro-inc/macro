@@ -99,6 +99,8 @@ async fn a_form_over_a_table_asks_every_column_and_adds_the_managed_ones() {
                 created_at: start_of_tests(),
                 updated_at: start_of_tests(),
                 is_hidden_in_drive: false,
+                responses_visible: false,
+                respondent_hidden: false,
             },
             access: FormAccess::Owner,
             table_gone: false,

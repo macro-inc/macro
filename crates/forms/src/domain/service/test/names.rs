@@ -131,6 +131,8 @@ async fn which_name_a_new_form_goes_by_is_recorded_from_where_it_was_created() {
                 created_at: start_of_tests(),
                 updated_at: start_of_tests(),
                 is_hidden_in_drive: false,
+                responses_visible: false,
+                respondent_hidden: false,
             },
             trashed_at: None,
             name_follows_database: true,
