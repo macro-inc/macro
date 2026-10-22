@@ -1,6 +1,7 @@
 /* Reuse ContextScene and FeatureConstellation, including their native glass. */
 .macro-hero-art { position: relative; width: min(780px, 100%); height: 460px; flex: none; }
-.macro-hero-scene { position: relative; width: 100%; height: 100%; }
+/* Rebalance space inside the stage without shifting the hero or letter below. */
+.macro-hero-scene { position: relative; width: 100%; height: 100%; translate: 0 20px; }
 .macro-hero-before, .macro-hero-after { position: absolute; inset: 0; }
 .macro-hero-before { display: grid; place-items: center; }
 .macro-hero-before [data-context-scene] { --welcome-scale: 1.25; width: min(560px, 100%); max-width: none; height: 360px; }

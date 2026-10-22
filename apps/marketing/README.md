@@ -26,6 +26,8 @@ and signup retain their existing system/cream/dark palettes.
 `MacroHero` reuses the live homepage's `ContextScene` and `FeatureConstellation`
 graphics. The original circular glass tools gather inward, then unfold into the
 full 15-feature composition on desktop (the compact eight-feature ring on phones).
+The animated scene sits 20px lower inside its stage to balance the space above
+and below the bubbles, without moving the CTA, stage, or following letter.
 The 24-second loop holds the finished feature graphic for over 12 seconds and
 pauses offscreen, in hidden tabs, or through its accessible pause button. Reduced
 motion shows the completed feature graphic immediately. Keep the source graphics'
