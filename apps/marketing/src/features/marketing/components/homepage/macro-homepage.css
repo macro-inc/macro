@@ -40,7 +40,7 @@
 .macro-home-hero h1 img { display: block; width: 100%; height: auto; }
 .macro-homepage .macro-home-button { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 11px 37px; background: #000; border-radius: 100px; color: #fff; text-decoration: none; font-family: inherit; font-size: 19px; line-height: 1.3; font-weight: 600; letter-spacing: -.025em; transition: background 180ms ease, transform 180ms ease; }
 .macro-homepage .macro-home-button:hover { background: #292929; transform: translateY(-1px); }
-.macro-home-tagline { max-width: 940px; margin: 40px 0 0; font-family: 'Roboto Slab Variable', serif; font-size: clamp(30px, 3.5vw, 44px); line-height: 1.2; letter-spacing: -.04em; font-weight: 400; }
+.macro-home-tagline { max-width: 650px; text-wrap: balance; margin: 40px 0 0; font-family: 'Roboto Slab Variable', serif; font-size: clamp(30px, 3.5vw, 44px); line-height: 1.2; letter-spacing: -.04em; font-weight: 400; }
 .macro-hero-art { position: relative; width: 468px; height: 390px; flex-shrink: 0; }
 .macro-hero-scene { position: absolute; width: 360px; height: 300px; inset: 0; transform: scale(1.3); transform-origin: top left; }
 .macro-hero-aura { position: absolute; width: 212px; height: 212px; left: 74px; top: 44px; border-radius: 50%; border: 1px solid #e4e4e7; background: radial-gradient(circle, #f0f0f2, #fff 70%); opacity: .8; animation: macro-aura 16s ease-in-out infinite; }

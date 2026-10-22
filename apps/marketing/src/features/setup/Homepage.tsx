@@ -34,9 +34,11 @@ export function Homepage() {
             Get started
           </a>
           <p class="macro-home-tagline">
-            Email, chat, docs, tasks, and agents.
+            Email, chat, docs, tasks.
             <br />
-            One beautifully connected workspace.
+            CRM, calls, sheets, and agents.
+            <br />
+            One connected workspace.
           </p>
         </section>
         <HomepageTiles />
