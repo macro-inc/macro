@@ -88,7 +88,7 @@ html[data-homepage][data-theme-light='true'] { color-scheme: light; }
 .macro-letter-close .macro-home-button { margin: 8px 0 24px; }
 .macro-letter-prose .macro-letter-postscript { font-size: 16px; }
 .macro-home-bottom .macro-letter-prose { width: min(640px, 100%); }
-.macro-home-bottom .homepage-testimonials { max-width: 640px; margin-inline: auto; }
+.macro-home-bottom .homepage-testimonials { max-width: 880px; margin-inline: auto; }
 @media (max-width: 700px) {
   .macro-home-hero { padding: 112px 24px 32px; }
   .macro-home-hero h1 { font-size: 39px; }

@@ -78,7 +78,9 @@ avoid stacking a second bubble animation on top of the message entrance.
 The previews load near the viewport through `DeferredDemo`; frozen app styles
 and neutral light or native dark tokens are scoped to their canvases, following
 live system theme changes without resetting the workflows. The homepage does not apply the cream palette. The original testimonial, blog
-carousel, closing CTA, and security section follow the grid. The shared navigation
+carousel, closing CTA, and security section follow the grid. Keep the testimonial
+container up to 880px wide so the quote spans 3–4 lines on desktop without
+shrinking the slab type; allow natural wrapping on phones. The shared navigation
 and phone signup routing remain in use.
 
 Marketing demos use `DemoInteractionBoundary`: wheel and touch gestures scroll
