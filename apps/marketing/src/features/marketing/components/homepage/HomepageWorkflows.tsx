@@ -4,7 +4,6 @@ import { createDummyWorkspace } from '../../primitives/createDummyWorkspace';
 import { PrStatusIcon } from '../DemoPrDocument';
 import { TaskNotebook } from '../workspace/frozen/TaskNotebook';
 import '../tasks/task-stories.css';
-import { meetingEmail } from '../../core/email-demo-story';
 import { homepagePeople } from '../../core/homepage-demo-people';
 import { AgentToolGroup } from '../agents/AgentTranscript';
 import {
@@ -16,80 +15,95 @@ import { trainingReview } from '../calls/call-fixtures';
 import { CompanyKanbanCardSurface } from '../DemoCompanyKanban';
 import { DocMention } from '../documents/DocMention';
 import { DocumentFrame } from '../documents/DocumentFrame';
-import { ChannelResult, ShareForm } from '../email/EmailSharingDemo';
-import { EmailThread } from '../email/frozen/EmailThread';
 import { HomepageConversation } from '../HomepageConversation';
 import HomepageEmailCompose from '../HomepageEmailCompose';
 import { HomepageMention } from '../HomepageMention';
 import HomepagePullRequest from '../HomepagePullRequest';
 import HomepageSpreadsheet from '../HomepageSpreadsheet';
 
-export function EmailWorkflow(props: {
-  phase: number;
-  advance: (phase: number) => void;
-}) {
+/** The live homepage's open conversation leads into its full-size composer. */
+export function EmailWorkflow(props: { phase: number }) {
   return (
-    <>
-      <div class="macro-preview-back macro-workflow-email">
-        <EmailThread
-          email={meetingEmail}
-          hideReply
-          onShare={() => props.advance(2)}
+    <div class="macro-email-story">
+      <div class="macro-email-conversation">
+        <HomepageConversation
+          messages={[
+            {
+              person: 'julia',
+              text: 'Can you send Valentina the demo follow-up?',
+            },
+          ]}
         />
-      </div>
-      <div
-        class="macro-preview-front macro-workflow-channel"
-        data-complete={props.phase >= 6}
-      >
-        <ChannelResult
-          staged
-          shared={props.phase >= 6}
-          updated={props.phase >= 7}
-          onOpen={() => props.advance(0)}
-        />
-      </div>
-      <Show when={props.phase >= 7}>
-        <div class="macro-workflow-composer macro-workflow-result">
-          <HomepageEmailCompose
-            animate={false}
-            draft={{
-              subject: 'Re: Thursday demo',
-              to: 'Valentina <valentina@coparse.com>',
-              cc: 'Julia <julia@macro.com>',
-              body: '',
-            }}
-            bodyContent={
-              <>
-                <p>Hi Valentina,</p>
-                <p>
-                  Thursday at 9 works. Here’s the{' '}
-                  <HomepageMention
-                    kind="md"
-                    label="Team rollout plan"
-                    description="Setup steps and owners"
-                    href="/documents"
-                  />{' '}
-                  so you can get a head start.
-                </p>
-                <p>Julia and I will walk you through it on the call.</p>
-              </>
-            }
+        <div class="macro-email-step" data-visible={props.phase >= 1}>
+          <HomepageConversation
+            messages={[
+              {
+                person: 'jacob',
+                text: (
+                  <>
+                    <span class="homepage-person-mention">@Macro</span> draft
+                    Valentina’s follow-up from{' '}
+                    <HomepageMention
+                      kind="call"
+                      label="Demo call transcript"
+                      description="The demo with Valentina"
+                      href="/calls"
+                    />
+                    . Link the sales PDF and rollout plan. Cc Julia.
+                  </>
+                ),
+              },
+            ]}
           />
         </div>
-      </Show>
+      </div>
       <div
-        class="macro-workflow-modal"
-        data-open={props.phase >= 2 && props.phase < 6}
+        class="macro-email-draft macro-email-step"
+        data-visible={props.phase >= 2}
       >
-        <ShareForm
-          phase={Math.min(5, Math.max(2, props.phase))}
-          query="launch"
-          message={props.phase >= 4 ? 'Here’s the email for Thursday.' : ''}
-          advance={() => props.advance(props.phase < 3 ? 3 : 6)}
-          cancel={() => props.advance(0)}
+        <HomepageEmailCompose
+          animate={false}
+          draft={{
+            subject: 'Demo follow-up',
+            to: 'Valentina <valentina@coparse.com>',
+            cc: 'Julia <julia@macro.com>',
+            body: '',
+          }}
+          bodyContent={
+            <>
+              <p class="macro-email-step" data-visible={props.phase >= 3}>
+                Hi Valentina,
+              </p>
+              <p class="macro-email-step" data-visible={props.phase >= 4}>
+                Thanks for joining the demo on September 14. Great meeting your
+                team!
+              </p>
+              <p class="macro-email-step" data-visible={props.phase >= 5}>
+                Here’s our{' '}
+                <HomepageMention
+                  kind="pdf"
+                  label="Macro sales overview.pdf"
+                  description="Macro product overview"
+                  href="/documents"
+                />{' '}
+                and the{' '}
+                <HomepageMention
+                  kind="md"
+                  label="Team rollout plan"
+                  description="Setup steps and owners"
+                  href="/documents"
+                />
+                .
+              </p>
+              <div class="macro-email-step" data-visible={props.phase >= 6}>
+                <p>Best,</p>
+                <p>Jacob</p>
+              </div>
+            </>
+          }
         />
       </div>
-    </>
+    </div>
   );
 }
 

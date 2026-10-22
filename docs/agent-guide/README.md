@@ -63,3 +63,8 @@ caret. Check Escape focus return and keyboard wrapping inside the open menu.
 Standalone marketing dev/preview servers hand `/app/*` navigation to
 `VITE_APP_BASE_URL` (`https://macro.com` by default); verify that signup leaves the local website instead of
 showing an empty header. Use an `apps/web` preview for local signup testing.
+
+For the homepage email illustration, verify the open conversation reveals a
+full-size draft with linked documents, keeps all recipient fields and the send
+button visible on mobile, and pauses before replaying. Reduced motion should
+show the completed draft. The illustration is inert and sends no email.

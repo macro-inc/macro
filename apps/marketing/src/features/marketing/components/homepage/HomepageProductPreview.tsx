@@ -23,6 +23,7 @@ import {
 } from './HomepageWorkflows';
 import lightPalette from './homepage-preview-light.css?inline';
 import './homepage-product-preview.css';
+import './homepage-email-story.css';
 
 export type HomepagePreviewKind =
   | 'email'
@@ -83,15 +84,7 @@ export default function HomepageProductPreview(props: {
     if (step === 0 || step >= 7) return undefined;
     switch (props.kind) {
       case 'email':
-        return step === 1
-          ? '[data-demo-share-trigger]'
-          : step === 2
-            ? '.mail-recipient-option'
-            : step === 3
-              ? '[data-share-message-input]'
-              : step <= 5
-                ? '.mail-share-submit'
-                : '.mail-shared-thread';
+        return undefined;
       case 'documents':
       case 'tasks':
         return undefined;
@@ -132,7 +125,7 @@ export default function HomepageProductPreview(props: {
       >
         <Switch>
           <Match when={props.kind === 'email'}>
-            <EmailWorkflow phase={phase()} advance={advance} />
+            <EmailWorkflow phase={phase()} />
           </Match>
           <Match when={props.kind === 'documents'}>
             <DocumentWorkflow phase={phase()} />

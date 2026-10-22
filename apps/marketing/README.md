@@ -56,11 +56,12 @@ preview panels retain the live site's glass highlight, shaded lower edge, and
 masked diagonal rim; chat bubbles retain the native 24px rounding, padding, and
 sent/received surface hierarchy. Keep the composer send button concentric with
 its shell: 26.25px shell radius, 16.875px button radius, and 9.375px edge inset.
-`HomepageWorkflows` reuses the email share form and channel result, shared
-document editing, the native task notebook, agent tool groups, linked customer
-cells, and call transcript controls.
-The email sequence shares a thread into chat, pauses for 3.2 seconds to read it,
-then layers the native reply composer over the conversation. All composer controls
+`HomepageWorkflows` reuses the live site's open chat bubbles and full-size
+`HomepageEmailCompose`, shared document editing, the native task notebook, agent
+tool groups, linked customer cells, and call transcript controls.
+The email sequence reveals the request, composer, and draft paragraphs with
+linked source documents. Keep recipient fields and the inset send button visible;
+do not wrap this scene in stacked thread or channel windows. All composer controls
 remain inside the inert preview. The document sequence shows Julia and Claude
 editing the same launch plan. The task sequence links a pull request, moves the task into review, then marks it
 complete after the pull request merges. It starts `TaskNotebook` with
@@ -71,10 +72,9 @@ for 14 seconds. The CRM retains its existing deal-movement sequence within the
 loop. Motion pauses offscreen, in hidden tabs, or through each preview's accessible
 pause control. Reduced motion shows the completed result immediately. Keep text
 at a stable readable size throughout; demonstrate actions and their results rather
-than moving decorative cards. Keep the share dialog mounted for smooth entry/exit,
-and expand staged chat messages with grid-row and opacity transitions so the
-conversation grows continuously. Reuse native demo content; avoid stacking a
-second bubble animation on top of the message entrance.
+than moving decorative cards. Keep email steps mounted and reveal them with
+opacity transitions so the composition stays stable. Reuse native demo content;
+avoid stacking a second bubble animation on top of the message entrance.
 The previews load near the viewport through `DeferredDemo`; frozen app styles
 and neutral light or native dark tokens are scoped to their canvases, following
 live system theme changes without resetting the workflows. The homepage does not apply the cream palette. The original testimonial, blog

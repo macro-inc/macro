@@ -166,7 +166,11 @@ export async function verifyHomepage(directory: string): Promise<void> {
           page.locator('.macro-hero-before .ob-orbit-tile').first()
         ).toHaveCSS('animation-play-state', 'paused');
         // Native previews follow live system theme changes without remounting.
-        const previewBody = page.locator('#email .mail-thread-body').first();
+        await page.emulateMedia({ reducedMotion: 'reduce' });
+        const previewBody = page
+          .locator('#email .homepage-email-body p')
+          .first();
+        await expect(previewBody).toHaveCSS('opacity', '1');
         await expect(previewBody).toHaveText(/\S+/);
         await expect(previewBody).toHaveCSS(
           'color',
