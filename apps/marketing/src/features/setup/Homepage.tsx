@@ -15,6 +15,7 @@ export function Homepage() {
       <SiteHeader />
       <main class="macro-home-scroll" data-onboarding-scroll>
         <section class="macro-home-hero" aria-labelledby="macro-home-title">
+          <MacroHero />
           <h1 id="macro-home-title" data-welcome-heading>
             One workspace for your team and your agents.
           </h1>
@@ -29,7 +30,6 @@ export function Homepage() {
           >
             Get started
           </a>
-          <MacroHero />
         </section>
         <section
           class="macro-letter-intro macro-letter-prose"

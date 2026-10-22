@@ -12,7 +12,8 @@ headings at weight 400, and contrasting pill
 calls to action. `?theme=dark` pins dark mode; `?theme=cream` pins the white
 homepage while retaining cream on product pages. The first-paint script and
 `sitePalette.ts` must apply the same preference before and after hydration. The hero omits the wordmark and keeps its summary on two lines on desktop,
-with natural wrapping on phones. The homepage reads as a sales letter: a direct headline and product summary,
+with natural wrapping on phones. The transitioning graphic sits above the headline,
+summary, and CTA on desktop and phones. The homepage reads as a sales letter: a direct headline and product summary,
 two short first-person paragraphs on small-team coordination and agents working
 from shared context, then one concise paragraph per
 feature followed
