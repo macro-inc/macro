@@ -20,7 +20,7 @@ scroll-driven header CTA landing animation.
 
 `HomepageTiles` presents six product feature panels in two columns: email and
 chat, documents and tasks, agents, sheets and databases, CRM, and calls. Desktop
-panels are square; narrower layouts allow extra height for readable copy. Phones
+panels are square, with a gray-50 background at 50% opacity and no outer border; narrower layouts allow extra height for readable copy. Phones
 stack them in one column. `HomepageProductPreview` reuses the existing email
 composer, collaborative document, agent conversation, spreadsheet, CRM pipeline,
 and call transcript with local sample data. Keep each crop focused on its useful
@@ -30,6 +30,12 @@ shrink whole desktop windows to fit the cards. The email, document, and call tra
 show settled content immediately. Compose overlapping fragments of the actual UI instead of enclosing a full screenshot in a box. These layered previews are inert; product
 links beneath each description open the full interactive demos. Keep the UI
 faithful to those shared components rather than drawing separate mock interfaces.
+Each preview’s added layer motion plays a restrained, 4.4-second source-to-result
+sequence on entering the viewport, then holds still. The CRM board also retains
+its existing finite deal-movement demonstration. Highlight the relevant native link, cell, or
+speaker before bringing its related foreground surface forward; keep all text
+visible at its full size. Motion pauses in hidden tabs, resets offscreen, and is
+disabled for reduced motion.
 The previews load near the viewport through `DeferredDemo`; frozen app styles
 and neutral light tokens are scoped to their canvases, independent of the system theme. The homepage does not apply the cream palette. The original testimonial, blog
 carousel, closing CTA, and security section follow the grid. The shared navigation

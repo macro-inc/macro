@@ -94,3 +94,63 @@
   .macro-preview-company { width: 80%; }
   .macro-call-transcript [role=listitem]:nth-child(n+2) { display: none; }
 }
+
+.macro-product-agents [data-user-message-bubble] { --preview-source-bg: #fff; }
+.macro-product-crm .homepage-crm-card-surface { --preview-source-bg: var(--color-surface); }
+.macro-product-calls .call-poster-avatar { border-radius: 50%; }
+
+/* A short source → result sequence, followed by a still reading state.
+   Individual translate preserves each surface's existing composition/rotation. */
+.macro-product-preview { --preview-motion-state: running; }
+.macro-product-preview[data-page-visible=false] { --preview-motion-state: paused; }
+.macro-product-preview[data-visible=true] .macro-preview-front,
+.macro-product-preview[data-visible=true] .macro-product-agents .homepage-message-reply {
+  animation: macro-preview-result 4.4s cubic-bezier(.22, 1, .36, 1) both;
+  animation-play-state: var(--preview-motion-state);
+}
+.macro-product-preview[data-visible=true] .macro-product-email .homepage-email-subject input,
+.macro-product-preview[data-visible=true] .macro-product-documents .mds-title,
+.macro-product-preview[data-visible=true] .macro-product-agents .homepage-message-body [data-user-message-bubble],
+.macro-product-preview[data-visible=true] .macro-product-spreadsheet .homepage-sheet-cell[aria-label^="B2:"],
+.macro-product-preview[data-visible=true] .macro-product-crm [data-crm-company="northwind"] .homepage-crm-card-surface {
+  animation: macro-preview-source 4.4s ease both;
+  animation-play-state: var(--preview-motion-state);
+}
+.macro-product-preview[data-visible=true] .macro-product-agents .demo-cursor-status,
+.macro-product-preview[data-visible=true] .macro-preview-task-meta > span:first-child,
+.macro-product-preview[data-visible=true] .macro-product-email .macro-preview-front .homepage-mention,
+.macro-product-preview[data-visible=true] .macro-preview-company [data-layer] > div {
+  animation: macro-preview-linked 4.4s ease both;
+  animation-play-state: var(--preview-motion-state);
+}
+.macro-product-preview[data-visible=true] .macro-product-calls .call-poster-tile:first-child .call-poster-avatar {
+  animation: macro-preview-speaker 4.4s ease both;
+  animation-play-state: var(--preview-motion-state);
+}
+.macro-product-preview[data-visible=true] .macro-call-transcript .call-transcript-text {
+  animation: macro-preview-transcript 4.4s ease both;
+  animation-play-state: var(--preview-motion-state);
+}
+@keyframes macro-preview-result {
+  0%, 12% { translate: 0 10px; }
+  34%, 100% { translate: 0 0; }
+}
+@keyframes macro-preview-source {
+  0%, 4%, 38%, 100% { background-color: var(--preview-source-bg, transparent); }
+  12%, 24% { background-color: rgb(40 113 187 / .09); }
+}
+@keyframes macro-preview-linked {
+  0%, 24%, 66%, 100% { box-shadow: 0 0 0 0 transparent; }
+  34%, 46% { box-shadow: 0 0 0 3px rgb(40 113 187 / .1); }
+}
+@keyframes macro-preview-speaker {
+  0%, 4%, 38%, 100% { outline: 2px solid transparent; outline-offset: 3px; }
+  12%, 24% { outline: 2px solid rgb(40 113 187 / .6); outline-offset: 3px; }
+}
+@keyframes macro-preview-transcript {
+  0%, 20%, 70%, 100% { background-color: transparent; }
+  38%, 52% { background-color: rgb(40 113 187 / .07); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .macro-product-preview[data-visible=true] * { animation: none !important; }
+}

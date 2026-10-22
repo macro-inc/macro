@@ -1,4 +1,4 @@
-import { Match, Switch } from 'solid-js';
+import { createSignal, Match, onCleanup, onMount, Switch } from 'solid-js';
 import {
   DocsGraphicFrame,
   DocsMarkdownScene,
@@ -45,8 +45,34 @@ const scopedUi = uiStyles
 export default function HomepageProductPreview(props: {
   kind: HomepagePreviewKind;
 }) {
+  let host!: HTMLDivElement;
+  const [visible, setVisible] = createSignal(false);
+  const [pageVisible, setPageVisible] = createSignal(true);
+  onMount(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setVisible(entry.isIntersecting && entry.intersectionRatio >= 0.45);
+      },
+      { threshold: 0.45 }
+    );
+    observer.observe(host);
+    const syncVisibility = () => setPageVisible(!document.hidden);
+    syncVisibility();
+    document.addEventListener('visibilitychange', syncVisibility);
+    onCleanup(() => {
+      observer.disconnect();
+      document.removeEventListener('visibilitychange', syncVisibility);
+    });
+  });
   return (
-    <div class="macro-product-preview" aria-hidden="true" inert>
+    <div
+      ref={host}
+      class="macro-product-preview"
+      data-visible={visible()}
+      data-page-visible={pageVisible()}
+      aria-hidden="true"
+      inert
+    >
       <style>{properties}</style>
       <style>{`@scope (.macro-product-canvas) { ${scopedUi} ${palette.replaceAll(':root', ':scope')} ${lightPalette} }`}</style>
       <div
