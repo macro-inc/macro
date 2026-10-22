@@ -1,6 +1,6 @@
 # Type Alias: Form
 
-> **Form** = \{ `audience`: [`Audience`](Audience.md); `closesAt`: `string` \| `null`; `confirmationMessage`: `string`; `createdAt`: `string`; `databaseId`: `string`; `description`: `string`; `id`: `string`; `isHiddenInDrive`: `boolean`; `name`: `string`; `ownerId`: `string`; `respondentColumnId`: `string` \| `null`; `status`: [`FormStatus`](FormStatus.md); `submittedColumnId`: `string` \| `null`; `tableId`: `string`; `tallyVisible`: `boolean`; `updatedAt`: `string`; \}
+> **Form** = \{ `audience`: [`Audience`](Audience.md); `closesAt`: `string` \| `null`; `confirmationMessage`: `string`; `createdAt`: `string`; `databaseId`: `string`; `description`: `string`; `id`: `string`; `isHiddenInDrive`: `boolean`; `name`: `string`; `ownerId`: `string`; `respondentColumnId`: `string` \| `null`; `respondentHidden`: `boolean`; `responsesVisible`: `boolean`; `status`: [`FormStatus`](FormStatus.md); `submittedColumnId`: `string` \| `null`; `tableId`: `string`; `tallyVisible`: `boolean`; `updatedAt`: `string`; \}
 
 A form: a view of one database table whose rows are its responses.
 
@@ -18,7 +18,9 @@ A form: a view of one database table whose rows are its responses.
 | <a id="property-ishiddenindrive"></a> `isHiddenInDrive` | `boolean` | Whether Drive leaves it, and the database behind it, out of its listings, as for a channel poll. |
 | <a id="property-name"></a> `name` | `string` | Its display name. A standalone form follows the database it created; a form attached to an existing table has its own name. |
 | <a id="property-ownerid"></a> `ownerId` | `string` | Its owner. |
-| <a id="property-respondentcolumnid"></a> `respondentColumnId` | `string` \| `null` | The person column each signed-in submission names its respondent in; `null` once deleted. |
+| <a id="property-respondentcolumnid"></a> `respondentColumnId` | `string` \| `null` | The person column each signed-in submission names its respondent in; `null` once deleted. When `respondent_hidden`, the form still owns this column but does not write it. |
+| <a id="property-respondenthidden"></a> `respondentHidden` | `boolean` | Whether respondent identity is withheld from response rows. The ledger still records who responded so they cannot submit twice. |
+| <a id="property-responsesvisible"></a> `responsesVisible` | `boolean` | Whether people with View may read individual response rows. |
 | <a id="property-status"></a> `status` | [`FormStatus`](FormStatus.md) | Whether its owner closed it. |
 | <a id="property-submittedcolumnid"></a> `submittedColumnId` | `string` \| `null` | The date column each submission stamps; `null` once deleted. |
 | <a id="property-tableid"></a> `tableId` | `string` | The table whose rows are its responses. |
