@@ -22,7 +22,7 @@ export function Homepage() {
       <main class="macro-home-scroll" data-onboarding-scroll>
         <section class="macro-home-hero" aria-labelledby="macro-home-title">
           <h1 id="macro-home-title" data-welcome-heading>
-            Why we built Macro.
+            One workspace for your team and your agents.
           </h1>
           <p class="macro-home-tagline">
             Email, chat, docs, tasks, CRM, calls, and sheets. <br />
