@@ -39,7 +39,9 @@ as a letter from the team, explaining each design choice once rather than
 repeating a feature summary in a second paragraph.
 
 `HomepageTiles` presents seven product sections in one column on desktop and
-mobile: email integrated with chat and tasks, collaborative documents,
+mobile. A small Inter feature index stays on the left at desktop widths and
+wraps above the demos below 1240px; its anchors leave room for the fixed header.
+The sections cover email integrated with chat and tasks, collaborative documents,
 self-updating tasks, agents, sheets and databases, CRM, and calls. Demo art has
 no flat gray backdrop or outer border. Separate feature sections with viewport-wide
 1px rules at 5.4% ink (30% of the product-page intensity), with 20px more space

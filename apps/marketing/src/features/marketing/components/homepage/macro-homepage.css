@@ -167,3 +167,21 @@ html[data-homepage][data-theme-light='true'] { color-scheme: light; }
   filter: blur(28px);
 }
 html[data-theme-light='true'] .macro-tile-ambience { opacity: .6; }
+
+/* A quiet index beside the demos; it rejoins the flow on narrow screens. */
+.macro-feature-layout { position: relative; }
+.macro-feature-toc { position: absolute; top: 0; bottom: 0; left: max(24px, calc(50% - 610px)); width: 150px; }
+.macro-feature-toc nav { position: sticky; top: 112px; display: flex; flex-direction: column; align-items: flex-start; font: 400 13px/1.5 'Inter Variable', Inter, sans-serif; }
+.macro-feature-toc nav > span { margin-bottom: 12px; color: var(--color-ink-extra-muted); font-size: 11px; }
+.macro-feature-toc a { padding-block: 7px; color: var(--color-ink-muted); text-decoration: none; transition: color 160ms ease; }
+.macro-feature-toc a:hover, .macro-feature-toc a:focus-visible { color: var(--color-ink); }
+.macro-feature-tile { scroll-margin-top: 104px; }
+@media (max-width: 1239px) {
+  .macro-feature-toc { position: static; width: min(640px, calc(100% - 48px)); margin: 0 auto 40px; }
+  .macro-feature-toc nav { position: static; flex-direction: row; flex-wrap: wrap; column-gap: 22px; row-gap: 2px; }
+  .macro-feature-toc nav > span { flex-basis: 100%; margin-bottom: 4px; }
+}
+@media (max-width: 700px) {
+  .macro-feature-toc { width: min(516px, calc(100% - 48px)); margin-bottom: 32px; }
+  .macro-feature-toc a { min-height: 44px; display: inline-flex; align-items: center; padding-block: 8px; }
+}
