@@ -33,7 +33,8 @@ pauses offscreen, in hidden tabs, or through its accessible pause button. Reduce
 motion shows the completed feature graphic immediately. Keep the source graphics'
 materials and layouts; do not replace them with a separate decorative icon system.
 The hero never intercepts scrolling. The original closing section retains its
-scroll-driven header CTA landing animation.
+scroll-driven header CTA landing animation. The homepage ends after the closing
+CTA and security section, without a separate footer navigation band.
 
 Use concrete product capabilities for feature headings and describe actions in
 the copy, following the live site; avoid slogans and vague benefit claims. Write the homepage
