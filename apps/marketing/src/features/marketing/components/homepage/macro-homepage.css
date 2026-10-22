@@ -15,7 +15,7 @@ html[data-homepage][data-theme-light='true'] { color-scheme: light; }
   -webkit-font-smoothing: antialiased;
 }
 .macro-homepage *, .macro-homepage *::before, .macro-homepage *::after { box-sizing: border-box; }
-.macro-home-scroll { height: 100%; overflow: auto; overscroll-behavior: contain; }
+.macro-home-scroll { height: 100%; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
 .macro-homepage .site-header {
   --nav-ink: light-dark(#1d1d1f, #fff);
   --nav-muted: light-dark(#6e6e73, #b8b8bd);
@@ -46,8 +46,18 @@ html[data-homepage][data-theme-light='true'] { color-scheme: light; }
 .macro-motion-toggle { position: absolute; right: 0; bottom: 0; width: 36px; height: 36px; border: 0; border-radius: 50%; background: light-dark(#f5f5f7, #141414); color: light-dark(#86868b, #aaa); display: grid; place-items: center; transition: color 160ms; }
 .macro-motion-toggle:hover { color: light-dark(#1d1d1f, #fff); }
 .macro-motion-toggle svg { width: 13px; height: 13px; }
-.macro-feature-grid { width: min(800px, calc(100% - 64px)); margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 88px; }
-.macro-feature-tile { min-width: 0; display: flex; flex-direction: column; background: transparent; border: 0; }
+.macro-feature-grid { --feature-section-gap: 88px; width: min(800px, calc(100% - 64px)); margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--feature-section-gap); }
+.macro-feature-tile { position: relative; min-width: 0; display: flex; flex-direction: column; background: transparent; border: 0; }
+.macro-feature-tile + .macro-feature-tile::before {
+  content: '';
+  position: absolute;
+  top: calc(var(--feature-section-gap) / -2);
+  left: 50%;
+  width: 100vw;
+  transform: translateX(-50%);
+  border-top: 1px solid color-mix(in srgb, var(--color-ink) 18%, transparent);
+  pointer-events: none;
+}
 .macro-tile-art { height: 450px; min-height: 450px; flex: none; position: relative; isolation: isolate; overflow: hidden; border-radius: 16px; background: transparent; }
 .macro-tile-copy { width: min(640px, 100%); margin: 0 auto 28px; text-align: left; }
 .macro-letter-prose h2, .macro-tile-copy h2 { margin: 0 0 24px; font-family: 'Roboto Slab Variable', serif; font-size: 36px; font-weight: 400; line-height: 1.22; letter-spacing: -.04em; text-wrap: balance; }
@@ -89,7 +99,7 @@ html[data-homepage][data-theme-light='true'] { color-scheme: light; }
   .macro-letter-intro { margin-bottom: 64px; }
   .macro-letter-prose p, .macro-tile-copy p { font-size: 18px; line-height: 1.6; }
   .macro-letter-prose h2, .macro-tile-copy h2 { font-size: 31px; margin-bottom: 20px; }
-  .macro-feature-grid { width: calc(100% - 32px); gap: 64px; max-width: 540px; }
+  .macro-feature-grid { --feature-section-gap: 64px; width: calc(100% - 32px); max-width: 540px; }
   .macro-tile-copy { width: calc(100% - 16px); margin-bottom: 20px; }
   .macro-tile-art { height: 470px; min-height: 470px; }
   .macro-tile-links { margin-top: 16px; }
