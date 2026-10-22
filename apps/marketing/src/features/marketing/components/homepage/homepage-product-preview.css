@@ -192,3 +192,44 @@
   .macro-workflow-modal { transform: none; }
   .macro-workflow-channel .mail-message-step { translate: none; }
 }
+
+/* The live site's composer finish: a soft cast shadow and one continuous rim. */
+.macro-preview-back, .macro-preview-front, .macro-workflow-modal .mail-share-form {
+  border: 1px solid #d9d9e24d;
+  border-radius: 24px;
+  background: #fff;
+  box-shadow: 0 0 0 .5px #b8b8c21f, 0 3px 8px -4px #25253512, 0 20px 48px -20px #25253538;
+}
+.macro-preview-back { transform: rotate(-1.5deg); }
+.macro-preview-front { transform: rotate(1.5deg); box-shadow: 0 0 0 .5px #b8b8c21f, 0 5px 12px -5px #25253516, 0 26px 56px -24px #25253545; }
+.macro-product-documents .macro-preview-back, .macro-product-calls .macro-preview-back { transform: rotate(1.5deg); }
+.macro-product-documents .macro-preview-front, .macro-product-calls .macro-preview-front { transform: rotate(-1.5deg); }
+.macro-product-agents .homepage-message { transform: none; }
+.macro-workflow-agent-result .homepage-message-reply { transform: rotate(1.5deg); }
+.macro-product-agents .demo-cursor-card { border-radius: 22px; border-color: #dedee480; box-shadow: 0 3px 8px -4px #25253512, 0 22px 50px -24px #25253545; }
+.macro-product-canvas .homepage-message [data-user-message-bubble] { border-color: #e8e8ed80; background: #f8f8fa; box-shadow: inset 0 1px 0 #fff; }
+.macro-workflow-modal .mail-share-form { box-shadow: 0 0 0 .5px #b8b8c226, 0 5px 14px -5px #25253525, 0 30px 70px -24px #25253555; overflow: hidden; }
+.macro-workflow-composer { position: absolute; top: 6px; left: 0; width: 82%; z-index: 3; transform: rotate(-1.5deg); }
+.macro-product-canvas .macro-workflow-composer .homepage-email-demo { min-height: 0; --homepage-email-height: 0px; }
+.macro-product-canvas .macro-workflow-composer .homepage-email-surface { min-height: 0; padding: 16px 22px; border-radius: 26.25px; background: linear-gradient(145deg, #fff, #fcfcfe); box-shadow: 0 0 0 .75px #d9d9e280, 0 2px 8px #2525350c, 0 20px 54px -18px #25253540; }
+.macro-product-canvas .macro-workflow-composer .homepage-email-surface::after { display: block; border-color: #ffffffa0; background: linear-gradient(135deg, #fff, #ffffff00 45%, #dcdce560) border-box; }
+.macro-product-canvas .macro-workflow-composer .homepage-email-row { display: flex; min-height: 30px; border-color: #e9e9ef; }
+.macro-product-canvas .macro-workflow-composer .homepage-email-label { display: block; flex-basis: 50px; color: #8b8b95; font-size: 12px; }
+.macro-product-canvas .macro-workflow-composer .homepage-email-row input { padding: 7px 0; color: #33333b; font-size: 13px; line-height: 18px; }
+.macro-product-canvas .macro-workflow-composer .homepage-email-sender { padding: 2px 0; color: #33333b; background: none; font-size: 13px; }
+.macro-workflow-composer .homepage-email-sender img { width: 20px; height: 20px; }
+.macro-product-canvas .macro-workflow-composer .homepage-email-body-wrap { margin-top: 16px; }
+.macro-product-canvas .macro-workflow-composer .homepage-email-body { min-height: 0; }
+.macro-product-canvas .macro-workflow-composer .homepage-email-body p { font-size: 15px; line-height: 24px; margin: 0 0 12px; }
+.macro-workflow-composer .homepage-email-toolbar { margin-top: 0; }
+.macro-workflow-composer .homepage-email-toolbar button { color: #878791; }
+.macro-workflow-composer .homepage-email-toolbar .homepage-email-send { background: #24242a; color: #fff; opacity: 1; }
+.macro-product-email[data-phase="7"] > .macro-preview-back { opacity: 0; }
+.macro-product-email > .macro-preview-back { transition: opacity 450ms ease; }
+.macro-product-email[data-phase="7"] .macro-workflow-channel { z-index: 1; }
+@media (max-width: 700px) {
+  .macro-workflow-composer { width: 96%; }
+  .macro-product-canvas .macro-workflow-composer .homepage-email-surface { padding: 12px 16px; }
+  .macro-product-canvas .macro-workflow-composer .homepage-email-row input { font-size: 12px; }
+  .macro-product-canvas .macro-workflow-composer .homepage-email-body p { font-size: 14px; line-height: 21px; }
+}

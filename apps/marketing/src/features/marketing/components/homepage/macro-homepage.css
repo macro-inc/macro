@@ -136,8 +136,17 @@
 .macro-homepage .site-nav-open-footer { background: #000; color: #fff; box-shadow: none; font-family: inherit; }
 .macro-homepage .site-nav-open-footer::after { display: none; }
 
-/* The same bevel and masked rim used by the large compose surface. */
-.macro-hero-mark::after, .macro-hero-tool::after, .macro-hero-surface > div::after { content: ''; position: absolute; inset: 1px; border-radius: inherit; corner-shape: inherit; pointer-events: none; padding: 1px; background: linear-gradient(145deg, #ffffffb3, #ffffff08 55%, #00000014); mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); mask-composite: exclude; }
+/* Match the live welcome constellation's fine glass rim and soft depth. */
+.macro-hero-rings { position: absolute; inset: 0; width: 360px; height: 300px; overflow: visible; color: #686875; pointer-events: none; }
+.macro-hero-aura { border: 0; background: radial-gradient(ellipse, #e9e9ef75, #f5f5f840 45%, transparent 72%); }
+.macro-hero-tool { width: var(--size); height: var(--size); left: calc(180px - var(--size) / 2); top: calc(150px - var(--size) / 2); z-index: 1; }
+.macro-hero-tool svg { width: 46%; height: 46%; }
+.macro-hero-tool, .macro-hero-surface > div { border: 0; border-radius: 32%; corner-shape: squircle; background: linear-gradient(145deg, #fffffffa, #f7f7faed); box-shadow: 0 2px 3px -1px #20202a14, 0 12px 28px -10px #20202a30, inset 0 1px 0 #fff, inset 0 -1px 0 #d4d4df60; color: #3b3b43; }
+.macro-hero-surface { z-index: 2; }
+.macro-hero-mark { border: 0; border-radius: 32%; background: linear-gradient(145deg, #38383d, #19191d 70%); box-shadow: 0 3px 5px -2px #15151d40, 0 18px 38px -12px #15151d60, inset 0 1px 0 #ffffff28, inset 0 -1px 0 #00000050; }
+.macro-hero-mark::after, .macro-hero-tool::after, .macro-hero-surface > div::after { content: ''; position: absolute; inset: 0; border-radius: inherit; corner-shape: inherit; pointer-events: none; padding: 1px; background: linear-gradient(135deg, #ffffffb0, #b6b6c340 26%, #d4d4df20 70%, #a0a0b560); mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); mask-composite: exclude; }
 .macro-hero-surface > div { position: relative; }
-.macro-hero-tool svg, .macro-hero-surface svg { filter: drop-shadow(0 1px 0 #fff); }
-.macro-hero-mark svg { filter: drop-shadow(0 2px 2px #00000050); }
+.macro-hero-mark svg { filter: drop-shadow(0 1px 1px #00000038); }
+
+.macro-feature-tile#email .macro-tile-art { height: 520px; min-height: 520px; }
+@media (max-width: 700px) { .macro-feature-tile#email .macro-tile-art { height: 550px; min-height: 550px; } }

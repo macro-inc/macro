@@ -57,7 +57,11 @@ export default function HomepageProductPreview(props: {
     steps: stepDelays.length,
     visibilityThreshold: 0.45,
     delay: (step) =>
-      props.kind === 'crm' && step === 7 ? 6200 : stepDelays[step - 1],
+      props.kind === 'crm' && step === 7
+        ? 6200
+        : props.kind === 'email' && step === 7
+          ? 3200
+          : stepDelays[step - 1],
     loop: { hold: 14000 },
     advance,
     reset: () => {

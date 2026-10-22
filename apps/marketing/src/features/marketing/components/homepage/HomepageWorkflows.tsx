@@ -16,6 +16,7 @@ import { DocumentFrame } from '../documents/DocumentFrame';
 import { ChannelResult, ShareForm } from '../email/EmailSharingDemo';
 import { EmailThread } from '../email/frozen/EmailThread';
 import { HomepageConversation } from '../HomepageConversation';
+import HomepageEmailCompose from '../HomepageEmailCompose';
 import { HomepageMention } from '../HomepageMention';
 import HomepagePullRequest from '../HomepagePullRequest';
 import HomepageSpreadsheet from '../HomepageSpreadsheet';
@@ -44,6 +45,35 @@ export function EmailWorkflow(props: {
           onOpen={() => props.advance(0)}
         />
       </div>
+      <Show when={props.phase >= 7}>
+        <div class="macro-workflow-composer macro-workflow-result">
+          <HomepageEmailCompose
+            animate={false}
+            draft={{
+              subject: 'Re: Thursday demo',
+              to: 'Valentina <valentina@coparse.com>',
+              cc: 'Julia <julia@macro.com>',
+              body: '',
+            }}
+            bodyContent={
+              <>
+                <p>Hi Valentina,</p>
+                <p>
+                  Thursday at 9 works. Here’s the{' '}
+                  <HomepageMention
+                    kind="md"
+                    label="Team rollout plan"
+                    description="Setup steps and owners"
+                    href="/documents"
+                  />{' '}
+                  so you can get a head start.
+                </p>
+                <p>Julia and I will walk you through it on the call.</p>
+              </>
+            }
+          />
+        </div>
+      </Show>
       <div
         class="macro-workflow-modal"
         data-open={props.phase >= 2 && props.phase < 6}

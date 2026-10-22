@@ -9,13 +9,14 @@ The homepage uses a white background in every system color scheme, native SF Pro
 on Apple platforms (with a system sans-serif fallback elsewhere), the supplied
 text-only vector Macro wordmark with rounded upper M corners, centered Roboto Slab headings at weight 400, and black pill
 calls to action. The hero promotes the product-description copy to its main slab
-headline. Hero icons use rounded squircle tiles, inset highlights, beveled edges,
-and layered neutral shadows that echo the compose surface. Graphics layer white product surfaces with fine neutral borders and restrained shadows. `components/homepage/macro-homepage.css`
+headline. Hero icons use rounded squircle tiles, fine highlighted rims,
+and soft cast shadows that echo the native compose surface. Graphics layer white product surfaces with fine neutral borders and restrained shadows. `components/homepage/macro-homepage.css`
 scopes that treatment to `.macro-homepage`; product pages, blog, sample workspace,
 and signup retain their existing system/cream/dark palettes.
 
 `MacroHero` uses a larger desktop composition with readable labels and a dedicated
-gap above the wordmark, scaling down to fit phones. It gathers the existing welcome constellation into the Macro mark, then
+gap above the wordmark, scaling down to fit phones. Fine concentric rings frame
+the full, variable-sized welcome constellation. It gathers those tools into the Macro mark, then
 unfolds it into connected native features. Its 16-second sequence pauses offscreen,
 in hidden tabs, or through the accessible pause button. Reduced motion shows the
 connected state immediately. The hero never intercepts scrolling. The original closing section retains its
@@ -28,7 +29,9 @@ and calls. Panels use a gray-50 background at 50% opacity and no outer border.
 with local sample data; never shrink a whole desktop window into a card.
 `HomepageWorkflows` reuses the email share form and channel result, document task
 mentions, agent tool groups, linked customer cells, and call transcript controls.
-The document sequence selects a checklist item and uses the native Tasks action
+The email sequence shares a thread into chat, pauses for 3.2 seconds to read it,
+then layers the native reply composer over the conversation. All composer controls
+remain inside the inert preview. The document sequence selects a checklist item and uses the native Tasks action
 to convert it into a linked task. These are inert demonstrations, not live writes;
 product links beneath each description open the full interactive demos.
 Each workflow loops through a short interaction sequence, then holds its result

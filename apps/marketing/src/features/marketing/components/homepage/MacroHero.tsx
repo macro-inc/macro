@@ -80,6 +80,21 @@ export function MacroHero() {
         aria-label="Your tools come together in Macro, connecting email, chat, docs, tasks, agents, and calendar."
       >
         <div class="macro-hero-aura" />
+        <svg class="macro-hero-rings" viewBox="0 0 360 300" aria-hidden="true">
+          <For each={Array.from({ length: 22 }, (_, index) => index)}>
+            {(index) => (
+              <circle
+                cx="180"
+                cy="150"
+                r={62 + index * 8}
+                fill="none"
+                stroke="currentColor"
+                stroke-width="0.6"
+                opacity={0.12 * (1 - index / 22) ** 2.6}
+              />
+            )}
+          </For>
+        </svg>
         <svg
           class="macro-hero-connections"
           viewBox="-180 -150 360 300"
@@ -93,12 +108,13 @@ export function MacroHero() {
             )}
           </For>
         </svg>
-        <For each={CONSTELLATION_TOOLS.slice(0, 8)}>
+        <For each={CONSTELLATION_TOOLS}>
           {(tool, index) => (
             <div
               class="macro-hero-tool"
               aria-hidden="true"
               style={{
+                '--size': `${tool.size}px`,
                 '--x': `${(tool.x - 50) * 3.1}px`,
                 '--y': `${(tool.y - 50) * 2.7}px`,
                 '--turn': `${index() % 2 === 0 ? -3 : 3}deg`,
