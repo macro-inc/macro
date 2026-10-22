@@ -19,6 +19,7 @@ import {
   DocumentWorkflow,
   EmailWorkflow,
   SheetWorkflow,
+  TaskWorkflow,
 } from './HomepageWorkflows';
 import lightPalette from './homepage-preview-light.css?inline';
 import './homepage-product-preview.css';
@@ -26,6 +27,7 @@ import './homepage-product-preview.css';
 export type HomepagePreviewKind =
   | 'email'
   | 'documents'
+  | 'tasks'
   | 'agents'
   | 'spreadsheet'
   | 'crm'
@@ -91,13 +93,8 @@ export default function HomepageProductPreview(props: {
                 ? '.mail-share-submit'
                 : '.mail-shared-thread';
       case 'documents':
-        return step === 1
-          ? '[data-task-selection]'
-          : step <= 3
-            ? '[data-convert-task]'
-            : step === 4
-              ? '[data-created-task]'
-              : '.macro-preview-task';
+      case 'tasks':
+        return undefined;
       case 'spreadsheet':
         return step <= 2
           ? '[aria-label^="B2:"]'
@@ -138,7 +135,10 @@ export default function HomepageProductPreview(props: {
             <EmailWorkflow phase={phase()} advance={advance} />
           </Match>
           <Match when={props.kind === 'documents'}>
-            <DocumentWorkflow phase={phase()} advance={advance} />
+            <DocumentWorkflow phase={phase()} />
+          </Match>
+          <Match when={props.kind === 'tasks'}>
+            <TaskWorkflow phase={phase()} />
           </Match>
           <Match when={props.kind === 'agents'}>
             <AgentWorkflow phase={phase()} />

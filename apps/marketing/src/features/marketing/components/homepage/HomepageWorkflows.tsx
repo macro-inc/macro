@@ -1,6 +1,9 @@
-import CheckSquare from '@phosphor/check-square.svg';
-import { Button } from '@ui';
 import { Show } from 'solid-js';
+import type { WorkspaceTask } from '../../core/dummy-workspace';
+import { createDummyWorkspace } from '../../primitives/createDummyWorkspace';
+import { PrStatusIcon } from '../DemoPrDocument';
+import { TaskNotebook } from '../workspace/frozen/TaskNotebook';
+import '../tasks/task-stories.css';
 import { meetingEmail } from '../../core/email-demo-story';
 import { homepagePeople } from '../../core/homepage-demo-people';
 import { AgentToolGroup } from '../agents/AgentTranscript';
@@ -90,80 +93,129 @@ export function EmailWorkflow(props: {
   );
 }
 
-/** Checkbox selection → MarkdownPopup's Tasks action → native task mention. */
-export function DocumentWorkflow(props: {
-  phase: number;
-  advance: (phase: number) => void;
-}) {
+/** Shared document edits use the same named carets as the document demos. */
+export function DocumentWorkflow(props: { phase: number }) {
   return (
     <>
       <div class="macro-preview-back macro-workflow-document">
         <DocumentFrame title="Website launch plan">
-          <p>Everything we need for Friday’s launch.</p>
+          <p>Everything we need for the launch.</p>
+          <p class="macro-collab-line" data-visible={props.phase >= 2}>
+            Launch: Friday, October 23.
+            <span
+              class="doc-caret doc-named-caret"
+              data-caret="julia"
+              data-name="Julia"
+            />
+          </p>
           <h2>Before we go live</h2>
-          <Show
-            when={props.phase >= 4}
-            fallback={
-              <p
-                class="macro-task-selection"
-                data-selected={props.phase >= 1}
-                data-task-selection
-              >
-                <input type="checkbox" tabIndex={-1} /> Prepare the launch
-                checklist
-              </p>
-            }
-          >
-            <p data-created-task>
-              <DocMention
-                item={{
-                  kind: 'task',
-                  label: 'Prepare the launch checklist',
-                  status: 'Not Started',
-                }}
-              />
-            </p>
-          </Show>
-          <Show when={props.phase >= 2 && props.phase < 4}>
-            <div class="macro-selection-menu">
-              <Button
-                size="sm"
-                onClick={() => props.advance(4)}
-                data-convert-task
-              >
-                <CheckSquare />
-                Tasks
-              </Button>
-            </div>
-          </Show>
-          <p>
-            Share the plan with{' '}
-            <DocMention item={{ kind: 'person', label: 'Teo' }} />.
+          <p class="macro-collab-line" data-visible={props.phase >= 4}>
+            Review the pricing page and send the customer announcement.
+            <span
+              class="doc-caret doc-named-caret"
+              data-caret="claude"
+              data-name="Claude"
+            />
           </p>
         </DocumentFrame>
       </div>
-      <Show when={props.phase >= 5}>
-        <div class="macro-preview-front macro-preview-task macro-workflow-result">
-          <DocMention
-            item={{
-              kind: 'task',
-              label: 'Prepare the launch checklist',
-              status: 'Not Started',
-            }}
-          />
-          <div class="macro-preview-task-meta">
-            <span>Not Started</span>
-            <img src={homepagePeople.jacob.photo} alt="" />
-            <span>Jacob</span>
-          </div>
-          <HomepageMention
-            kind="md"
-            label="Website launch plan"
-            description="Source document"
-            href="/documents"
-          />
-        </div>
-      </Show>
+      <div class="macro-preview-front macro-preview-message">
+        <HomepageConversation
+          messages={[
+            {
+              person: 'julia',
+              text: (
+                <>
+                  <span class="homepage-person-mention">@Claude</span> Add the
+                  launch steps we agreed on in this channel.
+                </>
+              ),
+            },
+            ...(props.phase >= 6
+              ? [
+                  {
+                    person: 'claude' as const,
+                    text: (
+                      <>
+                        Updated the{' '}
+                        <DocMention
+                          item={{
+                            kind: 'document',
+                            label: 'Website launch plan',
+                          }}
+                        />
+                        .
+                      </>
+                    ),
+                  },
+                ]
+              : []),
+          ]}
+        />
+      </div>
+    </>
+  );
+}
+
+/** The native task view follows its linked pull request from review to merge. */
+export function TaskWorkflow(props: { phase: number }) {
+  const workspace = createDummyWorkspace('tasks');
+  const task = (): WorkspaceTask => ({
+    ...workspace.data.tasks.find((item) => item.id === 'invite')!,
+    title: 'Fix the sign-in button',
+    description: 'The sign-in button does nothing on mobile.',
+    channel: 'website',
+    tags: ['Website'],
+    status:
+      props.phase >= 6
+        ? 'Completed'
+        : props.phase >= 3
+          ? 'In Review'
+          : 'In Progress',
+    steps: [],
+    comments: [],
+  });
+  const pr = () => (props.phase >= 5 ? 'merged' : 'open');
+  return (
+    <>
+      <div class="macro-preview-back macro-workflow-task">
+        <TaskNotebook
+          workspace={workspace}
+          task={task()}
+          initialPanelOpen={false}
+          hideCollectionNavigation
+          pills={
+            <Show when={props.phase >= 2}>
+              <span class="task-pr-pill" data-status={pr()}>
+                <PrStatusIcon status={pr()} class="size-3 shrink-0" />
+                <span>Fix mobile sign-in</span>
+                <span class="text-ink-muted">#491</span>
+              </span>
+            </Show>
+          }
+        />
+      </div>
+      <div class="macro-preview-front macro-preview-message">
+        <HomepageConversation
+          messages={[
+            {
+              person: 'julia',
+              text: 'The sign-in button does nothing on mobile. Can you fix it?',
+            },
+            ...(props.phase >= 2
+              ? [
+                  {
+                    person: 'cursor' as const,
+                    text:
+                      props.phase >= 5
+                        ? 'Pull request #491 merged.'
+                        : 'Opened pull request #491 for review.',
+                  },
+                ]
+              : []),
+          ]}
+        />
+      </div>
     </>
   );
 }

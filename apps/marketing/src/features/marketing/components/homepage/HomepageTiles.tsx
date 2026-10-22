@@ -51,8 +51,8 @@ export function HomepageTiles() {
     <div class="macro-feature-grid">
       <Tile
         id="email"
-        title="Email and chat"
-        description="We put email and team chat together so you can discuss a customer’s message with your team without forwarding copies around. Share the live thread in a channel and work on the reply there."
+        title="Email tightly integrated with your team chat and tasks"
+        description="Share a live email thread in a channel, work on the reply together, and create tasks from the conversation."
         links={[
           { href: '/email', label: 'Email' },
           { href: '/channels', label: 'Chat' },
@@ -61,18 +61,22 @@ export function HomepageTiles() {
       />
       <Tile
         id="documents"
-        title="Documents and tasks"
-        description="A task should carry the reason it exists. Create one from a message or document, keep the source linked, and edit the plan together as the work changes."
-        links={[
-          { href: '/documents', label: 'Docs' },
-          { href: '/tasks', label: 'Tasks' },
-        ]}
+        title="Documents your team and agents can edit together"
+        description="Write with your teammates in the same document. Ask an agent to draft a section or update the plan using the context in your workspace."
+        links={[{ href: '/documents', label: 'Docs' }]}
         preview="documents"
       />
       <Tile
+        id="tasks"
+        title="A task manager that keeps itself up to date"
+        description="Keep tasks linked to the work. A pull request moves its task into review when it opens and marks it complete when it merges."
+        links={[{ href: '/tasks', label: 'Tasks' }]}
+        preview="tasks"
+      />
+      <Tile
         id="coding-agents"
-        title="Coding agents"
-        description="We want you to use the coding agents you already pay for. Bring them into a channel, give them a task, and review the diff and pull request alongside the conversation."
+        title="Assign agents tasks. Mention them in channels just like colleagues."
+        description="Bring the agents you already use into Macro. Give them the context, let them do the work, and review their changes alongside the conversation."
         links={[
           { href: '/agents', label: 'Agents' },
           { href: '/github', label: 'GitHub' },
@@ -81,15 +85,15 @@ export function HomepageTiles() {
       />
       <Tile
         id="spreadsheet"
-        title="Sheets and databases"
-        description="Some work belongs in rows and columns. Bring in your Google Sheets and Notion databases, link records to the rest of your work, and edit them with teammates and agents."
+        title="Organize with sheets and databases"
+        description="Bring in your Google Sheets and Notion databases. Link records to emails, documents, and people, and edit them with teammates and agents."
         links={[{ href: '/demo', label: 'Explore the workspace' }]}
         preview="spreadsheet"
       />
       <Tile
         id="crm"
-        title="CRM"
-        description="Keeping a CRM current shouldn’t be a second job. Macro creates companies and contacts from email; agents can update deal stages and draft the next follow-up."
+        title="Auto-updating, hands-free CRM"
+        description="Macro creates companies and contacts from your email. Agents can update deal stages and draft follow-ups from the latest conversation."
         links={[{ href: '/crm', label: 'CRM' }]}
         preview="crm"
       />

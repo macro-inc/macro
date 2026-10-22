@@ -32,24 +32,27 @@ materials and layouts; do not replace them with a separate decorative icon syste
 The hero never intercepts scrolling. The original closing section retains its
 scroll-driven header CTA landing animation.
 
-Use product names for feature headings and describe concrete actions in the copy,
-following the live site; avoid slogans and vague benefit claims. Write the homepage
+Use concrete product capabilities for feature headings and describe actions in
+the copy, following the live site; avoid slogans and vague benefit claims. Write the homepage
 as a letter from the team, explaining each design choice once rather than
 repeating a feature summary in a second paragraph.
 
-`HomepageTiles` presents six product sections in one column on desktop and
-mobile: email and chat, documents and tasks, agents, sheets and databases, CRM,
-and calls. Only the demo art uses a gray-50 background at 50% opacity in light mode, a neutral near-black
+`HomepageTiles` presents seven product sections in one column on desktop and
+mobile: email integrated with chat and tasks, collaborative documents,
+self-updating tasks, agents, sheets and databases, CRM, and calls. Only the demo art uses a gray-50 background at 50% opacity in light mode, a neutral near-black
 background in dark mode, and no outer border.
 `HomepageProductPreview` layers readable fragments of the existing product UI
 with local sample data; never shrink a whole desktop window into a card.
-`HomepageWorkflows` reuses the email share form and channel result, document task
-mentions, agent tool groups, linked customer cells, and call transcript controls.
+`HomepageWorkflows` reuses the email share form and channel result, shared
+document editing, the native task notebook, agent tool groups, linked customer
+cells, and call transcript controls.
 The email sequence shares a thread into chat, pauses for 3.2 seconds to read it,
 then layers the native reply composer over the conversation. All composer controls
-remain inside the inert preview. The document sequence selects a checklist item and uses the native Tasks action
-to convert it into a linked task. These are inert demonstrations, not live writes;
-product links beneath each description open the full interactive demos.
+remain inside the inert preview. The document sequence shows Julia and Claude
+editing the same launch plan. The task sequence links a pull request, moves the task into review, then marks it
+complete after the pull request merges. It starts `TaskNotebook` with
+`initialPanelOpen={false}` so status and linked work stay readable. These are
+inert demonstrations, not live writes; product links beneath each description open the full interactive demos.
 Each workflow loops through a short interaction sequence, then holds its result
 for 14 seconds. The CRM retains its existing deal-movement sequence within the
 loop. Motion pauses offscreen, in hidden tabs, or through each preview's accessible

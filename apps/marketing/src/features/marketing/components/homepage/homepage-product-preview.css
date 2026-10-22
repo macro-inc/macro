@@ -233,3 +233,23 @@
   .macro-product-canvas .macro-workflow-composer .homepage-email-row input { font-size: 12px; }
   .macro-product-canvas .macro-workflow-composer .homepage-email-body p { font-size: 14px; line-height: 21px; }
 }
+
+.macro-collab-line {
+  opacity: 0;
+  transform: translateY(3px);
+  transition: opacity 700ms ease, transform 700ms ease;
+}
+.macro-collab-line[data-visible='true'] { opacity: 1; transform: none; }
+.macro-product-canvas .macro-workflow-task { height: 330px; }
+.macro-workflow-task .dummy-scroll { overflow: hidden; }
+.macro-workflow-task .pt-12 { padding-top: 24px; }
+.macro-workflow-task [aria-label='Task title'] { font-size: 22px; }
+.macro-product-documents .doc-story-body .macro-collab-line { margin-bottom: 18px; }
+.macro-product-documents .doc-named-caret { margin-left: 4px; }
+@media (max-width: 640px) {
+  .macro-product-canvas .macro-workflow-document { height: 360px; }
+  .macro-product-canvas .macro-workflow-task { height: 340px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .macro-collab-line { transition: none; }
+}

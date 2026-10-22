@@ -42,8 +42,12 @@ export function TaskNotebook(props: {
   hideCollectionNavigation?: boolean;
   /** Extra pills in the property row, e.g. linked GitHub pull requests. */
   pills?: JSX.Element;
+  /** Compact previews can start with the details panel closed. */
+  initialPanelOpen?: boolean;
 }) {
-  const [panel, setPanel] = createSignal<boolean>();
+  const [panel, setPanel] = createSignal<boolean | undefined>(
+    props.initialPanelOpen
+  );
   const save = (patch: Partial<WorkspaceTask>) =>
     props.workspace.updateTask(props.task.id, patch);
   return (

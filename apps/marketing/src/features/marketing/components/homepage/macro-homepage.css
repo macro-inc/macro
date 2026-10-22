@@ -121,3 +121,8 @@ html[data-homepage][data-theme-light='true'] { color-scheme: light; }
   box-shadow: inset 0 1px 0 light-dark(#fff, #ffffff0c), 0 1px 2px #00000014;
 }
 .macro-homepage .site-header a.site-nav-open:hover::before { background: light-dark(#fff, #fff); }
+
+.macro-feature-tile#documents .macro-tile-art { height: 510px; min-height: 510px; }
+@media (max-width: 700px) {
+  .macro-feature-tile#documents .macro-tile-art { height: 570px; min-height: 570px; }
+}

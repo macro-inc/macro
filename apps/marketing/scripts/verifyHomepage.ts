@@ -78,7 +78,7 @@ export async function verifyHomepage(directory: string): Promise<void> {
             `Homepage SSR root height is ${rootHeight}, expected viewport height ${viewport.height} (${label})`
           );
 
-        await expect(page.locator('.macro-feature-tile')).toHaveCount(6);
+        await expect(page.locator('.macro-feature-tile')).toHaveCount(7);
         await expect(page.locator('.macro-homepage')).toHaveCSS(
           'background-color',
           colorScheme === 'light' ? 'rgb(255, 255, 255)' : 'rgb(0, 0, 0)'
