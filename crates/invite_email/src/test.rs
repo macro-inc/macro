@@ -154,6 +154,8 @@ fn make_channel_invite() -> ChannelInviteMetadata {
         invited_by: MacroUserIdStr::try_from_email("sender@example.com").unwrap(),
         channel_name: "general".to_string(),
         is_direct_message: false,
+        message_id: None,
+        email_recipient: None,
         message_content: None,
         sender_profile_picture_url: None,
     }
@@ -406,4 +408,45 @@ fn deserialization_without_sender_email_uses_none() {
     }"#;
     let deserialized: InviteToMacro = serde_json::from_str(json).unwrap();
     assert!(deserialized.sender_email.is_none());
+}
+
+#[test]
+fn dm_emails_deduplicate_retries_without_suppressing_later_messages() {
+    let first = ChannelInviteMetadata {
+        is_direct_message: true,
+        message_id: Some(Uuid::new_v4()),
+        ..make_channel_invite()
+    };
+    let other_recipient = ChannelInviteMetadata {
+        email_recipient: Some(MacroUserIdStr::try_from_email("other@example.com").unwrap()),
+        ..first.clone()
+    };
+    assert_ne!(
+        first.rate_limit_key().as_bytes(),
+        other_recipient.rate_limit_key().as_bytes()
+    );
+    let next = ChannelInviteMetadata {
+        message_id: Some(Uuid::new_v4()),
+        ..first.clone()
+    };
+    assert_eq!(
+        first.rate_limit_key().as_bytes(),
+        first.clone().rate_limit_key().as_bytes()
+    );
+    assert_ne!(
+        first.rate_limit_key().as_bytes(),
+        next.rate_limit_key().as_bytes()
+    );
+    let channel = ChannelInviteMetadata {
+        is_direct_message: false,
+        ..first
+    };
+    let next_channel = ChannelInviteMetadata {
+        is_direct_message: false,
+        ..next
+    };
+    assert_eq!(
+        channel.rate_limit_key().as_bytes(),
+        next_channel.rate_limit_key().as_bytes()
+    );
 }

@@ -34,6 +34,8 @@ invites, and the colleague-joined email.
 
 ## Recipes
 
+- DM message emails include a stable message ID in the rate-limit key, so retries are suppressed without dropping subsequent messages. Ordinary channel invitations retain their sender/channel limit.
+
 - Add a new invite email: new metadata type in `src/<name>.rs` deriving
   `Template` → `templates/<name>.html` → `pub use` it from `src/lib.rs`.
 - Change an email's markup: `templates/<name>.html` → preview with

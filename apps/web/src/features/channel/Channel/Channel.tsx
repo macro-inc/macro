@@ -129,6 +129,7 @@ import {
   createTargetMessageController,
   type TargetMessageController,
 } from './create-target-message-controller';
+import { DirectMessageEmptyState } from './DirectMessageEmptyState';
 import { buildChannelMessageListMeta } from './message-list-meta';
 import { ScrollToBottomOverlay } from './ScrollToBottomOverlay';
 import {
@@ -753,7 +754,20 @@ export function Channel(props: ChannelProps) {
                         direction="desc"
                       />
                     </Show>
-                    <Show when={messageIndex.entryKeys.length > 0}>
+                    <Show
+                      when={messageIndex.entryKeys.length > 0}
+                      fallback={
+                        <Show
+                          when={
+                            messagesQuery.isSuccess &&
+                            channelType() === ChannelTypeEnum.DirectMessage &&
+                            !channel()?.agent_dm
+                          }
+                        >
+                          <DirectMessageEmptyState />
+                        </Show>
+                      }
+                    >
                       <div
                         class="relative flex-1 min-h-0"
                         ref={setThreadListContainerEl}

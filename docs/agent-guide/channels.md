@@ -9,6 +9,16 @@ the message text, including link labels and mention names, once per preview.
 Verify wide and narrow rows and channel/thread cards; links and mentions remain
 interactive inside the opened conversation.
 
+## Empty direct messages
+
+An empty human DM shows the centered conversations illustration and “Say hello”
+above the composer. The copy explains that recipients without a Macro account
+receive the message by email. Opening the DM sends nothing. Sending a human
+message queues an immediate email for nonusers, including follow-up messages,
+replies, and mentions; registered users retain their notification preferences.
+Check narrow and wide panes: the composer stays usable, and the empty state
+vanishes when the first timeline entry appears. Agent DMs keep their own UI.
+
 ## Create a channel
 
 1. `Create` → `Channel G`. Dialog `Create a channel` opens on step 1 of 3 with the `Name` textbox focused.

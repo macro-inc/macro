@@ -51,6 +51,7 @@ fn to_common_metadata(metadata: ChannelMetadata) -> CommonChannelMetadata {
 }
 
 struct InviteNotificationDelivery {
+    message_id: Option<Uuid>,
     channel_id: Uuid,
     invited_by_user_id: MacroUserIdStr<'static>,
     registered_recipient_ids: HashSet<MacroUserIdStr<'static>>,
@@ -65,6 +66,7 @@ async fn send_invite_notifications(
     delivery: InviteNotificationDelivery,
 ) -> anyhow::Result<()> {
     let InviteNotificationDelivery {
+        message_id,
         channel_id,
         invited_by_user_id,
         registered_recipient_ids,
@@ -74,6 +76,8 @@ async fn send_invite_notifications(
         common,
     } = delivery;
     let notification = ChannelInviteMetadata {
+        message_id,
+        email_recipient: None,
         invited_by: invited_by_user_id.clone(),
         channel_name: common.channel_name,
         is_direct_message: matches!(
@@ -97,18 +101,34 @@ async fn send_invite_notifications(
             .with_apns()
             .with_conn_gateway(),
         ),
-        ingress.send_notification(
-            SendNotificationRequestBuilder {
-                notification_entity: model_entity::EntityType::Channel
-                    .with_entity_string(channel_id.to_string()),
-                secondary_notification_entity: None,
-                notification,
-                sender_id: Some(invited_by_user_id.clone()),
-                recipient_ids: unregistered_recipient_ids,
+        async {
+            let mut result = Ok(());
+            for recipient in unregistered_recipient_ids {
+                let mut email_notification = notification.clone();
+                if email_notification.is_direct_message && message_id.is_some() {
+                    email_notification.email_recipient = Some(recipient.clone());
+                }
+                if let Err(error) = ingress
+                    .send_notification(
+                        SendNotificationRequestBuilder {
+                            notification_entity: model_entity::EntityType::Channel
+                                .with_entity_string(channel_id.to_string()),
+                            secondary_notification_entity: None,
+                            notification: email_notification,
+                            sender_id: Some(invited_by_user_id.clone()),
+                            recipient_ids: HashSet::from([recipient]),
+                        }
+                        .into_request()
+                        .with_email(),
+                    )
+                    .await
+                {
+                    tracing::error!(error=?error, %channel_id, "unable to queue recipient invite email");
+                    result = Err(error);
+                }
             }
-            .into_request()
-            .with_email(),
-        )
+            result
+        }
     )
     .map_err(|e| anyhow::anyhow!("{e:?}"))?;
 
@@ -336,6 +356,7 @@ where
                     .map_err(|e| anyhow::anyhow!("{e:?}"))?;
             }
             ChannelNotificationEffect::Invite {
+                message_id,
                 channel_id,
                 invited_by_user_id,
                 registered_recipient_ids,
@@ -347,6 +368,7 @@ where
                 send_invite_notifications(
                     &*self.ingress,
                     InviteNotificationDelivery {
+                        message_id,
                         channel_id,
                         invited_by_user_id,
                         registered_recipient_ids,

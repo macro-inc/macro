@@ -52,6 +52,8 @@ DMs, and the shared message store other domains discuss things on.
 
 ## Gotchas
 
+- Human DM messages to nonusers use immediate email, including mentions and replies; empty DM creation, bot messages, and silent/mentions-only policies do not trigger this path. Keep registered recipients on their normal notification routes.
+
 - DM invitation emails must stay distinguishable from channel invites (#7964) —
   don't collapse the two email templates.
 - Legacy document/CRM/channel message paths were removed (#6732); don't
