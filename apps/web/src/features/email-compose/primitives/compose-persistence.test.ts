@@ -1136,11 +1136,7 @@ it.each(['standalone', 'reply'] as const)(
         code: 'DRAFT_ALREADY_SENT',
       });
       await vi.advanceTimersByTimeAsync(1000);
-      expect(context.notices.feedback.alert).toHaveBeenCalledExactlyOnceWith(
-        surface === 'standalone'
-          ? 'This email was already sent'
-          : 'This reply was already sent'
-      );
+      expect(context.notices.feedback.alert).not.toHaveBeenCalled();
       expect(context.notices.feedback.failure).not.toHaveBeenCalled();
       expect(context.drafts.saveDraft).toHaveBeenCalledOnce();
       expect(context.delivery.sendMessage).not.toHaveBeenCalled();

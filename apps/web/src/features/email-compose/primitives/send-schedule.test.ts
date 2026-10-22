@@ -173,9 +173,7 @@ describe('send and schedule ordering', () => {
         expect(context.notices.feedback.success).not.toHaveBeenCalledWith(
           'Scheduled email sent'
         );
-        expect(context.notices.feedback.alert).toHaveBeenCalledWith(
-          'This email was already sent'
-        );
+        expect(context.notices.feedback.alert).not.toHaveBeenCalled();
         pending.resolve({
           draftId: 'draft',
           threadId: 'thread',

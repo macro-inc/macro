@@ -223,9 +223,7 @@ describe('draft session: reply composer', () => {
       await state.sendEmail();
       await vi.advanceTimersByTimeAsync(0);
       expect(context.delivery.sendMessage).not.toHaveBeenCalled();
-      expect(context.notices.feedback.alert).toHaveBeenCalledWith(
-        'This reply was already sent'
-      );
+      expect(context.notices.feedback.alert).not.toHaveBeenCalled();
       expect(state.savedDraftId()).toBeUndefined();
       // A fresh draft afterwards saves under new handles, not the sent id.
       state.edit('A new reply');
