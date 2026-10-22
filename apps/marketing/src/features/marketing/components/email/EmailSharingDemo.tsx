@@ -27,7 +27,7 @@ const shareMessage = 'Here’s the email for Thursday.';
 // The Share form's markup/classes come from TopBar/ShareButton.tsx and
 // ForwardToChannel.tsx. The animation changes fixture state only; it never
 // invokes share permissions, sends messages, or mounts a live app context.
-function ShareForm(props: {
+export function ShareForm(props: {
   phase: number;
   query: string;
   message: string;
@@ -127,7 +127,7 @@ function ShareForm(props: {
   );
 }
 
-function ChannelResult(props: {
+export function ChannelResult(props: {
   shared: boolean;
   updated: boolean;
   onOpen: () => void;

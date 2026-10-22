@@ -6,6 +6,7 @@
 .macro-preview-message { padding: 14px; }
 .macro-product-canvas .homepage-conversation { gap: 0; margin: 0; font-size: 15px; line-height: 1.55; }
 .macro-product-canvas .homepage-message { max-width: 100%; grid-template-columns: 26px minmax(0, 1fr); gap: 6px; }
+.macro-product-canvas .homepage-message[data-side=self] { grid-template-columns: minmax(0, 1fr) 26px; }
 .macro-product-canvas .homepage-message-name { padding-inline: 10px; }
 .macro-product-canvas .homepage-message-person [data-slot=avatar] { width: 26px; height: 26px; }
 .macro-product-canvas .homepage-message [data-user-message-bubble] { border: 1px solid var(--color-edge-muted); border-radius: 16px; background: #fafafa; box-shadow: none; padding: 8px 10px; }
@@ -37,7 +38,7 @@
 .macro-preview-task > .homepage-mention { color: var(--color-ink-muted); font-size: 14px; }
 /* The agent reply and its native session result form two independent layers. */
 .macro-product-agents .homepage-agent-story { padding: 24px 10px 0; border: 0; background: transparent; }
-.macro-product-agents .homepage-message:first-child { display: none; }
+.macro-product-agents .homepage-agent-story .homepage-message:first-child { display: none; }
 .macro-product-agents .homepage-message { width: 100%; transform: rotate(-2deg); }
 .macro-product-agents .homepage-message-body { width: 100%; }
 .macro-product-agents .homepage-message [data-user-message-bubble] { padding: 16px; background: #fff; box-shadow: 0 12px 24px -12px #20202b28; }
@@ -95,62 +96,76 @@
   .macro-call-transcript [role=listitem]:nth-child(n+2) { display: none; }
 }
 
-.macro-product-agents [data-user-message-bubble] { --preview-source-bg: #fff; }
-.macro-product-crm .homepage-crm-card-surface { --preview-source-bg: var(--color-surface); }
-.macro-product-calls .call-poster-avatar { border-radius: 50%; }
 
-/* A short source → result sequence, followed by a still reading state.
-   Individual translate preserves each surface's existing composition/rotation. */
-.macro-product-preview { --preview-motion-state: running; }
-.macro-product-preview[data-page-visible=false] { --preview-motion-state: paused; }
-.macro-product-preview[data-visible=true] .macro-preview-front,
-.macro-product-preview[data-visible=true] .macro-product-agents .homepage-message-reply {
-  animation: macro-preview-result 4.4s cubic-bezier(.22, 1, .36, 1) both;
-  animation-play-state: var(--preview-motion-state);
-}
-.macro-product-preview[data-visible=true] .macro-product-email .homepage-email-subject input,
-.macro-product-preview[data-visible=true] .macro-product-documents .mds-title,
-.macro-product-preview[data-visible=true] .macro-product-agents .homepage-message-body [data-user-message-bubble],
-.macro-product-preview[data-visible=true] .macro-product-spreadsheet .homepage-sheet-cell[aria-label^="B2:"],
-.macro-product-preview[data-visible=true] .macro-product-crm [data-crm-company="northwind"] .homepage-crm-card-surface {
-  animation: macro-preview-source 4.4s ease both;
-  animation-play-state: var(--preview-motion-state);
-}
-.macro-product-preview[data-visible=true] .macro-product-agents .demo-cursor-status,
-.macro-product-preview[data-visible=true] .macro-preview-task-meta > span:first-child,
-.macro-product-preview[data-visible=true] .macro-product-email .macro-preview-front .homepage-mention,
-.macro-product-preview[data-visible=true] .macro-preview-company [data-layer] > div {
-  animation: macro-preview-linked 4.4s ease both;
-  animation-play-state: var(--preview-motion-state);
-}
-.macro-product-preview[data-visible=true] .macro-product-calls .call-poster-tile:first-child .call-poster-avatar {
-  animation: macro-preview-speaker 4.4s ease both;
-  animation-play-state: var(--preview-motion-state);
-}
-.macro-product-preview[data-visible=true] .macro-call-transcript .call-transcript-text {
-  animation: macro-preview-transcript 4.4s ease both;
-  animation-play-state: var(--preview-motion-state);
-}
-@keyframes macro-preview-result {
-  0%, 12% { translate: 0 10px; }
-  34%, 100% { translate: 0 0; }
-}
-@keyframes macro-preview-source {
-  0%, 4%, 38%, 100% { background-color: var(--preview-source-bg, transparent); }
-  12%, 24% { background-color: rgb(40 113 187 / .09); }
-}
-@keyframes macro-preview-linked {
-  0%, 24%, 66%, 100% { box-shadow: 0 0 0 0 transparent; }
-  34%, 46% { box-shadow: 0 0 0 3px rgb(40 113 187 / .1); }
-}
-@keyframes macro-preview-speaker {
-  0%, 4%, 38%, 100% { outline: 2px solid transparent; outline-offset: 3px; }
-  12%, 24% { outline: 2px solid rgb(40 113 187 / .6); outline-offset: 3px; }
-}
-@keyframes macro-preview-transcript {
-  0%, 20%, 70%, 100% { background-color: transparent; }
-  38%, 52% { background-color: rgb(40 113 187 / .07); }
+/* Native workflow states sit in a spacious, single-column composition. */
+.macro-product-preview { inset: 30px 30px 28px; }
+.macro-preview-back { width: 78%; height: 300px; }
+.macro-preview-front { width: 67%; bottom: 0; }
+.macro-product-canvas .macro-workflow-document { height: 335px; }
+.macro-product-canvas .macro-workflow-document .doc-story-page { padding: 18px 0; }
+.macro-product-canvas .macro-workflow-document .doc-story-title { font-size: 22px; line-height: 1.3; }
+.macro-product-canvas .macro-workflow-document .doc-story-body { font-size: 15px; line-height: 1.6; }
+.macro-product-canvas .macro-workflow-document .doc-story-body h2 { font-size: 17px; margin: 18px 0 10px; }
+.macro-task-selection { display: flex; align-items: center; gap: 8px; border-radius: 3px; }
+.macro-task-selection[data-selected=true] { background: #d8e8fa; }
+.macro-selection-menu { position: absolute; top: 125px; right: 20px; padding: 4px; background: #fff; border: 1px solid #e3e3e7; border-radius: 8px; box-shadow: 0 5px 14px #00000014; }
+.macro-workflow-modal { position: absolute; inset: 0; z-index: 4; display: flex; justify-content: center; align-items: center; }
+.macro-workflow-modal .mail-share-scrim { position: relative; inset: auto; padding: 0; background: none; width: min(440px, 94%); }
+.macro-workflow-modal .mail-share-form { width: 100%; background: #fff; box-shadow: 0 20px 60px #20202b25; border-color: #e3e3e7; }
+.macro-workflow-email .mail-thread { height: 100%; background: #fff; }
+.macro-workflow-email .mail-thread-body { padding: 14px 22px; color: #242428; font-size: 15px; }
+.macro-workflow-email .mail-thread-body > h3 { display: none; }
+.macro-workflow-channel .mail-channel { min-height: 0; height: auto; padding-bottom: 0; background: #fff; }
+.macro-workflow-channel .mail-channel-messages { padding: 14px; }
+.macro-workflow-channel .mail-channel-composer { display: none; }
+.macro-workflow-channel .homepage-conversation { gap: 14px; }
+.macro-workflow-channel .homepage-message { width: 100%; }
+.macro-workflow-channel .homepage-message[data-side=self] [data-user-message-bubble] { background: #f3f5f8; }
+.macro-workflow-pointer { position: absolute; top: 0; left: 0; z-index: 8; transition: transform 650ms cubic-bezier(.22,1,.36,1); }
+.macro-workflow-toggle { position: absolute; bottom: -20px; right: -12px; width: 32px; height: 32px; display: grid; place-items: center; border: 0; border-radius: 50%; background: transparent; color: #85858b; pointer-events: auto; }
+.macro-workflow-toggle:hover { background: #eeeeef; color: #242428; }
+.macro-workflow-toggle:focus-visible { outline: 2px solid #2871bb; outline-offset: 2px; }
+.macro-workflow-toggle svg { width: 14px; height: 14px; }
+.macro-product-canvas .macro-workflow-agent { padding: 22px; height: 320px; }
+.macro-workflow-agent [data-tool-group] { margin-top: 14px; }
+.macro-workflow-agent-result { position: absolute; width: 78%; right: 0; bottom: 0; }
+.macro-workflow-agent-result .homepage-agent-story { padding: 0; }
+.macro-workflow-agent-result .homepage-message-name,
+.macro-workflow-agent-result .homepage-message-person,
+.macro-workflow-agent-result .homepage-message-body { display: none; }
+.macro-workflow-agent-result .homepage-message { display: block; }
+.macro-workflow-agent-result .homepage-message-reply { margin: 0; transform: rotate(3deg); }
+.macro-product-spreadsheet .macro-preview-back { height: 300px; }
+.macro-preview-company { width: 58%; }
+.macro-company-detail { display: grid; gap: 12px; padding: 12px 17px; font-size: 15px; border-top: 1px solid #ebebee; }
+.macro-company-detail > span:nth-child(odd) { color: #75757d; font-size: 12px; }
+.macro-product-crm .macro-preview-back { width: 100%; height: 315px; }
+.macro-product-calls .macro-preview-back { height: 270px; width: 78%; }
+.macro-workflow-recording .call-player { height: 235px; width: 100%; }
+.macro-workflow-recording .call-poster { background: #f0f0f2; }
+.macro-workflow-recording .call-poster-tile { background: #e9e9ed; }
+.macro-workflow-recording .call-poster-name { color: #fff; }
+.macro-product-calls .macro-preview-front { width: 70%; }
+.macro-call-transcript .call-transcript-row[data-selected] { background: #edf4fb; }
+@media (max-width: 700px) {
+  .macro-product-preview { inset: 24px 14px 28px; }
+  .macro-preview-back { width: 95%; height: 285px; transform: rotate(-2deg); }
+  .macro-preview-front { width: 94%; }
+  .macro-product-canvas .macro-workflow-document { height: 340px; }
+  .macro-workflow-document .dummy-scroll { padding-inline: 14px; }
+  .macro-workflow-modal .mail-share-scrim { width: 100%; }
+  .macro-workflow-channel .homepage-conversation { font-size: 14px; }
+  .macro-workflow-email .mail-thread-body { padding: 12px; }
+  .macro-workflow-agent-result { width: 96%; }
+  .macro-product-calls .macro-preview-back { width: 94%; }
+  .macro-product-calls .macro-preview-front { width: 96%; }
+  .macro-call-transcript [role=listitem]:nth-child(n+2) { display: block; }
+  .macro-call-transcript .call-transcript-text { font-size: 14px; line-height: 20px; }
+  .macro-workflow-toggle { width: 44px; height: 44px; bottom: -28px; right: -7px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .macro-product-preview[data-visible=true] * { animation: none !important; }
+  .macro-workflow-pointer { display: none; transition: none; }
+  .macro-product-canvas *, .macro-product-canvas *::before, .macro-product-canvas *::after { animation: none !important; transition: none !important; }
 }
+
+.macro-workflow-channel { overflow: hidden; }

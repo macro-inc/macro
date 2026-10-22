@@ -18,24 +18,22 @@ in hidden tabs, or through the accessible pause button. Reduced motion shows the
 connected state immediately. The hero never intercepts scrolling. The original closing section retains its
 scroll-driven header CTA landing animation.
 
-`HomepageTiles` presents six product feature panels in two columns: email and
-chat, documents and tasks, agents, sheets and databases, CRM, and calls. Desktop
-panels are square, with a gray-50 background at 50% opacity and no outer border; narrower layouts allow extra height for readable copy. Phones
-stack them in one column. `HomepageProductPreview` reuses the existing email
-composer, collaborative document, agent conversation, spreadsheet, CRM pipeline,
-and call transcript with local sample data. Keep each crop focused on its useful
-detail at readable UI size: reply and document links, task mentions, completed
-agent session, linked customer cells, deal cards, and transcript lines. Do not
-shrink whole desktop windows to fit the cards. The email, document, and call transcript
-show settled content immediately. Compose overlapping fragments of the actual UI instead of enclosing a full screenshot in a box. These layered previews are inert; product
-links beneath each description open the full interactive demos. Keep the UI
-faithful to those shared components rather than drawing separate mock interfaces.
-Each preview’s added layer motion plays a restrained, 4.4-second source-to-result
-sequence on entering the viewport, then holds still. The CRM board also retains
-its existing finite deal-movement demonstration. Highlight the relevant native link, cell, or
-speaker before bringing its related foreground surface forward; keep all text
-visible at its full size. Motion pauses in hidden tabs, resets offscreen, and is
-disabled for reduced motion.
+`HomepageTiles` presents six product feature panels in one column on desktop and
+mobile: email and chat, documents and tasks, agents, sheets and databases, CRM,
+and calls. Panels use a gray-50 background at 50% opacity and no outer border.
+`HomepageProductPreview` layers readable fragments of the existing product UI
+with local sample data; never shrink a whole desktop window into a card.
+`HomepageWorkflows` reuses the email share form and channel result, document task
+mentions, agent tool groups, linked customer cells, and call transcript controls.
+The document sequence selects a checklist item and uses the native Tasks action
+to convert it into a linked task. These are inert demonstrations, not live writes;
+product links beneath each description open the full interactive demos.
+Each workflow loops through a short interaction sequence, then holds its result
+for 14 seconds. The CRM retains its existing deal-movement sequence within the
+loop. Motion pauses offscreen, in hidden tabs, or through each preview's accessible
+pause control. Reduced motion shows the completed result immediately. Keep text
+at a stable readable size throughout; demonstrate actions and their results rather
+than moving decorative cards.
 The previews load near the viewport through `DeferredDemo`; frozen app styles
 and neutral light tokens are scoped to their canvases, independent of the system theme. The homepage does not apply the cream palette. The original testimonial, blog
 carousel, closing CTA, and security section follow the grid. The shared navigation

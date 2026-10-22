@@ -170,7 +170,7 @@ export async function verifyHomepage(directory: string): Promise<void> {
           'paused'
         );
         // The layered previews stay light and readable in either OS theme.
-        const previewBody = page.locator('#email .homepage-email-body');
+        const previewBody = page.locator('#email .mail-thread-body').first();
         await expect(previewBody).toHaveText(/\S+/);
         await expect(previewBody).toHaveCSS('color', 'rgb(36, 36, 40)');
         await page.emulateMedia({
@@ -185,7 +185,7 @@ export async function verifyHomepage(directory: string): Promise<void> {
               getComputedStyle(grid).gridTemplateColumns.split(' ').length,
             overflow: document.documentElement.scrollWidth > window.innerWidth,
           }));
-        expect(dimensions.columns).toBe(viewport.width < 701 ? 1 : 2);
+        expect(dimensions.columns).toBe(1);
         expect(dimensions.overflow).toBe(false);
         await page
           .locator('#email')

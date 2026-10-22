@@ -73,9 +73,9 @@
 @keyframes macro-mark { 0%, 13%, 44%, 75%, 100% { transform: scale(1); } 29%, 34%, 86% { transform: scale(1.17); } }
 @keyframes macro-aura { 0%, 12%, 100% { transform: scale(1.06); opacity: .75; } 29%, 34%, 86% { transform: scale(.6); opacity: .9; } 46%, 75% { transform: scale(1.18); opacity: .45; } }
 @keyframes macro-connect { 0%, 34%, 83%, 100% { opacity: 0; stroke-dasharray: 3 5; stroke-dashoffset: 20; } 48%, 73% { opacity: .5; stroke-dasharray: 3 5; stroke-dashoffset: 0; } }
-.macro-feature-grid { width: min(1120px, calc(100% - 64px)); margin: 0 auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; }
-.macro-feature-tile { min-width: 0; aspect-ratio: 1; display: flex; flex-direction: column; background: rgb(249 250 251 / .5); border-radius: 16px; border: 0; overflow: hidden; }
-.macro-tile-art { height: 55%; min-height: 290px; flex: 1; position: relative; isolation: isolate; }
+.macro-feature-grid { width: min(800px, calc(100% - 64px)); margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; }
+.macro-feature-tile { min-width: 0; aspect-ratio: auto; display: flex; flex-direction: column; background: rgb(249 250 251 / .5); border-radius: 16px; border: 0; overflow: hidden; }
+.macro-tile-art { height: 450px; min-height: 450px; flex: none; position: relative; isolation: isolate; }
 .macro-tile-copy { padding: 8px 40px 36px; text-align: center; }
 .macro-tile-copy h2 { max-width: 410px; margin: 0 auto 15px; font-family: 'Roboto Slab Variable', serif; font-size: clamp(25px, 2.5vw, 31px); font-weight: 400; line-height: 1.2; letter-spacing: -.04em; text-wrap: balance; }
 .macro-tile-copy p { margin: 0 auto; max-width: 410px; font-size: 16px; line-height: 1.45; color: #6e6e73; letter-spacing: -.016em; }
@@ -98,7 +98,7 @@
 .macro-home-footer > span { font-size: 11px; color: #86868b; }
 @media (max-width: 1000px) and (min-width: 701px) {
   .macro-feature-tile { aspect-ratio: auto; min-height: 510px; }
-  .macro-tile-art { min-height: 270px; }
+  .macro-tile-art { min-height: 450px; }
   .macro-tile-copy { padding: 5px 27px 28px; }
 }
 @media (max-width: 700px) {
@@ -111,7 +111,7 @@
   .macro-home-description { font-size: 16px; margin-top: 20px; }
   .macro-feature-grid { width: calc(100% - 32px); grid-template-columns: 1fr; gap: 22px; max-width: 540px; }
   .macro-feature-tile { aspect-ratio: auto; min-height: 500px; border-radius: 16px; }
-  .macro-tile-art { min-height: 285px; }
+  .macro-tile-art { height: 470px; min-height: 470px; }
   .macro-tile-copy { padding: 4px 26px 27px; }
   .macro-tile-copy h2 { font-size: 29px; }
   .macro-tile-copy p { font-size: 15px; }
