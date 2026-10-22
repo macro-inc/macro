@@ -42,7 +42,11 @@ mobile: email integrated with chat and tasks, collaborative documents,
 self-updating tasks, agents, sheets and databases, CRM, and calls. Only the demo art uses a gray-50 background at 50% opacity in light mode, a neutral near-black
 background in dark mode, and no outer border.
 `HomepageProductPreview` layers readable fragments of the existing product UI
-with local sample data; never shrink a whole desktop window into a card.
+with local sample data; never shrink a whole desktop window into a card. Dark
+preview panels retain the live site's glass highlight, shaded lower edge, and
+masked diagonal rim; chat bubbles retain the native 24px rounding, padding, and
+sent/received surface hierarchy. Keep the composer send button concentric with
+its shell: 26.25px shell radius, 16.875px button radius, and 9.375px edge inset.
 `HomepageWorkflows` reuses the email share form and channel result, shared
 document editing, the native task notebook, agent tool groups, linked customer
 cells, and call transcript controls.
