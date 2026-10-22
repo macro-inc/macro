@@ -145,30 +145,26 @@ export async function verifyHomepage(directory: string): Promise<void> {
         await expect(
           page.getByRole('button', { name: 'Pause animation' })
         ).toBeHidden();
-        await expect(page.locator('.macro-hero-surface').first()).toHaveCSS(
-          'opacity',
-          '1'
-        );
+        await expect(
+          page.locator('.macro-hero-after:visible .feature-flow-node').first()
+        ).toHaveCSS('opacity', '1');
         await page.emulateMedia({ reducedMotion: 'no-preference' });
         const pause = page.getByRole('button', { name: 'Pause animation' });
         await pause.click();
         await expect(
           page.getByRole('button', { name: 'Play animation' })
         ).toHaveAttribute('aria-pressed', 'true');
-        await expect(page.locator('.macro-hero-mark')).toHaveCSS(
-          'animation-play-state',
-          'paused'
-        );
+        await expect(
+          page.locator('.macro-hero-before .ob-orbit-tile').first()
+        ).toHaveCSS('animation-play-state', 'paused');
         await page.getByRole('button', { name: 'Play animation' }).click();
-        await expect(page.locator('.macro-hero-mark')).toHaveCSS(
-          'animation-play-state',
-          'running'
-        );
+        await expect(
+          page.locator('.macro-hero-before .ob-orbit-tile').first()
+        ).toHaveCSS('animation-play-state', 'running');
         await page.locator('#email').scrollIntoViewIfNeeded();
-        await expect(page.locator('.macro-hero-mark')).toHaveCSS(
-          'animation-play-state',
-          'paused'
-        );
+        await expect(
+          page.locator('.macro-hero-before .ob-orbit-tile').first()
+        ).toHaveCSS('animation-play-state', 'paused');
         // Native previews follow live system theme changes without remounting.
         const previewBody = page.locator('#email .mail-thread-body').first();
         await expect(previewBody).toHaveText(/\S+/);

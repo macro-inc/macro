@@ -1,61 +1,40 @@
-import Logo from '@icon/macro-logo.svg';
-import Calendar from '@phosphor/calendar-blank.svg';
-import Chat from '@phosphor/chats-circle.svg';
-import Mail from '@phosphor/envelope.svg';
-import Doc from '@phosphor/file-text.svg';
-import Task from '@phosphor/list-checks.svg';
 import Pause from '@phosphor/pause.svg';
 import Play from '@phosphor/play.svg';
-import Sparkle from '@phosphor/sparkle.svg';
-import { createSignal, For, onCleanup, onMount, Show } from 'solid-js';
-import { CONSTELLATION_TOOLS } from '../../../setup/components/WelcomeSteps';
+import { createSignal, onCleanup, onMount, Show } from 'solid-js';
+import { FeatureConstellation } from '../../../setup/components/FeatureOverview';
+import { ContextScene } from '../../../setup/components/WelcomeSteps';
+import './macro-hero.css';
 
-const surfaces = [
-  {
-    icon: Mail,
-    label: 'Email',
-    x: -126,
-    y: -36,
-  },
-  {
-    icon: Chat,
-    label: 'Chat',
-    x: -72,
-    y: -109,
-  },
-  {
-    icon: Doc,
-    label: 'Docs',
-    x: 66,
-    y: -110,
-  },
-  {
-    icon: Task,
-    label: 'Tasks',
-    x: 129,
-    y: -27,
-  },
-  {
-    icon: Sparkle,
-    label: 'Agents',
-    x: 76,
-    y: 99,
-  },
-  {
-    icon: Calendar,
-    label: 'Calendar',
-    x: -71,
-    y: 99,
-  },
-];
-
-/** One visual sentence: scattered tools gather, then unfold as connected work. */
+/** The original homepage graphics share one stage and a slow gather/unfold loop. */
 export function MacroHero() {
   let scene!: HTMLDivElement;
   const [paused, setPaused] = createSignal(false);
   const [visible, setVisible] = createSignal(false);
   const [documentVisible, setDocumentVisible] = createSignal(true);
   onMount(() => {
+    // Layout coordinates stay stable while the compositor moves the tiles.
+    const measure = () => {
+      for (const stage of scene.querySelectorAll<HTMLElement>(
+        '[data-context-scene], .feature-flow'
+      )) {
+        const context = stage.hasAttribute('data-context-scene');
+        const centerY = stage.clientHeight * (context ? 0.5 : 0.49);
+        for (const node of stage.querySelectorAll<HTMLElement>(
+          '.ob-orbit-tile, .feature-flow-node'
+        )) {
+          node.style.setProperty(
+            '--gather-x',
+            `${stage.clientWidth / 2 - node.offsetLeft}px`
+          );
+          node.style.setProperty('--gather-y', `${centerY - node.offsetTop}px`);
+        }
+      }
+    };
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    reducedMotion.addEventListener('change', measure);
+    const resize = new ResizeObserver(measure);
+    resize.observe(scene);
+    measure();
     const observer = new IntersectionObserver(([entry]) =>
       setVisible(entry.isIntersecting)
     );
@@ -64,6 +43,8 @@ export function MacroHero() {
     visibility();
     document.addEventListener('visibilitychange', visibility);
     onCleanup(() => {
+      reducedMotion.removeEventListener('change', measure);
+      resize.disconnect();
       observer.disconnect();
       document.removeEventListener('visibilitychange', visibility);
     });
@@ -77,72 +58,16 @@ export function MacroHero() {
       <div
         class="macro-hero-scene"
         role="img"
-        aria-label="Your tools come together in Macro, connecting email, chat, docs, tasks, agents, and calendar."
+        aria-label="Your existing tools come together in Macro, then unfold into connected email, chat, documents, tasks, CRM, calls, sheets, and agents."
       >
-        <div class="macro-hero-aura" />
-        <svg class="macro-hero-rings" viewBox="0 0 360 300" aria-hidden="true">
-          <For each={Array.from({ length: 22 }, (_, index) => index)}>
-            {(index) => (
-              <circle
-                cx="180"
-                cy="150"
-                r={62 + index * 8}
-                fill="none"
-                stroke="currentColor"
-                stroke-width="0.6"
-                opacity={0.12 * (1 - index / 22) ** 2.6}
-              />
-            )}
-          </For>
-        </svg>
-        <svg
-          class="macro-hero-connections"
-          viewBox="-180 -150 360 300"
-          aria-hidden="true"
-        >
-          <For each={surfaces}>
-            {(surface) => (
-              <path
-                d={`M 0 0 L ${surface.x * 0.5} 0 L ${surface.x} ${surface.y}`}
-              />
-            )}
-          </For>
-        </svg>
-        <For each={CONSTELLATION_TOOLS}>
-          {(tool, index) => (
-            <div
-              class="macro-hero-tool"
-              aria-hidden="true"
-              style={{
-                '--size': `${tool.size}px`,
-                '--x': `${(tool.x - 50) * 3.1}px`,
-                '--y': `${(tool.y - 50) * 2.7}px`,
-                '--turn': `${index() % 2 === 0 ? -3 : 3}deg`,
-              }}
-            >
-              <tool.icon />
-            </div>
-          )}
-        </For>
-        <For each={surfaces}>
-          {(surface) => (
-            <div
-              class="macro-hero-surface"
-              aria-hidden="true"
-              style={{
-                '--x': `${surface.x}px`,
-                '--y': `${surface.y}px`,
-              }}
-            >
-              <div>
-                <surface.icon />
-              </div>
-              <span>{surface.label}</span>
-            </div>
-          )}
-        </For>
-        <div class="macro-hero-mark" aria-hidden="true">
-          <Logo />
+        <div class="macro-hero-before" aria-hidden="true">
+          <ContextScene />
+        </div>
+        <div class="macro-hero-after macro-hero-expanded" aria-hidden="true">
+          <FeatureConstellation expanded />
+        </div>
+        <div class="macro-hero-after macro-hero-compact" aria-hidden="true">
+          <FeatureConstellation />
         </div>
       </div>
       <button

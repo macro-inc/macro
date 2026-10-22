@@ -1,0 +1,54 @@
+/* Reuse ContextScene and FeatureConstellation, including their native glass. */
+.macro-hero-art { position: relative; width: min(780px, 100%); height: 460px; flex: none; }
+.macro-hero-scene { position: relative; width: 100%; height: 100%; }
+.macro-hero-before, .macro-hero-after { position: absolute; inset: 0; }
+.macro-hero-before { display: grid; place-items: center; }
+.macro-hero-before [data-context-scene] { --welcome-scale: 1.25; width: min(560px, 100%); max-width: none; height: 360px; }
+.macro-hero-before .ob-orbit-tile { transform: translate(-50%, -50%); animation: macro-tools-gather 24s cubic-bezier(.65, 0, .25, 1) infinite; animation-delay: 0ms !important; }
+.macro-hero-before .ob-welcome-logo, .macro-hero-before [data-context-scene] > svg,
+.macro-hero-before [data-context-scene] > div:not(.ob-orbit-tile) { animation: macro-context-fade 24s ease-in-out infinite; }
+.macro-hero-after .feature-flow { height: 460px; width: 100%; }
+.macro-hero-after .feature-flow-core { left: 50%; top: 49%; width: 120px; height: 120px; animation: macro-feature-light 24s ease-in-out infinite; }
+.macro-hero-after .feature-flow-core svg { width: 50px; height: 50px; }
+.macro-hero-after .feature-flow-icon { width: 70px; height: 70px; }
+.macro-hero-after .feature-flow-node { animation: macro-features-unfold 24s cubic-bezier(.22, 1, .36, 1) infinite; }
+.macro-hero-after .feature-flow-node > span { font-size: 13px; line-height: 1.3; top: calc(100% + 8px); }
+.macro-hero-after .feature-flow-light { animation: macro-feature-light 24s ease-in-out infinite; }
+.macro-hero-after .feature-flow-halo { width: 400px; opacity: .65; }
+.macro-hero-compact { display: none; }
+.macro-hero-art[data-paused=true] .macro-hero-scene * { animation-play-state: paused; }
+
+@keyframes macro-tools-gather {
+  0%, 15%, 100% { opacity: 1; transform: translate(-50%, -50%) translate(0, 0) scale(1); }
+  26%, 88% { opacity: 0; transform: translate(-50%, -50%) translate(var(--gather-x, 0px), var(--gather-y, 0px)) scale(.18); }
+}
+@keyframes macro-context-fade {
+  0%, 18%, 100% { opacity: 1; }
+  29%, 90% { opacity: 0; }
+}
+@keyframes macro-features-unfold {
+  0%, 24%, 98%, 100% { opacity: 0; transform: translate(-50%, -50%) translate(var(--gather-x, 0px), var(--gather-y, 0px)) scale(.18); }
+  36%, 88% { opacity: 1; transform: translate(-50%, -50%) translate(0, 0) scale(1); }
+}
+@keyframes macro-feature-light {
+  0%, 20%, 98%, 100% { opacity: 0; }
+  32%, 88% { opacity: 1; }
+}
+@media (max-width: 700px) {
+  .macro-hero-art { width: 100%; max-width: 400px; height: 360px; }
+  .macro-hero-before [data-context-scene] { --welcome-scale: 1; height: 280px; width: calc(100% - 24px); }
+  .macro-hero-expanded { display: none; }
+  .macro-hero-compact { display: block; }
+  .macro-hero-after .feature-flow { height: 330px; margin-top: 10px; }
+  .macro-hero-after .feature-flow-core { width: 78px; height: 78px; }
+  .macro-hero-after .feature-flow-core svg { width: 35px; height: 35px; }
+  .macro-hero-after .feature-flow-icon { width: 50px; height: 50px; }
+  .macro-hero-after .feature-flow-icon svg { width: 23px; height: 23px; }
+  .macro-hero-after .feature-flow-node > span { font-size: 12px; }
+  .macro-hero-after .feature-flow-halo { width: 220px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .macro-hero-before { display: none; }
+  .macro-hero-art .macro-hero-scene * { animation: none; }
+  .macro-hero-after .feature-flow-node { transform: translate(-50%, -50%); }
+}

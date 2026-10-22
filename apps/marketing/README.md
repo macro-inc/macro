@@ -18,17 +18,18 @@ feature followed
 by wider native demonstrations. Open-source information, the existing testimonial,
 and a project-sized starting point lead into the retained blog and closing sections. Dark mode reuses the live site’s black canvas, neutral native surface
 tokens, warm-white actions, and original email-composer fill and rim; do not
-introduce a separate blue-gray palette. Hero icons use rounded squircle tiles, fine highlighted rims,
-and soft cast shadows that echo the native compose surface. Graphics layer theme-matched product surfaces with fine neutral borders and restrained shadows. `components/homepage/macro-homepage.css`
+introduce a separate blue-gray palette. Hero icons retain the original circular glass surfaces and soft cast shadows. Graphics layer theme-matched product surfaces with fine neutral borders and restrained shadows. `components/homepage/macro-homepage.css`
 scopes that treatment to `.macro-homepage`; product pages, blog, sample workspace,
 and signup retain their existing system/cream/dark palettes.
 
-`MacroHero` uses a larger desktop composition with readable labels and a dedicated
-gap beneath the hero introduction, scaling down to fit phones. Fine concentric rings frame
-the full, variable-sized welcome constellation. It gathers those tools into the Macro mark, then
-unfolds it into connected native features. Its 16-second sequence pauses offscreen,
-in hidden tabs, or through the accessible pause button. Reduced motion shows the
-connected state immediately. The hero never intercepts scrolling. The original closing section retains its
+`MacroHero` reuses the live homepage's `ContextScene` and `FeatureConstellation`
+graphics. The original circular glass tools gather inward, then unfold into the
+full 15-feature composition on desktop (the compact eight-feature ring on phones).
+The 24-second loop holds the finished feature graphic for over 12 seconds and
+pauses offscreen, in hidden tabs, or through its accessible pause button. Reduced
+motion shows the completed feature graphic immediately. Keep the source graphics'
+materials and layouts; do not replace them with a separate decorative icon system.
+The hero never intercepts scrolling. The original closing section retains its
 scroll-driven header CTA landing animation.
 
 Use product names for feature headings and describe concrete actions in the copy,
