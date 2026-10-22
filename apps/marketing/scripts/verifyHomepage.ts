@@ -171,6 +171,7 @@ export async function verifyHomepage(directory: string): Promise<void> {
         );
         // A light OS theme must not leak cream text colors into dark previews.
         const previewBody = page.locator('#email .homepage-email-body');
+        await expect(previewBody).toHaveText(/\S+/);
         await expect(previewBody).toHaveCSS('color', 'rgb(255, 255, 255)');
         await page.emulateMedia({
           colorScheme: colorScheme === 'light' ? 'dark' : 'light',

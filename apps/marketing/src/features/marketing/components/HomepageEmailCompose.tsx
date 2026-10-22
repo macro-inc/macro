@@ -17,6 +17,8 @@ export default function HomepageEmailCompose(
   props: {
     appChrome?: boolean;
     readOnly?: boolean;
+    /** Show the finished sample immediately in a cropped feature preview. */
+    animate?: boolean;
     /** Optional rich body for a prefilled local draft. */
     bodyContent?: JSX.Element;
     draft?: {
@@ -114,7 +116,8 @@ export default function HomepageEmailCompose(
   }
   const generation = createEmailDemoGeneration(
     () => (props.draft ? undefined : root),
-    append
+    append,
+    props.animate !== false
   );
   const generating = () => !props.draft && generation.phase() !== 'complete';
   const send = () => {

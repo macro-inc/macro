@@ -25,7 +25,8 @@ const tokens = parts.flatMap((part): EmailDemoToken[] =>
 /** The website owns its animation; it never initializes an app editor. */
 export function createEmailDemoGeneration(
   element: () => HTMLElement | undefined,
-  append: (items: EmailDemoToken[]) => void
+  append: (items: EmailDemoToken[]) => void,
+  animate = true
 ) {
   const [phase, setPhase] = createSignal<
     'waiting' | 'loading' | 'generating' | 'complete'
@@ -65,6 +66,11 @@ export function createEmailDemoGeneration(
   onMount(() => {
     const root = element();
     if (!root) return;
+    if (!animate) {
+      append(tokens);
+      setPhase('complete');
+      return;
+    }
     const takeOver = () => {
       takenOver = true;
       stop();

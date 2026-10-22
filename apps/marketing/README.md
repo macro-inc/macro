@@ -23,7 +23,11 @@ chat, documents and tasks, agents, sheets and databases, CRM, and calls. Desktop
 panels are square; narrower layouts allow extra height for readable copy. Phones
 stack them in one column. `HomepageProductPreview` reuses the existing email
 composer, collaborative document, agent conversation, spreadsheet, CRM pipeline,
-and call demos with local sample data. These cropped previews are inert; product
+and call transcript with local sample data. Keep each crop focused on its useful
+detail at readable UI size: reply and document links, task mentions, completed
+agent session, linked customer cells, deal cards, and transcript lines. Do not
+shrink whole desktop windows to fit the cards. The email, document, and call transcript
+show settled content immediately. These cropped previews are inert; product
 links beneath each description open the full interactive demos. Keep the UI
 faithful to those shared components rather than drawing separate mock interfaces.
 The previews load near the viewport through `DeferredDemo`; frozen app styles
