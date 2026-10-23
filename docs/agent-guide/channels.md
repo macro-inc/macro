@@ -9,6 +9,20 @@ the message text, including link labels and mention names, once per preview.
 Verify wide and narrow rows and channel/thread cards; links and mentions remain
 interactive inside the opened conversation.
 
+## Message links
+
+Bare URLs, common bare domains, and email addresses are clickable in opened
+messages, including agent/API messages and older messages. Explicit Markdown
+links still use their label. Inline code, code blocks, and escaped URLs stay
+literal. Removing a link in the composer remains effective after sending and
+reopening the message for editing.
+
+Verify a bare App Store URL on desktop and mobile, a percent-encoded URL, a URL
+containing Markdown punctuation, and Remove link → send → reopen. Channel and
+Home previews remain display-only as described above. The backend-free browser
+check is in
+`apps/web/src/lib/core/component/LexicalMarkdown/component/core/browser-test/README.md`.
+
 ## Create a channel
 
 1. `Create` → `Channel G`. Dialog `Create a channel` opens on step 1 of 3 with the `Name` textbox focused.

@@ -5,7 +5,7 @@
 
 import type { CodeNode } from '@lexical/code';
 import { PrismTokenizer } from '@lexical/code';
-import type { LinkNode } from '@lexical/link';
+import { $isAutoLinkNode, type LinkNode } from '@lexical/link';
 import { $getListDepth, type ListItemNode, type ListNode } from '@lexical/list';
 import type { HeadingNode, QuoteNode } from '@lexical/rich-text';
 import type { TableCellNode, TableNode, TableRowNode } from '@lexical/table';
@@ -350,7 +350,8 @@ function eraseRenderableElement<T extends ElementNode>(
 }
 
 const Text: TypedRenderableEntity<TextNode> = {
-  guard: (node: LexicalNode): node is TextNode => node.__type === 'text',
+  guard: (node: LexicalNode): node is TextNode =>
+    node.__type === 'text' || node.__type === 'unlinked-text',
   render: (props) => {
     return (
       <span class={getTextClassName(props.node, props.theme)}>
@@ -875,16 +876,21 @@ const HorizontalRule: TypedRenderableEntity<HorizontalRuleNode> = {
 };
 
 const Link: TypedRenderableElement<LinkNode> = {
-  guard: (node: LexicalNode): node is LinkNode => node.__type === 'link',
-  render: (props) => (
-    <LinkWithPreview
-      url={props.node.__url}
-      class={props.theme.link}
-      title={props.node.__title ?? props.node.__url}
-    >
-      {props.children}
-    </LinkWithPreview>
-  ),
+  guard: (node: LexicalNode): node is LinkNode =>
+    node.__type === 'link' || node.__type === 'autolink',
+  render: (props) => {
+    if ($isAutoLinkNode(props.node) && props.node.getIsUnlinked())
+      return props.children;
+    return (
+      <LinkWithPreview
+        url={props.node.__url}
+        class={props.theme.link}
+        title={props.node.__title ?? props.node.__url}
+      >
+        {props.children}
+      </LinkWithPreview>
+    );
+  },
 };
 
 const Mark: TypedRenderableElement<MarkNode> = {

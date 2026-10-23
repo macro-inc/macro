@@ -169,21 +169,20 @@ function $matchAndCreateAutoLink(
   }
 
   const linkNode = $createAutoLinkNode(matchedLink.url);
-  linkNode.append($createTextNode(matchedLink.text));
   matchedNode.replace(linkNode);
+  linkNode.append(matchedNode);
 }
 
 function $convertAutoLinkToLinkNode(node: AutoLinkNode): LinkNode {
   const url = node.getURL();
-  const text = node.getTextContent();
   const linkNode = $createLinkNode(url);
-  linkNode.append($createTextNode(text));
+  const children = node.getChildren();
   node.replace(linkNode);
+  linkNode.append(...children);
   return linkNode;
 }
 
-// TODO (seamus): Improve this logic. This function should correctly dissolve any links that
-// are touched by the selection while maintaining all children and text formatting.
+// Dissolve touched links while preserving their labels and text formatting.
 function $unlinkSelection(): boolean {
   const selection = $getSelection();
   let unlinkSuccess = false;
@@ -205,7 +204,7 @@ function $unlinkSelection(): boolean {
   // Process all selected nodes
   nodes.forEach((node) => {
     const parent = node.getParent();
-    if (!node || !parent) return;
+    if (!parent?.isAttached()) return;
 
     if ($isAutoLinkNode(parent)) {
       parent.setIsUnlinked(true);
@@ -216,20 +215,17 @@ function $unlinkSelection(): boolean {
 
     if ($isLinkNode(parent)) {
       unlinkSuccess = true;
-      let newNode;
-      let text = node.getTextContent();
-      if (strictLinkifier.test(text)) {
-        newNode = $createUnlinkedTextNode(text);
-      } else {
-        newNode = $createTextNode(text);
+      // Preserve the explicit removal even when the current editor's URL
+      // policy is narrower than the importer, and retain the whole label.
+      for (const child of parent.getChildren()) {
+        const unlinked = $isTextNode(child)
+          ? $createUnlinkedTextNode().updateFromJSON(child.exportJSON())
+          : child;
+        if (child.getKey() === anchor.key) anchor.key = unlinked.getKey();
+        if (child.getKey() === focus.key) focus.key = unlinked.getKey();
+        parent.insertBefore(unlinked);
       }
-      if (node.getKey() === anchor.key) {
-        anchor.key = newNode.getKey();
-      }
-      if (node.getKey() === focus.key) {
-        focus.key = newNode.getKey();
-      }
-      parent.replace(newNode);
+      parent.remove();
     }
   });
 

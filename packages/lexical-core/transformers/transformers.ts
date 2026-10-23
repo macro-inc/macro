@@ -20,9 +20,11 @@ import {
   $createTextNode,
   $isDecoratorNode,
   $isParagraphNode,
+  $isTextNode,
   type LexicalNode,
   LineBreakNode,
   ParagraphNode,
+  type TextNode,
 } from 'lexical';
 import {
   $createHorizontalRuleNode,
@@ -33,6 +35,12 @@ import {
   $createSearchMatchNode,
   SearchMatchNode,
 } from '../nodes/SearchMatchNode';
+import {
+  $createUnlinkedTextNode,
+  $isUnlinkedTextNode,
+  UnlinkedTextNode,
+} from '../nodes/UnlinkedTextNode';
+import { findNextAutoLinkMatch } from '../utils/auto-link';
 import { HTML_ENTITIES } from '../utils/html-entities';
 import {
   replaceTextWithUnknownMention,
@@ -152,10 +160,35 @@ function escapeUrl(url: string): string {
   return url.replace(/\(/g, '%28').replace(/\)/g, '%29');
 }
 
+function exportUnlinkedText(
+  node: TextNode,
+  exportFormat: (node: TextNode, text: string) => string
+): string {
+  const text = node.getTextContent();
+  const link = findNextAutoLinkMatch(text, 'common-tlds');
+  if (!link) return exportFormat(node, text);
+  return wrapXml('m-link', {
+    url: link.url,
+    text,
+    title: '',
+    unlinked: true,
+    format: node.getFormat(),
+  });
+}
+
 export const LINK_XML: TextMatchTransformer = {
-  dependencies: [LinkNode, UnknownMentionNode],
-  export: (node: LexicalNode) => {
-    if (!($isLinkNode(node) || $isAutoLinkNode(node))) return null;
+  dependencies: [LinkNode, UnlinkedTextNode, UnknownMentionNode],
+  export: (node, _exportChildren, exportFormat) => {
+    if ($isUnlinkedTextNode(node))
+      return exportUnlinkedText(node, exportFormat);
+    if ($isAutoLinkNode(node) && node.getIsUnlinked()) {
+      return node
+        .getChildren()
+        .filter($isTextNode)
+        .map((text) => exportUnlinkedText(text, exportFormat))
+        .join('');
+    }
+    if (!$isLinkNode(node)) return null;
     const text = node.getTextContent();
     return wrapXml('m-link', {
       url: escapeUrl(node.getURL()),
@@ -171,6 +204,15 @@ export const LINK_XML: TextMatchTransformer = {
       for (const field of ['url', 'text']) {
         if (!(field in res)) throw new Error(`Missing field ${field}`);
       }
+      if (res.unlinked === true) {
+        const format = typeof res.format === 'number' ? res.format : 0;
+        textNode.replace(
+          $createUnlinkedTextNode(res.text).setFormat(
+            format | textNode.getFormat()
+          )
+        );
+        return;
+      }
       const linkNode = $createLinkNode(res.url, { title: res.title });
       const linkTextNode = $createTextNode(res.text);
       linkTextNode.setFormat(textNode.getFormat());
@@ -182,6 +224,26 @@ export const LINK_XML: TextMatchTransformer = {
     }
   },
   type: 'text-match',
+};
+
+/** Preserve explicit unlinking when exporting to ordinary Markdown. */
+export const UNLINKED_TEXT: TextMatchTransformer = {
+  ...LINK_XML,
+  export: (node, _exportChildren, exportFormat) => {
+    if (
+      !$isUnlinkedTextNode(node) &&
+      !($isAutoLinkNode(node) && node.getIsUnlinked())
+    )
+      return null;
+    const texts = $isUnlinkedTextNode(node)
+      ? [node]
+      : node.getChildren().filter($isTextNode);
+    return texts
+      .map((text) =>
+        exportFormat(text, text.getTextContent()).replace(/[:.@/]/g, '\\$&')
+      )
+      .join('');
+  },
 };
 
 export const MARK_XML: TextMatchTransformer = {

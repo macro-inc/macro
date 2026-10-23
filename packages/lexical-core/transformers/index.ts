@@ -1,6 +1,7 @@
 import type { Transformer } from '@lexical/markdown';
 import { I_AGENT_ACTIVITY } from './agentActivity';
 import { I_AGENT_CONTEXT } from './agentContext';
+import { AUTO_LINK, ESCAPED_AUTO_LINK } from './auto-link';
 import { I_AWAIT_NODE } from './await';
 import { HTML_BLOCKQUOTE, I_MACRO_QUOTE } from './classedBlock';
 import { I_CURSOR_SYSTEM_NOTIFICATION } from './cursorSystemNotification';
@@ -53,6 +54,7 @@ import {
   MARK_XML,
   PRESERVE_LINES,
   SEARCH_MATCH,
+  UNLINKED_TEXT,
 } from './transformers';
 import { UNKNOWN_MENTION } from './unknownMention';
 import { I_VIDEO, VIDEO_LINK } from './video';
@@ -104,6 +106,8 @@ export const INTERNAL_TRANSFORMERS: Transformer[] = [
   I_CONNECT_APP,
   I_WATERMARK,
   ...CUSTOM_TRANSFORMERS,
+  ESCAPED_AUTO_LINK,
+  AUTO_LINK,
   I_CURSOR_SYSTEM_NOTIFICATION, // After the code fence so a tag quoted in one stays text
   UNKNOWN_MENTION, // Must be last to act as fallback for unrecognized XML tags
 ];
@@ -112,6 +116,7 @@ export const INTERNAL_TRANSFORMERS: Transformer[] = [
  * External transformers for converting Lexical to and from to GitHub Flavored (ish) Markdown.
  */
 export const EXTERNAL_TRANSFORMERS: Transformer[] = [
+  UNLINKED_TEXT,
   I_DATABASE_QUERY_BLOCK,
   I_DATABASE_QUERY,
   HR,
@@ -148,6 +153,8 @@ export const EXTERNAL_TRANSFORMERS: Transformer[] = [
   E_SNAPSHOT_NODE,
   ...HTML_ENTITY_TRANSFORMERS,
   ...CUSTOM_TRANSFORMERS,
+  ESCAPED_AUTO_LINK,
+  AUTO_LINK,
   UNKNOWN_MENTION, // Must be last to act as fallback for unrecognized XML tags
 ];
 
@@ -213,6 +220,8 @@ export const ALL_TRANSFORMERS: Transformer[] = [
   E_INLINE_EQUATION_NODE,
   ...HTML_ENTITY_TRANSFORMERS,
   ...CUSTOM_TRANSFORMERS,
+  ESCAPED_AUTO_LINK,
+  AUTO_LINK,
   I_CURSOR_SYSTEM_NOTIFICATION, // After the code fence so a tag quoted in one stays text
   UNKNOWN_MENTION, // Must be last to act as fallback for unrecognized XML tags
 ];
