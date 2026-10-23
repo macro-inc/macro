@@ -1,16 +1,18 @@
-import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
+import { SidePanel, useSidePanel } from '@components/app/side-panel';
 import { UserIcon } from '@core/component/UserIcon';
 import { useAuthor, useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ChatIcon from '@icon/system/regular/chat-circle.svg';
-import { cn, InlineCheckbox, Tooltip } from '@ui';
+import SidePanelIcon from '@icon/system/regular/sidebar-simple.svg';
+import { Button, cn } from '@ui';
 import type { RemoteParticipant, Track } from 'livekit-client';
 import {
   createSignal,
   createUniqueId,
   For,
+  type JSX,
   type JSXElement,
   lazy,
   Show,
@@ -18,10 +20,7 @@ import {
 } from 'solid-js';
 import { useCallContext } from './CallContext';
 import { CallControls } from './CallControls/CallControls';
-import {
-  CALL_PANEL_MEDIUM_NARROW_PX,
-  CALL_PANEL_VERY_NARROW_PX,
-} from './call-panel-breakpoints';
+import { CallDetailsPanel, CallDetailsSections } from './CallDetails';
 import { LK_TRACK_SOURCE } from './livekit-loader';
 import { MutedMicrophoneBadge } from './MutedMicrophoneBadge';
 import { ParticipantAvatarBackground } from './ParticipantAvatarBackground';
@@ -235,7 +234,7 @@ function ScreenShareTile(props: { participant: RemoteParticipant }) {
   );
 }
 
-export function CallOverlay(props: {
+type CallOverlayProps = {
   onLeave: () => void;
   showTeamSharing?: boolean;
   sharedWithTeam?: boolean;
@@ -244,8 +243,26 @@ export function CallOverlay(props: {
   showChat?: boolean;
   /** Narrow RTC credential for a guest; never an account bearer. */
   guestChatSession?: { token: string; participantId: string };
-}) {
+  /** The host's share-link control, shown in the Details panel's Invite section. */
+  inviteLink?: JSX.Element;
+};
+
+/**
+ * The call view. Its right-hand panel shows either the call's Details
+ * sections or its chat: opening chat swaps it in for Details, and closing it
+ * brings Details back.
+ */
+export function CallOverlay(props: CallOverlayProps) {
+  return (
+    <SidePanel.Root defaultOpen={false} persistKey="call-details">
+      <CallOverlayContent {...props} />
+    </SidePanel.Root>
+  );
+}
+
+function CallOverlayContent(props: CallOverlayProps) {
   const callCtx = useCallContext();
+  const sidePanel = useSidePanel()!;
   const currentUserId = useUserId();
   const currentUserName = useAuthor();
   const isConnecting = () => callCtx.isConnecting();
@@ -269,10 +286,23 @@ export function CallOverlay(props: {
   const teamShareLocked = () =>
     isConnecting() || !teamShare.canToggle() || teamShare.isPending();
 
-  const splitPanel = useSplitPanel();
-  const panelWidth = () => splitPanel?.panelSize.width ?? Infinity;
-  const isMediumNarrow = () => panelWidth() < CALL_PANEL_MEDIUM_NARROW_PX;
-  const isVeryNarrow = () => panelWidth() < CALL_PANEL_VERY_NARROW_PX;
+  const detailsId = createUniqueId();
+  let detailsButton: HTMLButtonElement | undefined;
+  /** Details stays open underneath chat and returns when chat closes. */
+  const detailsOpen = () => sidePanel.isOpen() && !(canChat() && chatOpen());
+  const panelOpen = () => detailsOpen() || (canChat() && chatOpen());
+  const closeDetails = () => {
+    sidePanel.setIsOpen(false);
+    detailsButton?.focus();
+  };
+  const toggleDetails = () => {
+    if (chatOpen()) {
+      setChatOpen(false);
+      sidePanel.setIsOpen(true);
+      return;
+    }
+    sidePanel.toggle();
+  };
 
   const participants = () =>
     Array.from(callCtx.remoteParticipants().values()).filter((p) => !p.isAgent);
@@ -288,6 +318,11 @@ export function CallOverlay(props: {
     const userId = currentUserId()?.trim();
     return macroIdentity ?? (userId ? tryMacroId(userId) : undefined);
   };
+
+  const localDisplayName = () =>
+    props.localName ||
+    callCtx.room()?.localParticipant.name ||
+    currentUserName();
 
   const localVideoTrack = () => {
     callCtx.trackVersion();
@@ -361,11 +396,7 @@ export function CallOverlay(props: {
                   isVideoMuted={callCtx.isVideoMuted()}
                   track={localVideoTrack()}
                   userId={localUserId()}
-                  fallbackName={
-                    props.localName ||
-                    callCtx.room()?.localParticipant.name ||
-                    currentUserName()
-                  }
+                  fallbackName={localDisplayName()}
                 />
               }
             >
@@ -390,11 +421,7 @@ export function CallOverlay(props: {
                   isVideoMuted={callCtx.isVideoMuted()}
                   track={localVideoTrack()}
                   userId={localUserId()}
-                  fallbackName={
-                    props.localName ||
-                    callCtx.room()?.localParticipant.name ||
-                    currentUserName()
-                  }
+                  fallbackName={localDisplayName()}
                   avatarSize="sm"
                 />
               </div>
@@ -431,86 +458,72 @@ export function CallOverlay(props: {
             )}
           </Show>
         </Show>
+        <CallDetailsPanel
+          id={detailsId}
+          open={detailsOpen()}
+          onClose={closeDetails}
+        />
       </div>
-      {/* Settings expand over the tiles; sharing stays clear of the controls.
-          On desktop the bar (and the chat composer beside it) is the call's
-          last row, where the corner prompt sits, so the prompt waits. */}
+      <CallDetailsSections
+        localUserId={localUserId()}
+        localName={localDisplayName()}
+        participants={participants()}
+        inviteLink={props.inviteLink}
+        teamSharing={
+          callCtx.activeChannelId() !== null && props.showTeamSharing !== false
+            ? {
+                shared: sharedWithTeam(),
+                disabled: teamShareLocked(),
+                onToggle: () =>
+                  fireAndForget(teamShare.toggle(), 'channel-call'),
+              }
+            : undefined
+        }
+      />
+      {/* Settings expand over the tiles. On desktop the bar (and the chat composer
+          beside it) is the call's last row, where the corner prompt sits, so the
+          prompt waits. */}
       <div
         class="relative flex shrink-0 flex-col items-center gap-2 py-3"
         data-holds-prompts={isTouchDevice() ? undefined : ''}
-        classList={{
-          '@min-[800px]/call:mr-90': canChat() && chatOpen(),
-        }}
+        classList={{ '@min-[800px]/call:mr-90': panelOpen() }}
       >
-        <Show
-          when={
-            callCtx.activeChannelId() !== null &&
-            props.showTeamSharing !== false &&
-            !isVeryNarrow()
-          }
-        >
-          <Tooltip
-            placement="top"
-            label={
-              sharedWithTeam()
-                ? "The creator's team can view the chat, transcript, and AI summary once the call ends"
-                : "Let the creator's team view the chat, transcript, and AI summary once the call ends"
-            }
-          >
-            <button
-              type="button"
-              onClick={() => fireAndForget(teamShare.toggle(), 'channel-call')}
-              disabled={teamShareLocked()}
-              role="checkbox"
-              aria-checked={sharedWithTeam()}
-              class={cn(
-                'order-1 inline-flex items-center gap-2 rounded-md h-7 px-2.5 text-xs select-none',
-                'border border-ink-muted/[0.08] bg-ink-muted/[0.025]',
-                'text-ink-muted/70 hover:text-ink hover:bg-ink-muted/[0.06]',
-                sharedWithTeam() && 'text-ink',
-                teamShareLocked() && 'pointer-events-none opacity-50'
-              )}
-            >
-              <InlineCheckbox checked={sharedWithTeam()} />
-              <Show when={!isMediumNarrow()}>
-                <span class="whitespace-nowrap">Share with team</span>
-              </Show>
-            </button>
-          </Tooltip>
-        </Show>
-        <div
-          class="grid w-full items-center gap-2 px-2"
-          classList={{
-            'grid-cols-[minmax(3.5rem,1fr)_minmax(0,36rem)_minmax(3.5rem,1fr)] @max-[500px]/call:grid-cols-[minmax(0,1fr)_auto]':
-              canChat(),
-            'grid-cols-[minmax(0,1fr)_minmax(0,36rem)_minmax(0,1fr)]':
-              !canChat(),
-          }}
-        >
-          <div
-            class="col-start-2 flex min-w-0 justify-center"
-            classList={{ '@max-[500px]/call:col-start-1': canChat() }}
-          >
+        <div class="grid w-full grid-cols-[minmax(3.5rem,1fr)_minmax(0,36rem)_minmax(3.5rem,1fr)] items-center gap-2 px-2 @max-[500px]/call:grid-cols-[minmax(0,1fr)_auto]">
+          <div class="col-start-2 flex min-w-0 justify-center @max-[500px]/call:col-start-1">
             <CallControls onLeave={props.onLeave} />
           </div>
-          <Show when={canChat()}>
-            <div class="justify-self-end rounded-xl border border-edge-muted bg-panel p-1.5 shadow-sm">
-              <Tooltip label={chatOpen() ? 'Close chat' : 'Open chat'}>
-                <button
-                  ref={chatButton}
-                  type="button"
-                  aria-label={chatOpen() ? 'Close chat' : 'Open chat'}
-                  aria-expanded={chatOpen()}
-                  aria-controls={chatId}
-                  onClick={toggleChat}
-                  class="flex size-10 items-center justify-center rounded-lg hover:bg-hover focus-visible:outline-2 focus-visible:outline-accent @min-[500px]/call:size-12"
-                  classList={{ 'bg-hover text-accent': chatOpen() }}
-                >
-                  <ChatIcon class="size-5" />
-                </button>
-              </Tooltip>
-            </div>
-          </Show>
+          <div class="flex items-center gap-1 justify-self-end rounded-xl border border-edge-muted bg-panel p-1.5 shadow-sm @max-[500px]/call:p-1">
+            <Button
+              ref={detailsButton}
+              size="icon-lg"
+              aria-label={detailsOpen() ? 'Hide details' : 'Show details'}
+              tooltip={{
+                content: detailsOpen() ? 'Hide details' : 'Show details',
+                placement: 'top',
+              }}
+              aria-pressed={detailsOpen()}
+              aria-controls={detailsId}
+              onClick={toggleDetails}
+            >
+              <SidePanelIcon class="rotate-180" />
+            </Button>
+            <Show when={canChat()}>
+              <Button
+                ref={chatButton}
+                size="icon-lg"
+                aria-label={chatOpen() ? 'Close chat' : 'Open chat'}
+                tooltip={{
+                  content: chatOpen() ? 'Close chat' : 'Open chat',
+                  placement: 'top',
+                }}
+                aria-pressed={chatOpen()}
+                aria-controls={chatId}
+                onClick={toggleChat}
+              >
+                <ChatIcon />
+              </Button>
+            </Show>
+          </div>
         </div>
       </div>
     </div>

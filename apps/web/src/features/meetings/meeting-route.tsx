@@ -16,6 +16,7 @@ import { useLocation, useNavigate, useSearchParams } from '@solidjs/router';
 import { Show } from 'solid-js';
 import { browserMeetingMedia } from './browser/meeting-media';
 import { preloadMeetingRuntime } from './browser/meeting-runtime';
+import { MeetingCopyButton } from './components/meeting-copy-button';
 import type { MeetingParticipantsState } from './components/meeting-participants';
 import type { MeetingPageState } from './context/meeting-session';
 import { useMeetingSessionLifecycle } from './context/meeting-session-lifecycle';
@@ -103,10 +104,6 @@ export function MeetingRouteContent(props: {
         meeting.isSuccess &&
         !meeting.data.callId
       }
-      url={getMeetingUrl(props.shareToken)}
-      onCopy={() =>
-        navigator.clipboard.writeText(getMeetingUrl(props.shareToken))
-      }
       onRename={canRename() ? rename : undefined}
       onSignIn={() => {
         const meetingRoute = `${location.pathname}${location.search}`;
@@ -140,6 +137,14 @@ export function MeetingRouteContent(props: {
             authenticated() === false ? credentials() : undefined
           }
           showTeamSharing={canShareWithTeam()}
+          inviteLink={
+            <MeetingCopyButton
+              url={getMeetingUrl(props.shareToken)}
+              onCopy={() =>
+                navigator.clipboard.writeText(getMeetingUrl(props.shareToken))
+              }
+            />
+          }
           sharedWithTeam={
             record.isSuccess ? record.data.shareWithTeam : undefined
           }

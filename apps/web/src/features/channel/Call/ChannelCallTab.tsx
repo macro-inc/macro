@@ -147,13 +147,8 @@ export function ChannelCallTab(props: {
       }
     >
       <Match when={call.isInThisChannel() && !call.joinError()}>
-        <div class="flex size-full min-h-0 flex-col">
-          <div class="px-2 pt-2">
-            <ActiveCallLink />
-          </div>
-          <div class="min-h-0 flex-1">
-            <CallOverlay onLeave={handleLeave} />
-          </div>
+        <div class="size-full min-h-0 pt-2">
+          <CallOverlay onLeave={handleLeave} inviteLink={<ActiveCallLink />} />
         </div>
       </Match>
       <Match when={call.joinError()}>

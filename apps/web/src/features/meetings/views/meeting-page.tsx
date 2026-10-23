@@ -17,7 +17,6 @@ import {
   Switch,
 } from 'solid-js';
 import { MeetingCallHeading } from '../components/meeting-call-heading';
-import { MeetingCopyButton } from '../components/meeting-copy-button';
 import {
   MeetingParticipants,
   type MeetingParticipantsState,
@@ -45,8 +44,6 @@ export function MeetingPage(props: {
   avatar?: JSX.Element;
   participants?: MeetingParticipantsState;
   startCall?: boolean;
-  url?: string;
-  onCopy: () => Promise<void>;
   onRename?: (title: string) => Promise<void>;
   /** The host keeps the URL in sync without replacing this session owner. */
   onCallStateChange?: (connected: boolean) => void;
@@ -189,9 +186,6 @@ export function MeetingPage(props: {
             title={ready()?.title || 'Call'}
             onRename={props.onRename}
           />
-          <Show when={props.url}>
-            {(url) => <MeetingCopyButton url={url()} onCopy={props.onCopy} />}
-          </Show>
         </Show>
       </header>
       <Switch>

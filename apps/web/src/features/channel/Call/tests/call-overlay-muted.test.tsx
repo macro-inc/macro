@@ -18,6 +18,17 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitPanel: () => undefined,
 }));
 
+vi.mock('@core/hotkey/hotkeys', () => ({ registerHotkey: vi.fn() }));
+
+vi.stubGlobal(
+  'ResizeObserver',
+  class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+);
+
 vi.mock('@core/component/UserIcon', () => ({
   UserIcon: () => <div data-testid="user-avatar" />,
 }));
@@ -35,13 +46,6 @@ vi.mock('@core/user', () => ({
   tryMacroId: (identity: string) => identity,
   getDisplayName: (identity: string) =>
     mocks.displayNames.get(identity) ?? identity,
-}));
-
-vi.mock('@ui', () => ({
-  cn: (...classes: Array<string | false | null | undefined>) =>
-    classes.filter(Boolean).join(' '),
-  InlineCheckbox: () => null,
-  Tooltip: (props: { children: unknown }) => props.children,
 }));
 
 vi.mock('../CallContext', () => ({
@@ -159,13 +163,14 @@ describe('CallOverlay muted microphone badges', () => {
     const controls = setUpCallState();
     controls.setChannelId(null);
     render(() => <CallOverlay onLeave={() => undefined} showTeamSharing />);
-    expect(screen.queryByRole('checkbox')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Show details' }));
+    expect(screen.queryByRole('switch')).toBeNull();
     controls.setChannelId('channel-1');
     expect(
-      screen.getByRole('checkbox', { name: 'Share with team' })
+      screen.getByRole('switch', { name: 'Share with team' })
     ).toBeTruthy();
     controls.setChannelId(null);
-    expect(screen.queryByRole('checkbox')).toBeNull();
+    expect(screen.queryByRole('switch')).toBeNull();
   });
 
   it('uses the guest name from the media session and hides team sharing for guests', () => {
@@ -178,11 +183,11 @@ describe('CallOverlay muted microphone badges', () => {
     render(() => (
       <CallOverlay onLeave={() => undefined} showTeamSharing={false} />
     ));
-    expect(screen.getByText('Taylor Guest')).toBeTruthy();
+    expect(screen.getAllByText('Taylor Guest').length).toBeGreaterThan(0);
     expect(
       screen.getByRole('status', { name: 'Taylor Guest is muted' })
     ).toBeTruthy();
-    expect(screen.queryByRole('checkbox')).toBeNull();
+    expect(screen.queryByRole('switch')).toBeNull();
   });
 
   it('opens chat for a standalone meeting without a channel', async () => {
@@ -196,7 +201,7 @@ describe('CallOverlay muted microphone badges', () => {
       await screen.findByRole('textbox', { name: 'Message this call' })
     ).toBeTruthy();
     expect(screen.getByText('call-id')).toBeTruthy();
-    expect(screen.queryByRole('checkbox')).toBeNull();
+    expect(screen.queryByRole('switch')).toBeNull();
   });
 
   it('does not mount authenticated message queries for a guest', () => {
@@ -214,7 +219,7 @@ describe('CallOverlay muted microphone badges', () => {
     render(() => <CallOverlay onLeave={() => undefined} />);
     const video = screen.getByTestId('track-local-camera');
     const toggle = screen.getByRole('button', { name: 'Open chat' });
-    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
     fireEvent.click(toggle);
     const composer = await screen.findByRole('textbox', {
       name: 'Message this call',
@@ -224,13 +229,41 @@ describe('CallOverlay muted microphone badges', () => {
     expect(screen.getByTestId('track-local-camera')).toBe(video);
     fireEvent.click(screen.getByRole('button', { name: 'Close sidebar' }));
     expect(document.activeElement).toBe(toggle);
-    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
     fireEvent.click(toggle);
     expect(screen.getByRole('textbox', { name: 'Message this call' })).toBe(
       composer
     );
     expect((composer as HTMLInputElement).value).toBe('Draft');
     expect(screen.getByTestId('track-local-camera')).toBe(video);
+  });
+
+  it('swaps Details for chat and brings Details back when chat closes', async () => {
+    setUpCallState([createRemoteParticipant('alex', {}, 'Alex Morgan')]);
+    render(() => (
+      <CallOverlay
+        onLeave={() => undefined}
+        inviteLink={<button type="button">Copy Meeting Url</button>}
+      />
+    ));
+    const details = () =>
+      screen.queryByRole('complementary', { name: 'Call details' });
+    expect(details()).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Show details' }));
+    const panel = details();
+    expect(panel?.textContent).toContain('People');
+    expect(panel?.textContent).toContain('Alex Morgan');
+    expect(panel?.textContent).toContain('Current User');
+    expect(
+      screen.getByRole('button', { name: 'Copy Meeting Url' })
+    ).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open chat' }));
+    await screen.findByRole('textbox', { name: 'Message this call' });
+    expect(details()).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close sidebar' }));
+    expect(details()).not.toBeNull();
   });
 
   it('shows local mute state on both the full tile and local PIP', () => {
