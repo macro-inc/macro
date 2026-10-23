@@ -303,8 +303,8 @@
         outputHashes = {
           "git+https://github.com/macro-inc/tauri-plugins?rev=6ddd6600e20436388f169e936b610fe93944b7b0#6ddd6600e20436388f169e936b610fe93944b7b0" =
             "sha256-5ErLW2po5ZlTTuJjsCExwC//rHYcQo2tKXiyz3w/0kQ=";
-          "git+https://github.com/macro-inc/plugins-workspace?rev=06474e4c446600627cf37a11f0c22c27bcf764ca#06474e4c446600627cf37a11f0c22c27bcf764ca" =
-            "sha256-ngH5sltERe8DlP/zjsin9jmlGOZFeABk8SxJ5AnZG18=";
+          "git+https://github.com/macro-inc/plugins-workspace?rev=bc6ec3b8e80eed80ef4969f4463a357d46adb3b1#bc6ec3b8e80eed80ef4969f4463a357d46adb3b1" =
+            "sha256-IdhZM/B8EyC/4/3HxQjkzNkrJeA68+43+rKity+iGLY=";
           "git+https://github.com/tursodatabase/turso?rev=79163249538197d01dec5ea7f65519454ed792e2#79163249538197d01dec5ea7f65519454ed792e2" =
             "sha256-7Noz7RMN+4nhlU5BBLzxZZ53nNFGewrr8BFMO1adkCo=";
           "git+https://github.com/seanaye/tauri?rev=95a7521b#95a7521b8c565cfba568319ddd8ba79c9ce244e2" =
@@ -862,8 +862,8 @@
         src = ../apps/web/tauri/desktop-cef;
         cargoLock = ../apps/web/tauri/desktop-cef/Cargo.lock;
         outputHashes = {
-          "git+https://github.com/macro-inc/plugins-workspace?rev=06474e4c446600627cf37a11f0c22c27bcf764ca#06474e4c446600627cf37a11f0c22c27bcf764ca" =
-            "sha256-ngH5sltERe8DlP/zjsin9jmlGOZFeABk8SxJ5AnZG18=";
+          "git+https://github.com/macro-inc/plugins-workspace?rev=bc6ec3b8e80eed80ef4969f4463a357d46adb3b1#bc6ec3b8e80eed80ef4969f4463a357d46adb3b1" =
+            "sha256-IdhZM/B8EyC/4/3HxQjkzNkrJeA68+43+rKity+iGLY=";
           "git+https://github.com/macro-inc/tauri-plugins?rev=6ddd6600e20436388f169e936b610fe93944b7b0#6ddd6600e20436388f169e936b610fe93944b7b0" =
             "sha256-5ErLW2po5ZlTTuJjsCExwC//rHYcQo2tKXiyz3w/0kQ=";
           "git+https://github.com/macro-inc/tauri?rev=285fb6b1#285fb6b1cb2fc20666da1688f4c74e240a100035" =
