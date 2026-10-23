@@ -33,12 +33,24 @@ export type ListNavigationOptions<TItem> = ListFocusOptions & {
   wrap?: boolean;
 };
 
-/** Fallback used when a requested restoration key is not currently present. */
-export type ListFocusFallback = 'none' | 'first' | 'last' | 'nearest';
+/**
+ * Fallback used when a requested restoration key is not currently present.
+ * `successor` moves to the item that took the key's place: its nearest
+ * surviving neighbour from when it was last focused, later items first. With
+ * no surviving neighbour the key is retained, as with `none`.
+ */
+export type ListFocusFallback =
+  | 'none'
+  | 'first'
+  | 'last'
+  | 'nearest'
+  | 'successor';
 
 /** Options for restoring focus from persisted view state. */
-export type ListRestoreFocusOptions = ListFocusOptions & {
+export type ListRestoreFocusOptions<TItem = unknown> = ListFocusOptions & {
   fallback?: ListFocusFallback;
+  /** Fallbacks skip items this rejects (a load-more row, a heading). */
+  isNavigable?: (item: TItem, index: number) => boolean;
   /** Center point for a nearest fallback. */
   nearestIndex?: number;
   /** Keep an unavailable key as the restoration anchor. Defaults to true. */

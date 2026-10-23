@@ -51,6 +51,7 @@ import {
   Suspense,
   Switch,
 } from 'solid-js';
+import type { CacheSnapshot } from 'virtua';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import {
   persistSoupNavigationTouchHighlight,
@@ -86,6 +87,17 @@ export type EmailListProps = {
   /** Present while threads open in a reading pane beside the list. */
   pane?: EmailListPane;
 };
+
+/**
+ * Each split's last measured list, so a list that remounts after a thread
+ * closes lays its rows out as before and its saved offset lands on the same
+ * rows. Bounded: one entry per recently used split.
+ */
+const savedLayouts = new Map<
+  string,
+  { scope: string; cache: CacheSnapshot; offset: number }
+>();
+const MAX_SAVED_LAYOUTS = 20;
 
 export function EmailList(props: EmailListProps) {
   const {
@@ -186,7 +198,10 @@ export function EmailList(props: EmailListProps) {
     DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
   );
 
+  // Kept as the user scrolls: the virtualizer drops its handle while it
+  // unmounts, before this list's state is saved.
   let scrollOffset = DEFAULT_EMAIL_LIST_STATE.scrollOffset;
+  let lastHandle: VirtualizerHandle | undefined;
   const readListState = (): EmailListStateSnapshot => ({
     focusKey: list.focus.requestedKey(),
     scrollOffset: virtualizer()?.scrollOffset ?? scrollOffset,
@@ -415,12 +430,42 @@ export function EmailList(props: EmailListProps) {
   }
 
   let restoredScroll = false;
+  let disposed = false;
+  onCleanup(() => {
+    disposed = true;
+  });
   function registerVirtualizer(handle?: VirtualizerHandle) {
     setVirtualizer(handle);
+    if (handle) lastHandle = handle;
     if (!handle || restoredScroll) return;
-
-    handle.scrollTo(scrollOffset);
     restoredScroll = true;
+    // The virtualizer measures its viewport after this ref runs; a scroll
+    // issued against a zero-height viewport lands in the wrong place.
+    let frames = 0;
+    const restore = () => {
+      if (disposed) return;
+      if (handle.viewportSize === 0 && frames++ < 30) {
+        requestAnimationFrame(restore);
+        return;
+      }
+      handle.scrollTo(scrollOffset);
+      requestAnimationFrame(() => {
+        if (!disposed) revealFocusedRow(handle);
+      });
+    };
+    requestAnimationFrame(restore);
+  }
+  // j/k in the open thread moves list focus. Returning keeps the list where
+  // it was and scrolls only when that row is now off screen.
+  function revealFocusedRow(handle: VirtualizerHandle) {
+    const focused = list.focus.index();
+    if (focused < 0) return;
+    const top = handle.getItemOffset(focused);
+    const bottom = top + handle.getItemSize(focused);
+    const viewTop = handle.scrollOffset;
+    if (top < viewTop || bottom > viewTop + handle.viewportSize) {
+      handle.scrollToIndex(focused, { align: 'nearest' });
+    }
   }
 
   const hasEmailRows = () => rows().some((row) => row.kind === 'entity');
@@ -452,6 +497,27 @@ export function EmailList(props: EmailListProps) {
   const listScope = () =>
     `${state.tab}|${state.inboxIds === undefined ? '*' : state.inboxIds.join(',')}|${state.aliasFilter?.emailAddress ?? ''}`;
   let activeScope = listScope();
+  const layoutKey = panel.handle.id;
+  const savedLayout = savedLayouts.get(layoutKey);
+  const resumed = savedLayout?.scope === activeScope ? savedLayout : undefined;
+  const initialCache = resumed?.cache;
+  // Closing a thread remounts the list without a history change, so the
+  // persisted entry state is not applied again; resume from the last layout.
+  if (resumed) scrollOffset = resumed.offset;
+  onCleanup(() => {
+    const handle = lastHandle;
+    if (!handle) return;
+    savedLayouts.delete(layoutKey);
+    savedLayouts.set(layoutKey, {
+      scope: activeScope,
+      cache: handle.cache,
+      offset: scrollOffset,
+    });
+    if (savedLayouts.size > MAX_SAVED_LAYOUTS) {
+      const oldest = savedLayouts.keys().next().value;
+      if (oldest !== undefined) savedLayouts.delete(oldest);
+    }
+  });
   createEffect(() => {
     const nextScope = listScope();
     if (nextScope === activeScope) return;
@@ -469,10 +535,18 @@ export function EmailList(props: EmailListProps) {
 
     if (list.focus.result()) return;
 
-    const restored = list.focus.restore(list.focus.requestedKey(), {
-      retainUnavailable: false,
+    // A row that left the list (archived from its open thread or on another
+    // device) hands focus to the row that took its place, which sits where
+    // the removed row was, so the list does not scroll for it.
+    const requested = list.focus.requestedKey();
+    const restored = list.focus.restore(requested, {
+      fallback: 'successor',
+      isNavigable: (row) => row.kind === 'entity',
     });
     if (restored) return;
+    // Without a surviving neighbour the key waits only while rows are still
+    // arriving; otherwise (search results, a stale saved key) take the first.
+    if (requested !== undefined && !hasEmailRows()) return;
     if (isTouchDevice()) return;
 
     list.focus.first({
@@ -618,6 +692,7 @@ export function EmailList(props: EmailListProps) {
                   <Suspense>
                     <Virtualizer
                       ref={registerVirtualizer}
+                      cache={initialCache}
                       data={rows()}
                       scrollRef={viewport()}
                       startMargin={
@@ -630,7 +705,10 @@ export function EmailList(props: EmailListProps) {
                           ? [list.focus.index()]
                           : undefined
                       }
-                      onScroll={checkNearEnd}
+                      onScroll={(offset) => {
+                        scrollOffset = offset;
+                        checkNearEnd();
+                      }}
                     >
                       {(row) => (
                         <Switch>
