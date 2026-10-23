@@ -178,31 +178,29 @@ function EmailReadReceipts() {
   const userId = useUserId();
   const { query } = useEmailLinks();
   const links = () =>
-    query.isSuccess
-      ? query.data.links.filter((link) => link.macro_id === userId())
-      : [];
+    (query.data?.links ?? []).filter((link) => link.macro_id === userId());
   return (
     <Show
-      when={!query.isError}
+      when={!query.isPending}
       fallback={
-        <SettingsCard>
-          <SettingsRow label="Couldn't load accounts">
-            <Button
-              variant="outline"
-              onClick={() => fireAndForget(query.refetch(), 'email-settings')}
-            >
-              Try again
-            </Button>
-          </SettingsRow>
-        </SettingsCard>
+        <p role="status" class="text-sm text-ink-muted">
+          Loading accounts…
+        </p>
       }
     >
       <Show
-        when={!query.isPending}
+        when={query.data}
         fallback={
-          <p role="status" class="text-sm text-ink-muted">
-            Loading accounts…
-          </p>
+          <SettingsCard>
+            <SettingsRow label="Couldn't load accounts">
+              <Button
+                variant="outline"
+                onClick={() => fireAndForget(query.refetch(), 'email-settings')}
+              >
+                Try again
+              </Button>
+            </SettingsRow>
+          </SettingsCard>
         }
       >
         <SettingsCard>
