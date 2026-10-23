@@ -1077,16 +1077,20 @@ and correctly sized logos before releasing them.
 ### Pricing savings comparison
 
 `/pricing` uses a single aligned table in `SavingsCalculator`, with a compact
-savings header and team-size control above it. Show seven primary tools:
-Superhuman, Slack, Notion, Linear, Jira, HubSpot Professional, and Salesforce Pro.
-One More tools control appends the remaining tools. Keep tool logos, names,
-plans, and prices in consistent columns; show the per-user monthly unit once
-in the header. Preserve the same columns on phones with smaller type and spacing.
-Do not show category headings, a separate result card, divider lines, a stacked
-cost breakdown, or introductory subtext. Standalone AI subscriptions are excluded.
-The original Notion, Linear, Superhuman, and Slack business stack starts selected;
-additional subscriptions start off. Display yearly savings against Macro Pro at
-$40 per person per month; label additional cost explicitly when Macro costs more.
+savings header and team-size control above it. Show eight primary tools:
+Superhuman, Slack, Notion, Jira, HubSpot Professional, Granola Business,
+Calendly, and Dropbox. Default to Superhuman, Notion, Jira, Slack, Granola,
+and HubSpot for a complementary email/docs/tasks/chat/meeting-notes/CRM stack.
+Calendly and Dropbox are visible but start off. One More tools control appends
+alternatives including Linear, Salesforce Pro, Otter, Fireflies Business,
+Airtable, Asana, ClickUp, Zoom, and Acrobat. Avoid preselecting competing tools
+for the same workflow simply to increase the savings estimate.
+Keep tool logos, names, plans, and prices in consistent columns; show the per-user
+monthly unit once in the header. Preserve the same columns on phones with
+smaller type and spacing. Do not show category headings, a separate result card,
+divider lines, a stacked cost breakdown, or introductory subtext. Standalone AI
+subscriptions are excluded. Display yearly savings against Macro Pro at $40 per
+person per month; label additional cost explicitly when Macro costs more.
 Prices link to vendor sources; billing assumptions appear only with More tools.
 The `/tour` calculator retains its separate tier controls and shares the original
 nine tools' prices through `core/savings-calculator.ts`.

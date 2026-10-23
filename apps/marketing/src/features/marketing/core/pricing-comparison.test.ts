@@ -6,12 +6,12 @@ import {
 
 describe('pricing comparison', () => {
   it('compares the default business stack with Macro Pro', () => {
-    // Superhuman $33 + Slack $15 + Notion $20 + Linear $16 = $84.
+    // Superhuman $33 + Notion $20 + Jira $15.56 + Slack $15 + Granola $14 + HubSpot $90.
     expect(summarizeComparison(DEFAULT_COMPARISON_TOOLS, 5)).toEqual({
-      monthlySeatCents: 8400,
-      toolsCents: 504000,
+      monthlySeatCents: 18756,
+      toolsCents: 1125360,
       macroCents: 240000,
-      differenceCents: 264000,
+      differenceCents: 885360,
     });
   });
 

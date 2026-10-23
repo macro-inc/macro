@@ -80,6 +80,18 @@ export const COMPARISON_GROUPS: readonly {
     name: 'Calls, notes & scheduling',
     tools: [
       {
+        id: 'granola',
+        name: 'Granola',
+        plan: { id: 'business', name: 'Business', monthlyCents: 1400 },
+        source: 'https://www.granola.ai/pricing',
+      },
+      {
+        id: 'fireflies',
+        name: 'Fireflies',
+        plan: { id: 'business', name: 'Business', monthlyCents: 1900 },
+        source: 'https://fireflies.ai/pricing',
+      },
+      {
         id: 'zoom',
         name: 'Zoom',
         plan: { id: 'pro', name: 'Workplace Pro', monthlyCents: 1416 },
@@ -122,20 +134,23 @@ export const COMPARISON_TOOLS = COMPARISON_GROUPS.flatMap(
   (group) => group.tools
 );
 export const MORE_COMPARISON_TOOLS = [
+  'linear',
+  'salesforce',
   'airtable',
   'asana',
   'clickup',
   'zoom',
   'otter',
-  'calendly',
-  'dropbox',
+  'fireflies',
   'acrobat',
 ];
 export const DEFAULT_COMPARISON_TOOLS = [
   'superhuman',
-  'slack',
   'notion',
-  'linear',
+  'jira',
+  'slack',
+  'granola',
+  'hubspot',
 ];
 
 export function summarizeComparison(

@@ -1,6 +1,7 @@
 import AsanaIcon from '@assets/icons/logo-asana.svg';
 import ClickUpIcon from '@assets/icons/logo-clickup.svg';
 import JiraIcon from '@assets/icons/logo-jira.svg';
+import GranolaIcon from '@assets/icons/logo-granola.svg';
 import LinearIcon from '@icon/mcp-linear.svg';
 import NotionIcon from '@icon/mcp-notion.svg';
 import SlackIcon from '@icon/mcp-slack.svg';
@@ -52,6 +53,8 @@ const comparisonIcons: Record<
   (props: JSX.SvgSVGAttributes<SVGSVGElement>) => JSX.Element
 > = {
   ...toolIcons,
+  granola: GranolaIcon,
+  fireflies: WaveformIcon,
   airtable: TableIcon,
   zoom: ZoomIcon,
   otter: WaveformIcon,
@@ -210,11 +213,11 @@ export function SavingsCalculator() {
       <Show when={showMore()}>
         <p class="pricing-savings-note">
           USD list prices for the plans shown, generally billed annually. Jira
-          uses its published monthly rate; Acrobat uses an annual contract
-          billed monthly. Estimates assume every person has each selected tool.
-          Seat minimums, usage limits, features, and storage differ; this
-          compares subscription costs. Keep your email provider. Click a price
-          to see its source.
+          and Granola use their published monthly rates; Acrobat uses an annual
+          contract billed monthly. Estimates assume every person has each
+          selected tool. Seat minimums, usage limits, features, and storage
+          differ; this compares subscription costs. Keep your email provider.
+          Click a price to see its source.
         </p>
       </Show>
     </div>
