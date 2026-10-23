@@ -128,7 +128,13 @@ export async function initializeBrowserObservability(): Promise<void> {
     fireAndForget(Telemetry.flush(), 'telemetry-flush')
   );
   window.addEventListener('error', (event) => {
-    if (isIgnorableError({ message: event.message, source: event.filename })) {
+    if (
+      isIgnorableError({
+        message: event.message,
+        source: event.filename,
+        nativeApp: isTauri(),
+      })
+    ) {
       return;
     }
     Telemetry.error(event.error ?? event.message, {

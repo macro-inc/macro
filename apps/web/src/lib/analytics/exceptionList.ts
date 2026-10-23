@@ -8,13 +8,15 @@ type ExceptionList = {
 
 /** Frames run outermost first, so the last one is where the error was thrown. */
 export function isIgnorableException(
-  exceptionList: ExceptionList | undefined
+  exceptionList: ExceptionList | undefined,
+  nativeApp = false
 ): boolean {
   const thrown = exceptionList?.[0];
   if (!thrown) return false;
   return isIgnorableError({
     message: thrown.value,
     source: thrown.stacktrace?.frames?.at(-1)?.filename,
+    nativeApp,
   });
 }
 

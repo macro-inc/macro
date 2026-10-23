@@ -134,6 +134,30 @@ it('drops browser and extension noise from window errors but reports app errors'
   });
 });
 
+it('reports Android Java bridge failures inside the native app', async () => {
+  vi.mocked(readDesktopDiagnostics).mockResolvedValue(undefined);
+  const addEventListener = vi.spyOn(window, 'addEventListener');
+  await initializeBrowserObservability();
+  const onError = addEventListener.mock.calls.find(
+    ([type]) => type === 'error'
+  )?.[1] as (event: ErrorEvent) => void;
+  addEventListener.mockRestore();
+  const bridgeError = new Error(
+    'Error invoking postMessage: Java object is gone'
+  );
+
+  onError(
+    new ErrorEvent('error', {
+      message: bridgeError.message,
+      error: bridgeError,
+    })
+  );
+
+  expect(Telemetry.error).toHaveBeenCalledWith(bridgeError, {
+    'error.source': 'window',
+  });
+});
+
 it('an older binary without diagnostics still obeys the normal telemetry gate', async () => {
   sessionStorage.setItem(
     'macro-document-lifecycle',

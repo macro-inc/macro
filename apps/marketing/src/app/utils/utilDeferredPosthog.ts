@@ -1,4 +1,4 @@
-import type { CaptureOptions, PostHogConfig } from 'posthog-js';
+import type { CaptureOptions, CaptureResult, PostHogConfig } from 'posthog-js';
 
 type Properties = Record<string, unknown>;
 
@@ -65,6 +65,24 @@ const campaignKeys = [
   'irclid',
   '_kx',
 ];
+
+// The in-app browser's navigation logger throws this after its Java object is
+// collected. It is not a website failure.
+const dropAndroidInAppBrowserNoise = (event: CaptureResult | null) => {
+  const list = event?.properties.$exception_list;
+  const message =
+    Array.isArray(list) && list[0] && typeof list[0] === 'object'
+      ? (list[0] as { value?: unknown }).value
+      : undefined;
+  if (
+    event?.event === '$exception' &&
+    typeof message === 'string' &&
+    message.includes('Java object is gone')
+  ) {
+    return null;
+  }
+  return event;
+};
 
 /** Website-only queue: the SDK downloads after paint, or immediately on an event. */
 export const createDeferredPosthog = (
@@ -140,6 +158,7 @@ export const createDeferredPosthog = (
           // once before handing future history-change pageviews to the SDK.
           capture_pageview: false,
           capture_pageleave: true,
+          before_send: dropAndroidInAppBrowserNoise,
         });
         client = loaded;
         drain();

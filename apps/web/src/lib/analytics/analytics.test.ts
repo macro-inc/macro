@@ -193,6 +193,25 @@ describe('PostHog exception frames', () => {
     );
   }
 
+  it('drops the Android in-app browser bridge failure', async () => {
+    expect(
+      await beforeSendException(
+        'Error invoking postMessage: Java object is gone',
+        ['https://macro.com/']
+      )
+    ).toBeNull();
+  });
+
+  it('keeps Android bridge failures from the native app', async () => {
+    mocks.platform = 'android';
+    expect(
+      await beforeSendException(
+        'Error invoking postMessage: Java object is gone',
+        ['https://tauri.localhost/app/app-xMZRw8gs.js']
+      )
+    ).not.toBeNull();
+  });
+
   it('drops the ResizeObserver loop warning, which browsers report with a trailing period', async () => {
     expect(
       await beforeSendException(

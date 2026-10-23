@@ -165,7 +165,9 @@ const initializePosthog = (instance: PostHog) => {
 
       if (cr?.event !== '$exception') return cr;
 
-      if (isIgnorableException(cr.properties.$exception_list)) return null;
+      if (isIgnorableException(cr.properties.$exception_list, isTauri())) {
+        return null;
+      }
 
       if (isTauri()) {
         rewriteNativeFrameUrls(cr.properties.$exception_list, getWebOrigin());
