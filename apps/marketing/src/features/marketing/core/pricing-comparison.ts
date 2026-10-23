@@ -121,7 +121,16 @@ export const COMPARISON_GROUPS: readonly {
 export const COMPARISON_TOOLS = COMPARISON_GROUPS.flatMap(
   (group) => group.tools
 );
-export const MORE_COMPARISON_TOOLS = ['airtable', 'asana', 'clickup', 'zoom'];
+export const MORE_COMPARISON_TOOLS = [
+  'airtable',
+  'asana',
+  'clickup',
+  'zoom',
+  'otter',
+  'calendly',
+  'dropbox',
+  'acrobat',
+];
 export const DEFAULT_COMPARISON_TOOLS = [
   'superhuman',
   'slack',

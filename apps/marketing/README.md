@@ -1076,18 +1076,17 @@ and correctly sized logos before releasing them.
 
 ### Pricing savings comparison
 
-`/pricing` groups email/chat, docs/sheets/projects, CRM, calls/scheduling, and
-files/PDFs in `core/pricing-comparison.ts`. Show one relevant plan per tool,
-including HubSpot Professional and Salesforce Pro. Keep Notion, Linear, and
-Jira visible in docs/projects; one shared Show more tools control reveals
-Airtable, Asana, ClickUp, and Zoom in their respective groups. Do not include
-standalone AI subscriptions. Desktop groups use two columns; phones show the
-savings result above a single column of tools.
+`/pricing` uses a single aligned table in `SavingsCalculator`, with a compact
+savings header and team-size control above it. Show seven primary tools:
+Superhuman, Slack, Notion, Linear, Jira, HubSpot Professional, and Salesforce Pro.
+One More tools control appends the remaining tools. Keep tool logos, names,
+plans, and prices in consistent columns; show the per-user monthly unit once
+in the header. Preserve the same columns on phones with smaller type and spacing.
+Do not show category headings, a separate result card, divider lines, a stacked
+cost breakdown, or introductory subtext. Standalone AI subscriptions are excluded.
 The original Notion, Linear, Superhuman, and Slack business stack starts selected;
-alternatives and additional subscriptions start off. Display yearly savings
-against Macro Pro at $40 per person per month. If Macro costs more, label the
-additional cost explicitly. Keep the result free of cost-breakdown rows and
-separator lines, and omit introductory subtext below the heading. Prices link
-to vendor sources; billing assumptions appear only when more tools are expanded.
+additional subscriptions start off. Display yearly savings against Macro Pro at
+$40 per person per month; label additional cost explicitly when Macro costs more.
+Prices link to vendor sources; billing assumptions appear only with More tools.
 The `/tour` calculator retains its separate tier controls and shares the original
 nine tools' prices through `core/savings-calculator.ts`.
