@@ -16,7 +16,7 @@ use agent_trigger::domain::task_assignment::{
     ProjectTaskAssignmentContext, TaskAssignmentContext, process_task_assignment,
 };
 use agent_trigger::outbound::{
-    BotRepoAgentLookup, ChannelRepoTypeLookup, DssTaskAssignmentContext, FastModelTriggerJudge,
+    BotRepoAgentLookup, ChannelRepoTypeLookup, DssTaskAssignmentContext, JevTriggerJudge,
     LexicalExplicitReplyExtractor, MessageDiscussionReader, MessageThreadHistory, ParentNameReader,
     PgPeopleDirectory, VisionImageCaptioner,
 };
@@ -30,6 +30,8 @@ use entity_access::domain::{ports::EntityAccessService, service::EntityAccessSer
 use entity_access::outbound::PgAccessRepository;
 use entity_registry::OwnerGrantPolicy;
 use entity_registry_db_utils::OwnedEntityRegistrar;
+use jev::domain::JevClassifier;
+use jev::outbound::TypesafeJev;
 use kafka_util::{GroupName, InitialOffset, KafkaEventConsumer, consumer_span, record_span_error};
 use lexical_client::LexicalClient;
 use macro_entrypoint::{MacroEntrypoint, shutdown_signal};
@@ -70,7 +72,7 @@ type Trigger = AgentTriggerService<
     BotRepoAgentLookup<PgBotsRepo>,
     BotRepoAgentLookup<PgBotsRepo>,
     LexicalExplicitReplyExtractor,
-    FastModelTriggerJudge,
+    Option<JevTriggerJudge<JevClassifier<TypesafeJev>>>,
     MessageThreadHistory<
         entity_access::domain::service::EntityAccessServiceImpl<
             entity_access::outbound::PgAccessRepository,
@@ -197,6 +199,13 @@ async fn run() -> anyhow::Result<()> {
         static_file::outbound::CdnStaticFileRepo::new(StaticFileServiceUrl::new()?.to_string()),
         recorder.clone(),
     );
+    let classifier = config
+        .typesafe_api_key
+        .value()
+        .map(TypesafeJev::new)
+        .transpose()
+        .context("invalid TYPESAFE_API_KEY")?
+        .map(|provider| Arc::new(JevClassifier::new(provider, recorder)));
     let trigger = AgentTriggerService::new(
         PgAgentSessionRepo::new(
             pool.clone(),
@@ -206,7 +215,7 @@ async fn run() -> anyhow::Result<()> {
         BotRepoAgentLookup::new(PgBotsRepo::new(pool.clone())),
         BotRepoAgentLookup::new(PgBotsRepo::new(pool.clone())),
         LexicalExplicitReplyExtractor::new(lexical),
-        FastModelTriggerJudge::new(recorder, images),
+        classifier.map(|classifier| JevTriggerJudge::new(classifier, images)),
         MessageThreadHistory::new(
             message_reader,
             entity_access::domain::service::EntityAccessServiceImpl::new(
