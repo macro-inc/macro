@@ -73,7 +73,7 @@ impl ReadReceiptRepository for ReadReceiptPgRepository {
         Ok(counted > 0)
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, user), err)]
     async fn accessible_inboxes(&self, user: &MacroUserIdStr<'_>) -> Result<Vec<Uuid>, Report> {
         Ok(
             email_db_client::links::get::fetch_inboxes_for_macro_id(&self.0, user.as_ref())
