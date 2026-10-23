@@ -64,6 +64,12 @@ export const COMPARISON_GROUPS: readonly {
   {
     name: 'CRM',
     tools: [
+      {
+        id: 'attio',
+        name: 'Attio',
+        plan: { id: 'pro', name: 'Pro', monthlyCents: 7900 },
+        source: 'https://attio.com/pricing/usd',
+      },
       comparisonTool(
         'hubspot',
         'professional',
@@ -133,7 +139,8 @@ export const COMPARISON_GROUPS: readonly {
 export const COMPARISON_TOOLS = COMPARISON_GROUPS.flatMap(
   (group) => group.tools
 );
-export const MORE_COMPARISON_TOOLS = [
+export const ADDITIONAL_COMPARISON_TOOLS = [
+  'attio',
   'linear',
   'salesforce',
   'airtable',

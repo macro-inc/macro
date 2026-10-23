@@ -35,8 +35,6 @@
 .pricing-savings-plan { color: var(--ps-muted); font: 400 13px/1.4 Inter, body; }
 .pricing-savings-price { display: inline-flex; align-items: center; justify-content: end; min-height: 44px; color: var(--ps-ink); font: 500 15px/1.4 Inter, body; font-variant-numeric: tabular-nums; text-decoration: none; }
 .pricing-savings-price:hover { text-decoration: underline; text-underline-offset: 4px; }
-.pricing-savings-more { justify-self: center; display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 44px; padding: 8px 20px; border: 0; border-radius: 999px; background: var(--ps-hover); color: var(--ps-ink); font: 500 13px/1.5 Inter, body; }
-.pricing-savings-more:hover { background: color-mix(in srgb, var(--c1) 10%, transparent); }
 .pricing-savings-note { max-width: 620px; margin: 20px auto 0; color: var(--ps-muted); font: 400 12px/1.7 Inter, body; text-align: center; }
 .pricing-savings :focus-visible { outline: 2px solid var(--ps-muted); outline-offset: 2px; }
 @media (max-width: 600px) {
@@ -58,4 +56,14 @@
   .pricing-savings-table thead th:first-child { padding-left: 56px; }
   .pricing-savings-plan { font-size: 11px; }
   .pricing-savings-price { font-size: 13px; }
+}
+
+.pricing-savings-scroll { max-height: 480px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--c1) 30%, transparent) transparent; scrollbar-gutter: stable; border-radius: 10px; }
+.pricing-savings-scroll::-webkit-scrollbar { display: block; width: 6px; }
+.pricing-savings-scroll::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--c1) 30%, transparent); border-radius: 999px; }
+.pricing-savings-table thead { position: sticky; top: 0; z-index: 1; background: var(--b0); }
+.pricing-savings-table thead th { padding-top: 12px; }
+.pricing-savings-note { margin-top: 16px; }
+@media (max-width: 600px) {
+  .pricing-savings-scroll { max-height: 425px; }
 }

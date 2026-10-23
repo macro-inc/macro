@@ -1,3 +1,4 @@
+import attioLogo from '@assets/icons/logo-attio.ico';
 import AsanaIcon from '@assets/icons/logo-asana.svg';
 import ClickUpIcon from '@assets/icons/logo-clickup.svg';
 import JiraIcon from '@assets/icons/logo-jira.svg';
@@ -18,11 +19,11 @@ import WaveformIcon from '@phosphor/waveform.svg';
 import SalesforceIcon from '@phosphor/cloud.svg';
 import MinusIcon from '@phosphor/minus.svg';
 import PlusIcon from '@phosphor/plus.svg';
-import { createSignal, For, type JSX, Show } from 'solid-js';
+import { createSignal, For, type JSX } from 'solid-js';
 import {
   COMPARISON_TOOLS,
   DEFAULT_COMPARISON_TOOLS,
-  MORE_COMPARISON_TOOLS,
+  ADDITIONAL_COMPARISON_TOOLS,
   summarizeComparison,
 } from '../../core/pricing-comparison';
 import {
@@ -53,6 +54,16 @@ const comparisonIcons: Record<
   (props: JSX.SvgSVGAttributes<SVGSVGElement>) => JSX.Element
 > = {
   ...toolIcons,
+  attio: (props) => (
+    <img
+      src={attioLogo}
+      class={props.class}
+      alt=""
+      aria-hidden="true"
+      width="20"
+      height="20"
+    />
+  ),
   granola: GranolaIcon,
   fireflies: WaveformIcon,
   airtable: TableIcon,
@@ -66,7 +77,6 @@ const comparisonIcons: Record<
 /** Yearly cost of a team's current tools next to Macro's paid plan. */
 export function SavingsCalculator() {
   const [selected, setSelected] = createSignal(DEFAULT_COMPARISON_TOOLS);
-  const [showMore, setShowMore] = createSignal(false);
   const [seats, setSeats] = createSignal(5);
   const summary = () => summarizeComparison(selected(), seats());
   const stepSeats = (delta: number) =>
@@ -133,93 +143,87 @@ export function SavingsCalculator() {
             </div>
           </div>
         </div>
-        <table
-          class="pricing-savings-table"
-          aria-label="Tools to replace with Macro"
+        <div
+          class="pricing-savings-scroll"
+          role="region"
+          aria-label="All tools to replace with Macro"
+          tabIndex={0}
         >
-          <colgroup>
-            <col class="pricing-savings-tool-col" />
-            <col class="pricing-savings-plan-col" />
-            <col class="pricing-savings-price-col" />
-          </colgroup>
-          <thead>
-            <tr>
-              <th scope="col">Tool</th>
-              <th scope="col">Plan</th>
-              <th scope="col">/user/month</th>
-            </tr>
-          </thead>
-          <tbody id="pricing-savings-tools">
-            <For
-              each={[
-                ...COMPARISON_TOOLS.filter(
-                  (tool) => !MORE_COMPARISON_TOOLS.includes(tool.id)
-                ),
-                ...(showMore()
-                  ? COMPARISON_TOOLS.filter((tool) =>
-                      MORE_COMPARISON_TOOLS.includes(tool.id)
-                    )
-                  : []),
-              ]}
-            >
-              {(tool) => {
-                const Icon = comparisonIcons[tool.id];
-                return (
-                  <tr data-selected={selected().includes(tool.id)}>
-                    <th scope="row">
-                      <button
-                        type="button"
-                        class="pricing-savings-toggle"
-                        aria-label={`${tool.name} ${tool.plan.name}`}
-                        aria-pressed={selected().includes(tool.id)}
-                        onClick={() => toggleTool(tool.id)}
-                      >
-                        <span class="pricing-savings-check" aria-hidden="true">
-                          <CheckIcon />
-                        </span>
-                        <Icon class="pricing-savings-icon" aria-hidden="true" />
-                        <span>{tool.name}</span>
-                      </button>
-                    </th>
-                    <td class="pricing-savings-plan">{tool.plan.name}</td>
-                    <td>
-                      <a
-                        class="pricing-savings-price"
-                        href={tool.source}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        aria-label={`${tool.name} pricing: ${formatUsd(tool.plan.monthlyCents)} per user per month`}
-                      >
-                        {formatUsd(tool.plan.monthlyCents)}
-                      </a>
-                    </td>
-                  </tr>
-                );
-              }}
-            </For>
-          </tbody>
-        </table>
-        <button
-          type="button"
-          class="pricing-savings-more"
-          aria-expanded={showMore()}
-          aria-controls="pricing-savings-tools"
-          onClick={() => setShowMore((value) => !value)}
-        >
-          {showMore() ? 'Fewer tools' : 'More tools'}
-          <span aria-hidden="true">{showMore() ? '−' : '+'}</span>
-        </button>
+          <table
+            class="pricing-savings-table"
+            aria-label="Tools to replace with Macro"
+          >
+            <colgroup>
+              <col class="pricing-savings-tool-col" />
+              <col class="pricing-savings-plan-col" />
+              <col class="pricing-savings-price-col" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th scope="col">Tool</th>
+                <th scope="col">Plan</th>
+                <th scope="col">/user/month</th>
+              </tr>
+            </thead>
+            <tbody id="pricing-savings-tools">
+              <For
+                each={[
+                  ...COMPARISON_TOOLS.filter(
+                    (tool) => !ADDITIONAL_COMPARISON_TOOLS.includes(tool.id)
+                  ),
+                  ...COMPARISON_TOOLS.filter((tool) =>
+                    ADDITIONAL_COMPARISON_TOOLS.includes(tool.id)
+                  ),
+                ]}
+              >
+                {(tool) => {
+                  const Icon = comparisonIcons[tool.id];
+                  return (
+                    <tr data-selected={selected().includes(tool.id)}>
+                      <th scope="row">
+                        <button
+                          type="button"
+                          class="pricing-savings-toggle"
+                          aria-label={`${tool.name} ${tool.plan.name}`}
+                          aria-pressed={selected().includes(tool.id)}
+                          onClick={() => toggleTool(tool.id)}
+                        >
+                          <span
+                            class="pricing-savings-check"
+                            aria-hidden="true"
+                          >
+                            <CheckIcon />
+                          </span>
+                          <Icon
+                            class="pricing-savings-icon"
+                            aria-hidden="true"
+                          />
+                          <span>{tool.name}</span>
+                        </button>
+                      </th>
+                      <td class="pricing-savings-plan">{tool.plan.name}</td>
+                      <td>
+                        <a
+                          class="pricing-savings-price"
+                          href={tool.source}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label={`${tool.name} pricing: ${formatUsd(tool.plan.monthlyCents)} per user per month`}
+                        >
+                          {formatUsd(tool.plan.monthlyCents)}
+                        </a>
+                      </td>
+                    </tr>
+                  );
+                }}
+              </For>
+            </tbody>
+          </table>
+        </div>
       </div>
-      <Show when={showMore()}>
-        <p class="pricing-savings-note">
-          USD list prices for the plans shown, generally billed annually. Jira
-          and Granola use their published monthly rates; Acrobat uses an annual
-          contract billed monthly. Estimates assume every person has each
-          selected tool. Seat minimums, usage limits, features, and storage
-          differ; this compares subscription costs. Keep your email provider.
-          Click a price to see its source.
-        </p>
-      </Show>
+      <p class="pricing-savings-note">
+        USD/user/month. Annual billing where available; same seat count for every selected tool.
+      </p>
     </div>
   );
 }
