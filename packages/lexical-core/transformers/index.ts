@@ -52,13 +52,14 @@ import {
   LINK_XML,
   MARK_XML,
   PRESERVE_LINES,
+  protectEmptyParagraphLines,
   SEARCH_MATCH,
 } from './transformers';
 import { UNKNOWN_MENTION } from './unknownMention';
 import { I_VIDEO, VIDEO_LINK } from './video';
 import { E_WATERMARK, I_WATERMARK } from './watermark';
 
-export { isConversionOnlyTransformer };
+export { isConversionOnlyTransformer, protectEmptyParagraphLines };
 
 /**
  * Internal transformers for converting markdown between Lexical state and markdown.

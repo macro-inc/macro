@@ -27,6 +27,7 @@ import {
   EXTERNAL_TRANSFORMERS,
   INITIALIZE_LOCAL_STATUS,
   INTERNAL_TRANSFORMERS,
+  protectEmptyParagraphLines,
   stripDraftCommentMarks,
 } from '@macro-inc/lexical-core';
 import { SKIP_SCROLL_INTO_VIEW_TAG } from '@macro-inc/lexical-core/constants';
@@ -342,21 +343,17 @@ export function setEditorStateFromMarkdown(
     });
   }
   const transformers = weakTransformersByEditor.get(editor)![target];
+  const source = protectEmptyParagraphLines(markdown);
 
   if (!inUpdate) {
     editor.update(() => {
       $addUpdateTag(SKIP_DOM_SELECTION_TAG);
-      $convertFromMarkdownString(
-        markdown,
-        transformers,
-        node,
-        preserveNewLines
-      );
+      $convertFromMarkdownString(source, transformers, node, preserveNewLines);
     });
     editor.read(() => {});
     return editor.getEditorState();
   } else {
-    $convertFromMarkdownString(markdown, transformers, node, preserveNewLines);
+    $convertFromMarkdownString(source, transformers, node, preserveNewLines);
   }
 }
 

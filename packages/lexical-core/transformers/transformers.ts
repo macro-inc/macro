@@ -65,7 +65,50 @@ export function isConversionOnlyTransformer<T extends LexicalTransformer>(
   return 'conversionOnly' in transformer;
 }
 
-// See https://github.com/facebook/lexical/issues/4271/ for the reasoning behind this.
+/**
+ * An empty paragraph written as a line holding a single space, so that a blank
+ * line survives a markdown round trip. Internal markdown keeps this form; see
+ * https://github.com/facebook/lexical/issues/4271/ for the reasoning.
+ */
+const EMPTY_PARAGRAPH_LINE = ' ';
+
+/**
+ * The form `protectEmptyParagraphLines` rewrites `EMPTY_PARAGRAPH_LINE` to
+ * before handing markdown to Lexical. A zero-width space is not whitespace to
+ * `String.prototype.trimEnd`, so Lexical's normalizer leaves it intact.
+ */
+const EMPTY_PARAGRAPH_SENTINEL = '\u200b';
+
+// Mirror the fence detection in Lexical's markdown normalizer: a fence that
+// opens and closes on one line leaves the surrounding block state alone.
+const SINGLE_LINE_CODE_FENCE =
+  /^[ \t]*```[^`]+(?:(?:`{1,2}|`{4,})[^`]+)*```(?:[^`]|$)/;
+const CODE_FENCE = /^[ \t]*`{3,}/;
+
+/**
+ * Rewrite every empty-paragraph line outside fenced code to a sentinel Lexical
+ * will not erase. `$convertFromMarkdownString` normalizes its input before any
+ * transformer runs, and that normalizer trims trailing whitespace off every
+ * line, which turns `EMPTY_PARAGRAPH_LINE` into an ordinary blank separator and
+ * drops the paragraph. Inside a fence the normalizer keeps lines verbatim and a
+ * lone space is content, so those are left alone.
+ */
+export function protectEmptyParagraphLines(markdown: string): string {
+  const lines = markdown.split('\n');
+  let inCodeBlock = false;
+  for (let index = 0; index < lines.length; index++) {
+    const line = lines[index];
+    if (CODE_FENCE.test(line)) {
+      if (!SINGLE_LINE_CODE_FENCE.test(line)) inCodeBlock = !inCodeBlock;
+      continue;
+    }
+    if (!inCodeBlock && line === EMPTY_PARAGRAPH_LINE) {
+      lines[index] = EMPTY_PARAGRAPH_SENTINEL;
+    }
+  }
+  return lines.join('\n');
+}
+
 export const PRESERVE_LINES: ConversionOnlyTransformer<ElementTransformer> = {
   type: 'element',
   dependencies: [ParagraphNode],
@@ -75,14 +118,18 @@ export const PRESERVE_LINES: ConversionOnlyTransformer<ElementTransformer> = {
       // A decorator with no text content - an await spinner, say - is still
       // a child worth exporting, not a blank line.
       if (!content.trim() && !node.getChildren().some($isDecoratorNode)) {
-        return '\n \n';
+        return `\n${EMPTY_PARAGRAPH_LINE}\n`;
       }
     }
     return null;
   },
-  regExp: /^ $/, // a line with only a space
+  // A line holding only the empty-paragraph marker, in either form.
+  regExp: new RegExp(`^[${EMPTY_PARAGRAPH_LINE}${EMPTY_PARAGRAPH_SENTINEL}]$`),
   replace: (textNode, nodes, _, isImport) => {
     if (isImport && nodes.length === 1) {
+      // The second empty child keeps Lexical's import from reading the
+      // paragraph as a blank separator and removing it; both collapse away
+      // when the editor normalizes the imported state.
       textNode.append($createTextNode(''));
     }
   },
