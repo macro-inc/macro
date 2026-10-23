@@ -110,6 +110,10 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
     var onSelectRemoteParticipant: ((String) -> Void)?
     var onOpenDrawerFromThumbnail: (() -> Void)?
     var onModeChanged: ((CallVideoOverlayMode) -> Void)?
+    /// Whether a call is running behind the overlay. Read on main when a
+    /// setter applies, so a late update queued before teardown can never
+    /// present a drawer, thumbnail, or edge tab with no call to leave.
+    var isCallActive: () -> Bool = { false }
 
     /// Everything the overlay renders, in one value. Setters mutate `desired`;
     /// the apply pass owns moving it into the view tree and records what it
@@ -203,12 +207,16 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
         }
     }
 
-    func setMode(_ mode: CallVideoOverlayMode) {
+    func setMode(_ requestedMode: CallVideoOverlayMode) {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
+            let mode = self.isCallActive() ? requestedMode : .hidden
+            if mode != requestedMode {
+                callKitLog("Native video overlay hiding instead of mode=\(requestedMode.rawValue); no active call")
+            }
             self.desired.mode = mode
             self.scheduleApply()
-            print("[CallKit] Native video overlay mode=\(mode.rawValue)")
+            callKitLog("Native video overlay mode=\(mode.rawValue)")
             self.onModeChanged?(mode)
         }
     }
@@ -223,7 +231,7 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
                 self.desired.channelTitle = "Call"
             }
             self.scheduleApply()
-            print("[CallKit] Native video overlay channelTitle=\(self.desired.channelTitle)")
+            callKitLog("Native video overlay channelTitle hasTitle=\(trimmedTitle?.isEmpty == false)")
         }
     }
 
@@ -232,7 +240,7 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
             guard let self else { return }
             self.desired.theme = theme ?? .fallback
             self.scheduleApply()
-            print("[CallKit] Native video overlay theme updated")
+            callKitLog("Native video overlay theme updated")
         }
     }
 
@@ -244,20 +252,30 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
         return primaryVideoView
     }
 
+    /// The scene the overlay lives in, for native UI that must sit above it.
+    func presentationWindowScene() -> UIWindowScene? {
+        webview?.window?.windowScene
+    }
+
     func presentForActiveCallIfNeeded() {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            guard self.desired.mode == .hidden, !self.didAutoPresent else { return }
+            guard self.isCallActive(), self.desired.mode == .hidden, !self.didAutoPresent else { return }
             self.didAutoPresent = true
             self.desired.mode = .expanded
             self.scheduleApply()
-            print("[CallKit] Native video overlay auto-presented for active call")
+            callKitLog("Native video overlay auto-presented for active call")
         }
     }
 
     func setRemoteVideoParticipants(_ participants: [NativeVideoParticipant], primaryId: String?) {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
+            // Remote participants show the edge tab even while hidden.
+            guard self.isCallActive() else {
+                callKitLog("Native video overlay ignoring remote participants; no active call")
+                return
+            }
             self.desired.participants = participants
             self.desired.primaryRemoteParticipantId = primaryId
             if self.primaryRemoteParticipant != nil, self.desired.mode == .hidden, !self.didAutoPresent {
@@ -271,6 +289,10 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
     func setLocalVideoTrack(_ track: VideoTrack?) {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
+            guard self.isCallActive() else {
+                callKitLog("Native video overlay ignoring localTrack=\(track == nil ? "nil" : "set"); no active call")
+                return
+            }
             self.desired.localVideoTrack = track
             self.desired.isLocalVideoEnabled = track != nil
             if track != nil, self.desired.mode == .hidden, !self.didAutoPresent {
@@ -278,7 +300,7 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
                 self.desired.mode = .expanded
             }
             self.scheduleApply()
-            print("[CallKit] Native video overlay localTrack=\(track == nil ? "nil" : "set")")
+            callKitLog("Native video overlay localTrack=\(track == nil ? "nil" : "set")")
         }
     }
 
@@ -292,7 +314,7 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
                 self.desired.localParticipantTitle = "You"
             }
             self.scheduleApply()
-            print("[CallKit] Native video overlay localParticipantTitle=\(self.desired.localParticipantTitle)")
+            callKitLog("Native video overlay localParticipantTitle hasTitle=\(trimmedTitle?.isEmpty == false)")
         }
     }
 
@@ -301,7 +323,7 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
             guard let self else { return }
             self.desired.isLocalVideoEnabled = enabled
             self.scheduleApply()
-            print("[CallKit] Native video overlay localVideoEnabled=\(enabled)")
+            callKitLog("Native video overlay localVideoEnabled=\(enabled)")
         }
     }
 
@@ -310,7 +332,7 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
             guard let self else { return }
             self.desired.isAudioMuted = muted
             self.scheduleApply()
-            print("[CallKit] Native video overlay audioMuted=\(muted)")
+            callKitLog("Native video overlay audioMuted=\(muted)")
         }
     }
 
@@ -319,7 +341,7 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
             guard let self else { return }
             self.desired.audioRoute = route
             self.scheduleApply()
-            print("[CallKit] Native video overlay audioRoute input=\(route.input.rawValue) output=\(route.output.rawValue) speakerForced=\(route.isSpeakerForced) supportsSpeakerToggle=\(route.supportsSpeakerToggle)")
+            callKitLog("Native video overlay audioRoute input=\(route.input.rawValue) output=\(route.output.rawValue) speakerForced=\(route.isSpeakerForced) supportsSpeakerToggle=\(route.supportsSpeakerToggle)")
         }
     }
 
@@ -332,7 +354,7 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
             self.stripScrollView.invalidateSelection()
             self.didAutoPresent = false
             self.scheduleApply()
-            print("[CallKit] Native video overlay reset")
+            callKitLog("Native video overlay reset")
         }
     }
 
@@ -363,7 +385,7 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
         guard !isOverlayInteracting else {
             if deferredApplyStart == nil {
                 deferredApplyStart = CACurrentMediaTime()
-                print("[CallKit] Native video overlay deferring structural apply while interacting \(interactionDebugDescription)")
+                callKitLog("Native video overlay deferring structural apply while interacting \(interactionDebugDescription)")
             }
             applyRestyleOnly()
             scheduleDeferredFlush()
@@ -371,7 +393,7 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
         }
         if let start = deferredApplyStart {
             deferredApplyStart = nil
-            print(String(format: "[CallKit] Native video overlay flushed deferred apply after %.2fs", CACurrentMediaTime() - start))
+            callKitLog(String(format: "Native video overlay flushed deferred apply after %.2fs", CACurrentMediaTime() - start))
         }
         applyFullState()
         applied = desired
@@ -406,7 +428,7 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
         layoutFrames()
         bringOverlayToFrontIfNeeded()
         if participantsChanged {
-            print("[CallKit] Native video overlay applied remoteParticipants=\(desired.participants.count) primary=\(primaryRemoteParticipant?.id ?? "nil")")
+            callKitLog("Native video overlay applied remoteParticipants=\(desired.participants.count) hasPrimary=\(primaryRemoteParticipant != nil)")
         }
     }
 
@@ -469,7 +491,7 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
             rootView.frame = parent.bounds
             rootView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
             parent.addSubview(rootView)
-            print("[CallKit] Attached native video overlay parent=\(type(of: parent)) frame=\(parent.bounds)")
+            callKitLog("Attached native video overlay parent=\(type(of: parent)) frame=\(parent.bounds)")
         } else if rootView.frame != parent.bounds {
             rootView.frame = parent.bounds
         }
@@ -485,7 +507,7 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
             "document.activeElement && document.activeElement.blur && document.activeElement.blur()",
             completionHandler: nil
         )
-        print("[CallKit] Native video overlay dismissed webview keyboard for drawer")
+        callKitLog("Native video overlay dismissed webview keyboard for drawer")
     }
 
     /// Reordering the window's subviews while a touch is in flight destabilizes
@@ -849,7 +871,7 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
     private func selectDisplayedParticipant(_ id: String) {
         // A departure may have arrived while the displayed row was frozen.
         guard desired.participants.contains(where: { $0.id == id }) else { return }
-        print("[CallKit] Native video overlay remote tile selected id=\(id)")
+        callKitLog("Native video overlay remote tile selected")
         onSelectRemoteParticipant?(id)
     }
 
@@ -1213,34 +1235,34 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
     }
 
     @objc private func toggleMicrophone() {
-        print("[CallKit] Native video overlay microphone toggle tapped currentMuted=\(isAudioMuted)")
+        callKitLog("Native video overlay microphone toggle tapped currentMuted=\(isAudioMuted)")
         onToggleMicrophone?()
     }
 
     @objc private func toggleSpeaker() {
-        print("[CallKit] Native video overlay speaker toggle tapped output=\(audioRoute.output.rawValue) speakerForced=\(audioRoute.isSpeakerForced) supportsSpeakerToggle=\(audioRoute.supportsSpeakerToggle)")
+        callKitLog("Native video overlay speaker toggle tapped output=\(audioRoute.output.rawValue) speakerForced=\(audioRoute.isSpeakerForced) supportsSpeakerToggle=\(audioRoute.supportsSpeakerToggle)")
         guard audioRoute.supportsSpeakerToggle else { return }
         onToggleSpeaker?()
     }
 
     @objc private func toggleCamera() {
-        print("[CallKit] Native video overlay camera toggle tapped currentEnabled=\(isLocalVideoEnabled)")
+        callKitLog("Native video overlay camera toggle tapped currentEnabled=\(isLocalVideoEnabled)")
         onToggleCamera?()
     }
 
     @objc private func switchCamera() {
-        print("[CallKit] Native video overlay camera switch tapped")
+        callKitLog("Native video overlay camera switch tapped")
         onSwitchCamera?()
     }
 
     @objc private func unpinRemoteParticipant() {
         guard let pinnedRemoteParticipantId else { return }
-        print("[CallKit] Native video overlay unpin tapped id=\(pinnedRemoteParticipantId)")
+        callKitLog("Native video overlay unpin tapped")
         onSelectRemoteParticipant?(pinnedRemoteParticipantId)
     }
 
     @objc private func endCall() {
-        print("[CallKit] Native video overlay end call tapped")
+        callKitLog("Native video overlay end call tapped")
         onEndCall?()
     }
 

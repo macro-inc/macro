@@ -367,6 +367,8 @@ export const storageExcluded = [
   'saveDatabaseQuery',
   // Live presence between viewers of a database, internal to the web app.
   'shareDatabaseAwareness',
+  // Staying in a call after the alone warning is a live-device session flow, like leaving.
+  'stayInCall',
   // Composer dictation is an app-internal, user-only upload flow.
   'transcribeDictation',
   // The web app's Ctrl+Z over the viewer's own session edits; the SDK's

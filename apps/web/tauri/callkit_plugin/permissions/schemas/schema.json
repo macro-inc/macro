@@ -319,6 +319,18 @@
           "markdownDescription": "Denies the can_use_full_screen_intent command without any pre-configured scope."
         },
         {
+          "description": "Enables the dismiss_alone_prompt command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-dismiss-alone-prompt",
+          "markdownDescription": "Enables the dismiss_alone_prompt command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the dismiss_alone_prompt command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-dismiss-alone-prompt",
+          "markdownDescription": "Denies the dismiss_alone_prompt command without any pre-configured scope."
+        },
+        {
           "description": "Enables the end_active_call command without any pre-configured scope.",
           "type": "string",
           "const": "allow-end-active-call",
@@ -475,6 +487,18 @@
           "markdownDescription": "Denies the set_video_overlay_mode command without any pre-configured scope."
         },
         {
+          "description": "Enables the show_alone_prompt command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-show-alone-prompt",
+          "markdownDescription": "Enables the show_alone_prompt command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the show_alone_prompt command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-show-alone-prompt",
+          "markdownDescription": "Denies the show_alone_prompt command without any pre-configured scope."
+        },
+        {
           "description": "Enables the start_outgoing_call command without any pre-configured scope.",
           "type": "string",
           "const": "allow-start-outgoing-call",
@@ -497,6 +521,18 @@
           "type": "string",
           "const": "deny-switch-camera",
           "markdownDescription": "Denies the switch_camera command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the watch_alone_prompt_response command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-watch-alone-prompt-response",
+          "markdownDescription": "Enables the watch_alone_prompt_response command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the watch_alone_prompt_response command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-watch-alone-prompt-response",
+          "markdownDescription": "Denies the watch_alone_prompt_response command without any pre-configured scope."
         },
         {
           "description": "Enables the watch_call_answered command without any pre-configured scope.",

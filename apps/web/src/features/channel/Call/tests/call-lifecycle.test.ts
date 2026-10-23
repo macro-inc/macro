@@ -217,7 +217,7 @@ describe('shared call lifecycle', () => {
     expect(ports.onJoined).not.toHaveBeenCalled();
     connection.resolve();
     await promise;
-    expect(ports.onJoined).toHaveBeenCalledExactlyOnceWith(call);
+    expect(ports.onJoined).toHaveBeenCalledExactlyOnceWith(call, 'user');
     expect(ports.watch).toHaveBeenCalledOnce();
   });
 
@@ -238,7 +238,7 @@ describe('shared call lifecycle', () => {
     expect(ports.requestToken).not.toHaveBeenCalled();
     expect(ports.connect).not.toHaveBeenCalled();
     expect(lifecycle.getState()).toEqual({ t: 'active', call });
-    expect(ports.onJoined).toHaveBeenCalledExactlyOnceWith(call);
+    expect(ports.onJoined).toHaveBeenCalledExactlyOnceWith(call, 'user');
     expect(vi.getTimerCount()).toBe(0);
   });
 
@@ -587,6 +587,32 @@ describe('shared call lifecycle', () => {
       expect(ports.onLeft).toHaveBeenCalledOnce();
     }
   );
+
+  it('still leaves the server when media teardown outlasts the leave timeout', async () => {
+    const { lifecycle, ports, join } = setup();
+    await join();
+    ports.disconnect.mockReturnValueOnce(new Promise(() => {}));
+    const failed = expect(lifecycle.leave(call.channelId)).rejects.toThrow(
+      'timed out'
+    );
+    await vi.advanceTimersByTimeAsync(LEAVE_TIMEOUT_MS);
+    await failed;
+    expect(ports.leave).toHaveBeenCalledExactlyOnceWith(call.channelId);
+    expect(lifecycle.getState().t).toBe('idle');
+  });
+
+  it('records why each leave ran and which call it left', async () => {
+    const { lifecycle, ports, join, nativeEnd } = setup();
+    await join();
+    await lifecycle.leave(call.channelId);
+    await join();
+    nativeEnd();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(ports.onLeft.mock.calls).toEqual([
+      [call, 'user_initiated'],
+      [call, 'native_ended'],
+    ]);
+  });
 
   it('times out a hung leave and permits a new join', async () => {
     const { lifecycle, ports, join } = setup();

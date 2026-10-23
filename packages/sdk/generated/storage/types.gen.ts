@@ -16659,6 +16659,38 @@ export type ToggleShareWithTeamResponses = {
 
 export type ToggleShareWithTeamResponse = ToggleShareWithTeamResponses[keyof ToggleShareWithTeamResponses];
 
+export type StayInCallData = {
+    body?: never;
+    path: {
+        /**
+         * Call ID
+         */
+        call_id: string;
+    };
+    query?: never;
+    url: '/call/record/{call_id}/stay';
+};
+
+export type StayInCallErrors = {
+    401: ErrorResponse;
+    /**
+     * The call is not live or the caller is not in it
+     */
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type StayInCallError = StayInCallErrors[keyof StayInCallErrors];
+
+export type StayInCallResponses = {
+    /**
+     * Alone period restarted
+     */
+    204: void;
+};
+
+export type StayInCallResponse = StayInCallResponses[keyof StayInCallResponses];
+
 export type EditCallTranscriptData = {
     body: EditCallTranscriptRequest;
     path: {

@@ -1,9 +1,11 @@
-//! Reconcile RTC presence after missed leave webhooks and archive empty calls.
+//! Reconcile RTC presence after missed leave webhooks, enforce the alone
+//! timeout, and archive empty calls.
 
 use std::collections::HashSet;
 
 use chrono::{DateTime, TimeDelta, Utc};
 
+use super::alone::ConnectedPeople;
 use super::*;
 use crate::domain::meetings::GuestId;
 
@@ -25,7 +27,7 @@ where
     B: MacroEventBroker + Clone,
 {
     /// Marks participants and guests who are no longer connected as left,
-    /// then archives the call if that leaves it empty.
+    /// advances the alone timeout, then archives the call if it is empty.
     #[tracing::instrument(err, skip(self, call), fields(call_id = %call.id))]
     pub(super) async fn reconcile_call(
         &self,
@@ -76,6 +78,23 @@ where
             }
             tracing::info!(%guest_id, "marking disconnected guest as left");
             self.repo.reconcile_guest(&call.id, guest_id, false).await?;
+        }
+
+        let people = ConnectedPeople {
+            users: connected
+                .iter()
+                .filter_map(|identity| MacroUserIdStr::parse_from_str(identity).ok())
+                .map(CowLike::into_owned)
+                .collect(),
+            guests: connected_guests.len(),
+        };
+        // A failed step is recorded on its span; the emptiness check still runs.
+        if self
+            .enforce_alone_timeout(call, &people, now)
+            .await
+            .unwrap_or(false)
+        {
+            return Ok(());
         }
 
         // A call created moments ago may not have anyone connected yet.

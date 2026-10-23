@@ -507,7 +507,21 @@ impl<
             Err(CallError::NotFound(_)) => return Ok(true),
             Err(error) => return Err(error),
         };
-        self.publish_archived_call_event(&archived, CallArchiveReason::LastParticipantLeft);
+        self.complete_archival(call, &archived, CallArchiveReason::LastParticipantLeft)
+            .await;
+        Ok(true)
+    }
+
+    /// Runs the side effects of an archive this caller committed: the
+    /// lifecycle event, summarization, voice enrollment, media teardown, and
+    /// the `call_ended` fan-out.
+    pub(super) async fn complete_archival(
+        &self,
+        call: &Call,
+        archived: &ArchivedCall,
+        reason: CallArchiveReason,
+    ) {
+        self.publish_archived_call_event(archived, reason);
         self.spawn_summarize_call(archived.call_id);
         self.spawn_process_voices_for_call(archived.call_id);
         let rtc = self.rtc_client.clone();
@@ -537,7 +551,6 @@ impl<
             None,
         )
         .await;
-        Ok(true)
     }
 
     #[tracing::instrument(err, skip_all)]

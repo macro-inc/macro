@@ -32,6 +32,17 @@ type CallAnsweredWirePayload = {
 
 type CallDeclinedWirePayload = CallAnsweredWirePayload;
 
+type CallAloneWarningWirePayload = {
+  channel_id?: string | null;
+  call_id?: string;
+  ends_at?: string;
+};
+
+type CallAloneClearedWirePayload = {
+  channel_id?: string | null;
+  call_id?: string;
+};
+
 type CallShareWithTeamToggledWirePayload = {
   channel_id?: string;
   call_id?: string;
@@ -73,6 +84,24 @@ export type CallDeclinedEvent = {
   declinedBy: string | null;
 };
 
+/**
+ * The user has been alone in a call long enough that the server will end it
+ * at `endsAt` unless they choose to stay. Sent only to that user's own
+ * connections, and re-sent each minute until it is resolved.
+ */
+export type CallAloneWarningEvent = {
+  channelId: string | null;
+  callId: string;
+  /** Epoch ms. */
+  endsAt: number;
+};
+
+/** The alone warning no longer applies: someone joined or the user stayed. */
+export type CallAloneClearedEvent = {
+  channelId: string | null;
+  callId: string;
+};
+
 /** A participant flipped the call's share-with-team flag. */
 export type CallShareWithTeamToggledEvent = {
   channelId: string;
@@ -86,6 +115,8 @@ export type CallEvent =
   | ({ type: 'call_ended' } & CallEndedEvent)
   | ({ type: 'call_answered' } & CallAnsweredEvent)
   | ({ type: 'call_declined' } & CallDeclinedEvent)
+  | ({ type: 'call_alone_warning' } & CallAloneWarningEvent)
+  | ({ type: 'call_alone_cleared' } & CallAloneClearedEvent)
   | ({
       type: 'call_share_with_team_toggled';
     } & CallShareWithTeamToggledEvent);
@@ -97,6 +128,8 @@ const CALL_EVENT_TYPES = new Set<string>([
   'call_ended',
   'call_answered',
   'call_declined',
+  'call_alone_warning',
+  'call_alone_cleared',
   'call_share_with_team_toggled',
 ]);
 
@@ -169,6 +202,22 @@ export function parseCallEvent(
         declinedBy: declinedBy ?? null,
       };
     })
+    .with('call_alone_warning', (eventType) => {
+      const {
+        channel_id: channelId,
+        call_id: callId,
+        ends_at: endsAtIso,
+      } = payload as CallAloneWarningWirePayload;
+      const endsAt = endsAtIso ? Date.parse(endsAtIso) : Number.NaN;
+      if (!callId || !Number.isFinite(endsAt)) return null;
+      return { type: eventType, channelId: channelId ?? null, callId, endsAt };
+    })
+    .with('call_alone_cleared', (eventType) => {
+      const { channel_id: channelId, call_id: callId } =
+        payload as CallAloneClearedWirePayload;
+      if (!callId) return null;
+      return { type: eventType, channelId: channelId ?? null, callId };
+    })
     .with('call_share_with_team_toggled', (eventType) => {
       const {
         channel_id: channelId,
@@ -200,6 +249,8 @@ type CallEventHandlers = {
   onCallEnded?: (event: CallEndedEvent) => void;
   onCallAnswered?: (event: CallAnsweredEvent) => void;
   onCallDeclined?: (event: CallDeclinedEvent) => void;
+  onCallAloneWarning?: (event: CallAloneWarningEvent) => void;
+  onCallAloneCleared?: (event: CallAloneClearedEvent) => void;
   onShareWithTeamToggled?: (event: CallShareWithTeamToggledEvent) => void;
 };
 
@@ -253,6 +304,19 @@ export function createCallEventsEffect(handlers: CallEventHandlers) {
           channelId: event.channelId,
           callId: event.callId,
           declinedBy: event.declinedBy,
+        });
+      })
+      .with({ type: 'call_alone_warning' }, (event) => {
+        handlers.onCallAloneWarning?.({
+          channelId: event.channelId,
+          callId: event.callId,
+          endsAt: event.endsAt,
+        });
+      })
+      .with({ type: 'call_alone_cleared' }, (event) => {
+        handlers.onCallAloneCleared?.({
+          channelId: event.channelId,
+          callId: event.callId,
         });
       })
       .with({ type: 'call_share_with_team_toggled' }, (event) => {

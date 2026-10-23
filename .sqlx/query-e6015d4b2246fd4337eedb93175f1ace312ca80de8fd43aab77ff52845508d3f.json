@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE calls SET alone_since = COALESCE(alone_since, $2) WHERE id = $1\n               RETURNING alone_since AS \"alone_since!\", alone_warned_at, alone_since = $2 AS \"newly_alone!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "alone_since!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 1,
+        "name": "alone_warned_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "newly_alone!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      null
+    ]
+  },
+  "hash": "e6015d4b2246fd4337eedb93175f1ace312ca80de8fd43aab77ff52845508d3f"
+}

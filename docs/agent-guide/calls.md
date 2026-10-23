@@ -71,6 +71,46 @@ does not pin someone, tapping pins the displayed person, and a participant who
 leaves during a held touch cannot be selected. Exercise speaker changes and
 departures during row gestures on a physical iPhone as well as the simulator.
 
+Leaving a native iOS call is final. The drawer's **Leave**, CallKit's end
+button and the alone prompt's **Leave** all end the CallKit call, its LiveKit
+room, the drawer and PiP, even when the native session has already lost
+track of the call. PiP and the drawer appear only while a call is active, so
+restoring a PiP left over from an ended call dismisses it instead of opening
+an empty drawer. A call the user left is never rejoined automatically: a
+native snapshot that still reports it is ended natively, and only tapping
+Join in that channel lets the call back in. A CallKit answer handled more
+than 60 seconds after it was fulfilled is dropped rather than joined. Verify
+on a physical iPhone that Leave from the drawer, from the lock screen, and
+right before backgrounding the app each end the call without a PiP or drawer
+returning, and that tapping Join afterwards still rejoins a call that is
+still running.
+
+Native call logs go to the unified log (subsystem: the app's bundle id,
+category `CallKit`) at notice level, so they survive on the device. Collect
+them from a connected iPhone with
+`sudo log collect --device-udid <udid> --start '<time>' --output calls.logarchive`
+and read them with `log show --predicate 'category == "CallKit"' calls.logarchive`.
+They never contain identities, names, or device names; participants appear
+as LiveKit SIDs. The app's `call_action` analytics record `callId` on `joined`
+and `left`, what started each join (`trigger`: `user`, `deep_link`, `restore`,
+`auto_rejoin`), and why each leave ran (`leaveReason`: `user_initiated`,
+`native_ended`, `join_cancelled`, `stale_native_session`).
+
+### Alone in a call
+
+When the only person left in a call is a Macro user, the server warns them
+after 5 minutes: `You're the only one here` with **Stay in call**, and the
+call ends 2 minutes later unless they stay. Staying restarts the 5-minute
+clock, and someone joining clears the warning on every device. On the web,
+desktop and Android the warning is a dialog (a drawer at phone width) with a
+countdown; **Dismiss** hides it and keeps the deadline. On iOS CallKit calls
+it is a native alert above the call drawer, or a notification while the app
+is in the background, where the phone also posts its own notice after 5
+minutes alone. A call whose only remaining participant is a guest never
+times out. Verify by leaving another participant's tab and waiting in the
+call: the warning, Stay, the end after the deadline, and dismissal when
+someone joins.
+
 If a recording fails to play, reload the page to obtain a fresh recording link,
 or use **Open or download recording**. The playback warning does not assume
 that the failure is caused by an unsupported media format.

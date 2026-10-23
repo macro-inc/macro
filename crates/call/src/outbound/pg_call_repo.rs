@@ -1,5 +1,6 @@
 //! Postgres-backed repository for call state.
 
+mod alone;
 mod edit;
 mod imported;
 mod lifecycle;
@@ -32,13 +33,14 @@ use crate::domain::meetings::{
     GuestId, Meeting, MeetingPreparation, MeetingToken, UpdateMeetingRequest,
 };
 use crate::domain::models::{
-    ActiveCallSummary, AddParticipantError, ArchivedCall, Call, CallError, CallParticipant,
-    CallPeople, CallRecord, CallRecordGuest, CallRecordPage, CallRecordParticipant,
-    CallRecordPreview, CallRecordPreviewData, CallRecordTranscriptSegment, CustomSpeakerAssignment,
-    DeletedCallRecordStorageKeys, EditCallRecordRepoArgs, EnrichedCallTranscript,
-    TranscriptSegmentRequest, WithCallId,
+    ActiveCallSummary, AddParticipantError, AloneCallState, ArchivedCall, Call, CallError,
+    CallParticipant, CallPeople, CallRecord, CallRecordGuest, CallRecordPage,
+    CallRecordParticipant, CallRecordPreview, CallRecordPreviewData, CallRecordTranscriptSegment,
+    CustomSpeakerAssignment, DeletedCallRecordStorageKeys, EditCallRecordRepoArgs,
+    EnrichedCallTranscript, TranscriptSegmentRequest, WithCallId,
 };
 use crate::domain::ports::CallRepository;
+use lifecycle::ArchiveCondition;
 use property_clauses::{clause_params, property_clauses};
 
 /// Name of the partial unique index enforcing one active call per user.
@@ -1032,7 +1034,7 @@ impl CallRepository for PgCallRepo {
     }
 
     async fn archive_call(&self, call_id: &Uuid) -> Result<ArchivedCall, CallError> {
-        self.archive_session(call_id, false)
+        self.archive_session(call_id, ArchiveCondition::Always)
             .await?
             .ok_or_else(|| CallError::NotFound(call_id.to_string()))
     }
@@ -1040,7 +1042,41 @@ impl CallRepository for PgCallRepo {
         &self,
         call_id: &Uuid,
     ) -> Result<Option<ArchivedCall>, CallError> {
-        self.archive_session(call_id, true).await
+        self.archive_session(call_id, ArchiveCondition::Empty).await
+    }
+    async fn archive_alone_call(
+        &self,
+        call_id: &Uuid,
+        warned_by: DateTime<Utc>,
+    ) -> Result<Option<ArchivedCall>, CallError> {
+        self.archive_session(call_id, ArchiveCondition::AloneWarnedBy(warned_by))
+            .await
+    }
+    async fn mark_call_alone(
+        &self,
+        call_id: &Uuid,
+        now: DateTime<Utc>,
+    ) -> Result<Option<AloneCallState>, CallError> {
+        self.start_alone(call_id, now).await
+    }
+    async fn warn_alone_call(
+        &self,
+        call_id: &Uuid,
+        now: DateTime<Utc>,
+        alone_by: DateTime<Utc>,
+    ) -> Result<Option<DateTime<Utc>>, CallError> {
+        self.record_alone_warning(call_id, now, alone_by).await
+    }
+    async fn clear_call_alone(&self, call_id: &Uuid) -> Result<bool, CallError> {
+        self.clear_alone(call_id).await
+    }
+    async fn reset_call_alone<'a>(
+        &self,
+        call_id: &Uuid,
+        user_id: MacroUserIdStr<'a>,
+        now: DateTime<Utc>,
+    ) -> Result<bool, CallError> {
+        self.reset_alone(call_id, user_id, now).await
     }
 
     #[tracing::instrument(err, skip(self))]

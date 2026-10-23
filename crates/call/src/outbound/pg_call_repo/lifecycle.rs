@@ -2,12 +2,24 @@
 
 use super::*;
 
+/// What must hold, under the call lock, for an archive to proceed.
+#[derive(Debug, Clone, Copy)]
+pub(super) enum ArchiveCondition {
+    /// Archive unconditionally.
+    Always,
+    /// Archive only when no participant or guest is still present.
+    Empty,
+    /// Archive only when the alone warning was sent at or before this
+    /// instant; everyone still present is marked as having left.
+    AloneWarnedBy(DateTime<Utc>),
+}
+
 impl PgCallRepo {
     #[tracing::instrument(err, skip(self))]
     pub(super) async fn archive_session(
         &self,
         call_id: &Uuid,
-        require_empty: bool,
+        condition: ArchiveCondition,
     ) -> Result<Option<ArchivedCall>, CallError> {
         let mut tx = self.pool.begin().await?;
         // The live share-with-team intent is translated into canonical team
@@ -17,7 +29,7 @@ impl PgCallRepo {
         // Fetch and lock the active call so concurrent archive_call callers serialize.
         let call = sqlx::query!(
             r#"
-            SELECT id, channel_id, room_name, created_by, created_at, egress_id, recording_key, preview_url, recording_started_at, share_permission_id, share_with_team, meeting_id,
+            SELECT id, channel_id, room_name, created_by, created_at, egress_id, recording_key, preview_url, recording_started_at, share_permission_id, share_with_team, meeting_id, alone_warned_at,
                    (SELECT title FROM call_meetings WHERE id = calls.meeting_id) AS meeting_title
             FROM calls
             WHERE id = $1
@@ -29,21 +41,49 @@ impl PgCallRepo {
         .await?
         .ok_or_else(|| CallError::NotFound(call_id.to_string()))?;
 
-        if require_empty
-            && sqlx::query_scalar!(
-                r#"SELECT (
-                    EXISTS(SELECT 1 FROM call_participants WHERE call_id = $1 AND left_at IS NULL)
-                    OR EXISTS(SELECT 1 FROM call_guests WHERE call_id = $1 AND left_at IS NULL)
-                ) AS "exists!""#,
-                call_id,
-            )
-            .fetch_one(tx.as_mut())
-            .await?
-        {
-            return Ok(None);
+        let ended_at = Utc::now().trunc_subsecs(6);
+        match condition {
+            ArchiveCondition::Always => {}
+            ArchiveCondition::Empty => {
+                if sqlx::query_scalar!(
+                    r#"SELECT (
+                        EXISTS(SELECT 1 FROM call_participants WHERE call_id = $1 AND left_at IS NULL)
+                        OR EXISTS(SELECT 1 FROM call_guests WHERE call_id = $1 AND left_at IS NULL)
+                    ) AS "exists!""#,
+                    call_id,
+                )
+                .fetch_one(tx.as_mut())
+                .await?
+                {
+                    return Ok(None);
+                }
+            }
+            ArchiveCondition::AloneWarnedBy(warned_by) => {
+                // Staying clears the warning, so a stay that won the lock
+                // keeps the call alive.
+                if call
+                    .alone_warned_at
+                    .is_none_or(|warned_at| warned_at > warned_by)
+                {
+                    return Ok(None);
+                }
+                sqlx::query!(
+                    "UPDATE call_participants SET left_at = $2 WHERE call_id = $1 AND left_at IS NULL",
+                    call_id,
+                    ended_at,
+                )
+                .execute(tx.as_mut())
+                .await?;
+                sqlx::query!(
+                    "UPDATE call_guests SET left_at = $2 WHERE call_id = $1 AND left_at IS NULL",
+                    call_id,
+                    ended_at,
+                )
+                .execute(tx.as_mut())
+                .await?;
+            }
         }
 
-        let ended_at = Utc::now().trunc_subsecs(6);
         let duration_ms = ended_at
             .signed_duration_since(call.created_at)
             .num_milliseconds()

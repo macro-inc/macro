@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, channel_id, room_name, created_by, created_at, egress_id, recording_key, preview_url, recording_started_at, share_permission_id, share_with_team, meeting_id,\n                   (SELECT title FROM call_meetings WHERE id = calls.meeting_id) AS meeting_title\n            FROM calls\n            WHERE id = $1\n            FOR UPDATE\n            ",
+  "query": "\n            SELECT id, channel_id, room_name, created_by, created_at, egress_id, recording_key, preview_url, recording_started_at, share_permission_id, share_with_team, meeting_id, alone_warned_at,\n                   (SELECT title FROM call_meetings WHERE id = calls.meeting_id) AS meeting_title\n            FROM calls\n            WHERE id = $1\n            FOR UPDATE\n            ",
   "describe": {
     "columns": [
       {
@@ -65,6 +65,11 @@
       },
       {
         "ordinal": 12,
+        "name": "alone_warned_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 13,
         "name": "meeting_title",
         "type_info": "Text"
       }
@@ -87,8 +92,9 @@
       false,
       false,
       true,
+      true,
       null
     ]
   },
-  "hash": "1107a52cef8f77f62717fe1e0b9834f0d7bb106eed211cf207881b917ccba36a"
+  "hash": "c9c891b445f42d44c472098c2f484bc11064e5266af3ba714022722c5de63e2a"
 }

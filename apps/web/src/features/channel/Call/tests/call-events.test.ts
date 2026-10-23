@@ -13,11 +13,13 @@ vi.mock('@service-connection/websocket', () => ({
 const wire = (payload: unknown) => JSON.stringify(payload);
 
 describe('isCallEventType', () => {
-  it('accepts the five call events', () => {
+  it('accepts the call events', () => {
     expect(isCallEventType('call_started')).toBe(true);
     expect(isCallEventType('call_ended')).toBe(true);
     expect(isCallEventType('call_answered')).toBe(true);
     expect(isCallEventType('call_declined')).toBe(true);
+    expect(isCallEventType('call_alone_warning')).toBe(true);
+    expect(isCallEventType('call_alone_cleared')).toBe(true);
     expect(isCallEventType('call_share_with_team_toggled')).toBe(true);
   });
 
@@ -113,6 +115,45 @@ describe('parseCallEvent', () => {
       shareWithTeam: true,
       toggledBy: 'user-3',
     });
+  });
+
+  it('parses call_alone_warning with its deadline in epoch ms', () => {
+    expect(
+      parseCallEvent(
+        'call_alone_warning',
+        wire({
+          channel_id: 'chan-1',
+          call_id: 'call-1',
+          ends_at: '2026-10-21T19:47:00Z',
+        })
+      )
+    ).toEqual({
+      type: 'call_alone_warning',
+      channelId: 'chan-1',
+      callId: 'call-1',
+      endsAt: Date.parse('2026-10-21T19:47:00Z'),
+    });
+  });
+
+  it('parses call_alone_cleared for a standalone meeting', () => {
+    expect(
+      parseCallEvent(
+        'call_alone_cleared',
+        wire({ channel_id: null, call_id: 'call-1' })
+      )
+    ).toEqual({
+      type: 'call_alone_cleared',
+      channelId: null,
+      callId: 'call-1',
+    });
+  });
+
+  it.each([
+    { call_id: 'call-1' },
+    { call_id: 'call-1', ends_at: 'soon' },
+    { ends_at: '2026-10-21T19:47:00Z' },
+  ])('rejects a call_alone_warning without a usable deadline', (payload) => {
+    expect(parseCallEvent('call_alone_warning', wire(payload))).toBe(null);
   });
 
   it('returns null for a non-call event type', () => {

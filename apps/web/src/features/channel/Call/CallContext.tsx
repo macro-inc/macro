@@ -1669,7 +1669,7 @@ function createCallState() {
         unregister();
       };
     },
-    onJoined: (call) => {
+    onJoined: (call, source) => {
       const answeringUserId = userId();
       if (answeringUserId && call.callId) {
         publishCallResolution({
@@ -1682,13 +1682,16 @@ function createCallState() {
       analytics.track('call_action', {
         action: 'joined',
         channelId: call.channelId,
+        callId: call.callId ?? undefined,
+        trigger: source,
       });
     },
-    onLeft: (channelId) =>
+    onLeft: (call, reason) =>
       analytics.track('call_action', {
         action: 'left',
-        channelId,
-        leaveReason: 'user_initiated',
+        channelId: call.channelId,
+        callId: call.callId ?? undefined,
+        leaveReason: reason,
       }),
     reportError: (error) => console.error('call lifecycle failed', error),
   });

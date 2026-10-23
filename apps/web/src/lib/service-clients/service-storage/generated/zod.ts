@@ -2880,6 +2880,16 @@ export const toggleShareWithTeamParams = zod.object({
 export const toggleShareWithTeamResponse = zod.boolean();
 
 /**
+ * Keeps the identified live call going for a participant the alone timeout
+warned: restarts their alone period and tells their other devices to
+dismiss the warning (`call_alone_cleared`).
+ * @summary Handler for `POST /call/record/{call_id}/stay`.
+ */
+export const stayInCallParams = zod.object({
+  call_id: zod.uuid().describe('Call ID'),
+});
+
+/**
  * Applies per-diarized-speaker `custom_speaker` overrides to the call's
 archived transcript rows. Auth uses the same `EditAccessLevel` extractor
 as `edit_call_record_handler`.

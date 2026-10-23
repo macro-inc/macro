@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT (\n                        EXISTS(SELECT 1 FROM call_participants WHERE call_id = $1 AND left_at IS NULL)\n                        OR EXISTS(SELECT 1 FROM call_guests WHERE call_id = $1 AND left_at IS NULL)\n                    ) AS \"exists!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "exists!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "97f934c5957986d60aee5348a3e00fb359b52d8d9c225d10f487b232260cb035"
+}

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE call_participants SET left_at = $2 WHERE call_id = $1 AND left_at IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6851d68a1210fdb8fe3f95f3f6799e9b030ed34b04b92093f6d74c66063d300a"
+}

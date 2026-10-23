@@ -62,6 +62,32 @@ Denies the can_use_full_screen_intent command without any pre-configured scope.
 <tr>
 <td>
 
+`call-kit:allow-dismiss-alone-prompt`
+
+</td>
+<td>
+
+Enables the dismiss_alone_prompt command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`call-kit:deny-dismiss-alone-prompt`
+
+</td>
+<td>
+
+Denies the dismiss_alone_prompt command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
 `call-kit:allow-end-active-call`
 
 </td>
@@ -400,6 +426,32 @@ Denies the set_video_overlay_mode command without any pre-configured scope.
 <tr>
 <td>
 
+`call-kit:allow-show-alone-prompt`
+
+</td>
+<td>
+
+Enables the show_alone_prompt command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`call-kit:deny-show-alone-prompt`
+
+</td>
+<td>
+
+Denies the show_alone_prompt command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
 `call-kit:allow-start-outgoing-call`
 
 </td>
@@ -445,6 +497,32 @@ Enables the switch_camera command without any pre-configured scope.
 <td>
 
 Denies the switch_camera command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`call-kit:allow-watch-alone-prompt-response`
+
+</td>
+<td>
+
+Enables the watch_alone_prompt_response command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`call-kit:deny-watch-alone-prompt-response`
+
+</td>
+<td>
+
+Denies the watch_alone_prompt_response command without any pre-configured scope.
 
 </td>
 </tr>

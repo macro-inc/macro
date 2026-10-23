@@ -37,6 +37,8 @@ pub enum CallArchiveReason {
     LastParticipantLeft,
     /// The room-finished webhook archived the call.
     RoomFinished,
+    /// The only person left was a Macro user who did not choose to stay.
+    AloneTimeout,
 }
 
 /// Metadata for [`CallTopicEvent::RecordArchived`].

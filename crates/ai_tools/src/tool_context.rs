@@ -889,6 +889,10 @@ impl CallRtcClient for NoOpCallRtcClient {
         Ok(())
     }
 
+    async fn list_rooms(&self) -> anyhow::Result<Vec<call::domain::models::RtcRoom>> {
+        Ok(Vec::new())
+    }
+
     async fn generate_token<'a>(
         &self,
         _room_name: &str,

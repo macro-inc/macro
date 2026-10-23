@@ -50,6 +50,15 @@ export function declineCall(callId: string) {
 }
 
 /**
+ * Keeps the user in a call the server warned it would end because they are
+ * alone in it. Nothing to cache: the server clears the warning and tells the
+ * user's other devices.
+ */
+export function stayInCall(callId: string) {
+  return throwOnErr(() => callServiceClient.stayInCall(callId));
+}
+
+/**
  * All active calls in channels the user is a member of, newest first. One
  * request app-wide; the websocket
  * call_started/call_ended handlers keep it live.

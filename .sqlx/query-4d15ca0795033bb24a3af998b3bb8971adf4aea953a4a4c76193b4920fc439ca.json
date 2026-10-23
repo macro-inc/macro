@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE calls SET alone_since = NULL, alone_warned_at = NULL WHERE id = $1 AND alone_warned_at IS NOT NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4d15ca0795033bb24a3af998b3bb8971adf4aea953a4a4c76193b4920fc439ca"
+}

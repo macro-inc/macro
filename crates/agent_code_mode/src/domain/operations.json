@@ -365,6 +365,7 @@
   "storage.declineCall": "Decline Call",
   "storage.meetingShare": "Meeting Share",
   "storage.toggleShareWithTeam": "Toggle Share With Team",
+  "storage.stayInCall": "Stay In Call",
   "storage.editCallTranscript": "Edit Call Transcript",
   "storage.getRingStatus": "Get Ring Status",
   "storage.declineRing": "Decline Ring",

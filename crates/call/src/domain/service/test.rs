@@ -26,17 +26,20 @@ use uuid::Uuid;
 
 mod access;
 mod active_meetings;
+mod alone_timeout;
 mod channel_startup;
 mod guest_chat;
 mod meeting_invites;
 mod meeting_participants;
 mod meeting_startup;
+mod orphan_rooms;
 
 use crate::domain::meetings::GuestId;
 use crate::domain::models::{
     ActiveCallSummary, AddParticipantError, ArchivedCall, Call, CallError, CallParticipant,
     CallRecord, CallRecordTranscriptSegment, CallWebhookEvent, DeletedCallRecordStorageKeys,
-    EditCallRecordRequest, EgressS3Config, RingStatus, VerifiedRingToken, VoipPushPayloadRequest,
+    EditCallRecordRequest, EgressS3Config, RingStatus, RtcRoom, VerifiedRingToken,
+    VoipPushPayloadRequest,
 };
 use crate::domain::ports::{
     CallRtcClient, CallService, CallSummarizer, MockCallRepository, MockCallRtcClient,
@@ -120,6 +123,10 @@ impl CallRtcClient for MockRtcClient {
 
     async fn delete_room(&self, _room_name: &str) -> anyhow::Result<()> {
         Ok(())
+    }
+
+    async fn list_rooms(&self) -> anyhow::Result<Vec<RtcRoom>> {
+        Ok(Vec::new())
     }
 
     async fn generate_token<'a>(
@@ -927,6 +934,10 @@ async fn reconcile_marks_disconnected_people_left_and_archives_the_empty_call() 
 #[tokio::test]
 async fn reconcile_keeps_people_still_connected_to_the_room() {
     let mut repo = reconcile_repo(minutes_ago(10));
+    // Two people connected: the call is not alone.
+    repo.expect_clear_call_alone()
+        .times(1)
+        .returning(|_| Box::pin(async { Ok(false) }));
     repo.expect_get_participant_count()
         .times(1)
         .returning(|_| Box::pin(async { Ok(2) }));

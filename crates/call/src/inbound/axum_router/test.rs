@@ -4,7 +4,7 @@ use axum::response::IntoResponse;
 use crate::domain::models::CallError;
 use entity_access::domain::models::{AccessLevel, EntityPermission};
 
-use super::DeclineCallPermission;
+use super::{DeclineCallPermission, StayInCallPermission};
 
 #[test]
 fn maps_domain_errors_to_status_codes() {
@@ -46,13 +46,14 @@ fn maps_domain_errors_to_status_codes() {
 }
 
 /// The entity-access service resolves a call to an access level, never a
-/// channel role, so the decline route must accept a plain viewer.
+/// channel role, so the decline and stay routes must accept a plain viewer.
 #[test]
-fn decline_accepts_the_permission_call_access_resolves_to() {
+fn per_user_call_routes_accept_the_permission_call_access_resolves_to() {
     let viewer = EntityPermission::AccessLevel {
         access_level: AccessLevel::View,
     };
     assert!(viewer.satisfies::<DeclineCallPermission>());
+    assert!(viewer.satisfies::<StayInCallPermission>());
 }
 
 mod public_routes {

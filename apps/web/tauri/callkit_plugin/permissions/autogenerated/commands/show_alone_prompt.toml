@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-show-alone-prompt"
+description = "Enables the show_alone_prompt command without any pre-configured scope."
+commands.allow = ["show_alone_prompt"]
+
+[[permission]]
+identifier = "deny-show-alone-prompt"
+description = "Denies the show_alone_prompt command without any pre-configured scope."
+commands.deny = ["show_alone_prompt"]

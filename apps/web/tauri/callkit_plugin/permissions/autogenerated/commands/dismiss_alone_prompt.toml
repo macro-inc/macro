@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-dismiss-alone-prompt"
+description = "Enables the dismiss_alone_prompt command without any pre-configured scope."
+commands.allow = ["dismiss_alone_prompt"]
+
+[[permission]]
+identifier = "deny-dismiss-alone-prompt"
+description = "Denies the dismiss_alone_prompt command without any pre-configured scope."
+commands.deny = ["dismiss_alone_prompt"]

@@ -252,6 +252,10 @@ fn archive_reasons_use_exact_wire_names() {
         serde_json::to_value(CallArchiveReason::RoomFinished).expect("serializable archive reason"),
         "room_finished"
     );
+    assert_eq!(
+        serde_json::to_value(CallArchiveReason::AloneTimeout).expect("serializable archive reason"),
+        "alone_timeout"
+    );
 }
 
 #[test]

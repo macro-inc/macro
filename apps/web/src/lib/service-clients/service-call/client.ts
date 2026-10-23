@@ -227,6 +227,20 @@ export const callServiceClient = {
     ).map(() => undefined);
   },
 
+  /**
+   * `POST /call/record/{callId}/stay`: keeps the user in a call they are
+   * alone in after the server warned it would end it. 404 when the call
+   * already ended or the user is no longer in it.
+   */
+  async stayInCall(callId: string) {
+    return (
+      await fetchWithToken<Record<string, never>>(
+        `${host}/call/record/${callId}/stay`,
+        { method: 'POST' }
+      )
+    ).map(() => undefined);
+  },
+
   async checkActiveCall(channelId: string) {
     return (
       await fetchWithToken<CallActiveResponse>(

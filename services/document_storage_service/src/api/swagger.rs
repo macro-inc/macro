@@ -379,6 +379,7 @@ use utoipa::OpenApi;
         call::inbound::axum_router::get_active_calls_handler,
         call::inbound::axum_router::leave_or_end_call_handler,
         call::inbound::axum_router::decline_call_handler,
+        call::inbound::axum_router::stay_in_call_handler,
         call::inbound::axum_router::get_call_record_handler,
         call::inbound::axum_router::edit_call_record_handler,
         call::inbound::axum_router::edit_call_transcript_handler,

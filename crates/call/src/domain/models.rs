@@ -152,6 +152,27 @@ pub struct VerifiedRingToken {
     pub room: Option<String>,
 }
 
+/// Alone-timeout state of an active call whose only connected person is one
+/// Macro user.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AloneCallState {
+    /// When the user became the only person connected.
+    pub alone_since: DateTime<Utc>,
+    /// When they were warned that the call will end, if they have been.
+    pub warned_at: Option<DateTime<Utc>>,
+    /// Whether this update is the one that started the alone period.
+    pub newly_alone: bool,
+}
+
+/// An RTC room that currently exists on the provider.
+#[derive(Debug, Clone)]
+pub struct RtcRoom {
+    /// The room name; Macro names rooms after their call id.
+    pub name: String,
+    /// When the provider created the room.
+    pub created_at: DateTime<Utc>,
+}
+
 /// Response for the leave/end call operation.
 #[derive(Debug, serde::Serialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]

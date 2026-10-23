@@ -29,12 +29,13 @@ use super::meetings::{
 };
 
 use super::models::{
-    ActiveCallSummary, ActiveCallsResponse, AddParticipantError, ArchivedCall, Call,
-    CallActiveResponse, CallError, CallParticipant, CallRecord, CallRecordPreview,
+    ActiveCallSummary, ActiveCallsResponse, AddParticipantError, AloneCallState, ArchivedCall,
+    Call, CallActiveResponse, CallError, CallParticipant, CallRecord, CallRecordPreview,
     CallRecordTranscriptSegment, CallTokenResponse, CallTranscriptCustomSpeakerResult,
     CallWebhookEvent, EgressS3Config, EnrichedCallTranscript, GetBatchCallRecordPreviewRequest,
     GetBatchCallRecordPreviewResponse, GetCallRecordsRequest, LeaveCallResponse,
-    RingStatusResponse, TranscriptSegmentRequest, VerifiedRingToken, VoipPushPayloadRequest,
+    RingStatusResponse, RtcRoom, TranscriptSegmentRequest, VerifiedRingToken,
+    VoipPushPayloadRequest,
 };
 
 /// Repository port for persisting call state to the database.
@@ -337,6 +338,50 @@ pub trait CallRepository: Send + Sync + 'static {
         &self,
         call_id: &Uuid,
     ) -> impl Future<Output = Result<Option<ArchivedCall>, CallError>> + Send;
+
+    /// Archive a call that timed out alone: only if its alone warning was sent
+    /// at or before `warned_by` while holding the call lock, marking everyone
+    /// still present as left. `None` when the warning was cleared meanwhile.
+    fn archive_alone_call(
+        &self,
+        call_id: &Uuid,
+        warned_by: DateTime<Utc>,
+    ) -> impl Future<Output = Result<Option<ArchivedCall>, CallError>> + Send;
+
+    /// Record that the call's only connected person is one Macro user, keeping
+    /// an earlier start, and return its alone state. `None` when the call is
+    /// no longer active.
+    fn mark_call_alone(
+        &self,
+        call_id: &Uuid,
+        now: DateTime<Utc>,
+    ) -> impl Future<Output = Result<Option<AloneCallState>, CallError>> + Send;
+
+    /// Record the alone warning at `now` if the call has been alone since
+    /// `alone_by` or earlier and was not warned yet. Returns the warning time
+    /// only to the one caller that recorded it.
+    fn warn_alone_call(
+        &self,
+        call_id: &Uuid,
+        now: DateTime<Utc>,
+        alone_by: DateTime<Utc>,
+    ) -> impl Future<Output = Result<Option<DateTime<Utc>>, CallError>> + Send;
+
+    /// Clear the call's alone state. Returns `true` only to the one caller
+    /// that cleared a sent warning.
+    fn clear_call_alone(
+        &self,
+        call_id: &Uuid,
+    ) -> impl Future<Output = Result<bool, CallError>> + Send;
+
+    /// Restart the alone period at `now` and clear any warning, when the user
+    /// is an active participant of the call. Returns whether they were.
+    fn reset_call_alone<'a>(
+        &self,
+        call_id: &Uuid,
+        user_id: MacroUserIdStr<'a>,
+        now: DateTime<Utc>,
+    ) -> impl Future<Output = Result<bool, CallError>> + Send;
 
     /// Set the recording key on an archived call record.
     fn set_recording_key(
@@ -691,8 +736,11 @@ pub trait CallRtcClient: Send + Sync + 'static {
     /// Reserve an empty room for setup, expiring automatically without participants.
     fn prepare_room(&self, room_name: &str) -> impl Future<Output = anyhow::Result<()>> + Send;
 
-    /// Delete an RTC room.
+    /// Delete an RTC room. Deleting a room that no longer exists succeeds.
     fn delete_room(&self, room_name: &str) -> impl Future<Output = anyhow::Result<()>> + Send;
+
+    /// Every RTC room that currently exists.
+    fn list_rooms(&self) -> impl Future<Output = anyhow::Result<Vec<RtcRoom>>> + Send;
 
     /// Read connected identities and names without joining the room.
     fn list_meeting_participants(
@@ -885,6 +933,9 @@ pub trait CallService: Send + Sync + 'static {
     /// Backstop for missed `participant_left` webhooks: marks participants
     /// and guests no longer connected to their RTC room as left, and archives
     /// calls that leaves empty. One call's failure does not stop the rest.
+    /// Enforces the alone timeout on calls whose only connected person is one
+    /// Macro user. Then deletes RTC rooms that stale tokens recreated for
+    /// archived calls.
     fn reconcile_stale_calls(&self) -> impl Future<Output = Result<(), CallError>> + Send;
 
     /// List all active calls in channels the user is an active member of,
@@ -917,6 +968,16 @@ pub trait CallService: Send + Sync + 'static {
     /// call cannot decline the channel's newer active call. Returns
     /// [`CallError::NotFound`] when that call is no longer active.
     fn decline_call<'a>(
+        &self,
+        call_id: &Uuid,
+        user_id: MacroUserIdStr<'a>,
+    ) -> impl Future<Output = Result<(), CallError>> + Send;
+
+    /// Keep a live call going for a participant the alone timeout warned:
+    /// restarts their alone period and tells their other devices to dismiss
+    /// the warning (`call_alone_cleared`). Returns [`CallError::NotFound`]
+    /// when the call is not live or the user is not an active participant.
+    fn stay_in_call<'a>(
         &self,
         call_id: &Uuid,
         user_id: MacroUserIdStr<'a>,

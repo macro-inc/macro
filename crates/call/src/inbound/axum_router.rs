@@ -103,6 +103,7 @@ impl<S, Svc, Auth> FromRef<CallRouterState<S, Svc, Auth>> for MacroAuthorization
 /// - `GET /active` — list all active calls in channels the caller is a member of
 /// - `DELETE /{channel_id}` — leave or end a call
 /// - `POST /record/{call_id}/decline` — decline a ringing call on every device
+/// - `POST /record/{call_id}/stay` — keep a live call going after the alone warning
 /// - `GET /record/{call_id}` — get a full call record (transcript + participants)
 /// - `PATCH /record/{call_id}` — edit a call record (share permissions, team sharing, name)
 /// - `PATCH /record/{call_id}/transcript` — set per-diarized-speaker custom_speaker overrides
@@ -173,6 +174,10 @@ where
         .route(
             "/record/{call_id}/decline",
             post(decline_call_handler::<S, Svc, Auth>),
+        )
+        .route(
+            "/record/{call_id}/stay",
+            post(stay_in_call_handler::<S, Svc, Auth>),
         )
         .route(
             "/record/{call_id}",
@@ -755,6 +760,51 @@ pub async fn decline_call_handler<
     state
         .service
         .decline_call(&call_id, user.authorization.user.macro_user_id.clone())
+        .await?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Permission `POST /call/record/{call_id}/stay` requires: whoever can see the
+/// call; the service then requires an active participant. Like decline, call
+/// access resolves to an access level, never a channel role.
+pub(crate) type StayInCallPermission = ViewAccessLevel;
+
+/// Handler for `POST /call/record/{call_id}/stay`.
+///
+/// Keeps the identified live call going for a participant the alone timeout
+/// warned: restarts their alone period and tells their other devices to
+/// dismiss the warning (`call_alone_cleared`).
+#[utoipa::path(
+    post,
+    operation_id = "stay_in_call",
+    path = "/call/record/{call_id}/stay",
+    params(
+        ("call_id" = Uuid, Path, description = "Call ID"),
+    ),
+    responses(
+        (status = 204, description = "Alone period restarted"),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse, description = "The call is not live or the caller is not in it"),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn stay_in_call_handler<
+    S: CallService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<CallRouterState<S, Svc, Auth>>,
+    access: CallAccessLevelExtractor<StayInCallPermission, Svc, Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+) -> Result<StatusCode, CallError> {
+    let call_id = Uuid::parse_str(&access.entity_access_receipt.entity().entity_id)
+        .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid call_id in receipt")))?;
+
+    state
+        .service
+        .stay_in_call(&call_id, user.authorization.user.macro_user_id.clone())
         .await?;
 
     Ok(StatusCode::NO_CONTENT)

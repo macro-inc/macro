@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE calls SET alone_since = $3, alone_warned_at = NULL\n               WHERE id = $1 AND EXISTS (\n                   SELECT 1 FROM call_participants\n                   WHERE call_id = $1 AND user_id = $2 AND left_at IS NULL\n               )",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "74271a83718d06d0d3bb339f77454049e6ff07db492aeb9827275874807a8207"
+}
