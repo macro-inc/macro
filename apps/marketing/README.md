@@ -1076,6 +1076,9 @@ and correctly sized logos before releasing them.
 
 ### Pricing savings comparison
 
+The Free/Pro/Max comparison uses fixed plan columns, a continuous Pro-column
+highlight, and subdued Free values on desktop and phones.
+
 `/pricing` uses a single aligned table in `SavingsCalculator`, with a compact
 savings header and team-size control above it. Show eight primary tools:
 Superhuman, Slack, Notion, Jira, HubSpot Professional, Granola Business,

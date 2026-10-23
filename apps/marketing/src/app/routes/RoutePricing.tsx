@@ -369,8 +369,8 @@ function comparisonPlanHeadingStyle(color: string): JSX.CSSProperties {
 }
 
 function ComparisonGrid() {
-  const cols = () =>
-    mobile() ? '1fr 64px 64px 64px' : '1fr 140px 140px 140px';
+  const planWidth = () => (mobile() ? 64 : 160);
+  const cols = () => `minmax(0, 1fr) repeat(3, ${planWidth()}px)`;
 
   return (
     <section
@@ -388,7 +388,7 @@ function ComparisonGrid() {
         style={{
           'box-sizing': 'border-box',
           'max-width': '1100px',
-          'padding-left': mobile() ? '12px' : '40px',
+          'background-image': `linear-gradient(to right, transparent calc(100% - ${planWidth() * 2}px), color-mix(in srgb, var(--c1) 6%, transparent) calc(100% - ${planWidth() * 2}px), color-mix(in srgb, var(--c1) 6%, transparent) calc(100% - ${planWidth()}px), transparent calc(100% - ${planWidth()}px))`,
           width: '100%',
         }}
       >
@@ -397,16 +397,28 @@ function ComparisonGrid() {
             'align-items': 'end',
             'border-bottom': `1px solid ${RULE_STRONG}`,
             display: 'grid',
-            gap: mobile() ? '8px' : '16px',
+            gap: '0',
             'grid-template-columns': cols(),
-            padding: mobile() ? '0 4px 16px' : '0 8px 20px',
+            padding: '0',
           }}
         >
           <div aria-hidden="true" />
           <For each={comparisonPlans}>
             {(plan) => (
-              <div style={{ 'text-align': 'center' }}>
-                <div style={comparisonPlanHeadingStyle('var(--c1)')}>
+              <div
+                style={{
+                  'text-align': 'center',
+                  opacity: plan.key === 'free' ? 0.6 : 1,
+                  padding: mobile() ? '18px 4px' : '24px 12px',
+                  'box-shadow':
+                    plan.key === 'pro' ? 'inset 0 2px 0 var(--c1)' : undefined,
+                }}
+              >
+                <div
+                  style={comparisonPlanHeadingStyle(
+                    plan.key === 'pro' ? 'var(--c1)' : 'var(--c4)'
+                  )}
+                >
                   {plan.name}
                 </div>
                 <div
@@ -429,10 +441,9 @@ function ComparisonGrid() {
               <div
                 style={{
                   ...eyebrowStyle(),
-                  'border-bottom': `1px solid ${RULE}`,
                   color: 'color-mix(in srgb, var(--c4) 70%, transparent)',
-                  'font-size': mobile() ? '12px' : '13px',
-                  padding: mobile() ? '20px 4px 12px' : '24px 8px 14px',
+                  'font-size': mobile() ? '10px' : '11px',
+                  padding: mobile() ? '28px 8px 8px' : '36px 16px 10px',
                 }}
               >
                 {group.group}
@@ -447,15 +458,16 @@ function ComparisonGrid() {
                           ? '0'
                           : `1px solid ${RULE}`,
                       display: 'grid',
-                      gap: mobile() ? '8px' : '16px',
+                      gap: '0',
                       'grid-template-columns': cols(),
-                      padding: mobile() ? '14px 4px' : '16px 8px',
+                      padding: '0',
                     }}
                   >
                     <div
                       style={{
-                        color: 'var(--c2)',
-                        'font-size': mobile() ? '14px' : '16px',
+                        color: 'var(--c4)',
+                        'font-size': mobile() ? '13px' : '14px',
+                        padding: mobile() ? '16px 8px' : '20px 16px',
                         'line-height': 1.4,
                       }}
                     >
@@ -464,7 +476,12 @@ function ComparisonGrid() {
                     <For each={comparisonPlans}>
                       {(plan) => (
                         <div
-                          style={{ display: 'grid', 'place-items': 'center' }}
+                          style={{
+                            display: 'grid',
+                            'place-items': 'center',
+                            padding: mobile() ? '16px 4px' : '20px 12px',
+                            opacity: plan.key === 'free' ? 0.5 : 1,
+                          }}
                         >
                           <ComparisonCell value={row[plan.key]} />
                         </div>
