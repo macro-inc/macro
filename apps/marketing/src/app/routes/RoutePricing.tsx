@@ -952,18 +952,6 @@ function SavingsSection() {
         <h2 id="pricing-savings-title" style={sectionHeadingStyle()}>
           See what you’d save
         </h2>
-        <p
-          style={{
-            color: 'var(--c4)',
-            'font-size': mobile() ? '15px' : '16px',
-            'line-height': 1.6,
-            margin: 0,
-            'max-width': '440px',
-            'text-wrap': 'balance',
-          }}
-        >
-          Choose the tools your team pays for today and how many seats you need.
-        </p>
       </div>
       <SavingsCalculator />
     </section>

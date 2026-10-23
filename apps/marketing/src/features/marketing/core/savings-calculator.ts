@@ -1,16 +1,16 @@
 /**
- * Per-seat prices for the pricing-page savings calculator. Prices are stored as
+ * Shared per-seat prices for the pricing and tour savings calculators. Prices are stored as
  * published (cents per seat per month) and compared as yearly team totals.
  *
  * Competitor prices are their public per-seat rates billed annually (their
- * lowest advertised price), checked against each pricing page in September
+ * lowest advertised price), checked against each pricing page in October
  * 2026. Jira publishes a small-team per-user rate rather than an annual one.
  * Macro is compared at its Pro plan, a flat $40 per seat.
  */
 export const MACRO_SEAT_CENTS = 4000;
 export const MAX_SEATS = 10_000;
 
-export const PRICES_CHECKED = 'September 2026';
+export const PRICES_CHECKED = 'October 2026';
 
 export type SavingsPlan = {
   id: string;
@@ -56,8 +56,8 @@ export const SAVINGS_TOOLS: readonly SavingsTool[] = [
     id: 'jira',
     name: 'Jira',
     plans: [
-      { id: 'standard', name: 'Standard', monthlyCents: 791 },
-      { id: 'premium', name: 'Premium', monthlyCents: 1454 },
+      { id: 'standard', name: 'Standard', monthlyCents: 848 },
+      { id: 'premium', name: 'Premium', monthlyCents: 1556 },
     ],
   },
   {
