@@ -803,7 +803,10 @@ inbox show **Opened** or **Not opened** beside the date in the expanded
 message header. The desktop tooltip and the expanded header details (tap the
 header caret on touch) give the count and first and last open times. Only
 people with access to the sending inbox see it, and the thread refreshes it
-about once a minute. A recipient who reads their own copy in Macro counts as
+about once a minute. Turning the setting off stops tracking new messages;
+statuses already recorded for that inbox stay visible while another of the
+viewer's inboxes has read receipts on, and every status hides once none does.
+A recipient who reads their own copy in Macro counts as
 an open; the reader loads the pixel only on copies in an inbox the viewer owns
 or is a delegate of that were not sent from one of the viewer's addresses or
 send-as aliases. The sender's copy never loads it, including a copy the sender
