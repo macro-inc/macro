@@ -75,7 +75,8 @@ where
     Ok(record)
 }
 
-/// Remove a connected app, revoking its Pipedream account.
+/// Remove a connected app, revoking its Pipedream account. Returns the
+/// connection that was removed, or `None` when the app was not connected.
 ///
 /// The Pipedream deletion is best effort: failing to clean up remotely must
 /// not strand the local row, so remote failures are logged and the local
@@ -86,7 +87,7 @@ pub async fn disconnect_mcp_server<S, P>(
     pipedream: &P,
     user_id: &MacroUserIdStr<'static>,
     app_slug: &str,
-) -> anyhow::Result<()>
+) -> anyhow::Result<Option<PipedreamConnection>>
 where
     S: ConnectionStore,
     P: PipedreamConnect,
@@ -96,7 +97,7 @@ where
         .load(user_id, app_slug)
         .await
         .map_err(anyhow::Error::from)?;
-    if let Some(record) = record
+    if let Some(record) = &record
         && let Err(e) = pipedream.delete_account(&record.account_id).await
     {
         tracing::warn!(error = ?e, account_id = %record.account_id, "failed to delete Pipedream account");
@@ -107,5 +108,5 @@ where
         .await
         .map_err(anyhow::Error::from)?;
 
-    Ok(())
+    Ok(record)
 }

@@ -219,6 +219,7 @@ export function useTasksDataSource(
         enabled: facetOptionsReady,
       })
     : createSearchState({
+        surface: () => 'tasks',
         text: () => state.search,
         localPool,
         enabled: facetOptionsReady,

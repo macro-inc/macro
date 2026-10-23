@@ -179,6 +179,7 @@ export function useEmailDataSource(
   // The quick-access pool behind local search holds no email threads, so
   // every search result comes from the search service.
   const search = createSearchState({
+    surface: () => 'email',
     text: () => state.search,
     enabled: () => sourceEnabled() && searchFavoritesReady(),
     disableLocalSearch: () => true,

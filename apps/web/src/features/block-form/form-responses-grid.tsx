@@ -60,6 +60,7 @@ export function FormResponsesGrid(props: {
           return (
             <div class="@container/database flex min-h-0 flex-1 flex-col overflow-hidden">
               <DatabaseGrid
+                host="form"
                 databaseId={props.databaseId}
                 table={shown()}
                 canEdit={canEdit()}

@@ -159,6 +159,11 @@ export type AppEvents = {
    * An entity was opened in a split (md, task, pdf, chat, email, channel,
    * canvas, code, project, company, contact, ...). Fired from BlockLoader on
    * successful load; nested blocks and preview-panel peeks are excluded.
+   * Route-owned detail views fire it themselves: documents from
+   * FileDetailLoadGate, channels from ChannelDetail, calls and PRs from their
+   * detail views. Blocks without an open history row fire it only when they
+   * set `openAnalyticsEnabled` (database); calendar does not, since it loads
+   * one fixed id and `open_view` already counts it.
    */
   open_entity: EntityEventPayload;
   /**
@@ -167,6 +172,11 @@ export type AppEvents = {
    * split-layout component registry.
    */
   open_view: { viewId: string } & Record<string, unknown>;
+  /**
+   * Agent sessions report create, rename (`update_entity`) and delete as
+   * `entityType: 'agent'`, the type their `open_entity` carries. The retired
+   * AI chat reported `chat`; count both for AI conversations over time.
+   */
   create_entity: EntityEventPayload;
   update_entity: EntityEventPayload & {
     /** Which property changed: 'name' | 'parent_project' | 'status' | ... */
@@ -188,7 +198,18 @@ export type AppEvents = {
 
   theme_changed: { themeId: string };
 
+  /**
+   * A message sent to AI, with `attachmentCount` files. `surface` is 'chat'
+   * for the legacy AI chat and 'agent' for an accepted agent-session prompt
+   * (AgentSession.sendPrompt), which also carries `agentSessionId`,
+   * `agentId`, `newSession`, `submitSurface` and `queued`. Events before the
+   * agent tracking have no `surface`.
+   */
   ai_message_sent: Record<string, unknown>;
+  /**
+   * A file added to the legacy AI chat's input, on upload or drop. Agent
+   * sessions report attachments as `ai_message_sent.attachmentCount` instead.
+   */
   ai_attachment_add: Record<string, unknown>;
   /** A paid user opened Stripe Checkout for an AI credit pack. */
   ai_credits_checkout_start: { amountCents: number };
@@ -198,6 +219,21 @@ export type AppEvents = {
   plan_changed: { plan: 'premium' | 'max'; from?: string };
 
   email_message_sent: Record<string, unknown>;
+  /**
+   * How the inbox-link OAuth callback ended. `connected` covers re-linking an
+   * inbox that was already connected; the client cannot tell them apart.
+   */
+  email_link_callback_result: {
+    outcome:
+      | 'connected'
+      | 'already_initialized'
+      | 'shared_inbox_conflict'
+      | 'payment_required'
+      | 'no_gmail_grant'
+      | 'failed'
+      | 'exception'
+      | 'missing_link_id';
+  };
 
   channel_message_sent: Record<string, unknown>;
   channel_messages_load: {
@@ -211,8 +247,9 @@ export type AppEvents = {
   };
 
   // --- Calls ---------------------------------------------------------------
-  // Frontend call interactions. Authoritative lifecycle (ended, recording,
-  // summary) is server-driven and tracked backend-side.
+  // Frontend call interactions only. Recordings, transcripts and summaries
+  // are produced server-side and send no PostHog events yet; the call service
+  // publishes them only to Kafka (`call.recording_ready`, `call.record_summarized`).
   call_action: {
     action:
       | 'join_clicked'
@@ -247,6 +284,106 @@ export type AppEvents = {
 
   block_pdf_definition_open: Record<string, unknown>;
   block_pdf_section_open: Record<string, unknown>;
+
+  // --- Databases -----------------------------------------------------------
+  /** A committed ops batch wrote rows of a database (grid, board, forms). */
+  database_rows_edited: {
+    databaseId: string;
+    insertedRows: number;
+    updatedRows: number;
+    deletedRows: number;
+  };
+  /**
+   * A database grid read its view: once when a view opens (a view switch
+   * included) and once per filter or sort change that settles for a second.
+   * Refreshes, live updates and layout edits are not counted. `host` tells a
+   * database's own page from a grid embedded in a document or a form's
+   * responses; only `block` opens are database opens.
+   */
+  database_query_run: {
+    databaseId: string;
+    tableId: string;
+    viewId: string;
+    host: 'block' | 'document' | 'form';
+    trigger: 'open' | 'query_change';
+    /** Top-level filter conditions; 0 when unfiltered. */
+    filterConditions: number;
+    sortKeys: number;
+  };
+
+  // --- Calendar ------------------------------------------------------------
+  calendar_event_created: {
+    eventId: string;
+    attendees: number;
+    recurring: boolean;
+    macroCall: boolean;
+    conference: boolean;
+  };
+  calendar_event_rsvp: {
+    response: 'accepted' | 'declined' | 'tentative';
+    scope: 'all' | 'this_event';
+  };
+
+  // --- Notifications -------------------------------------------------------
+  /**
+   * A notification was opened: from the app's lists and stacks (`in_app`), a
+   * browser notification, a native iOS, Android or macOS notification tap
+   * (`native_push`, counted once its navigation applies; `macro_device` tells
+   * the platforms apart), or a home recommendation that opens through its
+   * notification (`home_recommendation`, not a notification-driven open).
+   */
+  notification_opened: {
+    source: 'in_app' | 'browser_push' | 'native_push' | 'home_recommendation';
+    notificationType: string;
+    entityType: string;
+  };
+
+  // --- Search --------------------------------------------------------------
+  /**
+   * One service search per settled query: a query whose results stay
+   * unreplaced for 1.5s, or the last one when the surface closes. Refetches
+   * and later pages of the same query are not counted; no query text is sent.
+   */
+  search_performed: {
+    /** View id ('search', 'email', 'tasks', ...), 'home', or 'mobile_search'. */
+    surface: string;
+    matchType: 'exact' | 'partial';
+    /** First page only: '0' | '1-9' | '10-49' | '50+'. */
+    resultCount: string;
+  };
+
+  // --- CRM -----------------------------------------------------------------
+  crm_company_created: { companyId: string };
+  crm_contact_created: { companyId: string; contactId: string };
+  /**
+   * A committed pipeline write: inserted rows are entries added, updated
+   * rows include stage moves and other cell edits.
+   */
+  crm_pipeline_entries_edited: {
+    pipelineId: string;
+    recordType?: 'company' | 'contact';
+    /** The pipeline editor or the record page's pipeline cards. */
+    surface: 'pipeline' | 'record';
+    insertedRows: number;
+    updatedRows: number;
+    deletedRows: number;
+  };
+
+  // --- Routines ------------------------------------------------------------
+  // Client-side until the scheduled_action service reports to PostHog;
+  // scheduled and event-triggered runs are not counted yet.
+  routine_created: {
+    routineId?: string;
+    source: 'new' | 'duplicate';
+    triggerType: string;
+    targetKind?: 'agent' | 'model';
+  };
+  /** A manual Run now the server accepted, not the run's outcome. */
+  routine_run: {
+    routineId: string;
+    trigger: 'manual';
+    targetKind?: 'agent' | 'model';
+  };
 };
 
 export type AppEventNames = keyof AppEvents;

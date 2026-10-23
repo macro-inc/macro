@@ -267,6 +267,7 @@ export function DocumentDatabase(props: {
                       />
                     </div>
                     <DatabaseGrid
+                      host="document"
                       contentClass="m-3 rounded-lg border border-edge-muted"
                       databaseId={databaseId}
                       table={shown()}

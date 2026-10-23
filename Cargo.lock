@@ -495,6 +495,7 @@ dependencies = [
  "ai_tools",
  "ai_toolset",
  "ai_usage",
+ "analytics_client",
  "anyhow",
  "async-openai",
  "async-stream",
@@ -564,6 +565,7 @@ dependencies = [
  "lexical_client",
  "lexical_mention_extractor",
  "log",
+ "lru 0.16.4",
  "macro_auth",
  "macro_authorization",
  "macro_aws_config",
@@ -1302,11 +1304,14 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "hex",
+ "macro_env",
  "reqwest 0.13.4",
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "tokio",
  "tracing",
+ "uuid",
  "workspace-hack",
 ]
 

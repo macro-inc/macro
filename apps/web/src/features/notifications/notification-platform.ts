@@ -189,7 +189,14 @@ export async function maybeHandlePlatformNotification(
     ) {
       notificationHandle.onClick(() => {
         window.focus();
-        openNotification(notification, splitLayoutManager);
+        openNotification(
+          notification,
+          splitLayoutManager,
+          false,
+          undefined,
+          undefined,
+          { source: 'browser_push' }
+        );
         notificationHandle.close();
       });
     }

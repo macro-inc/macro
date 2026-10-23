@@ -12,6 +12,7 @@ export function createMobileFullTextSearch(
   category: Accessor<EntitySearchCategory>
 ) {
   const search = createSearchState({
+    surface: () => 'mobile_search',
     text,
     disableLocalSearch: () => true,
     enabled: () => category() !== 'projects' && !!text().trim(),

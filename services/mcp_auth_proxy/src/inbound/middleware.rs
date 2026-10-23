@@ -17,6 +17,26 @@ use macro_user_id::user_id::MacroUserIdStr;
 #[derive(Clone)]
 pub struct JwtAccessToken(pub String);
 
+/// Which kind of credential authenticated an MCP request.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum McpAuthMethod {
+    /// A FusionAuth access token, as issued by the OAuth broker to clients
+    /// such as Claude.ai, ChatGPT, or Cursor.
+    OAuth,
+    /// A Macro API key the user created and pasted into the client.
+    ApiKey,
+}
+
+impl McpAuthMethod {
+    /// Stable lowercase label for logs and analytics.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::OAuth => "oauth",
+            Self::ApiKey => "api_key",
+        }
+    }
+}
+
 fn resource_metadata_path() -> String {
     format!(
         "{}/.well-known/oauth-protected-resource",
@@ -77,7 +97,7 @@ fn unauthorized_response(request: &Request<Body>, error: Option<&str>) -> Respon
 }
 
 /// Validates `Authorization: Bearer <token>` and stores the authenticated
-/// [`MacroUserIdStr`] in the request extensions.
+/// [`MacroUserIdStr`] and its [`McpAuthMethod`] in the request extensions.
 pub async fn validate_bearer(
     axum::extract::State(jwt_args): axum::extract::State<JwtValidationArgs>,
     mut request: Request<Body>,
@@ -103,9 +123,9 @@ pub async fn validate_bearer(
         }
     };
 
-    let user_id = match jwt_token {
-        JwtToken::MacroAccessToken(token) => token.macro_user_id.clone(),
-        JwtToken::MacroApiToken(token) => token.macro_user_id.clone(),
+    let (user_id, auth_method) = match jwt_token {
+        JwtToken::MacroAccessToken(token) => (token.macro_user_id, McpAuthMethod::OAuth),
+        JwtToken::MacroApiToken(token) => (token.macro_user_id, McpAuthMethod::ApiKey),
     };
 
     let user_id = match MacroUserIdStr::try_from(user_id) {
@@ -117,6 +137,7 @@ pub async fn validate_bearer(
     };
 
     request.extensions_mut().insert(user_id);
+    request.extensions_mut().insert(auth_method);
     request.extensions_mut().insert(JwtAccessToken(token));
 
     next.run(request).await

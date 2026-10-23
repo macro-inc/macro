@@ -4,7 +4,10 @@
 use crate::cognition::{
     api::{self, context::ApiContext},
     config::{Config, Environment},
-    service,
+    service::{
+        self,
+        integration_analytics::{IntegrationAnalytics, IntegrationChange, IntegrationEvent},
+    },
 };
 use ai_tools::{NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress};
 use anyhow::Context;
@@ -970,10 +973,17 @@ pub async fn build(
     // The moment a connector finishes OAuth, reconcile onboarding for that
     // user — gather jobs start before the user even returns to their
     // original tab. Spawned so the callback response never waits on them.
+    let integration_analytics = IntegrationAnalytics::from_config(&config, &db);
     let onboarding_for_auth_hook = onboarding_service.clone();
+    let analytics_for_auth_hook = integration_analytics.clone();
     let mcp_auth_hook: mcp_client::inbound::axum_router::McpAuthCompletedHook =
         Arc::new(move |record: mcp_client::domain::models::McpServerRecord| {
             let service = onboarding_for_auth_hook.clone();
+            analytics_for_auth_hook.record(
+                record.user_id.clone(),
+                IntegrationChange::Connected,
+                IntegrationEvent::mcp_server(&record.url),
+            );
             Box::pin(async move {
                 tokio::spawn(async move {
                     use onboarding::domain::service::OnboardingService;
@@ -983,21 +993,40 @@ pub async fn build(
                 });
             })
         });
+    let analytics_for_mcp_removed_hook = integration_analytics.clone();
+    let mcp_removed_hook: mcp_client::inbound::axum_router::McpServerRemovedHook =
+        Arc::new(move |record: mcp_client::domain::models::McpServerRecord| {
+            if let Some(event) = IntegrationEvent::removed_mcp_server(&record) {
+                analytics_for_mcp_removed_hook.record(
+                    record.user_id,
+                    IntegrationChange::Disconnected,
+                    event,
+                );
+            }
+            Box::pin(async {})
+        });
     let mcp_state = mcp_client::inbound::McpRouterState::new(
         mcp_server_repo,
         mcp_oauth,
         authorization_state.clone(),
         mcp_client_metadata,
     )
-    .with_auth_completed_hook(mcp_auth_hook);
+    .with_auth_completed_hook(mcp_auth_hook)
+    .with_server_removed_hook(mcp_removed_hook);
 
     // The Pipedream stack gets the same post-connect reconcile hook as the
     // native one: a finished Connect flow starts gather jobs immediately.
     let onboarding_for_pipedream_hook = onboarding_service.clone();
+    let analytics_for_pipedream_hook = integration_analytics.clone();
     let pipedream_auth_hook: pipedream_mcp::inbound::axum_router::PipedreamAuthCompletedHook =
         Arc::new(
             move |connection: pipedream_mcp::domain::models::PipedreamConnection| {
                 let service = onboarding_for_pipedream_hook.clone();
+                analytics_for_pipedream_hook.record(
+                    connection.user_id.clone(),
+                    IntegrationChange::Connected,
+                    IntegrationEvent::pipedream(&connection.app_slug),
+                );
                 Box::pin(async move {
                     tokio::spawn(async move {
                         use onboarding::domain::service::OnboardingService;
@@ -1008,12 +1037,24 @@ pub async fn build(
                 })
             },
         );
+    let pipedream_disconnected_hook: pipedream_mcp::inbound::axum_router::PipedreamDisconnectedHook =
+        Arc::new(
+            move |connection: pipedream_mcp::domain::models::PipedreamConnection| {
+                integration_analytics.record(
+                    connection.user_id,
+                    IntegrationChange::Disconnected,
+                    IntegrationEvent::pipedream(&connection.app_slug),
+                );
+                Box::pin(async {})
+            },
+        );
     let pipedream_state = pipedream_mcp::inbound::PipedreamRouterState::new(
         pipedream_repo,
         pipedream_client,
         authorization_state.clone(),
     )
-    .with_auth_completed_hook(pipedream_auth_hook);
+    .with_auth_completed_hook(pipedream_auth_hook)
+    .with_disconnected_hook(pipedream_disconnected_hook);
 
     let cancellation = tokio_util::sync::CancellationToken::new();
     super::refresh::start(

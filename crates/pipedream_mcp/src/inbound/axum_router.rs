@@ -31,6 +31,10 @@ pub type PipedreamAuthCompletedHook = Arc<
     dyn Fn(PipedreamConnection) -> std::pin::Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync,
 >;
 
+/// Hook invoked after a user disconnects an app, with the connection as it
+/// was before removal. Implementations must be quick or spawn.
+pub type PipedreamDisconnectedHook = PipedreamAuthCompletedHook;
+
 /// Shared state for the MCP router.
 ///
 /// `pipedream` is the single connect path. When it is `None` (deployment not
@@ -41,6 +45,7 @@ pub struct PipedreamRouterState<S, P, Auth> {
     pipedream: Option<Arc<P>>,
     authorization_state: MacroAuthorizationState<Auth>,
     on_auth_completed: Option<PipedreamAuthCompletedHook>,
+    on_disconnected: Option<PipedreamDisconnectedHook>,
 }
 
 impl<S, P, Auth> Clone for PipedreamRouterState<S, P, Auth> {
@@ -50,6 +55,7 @@ impl<S, P, Auth> Clone for PipedreamRouterState<S, P, Auth> {
             pipedream: self.pipedream.clone(),
             authorization_state: self.authorization_state.clone(),
             on_auth_completed: self.on_auth_completed.clone(),
+            on_disconnected: self.on_disconnected.clone(),
         }
     }
 }
@@ -79,6 +85,7 @@ where
             pipedream,
             authorization_state,
             on_auth_completed: None,
+            on_disconnected: None,
         }
     }
 
@@ -86,6 +93,13 @@ where
     /// [`PipedreamAuthCompletedHook`]).
     pub fn with_auth_completed_hook(mut self, hook: PipedreamAuthCompletedHook) -> Self {
         self.on_auth_completed = Some(hook);
+        self
+    }
+
+    /// Invoke `hook` whenever a user disconnects an app (see
+    /// [`PipedreamDisconnectedHook`]).
+    pub fn with_disconnected_hook(mut self, hook: PipedreamDisconnectedHook) -> Self {
+        self.on_disconnected = Some(hook);
         self
     }
 
@@ -498,13 +512,17 @@ where
 {
     let user = &authorization.authorization.user;
     let pipedream = state.pipedream()?;
-    disconnect_mcp_server(
+    let removed = disconnect_mcp_server(
         state.store.as_ref(),
         pipedream.as_ref(),
         &user.macro_user_id,
         &params.app_slug,
     )
     .await?;
+
+    if let (Some(connection), Some(hook)) = (removed, &state.on_disconnected) {
+        hook(connection).await;
+    }
 
     Ok(StatusCode::NO_CONTENT)
 }

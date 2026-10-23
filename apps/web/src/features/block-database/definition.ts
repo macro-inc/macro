@@ -19,6 +19,10 @@ export const definition = defineBlock({
   // A database is not a soup entity and not a cloud-storage item, so the
   // open-tracking path (history row + soup refetch) has nothing to write.
   openTrackingEnabled: false,
+  // Opening a database is still a product signal. Calendar, the other block
+  // without history, stays off: it always loads one fixed id and `open_view`
+  // already counts it.
+  openAnalyticsEnabled: true,
   editPermissionEnabled: true,
   async load(source, _intent) {
     if (!(await waitForDatabaseRollout())) return LoadErrors.MISSING;

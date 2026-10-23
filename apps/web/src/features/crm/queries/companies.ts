@@ -1,4 +1,5 @@
 import { NIL_UUID } from '@app/features/next-soup/filters/filter-store';
+import { analytics } from '@app/lib/analytics';
 import { ThrownResultError, throwOnErr } from '@core/util/result';
 import type { CrmCompanyEntity } from '@entity';
 import { soupKeys } from '@queries/soup/keys';
@@ -152,6 +153,7 @@ export function useCreateCompanyMutation(deps: CrmRecordDependencies) {
       mutationFn: ({ name, domain }: { name: string; domain: string }) =>
         throwOnErr(() => deps.storage.createCompany({ name, domain })),
       onSuccess: (data) => {
+        analytics.track('crm_company_created', { companyId: data.id });
         deps.client.setQueryData(crmKeys.company(data.id).queryKey, data);
         return deps.client.invalidateQueries({ queryKey: soupKeys._def });
       },
@@ -209,13 +211,18 @@ export function useCreateContactMutation(deps: CrmRecordDependencies) {
         throwOnErr(() =>
           deps.storage.createContact({ companyId, name, email })
         ),
-      onSuccess: (_data, { companyId }) =>
-        Promise.all([
+      onSuccess: (contact, { companyId }) => {
+        analytics.track('crm_contact_created', {
+          companyId,
+          contactId: contact.id,
+        });
+        return Promise.all([
           deps.client.invalidateQueries({
             queryKey: crmKeys.company(companyId).queryKey,
           }),
           deps.client.invalidateQueries({ queryKey: soupKeys._def }),
-        ]),
+        ]);
+      },
     }),
     () => deps.client
   );

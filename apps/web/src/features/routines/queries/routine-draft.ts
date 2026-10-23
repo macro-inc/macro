@@ -45,6 +45,15 @@ function getAgentTask(schedule: ScheduledAction): RoutineTask | undefined {
   return result.success ? result.data : undefined;
 }
 
+/** Whether a routine runs an agent or a bare model; undefined when its task is unreadable. */
+export function routineTargetKind(
+  schedule: ScheduledAction
+): RoutineTarget['kind'] | undefined {
+  const task = getAgentTask(schedule);
+  if (!task) return undefined;
+  return task.agent ? 'agent' : 'model';
+}
+
 function targetFromTask(task: RoutineTask): RoutineTarget {
   if (task.agent) {
     if (task.model != null) {

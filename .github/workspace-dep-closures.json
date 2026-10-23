@@ -2010,6 +2010,8 @@
     ],
     "analytics_client": [
       "crates/analytics_client",
+      "crates/macro_env",
+      "crates/macro_env_var",
       "crates/workspace-hack"
     ],
     "anthropic": [
@@ -2543,6 +2545,8 @@
     "cal": [
       "crates/analytics_client",
       "crates/cal",
+      "crates/macro_env",
+      "crates/macro_env_var",
       "crates/model-error-response",
       "crates/workspace-hack"
     ],

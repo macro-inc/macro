@@ -5,12 +5,20 @@ import { err, ok } from 'neverthrow';
 import { render } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { scheduledActionKeys } from './keys';
-import { useSetScheduleEnabledMutation } from './schedules';
+import {
+  useCreateScheduleMutation,
+  useRunScheduleNowMutation,
+  useSetScheduleEnabledMutation,
+} from './schedules';
 
 const setEnabled = vi.hoisted(() => vi.fn());
+const createSchedule = vi.hoisted(() => vi.fn());
+const runNow = vi.hoisted(() => vi.fn());
+const track = vi.hoisted(() => vi.fn());
 vi.mock('@service-scheduled-action/client', () => ({
-  scheduledActionClient: { setEnabled },
+  scheduledActionClient: { setEnabled, createSchedule, runNow },
 }));
+vi.mock('@app/lib/analytics', () => ({ analytics: { track } }));
 vi.mock('@queries/client', async () => {
   const { QueryClient } = await import('@tanstack/solid-query');
   return { queryClient: new QueryClient() };
@@ -66,6 +74,9 @@ function schedules(): ScheduledAction[] | undefined {
 
 beforeEach(() => {
   setEnabled.mockReset();
+  createSchedule.mockReset();
+  runNow.mockReset();
+  track.mockReset();
   queryClient.setQueryData(scheduledActionKeys.list.queryKey, [routine, other]);
 });
 
@@ -136,5 +147,93 @@ describe('routine activation', () => {
     respond(err([{ code: 'CONFLICT', message: 'Routine changed' }]));
     await expect(pausing).rejects.toThrow('Routine changed');
     expect(schedules()).toEqual([{ ...routine, claimed }, other]);
+  });
+});
+
+describe('routine analytics', () => {
+  const agentRoutine: ScheduledAction = {
+    ...routine,
+    task: {
+      agent: { bot_id: '01a15c48-43af-7050-9059-8c5e46d6d7d7' },
+      prompt: '',
+      user_prompt: 'Post the daily metrics',
+    },
+  };
+
+  const request = {
+    name: agentRoutine.name,
+    kind: agentRoutine.kind,
+    task: agentRoutine.task,
+    trigger: agentRoutine.trigger,
+    enabled: true,
+  };
+
+  function mountRoutineMutations() {
+    let mutations!: {
+      create: ReturnType<typeof useCreateScheduleMutation>;
+      duplicate: ReturnType<typeof useCreateScheduleMutation>;
+      run: ReturnType<typeof useRunScheduleNowMutation>;
+    };
+    function Probe() {
+      mutations = {
+        create: useCreateScheduleMutation(),
+        duplicate: useCreateScheduleMutation(undefined, 'duplicate'),
+        run: useRunScheduleNowMutation(),
+      };
+      return null;
+    }
+    dispose = render(
+      () => (
+        <QueryClientProvider client={queryClient}>
+          <Probe />
+        </QueryClientProvider>
+      ),
+      document.createElement('div')
+    );
+    return mutations;
+  }
+
+  it('reports created and duplicated routines, but not failed ones', async () => {
+    createSchedule.mockResolvedValue(ok(agentRoutine));
+    const mutations = mountRoutineMutations();
+
+    await mutations.create.mutateAsync(request);
+    await mutations.duplicate.mutateAsync(request);
+    createSchedule.mockResolvedValueOnce(err([{ message: 'Invalid' }]));
+    await expect(mutations.create.mutateAsync(request)).rejects.toBeDefined();
+
+    expect(track.mock.calls).toEqual([
+      [
+        'routine_created',
+        {
+          routineId: 'routine',
+          source: 'new',
+          triggerType: 'cron',
+          targetKind: 'agent',
+        },
+      ],
+      [
+        'routine_created',
+        expect.objectContaining({ routineId: 'routine', source: 'duplicate' }),
+      ],
+    ]);
+  });
+
+  it('reports an accepted manual run with the target kind from the list cache', async () => {
+    queryClient.setQueryData(scheduledActionKeys.list.queryKey, [agentRoutine]);
+    runNow.mockResolvedValue(ok({}));
+    const mutations = mountRoutineMutations();
+
+    await mutations.run.mutateAsync({ scheduleId: 'routine' });
+    runNow.mockResolvedValueOnce(err([{ message: 'Busy' }]));
+    await expect(
+      mutations.run.mutateAsync({ scheduleId: 'routine' })
+    ).rejects.toBeDefined();
+
+    expect(track).toHaveBeenCalledExactlyOnceWith('routine_run', {
+      routineId: 'routine',
+      trigger: 'manual',
+      targetKind: 'agent',
+    });
   });
 });

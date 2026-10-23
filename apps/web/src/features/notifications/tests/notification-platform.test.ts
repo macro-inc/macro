@@ -273,7 +273,11 @@ describe('maybeHandlePlatformNotification', () => {
       expect(focus).toHaveBeenCalledOnce();
       expect(openNotification).toHaveBeenCalledExactlyOnceWith(
         notification,
-        layout
+        layout,
+        false,
+        undefined,
+        undefined,
+        { source: 'browser_push' }
       );
       expect(handle.close).toHaveBeenCalledOnce();
     } finally {

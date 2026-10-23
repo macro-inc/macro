@@ -1,9 +1,14 @@
+import { canonicalPipedreamSlug } from '@core/pipedream/slugs';
 import { fireAndForget } from '@core/util/fireAndForget';
 import SearchIcon from '@phosphor/magnifying-glass.svg';
-import { createSignal, For, Show } from 'solid-js';
+import { createEffect, createSignal, For, Show } from 'solid-js';
 import { ContinueButton } from '../components/controls';
 import { ToolTile } from '../components/tool-tile';
 import { type Tool, useOnboardingContext } from '../context/onboarding-context';
+import {
+  readPendingConnectors,
+  savePendingConnectors,
+} from '../primitives/flow-storage';
 import { orderOnboardingTools } from '../primitives/tools';
 
 /** Uses the same searchable, paginated catalog and hosted connection flow as Settings. */
@@ -13,6 +18,20 @@ export function ToolsStep(props: { onContinue: () => void }) {
   const connected = context.createConnectedTools({ poll: true });
   const entries = () => orderOnboardingTools(catalog.entries());
   const [busy, setBusy] = createSignal<string>();
+  // Hosted OAuth finishes out of band, so a connection counts once polling
+  // reports a tool this step started connecting. Kept in session storage
+  // because GitHub's web OAuth reloads the page before its link lands.
+  const [pending, setPending] = createSignal(readPendingConnectors());
+  createEffect(() => savePendingConnectors(pending()));
+  createEffect(() => {
+    const landed = [...pending()].filter((slug) =>
+      ['connected', 'account-linked'].includes(connected.state(slug))
+    );
+    if (landed.length === 0) return;
+    for (const slug of landed)
+      context.track('onboarding_v4_connector_connected', { connector: slug });
+    setPending((set) => new Set([...set].filter((s) => !landed.includes(s))));
+  });
 
   const connect = async (tool: Tool) => {
     if (
@@ -21,6 +40,7 @@ export function ToolsStep(props: { onContinue: () => void }) {
     )
       return;
     setBusy(tool.slug);
+    setPending((set) => new Set(set).add(canonicalPipedreamSlug(tool.slug)));
     try {
       await context.connectTool(tool);
     } finally {

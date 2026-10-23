@@ -203,6 +203,7 @@ export function PdfDetail(props: {
   return (
     <FileDetailLoadGate
       documentId={props.documentId}
+      entityType="pdf"
       label="PDF"
       load={loadPdfDocument}
     >

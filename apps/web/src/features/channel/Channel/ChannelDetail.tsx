@@ -1,5 +1,6 @@
 import { ViewShell } from '@app/components/view-shell';
 import { ChatWithAgentButton } from '@app/features/chat/ChatWithAgentButton';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { ChannelAttachmentsTab } from '@channel/Attachments/ChannelAttachmentsTab';
 import { useChannelBotManagement } from '@channel/Bots/use-channel-bot-management';
 import { useCallContextOptional } from '@channel/Call/CallContext';
@@ -46,6 +47,7 @@ import {
   Match,
   on,
   onCleanup,
+  onMount,
   Show,
   Switch,
 } from 'solid-js';
@@ -278,6 +280,15 @@ function ChannelDetailContent(props: ChannelDetailProps) {
   const canCall = useChannelCanCall(channelId);
   const channelName = useChannelName(channelId, props.fallbackName);
   useSplitDisplayName(() => channelName() ?? 'New Channel');
+  const analytics = useAnalytics();
+  // Keyed by channel id, so this counts one open per channel shown.
+  onMount(() => {
+    analytics.pageView('channel');
+    analytics.track('open_entity', {
+      entityType: 'channel',
+      entityId: channelId,
+    });
+  });
 
   const requestFromTarget = (
     target: ChannelTargetRequest | undefined

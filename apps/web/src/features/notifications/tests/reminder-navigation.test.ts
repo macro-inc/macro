@@ -16,6 +16,9 @@ vi.mock('../notification-stacking', () => ({
 
 const flags = vi.hoisted(() => ({ reminders: true }));
 const getNotificationById = vi.hoisted(() => vi.fn());
+const track = vi.hoisted(() => vi.fn());
+
+vi.mock('@app/lib/analytics', () => ({ analytics: { track } }));
 
 vi.mock('@app/features/calendar-view/calendar-range', () => ({
   createCalendarRange: vi.fn(),
@@ -79,6 +82,47 @@ describe('reminder notification navigation', () => {
     flags.reminders = true;
     openWithSplit.mockReset();
     getNotificationById.mockReset();
+    track.mockReset();
+  });
+
+  it('reports an in-app open with the notification type', async () => {
+    await openNotification(reminderNotification(), layout);
+    expect(track).toHaveBeenCalledExactlyOnceWith('notification_opened', {
+      source: 'in_app',
+      notificationType: 'reminder',
+      entityType: 'email_thread',
+    });
+  });
+
+  it('reports a native notification tap as a push open', async () => {
+    const source = {
+      notifications: () => [{ ...reminderNotification(), id: 'n-1' }],
+    } as unknown as NotificationSource;
+    await openNotificationFromId('n-1', layout, source);
+    expect(track).toHaveBeenCalledExactlyOnceWith('notification_opened', {
+      source: 'native_push',
+      notificationType: 'reminder',
+      entityType: 'email_thread',
+    });
+  });
+
+  it('counts a retried native tap once, when its navigation applies', async () => {
+    const source = {
+      notifications: () => [{ ...reminderNotification(), id: 'n-1' }],
+    } as unknown as NotificationSource;
+    const onApplied = vi.fn();
+    await openNotificationFromId('n-1', layout, source, { onApplied });
+    await openNotificationFromId('n-1', layout, source, { onApplied });
+    expect(track).not.toHaveBeenCalled();
+
+    openWithSplit.mock.calls[1][1].onApplied();
+
+    expect(track).toHaveBeenCalledExactlyOnceWith('notification_opened', {
+      source: 'native_push',
+      notificationType: 'reminder',
+      entityType: 'email_thread',
+    });
+    expect(onApplied).toHaveBeenCalledOnce();
   });
 
   it('opens the original email thread', async () => {
@@ -135,5 +179,6 @@ describe('reminder notification navigation', () => {
       notificationId: 'notification-1',
     });
     expect(openWithSplit).not.toHaveBeenCalled();
+    expect(track).not.toHaveBeenCalled();
   });
 });

@@ -16,6 +16,8 @@ const KEYS = {
   next: 'onboarding-flow-next',
   /** Inbox count when a connect started, to detect a landed link after reload. */
   connectBaseline: 'onboarding-flow-email-baseline',
+  /** Tools whose connect started, so one that lands after GitHub's OAuth reload is still reported. */
+  pendingConnectors: 'onboarding-flow-pending-connectors',
   /** Presentation choices from the signed-out slides. */
   signupDraft: 'onboarding-signup-draft',
 } as const;
@@ -70,6 +72,7 @@ export const saveNext = (next: string) => write(KEYS.next, next);
 export function clearFlowProgress() {
   write(KEYS.step, undefined);
   write(KEYS.next, undefined);
+  write(KEYS.pendingConnectors, undefined);
 }
 
 export function readConnectBaseline(): number | undefined {
@@ -81,6 +84,27 @@ export function readConnectBaseline(): number | undefined {
 
 export const saveConnectBaseline = (count: number | undefined) =>
   write(KEYS.connectBaseline, count === undefined ? undefined : String(count));
+
+export function readPendingConnectors(): ReadonlySet<string> {
+  const raw = read(KEYS.pendingConnectors);
+  if (raw === null) return new Set();
+  try {
+    const slugs: unknown = JSON.parse(raw);
+    if (Array.isArray(slugs))
+      return new Set(
+        slugs.filter((slug): slug is string => typeof slug === 'string')
+      );
+  } catch {
+    // Fall through: malformed state reports nothing.
+  }
+  return new Set();
+}
+
+export const savePendingConnectors = (slugs: ReadonlySet<string>) =>
+  write(
+    KEYS.pendingConnectors,
+    slugs.size === 0 ? undefined : JSON.stringify([...slugs])
+  );
 
 export const readSignupDraft = () => parseSignupDraft(read(KEYS.signupDraft));
 
