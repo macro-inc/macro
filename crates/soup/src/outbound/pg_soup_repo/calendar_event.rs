@@ -61,13 +61,29 @@ pub(super) async fn cursor_soup(
     }
 
     let sort = sort_sql(parts.sort);
-    let mut query =
-        QueryBuilder::<Postgres>::new(format!("{} WHERE (event.owner_id = ", select_sql()));
+    // A filter that is only notification states can name its events from
+    // `user_notification` first. The per-event EXISTS form seq-scans
+    // `calendar_events`: the owner-or-delegated OR hides the activity index,
+    // and Postgres prices the notification hash against every event rather
+    // than the page. MATERIALIZED keeps that id set from being inlined back
+    // into the scan. Joining on `event.id::text` cannot use the primary key,
+    // so the id is cast to uuid after a lowercase-uuid guard. Any other
+    // literal, or a NOT, stays on the old shape.
+    let notified_ids = parts.filter.as_ref().and_then(notification_event_ids_sql);
+    let mut query = match &notified_ids {
+        Some(ids_sql) => QueryBuilder::<Postgres>::new(format!(
+            "WITH notified AS MATERIALIZED ({ids_sql}) {select} INNER JOIN notified ON event.id = notified.event_item_id::uuid WHERE (event.owner_id = ",
+            select = select_sql(),
+        )),
+        None => QueryBuilder::<Postgres>::new(format!("{} WHERE (event.owner_id = ", select_sql())),
+    };
     query.push_bind(req.user_id.as_ref().to_string());
     query.push(" OR EXISTS (SELECT 1 FROM macro_user_links link WHERE link.link_id = event.source_link_id AND link.primary_macro_id = ");
     query.push_bind(req.user_id.as_ref().to_string());
     query.push("))");
-    if let Some(filter) = &parts.filter {
+    if notified_ids.is_none()
+        && let Some(filter) = &parts.filter
+    {
         query.push(" AND (");
         push_filter(&mut query, filter);
         query.push(")");
@@ -198,6 +214,48 @@ fn select_sql() -> &'static str {
         event.last_reminder_fired_at
     FROM calendar_events event
     "#
+}
+
+/// Event ids for a filter that is only positive notification states.
+/// `None` when the tree contains any other literal or a NOT: those stay on
+/// the per-event `EXISTS` so the two shapes cannot disagree.
+///
+/// AND is `INTERSECT` because two states can be witnessed by different
+/// notification rows. OR is `UNION`. Each arm fences the user's rows with
+/// `OFFSET 0` so Postgres cannot start from every `calendar_event`
+/// notification in the table. `$1` is the requesting user, the same bind
+/// `cursor_soup` pushes first.
+fn notification_event_ids_sql(expr: &Expr<CalendarEventLiteral>) -> Option<String> {
+    match expr {
+        Expr::Literal(CalendarEventLiteral::NotificationState(state)) => {
+            let predicate = super::expanded::dynamic::NotificationPredicate::state(*state).sql();
+            Some(format!(
+                r#"SELECT DISTINCT n.event_item_id
+                   FROM (
+                       SELECT un.notification_id
+                       FROM user_notification un
+                       WHERE un.user_id = $1
+                         AND un.deleted_at IS NULL
+                         AND {predicate}
+                       OFFSET 0
+                   ) un
+                   JOIN notification n ON n.id = un.notification_id
+                   WHERE n.event_item_type = 'calendar_event'
+                     AND n.event_item_id ~ '^[0-9a-f]{{8}}-[0-9a-f]{{4}}-[0-9a-f]{{4}}-[0-9a-f]{{4}}-[0-9a-f]{{12}}$'"#
+            ))
+        }
+        Expr::And(left, right) => Some(format!(
+            "({}) INTERSECT ({})",
+            notification_event_ids_sql(left)?,
+            notification_event_ids_sql(right)?
+        )),
+        Expr::Or(left, right) => Some(format!(
+            "({}) UNION ({})",
+            notification_event_ids_sql(left)?,
+            notification_event_ids_sql(right)?
+        )),
+        Expr::Not(_) | Expr::Literal(_) => None,
+    }
 }
 
 fn sort_sql(sort: SimpleSortMethod) -> &'static str {
