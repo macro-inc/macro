@@ -35,6 +35,7 @@
     { "type": "datadog:index/monitor:Monitor", "name": "rds-high-iops", "id": "16918920" },
     { "type": "datadog:index/monitor:Monitor", "name": "apm-get-channel-messages-p95", "id": "19271629" },
     { "type": "datadog:index/monitor:Monitor", "name": "opensearch-storage-low", "id": "21836655" },
+    { "type": "datadog:index/monitor:Monitor", "name": "graphql-cache-worker-host-disposed", "id": "22681005" },
     { "type": "datadog:index/syntheticsTest:SyntheticsTest", "name": "app-welcome-health-check", "id": "3xv-xcg-7kp" }
   ]
 }

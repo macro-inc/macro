@@ -1,7 +1,7 @@
 // Datadog monitors and synthetic tests.
 //
 // Every monitor in the org is declared here. See README.md before deploying —
-// the 35 monitors under `monitors/` are adopted, not created, and a program that
+// the 36 monitors under `monitors/` are adopted, not created, and a program that
 // stops declaring one deletes it.
 
 // Adopted from the Datadog UI.
