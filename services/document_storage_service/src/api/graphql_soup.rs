@@ -1,3 +1,5 @@
+mod telemetry;
+
 use crate::api::context::{ApiContext, AuthorizationService};
 use crate::api::folders_query::DssFoldersQueryReader;
 use agent_session::outbound::postgres::PgAgentSessionRepo;
@@ -46,7 +48,6 @@ fn graphiql_source(endpoint: &str) -> String {
         .finish()
 }
 
-#[tracing::instrument(skip_all, name = "graphql.execute")]
 async fn graphql_handler(
     State(state): State<ApiContext>,
     Cached(auth): Cached<
@@ -59,17 +60,19 @@ async fn graphql_handler(
         .authorization
         .as_ref()
         .and_then(UserOrInternalServiceAuthorization::acting_user);
-    let request = graphql_query_context_data(
-        request.into_inner(),
-        &state,
-        acting_user.map(|user| user.macro_user_id.clone()),
-        acting_user.and_then(|user| user.user_context.organization_id.map(i64::from)),
-    );
-    state
-        .graphql_soup_schema
-        .execute(request.data(GraphqlRequestParts::new(request_parts)))
-        .await
-        .into()
+    telemetry::observe(request.into_inner(), acting_user.is_some(), |request| {
+        let request = graphql_query_context_data(
+            request,
+            &state,
+            acting_user.map(|user| user.macro_user_id.clone()),
+            acting_user.and_then(|user| user.user_context.organization_id.map(i64::from)),
+        );
+        state
+            .graphql_soup_schema
+            .execute(request.data(GraphqlRequestParts::new(request_parts)))
+    })
+    .await
+    .into()
 }
 
 async fn subscription_handler(
