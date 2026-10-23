@@ -2445,10 +2445,11 @@ stay text instead of becoming mentions, long pastes do not collapse into a
 4. The document auto-saves continuously (collaborative CRDT; no save button). The tab title
    and header update to the typed title.
 
-On desktop, opening a document with an existing title focuses the body editor after its
-content and title have loaded. A new document with an empty title focuses the
-title field instead. A control the user focused while the document loaded keeps
-focus.
+On desktop, opening a document through Cmd/Ctrl+K focuses its body editor after
+the content and title have loaded. Creating a document focuses its empty title;
+if the new document already has a title, it focuses the body. Ordinary clicks
+and Back/Forward do not move focus into the editor. A control the user focused
+while the document loaded keeps focus.
 
 The a11y snapshot exposes the entire body as the contenteditable's `value` and as paragraph
 nodes — use the snapshot itself to verify content. For formatting checks, run

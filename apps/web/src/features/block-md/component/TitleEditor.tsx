@@ -1,3 +1,4 @@
+import { activeElement } from '@app/signal/focus';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { EmojiMenu } from '@core/component/LexicalMarkdown/component/menu/EmojiMenu';
 import { TagsMenu } from '@core/component/LexicalMarkdown/component/menu/TagsMenu';
@@ -366,6 +367,7 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
   // Autofocus a new document's empty title once its metadata has loaded.
   let didAutoFocus = false;
   createEffect(() => {
+    activeElement();
     const name = mdDocumentName();
     if (
       !didAutoFocus &&
@@ -374,15 +376,18 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
       dataReady() &&
       name !== undefined
     ) {
-      didAutoFocus = true;
       if (name === '') {
         if (
           shouldAutofocusDocument(
             blockElement() ?? null,
             panel?.panelRef() ?? null
           )
-        )
+        ) {
+          didAutoFocus = true;
           editor.focus();
+        }
+      } else {
+        didAutoFocus = true;
       }
     }
   });

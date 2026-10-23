@@ -1,3 +1,4 @@
+import { activeElement } from '@app/signal/focus';
 import { MessageCommentsProvider } from '@block-md/comments/MessageCommentsProvider';
 import { URL_PARAMS } from '@block-md/constants';
 import { keyNavigationPlugin } from '@block-md/plugins/keyboardNavigation';
@@ -636,13 +637,13 @@ export function MarkdownEditor(props: {
   // Focus a named document once both its editor and metadata are ready.
   let didAutoFocus = false;
   createEffect(() => {
+    activeElement();
     if (
       !didAutoFocus &&
       props.autoFocusOnMount &&
       editorReady() &&
       mdDocumentName()
     ) {
-      didAutoFocus = true;
       if (
         !shouldAutofocusDocument(
           blockElement() ?? null,
@@ -650,6 +651,7 @@ export function MarkdownEditor(props: {
         )
       )
         return;
+      didAutoFocus = true;
       editor.focus(undefined, { defaultSelection: 'rootStart' });
     }
   });

@@ -131,6 +131,7 @@ export function CommandMenu() {
     : () => true; // assume list mode
 
   let suppressCloseAutoFocus = false;
+  let wasOpen = false;
 
   createEffect(() => {
     const open = CommandState.isOpen();
@@ -139,16 +140,27 @@ export function CommandMenu() {
     }
     if (open) {
       CommandState.onMenuOpen();
-      suppressCloseAutoFocus = false;
+      if (!wasOpen) {
+        suppressCloseAutoFocus = false;
+        CommandState.setFocusDestinationOnClose(false);
+      }
     } else {
       CommandState.onMenuClose();
     }
+    wasOpen = open;
   });
 
   const handleSelect = (item: CommandMenuItem) => {
+    CommandState.setFocusDestinationOnClose(
+      (isEntityItem(item) &&
+        item.data.type !== 'foreign' &&
+        (!isGithubPrEntity(item.data) || USE_MACRO_PR_SUMMARY_BLOCK)) ||
+        item.kind === 'initiative'
+    );
     if (
       isSearchItem(item) ||
       isAskAiItem(item) ||
+      isUserItem(item) ||
       item.kind === 'new-project' ||
       (isCommandItem(item) &&
         item.data.hotkeyToken === TOKENS.global.createCommand)
@@ -161,9 +173,13 @@ export function CommandMenu() {
       class="[&>[data-command-menu]>[data-layer]>[data-surface]]:border-0! [&>[data-command-menu]>[data-layer]>[data-surface]]:bg-transparent [&>[data-command-menu]>[data-layer]>[data-surface]]:rounded-[24px]"
       onOpenChange={CommandState.setIsOpen}
       onCloseAutoFocus={(e) => {
-        if (suppressCloseAutoFocus) {
+        if (suppressCloseAutoFocus || CommandState.focusDestinationOnClose()) {
           e.preventDefault();
           suppressCloseAutoFocus = false;
+        }
+        if (CommandState.focusDestinationOnClose()) {
+          globalSplitManager()?.returnFocus();
+          CommandState.setFocusDestinationOnClose(false);
         }
       }}
       open={CommandState.isOpen()}

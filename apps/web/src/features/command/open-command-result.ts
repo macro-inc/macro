@@ -1,4 +1,5 @@
 import { openChatWithMessage } from '@app/features/chat/ChatWithAgentButton';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { createGlobalSearchOpener } from '@app/features/next-soup/open-search';
 import { getViewPreset } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
@@ -50,6 +51,7 @@ export function createCommandResultOpener(
           reopen: 'latest',
         }
       );
+      globalSplitManager()?.returnFocus();
     } catch {
       toast.failure(t('commandMenu.unableToOpenConversation'));
     }
@@ -123,7 +125,7 @@ export function createCommandResultOpener(
           type: 'component',
           id: projectRouteId({ id: item.id, section: 'overview' }),
         },
-        { preferNewSplit: openInNewSplit }
+        { referredFrom, preferNewSplit: openInNewSplit }
       );
       return true;
     }
