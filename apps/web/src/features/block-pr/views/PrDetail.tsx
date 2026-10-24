@@ -161,7 +161,7 @@ export function PrDetailBody(props: PrDetailBodyProps) {
 /** Native hosts place this content below their header inside `PrChangesProvider`. */
 export function PrDetailContent(props: PrDetailBodyProps) {
   return (
-    <div class="relative min-h-0 min-w-0 flex-1">
+    <div class="relative min-h-0 min-w-0 flex-1 touch:[--mobile-content-inset-top:0px]">
       <Suspense
         fallback={
           <Scroll class="size-full min-h-0">
@@ -253,7 +253,7 @@ export function StandalonePrDetail(props: { foreignEntityId: string }) {
       >
         <ChangesSplit>
           <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden @container">
-            <ViewShell.TopBar class="touch:flex">
+            <ViewShell.TopBar class="touch:flex touch:h-auto touch:min-h-12 touch:pt-[calc(var(--mobile-content-inset-top,var(--safe-top,0px))+0.75rem)]">
               <SplitPanel.CloseButton class="hidden shrink-0 touch:flex" />
               <Show when={detail.data()?.pullRequest.status}>
                 {(status) => <PrStatusIcon status={status()} />}
