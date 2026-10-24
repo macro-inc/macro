@@ -125,6 +125,7 @@ members = [
   "crates/unfurl",
   "crates/user_api_key",
   "crates/webhook_signature",
+  "crates/whatsapp_e2e",
   "crates/whatsapp_fake_server",
   "crates/whatsapp_linked",
   "crates/whatsapp_store_pg",

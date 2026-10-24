@@ -21451,6 +21451,30 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a28ac98ddc8b9274cb41bb4d9d4d5c425b6020c50c46f25559911905610b4a88"
 
 [[package]]
+name = "whatsapp_e2e"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "entity_access",
+ "entity_access_db_utils",
+ "macro_db_migrator",
+ "sqlx",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "uuid",
+ "whatsapp_fake_server",
+ "whatsapp_linked",
+ "whatsapp_session_service",
+ "whatsapp_store_pg",
+ "whatsmeow",
+ "whatsmeow_signal",
+ "workspace-hack",
+ "zeroize",
+]
+
+[[package]]
 name = "whatsapp_fake_server"
 version = "0.1.0"
 dependencies = [
