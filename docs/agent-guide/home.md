@@ -111,9 +111,10 @@ explicitly saved favorites still open their context. Verify this alongside an
 ordinary standalone session, which remains listed.
 
 The Agents workspace uses a single left dot for activity and unread state in
-place of the sparkle. Opening a loaded session from Home or Agents marks its
-notifications read after the viewing delay, including notifications arriving
-while that session remains active.
+place of the sparkle. Clicking a session row in Home or the Agents sidebar
+clears the row's loaded unread dot immediately; a failed read write restores
+it. The opened session also marks its notifications read after the viewing
+delay, including notifications arriving while that session remains active.
 Other Home items have no title tooltips, and their timestamps are
 visible only while hovering the row. An unread
 dot remains visible. Click a row to preview it; `j`/`k` navigate and update the

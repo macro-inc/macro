@@ -208,8 +208,9 @@ ownership. Cancel, logout, and the ten-minute timeout retire pending callbacks.
 - Add Google Meet account hints only to join actions using the displayed calendar's
   connected email; keep stored and copied conference links unchanged. See the
   [calendar walkthrough](../../docs/agent-guide/calendar.md).
-- Mark loaded calendar row notifications through the notification source so read
-  dots update immediately and failed writes roll back; grid selections also mark
+- Mark loaded calendar and agent-session row notifications through the
+  notification source (`markRowNotificationsSeenOnOpen`) so read dots update
+  immediately and failed writes roll back; calendar grid selections also mark
   the canonical event read, excluding team projections.
 - Route explicit call exits using the server's `callEnded` result: ended calls
   open their record; ongoing channel and scheduled calls return to the channel
