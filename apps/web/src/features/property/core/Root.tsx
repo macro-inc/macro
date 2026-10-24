@@ -34,6 +34,7 @@ export function Root(props: PropertyRootProps) {
   const [editorAnchor, setEditorAnchor] = createSignal<HTMLElement | undefined>(
     undefined
   );
+  const [initialSearchQuery, setInitialSearchQuery] = createSignal('');
 
   useHoldParentHoverCardOpen(editorOpen);
 
@@ -73,13 +74,21 @@ export function Root(props: PropertyRootProps) {
       return local.onRefresh;
     },
     editorOpen,
-    openEditor: (anchor) => {
+    openEditor: (anchor, initialQuery) => {
       if (anchor) setEditorAnchor(() => anchor);
+      if (initialQuery) setInitialSearchQuery(initialQuery);
       setEditorOpen(true);
     },
     closeEditor: () => {
       setEditorOpen(false);
+      setInitialSearchQuery('');
       restoreFocusToAnchor();
+    },
+    initialSearchQuery,
+    consumeInitialSearchQuery: () => {
+      const query = initialSearchQuery();
+      setInitialSearchQuery('');
+      return query;
     },
   };
 

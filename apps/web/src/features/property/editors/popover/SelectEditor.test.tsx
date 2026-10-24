@@ -92,6 +92,7 @@ function setup(value = property) {
   const onSave = vi.fn(() => pending.promise);
   const onRefresh = vi.fn();
   const [editorOpen, setEditorOpen] = createSignal(true);
+  const [initialQuery, setInitialQuery] = createSignal('');
   const context: PropertyRootContextValue = {
     property: () => value,
     canEdit: () => true,
@@ -100,6 +101,12 @@ function setup(value = property) {
     closeEditor: () => setEditorOpen(false),
     onSave,
     onRefresh,
+    initialSearchQuery: initialQuery,
+    consumeInitialSearchQuery: () => {
+      const query = initialQuery();
+      setInitialQuery('');
+      return query;
+    },
   };
   render(() => (
     <PropertyRootContext.Provider value={context}>
