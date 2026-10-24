@@ -71,6 +71,16 @@ describe('RecipientSelector typed addresses', () => {
     expect(emails()).toEqual(['a@example.com', 'b@example.com']);
   });
 
+  it('keeps a just-picked suggestion when an address is typed right after it', async () => {
+    const { input, emails } = renderSelector();
+    fireEvent.input(input, { target: { value: 'bob@example.com' } });
+    await screen.findByRole('listbox');
+    fireEvent.keyDown(input, { key: 'Enter' });
+    fireEvent.input(input, { target: { value: 'carol@example.com,' } });
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    expect(emails()).toEqual(['bob@example.com', 'carol@example.com']);
+  });
+
   it('leaves text until a separator ends a complete address', () => {
     const { input, emails } = renderSelector();
     fireEvent.input(input, {

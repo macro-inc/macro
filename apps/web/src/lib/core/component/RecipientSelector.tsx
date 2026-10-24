@@ -387,7 +387,15 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
     )
   );
 
-  const debouncedHandleChange = debounce(handleChange, 100);
+  let pendingSelection: CombinedRecipientItem[] | undefined;
+  const debouncedHandleChange = debounce((value: CombinedRecipientItem[]) => {
+    pendingSelection = undefined;
+    handleChange(value);
+  }, 100);
+  const scheduleChange = (value: CombinedRecipientItem[]) => {
+    pendingSelection = value;
+    debouncedHandleChange(value);
+  };
 
   const [isOpen, setIsOpen] = createSignal(false);
   const [suppressOpenUntilInputChange, setSuppressOpenUntilInputChange] =
@@ -664,9 +672,18 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
       );
     if (emails.length === 0 || !emails.every((e) => EmailValidator.validate(e)))
       return false;
+    // A suggestion picked within the debounce window is not in props yet.
+    const current =
+      pendingSelection ?? (props.selectedOptions as CombinedRecipientItem[]);
+    const currentEmails = new Set(
+      current.flatMap((option) => {
+        const email = getRecipientOptionEmail(option);
+        return email ? [email.toLowerCase()] : [];
+      })
+    );
     const known = recipients().raw;
     const added = emails
-      .filter((email) => !selectedEmails().has(email.toLowerCase()))
+      .filter((email) => !currentEmails.has(email.toLowerCase()))
       .map(
         (email) =>
           known.find(
@@ -681,10 +698,9 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
           })
       );
     if (added.length === 0) return false;
-    handleChange([
-      ...(props.selectedOptions as CombinedRecipientItem[]),
-      ...added,
-    ]);
+    debouncedHandleChange.clear();
+    pendingSelection = undefined;
+    handleChange([...current, ...added]);
     return true;
   };
 
@@ -732,7 +748,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
           visibleOptionKeys().has(getRecipientOptionValue(option))
         }
         value={props.selectedOptions as CombinedRecipientItem[]}
-        onChange={debouncedHandleChange}
+        onChange={scheduleChange}
         onInputChange={onInputChange}
         shouldFocusWrap
         placeholder={
