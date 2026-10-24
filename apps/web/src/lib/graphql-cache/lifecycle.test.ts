@@ -13,6 +13,7 @@ describe('clearRegisteredCaches', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
@@ -82,6 +83,31 @@ describe('clearRegisteredCaches', () => {
 
     expect(localStorage.getItem('graphql-cache:scope')).toBe(
       '00000000-0000-4000-8000-000000000002'
+    );
+  });
+
+  it('settles and rotates the scope when a wedged cache never answers clear', async () => {
+    vi.useFakeTimers();
+    localStorage.setItem('graphql-cache:scope', 'current-scope');
+    vi.spyOn(crypto, 'randomUUID').mockReturnValue(
+      '00000000-0000-4000-8000-000000000003'
+    );
+    const { CACHE_CLEAR_TIMEOUT_MS, clearRegisteredCaches, registerCacheHost } =
+      await import('./lifecycle');
+    registerCacheHost(hostWithClear(() => new Promise(() => {})));
+    let settled = false;
+
+    const clearing = (async () => {
+      await clearRegisteredCaches();
+      settled = true;
+    })();
+    await vi.advanceTimersByTimeAsync(CACHE_CLEAR_TIMEOUT_MS - 1);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    await clearing;
+
+    expect(localStorage.getItem('graphql-cache:scope')).toBe(
+      '00000000-0000-4000-8000-000000000003'
     );
   });
 
