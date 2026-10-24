@@ -7,6 +7,7 @@ import {
   type Accessor,
   createEffect,
   createMemo,
+  createSignal,
   on,
   onCleanup,
 } from 'solid-js';
@@ -170,6 +171,26 @@ export function useReopenTrackedEntitiesOnReconnect(): void {
   });
 }
 
+function refreshTrackedEntities() {
+  const now = Date.now();
+  for (const [entity_id, tracked] of trackedEntities) {
+    const entity = { entity_id, entity_type: tracked.entityType };
+    const pausedMs = now - tracked.lastSeen;
+    const missedEvents = pausedMs >= GATEWAY_ACTIVITY_WINDOW_MS;
+    if (missedEvents) reportHeartbeatResumed(entity, pausedMs);
+    fireAndForget(
+      connectionGatewayClient.trackEntity({
+        ...entity,
+        action: 'ping',
+      }),
+      'connection-gateway'
+    );
+    if (missedEvents)
+      for (const onRefresh of tracked.refreshCallbacks.keys())
+        onRefresh(entity);
+  }
+}
+
 /**
  * Pings every tracked entity as soon as the tab regains focus, since the heartbeat pauses in
  * the background. A tab that went unseen longer than the gateway's activity window was left
@@ -181,23 +202,41 @@ export function useRefreshTrackedEntitiesOnFocus(): void {
       isTabFocused,
       (focused) => {
         if (!focused) return;
-        const now = Date.now();
-        for (const [entity_id, tracked] of trackedEntities) {
-          const entity = { entity_id, entity_type: tracked.entityType };
-          const pausedMs = now - tracked.lastSeen;
-          const missedEvents = pausedMs >= GATEWAY_ACTIVITY_WINDOW_MS;
-          if (missedEvents) reportHeartbeatResumed(entity, pausedMs);
-          fireAndForget(
-            connectionGatewayClient.trackEntity({
-              ...entity,
-              action: 'ping',
-            }),
-            'connection-gateway'
-          );
-          if (missedEvents)
-            for (const onRefresh of tracked.refreshCallbacks.keys())
-              onRefresh(entity);
-        }
+        refreshTrackedEntities();
+      },
+      { defer: true }
+    )
+  );
+}
+
+/**
+ * On iOS, tapping a push notification while the app is backgrounded may not
+ * reliably trigger a focus event (document.hasFocus() can remain false even
+ * when the app is visible). This hook listens to visibilitychange and
+ * refreshes tracked entities when the app becomes visible, ensuring that
+ * reactions and other updates are fetched after returning from background.
+ */
+export function useRefreshTrackedEntitiesOnVisibility(): void {
+  const [isVisible, setIsVisible] = createSignal(
+    document.visibilityState === 'visible'
+  );
+
+  createEffect(() => {
+    const handleVisibilityChange = () => {
+      setIsVisible(document.visibilityState === 'visible');
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    onCleanup(() =>
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    );
+  });
+
+  createEffect(
+    on(
+      isVisible,
+      (visible) => {
+        if (!visible) return;
+        refreshTrackedEntities();
       },
       { defer: true }
     )

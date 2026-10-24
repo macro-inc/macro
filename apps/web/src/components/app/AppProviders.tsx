@@ -29,6 +29,7 @@ import { useQuerySync } from '@queries/sync/use-query-sync';
 import { MutationUndoProvider } from '@queries/undo';
 import {
   useRefreshTrackedEntitiesOnFocus,
+  useRefreshTrackedEntitiesOnVisibility,
   useReopenTrackedEntitiesOnReconnect,
 } from '@service-connection/client';
 import { ws as connectionGatewayWebsocket } from '@service-connection/websocket';
@@ -45,6 +46,9 @@ function ConfiguredGlobalAppStateProvider(props: ParentProps) {
 
   if (isNativeMobilePlatform()) {
     useInvalidateQueriesOnReconnect();
+    // On iOS, tapping a push notification while backgrounded may not reliably
+    // trigger document.hasFocus(), so also refresh on visibility changes.
+    useRefreshTrackedEntitiesOnVisibility();
   }
 
   let notificationUpdatePrompted = false;

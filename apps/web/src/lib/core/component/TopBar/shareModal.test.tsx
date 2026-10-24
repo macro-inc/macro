@@ -72,6 +72,7 @@ vi.mock('@queries/undo', () => ({
 }));
 vi.mock('@service-connection/client', () => ({
   useRefreshTrackedEntitiesOnFocus: () => {},
+  useRefreshTrackedEntitiesOnVisibility: () => {},
   useReopenTrackedEntitiesOnReconnect: () => {},
 }));
 vi.mock('@service-connection/websocket', () => ({

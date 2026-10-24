@@ -1,6 +1,7 @@
 import {
   useEntitySubscription,
   useRefreshTrackedEntitiesOnFocus,
+  useRefreshTrackedEntitiesOnVisibility,
   useReopenTrackedEntitiesOnReconnect,
 } from '@service-connection/client';
 import type { MessageParent } from '@service-storage/messages';
@@ -303,5 +304,45 @@ it('moves the drawer subscription with its source and reopens all remaining owne
       'threadReplies',
       { type: 'document', id: 'next-document' },
     ],
+  });
+});
+
+it('refreshes views on visibility change to visible, independent of focus', () => {
+  const visibility = vi.spyOn(document, 'visibilityState', 'get');
+
+  // Start with the app visible and focused
+  visibility.mockReturnValue('visible');
+  mount(useRefreshTrackedEntitiesOnVisibility);
+  mount(() =>
+    useMessageThreadQuery(
+      () => parent,
+      () => 'root'
+    )
+  );
+
+  // Clear initial calls from mounting
+  mocks.send.mockClear();
+  mocks.invalidate.mockClear();
+
+  // Simulate the app being backgrounded (heartbeats pause when unfocused)
+  mocks.setFocused(false);
+  visibility.mockReturnValue('hidden');
+  document.dispatchEvent(new Event('visibilitychange'));
+
+  // Wait for >60 seconds while backgrounded (gateway activity window)
+  vi.advanceTimersByTime(80_000);
+  expect(sent('ping')).toHaveLength(0);
+  expect(mocks.invalidate).not.toHaveBeenCalled();
+
+  // Visibility changes to visible (e.g., from push notification tap on iOS)
+  // but focus is NOT set (this is the iOS edge case)
+  visibility.mockReturnValue('visible');
+  document.dispatchEvent(new Event('visibilitychange'));
+
+  // Should ping and refresh since we were away past the gateway window
+  expect(sent('ping')).toHaveLength(1);
+  expect(mocks.invalidate).toHaveBeenCalledTimes(3);
+  expect(mocks.invalidate).toHaveBeenCalledWith({
+    queryKey: ['messages', 'threadReplies', parent],
   });
 });
