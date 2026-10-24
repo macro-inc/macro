@@ -1,5 +1,5 @@
-import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { hasLoginCookie } from '@core/util/cookies';
+import { isTauri } from '@core/util/platform';
 import { getOrCreateCacheScope } from '@graphql-cache/scope';
 import { partialMatchKey, type QueryKey } from '@tanstack/query-core';
 import { authKeys } from './auth/keys';
@@ -48,7 +48,7 @@ export function createQueryPersistenceScopes(
         partialMatchKey(queryKey, ['email', 'threadMessages']),
       shouldRestore: hasLoginCookie,
     },
-    ...(isNativeMobilePlatform()
+    ...(isTauri()
       ? [
           {
             store: createPerQueryIDBStore({

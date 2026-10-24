@@ -28,8 +28,9 @@ const mocks = vi.hoisted(() => ({
   bundle: vi.fn(),
   location: vi.fn(),
 }));
-vi.mock('@core/mobile/isNativeMobilePlatform', () => ({
-  isNativeMobilePlatform: () => mocks.native,
+vi.mock('@core/util/platform', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/util/platform')>()),
+  isTauri: () => mocks.native,
 }));
 vi.mock('@core/util/cookies', () => ({ hasLoginCookie: () => mocks.login }));
 vi.mock('@core/auth/push-registration-lifecycle', () => ({

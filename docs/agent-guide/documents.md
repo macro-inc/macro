@@ -2477,9 +2477,10 @@ carrying the meeting link; verify on a finished call's `Properties`.
 
 ## Native offline reopening
 
-On native mobile, previously opened Markdown documents/tasks can reopen after an
-app restart using their cached body and last-known permissions. Warm the document
-online first, then restart with API traffic blocked: verify the existing body,
+In the native apps (desktop, iOS, and Android), previously opened Markdown
+documents/tasks can reopen after an app restart using their cached body and
+last-known permissions. Warm the document online first, then restart with API
+traffic blocked: verify the existing body,
 make a disposable edit, and restart offline again to check local recovery.
 Restoring connectivity must reauthorize synchronization before queued edits reach
 the server; verify the server copy, not just the still-cached editor text.
