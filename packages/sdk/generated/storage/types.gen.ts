@@ -4762,7 +4762,7 @@ export type CrmAssociation = {
      * Items associated with the contact.
      */
     contact: string;
-};
+} | 'activity';
 
 /**
  * The crm company filters used to narrow which CRM companies appear in soup.

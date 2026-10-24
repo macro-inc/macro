@@ -805,9 +805,11 @@ export type GraphqlChatRole =
 
 /** GraphQL input naming the CRM record an association filter restricts to. */
 export type GraphqlCrmAssociation =
-  {   /** Items associated with the company or any of its contacts. */
+  {   /** Activity across visible CRM-enabled teams; only true is valid. */
+  activity: boolean; company?: never; contact?: never; }
+  |  { activity?: never;   /** Items associated with the company or any of its contacts. */
   company: string | number; contact?: never; }
-  |  { company?: never;   /** Items associated with the contact. */
+  |  { activity?: never; company?: never;   /** Items associated with the contact. */
   contact: string | number; };
 
 /** The two operands of a recursive `CrmCompanyFilterExpr` binary expression. */
@@ -1125,7 +1127,8 @@ export type GraphqlEntityFilterAst = {
   /** The chat filter to apply. */
   chatFilter?: GraphqlChatExpr | null | undefined;
   /**
-   * Restrict every entity type to items associated with this CRM record.
+   * Restrict every entity type to items associated with this CRM record,
+   * or to activity across visible CRM-enabled teams.
    * Requires an expanded, timestamp-sorted query.
    */
   crmAssociation?: GraphqlCrmAssociation | null | undefined;

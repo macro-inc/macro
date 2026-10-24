@@ -348,3 +348,14 @@ fn contacts_are_opt_in_and_normalize_full_email_filters() {
         .is_err()
     );
 }
+
+#[test]
+fn activity_association_accepts_only_true() {
+    let ast = materialize_graphql_filter(json!({"crmAssociation": {"activity": true}})).unwrap();
+    assert_eq!(ast.crm_association, Some(CrmAssociation::Activity));
+    assert_eq!(
+        serde_json::to_value(CrmAssociation::Activity).unwrap(),
+        json!("activity")
+    );
+    assert!(materialize_graphql_filter(json!({"crmAssociation": {"activity": false}})).is_err());
+}

@@ -3203,6 +3203,10 @@ input GraphqlCrmAssociation @oneOf {
 	Items associated with the contact.
 	"""
 	contact: ID
+	"""
+	Activity across visible CRM-enabled teams; only true is valid.
+	"""
+	activity: Boolean
 }
 
 """
@@ -4200,7 +4204,8 @@ input GraphqlEntityFilterAst {
 	"""
 	favoritesOnly: Boolean
 	"""
-	Restrict every entity type to items associated with this CRM record.
+	Restrict every entity type to items associated with this CRM record,
+	or to activity across visible CRM-enabled teams.
 	Requires an expanded, timestamp-sorted query.
 	"""
 	crmAssociation: GraphqlCrmAssociation

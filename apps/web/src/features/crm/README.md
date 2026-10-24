@@ -65,18 +65,21 @@ context; later flag, focus or record changes leave the open draft unchanged.
 The Soup and email SQL optimizations are independent of this frontend gate.
 
 The workspace activity feeds are CRM-linked, not unfiltered app shortcuts.
-`queries/activity.ts` loads all authorized companies and contacts before
-building the feed filters; the capped Quick Access suggestions are not a
-complete scope. Notes means Markdown documents excluding task, snippet, and
-skill subtypes. Email uses the viewer's mailbox, without team-scope widening.
-This reuses existing endpoints without a schema change. Keep the scope complete:
-never cap association IDs or fall back to an unfiltered feed. The activity query
-memoizes its large filter AST between scope/tab changes. SQL generation batches
-OR-ed references into set-membership predicates rather than emitting thousands
-of separate subqueries. Email similarly batches participant lists with identical
-sender/recipient roles in both candidate and message queries, and omits exact
-addresses already covered by a company domain. These backend optimizations must
-be deployed to resolve large-scope request stalls.
+`queries/activity.ts` sends a constant-size `crma: 'activity'` association
+selector. CRM resolves every visible company and contact on the server before
+Soup filters and paginates the result; the browser does not prefetch the full
+CRM or enumerate record IDs in filter trees. The scope excludes hidden records,
+including for administrators, and keeps distinct contact IDs even when their
+email addresses match. Tasks, Notes and Calls match Companies/Contacts property
+links; Notes excludes task, snippet and skill Markdown subtypes. Email matches
+visible company domains/contact addresses in the viewer's own mailbox, without
+team-scope widening or requiring a property link on the email.
+
+Activity extends the existing authorized CRM association path rather than
+splitting the feed into independent client queries. This preserves one sorted
+cursor and a complete scope without raising GraphQL's filter safety limits.
+SQL batching remains useful after resolution, but cannot fix oversized ingress
+filters. Deploy the backend association variant before the updated frontend.
 
 When changing behavior, test the responsible primitive or pure function. When
 moving behavior, retain query keys, persistence keys, mutation ordering, loading

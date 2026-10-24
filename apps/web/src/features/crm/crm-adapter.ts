@@ -221,7 +221,7 @@ export function createAppCrmContext(): CrmContext {
       ),
     createActivity: (tab) =>
       withRowNotifications(
-        useCrmActivityQuery(deps, useSoupAstItemsQuery, tab, userId)
+        useCrmActivityQuery(useSoupAstItemsQuery, tab, userId)
       ),
     openTaskComposer: () =>
       layout.popoverSplit({

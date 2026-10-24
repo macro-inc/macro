@@ -25754,6 +25754,11 @@
                 "description": "Items associated with the contact."
               }
             }
+          },
+          {
+            "type": "string",
+            "description": "Activity across visible CRM-enabled teams, excluding hidden records.",
+            "enum": ["activity"]
           }
         ],
         "description": "The CRM record an association filter names."
