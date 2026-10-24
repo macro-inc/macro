@@ -184,6 +184,7 @@ impl TaskPropertiesPort for TestTaskPropertiesPort {
 #[derive(Default)]
 struct TestConnectionService {
     invalidations: Mutex<usize>,
+    access_changes: Mutex<Vec<(Vec<String>, EntityType, String)>>,
 }
 
 impl ConnectionService for TestConnectionService {
@@ -201,6 +202,20 @@ impl ConnectionService for TestConnectionService {
         _message_type: &str,
         _message: serde_json::Value,
     ) -> Result<(), connection::domain::models::ConnectionError> {
+        Ok(())
+    }
+
+    async fn send_access_changed<'a>(
+        &self,
+        users: &[macro_user_id::user_id::MacroUserIdStr<'a>],
+        entity_type: EntityType,
+        entity_id: &str,
+    ) -> Result<(), connection::domain::models::ConnectionError> {
+        self.access_changes.lock().unwrap().push((
+            users.iter().map(|user| user.as_ref().to_string()).collect(),
+            entity_type,
+            entity_id.to_string(),
+        ));
         Ok(())
     }
 }
@@ -1676,7 +1691,7 @@ async fn owner_scoped_bot_can_edit_and_toggle_explicit_team_sharing() {
                 command.expected() == &team_share_facts()
                     && command.target().map(|grant| AccessLevel::from(grant.level)) == level
             })
-            .returning(|_| Box::pin(async { Ok(()) }));
+            .returning(|_| Box::pin(async { Ok(EditDocumentRepoOutcome::default()) }));
         make_test_service(repo)
             .edit_document(
                 owner_bot_edit_receipt(),
@@ -1966,7 +1981,7 @@ async fn edit_document_sets_revocation_intent_from_link_share_target() {
                         .as_ref()
                         .is_some_and(|permission| permission.link_share == link_share)
             })
-            .return_once(|_| Box::pin(std::future::ready(Ok(()))));
+            .return_once(|_| Box::pin(std::future::ready(Ok(EditDocumentRepoOutcome::default()))));
 
         make_test_service(repo)
             .edit_document(
@@ -1990,11 +2005,57 @@ async fn edit_document_sets_revocation_intent_from_link_share_target() {
 }
 
 #[tokio::test]
+async fn edit_document_tells_users_its_removed_grants_covered_except_the_editor() {
+    let mut repo = make_mock_repo();
+    repo.expect_edit_document().return_once(|_| {
+        Box::pin(std::future::ready(Ok(EditDocumentRepoOutcome {
+            users_who_may_lose_access: vec![
+                macro_user_id::user_id::MacroUserIdStr::parse_from_str("macro|member@user.com")
+                    .unwrap()
+                    .into_owned(),
+                macro_user_id::user_id::MacroUserIdStr::parse_from_str("macro|user@user.com")
+                    .unwrap()
+                    .into_owned(),
+            ],
+        })))
+    });
+    let service = make_test_service(repo);
+
+    service
+        .edit_document(
+            edit_receipt("doc-1"),
+            task_document_context("doc-1"),
+            EditDocumentServiceArgs {
+                document_name: None,
+                project_id: None,
+                share_permission: Some(UpdateSharePermissionRequestV2 {
+                    link_share: Some(None),
+                    link_share_access_level: None,
+                    team_share_access_level: None,
+                    channel_share_permissions: None,
+                }),
+                file_type: None,
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        *service.connection_service.access_changes.lock().unwrap(),
+        vec![(
+            vec!["macro|member@user.com".to_string()],
+            EntityType::Document,
+            "doc-1".to_string()
+        )]
+    );
+}
+
+#[tokio::test]
 async fn test_edit_document_publishes_document_updated_event() {
     let mut repo = make_mock_repo();
     repo.expect_edit_document()
         .withf(|args| args.document_id == "doc-1" && !args.revoke_non_owner_user_access)
-        .returning(|_| Box::pin(std::future::ready(Ok(()))));
+        .returning(|_| Box::pin(std::future::ready(Ok(EditDocumentRepoOutcome::default()))));
 
     let (service, event_broker) = make_test_service_with_event_broker(repo);
 
@@ -2043,7 +2104,7 @@ async fn test_edit_document_rename_only_keeps_project_access() {
 
     let mut repo = make_mock_repo();
     repo.expect_edit_document()
-        .returning(|_| Box::pin(std::future::ready(Ok(()))));
+        .returning(|_| Box::pin(std::future::ready(Ok(EditDocumentRepoOutcome::default()))));
 
     let (service, entity_access) = make_test_service_with_entity_access(repo);
 
@@ -2082,7 +2143,7 @@ async fn test_edit_document_project_change_moves_project_access() {
 
     let mut repo = make_mock_repo();
     repo.expect_edit_document()
-        .returning(|_| Box::pin(std::future::ready(Ok(()))));
+        .returning(|_| Box::pin(std::future::ready(Ok(EditDocumentRepoOutcome::default()))));
     repo.expect_update_project_modified()
         .times(2)
         .returning(|_| Box::pin(std::future::ready(Ok(()))));

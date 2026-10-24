@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT DISTINCT user_id AS \"user_id!\"\n        FROM comms_channel_participants\n        WHERE channel_id = ANY($1) AND left_at IS NULL\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "8c28eab072d008b9fe5333e386b0d2636b9c62e8db1e6ed52d57dd3553f22ad1"
+}

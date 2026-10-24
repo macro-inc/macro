@@ -33,6 +33,15 @@ impl ConnectionService for SlowConnectionService {
             _ => panic!("unexpected call event"),
         }
     }
+
+    async fn send_access_changed<'a>(
+        &self,
+        _users: &[MacroUserIdStr<'a>],
+        _entity_type: model_entity::EntityType,
+        _entity_id: &str,
+    ) -> Result<(), ConnectionError> {
+        Ok(())
+    }
 }
 
 struct RecordingNotificationIngress(mpsc::UnboundedSender<&'static str>);

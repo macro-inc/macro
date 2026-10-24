@@ -867,6 +867,15 @@ impl ConnectionService for NoOpConnectionService {
     ) -> Result<(), connection::domain::models::ConnectionError> {
         Ok(())
     }
+
+    async fn send_access_changed<'a>(
+        &self,
+        _users: &[MacroUserIdStr<'a>],
+        _entity_type: model_entity::EntityType,
+        _entity_id: &str,
+    ) -> Result<(), connection::domain::models::ConnectionError> {
+        Ok(())
+    }
 }
 
 /// No-op RTC client used by the call tool context — the AI read-only tools

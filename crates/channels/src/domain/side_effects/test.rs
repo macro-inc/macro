@@ -1076,6 +1076,35 @@ async fn handle_publishes_channel_created_event() {
 }
 
 #[tokio::test]
+async fn removed_participants_are_told_they_lost_the_channel() {
+    let realtime = FakeRealtime::default();
+    let service = ChannelSideEffectService::new(
+        FakeContext::default(),
+        realtime.clone(),
+        FakeNotifications::default(),
+        FakeContacts::default(),
+    );
+    let channel_id = Uuid::new_v4();
+    let removed = users(&["bob@example.com", "carol@example.com"]);
+
+    service
+        .handle(ChannelEvent::ParticipantsRemoved {
+            channel_id,
+            channel_type: ChannelType::Team,
+            actor: user("admin@example.com"),
+            removed_user_ids: removed.clone(),
+        })
+        .await;
+
+    let effects = realtime.effects.lock().unwrap();
+    assert!(
+        matches!(&effects[..], [ChannelRealtimeEffect::AccessLost { channel_id: id, recipients }]
+        if *id == channel_id && recipients == &removed),
+        "{effects:?}"
+    );
+}
+
+#[tokio::test]
 async fn handle_publishes_participant_events() {
     let broker = TestEventBroker::default();
     let service = broker_service(broker.clone());

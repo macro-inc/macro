@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT (status <> 'cancelled' AND visibility IN ('default', 'public')) AS \"visible!\"\n        FROM calendar_events\n        WHERE id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "visible!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "a2727d3cc8eda864053fdb2d7af25eead8dd61c10415c15dfa5b393f186d12c2"
+}

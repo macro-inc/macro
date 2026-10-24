@@ -7,7 +7,7 @@ use macro_user_id::{
     user_id::{MacroUserId, MacroUserIdStr},
 };
 
-use crate::domain::models::{ConnectionError, InvalidationEvent};
+use crate::domain::models::{ConnectionError, EntityType, InvalidationEvent};
 
 /// Repository for handling github oauth related actions.
 pub trait ConnectionGateway: Send + Sync + 'static {
@@ -28,6 +28,14 @@ pub trait ConnectionGateway: Send + Sync + 'static {
         message_type: &str,
         message: serde_json::Value,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Tells users their access to an entity may have changed.
+    fn send_access_changed<'a>(
+        &self,
+        users: &[MacroUserIdStr<'a>],
+        entity_type: EntityType,
+        entity_id: &str,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
 /// Service interface for connection operations
@@ -44,5 +52,15 @@ pub trait ConnectionService: Send + Sync + 'static {
         users: &[MacroUserIdStr<'a>],
         message_type: &str,
         message: serde_json::Value,
+    ) -> impl Future<Output = Result<(), ConnectionError>> + Send;
+
+    /// Tells users their access to an entity may have changed, so their open
+    /// clients drop (or show) it without a reload. Send it to everyone a change
+    /// may have cut off; someone who kept access only refetches.
+    fn send_access_changed<'a>(
+        &self,
+        users: &[MacroUserIdStr<'a>],
+        entity_type: EntityType,
+        entity_id: &str,
     ) -> impl Future<Output = Result<(), ConnectionError>> + Send;
 }

@@ -17,4 +17,15 @@ impl ConnectionGatewayClient {
         )
         .await
     }
+
+    /// Tell users a calendar event they could see through a channel share is
+    /// no longer visible to them.
+    pub async fn calendar_event_access_changed(
+        &self,
+        user_ids: &[&str],
+        event_id: &str,
+    ) -> anyhow::Result<()> {
+        self.send_access_changed(user_ids, EntityType::CalendarEvent, event_id)
+            .await
+    }
 }

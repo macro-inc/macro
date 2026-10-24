@@ -30,10 +30,7 @@ import { FloatRegions } from '@components/app/mobile/float-regions/float-region-
 import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
-import {
-  EntityLoadGate,
-  toEntityLoadError,
-} from '@core/component/EntityLoadGate';
+import { EntityLoadGate } from '@core/component/EntityLoadGate';
 import { FindBar } from '@core/component/FindBar';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { toast } from '@core/component/Toast/Toast';
@@ -143,6 +140,7 @@ import {
   type ThreadManagerSnapshot,
 } from './thread-manager';
 import { createThreadPaginator } from './thread-paginator';
+import { timelineLoadError } from './timeline-load-error';
 import { UnifiedEditInput } from './UnifiedEditInput';
 import { UnifiedReplyInput } from './UnifiedReplyInput';
 import { UnreadNotificationsOverlay } from './UnreadNotificationsOverlay';
@@ -240,11 +238,10 @@ export function Channel(props: ChannelProps) {
   const messagesLoadResult = {
     data: () => messagesQuery.data,
     // Pagination and background-refresh errors should not replace content that
-    // has already loaded. Only initial-loading errors belong to the gate.
+    // has already loaded, unless they refuse access. Initial-loading errors
+    // always belong to the gate.
     error: () =>
-      messagesQuery.isLoadingError && !isTargetMessageMissing()
-        ? toEntityLoadError(messagesQuery.error)
-        : undefined,
+      isTargetMessageMissing() ? undefined : timelineLoadError(messagesQuery),
     // Keep the loading view mounted while the missing-target handler switches
     // the query back to the latest page.
     isPending: () => messagesQuery.isPending || isTargetMessageMissing(),

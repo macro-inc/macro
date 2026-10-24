@@ -7,14 +7,26 @@ import { useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { revalidateActivityQueries } from '../activity/push-registry';
 import { agentSessionKeys } from '../agent-session/keys';
+import { invalidateCalendarEventPreviews } from '../calendar/mention-preview';
 import { callKeys } from '../call/keys';
+import { channelKeys } from '../channel/keys';
 import { queryClient } from '../client';
+import { messageKeys } from '../messages/keys';
 import { refreshActiveGraphqlPreviewQueries } from '../preview/active-queries';
 import { refreshActiveGraphqlSoupQueries } from '../soup/graphql/active-queries';
 import { soupKeys } from '../soup/keys';
 import { invalidateAllSoup } from '../soup/normalized-cache';
 import { databasesKeys, entityKeys } from '../storage/keys';
 import { accessRequestKeys } from './keys';
+
+/**
+ * An item whose access changed. Calendar events and channels have no Share
+ * surface of their own, but people lose them when an event is hidden or they
+ * leave a channel.
+ */
+export type AccessChangeEntity =
+  | ShareEntity
+  | { entityType: 'calendar_event' | 'channel'; entityId: string };
 
 export function fetchAccessRequestState(entity: ShareEntity, offset = 0) {
   return throwOnErr(() => accessRequestsClient.state(entity, offset));
@@ -41,19 +53,21 @@ function accessRequestStateOptions(
     throwOnError: false,
   };
 }
-export function invalidateAccessRequests(entity: ShareEntity) {
+export function invalidateAccessRequests(entity: AccessChangeEntity) {
   return queryClient.invalidateQueries({
     queryKey: accessRequestKeys.entity(entity.entityType, entity.entityId)
       .queryKey,
   });
 }
-export function refreshSharedAccess(entity: ShareEntity) {
+export function refreshSharedAccess(entity: AccessChangeEntity) {
   fireAndForget(invalidateAccessRequests(entity), 'access-requests');
   // Permissions change list membership even when the item was never cached.
   invalidateAllSoup();
   queryClient.invalidateQueries({ queryKey: soupKeys.search._def });
   fireAndForget(refreshActiveGraphqlSoupQueries(), 'access-requests');
-  const includesDescendants = entity.entityType === 'project';
+  // A folder grant reaches what it holds, and a channel what was shared there.
+  const includesDescendants =
+    entity.entityType === 'project' || entity.entityType === 'channel';
   fireAndForget(
     refreshActiveGraphqlPreviewQueries(
       includesDescendants ? undefined : entity.entityId
@@ -77,6 +91,29 @@ export function refreshSharedAccess(entity: ShareEntity) {
   }
   if (entity.entityType === 'call')
     queryClient.invalidateQueries({ queryKey: callKeys._def });
+  if (entity.entityType === 'calendar_event')
+    invalidateCalendarEventPreviews(entity.entityId);
+  if (entity.entityType === 'channel') {
+    for (const key of [
+      channelKeys.listChannels,
+      channelKeys.activity,
+      channelKeys.withID(entity.entityId),
+      channelKeys.participants(entity.entityId),
+      channelKeys.attachments(entity.entityId),
+      channelKeys.mentions(entity.entityId),
+      channelKeys.channelBots(entity.entityId),
+    ])
+      queryClient.invalidateQueries({ queryKey: key.queryKey });
+    // An open conversation closes once its timeline is refused.
+    queryClient.invalidateQueries({
+      queryKey: [
+        ...messageKeys.messages._def,
+        { type: 'channel', id: entity.entityId },
+      ],
+    });
+    // Events shared with the channel left with it.
+    invalidateCalendarEventPreviews();
+  }
   if (entity.entityType === 'agent_session')
     queryClient.invalidateQueries({
       queryKey: agentSessionKeys.detail(entity.entityId).queryKey,

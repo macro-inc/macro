@@ -76,6 +76,7 @@ impl CalendarRepository for FakeRepo {
             owner_id,
             change: CalendarEventChange::Created,
             team_ooo_changed,
+            channel_viewers_who_lost_access: Vec::new(),
         })
     }
 
@@ -1308,12 +1309,14 @@ async fn a_cancelled_provider_event_publishes_a_deletion() {
                 event_id: removed,
                 owner_id: "macro|owner".to_string(),
                 deleted: true,
+                channel_viewers_who_lost_access: Vec::new(),
             },
             // Another source still backs this one, so its row was rewritten.
             RetiredCalendarEvent {
                 event_id: survivor,
                 owner_id: "macro|owner".to_string(),
                 deleted: false,
+                channel_viewers_who_lost_access: Vec::new(),
             },
         ],
         ..FakeRepo::default()

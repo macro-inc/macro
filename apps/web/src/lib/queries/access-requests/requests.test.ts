@@ -1,7 +1,11 @@
 import { type Client, createClient } from '@urql/core';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { registerActivityRevalidator } from '../activity/push-registry';
+import { calendarKeys } from '../calendar/keys';
+import { channelKeys } from '../channel/keys';
+import { messageKeys } from '../messages/keys';
 import { registerActiveGraphqlPreviewQuery } from '../preview/active-queries';
+import { previewKeys } from '../preview/keys';
 import { registerActiveGraphqlSoupQuery } from '../soup/graphql/active-queries';
 import { soupKeys } from '../soup/keys';
 import { databasesKeys } from '../storage/keys';
@@ -99,6 +103,62 @@ it('refreshes folder descendants and the database discovery list after sharing c
   });
   expect(mocks.invalidate).toHaveBeenCalledWith({
     queryKey: databasesKeys.detail('database').queryKey,
+  });
+});
+
+it('drops what was shared in a channel the viewer lost, and the channel itself', () => {
+  const preview = vi.fn(async () => {});
+  const activity = vi.fn<
+    (entities: ReadonlySet<string> | null) => Promise<void>
+  >(async () => {});
+  disposers.push(
+    registerActiveGraphqlPreviewQuery({
+      isEnabled: () => true,
+      itemId: () => 'shared-document',
+      refresh: preview,
+    })
+  );
+  disposers.push(
+    registerActivityRevalidator({ client: () => client, refresh: activity })
+  );
+
+  refreshSharedAccess({ entityType: 'channel', entityId: 'channel' });
+
+  expect(mocks.lists).toHaveBeenCalledOnce();
+  expect(preview).toHaveBeenCalledOnce();
+  expect(activity).toHaveBeenCalledWith(null);
+  expect(mocks.invalidate).toHaveBeenCalledWith({
+    queryKey: channelKeys.listChannels.queryKey,
+  });
+  expect(mocks.invalidate).toHaveBeenCalledWith({
+    queryKey: channelKeys.activity.queryKey,
+  });
+  expect(mocks.invalidate).toHaveBeenCalledWith({
+    queryKey: channelKeys.channelBots('channel').queryKey,
+  });
+  expect(mocks.invalidate).toHaveBeenCalledWith({
+    queryKey: channelKeys.withID('channel').queryKey,
+  });
+  expect(mocks.invalidate).toHaveBeenCalledWith({
+    queryKey: [
+      ...messageKeys.messages._def,
+      { type: 'channel', id: 'channel' },
+    ],
+  });
+  expect(mocks.invalidate).toHaveBeenCalledWith({
+    queryKey: calendarKeys.mentionPreview._def,
+  });
+});
+
+it('refreshes the previews of a calendar event the viewer can no longer see', () => {
+  refreshSharedAccess({ entityType: 'calendar_event', entityId: 'event' });
+
+  expect(mocks.lists).toHaveBeenCalledOnce();
+  expect(mocks.invalidate).toHaveBeenCalledWith({
+    queryKey: previewKeys.item('event').queryKey,
+  });
+  expect(mocks.invalidate).toHaveBeenCalledWith({
+    queryKey: [...calendarKeys.mentionPreview._def, 'event'],
   });
 });
 

@@ -120,6 +120,9 @@ pub struct DisconnectedCalendar {
     pub token_identity: CalendarLinkTokenIdentity,
     /// Push channels that were open when the calendar was removed.
     pub watch_channels: Vec<CalendarWatchRelease>,
+    /// Events the removal took from channel members who could see them, each
+    /// naming those members.
+    pub retired_shared_events: Vec<super::ports::RetiredCalendarEvent>,
 }
 
 /// The mutually exclusive time shape of a calendar event.

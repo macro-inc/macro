@@ -1,6 +1,7 @@
 //! PostgreSQL implementation of the calendar repository port.
 mod change_log;
 mod changes;
+mod channel_access;
 mod details;
 mod export;
 mod invitations;
@@ -694,7 +695,8 @@ impl CalendarRepository for PgCalendarRepository {
         if row.provider == "OUTLOOK" {
             sqlx::query!("UPDATE email_link_microsoft_scopes SET calendar_disabled_at=now(),updated_at=now() WHERE link_id=$1",email_link_id).execute(&mut *tx).await.map_err(report)?;
             let mut log = ChangeLogBatch::default();
-            disable_calendar_capability_tx(&mut tx, &mut log, email_link_id).await?;
+            let retired_shared_events =
+                disable_calendar_capability_tx(&mut tx, &mut log, email_link_id).await?;
             sqlx::query!(
                 "DELETE FROM calendar_accounts WHERE email_link_id=$1",
                 email_link_id
@@ -715,6 +717,7 @@ impl CalendarRepository for PgCalendarRepository {
                     provider: CalendarProvider::Outlook,
                 },
                 watch_channels: vec![],
+                retired_shared_events,
             }));
         }
 
@@ -771,7 +774,8 @@ impl CalendarRepository for PgCalendarRepository {
         // cascades its calendars and backfill jobs.
         invalidate_stale_google_jobs_tx(&mut tx, email_link_id, grant_version).await?;
         let mut log = ChangeLogBatch::default();
-        disable_calendar_capability_tx(&mut tx, &mut log, email_link_id).await?;
+        let retired_shared_events =
+            disable_calendar_capability_tx(&mut tx, &mut log, email_link_id).await?;
         sqlx::query!(
             "DELETE FROM calendar_accounts WHERE email_link_id = $1",
             email_link_id,
@@ -794,6 +798,7 @@ impl CalendarRepository for PgCalendarRepository {
                     .ok_or_else(|| rootcause::report!("unsupported calendar provider"))?,
             },
             watch_channels,
+            retired_shared_events,
         }))
     }
 
@@ -932,6 +937,7 @@ impl CalendarRepository for PgCalendarRepository {
                     owner_id: upsert.event.owner_id.clone(),
                     change: CalendarEventChange::Unchanged,
                     team_ooo_changed: false,
+                    channel_viewers_who_lost_access: Vec::new(),
                 });
             }
         }
@@ -1042,6 +1048,7 @@ impl CalendarRepository for PgCalendarRepository {
                 owner_id: upsert.event.owner_id.clone(),
                 change: CalendarEventChange::Unchanged,
                 team_ooo_changed: false,
+                channel_viewers_who_lost_access: Vec::new(),
             });
         };
         if provider_sync {
@@ -1067,6 +1074,10 @@ impl CalendarRepository for PgCalendarRepository {
         } else {
             owns_schedule
         };
+        // Channel shares outlive a later decision to hide the event, so whoever
+        // they reached is told when it stops being visible to them.
+        let was_channel_visible =
+            !inserted && channel_access::channel_visible(&mut tx, event_id).await?;
         if is_canonical {
             apply_content_projection(&mut tx, event_id, source_id, &projection, source_kind)
                 .await?;
@@ -1078,6 +1089,12 @@ impl CalendarRepository for PgCalendarRepository {
                 apply_time_projection(&mut tx, event_id, source_id, &projection).await?;
             }
         }
+        let channel_viewers_who_lost_access =
+            if was_channel_visible && !channel_access::channel_visible(&mut tx, event_id).await? {
+                channel_access::channel_viewers(&mut tx, event_id).await?
+            } else {
+                Vec::new()
+            };
         if is_canonical || writes_schedule {
             rebuild_entity_reminder_firings(
                 &mut tx,
@@ -1105,6 +1122,7 @@ impl CalendarRepository for PgCalendarRepository {
                 CalendarEventChange::Updated
             },
             team_ooo_changed,
+            channel_viewers_who_lost_access,
         })
     }
 
@@ -2196,6 +2214,7 @@ impl CalendarRepository for PgCalendarRepository {
                 event_id: row.id,
                 owner_id: row.owner_id,
                 deleted: false,
+                channel_viewers_who_lost_access: Vec::new(),
             }
         }));
         let mut announced = HashSet::new();
@@ -3304,11 +3323,15 @@ async fn clear_calendar_opt_out_tx(
 /// invisible rather than leaked, because enrichment re-reads visibility from
 /// Postgres and drops a hit whose row is gone. Removing them wants a
 /// purge-by-owner operation, not this path.
+///
+/// What it does return are the events whose channel members it cut off, each
+/// naming them, so a disconnect can tell them; there are only as many as the
+/// inbox's events shared into channels.
 async fn disable_calendar_capability_tx(
     tx: &mut Transaction<'_, Postgres>,
     log: &mut ChangeLogBatch,
     email_link_id: Uuid,
-) -> Result<(), Report> {
+) -> Result<Vec<RetiredCalendarEvent>, Report> {
     let account_id = sqlx::query_scalar!(
         r#"
         UPDATE calendar_accounts
@@ -3324,7 +3347,7 @@ async fn disable_calendar_capability_tx(
     .await
     .map_err(report)?;
     let Some(account_id) = account_id else {
-        return Ok(());
+        return Ok(Vec::new());
     };
 
     let removed_calendars = sqlx::query_scalar!(
@@ -3365,8 +3388,13 @@ async fn disable_calendar_capability_tx(
     .fetch_all(&mut **tx)
     .await
     .map_err(report)?;
+    let mut shared_events = Vec::new();
     for event_id in &affected_event_ids {
-        restore_best_source_or_delete(tx, log, *event_id).await?;
+        if let Some(retired) = restore_best_source_or_delete(tx, log, *event_id).await?
+            && !retired.channel_viewers_who_lost_access.is_empty()
+        {
+            shared_events.push(retired);
+        }
     }
 
     // Reminder delivery claims are deliberately not foreign-keyed to
@@ -3385,7 +3413,7 @@ async fn disable_calendar_capability_tx(
     .execute(&mut **tx)
     .await
     .map_err(report)?;
-    Ok(())
+    Ok(shared_events)
 }
 
 async fn upsert_google_account_tx(
@@ -3912,6 +3940,9 @@ async fn restore_best_source_or_delete(
     .fetch_one(&mut **tx)
     .await
     .map_err(report)?;
+    // Read who the event's channel shares reach before a delete or a rewrite
+    // from a private source can hide it from them.
+    let channel_viewers = channel_access::visible_channel_viewers(tx, event_id).await?;
 
     let source = sqlx::query!(
         r#"
@@ -3941,6 +3972,7 @@ async fn restore_best_source_or_delete(
             event_id,
             owner_id: identity.owner_id,
             deleted: true,
+            channel_viewers_who_lost_access: channel_viewers,
         }));
     };
 
@@ -3959,10 +3991,17 @@ async fn restore_best_source_or_delete(
         identity.source_link_id,
         CalendarChangeOp::UpsertEvent(event_id),
     );
+    let channel_viewers_who_lost_access =
+        if channel_viewers.is_empty() || channel_access::channel_visible(tx, event_id).await? {
+            Vec::new()
+        } else {
+            channel_viewers
+        };
     Ok(Some(RetiredCalendarEvent {
         event_id,
         owner_id: identity.owner_id,
         deleted: false,
+        channel_viewers_who_lost_access,
     }))
 }
 

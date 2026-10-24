@@ -9,7 +9,7 @@ use macro_user_id::{
 };
 
 use crate::domain::{
-    models::{ConnectionError, InvalidationEvent},
+    models::{ConnectionError, EntityType, InvalidationEvent},
     ports::{ConnectionGateway, ConnectionService},
 };
 
@@ -101,5 +101,18 @@ impl<E: EntityAccessService, Cgw: ConnectionGateway> ConnectionService
             .map_err(|e| ConnectionError::Internal(e.into()))?;
 
         Ok(())
+    }
+
+    #[tracing::instrument(skip(self, users), fields(recipients = users.len()), err)]
+    async fn send_access_changed<'a>(
+        &self,
+        users: &[MacroUserIdStr<'a>],
+        entity_type: EntityType,
+        entity_id: &str,
+    ) -> Result<(), ConnectionError> {
+        self.connection_gateway
+            .send_access_changed(users, entity_type, entity_id)
+            .await
+            .map_err(|e| ConnectionError::Internal(e.into()))
     }
 }

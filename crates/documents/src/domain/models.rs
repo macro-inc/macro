@@ -491,6 +491,15 @@ pub struct EditDocumentRepoArgs {
     pub file_type: Option<FileTypeUpdate>,
 }
 
+/// What a document edit took away.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct EditDocumentRepoOutcome {
+    /// Users the edit's removed grants covered: members of channels and of the
+    /// team it stopped sharing with, and direct users a link-share revocation
+    /// dropped. Some may still reach the document another way.
+    pub users_who_may_lose_access: Vec<MacroUserIdStr<'static>>,
+}
+
 /// Arguments for the edit_document service call.
 #[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]

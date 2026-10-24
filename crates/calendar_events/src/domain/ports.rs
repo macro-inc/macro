@@ -518,6 +518,10 @@ pub struct CalendarEventWriteOutcome {
     pub change: CalendarEventChange,
     /// A changed source was or is OOO; it may revoke a teammate's status/title.
     pub team_ooo_changed: bool,
+    /// Members of channels the event is shared with who could see it before
+    /// this write and cannot now: it was made private or confidential, or
+    /// cancelled. Never its owner.
+    pub channel_viewers_who_lost_access: Vec<String>,
 }
 
 /// One event's fate after its sources were retired.
@@ -535,6 +539,9 @@ pub struct RetiredCalendarEvent {
     /// Whether the row is now gone. `false` means it was rewritten from a
     /// remaining source.
     pub deleted: bool,
+    /// Members of the channels the event was shared with who could see it
+    /// before the retirement and no longer can, other than its owner.
+    pub channel_viewers_who_lost_access: Vec<String>,
 }
 
 /// Persistence operations used by calendar business logic.
@@ -922,6 +929,14 @@ pub trait CalendarRefreshNotifier: Send + Sync + 'static {
         owner_id: &str,
         email_link_id: Uuid,
         team_ooo_changed: bool,
+    ) -> impl Future<Output = ()> + Send;
+
+    /// Tell channel members an event shared with their channel is no longer
+    /// visible to them, so their open clients drop it.
+    fn channel_access_lost(
+        &self,
+        user_ids: &[String],
+        event_id: Uuid,
     ) -> impl Future<Output = ()> + Send;
 }
 

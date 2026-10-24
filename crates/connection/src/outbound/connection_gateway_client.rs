@@ -7,7 +7,7 @@ use macro_user_id::{
 };
 
 use crate::domain::{
-    models::{INVALIDATION_MESSAGE_TYPE, InvalidationEvent},
+    models::{EntityType, INVALIDATION_MESSAGE_TYPE, InvalidationEvent},
     ports::ConnectionGateway,
 };
 
@@ -71,5 +71,17 @@ impl ConnectionGateway for ConnectionGatewayImpl {
         tracing::trace!(result=?result, "batch send message");
 
         Ok(())
+    }
+
+    async fn send_access_changed<'a>(
+        &self,
+        users: &[MacroUserIdStr<'a>],
+        entity_type: EntityType,
+        entity_id: &str,
+    ) -> Result<(), Self::Err> {
+        let users: Vec<&str> = users.iter().map(|user| user.as_ref()).collect();
+        self.client
+            .send_access_changed(&users, entity_type, entity_id)
+            .await
     }
 }

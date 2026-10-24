@@ -37,9 +37,10 @@ use model_entity::Entity;
 use super::models::{
     BranchNameContext, CopyDocumentRepoArgs, CreateDocumentRepoArgs, CreateTaskRequest,
     DocumentError, DocumentTeamShare, DocumentTeamShareResponse, EditDocumentRepoArgs,
-    EditDocumentServiceArgs, EmailImportRepoOutcome, GithubPullRequestTasksResponse,
-    GithubPullRequestsResponse, ImportEmailAttachmentRepoArgs, LocationQueryParams, NewDocument,
-    OwnerTeam, TaskBranchName, TaskIdentity, TeamTaskMetadata, TeamTaskNumber,
+    EditDocumentRepoOutcome, EditDocumentServiceArgs, EmailImportRepoOutcome,
+    GithubPullRequestTasksResponse, GithubPullRequestsResponse, ImportEmailAttachmentRepoArgs,
+    LocationQueryParams, NewDocument, OwnerTeam, TaskBranchName, TaskIdentity, TeamTaskMetadata,
+    TeamTaskNumber,
 };
 
 /// Repository for accessing document data from the database.
@@ -185,7 +186,7 @@ pub trait DocumentRepo: Send + Sync + 'static {
     fn edit_document(
         &self,
         args: EditDocumentRepoArgs,
-    ) -> impl Future<Output = Result<(), DocumentError>> + Send;
+    ) -> impl Future<Output = Result<EditDocumentRepoOutcome, DocumentError>> + Send;
 
     /// Update a document's `updatedAt` timestamp.
     fn update_document_modified(

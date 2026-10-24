@@ -27,8 +27,8 @@ use sqlx::Row;
 use crate::domain::content::{DocumentContent, DocumentContentState};
 use crate::domain::models::{
     BranchNameContext, CopyDocumentRepoArgs, CreateDocumentRepoArgs, DocumentError,
-    DocumentTeamShare, EditDocumentRepoArgs, EmailImportRepoOutcome, ImportEmailAttachmentRepoArgs,
-    OwnerTeam, TeamTaskMetadata, TeamTaskNumber,
+    DocumentTeamShare, EditDocumentRepoArgs, EditDocumentRepoOutcome, EmailImportRepoOutcome,
+    ImportEmailAttachmentRepoArgs, OwnerTeam, TeamTaskMetadata, TeamTaskNumber,
 };
 use crate::domain::ports::DocumentRepo;
 
@@ -612,10 +612,14 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
     }
 
     #[tracing::instrument(err, skip(self, args))]
-    async fn edit_document(&self, args: EditDocumentRepoArgs) -> Result<(), DocumentError> {
+    async fn edit_document(
+        &self,
+        args: EditDocumentRepoArgs,
+    ) -> Result<EditDocumentRepoOutcome, DocumentError> {
         use share_permission_db_utils::team_share;
 
         let mut transaction = self.pool.begin().await?;
+        let mut users_who_may_lose_access = Vec::new();
         if let Some(command) = &args.team_share {
             if command.expected().entity.entity_type != EntityType::Document
                 || command.expected().entity.entity_id != args.document_id
@@ -628,6 +632,14 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
                 return Err(DocumentError::BadRequest(
                     "team-share command does not match edit".to_string(),
                 ));
+            }
+            if let Some(current) = command.expected().current
+                && command
+                    .target()
+                    .is_none_or(|target| target.team_id != current.team_id)
+            {
+                users_who_may_lose_access
+                    .extend(edit::team_members(&mut transaction, current.team_id).await?);
             }
             team_share::apply(&mut transaction, command)
                 .await
@@ -656,6 +668,8 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
         .await?;
 
         if let Some(ref share_permission) = args.share_permission {
+            users_who_may_lose_access
+                .extend(edit::removed_channel_members(&mut transaction, share_permission).await?);
             edit::update_share_permission(&mut transaction, &args.document_id, share_permission)
                 .await?;
         }
@@ -670,17 +684,27 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
             // SAFETY: document IDs are UUID strings.
             let entity_id = macro_uuid::string_to_uuid(&args.document_id).unwrap();
 
-            entity_access_db_utils::remove_non_owner_user_entity_access(
-                &mut transaction,
-                &entity_id,
-                EntityType::Document,
-                &owner_principal,
-            )
-            .await?;
+            users_who_may_lose_access.extend(
+                entity_access_db_utils::remove_non_owner_user_entity_access(
+                    &mut transaction,
+                    &entity_id,
+                    EntityType::Document,
+                    &owner_principal,
+                )
+                .await?,
+            );
         }
 
         transaction.commit().await?;
-        Ok(())
+        users_who_may_lose_access.sort();
+        users_who_may_lose_access.dedup();
+        Ok(EditDocumentRepoOutcome {
+            // Channels also seat bots, which have no clients to tell.
+            users_who_may_lose_access: users_who_may_lose_access
+                .into_iter()
+                .filter_map(|user_id| MacroUserIdStr::try_from(user_id).ok())
+                .collect(),
+        })
     }
 
     #[tracing::instrument(err, skip(self))]

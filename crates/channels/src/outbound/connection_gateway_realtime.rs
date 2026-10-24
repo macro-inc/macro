@@ -59,6 +59,19 @@ impl ChannelRealtimePublisher for ConnectionGatewayChannelRealtimePublisher {
                 )
                 .await
             }
+            ChannelRealtimeEffect::AccessLost {
+                recipients,
+                channel_id,
+            } => {
+                let recipients: Vec<&str> = recipients.iter().map(|user| user.as_ref()).collect();
+                self.client
+                    .send_access_changed(
+                        &recipients,
+                        GatewayEntityType::Channel,
+                        &channel_id.to_string(),
+                    )
+                    .await
+            }
         }
     }
 }

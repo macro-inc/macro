@@ -49,6 +49,14 @@ pub enum ChannelRealtimeEffect {
         /// Channel whose picture changed.
         channel_id: Uuid,
     },
+    /// Tell people who left or were removed from a channel that they lost it,
+    /// and with it what was shared there.
+    AccessLost {
+        /// Users who are no longer participants.
+        recipients: Vec<MacroUserIdStr<'static>>,
+        /// Channel they lost.
+        channel_id: Uuid,
+    },
 }
 
 /// The sender of a channel message for notification purposes.
@@ -338,7 +346,23 @@ where
             }
             ChannelEvent::ChannelCreated { .. } => {}
             ChannelEvent::ChannelUpdated { .. } => {}
-            ChannelEvent::ParticipantsRemoved { .. } => {}
+            ChannelEvent::ParticipantsRemoved {
+                channel_id,
+                removed_user_ids,
+                ..
+            } => {
+                if let Err(error) = self
+                    .realtime
+                    .publish(ChannelRealtimeEffect::AccessLost {
+                        recipients: removed_user_ids,
+                        channel_id,
+                    })
+                    .await
+                {
+                    let error: anyhow::Error = error.into();
+                    tracing::error!(error=?error, %channel_id, "unable to tell removed participants they lost the channel");
+                }
+            }
             ChannelEvent::EntityMentionCreated { .. } => {}
             ChannelEvent::EntityMentionDeleted { .. } => {}
             ChannelEvent::ChannelDeleted { .. } => {}

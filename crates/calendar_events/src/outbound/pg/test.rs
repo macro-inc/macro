@@ -4652,6 +4652,34 @@ async fn a_reissued_grant_keeps_calendar_off_until_it_is_requested_again(pool: P
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn disconnecting_calendar_reports_the_channel_members_of_its_shared_events(pool: PgPool) {
+    let owner_id = "macro|calendar-disconnect-shared@example.com";
+    let member_id = "macro|calendar-disconnect-member@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let (_account_id, _calendar_id, event_id, _watch_channel_id) =
+        connected_calendar(&pool, &repo, owner_id, link_id).await;
+    let channel_id = insert_channel(&pool, owner_id, &[owner_id, member_id]).await;
+    share_with_channel(&pool, event_id, channel_id).await;
+
+    let disconnected = repo
+        .disconnect_provider_calendar(owner_id, link_id)
+        .await
+        .unwrap()
+        .expect("the owner's inbox is disconnectable");
+
+    assert_eq!(
+        disconnected.retired_shared_events,
+        vec![RetiredCalendarEvent {
+            event_id,
+            owner_id: owner_id.to_string(),
+            deleted: true,
+            channel_viewers_who_lost_access: vec![member_id.to_string()],
+        }]
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn only_the_owner_can_disconnect_an_inbox_calendar(pool: PgPool) {
     let owner_id = "macro|calendar-owner@example.com";
     let link_id = insert_link(&pool, owner_id).await;
@@ -4808,6 +4836,121 @@ async fn insert_channel(pool: &PgPool, owner_id: &str, members: &[&str]) -> Uuid
         .unwrap();
     }
     channel_id
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn hiding_a_channel_shared_event_reports_the_members_it_cut_off(pool: PgPool) {
+    let author_id = "macro|hiding-author@example.com";
+    let member_id = "macro|hiding-member@example.com";
+    let former_id = "macro|hiding-former@example.com";
+    let link = insert_link(&pool, author_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let provider = provider_ids(&repo, link).await;
+    let write = |title: &str, sequence: u32, visibility: EventVisibility| {
+        let mut upsert = timed_upsert(
+            author_id,
+            link,
+            provider,
+            "hiding@example.com",
+            title,
+            sequence,
+        );
+        upsert.event.visibility = visibility;
+        CalendarEventWrite::Fixture(upsert)
+    };
+    let event_id = repo
+        .upsert_event(write("Review", 1, EventVisibility::Default))
+        .await
+        .unwrap()
+        .event_id;
+    let channel_id = insert_channel(&pool, author_id, &[author_id, member_id, former_id]).await;
+    sqlx::query!(
+        "UPDATE comms_channel_participants SET left_at = now() WHERE channel_id = $1 AND user_id = $2",
+        channel_id,
+        former_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    share_with_channel(&pool, event_id, channel_id).await;
+
+    // An edit that keeps the event visible cuts no one off.
+    let renamed = repo
+        .upsert_event(write("Review notes", 2, EventVisibility::Public))
+        .await
+        .unwrap();
+    assert!(renamed.channel_viewers_who_lost_access.is_empty());
+
+    let hidden = repo
+        .upsert_event(write("Review notes", 3, EventVisibility::Private))
+        .await
+        .unwrap();
+    assert_eq!(hidden.event_id, event_id);
+    assert_eq!(hidden.channel_viewers_who_lost_access, vec![member_id]);
+
+    // Already hidden: a further edit has no one left to tell.
+    let edited = repo
+        .upsert_event(write("Review notes v2", 4, EventVisibility::Confidential))
+        .await
+        .unwrap();
+    assert!(edited.channel_viewers_who_lost_access.is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn deleting_a_channel_shared_event_reports_the_members_it_reached(pool: PgPool) {
+    let author_id = "macro|deleting-author@example.com";
+    let member_id = "macro|deleting-member@example.com";
+    let link = insert_link(&pool, author_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let provider = provider_ids(&repo, link).await;
+    let (account_id, calendar_id) = provider;
+    let channel_id = insert_channel(&pool, author_id, &[author_id, member_id]).await;
+    let shared = |uid: &str, visibility: EventVisibility| {
+        let mut upsert = timed_upsert(author_id, link, provider, uid, "Review", 1);
+        upsert.event.visibility = visibility;
+        CalendarEventWrite::Fixture(upsert)
+    };
+    let visible_id = repo
+        .upsert_event(shared("deleting@example.com", EventVisibility::Default))
+        .await
+        .unwrap()
+        .event_id;
+    let private_id = repo
+        .upsert_event(shared(
+            "deleting-private@example.com",
+            EventVisibility::Private,
+        ))
+        .await
+        .unwrap()
+        .event_id;
+    share_with_channel(&pool, visible_id, channel_id).await;
+    share_with_channel(&pool, private_id, channel_id).await;
+
+    let retired = repo
+        .remove_provider_source(account_id, calendar_id, "provider-deleting@example.com")
+        .await
+        .unwrap();
+    assert_eq!(
+        retired,
+        vec![RetiredCalendarEvent {
+            event_id: visible_id,
+            owner_id: author_id.to_string(),
+            deleted: true,
+            channel_viewers_who_lost_access: vec![member_id.to_string()],
+        }]
+    );
+
+    // The channel never saw a private event, so deleting it cuts no one off.
+    let retired = repo
+        .remove_provider_source(
+            account_id,
+            calendar_id,
+            "provider-deleting-private@example.com",
+        )
+        .await
+        .unwrap();
+    assert_eq!(retired.len(), 1);
+    assert!(retired[0].channel_viewers_who_lost_access.is_empty());
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -6159,6 +6302,7 @@ async fn retiring_the_primary_copy_promotes_the_shared_copy(pool: PgPool) {
             event_id,
             owner_id: member.to_string(),
             deleted: false,
+            channel_viewers_who_lost_access: Vec::new(),
         }]
     );
     let content = entity_content(&pool, event_id).await;
@@ -6373,6 +6517,7 @@ async fn canonical_selection_skips_copies_on_deleted_calendars(pool: PgPool) {
             event_id,
             owner_id: member.to_string(),
             deleted: true,
+            channel_viewers_who_lost_access: Vec::new(),
         }]
     );
 }

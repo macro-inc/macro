@@ -1266,22 +1266,23 @@ async fn test_edit_document_public_to_null_revokes_non_owner_access(pool: Pool<P
     let repo = test_repo(pool.clone());
     insert_non_owner_user_access(&pool).await;
 
-    repo.edit_document(EditDocumentRepoArgs {
-        team_share: None,
-        document_id: TEST_DOCUMENT_ID.to_string(),
-        document_name: None,
-        project_id: None,
-        share_permission: Some(UpdateSharePermissionRequestV2 {
-            link_share: Some(None),
-            link_share_access_level: Some(None),
-            team_share_access_level: None,
-            channel_share_permissions: None,
-        }),
-        revoke_non_owner_user_access: true,
-        file_type: None,
-    })
-    .await
-    .unwrap();
+    let outcome = repo
+        .edit_document(EditDocumentRepoArgs {
+            team_share: None,
+            document_id: TEST_DOCUMENT_ID.to_string(),
+            document_name: None,
+            project_id: None,
+            share_permission: Some(UpdateSharePermissionRequestV2 {
+                link_share: Some(None),
+                link_share_access_level: Some(None),
+                team_share_access_level: None,
+                channel_share_permissions: None,
+            }),
+            revoke_non_owner_user_access: true,
+            file_type: None,
+        })
+        .await
+        .unwrap();
 
     let result = share_permission_columns(&pool, TEST_DOCUMENT_ID).await;
 
@@ -1290,6 +1291,10 @@ async fn test_edit_document_public_to_null_revokes_non_owner_access(pool: Pool<P
     assert_eq!(
         direct_user_access_sources(&pool).await,
         vec![TEST_DOCUMENT_OWNER_ID.to_string()]
+    );
+    assert_eq!(
+        user_strings(&outcome.users_who_may_lose_access),
+        vec![TEST_DOCUMENT_NON_OWNER_ID]
     );
 }
 
@@ -2273,6 +2278,85 @@ async fn test_get_github_pull_request_keys_orders_and_parses(pool: Pool<Postgres
                 comments: None,
                 checks: None,
             },
+        ]
+    );
+}
+
+fn user_strings<'a>(users: &'a [macro_user_id::user_id::MacroUserIdStr<'static>]) -> Vec<&'a str> {
+    users.iter().map(|user| user.as_ref()).collect()
+}
+
+fn channel_share_edit(operation: UpdateOperation) -> EditDocumentRepoArgs {
+    EditDocumentRepoArgs {
+        team_share: None,
+        document_id: TEST_DOCUMENT_ID.to_string(),
+        document_name: None,
+        project_id: None,
+        share_permission: Some(UpdateSharePermissionRequestV2 {
+            link_share: None,
+            link_share_access_level: None,
+            team_share_access_level: None,
+            channel_share_permissions: Some(vec![UpdateChannelSharePermission {
+                operation,
+                channel_id: "c0000000-0000-0000-0000-000000000001".to_string(),
+                access_level: Some(AccessLevel::View),
+            }]),
+        }),
+        revoke_non_owner_user_access: false,
+        file_type: None,
+    }
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn edit_document_reports_members_of_a_channel_it_stops_sharing_with(pool: Pool<Postgres>) {
+    let repo = test_repo(pool);
+    let shared = repo
+        .edit_document(channel_share_edit(UpdateOperation::Add))
+        .await
+        .unwrap();
+    assert!(shared.users_who_may_lose_access.is_empty());
+
+    let unshared = repo
+        .edit_document(channel_share_edit(UpdateOperation::Remove))
+        .await
+        .unwrap();
+    assert_eq!(
+        user_strings(&unshared.users_who_may_lose_access),
+        vec![
+            "macro|teammate1@user.com",
+            "macro|teammate2@user.com",
+            "macro|user@user.com",
+        ]
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn edit_document_reports_members_of_a_team_it_stops_sharing_with(pool: Pool<Postgres>) {
+    let repo = test_repo(pool);
+    set_comment_share(&repo).await;
+    let mut args = team_edit_args(&repo, None).await;
+    args.share_permission = Some(UpdateSharePermissionRequestV2 {
+        link_share: None,
+        link_share_access_level: None,
+        team_share_access_level: Some(None),
+        channel_share_permissions: None,
+    });
+    args.revoke_non_owner_user_access = false;
+
+    let outcome = repo.edit_document(args).await.unwrap();
+
+    assert_eq!(
+        user_strings(&outcome.users_who_may_lose_access),
+        vec![
+            "macro|teammate1@user.com",
+            "macro|teammate2@user.com",
+            "macro|user@user.com",
         ]
     );
 }

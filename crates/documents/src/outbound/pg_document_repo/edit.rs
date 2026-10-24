@@ -69,6 +69,46 @@ pub(super) async fn update_document_metadata(
     Ok(())
 }
 
+/// Members of the channels `share_permission` stops sharing with.
+pub(super) async fn removed_channel_members(
+    transaction: &mut Transaction<'_, Postgres>,
+    share_permission: &UpdateSharePermissionRequestV2,
+) -> Result<Vec<String>, sqlx::Error> {
+    let channel_ids: Vec<uuid::Uuid> = share_permission
+        .channel_share_permissions
+        .iter()
+        .flatten()
+        .filter(|permission| matches!(permission.operation, UpdateOperation::Remove))
+        .filter_map(|permission| uuid::Uuid::parse_str(&permission.channel_id).ok())
+        .collect();
+    if channel_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    sqlx::query_scalar!(
+        r#"
+        SELECT DISTINCT user_id AS "user_id!"
+        FROM comms_channel_participants
+        WHERE channel_id = ANY($1) AND left_at IS NULL
+        "#,
+        &channel_ids,
+    )
+    .fetch_all(transaction.as_mut())
+    .await
+}
+
+/// Members of a team the document stops being shared with.
+pub(super) async fn team_members(
+    transaction: &mut Transaction<'_, Postgres>,
+    team_id: uuid::Uuid,
+) -> Result<Vec<String>, sqlx::Error> {
+    sqlx::query_scalar!(
+        r#"SELECT user_id FROM team_user WHERE team_id = $1"#,
+        team_id
+    )
+    .fetch_all(transaction.as_mut())
+    .await
+}
+
 /// Update share permissions for a document.
 ///
 /// Looks up the document's share permission ID, then updates the SharePermission

@@ -331,6 +331,15 @@ impl ConnectionService for StubConnectionService {
     ) -> Result<(), ConnectionError> {
         Ok(())
     }
+
+    async fn send_access_changed<'a>(
+        &self,
+        _users: &[MacroUserIdStr<'a>],
+        _entity_type: model_entity::EntityType,
+        _entity_id: &str,
+    ) -> Result<(), ConnectionError> {
+        Ok(())
+    }
 }
 
 #[derive(Clone)]
@@ -370,6 +379,15 @@ impl ConnectionService for RecordingConnectionService {
             message_type: message_type.to_string(),
             message,
         });
+        Ok(())
+    }
+
+    async fn send_access_changed<'a>(
+        &self,
+        _users: &[MacroUserIdStr<'a>],
+        _entity_type: model_entity::EntityType,
+        _entity_id: &str,
+    ) -> Result<(), ConnectionError> {
         Ok(())
     }
 }

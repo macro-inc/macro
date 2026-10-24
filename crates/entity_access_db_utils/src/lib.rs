@@ -104,7 +104,7 @@ pub async fn upsert_owner_grant(
 }
 
 /// Removes all user source level entity access rows for the provided entity aside from the owner
-/// one.
+/// one, returning the users whose rows were removed.
 /// This is used when an item goes from public to private.
 #[tracing::instrument(skip(transaction), err)]
 pub async fn remove_non_owner_user_entity_access(
@@ -112,8 +112,8 @@ pub async fn remove_non_owner_user_entity_access(
     entity_id: &macro_uuid::Uuid,
     entity_type: EntityType,
     owner_id: &str,
-) -> Result<(), sqlx::Error> {
-    sqlx::query!(
+) -> Result<Vec<String>, sqlx::Error> {
+    sqlx::query_scalar!(
         r#"
             DELETE FROM entity_access 
             WHERE entity_id = $1 
@@ -121,16 +121,15 @@ pub async fn remove_non_owner_user_entity_access(
             AND source_type = $3
             AND source_id != $4
             AND granted_from_project_id IS NULL
+            RETURNING source_id
         "#,
         entity_id,
         entity_type.as_ref(),
         EntityAccessSourceType::User as _,
         owner_id,
     )
-    .execute(transaction.as_mut())
-    .await?;
-
-    Ok(())
+    .fetch_all(transaction.as_mut())
+    .await
 }
 
 /// Deletes the direct user grants named by `user_ids` on the given entity.

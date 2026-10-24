@@ -177,6 +177,8 @@ struct FakeRepo {
     /// What the upsert reports doing to the row. `Created` by default, since
     /// most fixtures persist a fresh event.
     write_change: CalendarEventChange,
+    /// Channel members the upsert reports the write cut off.
+    channel_viewers_who_lost_access: Vec<String>,
     upserts: Arc<Mutex<Vec<CalendarEventUpsert>>>,
     removed_sources: Arc<Mutex<Vec<(Uuid, Uuid, String)>>>,
     /// Per-event fates `remove_provider_source` reports back.
@@ -212,6 +214,7 @@ impl Default for FakeRepo {
             creation_target: None,
             persisted_event_id: None,
             write_change: CalendarEventChange::Created,
+            channel_viewers_who_lost_access: Vec::new(),
             upserts: Default::default(),
             removed_sources: Default::default(),
             retired_events: Vec::new(),
@@ -268,6 +271,7 @@ impl CalendarRepository for FakeRepo {
             owner_id,
             change: self.write_change,
             team_ooo_changed,
+            channel_viewers_who_lost_access: self.channel_viewers_who_lost_access.clone(),
         })
     }
 
@@ -980,6 +984,7 @@ impl macro_event_broker::MacroEventBroker for RecordingEventBroker {
 #[derive(Clone, Default)]
 struct RecordingRefreshNotifier {
     notified: Arc<Mutex<Vec<(String, Uuid, bool)>>>,
+    access_lost: Arc<Mutex<Vec<(Vec<String>, Uuid)>>>,
 }
 
 impl CalendarRefreshNotifier for RecordingRefreshNotifier {
@@ -989,6 +994,13 @@ impl CalendarRefreshNotifier for RecordingRefreshNotifier {
             email_link_id,
             team_ooo_changed,
         ));
+    }
+
+    async fn channel_access_lost(&self, user_ids: &[String], event_id: Uuid) {
+        self.access_lost
+            .lock()
+            .expect("notifier lock")
+            .push((user_ids.to_vec(), event_id));
     }
 }
 
@@ -1256,6 +1268,37 @@ async fn a_persisted_mutation_nudges_the_links_calendar_viewers() {
 }
 
 #[tokio::test]
+async fn channel_members_a_write_cut_off_are_told() {
+    let event_id = Uuid::now_v7();
+    let repo = FakeRepo {
+        creation_target: Some(creation_target(false)),
+        persisted_event_id: Some(event_id),
+        write_change: CalendarEventChange::Updated,
+        channel_viewers_who_lost_access: vec!["macro|member@example.com".to_string()],
+        ..FakeRepo::default()
+    };
+    let refresh = RecordingRefreshNotifier::default();
+    service_with_refresh(
+        repo,
+        FakeProvider::new(FakeProviderBehavior::Echo),
+        FakeTokens::ok(),
+        refresh.clone(),
+    )
+    .create_event("macro|user", None, None, draft())
+    .await
+    .unwrap();
+
+    assert_eq!(
+        refresh
+            .access_lost
+            .lock()
+            .expect("notifier lock")
+            .as_slice(),
+        [(vec!["macro|member@example.com".to_string()], event_id)]
+    );
+}
+
+#[tokio::test]
 async fn a_write_that_changed_nothing_sends_no_refresh_nudge() {
     let repo = FakeRepo {
         creation_target: Some(creation_target(false)),
@@ -1291,17 +1334,20 @@ async fn deleting_a_series_publishes_deleted_per_removed_event() {
                 event_id: master,
                 owner_id: "macro|owner".to_string(),
                 deleted: true,
+                channel_viewers_who_lost_access: Vec::new(),
             },
             RetiredCalendarEvent {
                 event_id: instance,
                 owner_id: "macro|owner".to_string(),
                 deleted: true,
+                channel_viewers_who_lost_access: Vec::new(),
             },
             // Still backed by another source, so the row was rewritten.
             RetiredCalendarEvent {
                 event_id: survivor,
                 owner_id: "macro|owner".to_string(),
                 deleted: false,
+                channel_viewers_who_lost_access: Vec::new(),
             },
         ],
         ..FakeRepo::default()
@@ -1340,6 +1386,49 @@ async fn deleting_a_series_publishes_deleted_per_removed_event() {
             // A surviving row is an update, not a deletion.
             (survivor.to_string(), "updated"),
         ]
+    );
+}
+
+#[tokio::test]
+async fn deleting_a_shared_event_tells_the_channel_members_it_reached() {
+    let master = Uuid::now_v7();
+    let instance = Uuid::now_v7();
+    let repo = FakeRepo {
+        mutation_target: Some(mutation_target(false)),
+        retired_events: vec![
+            RetiredCalendarEvent {
+                event_id: master,
+                owner_id: "macro|owner".to_string(),
+                deleted: true,
+                channel_viewers_who_lost_access: vec!["macro|member@example.com".to_string()],
+            },
+            RetiredCalendarEvent {
+                event_id: instance,
+                owner_id: "macro|owner".to_string(),
+                deleted: true,
+                channel_viewers_who_lost_access: Vec::new(),
+            },
+        ],
+        ..FakeRepo::default()
+    };
+    let refresh = RecordingRefreshNotifier::default();
+    service_with_refresh(
+        repo,
+        FakeProvider::new(FakeProviderBehavior::Echo),
+        FakeTokens::ok(),
+        refresh.clone(),
+    )
+    .delete_event("macro|user", master, None, CalendarDeletionScope::All)
+    .await
+    .unwrap();
+
+    assert_eq!(
+        refresh
+            .access_lost
+            .lock()
+            .expect("notifier lock")
+            .as_slice(),
+        [(vec!["macro|member@example.com".to_string()], master)]
     );
 }
 
@@ -2757,6 +2846,7 @@ fn disconnected(channels: &[(&str, &str)]) -> DisconnectedCalendar {
                 resource_id: (*resource_id).to_string(),
             })
             .collect(),
+        retired_shared_events: Vec::new(),
     }
 }
 
@@ -2813,6 +2903,42 @@ async fn disconnecting_calendar_nudges_the_links_calendar_viewers() {
     assert_eq!(
         refresh.notified.lock().expect("notifier lock").as_slice(),
         [("macro|user".to_string(), link_id, true)]
+    );
+}
+
+#[tokio::test]
+async fn disconnecting_calendar_tells_channel_members_of_its_shared_events() {
+    let shared = Uuid::now_v7();
+    let repo = FakeRepo {
+        disconnected: Some(DisconnectedCalendar {
+            retired_shared_events: vec![RetiredCalendarEvent {
+                event_id: shared,
+                owner_id: "macro|user".to_string(),
+                deleted: true,
+                channel_viewers_who_lost_access: vec!["macro|member@example.com".to_string()],
+            }],
+            ..disconnected(&[])
+        }),
+        ..FakeRepo::default()
+    };
+    let refresh = RecordingRefreshNotifier::default();
+    service_with_refresh(
+        repo,
+        FakeProvider::new(FakeProviderBehavior::Echo),
+        FakeTokens::ok(),
+        refresh.clone(),
+    )
+    .disconnect_calendar("macro|user", Uuid::now_v7())
+    .await
+    .unwrap();
+
+    assert_eq!(
+        refresh
+            .access_lost
+            .lock()
+            .expect("notifier lock")
+            .as_slice(),
+        [(vec!["macro|member@example.com".to_string()], shared)]
     );
 }
 

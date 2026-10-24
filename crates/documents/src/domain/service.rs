@@ -63,11 +63,11 @@ use super::events::{
 };
 use super::models::{
     CloudFrontConfig, CopyDocumentRepoArgs, CreateDocumentRepoArgs, CreateTaskRequest,
-    DocumentError, DocumentTeamShareResponse, EditDocumentRepoArgs, EditDocumentServiceArgs,
-    EmailImportRepoOutcome, FileTypeUpdate, GithubPullRequest, GithubPullRequestTasks,
-    GithubPullRequestTasksResponse, GithubPullRequestsResponse, ImportEmailAttachmentRepoArgs,
-    LocationQueryParams, MAX_GITHUB_PULL_REQUEST_TASK_LOOKUP, NewDocument, TaskBranchName,
-    TaskIdentity, TeamTaskMetadata,
+    DocumentError, DocumentTeamShareResponse, EditDocumentRepoArgs, EditDocumentRepoOutcome,
+    EditDocumentServiceArgs, EmailImportRepoOutcome, FileTypeUpdate, GithubPullRequest,
+    GithubPullRequestTasks, GithubPullRequestTasksResponse, GithubPullRequestsResponse,
+    ImportEmailAttachmentRepoArgs, LocationQueryParams, MAX_GITHUB_PULL_REQUEST_TASK_LOOKUP,
+    NewDocument, TaskBranchName, TaskIdentity, TeamTaskMetadata,
 };
 #[cfg(feature = "document_create")]
 use super::ports::create::DocumentCreationService;
@@ -669,6 +669,32 @@ impl<
         let _ = self.macro_event_broker.send_event(event).inspect_err(|e| {
             tracing::error!(error=?e, "failed to publish document event");
         });
+    }
+
+    /// Realtime updates after an edit go to the people who still have access,
+    /// so whoever an edit's removed grants covered is told separately; their
+    /// clients drop the document, or keep it if another grant still reaches
+    /// them. The editor already sees their own change.
+    async fn tell_users_who_may_lose_access(
+        &self,
+        receipt: &EntityAccessReceipt<EditAccessLevel>,
+        outcome: EditDocumentRepoOutcome,
+    ) {
+        let mut users = outcome.users_who_may_lose_access;
+        if let EntityAccessAuth::Authenticated(actor) = receipt.auth() {
+            users.retain(|user| user != actor);
+        }
+        let _ = self
+            .connection_service
+            .send_access_changed(
+                &users,
+                receipt.entity().entity_type,
+                &receipt.entity().entity_id,
+            )
+            .await
+            .inspect_err(|error| {
+                tracing::error!(error=?error, "failed to tell users they may have lost document access");
+            });
     }
 
     async fn reused_email_import_response(
@@ -1712,7 +1738,8 @@ impl<
         let revoke_non_owner_user_access =
             should_revoke_non_owner_user_access(args.share_permission.as_ref());
 
-        self.repo
+        let outcome = self
+            .repo
             .edit_document(EditDocumentRepoArgs {
                 document_id: entity_access_receipt.entity().entity_id.clone(),
                 document_name: document_name.clone(),
@@ -1755,6 +1782,9 @@ impl<
                 |e| tracing::error!(error=?e, project_id=?project_id, "unable to update project modified date"),
             );
         }
+
+        self.tell_users_who_may_lose_access(&entity_access_receipt, outcome)
+            .await;
 
         // Send invalidation event
         let _ = self

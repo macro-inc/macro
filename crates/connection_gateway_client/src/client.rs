@@ -7,8 +7,11 @@ use connection_gateway_models::{
 
 use model_entity::Entity;
 
+mod access;
 mod calendar;
 mod email;
+
+pub use access::ACCESS_CHANGED_MESSAGE_TYPE;
 
 /// How long any one call to the connection gateway may take.
 ///
