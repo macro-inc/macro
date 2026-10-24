@@ -1112,7 +1112,10 @@
           write_app_entitlements() {
             local app="$1" out="$2"
             local profile="$TMPDIR/macro-provisionprofile.plist"
-            security cms -D -i "$MACOS_PROVISIONING_PROFILE" > "$profile"
+            # Not `security cms -D`: it imports the profile's certificates into
+            # a keychain, which the Nix build user cannot write.
+            ${pkgs.openssl}/bin/openssl smime -inform der -verify -noverify \
+              -in "$MACOS_PROVISIONING_PROFILE" -out "$profile"
             local team_id bundle_id app_id communication
             team_id=$(/usr/libexec/PlistBuddy -c 'Print :TeamIdentifier:0' "$profile")
             bundle_id=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist")
