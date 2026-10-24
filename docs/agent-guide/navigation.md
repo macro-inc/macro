@@ -387,7 +387,9 @@ until enabled on the rail.
   its surface and item styling with the sidebar right-click menus.
 - Nav: `Home`, `Drive`, `Email`, `Chat`, `Tasks`, `Calendar`,
   `Agents`, `Customers`. Calendar and Customers appear only when
-  their features are enabled.
+  their features are enabled. Calendar shows a next-meeting badge (`Now`, or
+  minutes under an hour away) unless **Show next meeting** is off in
+  **Settings → Calendar**.
 - Bottom: `Settings` (`Ctrl ;`) — a gear with the signed-in account's profile
   photo as a badge in its corner. It opens Settings directly in the active
   split (Shift-click for a new split); there is no account menu. Log out lives

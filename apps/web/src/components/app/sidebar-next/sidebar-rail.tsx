@@ -1,3 +1,4 @@
+import { useCalendarPreferences } from '@app/features/calendar/utils/preferences';
 import { useHasActiveChannelsCall } from '@app/features/channels-view/use-has-active-call';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { globalSplitManager } from '@app/signal/splitLayout';
@@ -47,6 +48,7 @@ const SidebarRailContent = () => {
   const analytics = useAnalytics();
   const layout = useSplitLayout();
   const hasUnread = useNavigationUnread();
+  const [calendarPreferences] = useCalendarPreferences();
 
   const _openHome = (event: MouseEvent) => {
     if (event.button !== 0) return;
@@ -90,7 +92,12 @@ const SidebarRailContent = () => {
                       />
                     </Suspense>
                   </Match>
-                  <Match when={item.id === 'calendar'}>
+                  <Match
+                    when={
+                      item.id === 'calendar' &&
+                      calendarPreferences.showNextMeetingBadge
+                    }
+                  >
                     <Suspense fallback={<ListNav item={item} />}>
                       <CalendarListNav item={item} />
                     </Suspense>

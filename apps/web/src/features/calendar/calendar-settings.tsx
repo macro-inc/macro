@@ -5,9 +5,15 @@ import { useUserId } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useEmailLinksQuery } from '@queries/email/link';
+import { ToggleSwitch } from '@ui';
 import { createSignal, Suspense } from 'solid-js';
 import { CalendarTeamSettings } from '../calendar-team/calendar-team';
-import { SettingsPage } from '../settings/primitives';
+import {
+  SettingsCard,
+  SettingsPage,
+  SettingsRow,
+  SettingsSection,
+} from '../settings/primitives';
 import {
   type ConnectedCalendarAccount,
   ConnectedCalendars,
@@ -130,6 +136,30 @@ export function CalendarConnectionSettings() {
   );
 }
 
+function CalendarSidebarSettings() {
+  const [preferences, setPreferences] = useCalendarPreferences();
+  return (
+    <SettingsSection title="Sidebar">
+      <SettingsCard>
+        <SettingsRow
+          label="Show next meeting"
+          description="Show the time until your next meeting on the Calendar button, or Now during one."
+        >
+          <ToggleSwitch
+            size="md"
+            label="Show next meeting"
+            labelClass="sr-only"
+            checked={preferences.showNextMeetingBadge}
+            onChange={(checked) =>
+              setPreferences('showNextMeetingBadge', checked)
+            }
+          />
+        </SettingsRow>
+      </SettingsCard>
+    </SettingsSection>
+  );
+}
+
 export function CalendarSettings() {
   return (
     <SettingsPage
@@ -137,6 +167,7 @@ export function CalendarSettings() {
       description="Manage your connected accounts, calendar visibility, and colors."
     >
       <CalendarConnectionSettings />
+      <CalendarSidebarSettings />
       <CalendarTeamSettings />
     </SettingsPage>
   );
