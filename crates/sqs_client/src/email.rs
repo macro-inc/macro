@@ -157,6 +157,7 @@ impl EmailMessageEnqueuer for SQS {
         messages: Vec<(Uuid, String)>,
         labels_to_add: Vec<String>,
         labels_to_remove: Vec<String>,
+        pending_write_id: Uuid,
     ) -> Result<(), Self::Err> {
         use models_email::gmail::gmail_ops::{
             GmailMessageRef, GmailOpsOperation, GmailOpsPubsubMessage,
@@ -172,9 +173,12 @@ impl EmailMessageEnqueuer for SQS {
             .collect();
         // A full batch is ~100 KB, so each goes out alone rather than in an
         // SQS batch whose 256 KB cap is shared by all its entries.
-        for payload in
-            ModifyMessageLabelsBatchPayload::chunked(messages, labels_to_add, labels_to_remove)
-        {
+        for payload in ModifyMessageLabelsBatchPayload::chunked(
+            messages,
+            labels_to_add,
+            labels_to_remove,
+            pending_write_id,
+        ) {
             self.enqueue_gmail_ops_notification(GmailOpsPubsubMessage {
                 link_id,
                 operation: GmailOpsOperation::ModifyMessageLabelsBatch(payload),

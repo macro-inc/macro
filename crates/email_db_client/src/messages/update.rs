@@ -1,7 +1,43 @@
+use models_email::email::service::label::system_labels;
 use sqlx::types::Uuid;
 
 #[cfg(test)]
 mod test;
+
+/// Sets a message's read flag from its UNREAD label when `read` is set, and its
+/// starred flag from its STARRED label when `starred` is set.
+#[tracing::instrument(skip(tx), err)]
+pub async fn set_flags_from_labels(
+    tx: &mut sqlx::PgConnection,
+    message_id: Uuid,
+    read: bool,
+    starred: bool,
+) -> anyhow::Result<()> {
+    sqlx::query!(
+        r#"
+        UPDATE email_messages m
+        SET
+            is_read = CASE WHEN $2 THEN NOT EXISTS (
+                SELECT 1 FROM email_message_labels ml JOIN email_labels l ON l.id = ml.label_id
+                WHERE ml.message_id = m.id AND l.provider_label_id = $4
+            ) ELSE m.is_read END,
+            is_starred = CASE WHEN $3 THEN EXISTS (
+                SELECT 1 FROM email_message_labels ml JOIN email_labels l ON l.id = ml.label_id
+                WHERE ml.message_id = m.id AND l.provider_label_id = $5
+            ) ELSE m.is_starred END
+        WHERE m.id = $1
+        "#,
+        message_id,
+        read,
+        starred,
+        system_labels::UNREAD,
+        system_labels::STARRED,
+    )
+    .execute(tx)
+    .await?;
+
+    Ok(())
+}
 
 /// Update the read status of a single message, scoped to the inbox that owns it.
 #[tracing::instrument(skip(tx), err)]

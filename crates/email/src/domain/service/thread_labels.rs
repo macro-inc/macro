@@ -3,8 +3,8 @@ use crate::domain::{
         EmailEventOrigin, EmailMacroEvent, LabelRef, MessageSendCancelledMetadata, SendCancelReason,
     },
     models::{
-        EmailErr, Link, LinkLabel, MAX_BULK_ARCHIVE_THREADS, SetThreadsArchivedResult,
-        SimpleMessage, UpdateThreadLabelsResult, label::system_labels,
+        EmailErr, Link, LinkLabel, MAX_BULK_ARCHIVE_THREADS, PendingLabelWrite,
+        SetThreadsArchivedResult, SimpleMessage, UpdateThreadLabelsResult, label::system_labels,
     },
     ports::{EmailMessageEnqueuer, EmailRepo},
 };
@@ -47,6 +47,8 @@ struct ThreadLabelWrite {
     link: Link,
     label: LinkLabel,
     add: bool,
+    /// Marks each thread's messages as waiting on this write when it is staged.
+    write_id: Uuid,
     threads: Vec<StagedThreadLabels>,
 }
 
@@ -386,8 +388,9 @@ where
                 .await;
         }
 
+        let write_id = macro_uuid::generate_uuid_v7();
         let thread = self
-            .stage_thread_labels(link, thread_id, &label.provider_label_id, add)
+            .stage_thread_labels(link, thread_id, &label.provider_label_id, add, write_id)
             .await?;
         let successful_ids = thread.all_ids.clone();
         self.commit_thread_label_write(
@@ -395,6 +398,7 @@ where
                 link: link.clone(),
                 label,
                 add,
+                write_id,
                 threads: vec![thread],
             },
             actor,
@@ -459,6 +463,7 @@ where
                             link,
                             label,
                             add: !archived,
+                            write_id: macro_uuid::generate_uuid_v7(),
                             threads: Vec::new(),
                         });
                         writes.len() - 1
@@ -470,6 +475,7 @@ where
                         thread_id,
                         system_labels::INBOX,
                         !archived,
+                        writes[index].write_id,
                     )
                     .await?;
                 Ok(Some((index, thread)))
@@ -506,6 +512,7 @@ where
         thread_id: Uuid,
         provider_label_id: &str,
         add: bool,
+        write_id: Uuid,
     ) -> Result<StagedThreadLabels, EmailErr> {
         let messages = self
             .email_repo
@@ -564,17 +571,34 @@ where
             None
         };
 
-        // Optimistic DB update: update all messages first
-        self.apply_label_db_changes(link, thread_id, &all_ids, provider_label_id, add)
-            .await?;
-
-        Ok(StagedThreadLabels {
+        let staged = StagedThreadLabels {
             thread_id,
             messages,
             all_ids,
             changed_ids,
             inbox_visible,
-        })
+        };
+        // The messages this thread adds to the write, marked in the same
+        // transaction as the optimistic update so inbox sync never sees the
+        // local change unmarked; a failed update leaves no marker.
+        let pending_ids: Vec<Uuid> = staged
+            .changed_provider_messages()
+            .map(|(id, _)| id)
+            .collect();
+        self.apply_label_db_changes(
+            link,
+            thread_id,
+            &staged.all_ids,
+            provider_label_id,
+            add,
+            PendingLabelWrite {
+                message_ids: &pending_ids,
+                write_id,
+            },
+        )
+        .await?;
+
+        Ok(staged)
     }
 
     /// Send staged label changes to Gmail as one write through the gmail_ops
@@ -591,6 +615,7 @@ where
             link,
             label,
             add,
+            write_id,
             threads,
         } = write;
         let provider_label_id = label.provider_label_id.as_str();
@@ -605,6 +630,8 @@ where
             } else {
                 (vec![], vec![provider_label_id.to_string()])
             };
+            let provider_message_ids: Vec<Uuid> =
+                provider_messages.iter().map(|(id, _)| *id).collect();
 
             if let Err(e) = self
                 .enqueuer
@@ -613,6 +640,7 @@ where
                     provider_messages,
                     labels_to_add,
                     labels_to_remove,
+                    write_id,
                 )
                 .await
             {
@@ -622,6 +650,8 @@ where
                     self.revert_label_db_changes(&link, thread, provider_label_id, add)
                         .await;
                 }
+                self.clear_pending_label_writes(&provider_message_ids, write_id)
+                    .await;
                 return Err(EmailErr::EnqueueErr(err));
             }
         }
@@ -696,7 +726,7 @@ where
         if let Some(inbox_visible) = *inbox_visible {
             if let Err(e) = self
                 .email_repo
-                .set_thread_inbox_state(thread_id, link.id, changed_ids, !add, inbox_visible)
+                .set_thread_inbox_state(thread_id, link.id, changed_ids, !add, inbox_visible, None)
                 .await
             {
                 let err = anyhow::Error::from(e);
@@ -760,6 +790,19 @@ where
         }
     }
 
+    /// Best effort: a marker left behind only keeps inbox sync off that label
+    /// on those messages until it expires.
+    async fn clear_pending_label_writes(&self, message_ids: &[Uuid], write_id: Uuid) {
+        if let Err(e) = self
+            .email_repo
+            .clear_pending_label_writes(message_ids, write_id)
+            .await
+        {
+            let err = anyhow::Error::from(e);
+            tracing::error!(error=?err, "failed to clear pending label write markers");
+        }
+    }
+
     /// Apply a thread label change to the DB. UNREAD/read flags and INBOX/
     /// visibility commit atomically; a failure propagates before provider sync
     /// or events. Other labels retain their best-effort starred side effect.
@@ -770,33 +813,28 @@ where
         message_ids: &[Uuid],
         provider_label_id: &str,
         add: bool,
+        pending: PendingLabelWrite<'_>,
     ) -> Result<(), EmailErr> {
         if provider_label_id == system_labels::INBOX {
             return self
                 .email_repo
-                .set_thread_inbox_state(thread_id, link.id, message_ids, add, add)
+                .set_thread_inbox_state(thread_id, link.id, message_ids, add, add, Some(pending))
                 .await
                 .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)));
         }
         if provider_label_id == system_labels::UNREAD {
             return self
                 .email_repo
-                .set_thread_read_state(thread_id, link.id, message_ids, !add)
+                .set_thread_read_state(thread_id, link.id, message_ids, !add, pending)
                 .await
                 .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)));
         }
 
-        let db_result = if add {
-            self.email_repo
-                .insert_message_labels_batch(message_ids, provider_label_id, link.id)
-                .await
-        } else {
-            self.email_repo
-                .delete_message_labels_batch(message_ids, provider_label_id, link.id)
-                .await
-        };
-
-        if let Err(e) = db_result {
+        if let Err(e) = self
+            .email_repo
+            .set_message_label_state(link.id, message_ids, provider_label_id, add, pending)
+            .await
+        {
             let err = anyhow::Error::from(e);
             tracing::error!(error=?err, "failed to update message labels in database");
             return Err(EmailErr::RepoErr(err));

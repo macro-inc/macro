@@ -3,9 +3,9 @@ use crate::domain::{
         Attachment, AttachmentDraft, AttachmentForwarded, Contact, ContactInfo, DraftDeletion,
         EmailErr, EmailFilter, EmailInboxDetails, EmailThreadMailProjection, EmailThreadMetadata,
         EmailThreadPreview, Label, Link, LinkLabel, MessageAttachment, MessageLabel, MessageRow,
-        MessageTimestamps, ParsedAddresses, PreviewCursorQuery, ResolvedDraftInput,
-        SettledDraftIds, SimpleMessage, SimpleMessageInfo, ThreadRow, UpsertEmailFilterInput,
-        UpsertedContacts, UserProvider,
+        MessageTimestamps, ParsedAddresses, PendingLabelWrite, PreviewCursorQuery,
+        ResolvedDraftInput, SettledDraftIds, SimpleMessage, SimpleMessageInfo, ThreadRow,
+        UpsertEmailFilterInput, UpsertedContacts, UserProvider,
     },
     ports::{
         DraftAttachmentRepo, EmailRepo, EmailUserRepo, LinkEmailSettings, RecipientsByMessageId,
@@ -437,14 +437,55 @@ impl EmailRepo for EmailPgRepo {
             .await
     }
 
+    async fn set_message_label_state(
+        &self,
+        link_id: Uuid,
+        message_ids: &[Uuid],
+        provider_label_id: &str,
+        add: bool,
+        pending: PendingLabelWrite<'_>,
+    ) -> Result<(), Self::Err> {
+        label::set_message_label_state(
+            &self.pool,
+            link_id,
+            message_ids,
+            provider_label_id,
+            add,
+            pending,
+        )
+        .await
+    }
+
+    async fn clear_pending_label_writes(
+        &self,
+        message_ids: &[Uuid],
+        write_id: Uuid,
+    ) -> Result<(), Self::Err> {
+        email_db_client::labels::pending_writes::clear_pending_label_writes(
+            &self.pool,
+            message_ids,
+            write_id,
+        )
+        .await
+    }
+
     async fn set_thread_read_state(
         &self,
         thread_id: Uuid,
         link_id: Uuid,
         message_ids: &[Uuid],
         is_read: bool,
+        pending: PendingLabelWrite<'_>,
     ) -> Result<(), Self::Err> {
-        label::set_thread_read_state(&self.pool, thread_id, link_id, message_ids, is_read).await
+        label::set_thread_read_state(
+            &self.pool,
+            thread_id,
+            link_id,
+            message_ids,
+            is_read,
+            pending,
+        )
+        .await
     }
 
     async fn set_thread_inbox_state(
@@ -454,6 +495,7 @@ impl EmailRepo for EmailPgRepo {
         message_ids: &[Uuid],
         add: bool,
         inbox_visible: bool,
+        pending: Option<PendingLabelWrite<'_>>,
     ) -> Result<(), Self::Err> {
         label::set_thread_inbox_state(
             &self.pool,
@@ -462,6 +504,7 @@ impl EmailRepo for EmailPgRepo {
             message_ids,
             add,
             inbox_visible,
+            pending,
         )
         .await
     }

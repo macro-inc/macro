@@ -1,6 +1,6 @@
 use crate::domain::models::{
-    LabelListVisibility, LabelType, LinkLabel, MessageListVisibility, SimpleMessage,
-    label::system_labels,
+    LabelListVisibility, LabelType, LinkLabel, MessageListVisibility, PendingLabelWrite,
+    SimpleMessage, label::system_labels,
 };
 use crate::outbound::email_pg_repo::db_types::{
     LabelListVisibilityDbRow, LabelTypeDbRow, MessageListVisibilityDbRow,
@@ -208,16 +208,56 @@ pub(crate) async fn get_thread_label_messages(
     Ok(rows.into_iter().map(Into::into).collect())
 }
 
-/// Commit every local representation of a thread's read state together.
-#[tracing::instrument(skip(pool, message_ids), err)]
+/// Commit a label's assignments on messages together with the pending Gmail
+/// write they wait on.
+#[tracing::instrument(skip(pool, message_ids, pending), err)]
+pub(super) async fn set_message_label_state(
+    pool: &PgPool,
+    link_id: Uuid,
+    message_ids: &[Uuid],
+    provider_label_id: &str,
+    add: bool,
+    pending: PendingLabelWrite<'_>,
+) -> Result<(), sqlx::Error> {
+    let mut tx = pool.begin().await?;
+    mark_pending(&mut tx, link_id, provider_label_id, pending).await?;
+    if add {
+        insert_message_labels_batch(&mut *tx, message_ids, provider_label_id, link_id).await?;
+    } else {
+        delete_message_labels_batch(&mut *tx, message_ids, provider_label_id, link_id).await?;
+    }
+    tx.commit().await
+}
+
+async fn mark_pending(
+    tx: &mut sqlx::PgConnection,
+    link_id: Uuid,
+    provider_label_id: &str,
+    pending: PendingLabelWrite<'_>,
+) -> Result<(), sqlx::Error> {
+    email_db_client::labels::pending_writes::mark_pending_label_writes(
+        tx,
+        link_id,
+        pending.message_ids,
+        provider_label_id,
+        pending.write_id,
+    )
+    .await
+}
+
+/// Commit every local representation of a thread's read state, and the
+/// pending Gmail write it waits on, together.
+#[tracing::instrument(skip(pool, message_ids, pending), err)]
 pub(super) async fn set_thread_read_state(
     pool: &PgPool,
     thread_id: Uuid,
     link_id: Uuid,
     message_ids: &[Uuid],
     is_read: bool,
+    pending: PendingLabelWrite<'_>,
 ) -> Result<(), sqlx::Error> {
     let mut tx = pool.begin().await?;
+    mark_pending(&mut tx, link_id, system_labels::UNREAD, pending).await?;
     if is_read {
         delete_message_labels_batch(&mut *tx, message_ids, system_labels::UNREAD, link_id).await?;
     } else {
@@ -228,8 +268,9 @@ pub(super) async fn set_thread_read_state(
     tx.commit().await
 }
 
-/// Commit INBOX assignments and the canonical thread flag in one transaction.
-#[tracing::instrument(skip(pool, message_ids), err)]
+/// Commit INBOX assignments, the canonical thread flag and, when given, the
+/// pending Gmail write they wait on in one transaction.
+#[tracing::instrument(skip(pool, message_ids, pending), err)]
 pub(super) async fn set_thread_inbox_state(
     pool: &PgPool,
     thread_id: Uuid,
@@ -237,8 +278,12 @@ pub(super) async fn set_thread_inbox_state(
     message_ids: &[Uuid],
     add: bool,
     inbox_visible: bool,
+    pending: Option<PendingLabelWrite<'_>>,
 ) -> Result<(), sqlx::Error> {
     let mut tx = pool.begin().await?;
+    if let Some(pending) = pending {
+        mark_pending(&mut tx, link_id, system_labels::INBOX, pending).await?;
+    }
     if add {
         insert_message_labels_batch(&mut *tx, message_ids, system_labels::INBOX, link_id).await?;
     } else {

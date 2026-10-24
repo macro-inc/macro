@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE email_messages m\n        SET\n            is_read = CASE WHEN $2 THEN NOT EXISTS (\n                SELECT 1 FROM email_message_labels ml JOIN email_labels l ON l.id = ml.label_id\n                WHERE ml.message_id = m.id AND l.provider_label_id = $4\n            ) ELSE m.is_read END,\n            is_starred = CASE WHEN $3 THEN EXISTS (\n                SELECT 1 FROM email_message_labels ml JOIN email_labels l ON l.id = ml.label_id\n                WHERE ml.message_id = m.id AND l.provider_label_id = $5\n            ) ELSE m.is_starred END\n        WHERE m.id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool",
+        "Bool",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2c5dcc182a7a9e7aee7fe0de43b3f140a8b7a6f21dc8645d5f0c999ff66cadbd"
+}

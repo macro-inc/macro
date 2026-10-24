@@ -4,9 +4,10 @@ pub(crate) mod test;
 use crate::attachments::provider;
 use crate::messages::replying_to_id;
 use crate::parse::service_to_db::addresses_from_message;
-use crate::{contacts, labels, parse, threads};
+use crate::{contacts, labels, messages, parse, threads};
 
 use models_email::email::db::address::UpsertedRecipients;
+use models_email::email::service::label::system_labels;
 use models_email::email::service::message;
 use sqlx::PgPool;
 use sqlx::types::Uuid;
@@ -39,6 +40,11 @@ pub async fn insert_message_with_tx(
 
     contacts::upsert_message::upsert_message_recipients(tx, message_db_id, &recipents).await?;
 
+    // A re-sync must not undo a Macro label write Gmail has not confirmed yet,
+    // including the read and starred flags those labels drive.
+    let pending_label_ids =
+        labels::pending_writes::pending_provider_label_ids(&mut *tx, message_db_id).await?;
+
     if !message.labels.is_empty() {
         let provider_label_ids: Vec<String> = message
             .labels
@@ -51,8 +57,20 @@ pub async fn insert_message_with_tx(
             message_db_id,
             &provider_label_ids,
             true,
+            &pending_label_ids,
         )
         .await?;
+    }
+
+    let pending_read = pending_label_ids
+        .iter()
+        .any(|id| id == system_labels::UNREAD);
+    let pending_starred = pending_label_ids
+        .iter()
+        .any(|id| id == system_labels::STARRED);
+    if pending_read || pending_starred {
+        messages::update::set_flags_from_labels(tx, message_db_id, pending_read, pending_starred)
+            .await?;
     }
 
     provider::insert_attachments(tx, message_db_id, &mut message.attachments).await?;

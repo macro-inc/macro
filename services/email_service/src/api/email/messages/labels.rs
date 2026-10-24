@@ -146,6 +146,18 @@ pub async fn handler(
     }
 
     let message_db_ids: Vec<Uuid> = db_messages.iter().map(|m| m.db_id).collect();
+    // Drafts have no provider_id and never reach Gmail.
+    let provider_messages: Vec<(Uuid, String)> = db_messages
+        .iter()
+        .filter_map(|msg| {
+            msg.provider_id
+                .as_ref()
+                .filter(|pid| !pid.is_empty())
+                .map(|pid| (msg.db_id, pid.clone()))
+        })
+        .collect();
+    let provider_message_ids: Vec<Uuid> = provider_messages.iter().map(|(id, _)| *id).collect();
+    let pending_write_id = macro_uuid::generate_uuid_v7();
     let provider_label_id = label.provider_label_id.clone();
     let is_adding = body.value;
 
@@ -163,6 +175,16 @@ pub async fn handler(
 
     let transaction_result = async {
         if !message_db_ids.is_empty() {
+            email_db_client::labels::pending_writes::mark_pending_label_writes(
+                &mut *tx,
+                link.id,
+                &provider_message_ids,
+                &provider_label_id,
+                pending_write_id,
+            )
+            .await
+            .context("Failed to mark pending label writes")?;
+
             if is_adding {
                 email_db_client::labels::insert::insert_message_labels_batch(
                     &mut *tx,
@@ -261,35 +283,40 @@ pub async fn handler(
         }
     }
 
-    // One Gmail write for the whole batch (drafts have no provider_id, skip them)
+    // One Gmail write for the whole batch
     let (labels_to_add, labels_to_remove) = if is_adding {
         (vec![provider_label_id.clone()], Vec::new())
     } else {
         (Vec::new(), vec![provider_label_id.clone()])
     };
 
-    let provider_messages: Vec<(Uuid, String)> = db_messages
-        .iter()
-        .filter_map(|msg| {
-            msg.provider_id
-                .as_ref()
-                .filter(|pid| !pid.is_empty())
-                .map(|pid| (msg.db_id, pid.clone()))
-        })
-        .collect();
-
-    ctx.sqs_client
+    if ctx
+        .sqs_client
         .enqueue_gmail_ops_modify_labels_batch(
             link.id,
             provider_messages,
             labels_to_add,
             labels_to_remove,
+            pending_write_id,
         )
         .await
         .inspect_err(|e| {
             tracing::error!(error=?e, "Failed to enqueue gmail ops label write");
         })
+        .is_err()
+    {
+        // Gmail never learns about this change, so inbox sync may restore Gmail's labels.
+        email_db_client::labels::pending_writes::clear_pending_label_writes(
+            &ctx.db,
+            &provider_message_ids,
+            pending_write_id,
+        )
+        .await
+        .inspect_err(|e| {
+            tracing::error!(error=?e, "Failed to clear pending label write markers");
+        })
         .ok();
+    }
 
     Ok((
         StatusCode::OK,

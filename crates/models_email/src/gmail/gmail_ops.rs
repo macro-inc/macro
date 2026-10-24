@@ -41,6 +41,10 @@ pub struct ModifyMessageLabelsPayload {
     pub provider_message_id: String,
     pub labels_to_add: Vec<String>,
     pub labels_to_remove: Vec<String>,
+    /// Pending label write marker this operation clears once Gmail accepts or
+    /// rejects it. Absent on operations enqueued before markers existed.
+    #[serde(default)]
+    pub pending_write_id: Option<Uuid>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -51,6 +55,10 @@ pub struct ModifyMessageLabelsBatchPayload {
     pub messages: Vec<GmailMessageRef>,
     pub labels_to_add: Vec<String>,
     pub labels_to_remove: Vec<String>,
+    /// Pending label write marker this batch clears on its messages once Gmail
+    /// accepts or rejects it. Absent on batches enqueued before markers existed.
+    #[serde(default)]
+    pub pending_write_id: Option<Uuid>,
 }
 
 /// The database and Gmail ids of one message.
@@ -70,6 +78,7 @@ impl From<ModifyMessageLabelsPayload> for ModifyMessageLabelsBatchPayload {
             }],
             labels_to_add: payload.labels_to_add,
             labels_to_remove: payload.labels_to_remove,
+            pending_write_id: payload.pending_write_id,
         }
     }
 }
@@ -80,6 +89,7 @@ impl ModifyMessageLabelsBatchPayload {
         messages: Vec<GmailMessageRef>,
         labels_to_add: Vec<String>,
         labels_to_remove: Vec<String>,
+        pending_write_id: Uuid,
     ) -> Vec<Self> {
         messages
             .chunks(MAX_BATCH_MODIFY_MESSAGES)
@@ -87,6 +97,7 @@ impl ModifyMessageLabelsBatchPayload {
                 messages: chunk.to_vec(),
                 labels_to_add: labels_to_add.clone(),
                 labels_to_remove: labels_to_remove.clone(),
+                pending_write_id: Some(pending_write_id),
             })
             .collect()
     }

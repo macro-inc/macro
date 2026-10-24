@@ -572,3 +572,101 @@ async fn resync_with_changed_labels_and_recipients_replaces_only_the_changes(
 
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("links", "threads"))
+)]
+async fn resync_keeps_labels_with_a_pending_gmail_write(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str(LINK_ID)?;
+    let thread_db_id = Uuid::parse_str(THREAD_ID)?;
+    seed_labels(&pool, link_id).await?;
+    let synced = SyncedMessage {
+        provider_id: "archived",
+        global_id: "<archived@macro.com>",
+        in_reply_to: None,
+        to: &["user1@macro.com"],
+        cc: &[],
+        labels: &["INBOX"],
+        body: "body",
+    };
+    let mut first_sync = synced.build(link_id, thread_db_id);
+    first_sync.is_read = true;
+    let message_id = first_sync.db_id;
+    insert_message(&pool, thread_db_id, &mut first_sync, link_id, true).await?;
+
+    // Archived and marked unread in Macro; Gmail has not applied either yet.
+    let write_id = Uuid::now_v7();
+    let mut tx = pool.begin().await?;
+    labels::delete::delete_message_labels_batch(&mut *tx, &vec![message_id], "INBOX", link_id)
+        .await?;
+    labels::insert::insert_message_labels_batch(&mut *tx, &vec![message_id], "UNREAD", link_id)
+        .await?;
+    messages::update::update_message_read_status(&mut tx, message_id, link_id, false).await?;
+    tx.commit().await?;
+    for label in ["INBOX", "UNREAD"] {
+        labels::pending_writes::mark_pending_label_writes(
+            &pool,
+            link_id,
+            &[message_id],
+            label,
+            write_id,
+        )
+        .await?;
+    }
+
+    let mut stale_resync = synced.build(link_id, thread_db_id);
+    stale_resync.is_read = true;
+    insert_message(&pool, thread_db_id, &mut stale_resync, link_id, true).await?;
+
+    let labels_after = |versions: RowVersions| -> Vec<String> {
+        versions
+            .labels
+            .into_iter()
+            .map(|(label, _)| label)
+            .collect()
+    };
+    assert_eq!(
+        labels_after(row_versions(&pool, message_id).await?),
+        ["UNREAD"]
+    );
+    let stored = sqlx::query!(
+        r#"
+        SELECT m.is_read, t.inbox_visible
+        FROM email_messages m JOIN email_threads t ON t.id = m.thread_id
+        WHERE m.id = $1
+        "#,
+        message_id
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert!(!stored.is_read);
+    assert!(!stored.inbox_visible);
+
+    // Once the writes finish, a re-sync follows Gmail again.
+    labels::pending_writes::clear_pending_label_writes(&pool, &[message_id], write_id).await?;
+    let mut resync = synced.build(link_id, thread_db_id);
+    resync.is_read = true;
+    insert_message(&pool, thread_db_id, &mut resync, link_id, true).await?;
+
+    assert_eq!(
+        labels_after(row_versions(&pool, message_id).await?),
+        ["INBOX"]
+    );
+    let stored = sqlx::query!(
+        r#"
+        SELECT m.is_read, t.inbox_visible
+        FROM email_messages m JOIN email_threads t ON t.id = m.thread_id
+        WHERE m.id = $1
+        "#,
+        message_id
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert!(stored.is_read);
+    assert!(stored.inbox_visible);
+
+    Ok(())
+}

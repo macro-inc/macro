@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO email_gmail_pending_label_writes (message_id, provider_label_id, write_id, expires_at)\n        SELECT m.id, $3, $4, now() + interval '12 hours'\n        FROM email_messages m\n        WHERE m.id = ANY($1) AND m.link_id = $2\n        ON CONFLICT (message_id, provider_label_id) DO UPDATE\n        SET write_id = EXCLUDED.write_id, expires_at = EXCLUDED.expires_at\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e5fe9e440569c3a67eee2e82ad6b5eaba3466a24e603de77b167311edd2c9e68"
+}

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT provider_label_id\n        FROM email_gmail_pending_label_writes\n        WHERE message_id = $1 AND expires_at > now()\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "provider_label_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "8cd8c7dd9298dd945b2377e63ce34c9a55e42015d1f2f6bb24baa09dc352a103"
+}

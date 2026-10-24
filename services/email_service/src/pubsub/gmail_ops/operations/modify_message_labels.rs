@@ -5,7 +5,11 @@ use email_api_client::domain::models::EmailApiError;
 use models_email::gmail::gmail_ops::ModifyMessageLabelsBatchPayload;
 use models_email::service;
 use models_email::service::link::Link;
+use sqlx::PgPool;
 use uuid::Uuid;
+
+#[cfg(test)]
+mod test;
 
 /// Modifies labels for a batch of messages in one Gmail request. Gmail
 /// applies the batch as a whole, so a permanent failure reverts every message
@@ -52,7 +56,7 @@ pub async fn modify_message_labels(
                 ?db_message_ids,
                 "Permanent Gmail error modifying labels, reverting database changes"
             );
-            revert_db_changes(ctx, link, payload, db_message_ids).await;
+            revert_db_changes(&ctx.db, link, payload, db_message_ids).await;
         } else {
             tracing::warn!(
                 error = ?error,
@@ -62,18 +66,45 @@ pub async fn modify_message_labels(
         }
     }
 
+    if result.is_ok() {
+        clear_pending_write(ctx, payload).await;
+    }
+
     result
+}
+
+/// Gmail confirmed the batch, so inbox sync applies Gmail's labels to its
+/// messages again.
+async fn clear_pending_write(ctx: &GmailOpsContext, payload: &ModifyMessageLabelsBatchPayload) {
+    let Some(write_id) = payload.pending_write_id else {
+        return;
+    };
+    let db_message_ids: Vec<Uuid> = payload
+        .messages
+        .iter()
+        .map(|message| message.db_message_id)
+        .collect();
+    email_db_client::labels::pending_writes::clear_pending_label_writes(
+        &ctx.db,
+        &db_message_ids,
+        write_id,
+    )
+    .await
+    .inspect_err(|e| {
+        tracing::warn!(error = ?e, ?db_message_ids, "Failed to clear pending label write markers");
+    })
+    .ok();
 }
 
 /// Reverts the optimistic DB changes for the messages of a batch that failed
 /// in Gmail.
 async fn revert_db_changes(
-    ctx: &GmailOpsContext,
+    db: &PgPool,
     link: &Link,
     payload: &ModifyMessageLabelsBatchPayload,
     failed_ids: Vec<Uuid>,
 ) {
-    let mut tx = match ctx.db.begin().await {
+    let mut tx = match db.begin().await {
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!(error=?e, "Failed to begin transaction for reversion");
@@ -111,6 +142,16 @@ async fn revert_db_changes(
             )
             .await
             .context("Failed to revert removing labels")?;
+        }
+
+        if let Some(write_id) = payload.pending_write_id {
+            email_db_client::labels::pending_writes::clear_pending_label_writes(
+                &mut *tx,
+                &failed_ids,
+                write_id,
+            )
+            .await
+            .context("Failed to clear pending label write markers")?;
         }
 
         if *provider_label_id == service::label::system_labels::UNREAD {

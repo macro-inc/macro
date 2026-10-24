@@ -76,6 +76,11 @@ the gateway `/email` prefix.
   1,000 messages, each one Gmail request; a permanent failure reverts the whole
   batch. Keep decoding the single-message `ModifyMessageLabels` form until no
   queued or retrying message can still carry it.
+- Gmail label writes leave a marker in `email_gmail_pending_label_writes`;
+  inbox sync's `update_labels` and message re-syncs keep the local state of a
+  marked label, and gmail_ops clears a batch's markers when Gmail accepts or
+  rejects it. Markers expire after 12 hours, which must outlast an operation's redelivery through
+  the gmail_ops queues.
 - Header addresses that Gmail accepts can fail `MacroUserIdStr::try_from_email`.
   Skip the bad address with a WARN that omits it (the parse error echoes it)
   instead of failing the step; see `pubsub::util::build_contact_connections`.

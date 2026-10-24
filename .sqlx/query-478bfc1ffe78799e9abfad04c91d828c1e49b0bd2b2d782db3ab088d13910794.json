@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        DELETE FROM email_gmail_pending_label_writes\n        WHERE message_id = ANY($1) AND write_id = $2\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "478bfc1ffe78799e9abfad04c91d828c1e49b0bd2b2d782db3ab088d13910794"
+}

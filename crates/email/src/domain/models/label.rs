@@ -75,6 +75,15 @@ pub struct UpdateThreadLabelsResult {
     pub failed_ids: Vec<Uuid>,
 }
 
+/// The Gmail write a local label change waits on: the messages its
+/// operations send and the id they carry. Recorded with the change so inbox
+/// sync never sees the change without it.
+#[derive(Debug, Clone, Copy)]
+pub struct PendingLabelWrite<'a> {
+    pub message_ids: &'a [Uuid],
+    pub write_id: Uuid,
+}
+
 /// The most threads one bulk archive request may change.
 pub const MAX_BULK_ARCHIVE_THREADS: usize = 100;
 
