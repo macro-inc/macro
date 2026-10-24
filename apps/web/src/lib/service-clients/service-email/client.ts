@@ -161,10 +161,9 @@ export const SIGNATURE_IMAGES_UNRESOLVED_CODE =
 
 export const emailClient = {
   settingsOperations: (linkId: string) =>
-    emailFetch<MailboxSettingsOperation[]>(
-      `${emailHost}/email/settings/operations`,
-      { headers: emailLinkHeaders(linkId) }
-    ),
+    emailFetch<MailboxSettingsOperation[]>('/email/settings/operations', {
+      headers: emailLinkHeaders(linkId),
+    }),
 
   async threadOperations(threadId: string) {
     return emailFetch<import('./generated/schemas').MailboxOperation[]>(
