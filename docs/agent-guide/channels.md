@@ -601,6 +601,9 @@ Returning through split navigation restores the saved message position and expan
 threads. Switching channel tabs and returning restores the Messages position,
 expanded threads, and pending reply from when the tab was left. The `Scroll to bottom` control appears when scrolling down through history;
 it returns to the latest page even after opening a link into old history.
+On touch devices a round **Jump to latest** button sits bottom-right above the
+composer whenever the list is away from the bottom, in either scroll direction;
+tapping it smooth-scrolls to latest and keeps the keyboard open.
 The jump waits for that page to reach the rendered list.
 A newer message navigation cancels a pending jump to latest. Scrolling manually
 or choosing another destination also cancels the initial target's delayed fallback.

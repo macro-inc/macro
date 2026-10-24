@@ -1683,7 +1683,9 @@ message highlight; incoming output does not repeat the search jump.
 - New messages and growing streamed replies follow while within 50px of the end.
   Scroll up to read history without being pulled back by subsequent output.
 - Far above the end, scroll downward to reveal **Scroll to bottom**. Clicking it
-  returns to latest and resumes following. The right-edge custom scrollbar is also
+  returns to latest and resumes following. On touch devices the round **Jump to
+  latest** button above the composer replaces it and shows whenever the transcript
+  is away from the end. The right-edge custom scrollbar is also
   drag-seekable, like channels.
 - Select mounted transcript text to use **Reply to selection**. Streaming updates
   retain message-row identity; scrolling a row outside the virtual window can
