@@ -1687,7 +1687,7 @@
             }
           },
           "429": {
-            "description": "Refresh already in progress for this user",
+            "description": "Refresh already in progress for this user, or the access token lacks the Macro claims and was issued too recently to refresh",
             "content": {
               "text/plain": {
                 "schema": {

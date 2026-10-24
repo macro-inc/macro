@@ -2752,7 +2752,7 @@ export type RefreshErrors = {
     400: string;
     401: string;
     /**
-     * Refresh already in progress for this user
+     * Refresh already in progress for this user, or the access token lacks the Macro claims and was issued too recently to refresh
      */
     429: string;
     500: string;
