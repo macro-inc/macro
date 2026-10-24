@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO whatsapp_send (id, account_id, binding_id, group_id, user_id, idempotency_key, request_sha256, payload, generation, group_sequence, created_at)\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, clock_timestamp())\n            ON CONFLICT (group_id, user_id, idempotency_key) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Bytea",
+        "Jsonb",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b57ca2db35a8feb453eb1d81bfa569fe9d1c006583ac5abb11df41a6c2cdd03a"
+}

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE whatsapp_group SET state = CASE WHEN $2 THEN 'suspended' ELSE 'active' END\n        WHERE id = ANY($1) AND state = CASE WHEN $2 THEN 'active' ELSE 'suspended' END",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5ddd68251a50aeccd2caa92e53b877a02452eca5f35eaddf0bc6a68c557e783c"
+}

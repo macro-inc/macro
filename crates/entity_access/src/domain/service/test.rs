@@ -471,6 +471,19 @@ impl AccessRepository for MockRepo {
         Ok(*self.form_access.lock().await)
     }
 
+    /// Resolve ordinary shares on an adopted WhatsApp group.
+    async fn get_whatsapp_group_access(
+        &self,
+        _form_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        self.form_access_callers
+            .lock()
+            .await
+            .push(user_id.map(|user_id| user_id.as_ref().to_string()));
+        Ok(*self.form_access.lock().await)
+    }
+
     async fn list_form_access(
         &self,
         _user_id: &MacroUserId<Lowercase<'_>>,

@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT payload FROM whatsapp_inbound_event WHERE account_id = $1 AND retry_at <= now() ORDER BY retry_at, event_id LIMIT $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "payload",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "dca5a47bafad2e70e9efa73bae698506c12e1883290a1ab64c4a8363660f3980"
+}

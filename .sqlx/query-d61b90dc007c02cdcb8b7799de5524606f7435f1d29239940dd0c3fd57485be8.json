@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT state, ownership_state FROM whatsapp_group WHERE id = $1 FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "state",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "ownership_state",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "d61b90dc007c02cdcb8b7799de5524606f7435f1d29239940dd0c3fd57485be8"
+}

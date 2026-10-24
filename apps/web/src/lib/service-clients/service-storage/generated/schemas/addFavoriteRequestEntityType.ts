@@ -31,4 +31,5 @@ export type AddFavoriteRequestEntityType =
   | 'initiative'
   | 'database'
   | 'database_row'
-  | 'form';
+  | 'form'
+  | 'whatsapp_group';

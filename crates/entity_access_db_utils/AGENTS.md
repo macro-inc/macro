@@ -52,6 +52,8 @@ top of it.
   locks, matching project topology propagation. Legacy non-UUID children inherit
   through their parent dynamically and do not get UUID grant rows.
 
+- Standalone `whatsapp_group` entities use the generic direct-sharing facts and grant helpers; remote membership never creates a grant.
+
 ## Related
 
 - Rules: `.agents/rules/rust/db.md`, `.agents/rules/rust/architecture.md`

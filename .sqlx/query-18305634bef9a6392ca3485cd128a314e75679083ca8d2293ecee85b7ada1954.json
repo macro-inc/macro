@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT b.group_jid, b.id, b.name\n            FROM whatsapp_group b\n            WHERE b.group_jid = ANY($2) AND b.state <> 'detached' AND whatsapp_group_can_view(b.id, $1)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "group_jid",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "18305634bef9a6392ca3485cd128a314e75679083ca8d2293ecee85b7ada1954"
+}

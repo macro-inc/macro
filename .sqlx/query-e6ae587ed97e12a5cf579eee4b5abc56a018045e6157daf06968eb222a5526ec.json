@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE whatsapp_group_message SET effect_revision = effect_revision + 1, notification_retry_at = now()\n        WHERE binding_id = $1 AND person_id = $2 AND source_id = $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e6ae587ed97e12a5cf579eee4b5abc56a018045e6157daf06968eb222a5526ec"
+}

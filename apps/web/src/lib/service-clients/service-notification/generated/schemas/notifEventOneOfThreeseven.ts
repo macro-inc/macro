@@ -4,14 +4,15 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { CalendarEventReminderMetadata } from './calendarEventReminderMetadata';
+
 import type { NotifEventOneOfThreesevenTag } from './notifEventOneOfThreesevenTag';
+import type { WhatsappGroupMessageMetadata } from './whatsappGroupMessageMetadata';
 
 /**
- * A calendar event alarm came due.
+ * A live message in a shared WhatsApp group.
  */
 export type NotifEventOneOfThreeseven = {
-  /** A calendar event alarm came due. */
-  content: CalendarEventReminderMetadata;
+  /** A live message in a shared WhatsApp group. */
+  content: WhatsappGroupMessageMetadata;
   tag: NotifEventOneOfThreesevenTag;
 };

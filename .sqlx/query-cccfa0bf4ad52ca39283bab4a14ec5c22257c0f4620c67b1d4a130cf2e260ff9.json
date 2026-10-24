@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE whatsapp_group SET state = 'detached', deleted_at = COALESCE(deleted_at,now()) WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cccfa0bf4ad52ca39283bab4a14ec5c22257c0f4620c67b1d4a130cf2e260ff9"
+}

@@ -15,6 +15,7 @@ export const NOTIFICATION_LABEL_BY_TYPE: Record<NotificationType, string> = {
   crm_discussion: 'COMMENT',
   channel_invite: 'INVITE',
   new_email: 'EMAIL',
+  whatsapp_group_message: 'WHATSAPP',
   invite_to_team: 'INVITE',
   task_assigned: 'ASSIGNED',
   ai_response: 'AI',

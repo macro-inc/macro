@@ -1,0 +1,47 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT s.binding_id, s.payload, s.allocated_source_id, s.state, s.created_at\n            FROM whatsapp_send s WHERE s.id = $1 AND s.account_id = $2 AND s.dispatch_started_at IS NOT NULL FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "binding_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "payload",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 2,
+        "name": "allocated_source_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "state",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "634c17f9799029be2eb2628e91e6c0bbc670362689c1ffc0b1f862798cd7e8a1"
+}

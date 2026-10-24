@@ -44,6 +44,8 @@ schema types (entity type, owner type, property filters).
 
 - `cargo test -p graphql_common`.
 
+- `WhatsAppGroup` is a canonical GraphQL entity type; Soup registration remains deferred.
+
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/security.md`

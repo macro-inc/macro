@@ -62,6 +62,7 @@ edit capability but calls no nested model and emits no additional model charge; 
 - `cargo test -p ai_tools` (`SQLX_OFFLINE` unset).
 - After adding/changing a tool: `cargo run -p ai_tools --bin gen_tool_schemas`
   and `--bin gen_ai_request_schemas` to refresh generated frontend schemas.
+- Regenerate DisplayResults entity-reference enums from `apps/web` with `bun run gen-dynamic-ui-schema` after canonical entity changes.
 
 ## Related
 

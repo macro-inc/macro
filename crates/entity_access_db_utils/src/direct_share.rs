@@ -28,6 +28,8 @@ pub async fn facts(
             .fetch_optional(tx.as_mut()).await?.map(|r| (r.owner, r.name, None)),
         EntityType::AgentSession => sqlx::query!("SELECT owner_id, name FROM agent_session WHERE id = $1 FOR SHARE", id)
             .fetch_optional(tx.as_mut()).await?.map(|r| (r.owner_id, r.name, None)),
+        EntityType::WhatsAppGroup => sqlx::query!("SELECT user_id, name FROM whatsapp_group WHERE id = $1 FOR SHARE", id)
+            .fetch_optional(tx.as_mut()).await?.map(|r| (r.user_id, r.name, None)),
         EntityType::Initiative => sqlx::query!("SELECT owner_user_id, name FROM initiative WHERE id = $1 FOR SHARE", id)
             .fetch_optional(tx.as_mut()).await?.map(|r| (r.owner_user_id, r.name, None)),
         EntityType::Database => sqlx::query!("SELECT user_id AS owner_id, name FROM database_entities WHERE database_id = $1 AND trashed_at IS NULL FOR SHARE", id)

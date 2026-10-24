@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM whatsapp_media_blob b WHERE b.created_at < now() - interval '1 day'\n            AND NOT EXISTS (SELECT 1 FROM whatsapp_group_attachment a WHERE a.document_id = b.document_id)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "b827af1bde86f6148320ff98befd13edb112ec15d7ecfb7777a33fbb0342b1f5"
+}

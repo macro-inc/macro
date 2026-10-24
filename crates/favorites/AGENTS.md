@@ -42,6 +42,8 @@ hexagonal architecture pattern.
 
 - `cargo test -p favorites --all-features` (`SQLX_OFFLINE` unset).
 
+- Standalone `WhatsAppGroup` entities are favoritable through the generic entity reference.
+
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/db.md`

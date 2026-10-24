@@ -82,6 +82,10 @@ pub enum EntityType {
     /// The entity is a Macro Form: a questionnaire whose answers land as rows
     /// of one database table (see the `forms` crate)
     Form,
+    /// An adopted, independently shared WhatsApp group.
+    #[serde(rename = "whatsapp_group")]
+    #[strum(serialize = "whatsapp_group")]
+    WhatsAppGroup,
 }
 
 impl EntityType {
@@ -137,6 +141,7 @@ impl EntityType {
             // A form's grants are `entity_access` rows, but, like a
             // database, a form is not something you file into a project.
             EntityType::Form => false,
+            EntityType::WhatsAppGroup => true,
         }
     }
     /// provide an entity string slice to upgrade this type into an [Entity]

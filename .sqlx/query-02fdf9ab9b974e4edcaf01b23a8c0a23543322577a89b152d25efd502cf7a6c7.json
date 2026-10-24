@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO whatsapp_group_roster (account_id, group_jid, observed_at, metadata) VALUES ($1, $2, $3, $4)\n            ON CONFLICT (account_id, group_jid) DO UPDATE SET observed_at = excluded.observed_at, metadata = excluded.metadata\n            WHERE whatsapp_group_roster.observed_at <= excluded.observed_at",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamptz",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "02fdf9ab9b974e4edcaf01b23a8c0a23543322577a89b152d25efd502cf7a6c7"
+}

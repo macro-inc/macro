@@ -79,6 +79,11 @@ where
             EntityType::Database => self.repo.get_database_access(entity_id, user_id).await,
             EntityType::DatabaseRow => self.repo.get_database_row_access(entity_id, user_id).await,
             EntityType::Form => self.repo.get_form_access(entity_id, user_id).await,
+            EntityType::WhatsAppGroup => {
+                self.repo
+                    .get_whatsapp_group_access(entity_id, user_id)
+                    .await
+            }
             EntityType::ScheduledAction => {
                 self.repo
                     .get_scheduled_action_access(entity_id, user_id)
@@ -223,6 +228,7 @@ where
             | EntityType::CrmPipeline
             | EntityType::Database
             | EntityType::DatabaseRow
+            | EntityType::WhatsAppGroup
             | EntityType::Form => {
                 let access_level = self
                     .repo
@@ -563,6 +569,7 @@ where
             | EntityType::CrmPipeline
             | EntityType::Database
             | EntityType::DatabaseRow
+            | EntityType::WhatsAppGroup
             | EntityType::Form
             | EntityType::ScheduledAction => {
                 self.get_optimized_access(entity_id, user_id, entity_type)
@@ -675,6 +682,7 @@ where
             | EntityType::CrmPipeline
             | EntityType::Database
             | EntityType::DatabaseRow
+            | EntityType::WhatsAppGroup
             | EntityType::Form
             | EntityType::ScheduledAction => {
                 let access = self
@@ -793,6 +801,7 @@ where
             | EntityType::CrmContact
             | EntityType::CrmPipeline
             | EntityType::Database
+            | EntityType::WhatsAppGroup
             | EntityType::Form => {
                 let entity_id = Uuid::parse_str(entity_id).map_err(|_| {
                     AccessError::BadRequest("invalid entity_id for get_users_by_entity")

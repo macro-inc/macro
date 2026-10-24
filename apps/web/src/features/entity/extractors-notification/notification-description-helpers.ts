@@ -108,7 +108,11 @@ export function getActionVerb(type: NotificationType): string {
       .with('entity_access_granted', () => 'granted access')
       .with('commented_on_document', 'crm_discussion', () => 'commented')
       .with('channel_message_reply', () => 'replied')
-      .with('channel_message_send', () => 'sent a message')
+      .with(
+        'channel_message_send',
+        'whatsapp_group_message',
+        () => 'sent a message'
+      )
       .with('channel_message_reaction', () => 'reacted to your message')
       .with('ai_response', () => 'AI responded')
       .with('new_email', () => 'sent an email')
@@ -141,7 +145,9 @@ export function getActionVerb(type: NotificationType): string {
 export function getTypeNoun(type: NotificationType, count: number): string {
   return match(type)
     .with('channel_message_reply', () => (count === 1 ? 'reply' : 'replies'))
-    .with('channel_message_send', () => (count === 1 ? 'message' : 'messages'))
+    .with('channel_message_send', 'whatsapp_group_message', () =>
+      count === 1 ? 'message' : 'messages'
+    )
     .with('channel_message_reaction', () =>
       count === 1 ? 'reaction' : 'reactions'
     )

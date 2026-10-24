@@ -1,0 +1,62 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT a.document_id, a.sha256, a.state, a.mime AS \"mime!\", a.filename AS \"filename!\", b.id AS group_id, b.user_id\n            FROM whatsapp_group_attachment a JOIN whatsapp_group b ON b.id = a.binding_id\n            WHERE a.binding_id = $1 AND a.person_id = $2 AND a.source_id = $3 AND a.ordinal = $4 AND a.account_id = $5\n            FOR UPDATE OF a",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "document_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "sha256",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 2,
+        "name": "state",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "mime!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "filename!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "group_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "user_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Int2",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "bbdc004911cbdaf82f97e26682029e9cbec7732f94a91ff6c31898f96a3cc99a"
+}

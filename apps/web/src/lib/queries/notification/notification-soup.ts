@@ -39,7 +39,8 @@ function notificationEntityTypeToSoupTag(
         'database_row',
         'form',
         'scheduled_action',
-        'initiative'
+        'initiative',
+        'whatsapp_group'
       ),
       () => null
     )

@@ -10,5 +10,5 @@ export type NotifEventOneOfThreesevenTag =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const NotifEventOneOfThreesevenTag = {
-  calendar_event_reminder: 'calendar_event_reminder',
+  whatsapp_group_message: 'whatsapp_group_message',
 } as const;

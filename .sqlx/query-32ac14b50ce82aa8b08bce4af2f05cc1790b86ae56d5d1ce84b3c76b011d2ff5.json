@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT share_permission_id FROM whatsapp_group WHERE id=$1 AND user_id=$2 FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "share_permission_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "32ac14b50ce82aa8b08bce4af2f05cc1790b86ae56d5d1ce84b3c76b011d2ff5"
+}

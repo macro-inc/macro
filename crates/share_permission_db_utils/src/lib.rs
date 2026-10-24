@@ -133,6 +133,15 @@ where
             .fetch_one(executor)
             .await?
         }
+        "whatsapp_group" => {
+            let item_id = macro_uuid::string_to_uuid(item_id)?;
+            sqlx::query_scalar!(
+                "SELECT share_permission_id FROM whatsapp_group WHERE id = $1",
+                item_id
+            )
+            .fetch_one(executor)
+            .await?
+        }
         "initiative" => {
             let item_id = macro_uuid::string_to_uuid(item_id)?;
             sqlx::query_scalar!(
@@ -267,5 +276,48 @@ pub async fn ensure_thread_share_permission(pool: &PgPool, thread_id: &str) -> a
         .await
         .context("failed to commit thread share permission")?;
 
+    Ok(())
+}
+
+/// Insert an explicitly private permission row with an application-allocated id.
+/// Does not authorize or commit the caller's transaction.
+pub async fn insert_private_permission<'e, E>(executor: E, id: &str) -> Result<(), sqlx::Error>
+where
+    E: Executor<'e, Database = Postgres>,
+{
+    sqlx::query!(r#"INSERT INTO "SharePermission" (id,"linkShare","linkShareAccessLevel") VALUES ($1,NULL,NULL)"#,id)
+        .execute(executor).await?;
+    Ok(())
+}
+
+/// Persist the standard optional link-share update after domain authorization.
+/// Explicit null disables the link; resetting its level uses View while enabled.
+/// Team sharing uses the separate canonical `team_share` helpers.
+pub async fn update_link_share<'e, E>(
+    executor: E,
+    id: &str,
+    update: &models_permissions::share_permission::UpdateSharePermissionRequestV2,
+) -> Result<(), sqlx::Error>
+where
+    E: Executor<'e, Database = Postgres>,
+{
+    let link = update.link_share.flatten().map(|link| link.to_string());
+    let level = update.link_share_access_level.flatten();
+    sqlx::query!(
+        r#"UPDATE "SharePermission" SET
+        "linkShare"=CASE WHEN $2 THEN $3 ELSE "linkShare" END,
+        "linkShareAccessLevel"=CASE WHEN $2 AND $3 IS NULL THEN NULL
+            WHEN $2 THEN COALESCE($5::"AccessLevel",'view')
+            WHEN $4 AND "linkShare" IS NOT NULL THEN COALESCE($5::"AccessLevel",'view')
+            WHEN $4 THEN NULL ELSE "linkShareAccessLevel" END,
+        "updatedAt"=now() WHERE id=$1"#,
+        id,
+        update.link_share.is_some(),
+        link,
+        update.link_share_access_level.is_some(),
+        level as _
+    )
+    .execute(executor)
+    .await?;
     Ok(())
 }

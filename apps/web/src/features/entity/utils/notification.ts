@@ -236,7 +236,7 @@ export function getNotificationActionText(n: Notification): string {
 
   return match(tag)
     .with('channel_mention', () => 'mentioned')
-    .with('channel_message_send', () => 'sent')
+    .with('channel_message_send', 'whatsapp_group_message', () => 'sent')
     .with('channel_message_reaction', () => 'reacted')
     .with('channel_message_reply', () => 'replied')
     .with('document_mention', () => 'mentioned')
@@ -342,6 +342,7 @@ export function extractMessageContent(notification: Notification): string {
         m.content.displayName ||
         ''
     )
+    .with({ tag: 'whatsapp_group_message' }, () => 'New WhatsApp message')
     .with({ tag: 'channel_invite' }, () => '')
     .with({ tag: 'invite_to_team' }, () => '')
     .with({ tag: 'call_started' }, (m) => m.content.channel_name ?? '')

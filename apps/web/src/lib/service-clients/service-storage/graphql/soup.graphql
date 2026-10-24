@@ -425,7 +425,8 @@ fragment SoupNotificationStateFields on GraphqlNotification {
 	__typename
 	id
 	eventType
-	entityType
+	# The canonical type also covers entities outside Soup (WhatsApp groups).
+	entityType: targetEntityType
 	entityId
 	sent
 	state
@@ -462,6 +463,10 @@ fragment SoupNotificationMetadataFields on GraphqlNotifEvent {
 # REST metadata (including mention/reply content) remains available to consumers.
 fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 	__typename
+	... on GraphqlWhatsappGroupMessageMetadata {
+		whatsappGroupName: groupName
+		whatsappMessageId: messageId
+	}
 	... on GraphqlChannelMentionMetadata {
 		channelMentionMessageId: messageId
 		channelMentionMessageContent: messageContent

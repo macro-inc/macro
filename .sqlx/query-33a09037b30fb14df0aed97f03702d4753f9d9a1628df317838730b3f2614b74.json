@@ -1,0 +1,59 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT m.message_id AS \"message_id!\", a.ordinal, a.state, a.filename, a.mime, a.size, a.document_id\n            FROM whatsapp_group_attachment a\n            JOIN whatsapp_group_message m ON m.binding_id = a.binding_id AND m.person_id = a.person_id AND m.source_id = a.source_id\n            WHERE a.binding_id = $1 AND m.message_id = ANY($2) AND a.state <> 'deleted'\n            ORDER BY m.message_id, a.ordinal",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "ordinal",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 2,
+        "name": "state",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "filename",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "mime",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "size",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "document_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "33a09037b30fb14df0aed97f03702d4753f9d9a1628df317838730b3f2614b74"
+}

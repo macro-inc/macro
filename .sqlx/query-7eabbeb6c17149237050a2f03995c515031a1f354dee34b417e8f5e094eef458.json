@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT b.id AS group_id, m.message_id AS \"message_id!\", m.effect_revision, m.published_revision, m.origin, m.content_revision, m.deleted_at, p.user_id\n            FROM whatsapp_group_message m\n            JOIN whatsapp_group b ON b.id = m.binding_id\n            JOIN whatsapp_external_person p ON p.id = m.person_id\n            WHERE m.message_id IS NOT NULL AND m.published_revision < m.effect_revision AND m.notification_retry_at <= now()\n            ORDER BY m.notification_retry_at, m.message_id LIMIT $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "group_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "message_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "effect_revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "published_revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "origin",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "content_revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "deleted_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "user_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "7eabbeb6c17149237050a2f03995c515031a1f354dee34b417e8f5e094eef458"
+}

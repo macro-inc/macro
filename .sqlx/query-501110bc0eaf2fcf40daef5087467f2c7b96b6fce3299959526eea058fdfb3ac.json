@@ -1,0 +1,66 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, user_id, group_id, payload, state, message_id, error_code, created_at FROM whatsapp_send\n            WHERE group_id = $1 AND user_id = $2 AND (id = ANY($3) OR message_id = ANY($3))\n            ORDER BY created_at LIMIT 100",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "group_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "payload",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 4,
+        "name": "state",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "message_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "error_code",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "501110bc0eaf2fcf40daef5087467f2c7b96b6fce3299959526eea058fdfb3ac"
+}

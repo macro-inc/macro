@@ -48,6 +48,8 @@ plus the owner-grant policy for what access that owner implies.
 - `cargo test -p entity_registry` (`SQLX_OFFLINE` unset; requires local
   MacroDB — `just setup_macrodb`).
 
+- `WhatsAppGroup` is a registered kind; adoption records the human owner and direct owner grant in one transaction.
+
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md` · Crate:

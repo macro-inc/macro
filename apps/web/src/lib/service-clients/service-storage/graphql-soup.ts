@@ -1053,6 +1053,17 @@ function mapGraphqlNotificationMetadata(
 ): NotifEvent {
   return match(metadata)
     .with(
+      { __typename: 'GraphqlWhatsappGroupMessageMetadata' },
+      (metadata) =>
+        ({
+          tag: 'whatsapp_group_message',
+          content: {
+            groupName: metadata.whatsappGroupName,
+            messageId: metadata.whatsappMessageId,
+          },
+        }) satisfies NotifEventMember<'whatsapp_group_message'>
+    )
+    .with(
       { __typename: 'GraphqlChannelMentionMetadata' },
       (metadata) =>
         ({

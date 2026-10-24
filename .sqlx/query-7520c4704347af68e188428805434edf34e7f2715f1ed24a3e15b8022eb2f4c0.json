@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE whatsapp_group_message SET body = $4,\n        reply_to = COALESCE(reply_to,$5), message_id = id\n        WHERE binding_id = $1 AND person_id = $2 AND source_id = $3\n          AND (message_id IS NULL OR body IS DISTINCT FROM $4)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7520c4704347af68e188428805434edf34e7f2715f1ed24a3e15b8022eb2f4c0"
+}

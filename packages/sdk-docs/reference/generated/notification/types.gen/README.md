@@ -161,3 +161,4 @@
 - [UnsubscribeItemResponse](type-aliases/UnsubscribeItemResponse.md)
 - [UnsubscribeItemResponses](type-aliases/UnsubscribeItemResponses.md)
 - [UserUnsubscribe](type-aliases/UserUnsubscribe.md)
+- [WhatsappGroupMessageMetadata](type-aliases/WhatsappGroupMessageMetadata.md)

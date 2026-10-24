@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE whatsapp_group b SET next_sequence = next_sequence + 1\n            WHERE b.id = $1 AND b.id = $2 AND b.state = 'active' AND b.ownership_state = 'active'\n              AND EXISTS (\n                SELECT 1 FROM whatsapp_linked_account a JOIN whatsapp_group_membership m ON m.account_id = a.id\n                WHERE a.id = $3 AND a.user_id = $4 AND a.state = 'connected' AND a.generation = $5\n                  AND m.binding_id = b.id AND m.generation = a.generation AND m.consent_ended_at IS NULL\n                  AND m.remote_member AND m.can_post AND m.reconciled)\n              AND whatsapp_group_can_view(b.id, $4)\n            RETURNING next_sequence",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "next_sequence",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "38c8cc31bde6e8431fbe2ee3399a24ad2ebec1b5732617a4dcf6bfcbff2bd56f"
+}

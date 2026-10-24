@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT m.source_at, m.deleted_at, array_agg(a.jid) AS \"sent_by!\"\n            FROM whatsapp_group_message m\n            JOIN whatsapp_identity_alias a ON a.binding_id = m.binding_id AND a.person_id = m.person_id\n            WHERE m.binding_id = $1 AND m.message_id = $2\n            GROUP BY m.source_at, m.deleted_at",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "source_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 1,
+        "name": "deleted_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "sent_by!",
+        "type_info": "TextArray"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      null
+    ]
+  },
+  "hash": "766166cb654ae0135d9ab1af2244d8ee22a8029d7d2c786d0fe1eefea419d103"
+}

@@ -6420,6 +6420,7 @@ dependencies = [
  "call",
  "channel_bots",
  "channel_labels",
+ "channel_sender",
  "channels",
  "chat",
  "chrono",
@@ -6561,6 +6562,7 @@ dependencies = [
  "utoipa-swagger-ui",
  "uuid",
  "webhook",
+ "whatsapp_linked",
  "work_feed",
  "workspace-hack",
  "zip 9.0.5",
@@ -21472,6 +21474,36 @@ dependencies = [
  "tracing",
  "whatsmeow",
  "whatsmeow_signal",
+ "workspace-hack",
+]
+
+[[package]]
+name = "whatsapp_linked"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "chrono",
+ "entity_access",
+ "entity_access_db_utils",
+ "entity_registry_db_utils",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_user_id",
+ "model-entity",
+ "model_owner",
+ "models_permissions",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "share_permission_db_utils",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "utoipa",
+ "uuid",
  "workspace-hack",
 ]
 

@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH needing AS (\n                SELECT EXISTS (\n                SELECT 1 FROM pg_locks l\n                WHERE l.locktype = 'advisory' AND l.objsubid = 1\n                  AND l.database = (SELECT oid FROM pg_database WHERE datname = current_database())\n                  AND ((l.classid::bigint << 32) | l.objid::bigint) = hashtext('whatsapp-account:' || a.id::text)::bigint) AS locked\n                FROM whatsapp_linked_account a WHERE (a.state = 'connected' OR EXISTS (\n                SELECT 1 FROM whatsapp_pairing p WHERE p.account_id = a.id AND p.consumed_at IS NULL AND p.expires_at > now())))\n            SELECT\n                (SELECT count(*) FROM needing WHERE locked) AS \"running!\",\n                (SELECT count(*) FROM needing WHERE NOT locked) AS \"unowned!\",\n                (SELECT COALESCE(EXTRACT(EPOCH FROM now() - min(created_at)), 0)::bigint FROM whatsapp_inbound_event) AS \"oldest!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "running!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "unowned!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "oldest!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "ceb8cfbdc19c2bd8b642a20295eb8b3bf30c874a6b95d4f29eef5145c412e876"
+}

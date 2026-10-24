@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO whatsapp_group_message (id, binding_id, person_id, source_id, origin, source_at, content_revision, deleted_at, revision_content, revised_at)\n        VALUES ($11, $1, $2, $3, $4, $5, $6, $7, $8, $9)\n        ON CONFLICT (binding_id, person_id, source_id) DO UPDATE SET\n            deleted_at = COALESCE(whatsapp_group_message.deleted_at, excluded.deleted_at),\n            revision_content = CASE WHEN excluded.content_revision > whatsapp_group_message.content_revision\n                THEN excluded.revision_content ELSE whatsapp_group_message.revision_content END,\n            revised_at = CASE WHEN excluded.content_revision > whatsapp_group_message.content_revision\n                THEN excluded.revised_at ELSE whatsapp_group_message.revised_at END,\n            content_revision = GREATEST(whatsapp_group_message.content_revision, excluded.content_revision),\n            source_at = CASE WHEN $10 THEN whatsapp_group_message.source_at ELSE excluded.source_at END",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Int8",
+        "Timestamptz",
+        "Text",
+        "Timestamptz",
+        "Bool",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "27ae44ded89969dc23fce3b695f1cb3307aeb8223387bcfdbb78888b661e6153"
+}

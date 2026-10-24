@@ -613,7 +613,7 @@ export type EntityAccessRequestedMetadata = {
 /**
  * The type of an entity in Macro
  */
-export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form';
+export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'whatsapp_group';
 
 /**
  * A plain old json error response for use with axum.
@@ -1167,6 +1167,12 @@ export type NotifEvent = {
     tag: 'reminder';
 } | {
     /**
+     * A live message in a shared WhatsApp group.
+     */
+    content: WhatsappGroupMessageMetadata;
+    tag: 'whatsapp_group_message';
+} | {
+    /**
      * A calendar event alarm came due.
      */
     content: CalendarEventReminderMetadata;
@@ -1486,6 +1492,20 @@ export type UserUnsubscribe = {
      * None for permanent mutes; notifications resume automatically at this deadline.
      */
     snoozed_until?: string | null;
+};
+
+/**
+ * A live message in an independently shared WhatsApp group.
+ */
+export type WhatsappGroupMessageMetadata = {
+    /**
+     * Group name, independent of its remote subject.
+     */
+    groupName: string;
+    /**
+     * Stable message id; retries use it as their notification id.
+     */
+    messageId: string;
 };
 
 export type HealthHandlerData = {

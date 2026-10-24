@@ -225,6 +225,9 @@ function getSupportedHandler(
               onApplied,
             })
       )
+      // Group notifications open the WhatsApp group view, which ships with
+      // the web app layer.
+      .with('whatsapp_group_message', () => null)
       .with('new_email', () => {
         const meta = notification.notification_metadata;
         if (meta.tag !== 'new_email') return null;

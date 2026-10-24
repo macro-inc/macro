@@ -1,0 +1,70 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT sp.id,sp.\"linkShare\" AS \"link_share: LinkShare\",sp.\"linkShareAccessLevel\" AS \"link_level: AccessLevel\",\n            sp.team_share_access_level AS \"team_level: AccessLevel\",g.user_id FROM whatsapp_group g JOIN \"SharePermission\" sp ON sp.id=g.share_permission_id WHERE g.id=$1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "link_share: LinkShare",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "link_level: AccessLevel",
+        "type_info": {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "team_level: AccessLevel",
+        "type_info": {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "user_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "dfffbf0b3113d085ac6487eb1e26e0a480c5b99057bfcc8e9d9a9ca1767b5a59"
+}

@@ -46,16 +46,19 @@ pub enum RegisteredEntityType {
     AgentSession,
     /// `scheduled_action`
     ScheduledAction,
+    /// `whatsapp_group`
+    WhatsAppGroup,
 }
 
 impl RegisteredEntityType {
     /// Every registered kind.
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 6] = [
         Self::Project,
         Self::Document,
         Self::Chat,
         Self::AgentSession,
         Self::ScheduledAction,
+        Self::WhatsAppGroup,
     ];
 
     /// The stored spelling.
@@ -73,6 +76,7 @@ impl From<RegisteredEntityType> for EntityType {
             RegisteredEntityType::Chat => Self::Chat,
             RegisteredEntityType::AgentSession => Self::AgentSession,
             RegisteredEntityType::ScheduledAction => Self::ScheduledAction,
+            RegisteredEntityType::WhatsAppGroup => Self::WhatsAppGroup,
         }
     }
 }
@@ -92,6 +96,7 @@ impl TryFrom<EntityType> for RegisteredEntityType {
             EntityType::Chat => Ok(Self::Chat),
             EntityType::AgentSession => Ok(Self::AgentSession),
             EntityType::ScheduledAction => Ok(Self::ScheduledAction),
+            EntityType::WhatsAppGroup => Ok(Self::WhatsAppGroup),
             other => Err(UnregisteredEntityType(other)),
         }
     }

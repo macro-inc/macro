@@ -73,6 +73,33 @@ async fn metadata_is_the_typed_notification_union() {
     );
 }
 
+#[tokio::test]
+async fn group_access_notifications_retain_the_canonical_entity_identity() {
+    let metadata = model_notifications::EntityAccessGrantedMetadata {
+        request_id: uuid::Uuid::from_u128(2),
+        revision: 1,
+        entity_name: "Escalations".into(),
+        file_type: None,
+        access_level: model_notifications::RequestedAccessLevel::View,
+    };
+    let mut row = raw_notification(serde_json::to_value(metadata).unwrap());
+    row.notification_event_type = "entity_access_granted".into();
+    row.entity = EntityType::WhatsAppGroup.with_entity_string("group-1".into());
+    let notification = GraphqlNotification::try_from(row).unwrap();
+    let schema = Schema::new(Query { notification }, EmptyMutation, EmptySubscription);
+    let response = schema
+        .execute("{ notification { targetEntityType entityId eventType } }")
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(
+        response.data.into_json().unwrap(),
+        json!({
+            "notification": { "targetEntityType": "WHATSAPP_GROUP", "entityId": "group-1", "eventType": "entity_access_granted" }
+        })
+    );
+    assert!(graphql_common::GraphqlSoupEntityType::try_new(EntityType::WhatsAppGroup).is_none());
+}
+
 #[test]
 fn malformed_metadata_is_rejected_before_graphql_resolution() {
     let error = GraphqlNotification::try_from(raw_notification(json!({"secret": "do not expose"})))

@@ -1487,3 +1487,33 @@ describe('GraphQL Soup browser cache session gate', () => {
     expect(WorkerConstructor).not.toHaveBeenCalled();
   });
 });
+
+it('preserves canonical WhatsApp group identity and notification metadata through GraphQL', async () => {
+  const { mapGraphqlNotification } = await import('./graphql-soup');
+  const mapped = mapGraphqlNotification({
+    __typename: 'GraphqlNotification',
+    id: 'notification',
+    eventType: 'whatsapp_group_message',
+    entityId: 'group-1',
+    entityType: 'WHATSAPP_GROUP',
+    state: 'UNSEEN',
+    sent: true,
+    senderId: null,
+    createdAt: '2026-10-21T10:00:00Z',
+    updatedAt: '2026-10-21T10:00:00Z',
+    viewedAt: null,
+    metadata: {
+      __typename: 'GraphqlWhatsappGroupMessageMetadata',
+      whatsappGroupName: 'Design Crit',
+      whatsappMessageId: 'message-1',
+    },
+  });
+  expect(mapped).toMatchObject({
+    entity_type: 'whatsapp_group',
+    entity_id: 'group-1',
+    notification_metadata: {
+      tag: 'whatsapp_group_message',
+      content: { groupName: 'Design Crit', messageId: 'message-1' },
+    },
+  });
+});

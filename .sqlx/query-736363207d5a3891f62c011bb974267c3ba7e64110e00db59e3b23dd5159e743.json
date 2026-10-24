@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT a.id FROM whatsapp_linked_account a\n            WHERE (a.state = 'connected' OR EXISTS (\n                SELECT 1 FROM whatsapp_pairing p WHERE p.account_id = a.id AND p.consumed_at IS NULL AND p.expires_at > now()))\n              AND NOT EXISTS (\n                SELECT 1 FROM pg_locks l\n                WHERE l.locktype = 'advisory' AND l.objsubid = 1\n                  AND l.database = (SELECT oid FROM pg_database WHERE datname = current_database())\n                  AND ((l.classid::bigint << 32) | l.objid::bigint) = hashtext('whatsapp-account:' || a.id::text)::bigint)\n            ORDER BY a.updated_at, a.id LIMIT $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "736363207d5a3891f62c011bb974267c3ba7e64110e00db59e3b23dd5159e743"
+}

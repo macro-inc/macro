@@ -116,6 +116,9 @@ where
     async fn purge(&self, entity: &OwnedEntityRef) -> Result<(), Self::Err> {
         let owner = entity.owner.as_owner();
         match entity.entity_type {
+            RegisteredEntityType::WhatsAppGroup => {
+                return Err(report!("WhatsApp groups must be owned by a person").into());
+            }
             RegisteredEntityType::Document
             | RegisteredEntityType::Chat
             | RegisteredEntityType::Project => self

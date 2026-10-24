@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, team_id, group_jid, user_id, state, ownership_state, adopted_at FROM whatsapp_group WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "group_jid",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "state",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "ownership_state",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "adopted_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "2ca4628d74b7e43e76ca149b22a74e9376b2528c9a357f9659ec5abc8467b988"
+}

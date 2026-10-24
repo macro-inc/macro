@@ -8,6 +8,7 @@ pub mod model;
 mod outbound;
 mod server;
 mod service;
+mod whatsapp_linked;
 
 /// The service's OpenAPI document, rendered by the `*_openapi` binary.
 pub use api::swagger::ApiDoc;

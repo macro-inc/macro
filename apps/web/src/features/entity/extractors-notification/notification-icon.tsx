@@ -16,6 +16,7 @@ import QuestionIcon from '@phosphor/question.svg';
 import SmileyIcon from '@phosphor/smiley.svg';
 import AgentIcon from '@phosphor/sparkle.svg';
 import UserPlusIcon from '@phosphor/user-plus.svg';
+import WhatsappIcon from '@phosphor/whatsapp-logo.svg';
 import { cn } from '@ui';
 import type { JSX } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -49,6 +50,7 @@ function getNotificationIcon(
     .with('initiative_discussion', () => ChatIcon)
     .with('channel_message_reply', () => ArrowBendUpLeftIcon)
     .with('channel_message_send', () => ChatIcon)
+    .with('whatsapp_group_message', () => WhatsappIcon)
     .with('channel_message_reaction', () => SmileyIcon)
     .with('new_email', () => EnvelopeIcon)
     .with('entity_access_requested', () => UserPlusIcon)

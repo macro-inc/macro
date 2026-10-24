@@ -4,16 +4,14 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { CalendarEventJoinRequestMetadata } from './calendarEventJoinRequestMetadata';
+import type { ChannelMessageReactionMetadata } from './channelMessageReactionMetadata';
 import type { NotifEventOneOfSixoneTag } from './notifEventOneOfSixoneTag';
 
 /**
- * A channel member asked to be added as a guest of an event the
-user shared with the channel.
+ * Someone reacted to one of the user's channel messages.
  */
 export type NotifEventOneOfSixone = {
-  /** A channel member asked to be added as a guest of an event the
-user shared with the channel. */
-  content: CalendarEventJoinRequestMetadata;
+  /** Someone reacted to one of the user's channel messages. */
+  content: ChannelMessageReactionMetadata;
   tag: NotifEventOneOfSixoneTag;
 };

@@ -141,3 +141,6 @@ impl IntoResponse for ExtractorError {
         (status, Json(ErrorResponse { message })).into_response()
     }
 }
+
+mod whatsapp_group;
+pub use whatsapp_group::WhatsAppGroupAccessLevelExtractor;

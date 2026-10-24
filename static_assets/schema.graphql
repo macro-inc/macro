@@ -4477,6 +4477,10 @@ enum GraphqlEntityType {
 	Macro Form entity (a questionnaire answered into a database table).
 	"""
 	FORM
+	"""
+	Independently shared WhatsApp group.
+	"""
+	WHATSAPP_GROUP
 }
 
 """
@@ -5754,10 +5758,10 @@ type GraphqlNewNotification {
 """
 Typed GraphQL union containing every supported notification event payload.
 """
-union GraphqlNotifEvent = GraphqlEntityAccessGrantedMetadata | GraphqlEntityAccessRequestedMetadata | GraphqlChannelMentionMetadata | GraphqlDocumentMentionMetadata | GraphqlMentionedInDocumentCommentMetadata | GraphqlRepliedToDocumentCommentThreadMetadata | GraphqlCommentedOnDocumentMetadata | GraphqlInitiativeDiscussionMetadata | GraphqlCrmDiscussionMetadata | GraphqlChannelInviteMetadata | GraphqlChannelMessageSendMetadata | GraphqlChannelMessageReactionMetadata | GraphqlChannelReplyMetadata | GraphqlCallStartedMetadata | GraphqlNewEmailMetadata | GraphqlInboxReauthRequiredMetadata | GraphqlInviteToTeamMetadata | GraphqlTaskAssignedMetadata | GraphqlReminderMetadata | GraphqlCalendarEventReminderMetadata | GraphqlAiResponseMetadata | GraphqlGithubPrStatusChangedMetadata | GraphqlGithubPrCheckRunMetadata | GraphqlGithubReviewRequestedMetadata | GraphqlGithubPrCommentMetadata | GraphqlGithubPrMentionMetadata | GraphqlGithubPrReviewMetadata | GraphqlAgentSessionSettledMetadata | GraphqlAgentSessionWaitingForInputMetadata | GraphqlAgentSessionMentionedMetadata | GraphqlCalendarEventJoinRequestMetadata
+union GraphqlNotifEvent = GraphqlWhatsappGroupMessageMetadata | GraphqlEntityAccessGrantedMetadata | GraphqlEntityAccessRequestedMetadata | GraphqlChannelMentionMetadata | GraphqlDocumentMentionMetadata | GraphqlMentionedInDocumentCommentMetadata | GraphqlRepliedToDocumentCommentThreadMetadata | GraphqlCommentedOnDocumentMetadata | GraphqlInitiativeDiscussionMetadata | GraphqlCrmDiscussionMetadata | GraphqlChannelInviteMetadata | GraphqlChannelMessageSendMetadata | GraphqlChannelMessageReactionMetadata | GraphqlChannelReplyMetadata | GraphqlCallStartedMetadata | GraphqlNewEmailMetadata | GraphqlInboxReauthRequiredMetadata | GraphqlInviteToTeamMetadata | GraphqlTaskAssignedMetadata | GraphqlReminderMetadata | GraphqlCalendarEventReminderMetadata | GraphqlAiResponseMetadata | GraphqlGithubPrStatusChangedMetadata | GraphqlGithubPrCheckRunMetadata | GraphqlGithubReviewRequestedMetadata | GraphqlGithubPrCommentMetadata | GraphqlGithubPrMentionMetadata | GraphqlGithubPrReviewMetadata | GraphqlAgentSessionSettledMetadata | GraphqlAgentSessionWaitingForInputMetadata | GraphqlAgentSessionMentionedMetadata | GraphqlCalendarEventJoinRequestMetadata
 
 """
-A notification associated with a Soup entity.
+A notification associated with a shared entity, including entities outside Soup.
 """
 type GraphqlNotification {
 	"""
@@ -5769,9 +5773,13 @@ type GraphqlNotification {
 	"""
 	eventType: String!
 	"""
-	The type of the associated entity.
+	The Soup type of the associated entity.
 	"""
-	entityType: GraphqlSoupEntityType!
+	entityType: GraphqlSoupEntityType! @deprecated(reason: "Use targetEntityType, which also covers entities outside Soup. Remove after 2026-12-01.")
+	"""
+	The type of the associated entity, including entities outside Soup.
+	"""
+	targetEntityType: GraphqlEntityType!
 	"""
 	The identifier of the associated entity.
 	"""
@@ -9362,6 +9370,20 @@ type GraphqlUser {
 	Fetch a page of Soup items using the existing Soup filter AST format.
 	"""
 	soup(input: SoupInput!): SoupPage!
+}
+
+"""
+Metadata for a message in an independently shared WhatsApp group.
+"""
+type GraphqlWhatsappGroupMessageMetadata {
+	"""
+	Display name of the group.
+	"""
+	groupName: String!
+	"""
+	Message to open within the group.
+	"""
+	messageId: ID!
 }
 
 """

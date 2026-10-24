@@ -39,6 +39,12 @@ mutations, and the realtime subscription.
 ## Checks
 
 - `cargo test -p graphql_notification` (`SQLX_OFFLINE` unset).
+- `cargo test -p complete_graph sdl_test::schema_types_and_fields_have_descriptions`
+  verifies exported GraphQL descriptions. Document `#[Object]` impl blocks
+  because their documentation supplies the schema type description.
+
+- `notification_event/whatsapp_group.rs` exposes live group-message metadata; its notification targets the standalone group entity.
+- Read a notification's type from `targetEntityType` (canonical `GraphqlEntityType`), so shared entities outside Soup keep their identity. `entityType` keeps its original `GraphqlSoupEntityType` output for deployed clients and is deprecated until 2026-12-01; changing its type would break them (`cargo x graphql-schema-compat`).
 
 ## Related
 

@@ -84,6 +84,8 @@ unreferenced replicas. These additive tables do not change agent-session claims.
 - Quote and alias camelCase columns to Rust field names
   (`SELECT "userId" AS user_id`); don't guess spelling — check `migrations/`.
 
+- The unmerged WhatsApp migrations define standalone group/message/reaction/attachment/read storage; domain queries live in `whatsapp_linked`.
+
 ## Related
 
 - Rules: `.agents/rules/rust/db.md`, `.agents/rules/rust/architecture.md` ·

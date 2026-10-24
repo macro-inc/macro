@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT message_id,emoji,count(*) AS \"count!\",COALESCE(bool_or(user_id=$2),false) AS \"mine!\"\n            FROM whatsapp_group_reaction WHERE message_id=ANY($1) AND emoji<>'' GROUP BY message_id,emoji ORDER BY message_id,emoji",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "emoji",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "count!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "mine!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "d74fb8de39fa5fe592f3878ed7f45c415f62f864799389ef6c0b08200a2a5002"
+}

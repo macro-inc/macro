@@ -2037,3 +2037,47 @@ mod initiative_discussion;
 pub use initiative_discussion::{InitiativeDiscussionMetadata, InitiativeDiscussionReason};
 mod crm_discussion;
 pub use crm_discussion::{CrmDiscussionMetadata, CrmDiscussionReason};
+
+/// A live message in an independently shared WhatsApp group.
+#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct WhatsappGroupMessageMetadata {
+    /// Group name, independent of its remote subject.
+    pub group_name: String,
+    /// Stable message id; retries use it as their notification id.
+    pub message_id: Uuid,
+}
+impl Notification for WhatsappGroupMessageMetadata {
+    const TYPE_NAME: &'static str = "whatsapp_group_message";
+}
+impl NotificationTitle for WhatsappGroupMessageMetadata {
+    fn format_title(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        Ok(self.group_name.clone())
+    }
+    fn format_body(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        Ok("New WhatsApp message".to_owned())
+    }
+}
+
+impl NotificationExtIos for WhatsappGroupMessageMetadata {
+    type NotifData = PushNotificationData;
+
+    fn collapse_key(&self, entity: &Entity<'_>) -> NotifCollapseKey {
+        NotifCollapseKey::new("whatsapp_group").append(&entity.entity_id)
+    }
+
+    fn as_apns<'a>(
+        &self,
+        sender_id: Option<MacroUserIdStr<'a>>,
+        _entity: &Entity<'_>,
+        notification_id: Uuid,
+    ) -> Option<APNSPushNotification<Self::NotifData>> {
+        alert_apns(self, sender_id, notification_id, None).ok()
+    }
+}

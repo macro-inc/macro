@@ -90,6 +90,7 @@ complete_graph = { path = "../../crates/complete_graph" }
 connection = { path = "../../crates/connection", default-features = false, features = [
   "outbound",
 ] }
+channel_sender = { path = "../../crates/channel_sender" }
 connection_gateway_client = { path = "../../crates/connection_gateway_client" }
 contacts = { path = "../../crates/contacts" }
 cowlike = { path = "../../crates/cowlike" }
@@ -241,6 +242,7 @@ search_service = { path = "../../crates/search_service" }
 secretsmanager_client = { path = "../../crates/secretsmanager_client" }
 serde = { workspace = true }
 serde_json = { workspace = true }
+whatsapp_linked = { path = "../../crates/whatsapp_linked", features = ["inbound", "outbound"] }
 slack_integration = { path = "../../crates/slack_integration", features = [
   "gateway",
   "inbound",

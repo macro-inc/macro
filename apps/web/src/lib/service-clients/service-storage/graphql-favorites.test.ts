@@ -89,6 +89,22 @@ describe('favorites GraphQL mutations', () => {
     });
   });
 
+  it('favorites an independent WhatsApp group without inventing a Soup entity', async () => {
+    await executeGraphqlSetFavoriteMutation(
+      client,
+      { entityType: 'whatsapp_group', entityId: 'group-1' },
+      true,
+      0
+    );
+    expect(mutationMock.mock.calls[0][1]).toMatchObject({
+      entity: { type: 'WHATSAPP_GROUP', id: 'group-1' },
+    });
+    expect(
+      mutationMock.mock.calls[0][2].normalizedCacheOptimistic.optimisticResponse
+        .setFavorite.result.effects
+    ).toEqual([]);
+  });
+
   it.each([
     { entityType: 'email_thread', typename: 'GraphqlSoupEmailThread' },
     { entityType: 'initiative', typename: 'GraphqlSoupInitiative' },

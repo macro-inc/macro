@@ -1,0 +1,65 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, user_id, group_id, payload, state, message_id, error_code, created_at FROM whatsapp_send\n            WHERE group_id = $1 AND user_id = $2 AND state IN ('pending', 'sending', 'unknown', 'failed')\n              AND created_at > now() - interval '7 days'\n            ORDER BY created_at DESC LIMIT 50",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "group_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "payload",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 4,
+        "name": "state",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "message_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "error_code",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "93d8a11b504854fd3aa76f3946b347851583fa2bb4e2bd2203c75f2317c8d476"
+}

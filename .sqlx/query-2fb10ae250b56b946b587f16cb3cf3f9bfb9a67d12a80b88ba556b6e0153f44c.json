@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT b.id FROM whatsapp_group b\n        WHERE b.group_jid = $1 AND b.state <> 'detached' AND whatsapp_group_can_view(b.id, $2)\n          AND ($3::uuid[] IS NULL OR b.id = ANY($3))",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "2fb10ae250b56b946b587f16cb3cf3f9bfb9a67d12a80b88ba556b6e0153f44c"
+}

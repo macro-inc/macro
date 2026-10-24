@@ -79,6 +79,27 @@ pub async fn get_document_access(
             AND source_id = ANY($2)
 
             UNION ALL
+            SELECT 'view'::text AS access_level FROM whatsapp_group_attachment wa
+            JOIN whatsapp_group_message wm ON wm.binding_id=wa.binding_id AND wm.person_id=wa.person_id AND wm.source_id=wa.source_id
+            WHERE wa.document_id=$1 AND wa.state='ready' AND wm.deleted_at IS NULL
+              AND (
+                whatsapp_group_can_view(wm.binding_id,$4)
+                OR EXISTS (
+                  SELECT 1 FROM entity_access ga
+                  WHERE ga.entity_id=wm.binding_id AND ga.entity_type='whatsapp_group'
+                    AND ga.source_id=ANY($2)
+                )
+                OR EXISTS (
+                  SELECT 1 FROM whatsapp_group wg
+                  JOIN "SharePermission" sp ON sp.id=wg.share_permission_id
+                  JOIN team_user owner_team ON owner_team.user_id=wg.user_id
+                  WHERE wg.id=wm.binding_id AND sp."linkShare"='TEAM'
+                    AND sp."linkShareAccessLevel" IS NOT NULL
+                    AND owner_team.team_id::text=ANY($2)
+                )
+              )
+
+            UNION ALL
             -- Source 2: document link share permission
             SELECT
                 share_permission."linkShareAccessLevel"::text AS access_level

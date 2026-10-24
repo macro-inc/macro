@@ -28,6 +28,7 @@ function toItemType(type: EntityRef['type']): ItemType | undefined {
       // items.
       'database',
       'database_row',
+      'whatsapp_group',
       () => undefined
     )
     .otherwise((itemType) => itemType);

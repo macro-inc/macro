@@ -39,6 +39,8 @@ team-level link-share defaults and team sharing.
 
 - `cargo test -p share_permission_db_utils` (`SQLX_OFFLINE` unset).
 
+- `whatsapp_group.share_permission_id` uses the standard permission lookup and canonical explicit team-sharing helpers.
+
 ## Related
 
 - Rules: `.agents/rules/rust/db.md`, `.agents/rules/rust/architecture.md` (CS-27)

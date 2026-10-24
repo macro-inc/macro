@@ -57,6 +57,7 @@ pub fn storage_entity_type(entity_type: AccessEntityType) -> Option<EntityType> 
         | AccessEntityType::CrmPipeline
         | AccessEntityType::Database
         | AccessEntityType::Form
+        | AccessEntityType::WhatsAppGroup
         | AccessEntityType::Team
         | AccessEntityType::ForeignEntity
         | AccessEntityType::StaticFile

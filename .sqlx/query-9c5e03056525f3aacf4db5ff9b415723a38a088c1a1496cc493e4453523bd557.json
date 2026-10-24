@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO whatsapp_group_read_state (user_id,group_id,message_id,read_at)\n            SELECT $2,$1,id,source_at FROM whatsapp_group_message WHERE id = $3 AND binding_id = $1 AND message_id IS NOT NULL\n            ON CONFLICT (user_id,group_id) DO UPDATE SET message_id = excluded.message_id,read_at = excluded.read_at\n            WHERE (whatsapp_group_read_state.read_at,whatsapp_group_read_state.message_id) < (excluded.read_at,excluded.message_id)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9c5e03056525f3aacf4db5ff9b415723a38a088c1a1496cc493e4453523bd557"
+}

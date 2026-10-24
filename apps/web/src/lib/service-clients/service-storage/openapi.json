@@ -12090,7 +12090,8 @@
                   "initiative",
                   "database",
                   "database_row",
-                  "form"
+                  "form",
+                  "whatsapp_group"
                 ]
               }
             },
@@ -12309,7 +12310,8 @@
                 "initiative",
                 "database",
                 "database_row",
-                "form"
+                "form",
+                "whatsapp_group"
               ]
             }
           },
@@ -16026,6 +16028,662 @@
         }
       }
     },
+    "/meta/linked/account": {
+      "get": {
+        "tags": ["whatsapp_linked::inbound::router"],
+        "summary": "The caller's own account.",
+        "operationId": "linked_account",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkedAccountView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meta/linked/configuration": {
+      "get": {
+        "tags": ["whatsapp_linked::inbound::router"],
+        "summary": "Server rollout switches.",
+        "operationId": "linked_configuration",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkedFeatures"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meta/linked/connect": {
+      "post": {
+        "tags": ["whatsapp_linked::inbound::router"],
+        "summary": "Start or resume the caller's pairing transaction.",
+        "operationId": "linked_connect",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LinkedConnect"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkedPairing"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meta/linked/disconnect": {
+      "post": {
+        "tags": ["whatsapp_linked::inbound::router"],
+        "summary": "End the caller's observation consent.",
+        "operationId": "linked_disconnect",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LinkedDisconnectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkedDisconnect"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meta/linked/groups": {
+      "get": {
+        "tags": ["whatsapp_linked::inbound::router"],
+        "summary": "Groups the caller's account has joined.",
+        "operationId": "linked_groups",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/LinkedGroupInfo"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meta/linked/groups/adopt": {
+      "post": {
+        "tags": ["whatsapp_linked::inbound::router"],
+        "summary": "Adopt one of the caller's groups into a standalone group entity.",
+        "operationId": "linked_adopt",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LinkedAdoptGroup"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdoptedGroup"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meta/linked/pairing/{id}": {
+      "get": {
+        "tags": ["whatsapp_linked::inbound::router"],
+        "summary": "Poll the caller's pairing transaction, including its current QR code.",
+        "operationId": "linked_pairing",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkedPairState"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["whatsapp_linked::inbound::router"],
+        "summary": "Cancel the caller's pairing transaction.",
+        "operationId": "linked_cancel_pairing",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/meta/linked/pairing/{id}/passkey": {
+      "post": {
+        "tags": ["whatsapp_linked::inbound::router"],
+        "summary": "Forward the owner's WebAuthn assertion to the pairing replica.",
+        "operationId": "linked_passkey",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/meta/linked/whatsapp-groups": {
+      "get": {
+        "tags": ["whatsapp_linked::inbound::router"],
+        "summary": "List adopted groups the caller can view, including without WhatsApp.",
+        "operationId": "whatsapp_groups",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WhatsAppGroupSummary"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meta/linked/whatsapp-groups/{group_id}": {
+      "get": {
+        "tags": ["whatsapp_linked::inbound::router"],
+        "summary": "Linked metadata for a group the caller can read.",
+        "operationId": "whatsapp_group",
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WhatsAppGroupDetail"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["whatsapp_linked::inbound::router"],
+        "summary": "Stop syncing the group, locally.",
+        "operationId": "linked_detach",
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/meta/linked/whatsapp-groups/{group_id}/attachments": {
+      "post": {
+        "tags": ["whatsapp_linked::inbound::router"],
+        "summary": "Stage one attachment for a later media reply in this group.",
+        "operationId": "linked_upload",
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/LinkedUploadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkedUploadedAttachment"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meta/linked/whatsapp-groups/{group_id}/delivery": {
+      "post": {
+        "tags": ["whatsapp_linked::inbound::router"],
+        "summary": "The caller's send progress for intents or group messages.",
+        "operationId": "linked_delivery",
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/LinkedSendProgress"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meta/linked/whatsapp-groups/{group_id}/messages": {
+      "get": {
+        "tags": ["whatsapp_linked::inbound::router"],
+        "summary": "Newest-first timeline through ordinary view access.",
+        "operationId": "whatsapp_group_messages",
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "description": "Last message id in the previous page.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"],
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size, 1 through 100.",
+            "required": false,
+            "schema": {
+              "type": ["integer", "null"],
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WhatsAppGroupMessages"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meta/linked/whatsapp-groups/{group_id}/messages/attachments": {
+      "post": {
+        "tags": ["whatsapp_linked::inbound::router"],
+        "summary": "Attachment states of linked messages, by group message id (at most 100).",
+        "operationId": "linked_message_attachments",
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/LinkedMessageAttachments"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meta/linked/whatsapp-groups/{group_id}/permissions": {
+      "get": {
+        "tags": ["whatsapp_linked::inbound::router"],
+        "summary": "Generic Share dialog policy.",
+        "operationId": "whatsapp_group_permissions",
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SharePermissionV2"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["whatsapp_linked::inbound::router"],
+        "summary": "Actual owner updates link and team sharing.",
+        "operationId": "whatsapp_group_update_permissions",
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSharePermissionRequestV2"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/meta/linked/whatsapp-groups/{group_id}/read": {
+      "post": {
+        "tags": ["whatsapp_linked::inbound::router"],
+        "summary": "Advance this viewer's read position.",
+        "operationId": "whatsapp_group_read",
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkRead"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/meta/linked/whatsapp-groups/{group_id}/sends": {
+      "get": {
+        "tags": ["whatsapp_linked::inbound::router"],
+        "summary": "Caller-owned pending, failed and uncertain sends.",
+        "operationId": "whatsapp_group_sends",
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/LinkedSendProgress"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["whatsapp_linked::inbound::router"],
+        "summary": "Send to WhatsApp from the caller's own account (one request per second per user).",
+        "operationId": "linked_reply",
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LinkedSendReply"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkedSendProgress"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "One send request per second per user; Retry-After: 1"
+          }
+        }
+      }
+    },
     "/pins": {
       "get": {
         "tags": ["pins::get_pins"],
@@ -19102,7 +19760,8 @@
                   "initiative",
                   "database",
                   "database_row",
-                  "form"
+                  "form",
+                  "whatsapp_group"
                 ]
               }
             ],
@@ -19137,6 +19796,18 @@
           "pinType": {
             "type": "string",
             "description": "The type of the pin"
+          }
+        }
+      },
+      "AdoptedGroup": {
+        "type": "object",
+        "description": "Adoption response.",
+        "required": ["group_id"],
+        "properties": {
+          "group_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Shareable entity identifier."
           }
         }
       },
@@ -23456,7 +24127,8 @@
                   "initiative",
                   "database",
                   "database_row",
-                  "form"
+                  "form",
+                  "whatsapp_group"
                 ]
               }
             ],
@@ -28142,7 +28814,8 @@
                   "initiative",
                   "database",
                   "database_row",
-                  "form"
+                  "form",
+                  "whatsapp_group"
                 ]
               }
             ],
@@ -28599,7 +29272,8 @@
                   "initiative",
                   "database",
                   "database_row",
-                  "form"
+                  "form",
+                  "whatsapp_group"
                 ]
               }
             ],
@@ -28653,7 +29327,8 @@
                   "initiative",
                   "database",
                   "database_row",
-                  "form"
+                  "form",
+                  "whatsapp_group"
                 ]
               }
             ],
@@ -32608,6 +33283,627 @@
         "description": "Defines who can access an item through its share link.",
         "enum": ["PUBLIC", "TEAM"]
       },
+      "LinkedAccount": {
+        "type": "object",
+        "description": "One person's account, never owned by a workspace.",
+        "required": ["id", "user_id", "state", "authorization_generation"],
+        "properties": {
+          "authorization_generation": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Explicit consent generation; reconnecting a socket never changes it."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable account identity."
+          },
+          "identity_jid": {
+            "type": ["string", "null"],
+            "description": "WhatsApp-verified identity, absent until the first pairing succeeds."
+          },
+          "state": {
+            "$ref": "#/components/schemas/LinkedAccountState",
+            "description": "Lifecycle."
+          },
+          "user_id": {
+            "type": "string",
+            "description": "Authenticated owner."
+          }
+        }
+      },
+      "LinkedAccountState": {
+        "type": "string",
+        "description": "Account lifecycle. Transport outages are not stored: a connected account\nstays connected while its session service reconnects.",
+        "enum": ["pairing", "connected", "logged_out", "disconnected"]
+      },
+      "LinkedAccountView": {
+        "type": "object",
+        "description": "Owner-scoped account state, including not connected.",
+        "properties": {
+          "account": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LinkedAccount",
+                "description": "The caller's account, when one exists."
+              }
+            ]
+          }
+        }
+      },
+      "LinkedAdoptGroup": {
+        "type": "object",
+        "description": "Explicit adoption request; the account is selected server-side.",
+        "required": ["group_jid"],
+        "properties": {
+          "group_jid": {
+            "type": "string",
+            "description": "Group the requester's account has joined."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Name for a newly created group entity; defaults to the group subject."
+          },
+          "team_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Destination workspace."
+          }
+        }
+      },
+      "LinkedAttachment": {
+        "type": "object",
+        "description": "One attachment of a linked message.",
+        "required": ["ordinal", "state", "file_name", "mime", "size"],
+        "properties": {
+          "document_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The private document, once ready."
+          },
+          "file_name": {
+            "type": "string",
+            "description": "Display filename."
+          },
+          "mime": {
+            "type": "string",
+            "description": "Declared MIME type."
+          },
+          "ordinal": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Position within the message."
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Declared size in bytes.",
+            "minimum": 0
+          },
+          "state": {
+            "$ref": "#/components/schemas/LinkedAttachmentState",
+            "description": "Current state."
+          }
+        }
+      },
+      "LinkedAttachmentState": {
+        "type": "string",
+        "description": "Where an attachment of a linked message stands.",
+        "enum": ["loading", "ready", "unavailable", "unsupported"]
+      },
+      "LinkedCapabilities": {
+        "type": "object",
+        "description": "Operations implemented for linked groups, independent of current permission.",
+        "required": [
+          "text_limit_bytes",
+          "mutations",
+          "mutation_window_seconds",
+          "max_attachments",
+          "attachment_limit_bytes",
+          "attachment_types"
+        ],
+        "properties": {
+          "attachment_limit_bytes": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Largest attachment in bytes.",
+            "minimum": 0
+          },
+          "attachment_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Supported attachment MIME types."
+          },
+          "max_attachments": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Attachments per send.",
+            "minimum": 0
+          },
+          "mutation_window_seconds": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Edits and deletes are offered this long after sending.",
+            "minimum": 0
+          },
+          "mutations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LinkedMutation"
+            },
+            "description": "Supported message operations."
+          },
+          "text_limit_bytes": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Maximum UTF-8 bytes per text send.",
+            "minimum": 0
+          }
+        }
+      },
+      "LinkedConnect": {
+        "type": "object",
+        "description": "Explicit pairing intent; replacement is a separate deliberate action.",
+        "properties": {
+          "replace": {
+            "type": "boolean",
+            "description": "Replace the retained identity with a different WhatsApp account."
+          }
+        }
+      },
+      "LinkedDeliveryState": {
+        "type": "string",
+        "description": "Observed send state. `unknown` means the request may have reached WhatsApp;\nit is never sent again automatically.",
+        "enum": [
+          "pending",
+          "sending",
+          "unknown",
+          "accepted",
+          "sent",
+          "delivered",
+          "read",
+          "failed"
+        ]
+      },
+      "LinkedDisconnect": {
+        "type": "object",
+        "description": "Result of disconnecting an account.",
+        "required": ["remote_unlink_requested"],
+        "properties": {
+          "remote_unlink_requested": {
+            "type": "boolean",
+            "description": "The session service was asked to log the device out of WhatsApp. It\nunlinks asynchronously; WhatsApp's Linked devices list is authoritative."
+          }
+        }
+      },
+      "LinkedDisconnectRequest": {
+        "type": "object",
+        "description": "The consent generation the owner deliberately disconnects.",
+        "required": ["authorization_generation"],
+        "properties": {
+          "authorization_generation": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Fences retries against a later reconnect or replacement."
+          }
+        }
+      },
+      "LinkedFeatures": {
+        "type": "object",
+        "description": "Independently controlled backend rollout switches. None grants access.",
+        "required": ["pairing", "adoption", "sending"],
+        "properties": {
+          "adoption": {
+            "type": "boolean",
+            "description": "Allow explicit existing-group adoption and access grants."
+          },
+          "pairing": {
+            "type": "boolean",
+            "description": "Allow new owner-bound pairing transactions."
+          },
+          "sending": {
+            "type": "boolean",
+            "description": "Allow new deliberate sends."
+          }
+        }
+      },
+      "LinkedGroupInfo": {
+        "type": "object",
+        "description": "One full metadata read of a group, never an incomplete membership delta.",
+        "required": [
+          "jid",
+          "name",
+          "participants",
+          "announce",
+          "disappearing",
+          "community",
+          "observedAt"
+        ],
+        "properties": {
+          "announce": {
+            "type": "boolean",
+            "description": "Only admins may post."
+          },
+          "community": {
+            "type": "boolean",
+            "description": "Community announcement or parent group, outside the supported surface."
+          },
+          "disappearing": {
+            "type": "boolean",
+            "description": "Disappearing messages are on; content is not retained."
+          },
+          "group": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LinkedGroupReference",
+                "description": "The caller's adopted entity for this remote group, when one is adopted in their\nworkspace and they can see it. Only set by the groups listing."
+              }
+            ]
+          },
+          "jid": {
+            "type": "string",
+            "description": "Remote group JID."
+          },
+          "name": {
+            "type": "string",
+            "description": "Current subject."
+          },
+          "observedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the session service read this metadata."
+          },
+          "participants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LinkedParticipant"
+            },
+            "description": "Full roster."
+          }
+        }
+      },
+      "LinkedGroupReference": {
+        "type": "object",
+        "description": "A group entity bound to a group.",
+        "required": ["id", "name"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Group entity id."
+          },
+          "name": {
+            "type": "string",
+            "description": "Channel name."
+          }
+        }
+      },
+      "LinkedIdentity": {
+        "type": "object",
+        "description": "Verified sender aliases, supplied only by protocol metadata.",
+        "required": ["jid"],
+        "properties": {
+          "alternateJid": {
+            "type": ["string", "null"],
+            "description": "Verified alternate identity, never inferred from a name or phone typed by a user."
+          },
+          "displayName": {
+            "type": ["string", "null"],
+            "description": "Untrusted display name."
+          },
+          "jid": {
+            "type": "string",
+            "description": "Phone-number or LID account JID."
+          }
+        }
+      },
+      "LinkedMediaKind": {
+        "type": "string",
+        "description": "Attachment categories WhatsApp distinguishes.",
+        "enum": ["image", "audio", "video", "document"]
+      },
+      "LinkedMessageAttachments": {
+        "type": "object",
+        "description": "The attachments of one linked group message.",
+        "required": ["message_id", "linked_attachments"],
+        "properties": {
+          "linked_attachments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LinkedAttachment"
+            },
+            "description": "Its attachments in order; deleted ones are omitted."
+          },
+          "message_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Group message."
+          }
+        }
+      },
+      "LinkedMutation": {
+        "type": "string",
+        "description": "Deliberate operations on an existing linked-group message.",
+        "enum": ["reaction", "edit", "delete"]
+      },
+      "LinkedPairState": {
+        "type": "object",
+        "description": "Owner-only pairing status. Deliberately has no `Debug` implementation: the\nQR and pairing code are secrets for the duration of the transaction.",
+        "required": ["state", "expiresAt"],
+        "properties": {
+          "challenge": {
+            "type": ["object", "null"],
+            "description": "WhatsApp's WebAuthn request options while the state is `passkey`; the\nnative authenticator answers through the passkey route."
+          },
+          "code": {
+            "type": ["string", "null"],
+            "description": "Pairing code to type on the phone, when phone-number pairing is used."
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Same owner-bound deadline."
+          },
+          "identityJid": {
+            "type": ["string", "null"],
+            "description": "Verified identity once paired."
+          },
+          "qr": {
+            "type": ["string", "null"],
+            "description": "Current QR content; rotates while the transaction waits."
+          },
+          "state": {
+            "$ref": "#/components/schemas/LinkedPairingState",
+            "description": "Current state."
+          }
+        }
+      },
+      "LinkedPairing": {
+        "type": "object",
+        "description": "Owner-bound pairing transaction, without its QR or pairing code.",
+        "required": ["id", "account_id", "state", "expires_at"],
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Account being connected."
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Database-assigned deadline."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "One-use transaction id."
+          },
+          "state": {
+            "$ref": "#/components/schemas/LinkedPairingState",
+            "description": "Current state."
+          }
+        }
+      },
+      "LinkedPairingState": {
+        "type": "string",
+        "description": "Pairing transaction state.",
+        "enum": [
+          "waiting",
+          "qr",
+          "passkey",
+          "success",
+          "expired",
+          "cancelled",
+          "failed"
+        ]
+      },
+      "LinkedParticipant": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/LinkedIdentity",
+            "description": "Identity evidence."
+          },
+          {
+            "type": "object",
+            "required": ["admin"],
+            "properties": {
+              "admin": {
+                "type": "boolean",
+                "description": "Group admin; only admins post in announcement groups."
+              }
+            }
+          }
+        ],
+        "description": "Current remote participant; Macro access is a separate grant."
+      },
+      "LinkedReplyBlock": {
+        "type": "string",
+        "description": "Why the viewer cannot send now.",
+        "enum": [
+          "sending_disabled",
+          "no_account",
+          "disconnected",
+          "not_observing",
+          "not_allowed_in_group",
+          "refreshing",
+          "group_unavailable"
+        ]
+      },
+      "LinkedReplyContent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Plain text.",
+            "required": ["text", "type"],
+            "properties": {
+              "text": {
+                "type": "string",
+                "description": "UTF-8 text, at most [`TEXT_LIMIT_BYTES`] bytes."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["text"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "One attachment staged through the attachments route.",
+            "required": ["upload_id", "type"],
+            "properties": {
+              "caption": {
+                "type": ["string", "null"],
+                "description": "Optional caption; audio has none."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["media"]
+              },
+              "upload_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The staged upload, which becomes the message's private document."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An operation on an existing message in this group.",
+            "required": ["message_id", "operation", "type"],
+            "properties": {
+              "message_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Existing group message, resolved to its WhatsApp source by the server."
+              },
+              "operation": {
+                "$ref": "#/components/schemas/LinkedMutation",
+                "description": "Explicit operation."
+              },
+              "text": {
+                "type": ["string", "null"],
+                "description": "Replacement text or emoji; absent for delete, empty to remove a reaction."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["mutation"]
+              }
+            }
+          }
+        ],
+        "description": "Content of a deliberate send."
+      },
+      "LinkedSendProgress": {
+        "type": "object",
+        "description": "Durable result of a deliberate send.",
+        "required": [
+          "id",
+          "user_id",
+          "group_id",
+          "payload",
+          "state",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Intent creation time."
+          },
+          "error_code": {
+            "type": ["string", "null"],
+            "description": "Sanitized failure code."
+          },
+          "group_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Group entity."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable intent id."
+          },
+          "message_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Group message, once WhatsApp accepted it."
+          },
+          "payload": {
+            "$ref": "#/components/schemas/LinkedSendReply",
+            "description": "The original request, so a failed draft can be recovered."
+          },
+          "state": {
+            "$ref": "#/components/schemas/LinkedDeliveryState",
+            "description": "Current state."
+          },
+          "user_id": {
+            "type": "string",
+            "description": "Person who submitted it."
+          }
+        }
+      },
+      "LinkedSendReply": {
+        "type": "object",
+        "description": "Explicit send action from a person. Only deliberate sends reach WhatsApp.",
+        "required": ["idempotency_key", "message"],
+        "properties": {
+          "idempotency_key": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable client intent key. A changed payload with this key is a conflict."
+          },
+          "message": {
+            "$ref": "#/components/schemas/LinkedReplyContent",
+            "description": "Content."
+          },
+          "reply_to": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Group message being quoted, within this group."
+          }
+        }
+      },
+      "LinkedUploadRequest": {
+        "type": "object",
+        "description": "Multipart body of the attachments route.",
+        "required": ["file"],
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "description": "One supported image, audio, video, PDF or text file."
+          }
+        }
+      },
+      "LinkedUploadedAttachment": {
+        "type": "object",
+        "description": "A staged attachment, sent only by a later deliberate send.",
+        "required": ["upload_id", "filename", "kind"],
+        "properties": {
+          "filename": {
+            "type": "string",
+            "description": "Display filename."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/LinkedMediaKind",
+            "description": "Category."
+          },
+          "upload_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Use as `upload_id` in a media send; also the future document id."
+          }
+        }
+      },
       "ListDatabaseWebhooksResponse": {
         "type": "object",
         "description": "A database's webhooks.",
@@ -32777,6 +34073,18 @@
       },
       "MacroUserIdStr": {
         "type": "string"
+      },
+      "MarkRead": {
+        "type": "object",
+        "description": "Mark messages through this message read.",
+        "required": ["message_id"],
+        "properties": {
+          "message_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Message in the addressed group."
+          }
+        }
       },
       "Meeting": {
         "type": "object",
@@ -37534,7 +38842,8 @@
           "database",
           "call",
           "email_thread",
-          "agent_session"
+          "agent_session",
+          "whatsapp_group"
         ]
       },
       "SharePermissionV2": {
@@ -43080,6 +44389,230 @@
           "webhook_id": {
             "$ref": "#/components/schemas/String",
             "description": "Webhook being validated."
+          }
+        }
+      },
+      "WhatsAppGroupDetail": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/WhatsAppGroupSummary",
+            "description": "List metadata."
+          },
+          {
+            "type": "object",
+            "required": ["share_permission", "access_level", "limits"],
+            "properties": {
+              "access_level": {
+                "$ref": "#/components/schemas/AccessLevel",
+                "description": "Caller's effective permission."
+              },
+              "limits": {
+                "$ref": "#/components/schemas/LinkedCapabilities",
+                "description": "Size and mutation limits."
+              },
+              "roster": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/LinkedGroupInfo",
+                    "description": "Latest remote metadata, absent when no observer is connected."
+                  }
+                ]
+              },
+              "sending_identity": {
+                "type": ["string", "null"],
+                "description": "Caller's own phone identity, never another account's identity."
+              },
+              "share_permission": {
+                "$ref": "#/components/schemas/SharePermissionV2",
+                "description": "Owner-controlled standard sharing configuration."
+              }
+            }
+          }
+        ],
+        "description": "Full group detail and current viewer capabilities."
+      },
+      "WhatsAppGroupMessage": {
+        "type": "object",
+        "description": "One message in an adopted group.",
+        "required": [
+          "id",
+          "sender",
+          "body",
+          "sent_at",
+          "received_at",
+          "deleted",
+          "reactions",
+          "attachments"
+        ],
+        "properties": {
+          "attachments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LinkedAttachment"
+            },
+            "description": "Imported or pending attachments."
+          },
+          "body": {
+            "type": "string",
+            "description": "Plain WhatsApp text."
+          },
+          "deleted": {
+            "type": "boolean",
+            "description": "Deleted for everyone."
+          },
+          "delivery_state": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LinkedDeliveryState",
+                "description": "Delivery state for the caller's deliberate send only."
+              }
+            ]
+          },
+          "edited_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Last edit timestamp."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable message id."
+          },
+          "reactions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WhatsAppGroupReaction"
+            },
+            "description": "Reactions grouped by emoji."
+          },
+          "received_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp first received by Macro."
+          },
+          "reply_to": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Message quoted by this one."
+          },
+          "sender": {
+            "$ref": "#/components/schemas/WhatsAppGroupSender",
+            "description": "Sender."
+          },
+          "sent_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp assigned by WhatsApp."
+          }
+        }
+      },
+      "WhatsAppGroupMessages": {
+        "type": "object",
+        "description": "Newest-first timeline page; `before` is the last returned message id.",
+        "required": ["messages"],
+        "properties": {
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WhatsAppGroupMessage"
+            },
+            "description": "Messages in descending sent_at, id order."
+          },
+          "next_cursor": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Cursor for older messages."
+          }
+        }
+      },
+      "WhatsAppGroupReaction": {
+        "type": "object",
+        "description": "Grouped reactions.",
+        "required": ["emoji", "count", "mine"],
+        "properties": {
+          "count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of reacting people."
+          },
+          "emoji": {
+            "type": "string",
+            "description": "Emoji."
+          },
+          "mine": {
+            "type": "boolean",
+            "description": "Caller has this reaction."
+          }
+        }
+      },
+      "WhatsAppGroupSender": {
+        "type": "object",
+        "description": "Message sender from protocol-verified identity evidence.",
+        "required": ["person_id", "name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Display name, never authentication evidence."
+          },
+          "person_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "External person identity."
+          },
+          "user_id": {
+            "type": ["string", "null"],
+            "description": "Verified Macro user association, if present."
+          }
+        }
+      },
+      "WhatsAppGroupSummary": {
+        "type": "object",
+        "description": "Adopted group visible through ordinary entity sharing.",
+        "required": ["id", "name", "user_id", "unread_count", "can_send"],
+        "properties": {
+          "can_send": {
+            "type": "boolean",
+            "description": "Caller may currently send from their own account."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Entity identifier."
+          },
+          "last_message_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Latest message timestamp."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "send_reason": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LinkedReplyBlock",
+                "description": "Reason sending is blocked."
+              }
+            ]
+          },
+          "unread_count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Unread live messages for this viewer."
+          },
+          "user_id": {
+            "type": "string",
+            "description": "Actual entity owner."
           }
         }
       },

@@ -43,6 +43,8 @@ types.
 
 - `cargo test -p model_notifications` (`SQLX_OFFLINE` unset).
 
+- `whatsapp_group_message` carries group name and message id for standalone group navigation.
+
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`

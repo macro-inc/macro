@@ -54,6 +54,8 @@ distribution.
 
 - `cargo test -p activity` (`SQLX_OFFLINE` unset).
 
+- Standalone WhatsApp groups have their own unread state and are excluded from activity ranking/Soup until that integration is added.
+
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/db.md`
