@@ -85,9 +85,8 @@ pub(super) async fn thread_mail_projections_by_ids(
         r#"
         WITH message_facts AS (
             SELECT m.id, m.thread_id, m.is_draft, m.is_read,
-                m.is_draft AND m.provider_id IS NULL AS macro_draft,
-                ((facts.in_inbox AND NOT facts.in_sent)
-                    OR (m.is_draft AND m.provider_id IS NULL)) AS inbox_visible,
+                draft.macro_draft,
+                ((facts.in_inbox AND NOT facts.in_sent) OR draft.macro_draft) AS inbox_visible,
                 NOT facts.in_trash
                 AND LOWER(SPLIT_PART(c.email_address, '@', 2)) IS DISTINCT FROM $3
                 AND (
@@ -106,11 +105,11 @@ pub(super) async fn thread_mail_projections_by_ids(
                             SELECT 1 FROM email_message_recipients r
                             WHERE r.message_id = m.id AND r.contact_id = m.from_contact_id
                         )) THEN m.internal_date_ts END,
-                    CASE WHEN m.is_draft AND m.provider_id IS NULL THEN m.updated_at END
+                    CASE WHEN draft.macro_draft THEN m.updated_at END
                 ) AS inbound_ts,
                 GREATEST(
                     CASE WHEN NOT (facts.in_junk OR facts.in_trash) THEN m.internal_date_ts END,
-                    CASE WHEN m.is_draft AND m.provider_id IS NULL THEN m.updated_at END
+                    CASE WHEN draft.macro_draft THEN m.updated_at END
                 ) AS all_ts,
                 CASE WHEN m.is_sent AND NOT facts.in_trash THEN m.internal_date_ts END AS sent_ts,
                 CASE WHEN NOT facts.in_trash THEN COALESCE(m.internal_date_ts, m.created_at) END AS preview_ts,
@@ -121,6 +120,12 @@ pub(super) async fn thread_mail_projections_by_ids(
             FROM email_messages m
             LEFT JOIN email_contacts c ON c.id = m.from_contact_id
             JOIN email_message_mailbox_facts facts ON facts.id = m.id
+            -- Same Macro-draft rule as `recompute_thread_metadata`.
+            CROSS JOIN LATERAL (
+                SELECT m.is_draft AND (m.provider_id IS NULL OR EXISTS (
+                    SELECT 1 FROM email_mailbox_drafts d WHERE d.message_id = m.id AND NOT d.delete_requested
+                )) AS macro_draft
+            ) draft
             CROSS JOIN LATERAL (
                 SELECT COALESCE(bool_or(f.is_important) FILTER (WHERE LOWER(f.email_address) = LOWER(c.email_address)), false) AS address_true,
                     COALESCE(bool_or(NOT f.is_important) FILTER (WHERE LOWER(f.email_address) = LOWER(c.email_address)), false) AS address_false,

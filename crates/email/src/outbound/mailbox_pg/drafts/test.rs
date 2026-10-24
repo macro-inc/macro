@@ -372,6 +372,39 @@ fn checkpoint(lease: &DraftLease, stage: DraftStage) -> DraftCheckpoint {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_synced_macro_draft_keeps_its_thread_out_of_archived_mail(db: PgPool) {
+    let (sync, _, input, link) = setup(&db, false).await;
+    let lease = sync
+        .claim_draft(
+            Uuid::now_v7(),
+            crate::domain::mailbox::drafts::models::DraftClaimMode::All,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    sync.settle_draft(&lease, &checkpoint(&lease, DraftStage::Ready))
+        .await
+        .unwrap();
+    let work = sync.claim_message(Uuid::now_v7()).await.unwrap().unwrap();
+    let state = MailboxState {
+        is_draft: true,
+        ..MailboxState::default()
+    };
+    sync.ingest(&work, snapshot(link, "a", state, "v2"))
+        .await
+        .unwrap();
+    let thread = sqlx::query!(
+        "SELECT inbox_visible,latest_inbound_message_ts FROM email_threads WHERE id = $1",
+        input.thread_db_id
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert!(thread.inbox_visible);
+    assert!(thread.latest_inbound_message_ts.is_some());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn saving_an_imported_draft_keeps_its_provider_identity_and_baseline(db: PgPool) {
     let (_, _, input, _) = setup(&db, true).await;
     let row=sqlx::query!("SELECT m.provider_id,d.base_version,d.revision,d.desired_content FROM email_messages m JOIN email_mailbox_drafts d ON d.message_id = m.id WHERE m.id = $1",input.db_id).fetch_one(&db).await.unwrap();

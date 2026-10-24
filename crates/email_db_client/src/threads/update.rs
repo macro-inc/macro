@@ -180,7 +180,10 @@ pub async fn recompute_thread_metadata(
     sqlx::query!(r#"
         WITH facts AS (
             SELECT m.*, f.in_inbox,f.in_trash,f.in_junk,f.in_sent,
-                m.is_draft AND m.provider_id IS NULL AS local_draft,
+                -- Outlook drafts composed in Macro gain a provider id once synced; their shadow row keeps them Macro drafts.
+                m.is_draft AND (m.provider_id IS NULL OR EXISTS (
+                    SELECT 1 FROM email_mailbox_drafts d WHERE d.message_id = m.id AND NOT d.delete_requested
+                )) AS local_draft,
                 EXISTS (SELECT 1 FROM email_message_recipients r WHERE r.message_id = m.id AND r.contact_id = m.from_contact_id) AS sender_is_recipient
             FROM email_messages m JOIN email_message_mailbox_facts f ON f.id = m.id
             WHERE m.thread_id = $1 AND m.link_id = $2 AND f.is_present
