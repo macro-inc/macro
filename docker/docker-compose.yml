@@ -348,9 +348,6 @@ services:
       # FusionAuth, which lives on that network only.
       auth:
       databases:
-      # `auth` too: the public MCP resolves the Google identity provider in
-      # FusionAuth at boot, and FusionAuth answers only on this network.
-      auth:
       services:
         aliases:
           # Hyphens, because a sandbox's git reaches the egress proxy by this
