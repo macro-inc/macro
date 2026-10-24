@@ -1,4 +1,5 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { applyAiOps } from '@block-md/ai-edit/applyAiOps';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { GeneralizedPopup } from '@core/component/GeneralizedPopup/Popup';
@@ -20,11 +21,6 @@ import {
   registerRootEventListener,
 } from '@core/component/LexicalMarkdown/plugins';
 import {
-  $canConvertCheckboxesToTasks,
-  CONVERT_CHECKBOXES_TO_TASKS,
-  isCheckboxToTaskPluginEnabled,
-} from '@core/component/LexicalMarkdown/plugins/checkbox-to-task';
-import {
   $getMarkIdsAtCaret,
   CREATE_DRAFT_COMMENT_COMMAND,
 } from '@core/component/LexicalMarkdown/plugins/comments/commentPlugin';
@@ -32,6 +28,7 @@ import {
   $getLocationUrl,
   $getSelectionLocation,
   type PersistentLocation,
+  serializePersistentLocation,
 } from '@core/component/LexicalMarkdown/plugins/location/locationPlugin';
 import {
   popupPlugin,
@@ -49,22 +46,27 @@ import {
   readNativePasteboardText,
   setNativeEditMenuSuppressed,
 } from '@core/mobile/nativeEditMenu';
+import { trackMention } from '@core/signal/mention';
 import { debouncedDependent } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { getScrollParentElement } from '@core/util/scrollParent';
-import type { NodeIdMappings } from '@macro-inc/lexical-core';
+import {
+  $createDocumentMentionNode,
+  buildMentionMarkdownString,
+  type NodeIdMappings,
+} from '@macro-inc/lexical-core';
 import { $getId } from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
 import { Telemetry } from '@macro-inc/observability';
 import ChatTeardrop from '@phosphor/chat-teardrop.svg';
 import GridIcon from '@phosphor/grid-four.svg';
 import CheckIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid';
 import SparkleIcon from '@phosphor-icons/core/bold/sparkle-bold.svg?component-solid';
-import LoadingIcon from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import CheckSquareIcon from '@phosphor-icons/core/regular/check-square.svg?component-solid';
 import LinkIcon from '@phosphor-icons/core/regular/link.svg?component-solid';
 import { makeResizeObserver } from '@solid-primitives/resize-observer';
 import { Button, SendButton, Toolbar } from '@ui';
 import {
+  $createTextNode,
   $getSelection,
   $isRangeSelection,
   $setSelection,
@@ -83,22 +85,28 @@ import {
   useContext,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { URL_PARAMS } from '../constants';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 import {
   cancelAiEdit,
   hasActiveAiEdit,
   requestAiEditWithToast,
 } from '../queries/ai-edit';
+import {
+  $insertAtSavedPoint,
+  type SavedPoint,
+} from '../util/insertAtSavedPoint';
+import type { ComposeTaskSuccess } from './ComposeTask';
 import { FormatTools } from './FormatTools';
 import { TouchSelectionToolbar } from './TouchSelectionToolbar';
 
 const MENU_ID = 'markdown-popup';
-
 export function MarkdownPopup(props: {
   highlightLayerRef: HTMLDivElement;
   lexicalMapping: NodeIdMappings;
 }) {
-  const { documentId, permissions, state } = useMarkdownDocument();
+  const { documentId, permissions, state, persistedName, fallbackName } =
+    useMarkdownDocument();
   const { canEdit, canComment } = permissions;
   const { comments: commentState, setCommentState } = state;
   const blockId = documentId();
@@ -191,8 +199,6 @@ export function MarkdownPopup(props: {
   const currentUserId = useUserId();
 
   const [locationCopied, setLocationCopied] = createSignal(false);
-  const [isConverting, setIsConverting] = createSignal(false);
-  const [hasCheckboxes, setHasCheckboxes] = createSignal(false);
   const [convertibleListKey, setConvertibleListKey] = createSignal<
     string | null
   >(null);
@@ -205,7 +211,6 @@ export function MarkdownPopup(props: {
     on([selection], () => {
       setLocationCopied(false);
       editor.read(() => {
-        setHasCheckboxes($canConvertCheckboxesToTasks());
         setConvertibleListKey(
           $getConvertibleListFromSelection()?.getKey() ?? null
         );
@@ -367,14 +372,8 @@ export function MarkdownPopup(props: {
   };
 
   // Selection actions shared by the desktop and touch toolbars.
-  const shouldShowCheckboxToTaskButton = () => {
-    return Boolean(
-      isCheckboxToTaskPluginEnabled(editor) &&
-        hasCheckboxes() &&
-        canEdit() &&
-        currentUserId()
-    );
-  };
+  const shouldShowCreateTaskButton = () =>
+    Boolean(currentUserId() && selection()?.text);
 
   const shouldShowTableButton = () =>
     Boolean(canEdit() && convertibleListKey());
@@ -382,27 +381,85 @@ export function MarkdownPopup(props: {
   const shouldShowEditWithAiButton = () =>
     inlineAiEditing().enabled && canEdit();
 
-  const handleConvertToTasks = () => {
-    const currentSelection = selection();
-    const userId = currentUserId();
-    if (!currentSelection?.lexicalSelection || !userId) {
-      return;
-    }
+  const insertTaskMention = async (
+    end: SavedPoint,
+    task: { documentId: string; title: string }
+  ) => {
+    const mentionUuid = await trackMention(
+      blockId,
+      'document',
+      task.documentId
+    );
+    let inserted = false;
+    editor.update(
+      () => {
+        inserted = $insertAtSavedPoint(end, [
+          $createTextNode(' '),
+          $createDocumentMentionNode({
+            documentId: task.documentId,
+            documentName: task.title,
+            blockName: 'task',
+            createdAt: Date.now(),
+            mentionUuid,
+          }),
+        ]);
+      },
+      { discrete: true }
+    );
+    if (!inserted) toast.failure('Could not link the task in this document');
+  };
 
-    setIsConverting(true);
-    editor.dispatchCommand(CONVERT_CHECKBOXES_TO_TASKS, {
-      selection: currentSelection.lexicalSelection as RangeSelection,
-      onComplete: (results) => {
-        setIsConverting(false);
-        const successCount = results.filter((r) => r.isOk()).length;
-        if (successCount > 0) {
-          toast.success(
-            `Created ${successCount} task${successCount > 1 ? 's' : ''}`
-          );
-        }
-        setPopupVisible(false);
+  // Opens the task composer on the highlighted snippet, as a channel
+  // message's "Create task" does, and can link the task after the snippet.
+  const handleCreateTask = () => {
+    const snippet = editor.read(() => {
+      const lexicalSelection = $getSelection();
+      const location = $getSelectionLocation();
+      if (!$isRangeSelection(lexicalSelection) || !location) return null;
+      const { key, offset, type } = lexicalSelection.isBackward()
+        ? lexicalSelection.anchor
+        : lexicalSelection.focus;
+      return {
+        text: lexicalSelection.getTextContent(),
+        location,
+        end: { key, offset, type },
+      };
+    });
+    const splitManager = globalSplitManager();
+    if (!snippet || !splitManager) return;
+
+    const text = snippet.text.replace(/\s+/g, ' ').trim();
+    splitManager.createPopoverSplit({
+      content: {
+        type: 'component',
+        id: 'task-compose',
+        params: {
+          initialTitle: text.length > 70 ? `${text.slice(0, 70)}...` : text,
+          initialContent: buildMentionMarkdownString({
+            type: 'document',
+            documentId: blockId,
+            documentName: persistedName() ?? fallbackName() ?? '',
+            blockName: 'md',
+            blockParams: {
+              [URL_PARAMS.location]: serializePersistentLocation(
+                snippet.location
+              ),
+            },
+          }),
+          linkInSource: canEdit()
+            ? {
+                label: 'Link in document',
+                insert: (task: ComposeTaskSuccess) =>
+                  fireAndForget(
+                    insertTaskMention(snippet.end, task),
+                    'markdown-create-task'
+                  ),
+              }
+            : undefined,
+        },
       },
     });
+    setPopupVisible(false);
   };
 
   const handleConvertListToTable = () => {
@@ -543,7 +600,7 @@ export function MarkdownPopup(props: {
         when={activePrompt() !== 'none'}
         fallback={
           <Toolbar ref={measureToolbar}>
-            {/* Selection actions: AI edit + convert to tasks. */}
+            {/* Selection actions: AI edit + create task. */}
             <Show when={shouldShowEditWithAiButton()}>
               <Toolbar.Button
                 size="sm"
@@ -553,23 +610,20 @@ export function MarkdownPopup(props: {
                 AI edit
               </Toolbar.Button>
             </Show>
-            <Show when={shouldShowCheckboxToTaskButton()}>
+            <Show when={shouldShowCreateTaskButton()}>
               <Toolbar.Button
                 size="sm"
                 depth={3}
-                onClick={handleConvertToTasks}
-                disabled={isConverting()}
+                tooltip="Create task from snippet"
+                onClick={handleCreateTask}
               >
-                <Dynamic
-                  component={isConverting() ? LoadingIcon : CheckSquareIcon}
-                  class="size-4"
-                />
-                {isConverting() ? 'Converting...' : 'Tasks'}
+                <CheckSquareIcon class="size-4" />
+                Task
               </Toolbar.Button>
             </Show>
             <Show
               when={
-                shouldShowEditWithAiButton() || shouldShowCheckboxToTaskButton()
+                shouldShowEditWithAiButton() || shouldShowCreateTaskButton()
               }
             >
               <Toolbar.Divider />
@@ -723,9 +777,8 @@ export function MarkdownPopup(props: {
           <TouchSelectionToolbar
             canEdit={canEdit()}
             canComment={canComment()}
-            isConverting={isConverting()}
             hasSelection={(selection()?.text ?? '') !== ''}
-            showTasksOption={shouldShowCheckboxToTaskButton()}
+            showCreateTaskOption={shouldShowCreateTaskButton()}
             showTableOption={shouldShowTableButton()}
             showEditWithAiOption={shouldShowEditWithAiButton()}
             showOpenCommentOption={
@@ -733,7 +786,7 @@ export function MarkdownPopup(props: {
             }
             locationCopied={locationCopied()}
             setPopupVisible={setPopupVisible}
-            onConvertToTasks={handleConvertToTasks}
+            onCreateTask={handleCreateTask}
             onConvertListToTable={handleConvertListToTable}
             onOpenComment={handleShowComment}
             onShare={() => fireAndForget(handleShare(), 'markdown-editor')}

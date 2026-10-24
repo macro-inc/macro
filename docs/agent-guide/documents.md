@@ -234,6 +234,17 @@ tags, opens it in an adjacent split, and inserts its mention in the source edito
 An empty title uses **New Note** when expanding.
 **Create → Document** continues to open a document directly.
 
+## Create a task from a Markdown selection
+
+Select text in a Markdown document and choose **Task** in the selection toolbar
+(desktop) or touch toolbar. The task composer opens with the selected text as
+the title (truncated to 70 characters) and a **Snippet** mention of the
+selection as the body; opening that mention scrolls to and highlights the
+range. Editors also see a **Link in document** toggle beside **Create More**;
+it is remembered and starts off. While on, creating the task inserts its
+mention right after the selected text. Verify both toggle states and that
+other text edited while the composer was open is preserved.
+
 ## Markdown outline
 
 On desktop, Markdown documents with at least three headings show a tick rail in
