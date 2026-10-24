@@ -71,6 +71,9 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   `expanded` path instead.
 - `candidate_gates.rs` encodes access-gate SQL shared across repo queries;
   changing it changes what every entity kind can return.
+- Keep the notified feed's notification lookup behind a lateral `OFFSET 0`
+  fence so the caller's `user_notification` rows drive the join; aggregate the
+  latest notification before applying the cursor or notification-state gates.
 - Queries over a known id list (`*/by_ids.rs`, hydration) and the initiative
   listing (`initiative_access_clause`) check access per row with `EXISTS` on
   `entity_access`, matching sources with `= ANY(ARRAY(SELECT ...))` so they are
