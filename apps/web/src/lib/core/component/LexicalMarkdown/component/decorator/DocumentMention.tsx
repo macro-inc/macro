@@ -1,8 +1,10 @@
 import { parseLocalDate } from '@app/features/calendar/utils/calendar-date';
 import { calendarMentionOpen } from '@app/features/calendar-view/mention-open-target';
 import { openCalendarEventSplit } from '@app/features/calendar-view/open-calendar-event';
+import { whatsappGroupContent } from '@app/features/external-view/hosted-content';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import {
   type BlockAlias,
   type BlockName,
@@ -415,6 +417,9 @@ export function DocumentMention(props: DocumentMentionDecoratorProps) {
       <Match when={props.blockName === 'skill'}>
         <SkillDocumentMention {...props} />
       </Match>
+      <Match when={props.blockName === 'whatsapp_group'}>
+        <WhatsAppGroupMention {...props} />
+      </Match>
     </Switch>
   );
 }
@@ -580,6 +585,48 @@ function FormMention(props: DocumentMentionDecoratorProps) {
             data-document-name={name()}
           >
             {detail.isError ? 'Form unavailable' : name() || 'Form'}
+          </span>
+        }
+      />
+    </span>
+  );
+}
+
+/**
+ * A WhatsApp group: not a previewable document, so it shows its stored name
+ * and opens inside External.
+ */
+function WhatsAppGroupMention(props: DocumentMentionDecoratorProps) {
+  const { openWithSplit } = useSplitLayout();
+  const open = (event: MouseEvent | KeyboardEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    openWithSplit(whatsappGroupContent(props.documentId), {
+      preferNewSplit: openInNewSplitForMention(event.shiftKey, true),
+    });
+  };
+  return (
+    <span
+      class="rounded-xs hover:bg-hover focus-visible:outline-2 focus-visible:outline-ink/30"
+      role="link"
+      tabIndex={0}
+      on:mousedown={(event) => event.preventDefault()}
+      on:click={open}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') open(event);
+      }}
+    >
+      <MentionContainer
+        icon={<EntityIcon targetType="whatsapp_group" size="fill" />}
+        collapsed={props.collapsed}
+        text={
+          <span
+            data-document-mention="true"
+            data-document-id={props.documentId}
+            data-block-name="whatsapp_group"
+            data-document-name={props.documentName}
+          >
+            {props.documentName || 'WhatsApp group'}
           </span>
         }
       />

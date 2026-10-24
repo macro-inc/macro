@@ -2,7 +2,7 @@ import type {
   WhatsAppGroupDetail,
   WhatsAppGroupMessages,
 } from '@service-storage/generated/schemas';
-import { ok } from 'neverthrow';
+import { err, ok } from 'neverthrow';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { whatsappGroupApi } from './production-api';
 
@@ -10,7 +10,7 @@ const client = vi.hoisted(() => ({
   list: vi.fn(),
   detail: vi.fn(),
   messages: vi.fn(),
-  sends: vi.fn(),
+  delivery: vi.fn(),
   send: vi.fn(),
   upload: vi.fn(),
   markRead: vi.fn(),
@@ -129,4 +129,88 @@ it('preserves the deliberate send key and maps quotes and reactions without a ch
     },
     reply_to: null,
   });
+});
+
+it('tells refusals from unknown outcomes and keeps the reason DSS gave', async () => {
+  client.send.mockResolvedValueOnce(
+    err([
+      {
+        code: 'invalid_input',
+        message: 'send an audio caption as a separate message',
+      },
+    ])
+  );
+  expect(
+    (
+      await whatsappGroupApi.send(
+        'group-id',
+        { kind: 'text', text: 'x' },
+        'key-1'
+      )
+    )._unsafeUnwrapErr()
+  ).toEqual({
+    kind: 'refused',
+    reason: 'Send an audio caption as a separate message.',
+  });
+  client.send.mockResolvedValueOnce(
+    err([
+      { code: 'disconnected', message: 'connect your WhatsApp account first' },
+    ])
+  );
+  expect(
+    (
+      await whatsappGroupApi.send(
+        'group-id',
+        { kind: 'text', text: 'x' },
+        'key-2'
+      )
+    )._unsafeUnwrapErr()
+  ).toEqual({
+    kind: 'refused',
+    reason: 'Connect your WhatsApp in External to send.',
+  });
+  for (const code of [
+    'NETWORK_ERROR',
+    'temporarily_unavailable',
+    'rate_limited',
+  ] as const) {
+    client.send.mockResolvedValueOnce(err([{ code, message: code }]));
+    expect(
+      (
+        await whatsappGroupApi.send(
+          'group-id',
+          { kind: 'text', text: 'x' },
+          'key-3'
+        )
+      )._unsafeUnwrapErr()
+    ).toEqual({ kind: 'unknown' });
+  }
+});
+
+it('reads recorded progress by send id', async () => {
+  client.delivery.mockResolvedValue(
+    ok([
+      {
+        id: 'send-1',
+        group_id: 'group-id',
+        user_id: 'macro|me@example.test',
+        created_at: '2026-10-21T12:00:00Z',
+        state: 'accepted',
+        message_id: 'message-9',
+        payload: {
+          idempotency_key: 'key-1',
+          message: { type: 'text', text: 'x' },
+        },
+      },
+    ])
+  );
+  expect(await whatsappGroupApi.delivery('group-id', ['send-1'])).toEqual([
+    {
+      id: 'send-1',
+      state: 'accepted',
+      messageId: 'message-9',
+      errorCode: undefined,
+    },
+  ]);
+  expect(client.delivery).toHaveBeenCalledWith('group-id', ['send-1']);
 });

@@ -578,10 +578,18 @@ export const reviewsSplitRoute = defineRoute({
   search: [reviewsTabSearch.namespace],
 });
 
-/** A shareable WhatsApp conversation, with no channel or legacy block. */
+/** Retired `/whatsapp-group/:groupId` links; redirects into External. */
 export const whatsappGroupRoute = defineRoute({
   id: 'whatsapp-group',
   path: 'whatsapp-group/:groupId',
+  params: z.object({ groupId: z.string().uuid() }),
+  remountKey: ({ groupId }) => groupId,
+});
+
+/** A shareable WhatsApp conversation in External's main pane, with no channel or legacy block. */
+export const externalWhatsappGroupRoute = defineRoute({
+  id: 'external-whatsapp-group',
+  path: 'whatsapp/:groupId',
   params: z.object({ groupId: z.string().uuid() }),
   remountKey: ({ groupId }) => groupId,
   claim: ({ groupId }) => ({ namespace: 'whatsapp-group', id: groupId }),

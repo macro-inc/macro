@@ -82,6 +82,8 @@ export function MentionsMenuItem(props: {
 
       case 'bookingLink':
         return <CalendarBlankIcon class="size-4 text-accent" />;
+      case 'whatsappGroup':
+        return <EntityIcon targetType="whatsapp_group" size="xs" />;
 
       case 'calendarEvent':
         return <EntityIcon targetType="calendar" size="xs" />;

@@ -1,10 +1,15 @@
+import type { ResultError } from '@core/util/result';
 import { throwOnErr } from '@core/util/result';
+import type { BaseFetchErrorCode } from '@core/util/safeFetch';
 import type { WhatsAppGroupApi } from '@queries/whatsapp-groups';
 import type { LinkedReplyContent } from '@service-storage/generated/schemas/linkedReplyContent';
+import type { LinkedSendProgress } from '@service-storage/generated/schemas/linkedSendProgress';
+import type { WhatsAppErrorCode } from '@service-storage/whatsapp-errors';
 import { whatsappGroupsClient as client } from '@service-storage/whatsapp-groups';
-import { match } from 'ts-pattern';
+import { err, ok } from 'neverthrow';
+import { match, P } from 'ts-pattern';
 import { phoneFromJid } from '../../whatsapp-linked/core/account';
-import type { GroupSend } from '../core/group';
+import type { GroupSend, SendFailure, SendProgress } from '../core/group';
 
 function content(request: GroupSend): LinkedReplyContent {
   return match(request)
@@ -38,6 +43,78 @@ function content(request: GroupSend): LinkedReplyContent {
     });
 }
 
+function sentenceCase(text: string) {
+  return `${text.charAt(0).toUpperCase()}${text.slice(1)}${/[.!?]$/.test(text) ? '' : '.'}`;
+}
+
+/**
+ * Refusals were never recorded and say why; anything else may have been
+ * recorded, so the caller retries with the same idempotency key.
+ */
+function writeFailure(
+  errors: ResultError<WhatsAppErrorCode | BaseFetchErrorCode>[]
+): SendFailure {
+  const [error] = errors;
+  if (!error) return { kind: 'unknown' };
+  return (
+    match(error.code)
+      .returnType<SendFailure>()
+      .with(
+        P.union(
+          'NETWORK_ERROR',
+          'SERVER_ERROR',
+          'HTTP_ERROR',
+          'INVALID_JSON',
+          'UNKNOWN_ERROR',
+          'temporarily_unavailable',
+          'lease_fenced',
+          // Not recorded; DSS takes one write per second per person.
+          'rate_limited'
+        ),
+        () => ({ kind: 'unknown' })
+      )
+      .with('invalid_input', () => ({
+        kind: 'refused',
+        reason: sentenceCase(error.message),
+      }))
+      .with(P.union('disconnected', 'UNAUTHORIZED'), () => ({
+        kind: 'refused',
+        reason: 'Connect your WhatsApp in External to send.',
+      }))
+      .with(P.union('forbidden', 'FORBIDDEN'), () => ({
+        kind: 'refused',
+        reason: "Your WhatsApp can't send to this group.",
+      }))
+      .with(P.union('not_found', 'NOT_FOUND', 'GONE'), () => ({
+        kind: 'refused',
+        reason: 'That message or upload is no longer available.',
+      }))
+      .with('configuration_required', () => ({
+        kind: 'refused',
+        reason: 'Sending to WhatsApp is turned off.',
+      }))
+      .with('send_expired', () => ({
+        kind: 'refused',
+        reason: "WhatsApp wasn't reachable in time, so this wasn't sent.",
+      }))
+      .with(P.union('conflict', 'CONFLICT', 'identity_conflict'), () => ({
+        kind: 'refused',
+        reason: 'This conflicts with an earlier WhatsApp request.',
+      }))
+      // A code this build doesn't know may have been recorded: retry quietly.
+      .exhaustive(() => ({ kind: 'unknown' }))
+  );
+}
+
+function progress(send: LinkedSendProgress): SendProgress {
+  return {
+    id: send.id,
+    state: send.state,
+    messageId: send.message_id ?? undefined,
+    errorCode: send.error_code ?? undefined,
+  };
+}
+
 /** Decodes DSS's generated wire models at the feature boundary. */
 export const whatsappGroupApi: WhatsAppGroupApi = {
   list: async () =>
@@ -45,6 +122,7 @@ export const whatsappGroupApi: WhatsAppGroupApi = {
       id: group.id,
       name: group.name,
       unreadCount: group.unread_count,
+      canSend: group.can_send,
     })),
   detail: async (id) => {
     const view = await throwOnErr(() => client.detail(id));
@@ -71,6 +149,7 @@ export const whatsappGroupApi: WhatsAppGroupApi = {
         textBytes: view.limits.text_limit_bytes,
         attachmentBytes: view.limits.attachment_limit_bytes,
         attachmentTypes: view.limits.attachment_types,
+        maxAttachments: view.limits.max_attachments,
         editSeconds: view.limits.mutation_window_seconds,
         mutations: view.limits.mutations,
       },
@@ -100,40 +179,32 @@ export const whatsappGroupApi: WhatsAppGroupApi = {
           ordinal: attachment.ordinal,
           state: attachment.state,
           fileName: attachment.file_name,
+          mime: attachment.mime,
           documentId: attachment.document_id ?? undefined,
         })),
-        delivery: message.delivery_state ?? undefined,
       })),
     };
   },
-  sends: async (id) =>
-    (await throwOnErr(() => client.sends(id)))
-      .filter(
-        (send) =>
-          !send.message_id &&
-          !['accepted', 'sent', 'delivered', 'read'].includes(send.state)
-      )
-      .map((send) => ({
-        id: send.id,
-        state: send.state,
-        errorCode: send.error_code ?? undefined,
-        preview: match(send.payload.message)
-          .with({ type: 'text' }, (message) => message.text)
-          .with({ type: 'media' }, (message) => message.caption ?? 'Attachment')
-          .with({ type: 'mutation' }, () => 'Message change')
-          .exhaustive(() => 'Message'),
-      })),
-  send: (id, request, idempotencyKey) =>
-    throwOnErr(() =>
-      client.send(id, {
-        idempotency_key: idempotencyKey,
-        message: content(request),
-        reply_to: 'replyTo' in request ? (request.replyTo ?? null) : null,
-      })
-    ),
+  send: async (id, request, idempotencyKey) => {
+    const result = await client.send(id, {
+      idempotency_key: idempotencyKey,
+      message: content(request),
+      reply_to: 'replyTo' in request ? (request.replyTo ?? null) : null,
+    });
+    return result.isOk()
+      ? ok(progress(result.value))
+      : err(writeFailure(result.error));
+  },
+  delivery: async (id, sendIds) =>
+    (await throwOnErr(() => client.delivery(id, sendIds))).map(progress),
   upload: async (id, file) => {
-    const result = await throwOnErr(() => client.upload(id, file));
-    return { uploadId: result.upload_id, audio: result.kind === 'audio' };
+    const result = await client.upload(id, file);
+    return result.isOk()
+      ? ok({
+          uploadId: result.value.upload_id,
+          audio: result.value.kind === 'audio',
+        })
+      : err(writeFailure(result.error));
   },
   markRead: (id, messageId) => throwOnErr(() => client.markRead(id, messageId)),
   stopSync: (id) => throwOnErr(() => client.stopSync(id)),

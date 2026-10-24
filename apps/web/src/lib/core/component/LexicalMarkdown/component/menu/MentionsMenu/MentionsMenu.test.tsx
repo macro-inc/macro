@@ -11,6 +11,8 @@ import * as mobileSort from './utils/mobileSort';
 
 const mocks = vi.hoisted(() => ({
   crmEnabled: false,
+  whatsappEnabled: false,
+  whatsappUserIds: [] as string[],
   mobile: false,
   requestedBuckets: [] as string[],
   contacts: [] as import('@core/context/quickAccess').EntityItem[],
@@ -41,10 +43,34 @@ vi.mock('@core/block', () => ({
   useMaybeBlockId: () => undefined,
   useMaybeBlockName: () => undefined,
 }));
-vi.mock('@core/constant/featureFlags', () => ({
-  enableCrm: {},
-  isFeatureEnabled: () => mocks.crmEnabled,
-  ENABLE_BEARER_TOKEN_AUTH: false,
+vi.mock('@core/constant/featureFlags', () => {
+  const enableCrm = { name: 'crm' };
+  const enableWhatsappLinked = { name: 'whatsapp' };
+  return {
+    enableCrm,
+    enableWhatsappLinked,
+    isFeatureEnabled: (flag: unknown) =>
+      flag === enableWhatsappLinked ? mocks.whatsappEnabled : mocks.crmEnabled,
+    ENABLE_BEARER_TOKEN_AUTH: false,
+  };
+});
+vi.mock('@app/features/whatsapp-group/queries/production-api', () => ({
+  whatsappGroupApi: {},
+}));
+vi.mock('@queries/gate', () => ({
+  queryReadyGate: (query: { isSuccess: boolean }) => query.isSuccess,
+}));
+vi.mock('@queries/whatsapp-groups', () => ({
+  useWhatsappGroupsQuery: (_api: unknown, userId: () => string) => ({
+    get isSuccess() {
+      mocks.whatsappUserIds.push(userId());
+      return userId() !== '';
+    },
+    data: [
+      { id: 'group-1', name: 'Design Crit', unreadCount: 0, canSend: true },
+      { id: 'group-2', name: 'Launch Room', unreadCount: 0, canSend: true },
+    ],
+  }),
 }));
 vi.mock('@core/context/quickAccess', () => ({
   useQuickAccess: () => ({
@@ -70,6 +96,7 @@ vi.mock('@core/context/quickAccess', () => ({
 }));
 vi.mock('@core/context/user', () => ({
   useEmail: () => () => 'gab@macro.com',
+  useUserId: () => () => 'macro|gab@macro.com',
 }));
 vi.mock('@core/constant/allBlocks', () => ({
   fileTypeToBlockName: () => 'md',
@@ -113,6 +140,8 @@ const originalScrollIntoView = Element.prototype.scrollIntoView;
 
 afterEach(() => {
   mocks.crmEnabled = false;
+  mocks.whatsappEnabled = false;
+  mocks.whatsappUserIds = [];
   mocks.mobile = false;
   mocks.requestedBuckets = [];
   mocks.contacts = [];
@@ -367,4 +396,44 @@ it('records mentions against the editing source outside a legacy block', () => {
   expect(createItemHandler).toHaveBeenCalledWith(
     expect.objectContaining({ blockId: 'doc-1' })
   );
+});
+
+it('offers WhatsApp groups to share by mention, only in channel composers', () => {
+  mocks.whatsappEnabled = true;
+  Element.prototype.scrollIntoView = vi.fn();
+  vi.mocked(useEmailSearchMention).mockReturnValue({
+    emails: () => [],
+    totalCount: () => 0,
+    hasMore: () => false,
+    isLoadingMore: () => false,
+    loadMore: async () => {},
+  } as unknown as ReturnType<typeof useEmailSearchMention>);
+  const menu = createMenuOperations();
+  menu.openMenu();
+  menu.setSearchTerm('design');
+  render(() => (
+    <MentionsMenu
+      menu={menu}
+      users={() => []}
+      block="channel"
+      anchor={document.createElement('div')}
+      onPick={vi.fn()}
+    />
+  ));
+  expect(screen.getByText('WhatsApp groups')).toBeTruthy();
+  expect(screen.getByText('Design Crit')).toBeTruthy();
+  expect(screen.queryByText('Launch Room')).toBeNull();
+  cleanup();
+
+  mocks.whatsappUserIds = [];
+  render(() => (
+    <MentionsMenu
+      menu={menu}
+      users={() => []}
+      anchor={document.createElement('div')}
+      onPick={vi.fn()}
+    />
+  ));
+  expect(screen.queryByText('WhatsApp groups')).toBeNull();
+  expect(mocks.whatsappUserIds.every((id) => id === '')).toBe(true);
 });

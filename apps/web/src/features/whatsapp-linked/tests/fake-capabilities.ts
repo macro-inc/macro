@@ -1,7 +1,6 @@
 import { okAsync, type ResultAsync } from 'neverthrow';
 import { type Accessor, createSignal, type Setter } from 'solid-js';
 import { vi } from 'vitest';
-import type { GroupSummary } from '../../whatsapp-group/core/group';
 import type {
   PairingRead,
   PasskeyCapability,
@@ -10,6 +9,7 @@ import type {
   WhatsAppLinkedCapabilities,
 } from '../context/whatsapp-linked-context';
 import type { WhatsAppAccount } from '../core/account';
+import type { AdoptFailure } from '../core/adopt';
 import type { WhatsAppGroup } from '../core/group';
 import type { PairingStep } from '../core/pairing';
 
@@ -37,7 +37,6 @@ export function createFakeWhatsApp(initial: {
   account: WhatsAppAccount | null;
   groups?: WhatsAppGroup[];
   passkey?: PasskeyCapability;
-  sharedGroups?: GroupSummary[];
 }) {
   const [account, setAccount] = signalRead<WhatsAppAccount | null>(
     initial.account
@@ -53,7 +52,6 @@ export function createFakeWhatsApp(initial: {
   const groupsEnabled: Accessor<boolean>[] = [];
   const capabilities = {
     features,
-    sharedGroups: signalRead(initial.sharedGroups ?? [])[0],
     account,
     groups: vi.fn((enabled: Accessor<boolean>) => {
       groupsEnabled.push(enabled);
@@ -89,15 +87,11 @@ export function createFakeWhatsApp(initial: {
         okAsync({ remoteUnlinkRequested: false })
     ),
     adopt: vi.fn(
-      (_request: {
-        groupJid: string;
-        name: string;
-      }): ResultAsync<{ groupId: string }, RequestFailure> =>
-        okAsync({ groupId: 'channel-new' })
+      (_groupJid: string): ResultAsync<{ groupId: string }, AdoptFailure> =>
+        okAsync({ groupId: 'group-new' })
     ),
     isConnecting: () => false,
     isDisconnecting: () => false,
-    isAdopting: () => false,
     openGroup: vi.fn(),
   } satisfies WhatsAppLinkedCapabilities;
   return { capabilities, setAccount, setGroups, setPairing, groupsEnabled };

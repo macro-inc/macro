@@ -418,13 +418,21 @@ export type AgentSessionMentionItem = Omit<
   'kind'
 > & { kind: 'agentSession' };
 
+/** A WhatsApp group in Macro; not a Soup entity, so it has its own kind. */
+export type WhatsAppGroupMentionItem = {
+  kind: 'whatsappGroup';
+  id: string;
+  data: { id: string; name: string };
+};
+
 export type MentionItem =
   | QuickAccessItem
   | DateMentionItem
   | GroupMentionItem
   | AgentSessionMentionItem
   | BookingLinkMentionItem
-  | CalendarEventMentionItem;
+  | CalendarEventMentionItem
+  | WhatsAppGroupMentionItem;
 
 /**
  * Type guard for DateMentionItem.

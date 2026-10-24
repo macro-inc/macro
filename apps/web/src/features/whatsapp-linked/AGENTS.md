@@ -10,13 +10,16 @@ entity. Each person sends from their own account. Behind the `enable-whatsapp-li
 
 - `whatsapp-linked.tsx`: production wiring (shared queries + split navigation).
 - `context/whatsapp-linked-context.tsx`: the capability contract tests fake.
-- `views/whatsapp-page.tsx`: the three page states and both dialogs.
+- `views/whatsapp-page.tsx`: account states, the Add to Macro and Can't be
+  added sections, and the pairing/confirm dialogs.
 
 ## Scope
 
-- Owns: the WhatsApp account page, pairing dialog and name-only Add dialog.
+- Owns: the WhatsApp account page, pairing dialog and one-click adoption
+  (no dialog; DSS names the group after WhatsApp).
 - Group timeline and sending: `features/whatsapp-group`; no channel integration.
-- Not here: the External tab shell and route → `features/external-view`;
+- Not here: the External tab shell, its In Macro sidebar and the
+  `/external/whatsapp/:groupId` route → `features/external-view`;
   HTTP → `lib/service-clients/service-storage/whatsapp-linked.ts`; shared
   queries → `lib/queries/whatsapp-linked`; DSS routes → `crates/whatsapp_linked`.
 
@@ -32,6 +35,8 @@ entity. Each person sends from their own account. Behind the `enable-whatsapp-li
   must be handled there, not fall through to "preparing".
 - Wire types come from DSS's generated `@service-storage/generated/schemas`
   (`Linked*`); change `crates/whatsapp_linked` and regenerate, never hand-type.
+- Adoption failures carry DSS's `LinkedError` code (`whatsappErrorResponse`);
+  `core/adopt.ts` words each one. Never show a catch-all message.
 - Adoption grants access only to its owner; the generic Share dialog manages
   later access. No special audience lists or WhatsApp membership requirement
   for viewing.

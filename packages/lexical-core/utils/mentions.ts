@@ -104,7 +104,8 @@ function documentMentionEntityType(blockName: string): string {
           'call',
           'automation',
           'form',
-          'database'
+          'database',
+          'whatsapp_group'
         ),
         (kind) => kind
       )

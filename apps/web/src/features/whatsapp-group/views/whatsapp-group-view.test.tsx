@@ -1,3 +1,5 @@
+import type { ChannelInputProps } from '@channel/Input/ChannelInput';
+import type { InputHandle, InputSnapshot } from '@channel/Input/types';
 import {
   cleanup,
   fireEvent,
@@ -5,12 +7,46 @@ import {
   screen,
   waitFor,
 } from '@solidjs/testing-library';
+import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
+import { err } from 'neverthrow';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { WhatsAppGroupProvider } from '../context/whatsapp-group-context';
-import { createFakeGroup, group, messages } from '../tests/fake-capabilities';
+import { createFakeGroup, group } from '../tests/fake-capabilities';
 import { WhatsAppGroupView } from './whatsapp-group-view';
 
+const mocks = vi.hoisted(() => ({
+  composer: undefined as ChannelInputProps | undefined,
+  restore: vi.fn(),
+  focus: vi.fn(),
+  failure: vi.fn(),
+}));
+vi.mock('@core/context/user', () => ({
+  useUserId: () => () => 'macro|me@example.test',
+}));
+vi.mock('@core/component/UserIcon', () => ({
+  UserIcon: () => <span data-testid="macro-avatar" />,
+}));
+vi.mock('@core/component/Toast/Toast', () => ({
+  toast: { failure: mocks.failure, alert: vi.fn() },
+}));
+vi.mock('@channel/Input/ChannelInput', () => ({
+  ChannelInput: (props: ChannelInputProps) => {
+    mocks.composer = props;
+    const handle: InputHandle = {
+      snapshot: vi.fn(),
+      clear: vi.fn(),
+      focus: mocks.focus,
+      send: vi.fn(),
+      attachFiles: vi.fn(),
+      restoreSnapshot: mocks.restore,
+    };
+    props.onReady?.(handle);
+    return <div data-testid="whatsapp-composer" />;
+  },
+}));
+
 beforeEach(() => {
+  mocks.composer = undefined;
   vi.stubGlobal('scrollTo', vi.fn());
   vi.stubGlobal(
     'ResizeObserver',
@@ -23,47 +59,101 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
+  vi.clearAllMocks();
   vi.unstubAllGlobals();
 });
 function mount(fake: ReturnType<typeof createFakeGroup>) {
   const share = vi.fn();
+  const connect = vi.fn();
   render(() => (
-    <WhatsAppGroupProvider value={fake.capabilities}>
-      <WhatsAppGroupView
-        userId={group.ownerId}
-        onShare={share}
-        onConnect={vi.fn()}
-        renderAttachment={(id) => <span>document {id}</span>}
-      />
-    </WhatsAppGroupProvider>
+    <QueryClientProvider client={new QueryClient()}>
+      <WhatsAppGroupProvider value={fake.capabilities}>
+        <WhatsAppGroupView
+          userId={group.ownerId}
+          onShare={share}
+          onConnect={connect}
+        />
+      </WhatsAppGroupProvider>
+    </QueryClientProvider>
   ));
-  return { share };
+  return { share, connect };
 }
-it('shows external names, quotes, reactions and the viewers own sending identity', async () => {
+function snapshot(value: string): InputSnapshot {
+  return { value, mentions: [], attachments: [] };
+}
+
+it('renders WhatsApp messages as channel rows with quotes and reactions', () => {
   const fake = createFakeGroup();
   const { share } = mount(fake);
   expect(screen.getByText('Ana Ruiz')).toBeTruthy();
   expect(screen.getByText('Sending as +14155550142')).toBeTruthy();
+  // WhatsApp's `*updated*` renders bold.
+  expect(screen.getByText('updated').className).toContain('font-bold');
   expect(
-    screen.getByRole('button', { name: '👍 2, your reaction' })
+    screen.getByRole('button', { name: /Ana Ruiz: The \*updated\* designs/ })
   ).toBeTruthy();
-  expect(screen.getByText(/Ana Ruiz: The updated designs/)).toBeTruthy();
+  const reaction = screen.getByRole('button', { name: /👍/ });
+  expect(reaction.getAttribute('aria-pressed')).toBe('true');
+  expect(reaction.textContent).toContain('2');
   fireEvent.click(screen.getByRole('button', { name: 'Share' }));
   expect(share).toHaveBeenCalledOnce();
-  fireEvent.click(screen.getAllByRole('button', { name: 'Reply' })[0]);
-  fireEvent.input(
-    screen.getByRole('textbox', { name: 'Message WhatsApp group' }),
-    { target: { value: 'My own account reply' } }
-  );
-  fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+});
+
+it('replies through the shared composer and sends WhatsApp formatting', async () => {
+  const fake = createFakeGroup();
+  mount(fake);
+  const row = document.querySelector('[data-message-id="message-1"]');
+  if (!row) throw new Error('message row missing');
+  fireEvent.pointerEnter(row);
+  fireEvent.click(screen.getByRole('button', { name: 'Reply' }));
+  expect(screen.getByText('Replying to Ana Ruiz')).toBeTruthy();
+  expect(mocks.focus).toHaveBeenCalled();
+  expect(mocks.composer?.features).toEqual({
+    mentions: false,
+    createItems: false,
+    gifs: false,
+    richBlocks: false,
+  });
+  await mocks.composer?.onSend?.(snapshot('Looks **great**'));
   await waitFor(() =>
     expect(fake.capabilities.send).toHaveBeenCalledWith(
-      { kind: 'text', text: 'My own account reply', replyTo: 'message-1' },
+      { kind: 'text', text: 'Looks *great*', replyTo: 'message-1' },
       expect.any(String)
     )
   );
+  expect(screen.queryByText('Replying to Ana Ruiz')).toBeNull();
+  expect(screen.getByText('Looks')).toBeTruthy();
 });
-it('lets a shared viewer without WhatsApp read the timeline and asks them to connect to reply', () => {
+
+it('removes a refused send, toasts the reason and restores the draft', async () => {
+  const fake = createFakeGroup();
+  fake.capabilities.send.mockResolvedValueOnce(
+    err({ kind: 'refused', reason: "Your WhatsApp can't send to this group." })
+  );
+  mount(fake);
+  const draft = snapshot('Hello there');
+  await mocks.composer?.onSend?.(draft);
+  await waitFor(() =>
+    expect(mocks.failure).toHaveBeenCalledWith(
+      "Your WhatsApp can't send to this group."
+    )
+  );
+  expect(mocks.restore).toHaveBeenCalledWith(draft);
+  expect(screen.queryByText('Hello there')).toBeNull();
+});
+
+it('keeps a draft WhatsApp would refuse in the composer', () => {
+  const fake = createFakeGroup({
+    group: { ...group, limits: { ...group.limits, textBytes: 3 } },
+  });
+  mount(fake);
+  expect(() => mocks.composer?.onSend?.(snapshot('Too long'))).toThrow(
+    'This message is too long for WhatsApp.'
+  );
+  expect(fake.capabilities.send).not.toHaveBeenCalled();
+});
+
+it('lets a viewer without WhatsApp read and offers to connect', () => {
   const fake = createFakeGroup({
     group: {
       ...group,
@@ -72,67 +162,25 @@ it('lets a shared viewer without WhatsApp read the timeline and asks them to con
       sendReason: 'no_account',
     },
   });
-  mount(fake);
-  expect(
-    screen.getByText('The updated designs are ready for review.')
-  ).toBeTruthy();
+  const { connect } = mount(fake);
   expect(screen.getByText('Connect your WhatsApp to reply')).toBeTruthy();
-  expect(screen.queryByRole('textbox')).toBeNull();
-  expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull();
-  expect(fake.capabilities.send).not.toHaveBeenCalled();
+  expect(screen.queryByTestId('whatsapp-composer')).toBeNull();
+  const row = document.querySelector('[data-message-id="message-1"]');
+  if (!row) throw new Error('message row missing');
+  fireEvent.pointerEnter(row);
+  expect(screen.queryByRole('button', { name: 'Reply' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Connect WhatsApp' }));
+  expect(connect).toHaveBeenCalledOnce();
 });
-it('keeps unknown sends visible without any automatic resend', () => {
+
+it('offers actions on rows that rendered before the viewer could send', () => {
   const fake = createFakeGroup({
-    sends: [
-      { id: 'send-1', preview: 'Running 10 minutes late', state: 'unknown' },
-    ],
-    messages: [
-      {
-        ...messages[0],
-        attachments: [
-          {
-            ordinal: 0,
-            state: 'loading',
-            fileName: 'design.pdf',
-            documentId: undefined,
-          },
-        ],
-      },
-    ],
+    group: { ...group, canSend: false, sendReason: 'disconnected' },
   });
   mount(fake);
-  expect(screen.getByText(/may already have arrived/)).toBeTruthy();
-  expect(screen.getByText('Loading design.pdf…')).toBeTruthy();
-  expect(fake.capabilities.send).not.toHaveBeenCalled();
-});
-it('offers edit and delete only for own messages, and confirms deletion', async () => {
-  const fake = createFakeGroup();
-  mount(fake);
-  expect(screen.getAllByRole('button', { name: 'Edit' })).toHaveLength(1);
-  fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
-  expect(screen.queryByLabelText('Attach file')).toBeNull();
-  expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe(
-    'Looking now. Thanks, Ana!'
-  );
-  fireEvent.input(screen.getByRole('textbox'), {
-    target: { value: 'Edited from my account' },
-  });
-  fireEvent.click(screen.getByRole('button', { name: 'Send' }));
-  await waitFor(() =>
-    expect(fake.capabilities.send).toHaveBeenCalledWith(
-      { kind: 'edit', messageId: 'message-2', text: 'Edited from my account' },
-      expect.any(String)
-    )
-  );
-  fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
-  expect(fake.capabilities.send).toHaveBeenCalledTimes(1);
-  const confirmation = screen.getAllByRole('button', { name: 'Delete' }).at(-1);
-  if (!confirmation) throw new Error('Missing delete confirmation');
-  fireEvent.click(confirmation);
-  await waitFor(() =>
-    expect(fake.capabilities.send).toHaveBeenCalledWith(
-      { kind: 'delete', messageId: 'message-2' },
-      expect.any(String)
-    )
-  );
+  fake.setGroup(group);
+  const row = document.querySelector('[data-message-id="message-1"]');
+  if (!row) throw new Error('message row missing');
+  fireEvent.pointerEnter(row);
+  expect(screen.getByRole('button', { name: 'Reply' })).toBeTruthy();
 });

@@ -12,8 +12,18 @@ it on locally with `VITE_ENABLE_WHATSAPP_LINKED=true`.
   hideable in **More → Customize sidebar**), or `g x`, or **Go to External** in
   the command menu.
 - Mobile: **More views → External**. It never takes a dock slot and has no
-  back button, like other navigation views; the External list sidebar is
-  hidden on touch, so the WhatsApp page fills the pane.
+  back button, like other navigation views; the External sidebar is hidden on
+  touch, so the WhatsApp page fills the pane with **In Macro** first. Opening a
+  group drills in full-screen; its **Back to WhatsApp** button returns.
+
+## Sidebar
+
+Desktop's External sidebar has **WhatsApp** (the page below) and a collapsible
+**In Macro** section: every WhatsApp group the viewer can read (their own and
+shared ones), each with its unread count and a **Read-only** tag when the
+viewer's WhatsApp can't send there. The open group's row is highlighted.
+DSS's `whatsapp_changed` gateway events refresh the lists; without one, External
+re-fetches once ~3 s after opening.
 
 ## WhatsApp page states
 
@@ -22,8 +32,7 @@ it on locally with `VITE_ENABLE_WHATSAPP_LINKED=true`.
 | Not linked | Outlined WhatsApp row, the unofficial-client account-risk note, **Connect** (disabled with a tooltip when the server turns pairing off). A signed-out device reads **Reconnect**. |
 | Passkey | When WhatsApp asks for a passkey, the dialog says **Confirm on your desktop**. In Macro desktop, **Confirm with passkey** runs the native `whatsapp_passkey_authenticate` command (its caBLE QR shows in the dialog) and posts the assertion to `pairing/<id>/passkey`; a returned code then shows to type on the phone. In a browser, **Continue in Macro desktop** opens `macro:///external?whatsappPairing=<id>`, which reopens the same pairing there; closing the browser dialog then doesn't cancel it. |
 | Pairing | Dialog **Link WhatsApp**: a locally encoded QR (`role="img"`, name "Scan this code with WhatsApp on your phone"), **Expires in m:ss**, four numbered steps, **Cancel**. The dialog carries `ph-no-capture`. A code confirmation step shows **The codes match**; expiry or failure shows **Show a new code**. |
-| Linked | Account row with the phone number, **Use a different account** (asks to confirm, then pairs with `replace: true`) and **Disconnect** (asks to confirm), then **Your WhatsApp groups**: adopted groups show **In Macro** with an unread badge (opens the standalone group), others **Add to Macro**. Community and disappearing-message groups say why they can't be added. |
-| Add to Macro | Dialog **Add “<group>” to Macro**: a group name prefilled from the subject and **Add to Macro**. The adopter owns the entity and shares it afterward with the normal Share dialog. |
+| Linked | Account row with the phone number, **Use a different account** (asks to confirm, then pairs with `replace: true`) and **Disconnect** (asks to confirm), then **Add to Macro**: the account's groups not yet in Macro, each with a one-click **Add to Macro** (no dialog, no name: the Macro group follows the WhatsApp name; unnamed groups show member names), and groups someone already shared with the viewer as **Shared with you by <owner> · Open**. Groups already in Macro are only in the sidebar. **Can't be added (n)** is collapsed and lists community and disappearing-message groups with the reason. A refused add shows DSS's specific reason under that group. |
 
 Cancel sends `DELETE /meta/linked/pairing/<id>`; closing after the phone links
 does not. Disconnect that WhatsApp did not confirm tells the person to remove
@@ -35,17 +44,22 @@ No environment has the WhatsApp session service yet, so intercept DSS
 `/meta/linked/*` in the browser (Playwright `page.route`). The functional test
 `apps/web/tests/functional/whatsapp-linked.spec.ts` is the reference mock: it
 answers `configuration`, `account`, `connect`, `pairing/<id>` (poll and
-`DELETE`), `groups` (`GET`), `groups/adopt` (`POST`), standalone `whatsapp-groups` routes and `disconnect`, and flips the pairing
+`DELETE`), `groups` (`GET`), `groups/adopt` (`POST`, body `{group_jid}`), standalone `whatsapp-groups` routes and `disconnect`, and flips the pairing
 to `success` to simulate the phone scanning. Never link a real account from an
 automated run.
 
 ## Adopted group view
 
-Open the adopted group from External or a shared link at `/app/whatsapp-group/:id`.
+Open the adopted group from External's sidebar or a shared link at
+`/app/external/whatsapp/:id`, in External's main pane. The retired
+`/app/whatsapp-group/:id` links and saved `whatsapp-group:<id>` layouts redirect there.
 The group has its own timeline, data layer and entity sharing; it does not appear
 as a native channel. **Share** uses ordinary people grants, access requests,
 team sharing and link sharing for `whatsapp_group`. Viewers can read the whole
 timeline without connecting WhatsApp or belonging to the remote group.
+In a channel composer, `@` offers **WhatsApp groups** (behind the WhatsApp flag);
+posting the mention shares the group with the channel's members (View), and the
+chip opens the group in External.
 
 The timeline pages newest-first from
 `GET /meta/linked/whatsapp-groups/<id>/messages`, including verified sender names,

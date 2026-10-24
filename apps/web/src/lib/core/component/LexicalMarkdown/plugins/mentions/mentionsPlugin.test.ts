@@ -98,6 +98,25 @@ describe('mentionsPlugin', () => {
     );
   });
 
+  it('tracks a WhatsApp group mention as a whatsapp_group reference', () => {
+    const { editor, created } = composer();
+    discrete(editor, () => {
+      $getRoot().append($createParagraphNode()).selectEnd();
+      editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, {
+        documentId: 'group-1',
+        documentName: 'Design Crit',
+        blockName: 'whatsapp_group',
+      });
+    });
+    expect(created).toContainEqual(
+      expect.objectContaining({
+        itemType: 'whatsapp_group',
+        itemId: 'group-1',
+        documentName: 'Design Crit',
+      })
+    );
+  });
+
   it('keeps database mentions compact in composers', () => {
     const { editor } = composer();
     discrete(editor, () => {

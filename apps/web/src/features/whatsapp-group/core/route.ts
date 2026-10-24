@@ -1,10 +1,10 @@
 import { z } from 'zod';
 
 const prefix = 'whatsapp-group:';
-/** The split manager stores native, block-free entities as component identities. */
-export function whatsappGroupComponentId(groupId: string): string {
-  return `${prefix}${groupId}`;
-}
+/**
+ * Groups once opened as their own `whatsapp-group:<id>` split component;
+ * restored layouts still carry that identity and now open in External.
+ */
 export function parseWhatsAppGroupComponentId(
   componentId: string
 ): string | undefined {

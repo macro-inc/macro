@@ -1,6 +1,7 @@
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { ImperativeDialogHost } from '@ui';
 import '@fontsource-variable/inter';
+import { InMacroSection } from '@app/features/external-view/components/in-macro-section';
 import { WhatsAppGroupProvider } from '@app/features/whatsapp-group/context/whatsapp-group-context';
 import { createWhatsAppGroupCapabilities } from '@app/features/whatsapp-group/queries/capabilities';
 import { whatsappGroupApi } from '@app/features/whatsapp-group/queries/production-api';
@@ -12,7 +13,7 @@ import { Route, Router } from '@solidjs/router';
 import { macroDarkTheme } from '@theme/themes/macro-dark';
 import { macroLightTheme } from '@theme/themes/macro-light';
 import { themeCssVars } from '@theme/utils/themeColorTokens';
-import { onMount, Suspense } from 'solid-js';
+import { onMount, Show, Suspense } from 'solid-js';
 // The app's styles, so the page and its screenshots look like the app.
 import '../../../src/index.css';
 import {
@@ -23,8 +24,13 @@ import { createWhatsAppLinkedCapabilities } from '@app/features/whatsapp-linked/
 import { WhatsAppPage } from '@app/features/whatsapp-linked/views/whatsapp-page';
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
+import { FloatRegionHost } from '@components/app/mobile/float-regions/FloatRegionHost';
+import { ToastRegion } from '@core/component/Toast/ToastRegion';
 import { UserContextProvider } from '@core/context/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { queryClient } from '@queries/client';
+import { queryReadyGate } from '@queries/gate';
+import { useWhatsappGroupsQuery } from '@queries/whatsapp-groups';
 import { QueryClientProvider } from '@tanstack/solid-query';
 import { ResultAsync } from 'neverthrow';
 import { render } from 'solid-js/web';
@@ -69,7 +75,12 @@ function GroupHarness(props: { groupId: string }) {
     };
   });
   return (
-    <div class="h-dvh">
+    <div class="relative h-dvh">
+      <ToastRegion />
+      {/* The app's bottom chrome host, where the composer floats on touch. */}
+      <Show when={isTouchDevice()}>
+        <FloatRegionHost />
+      </Show>
       <WhatsAppGroupProvider value={source}>
         <WhatsAppGroupView
           userId={userId()}
@@ -77,10 +88,29 @@ function GroupHarness(props: { groupId: string }) {
           onConnect={() => {
             location.search = '';
           }}
-          renderAttachment={(id) => <span>Document {id}</span>}
         />
       </WhatsAppGroupProvider>
     </div>
+  );
+}
+
+/** External's sidebar section over the real groups query. */
+function InMacroHarness() {
+  const userId = useUserId();
+  const groups = useWhatsappGroupsQuery(whatsappGroupApi, () => userId() ?? '');
+  return (
+    <main class="w-72 bg-panel p-2 text-ink">
+      <InMacroSection
+        groups={queryReadyGate(groups) ? groups.data : undefined}
+        isPending={groups.isPending}
+        isError={groups.isError}
+        activeGroupId={undefined}
+        open
+        onOpenChange={() => {}}
+        onOpenGroup={(groupId) => window.openedGroups.push(groupId)}
+        onRetry={() => {}}
+      />
+    </main>
   );
 }
 
@@ -94,7 +124,9 @@ function Page() {
     document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
     document.documentElement.dataset.themeLight = String(!dark);
   });
-  const groupId = new URLSearchParams(location.search).get('group');
+  const search = new URLSearchParams(location.search);
+  if (search.get('view') === 'in-macro') return <InMacroHarness />;
+  const groupId = search.get('group');
   if (groupId)
     return (
       <Suspense fallback={<p>Loading group…</p>}>

@@ -1,3 +1,4 @@
+import { ok, type Result } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import { vi } from 'vitest';
 import type { SourceRead } from '../../whatsapp-linked/context/whatsapp-linked-context';
@@ -6,7 +7,8 @@ import type {
   GroupDetail,
   GroupMessage,
   GroupSend,
-  PendingSend,
+  SendFailure,
+  SendProgress,
 } from '../core/group';
 
 export const group: GroupDetail = {
@@ -23,6 +25,7 @@ export const group: GroupDetail = {
     textBytes: 65536,
     attachmentBytes: 33554432,
     attachmentTypes: ['image/png', 'application/pdf', 'audio/ogg'],
+    maxAttachments: 1,
     editSeconds: 900,
     mutations: ['reaction', 'edit', 'delete'],
   },
@@ -31,7 +34,7 @@ export const messages: GroupMessage[] = [
   {
     id: 'message-1',
     sender: { name: 'Ana Ruiz' },
-    body: 'The updated designs are ready for review.',
+    body: 'The *updated* designs are ready for review.',
     sentAt: '2026-10-21T10:00:00Z',
     edited: false,
     deleted: false,
@@ -48,18 +51,14 @@ export const messages: GroupMessage[] = [
     replyTo: 'message-1',
     reactions: [],
     attachments: [],
-    delivery: 'delivered',
   },
 ];
 export function createFakeGroup(
-  initial: {
-    group?: GroupDetail;
-    messages?: GroupMessage[];
-    sends?: PendingSend[];
-  } = {}
+  initial: { group?: GroupDetail; messages?: GroupMessage[] } = {}
 ) {
   const [detail, setGroup] = createSignal(initial.group ?? group);
   const [timeline, setMessages] = createSignal(initial.messages ?? messages);
+  const [delivery, setDelivery] = createSignal<SendProgress[]>([]);
   const read = <T>(data: () => T): SourceRead<T> => ({
     get data() {
       return data();
@@ -71,19 +70,27 @@ export function createFakeGroup(
   const capabilities = {
     group: read(detail),
     timeline: read(timeline),
-    sends: read(() => initial.sends ?? []),
     hasOlder: () => false,
     loadingOlder: () => false,
     loadOlder: vi.fn(async () => undefined),
     send: vi.fn(
-      async (_request: GroupSend, _idempotencyKey: string) => undefined
+      async (
+        _request: GroupSend,
+        idempotencyKey: string
+      ): Promise<Result<SendProgress, SendFailure>> =>
+        ok({ id: `send-${idempotencyKey}`, state: 'pending' })
     ),
-    upload: vi.fn(async (_file: File) => ({
-      uploadId: 'upload-1',
-      audio: false,
-    })),
+    delivery: () => read(delivery),
+    upload: vi.fn(
+      async (
+        _file: File
+      ): Promise<Result<{ uploadId: string; audio: boolean }, SendFailure>> =>
+        ok({ uploadId: 'upload-1', audio: false })
+    ),
+    fileUrl: (documentId: () => string) =>
+      read(() => `https://files.example.test/${documentId()}`),
     markRead: vi.fn(async (_messageId: string) => undefined),
     stopSync: vi.fn(async () => undefined),
   } satisfies WhatsAppGroupCapabilities;
-  return { capabilities, setGroup, setMessages };
+  return { capabilities, setGroup, setMessages, setDelivery };
 }

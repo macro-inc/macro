@@ -1,6 +1,8 @@
 import { createRoutesManifest, type SplitRoutes } from '@app/lib/split-router';
 import {
   appRoute,
+  externalRoute,
+  externalWhatsappGroupRoute,
   homeSplitRoute,
   legacyContentRoute,
   notFoundRoute,
@@ -33,6 +35,7 @@ const routes = createRoutesManifest({
       ...appRoute,
       children: [
         homeSplitRoute,
+        { ...externalRoute, children: [externalWhatsappGroupRoute] },
         whatsappGroupRoute,
         legacyContentRoute,
         notFoundRoute,
@@ -70,15 +73,20 @@ describe('resolveContentLocation', () => {
   });
 });
 
-it('round-trips WhatsApp group components through their own route without a block', () => {
-  const content = {
-    type: 'component' as const,
+it('restores a saved WhatsApp group component inside External', () => {
+  const location = resolveContentLocation(routes, {
+    type: 'component',
     id: 'whatsapp-group:019a061e-0000-7000-8000-000000000001',
-  };
-  const location = resolveContentLocation(routes, content);
-  expect(location.route.matches.at(-1)).toEqual({
-    id: 'whatsapp-group',
-    params: { groupId: '019a061e-0000-7000-8000-000000000001' },
   });
-  expect(splitContentFromLocation(location)).toEqual(content);
+  expect(location.route.matches.slice(1)).toEqual([
+    { id: 'view-external', params: {} },
+    {
+      id: 'external-whatsapp-group',
+      params: { groupId: '019a061e-0000-7000-8000-000000000001' },
+    },
+  ]);
+  expect(splitContentFromLocation(location)).toEqual({
+    type: 'component',
+    id: 'external',
+  });
 });

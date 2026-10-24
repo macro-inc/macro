@@ -2,7 +2,7 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useNavigate } from '@app/lib/split-router';
 import { homeSplitRoute } from '@app/routes/routes';
 import { enableWhatsappLinked } from '@core/constant/featureFlags';
-import { lazy, onMount, Show, Suspense } from 'solid-js';
+import { type JSX, lazy, onMount, Show, Suspense } from 'solid-js';
 
 const Group = lazy(async () => ({
   default: (await import('./whatsapp-group')).WhatsAppGroup,
@@ -22,7 +22,10 @@ function DisabledGroup() {
   return null;
 }
 /** Gate before mounting any queries, including panes restored from session state. */
-export function WhatsAppGroupEntry(props: { groupId: string }) {
+export function WhatsAppGroupEntry(props: {
+  groupId: string;
+  leading?: JSX.Element;
+}) {
   const flag = useFeatureFlag(enableWhatsappLinked);
   return (
     <Show
@@ -34,7 +37,7 @@ export function WhatsAppGroupEntry(props: { groupId: string }) {
       }
     >
       <Suspense fallback={<WhatsAppGroupSkeleton />}>
-        <Group groupId={props.groupId} />
+        <Group groupId={props.groupId} leading={props.leading} />
       </Suspense>
     </Show>
   );

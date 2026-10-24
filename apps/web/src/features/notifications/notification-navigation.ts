@@ -8,7 +8,7 @@ import {
 import { prefetchChannelTarget } from '@channel/queries/prefetch-channel-target';
 import { contentReference } from '@components/app/split-layout/content-reference';
 import type {
-  OpenSplitResult,
+  SplitContent,
   SplitHandle,
   SplitManager,
 } from '@components/app/split-layout/layoutManager';
@@ -35,8 +35,8 @@ import type { PushNotificationNavigation } from '@service-notification/generated
 import { errAsync, ResultAsync } from 'neverthrow';
 import { match, P } from 'ts-pattern';
 import { shareEntity } from '../access-requests/core/types';
+import { whatsappGroupContent } from '../external-view/hosted-content';
 import { projectRouteId } from '../projects/core/route';
-import { whatsappGroupComponentId } from '../whatsapp-group/core/route';
 import {
   getDocumentCommentLocation,
   type NotificationEntityOverride,
@@ -67,16 +67,16 @@ async function goToLocationInSplit(
 }
 
 /** Opens or activates the requested content from the source split. */
-function openSplitIfNotOpen(
+type OpenOptions = {
+  newSplit?: boolean;
+  sourceHandle?: SplitHandle;
+  onApplied?: VoidFunction;
+};
+
+function openContent(
   layoutManager: SplitManager,
-  type: BlockName | BlockAlias | 'component',
-  id: string,
-  options: {
-    newSplit?: boolean;
-    params?: Record<string, unknown>;
-    sourceHandle?: SplitHandle;
-    onApplied?: VoidFunction;
-  } = {}
+  content: SplitContent,
+  options: OpenOptions
 ) {
   let onApplied = options.onApplied;
   const reportApplied = () => {
@@ -84,25 +84,38 @@ function openSplitIfNotOpen(
     onApplied = undefined;
     callback?.();
   };
-  const reportImmediateResult = (result: OpenSplitResult | undefined) => {
-    if (!result) return;
-    if (result.status === 'opened' || result.status === 'reused') {
-      reportApplied();
-    }
-  };
+  const result = layoutManager.openWithSplit(content, {
+    activate: true,
+    referredFrom: null,
+    preferNewSplit: options.newSplit,
+    handle: options.sourceHandle,
+    ...(options.onApplied ? { onApplied: reportApplied } : {}),
+  });
+  if (result?.status === 'opened' || result?.status === 'reused')
+    reportApplied();
+}
+
+/** Groups open in External's main pane; the group's route claim reuses an open one. */
+function openWhatsAppGroup(
+  layoutManager: SplitManager,
+  groupId: string,
+  options: OpenOptions
+) {
+  openContent(layoutManager, whatsappGroupContent(groupId), options);
+}
+
+function openSplitIfNotOpen(
+  layoutManager: SplitManager,
+  type: BlockName | BlockAlias | 'component',
+  id: string,
+  options: OpenOptions & { params?: Record<string, unknown> } = {}
+) {
   const existing = layoutManager.getSplitByContent(type, id);
   if (existing) {
     existing.activate();
-    reportApplied();
+    options.onApplied?.();
   } else {
-    const result = layoutManager.openWithSplit(contentReference(type, id), {
-      activate: true,
-      referredFrom: null,
-      preferNewSplit: options.newSplit,
-      handle: options.sourceHandle,
-      ...(options.onApplied ? { onApplied: reportApplied } : {}),
-    });
-    reportImmediateResult(result);
+    openContent(layoutManager, contentReference(type, id), options);
   }
   if (options.params && type !== 'component') {
     goToLocationInSplit(layoutManager, type, id, options.params).catch(
@@ -230,12 +243,11 @@ function getSupportedHandler(
       .with('whatsapp_group_message', () => {
         if (!isFeatureEnabled(enableWhatsappLinked)) return null;
         return async (lm: SplitManager, newSplit: boolean = false) =>
-          openSplitIfNotOpen(
-            lm,
-            'component',
-            whatsappGroupComponentId(notification.entity_id),
-            { newSplit, sourceHandle, onApplied }
-          );
+          openWhatsAppGroup(lm, notification.entity_id, {
+            newSplit,
+            sourceHandle,
+            onApplied,
+          });
       })
       .with('new_email', () => {
         const meta = notification.notification_metadata;
@@ -372,21 +384,24 @@ function getSupportedHandler(
                   });
               };
               span.setAttr('access_requests.outcome', 'navigation_requested');
-              openSplitIfNotOpen(
-                lm,
-                block === 'initiative' || block === 'whatsapp_group'
-                  ? 'component'
-                  : block,
-                block === 'whatsapp_group'
-                  ? whatsappGroupComponentId(target.entityId)
-                  : block === 'initiative'
+              if (block === 'whatsapp_group')
+                openWhatsAppGroup(lm, target.entityId, {
+                  newSplit,
+                  sourceHandle,
+                  onApplied: applied,
+                });
+              else
+                openSplitIfNotOpen(
+                  lm,
+                  block === 'initiative' ? 'component' : block,
+                  block === 'initiative'
                     ? projectRouteId({
                         id: target.entityId,
                         section: 'overview',
                       })
                     : target.entityId,
-                { newSplit, sourceHandle, onApplied: applied }
-              );
+                  { newSplit, sourceHandle, onApplied: applied }
+                );
             } catch {
               span.setAttr('access_requests.outcome', 'error');
               span.error('Access-request notification could not be opened');

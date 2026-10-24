@@ -116,6 +116,7 @@ import {
   emailSplitRoute,
   emailThreadRoute,
   externalRoute,
+  externalWhatsappGroupRoute,
   foldersRoute,
   formRespondRoute,
   homeCalendarRoute,
@@ -163,9 +164,13 @@ import {
   withMeetingShell,
 } from './shells';
 
-const WhatsAppGroupRouteView = lazyNamed(
+const WhatsAppGroupRedirectRouteView = lazyNamed(
   () => import('@app/features/whatsapp-group/route-views'),
-  'WhatsAppGroupRouteView'
+  'WhatsAppGroupRedirectRouteView'
+);
+const ExternalWhatsAppGroupRouteView = lazyNamed(
+  () => import('@app/features/external-view/route-views'),
+  'ExternalWhatsAppGroupRouteView'
 );
 
 const { Router, Route } = SplitRouter;
@@ -400,7 +405,12 @@ export function AppRouterView() {
           definition={externalRoute}
           component={ExternalRouteView}
           loading={ExternalViewSkeleton}
-        />
+        >
+          <Route
+            definition={externalWhatsappGroupRoute}
+            component={ExternalWhatsAppGroupRouteView}
+          />
+        </Route>
         <Route
           definition={calendarSplitRoute}
           component={CalendarRouteView}
@@ -422,7 +432,7 @@ export function AppRouterView() {
         </Route>
         <Route
           definition={whatsappGroupRoute}
-          component={WhatsAppGroupRouteView}
+          component={WhatsAppGroupRedirectRouteView}
         />
         <Route definition={callDetailRoute} component={CallDetailRouteView} />
         <Route definition={companiesRoute} component={CompaniesRouteView}>

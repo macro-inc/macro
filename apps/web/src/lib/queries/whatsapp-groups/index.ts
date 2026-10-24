@@ -3,18 +3,18 @@ import type {
   GroupSend,
   GroupSummary,
   MessagePage,
-  PendingSend,
+  SendFailure,
+  SendProgress,
 } from '@app/features/whatsapp-group/core/group';
 import {
   infiniteQueryOptions,
   queryOptions,
   useInfiniteQuery,
-  useMutation,
   useQuery,
 } from '@tanstack/solid-query';
+import type { Result } from 'neverthrow';
 import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
-import { whatsappOperation } from '../whatsapp-linked/operation';
 import { whatsappGroupsKeys } from './keys';
 
 /** Decoded group operations. Production decodes generated DSS types before this seam. */
@@ -22,28 +22,30 @@ export type WhatsAppGroupApi = {
   list: () => Promise<GroupSummary[]>;
   detail: (groupId: string) => Promise<GroupDetail>;
   messages: (groupId: string, before?: string) => Promise<MessagePage>;
-  sends: (groupId: string) => Promise<PendingSend[]>;
+  /** Records one deliberate send; DSS dedupes by the idempotency key. */
   send: (
     groupId: string,
     request: GroupSend,
     idempotencyKey: string
-  ) => Promise<unknown>;
+  ) => Promise<Result<SendProgress, SendFailure>>;
+  /** The caller's progress for recorded sends, by send id. */
+  delivery: (groupId: string, sendIds: string[]) => Promise<SendProgress[]>;
   upload: (
     groupId: string,
     file: File
-  ) => Promise<{ uploadId: string; audio: boolean }>;
+  ) => Promise<Result<{ uploadId: string; audio: boolean }, SendFailure>>;
   markRead: (groupId: string, messageId: string) => Promise<unknown>;
   stopSync: (groupId: string) => Promise<unknown>;
 };
 
+// DSS pushes `whatsapp_changed` through the connection gateway (`./sync`);
+// these reads do not poll.
 function listOptions(api: WhatsAppGroupApi, userId: string) {
   return queryOptions({
     queryKey: whatsappGroupsKeys.list(userId).queryKey,
     queryFn: api.list,
     enabled: !!userId,
     staleTime: 5000,
-    refetchInterval: 15000,
-    refetchIntervalInBackground: false,
     throwOnError: false,
   });
 }
@@ -53,8 +55,6 @@ function detailOptions(api: WhatsAppGroupApi, userId: string, groupId: string) {
     queryFn: () => api.detail(groupId),
     enabled: !!userId && !!groupId,
     staleTime: 5000,
-    refetchInterval: 15000,
-    refetchIntervalInBackground: false,
     throwOnError: false,
   });
 }
@@ -70,18 +70,25 @@ function messagesOptions(
     getNextPageParam: (page) => page.before,
     enabled: !!userId && !!groupId,
     staleTime: 0,
-    refetchInterval: 5000,
-    refetchIntervalInBackground: false,
     throwOnError: false,
   });
 }
-function sendsOptions(api: WhatsAppGroupApi, userId: string, groupId: string) {
+/** Outcomes of this viewer's in-flight sends; checked again on every push. */
+const DELIVERY_CHECK_MS = 5000;
+function deliveryOptions(
+  api: WhatsAppGroupApi,
+  userId: string,
+  groupId: string,
+  sendIds: string[]
+) {
   return queryOptions({
-    queryKey: whatsappGroupsKeys.sends(userId, groupId).queryKey,
-    queryFn: () => api.sends(groupId),
-    enabled: !!userId && !!groupId,
+    queryKey: whatsappGroupsKeys.delivery(userId, groupId)._ctx.sends(sendIds)
+      .queryKey,
+    queryFn: () => api.delivery(groupId, sendIds),
+    enabled: !!userId && !!groupId && sendIds.length > 0,
     staleTime: 0,
-    refetchInterval: 5000,
+    // A missed push must not leave a sent message pending forever.
+    refetchInterval: DELIVERY_CHECK_MS,
     refetchIntervalInBackground: false,
     throwOnError: false,
   });
@@ -101,35 +108,33 @@ export function useWhatsappGroupQueries(
   const messages = useInfiniteQuery(() =>
     messagesOptions(api, userId(), groupId())
   );
-  const sends = useQuery(() => sendsOptions(api, userId(), groupId()));
-  const send = useMutation(() => ({
-    mutationFn: (input: {
-      userId: string;
-      groupId: string;
-      request: GroupSend;
-      idempotencyKey: string;
-    }) =>
-      whatsappOperation(
-        'group.send',
-        () => api.send(input.groupId, input.request, input.idempotencyKey),
-        input.groupId
-      ),
-    // Pending/unknown sends refresh independently; never retry a write.
-    retry: false,
-    onSuccess: (_result, input) =>
-      Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: whatsappGroupsKeys.sends(input.userId, input.groupId)
-            .queryKey,
-        }),
-        queryClient.invalidateQueries({
-          queryKey: whatsappGroupsKeys.messages(input.userId, input.groupId)
-            .queryKey,
-        }),
-      ]),
-  }));
-  return { group, messages, sends, send };
+  return { group, messages };
+}
+export function useWhatsappGroupDeliveryQuery(
+  api: WhatsAppGroupApi,
+  userId: Accessor<string>,
+  groupId: Accessor<string>,
+  sendIds: Accessor<string[]>
+) {
+  return useQuery(() => deliveryOptions(api, userId(), groupId(), sendIds()));
+}
+/** Unread counts and names in every group list. */
+export function invalidateWhatsappGroupList() {
+  return queryClient.invalidateQueries({
+    queryKey: whatsappGroupsKeys.list._def,
+  });
 }
 export function invalidateWhatsappGroups() {
   return queryClient.invalidateQueries({ queryKey: whatsappGroupsKeys._def });
+}
+/** A send was recorded: its row and the group's place in lists follow. */
+export function refreshWhatsappGroupTimeline(userId: string, groupId: string) {
+  return Promise.all([
+    queryClient.invalidateQueries({
+      queryKey: whatsappGroupsKeys.messages(userId, groupId).queryKey,
+    }),
+    queryClient.invalidateQueries({
+      queryKey: whatsappGroupsKeys.delivery(userId, groupId).queryKey,
+    }),
+  ]);
 }

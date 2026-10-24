@@ -12,9 +12,21 @@ import type { ChannelMessageListMeta } from './list-meta';
 import { Message } from './Message';
 import { MaybeSwipeToReplyRow } from './SwipeToReplyRow';
 
+/**
+ * Where a message lives. A WhatsApp group renders through these rows but keeps
+ * its own storage, so it never reaches the stored-message editor.
+ */
+export type ChannelMessageParent =
+  | MessageParent
+  | { type: 'whatsapp_group'; id: string };
+
+function storedParent(parent: ChannelMessageParent): MessageParent | undefined {
+  return parent.type === 'whatsapp_group' ? undefined : parent;
+}
+
 type ChannelMessageProps = {
   renderContent?: (content: JSX.Element) => JSX.Element;
-  parent: MessageParent;
+  parent: ChannelMessageParent;
   inputMode?: 'inline' | 'unified';
   message: MessageData;
   actions?: MessageActions;
@@ -43,26 +55,28 @@ function isEditingMessage(
 
 function MessageContentSlot(props: {
   renderContent?: (content: JSX.Element) => JSX.Element;
-  parent: MessageParent;
+  parent: ChannelMessageParent;
   inputMode?: 'inline' | 'unified';
   messageEditor?: MessageEditor;
   class?: string;
 }) {
   const message = useMessage();
   const isEditing = () => isEditingMessage(props.messageEditor, message().id);
+  const inlineEditing = () => {
+    const parent = storedParent(props.parent);
+    const messageEditor = props.messageEditor;
+    if (!isEditing() || props.inputMode === 'unified') return;
+    return parent && messageEditor ? { parent, messageEditor } : undefined;
+  };
 
   const content = (
     <Switch>
-      <Match
-        when={
-          isEditing() && props.inputMode !== 'unified' && props.messageEditor
-        }
-      >
-        {(messageEditor) => (
+      <Match when={inlineEditing()}>
+        {(editing) => (
           <MessageEditorContent
-            parent={props.parent}
+            parent={editing().parent}
             message={message()}
-            messageEditor={messageEditor()}
+            messageEditor={editing().messageEditor}
             class={props.class}
           />
         )}
@@ -119,7 +133,7 @@ function DeletedMessageLayout() {
 
 function RegularMessageLayout(props: {
   renderContent?: (content: JSX.Element) => JSX.Element;
-  parent: MessageParent;
+  parent: ChannelMessageParent;
   inputMode?: 'inline' | 'unified';
   messageEditor?: MessageEditor;
   hideTriggeredBy?: boolean;
@@ -135,7 +149,12 @@ function RegularMessageLayout(props: {
           <Message.AgentBadge />
           <Message.Timestamp
             class="shrink-0"
-            format={props.parent.type === 'channel' ? 'time' : 'dateAndTime'}
+            format={
+              props.parent.type === 'channel' ||
+              props.parent.type === 'whatsapp_group'
+                ? 'time'
+                : 'dateAndTime'
+            }
           />
           <Message.EditedIndicator class="shrink-0" />
           <Message.AgentSessionLink class="ml-auto" />
@@ -165,7 +184,7 @@ function RegularMessageLayout(props: {
 
 function GroupedMessageLayout(props: {
   renderContent?: (content: JSX.Element) => JSX.Element;
-  parent: MessageParent;
+  parent: ChannelMessageParent;
   inputMode?: 'inline' | 'unified';
   messageEditor?: MessageEditor;
 }) {

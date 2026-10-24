@@ -92,9 +92,46 @@ import { isReplyInput } from './types';
 import { uploadInputAttachments } from './upload-attachments';
 import { clearComposer as clearComposerPreservingFocus } from './utils/clear-composer';
 import { entityToDocumentMentionInfo } from './utils/entity-mention';
+import type { UploadResult } from './utils/file-helpers';
 import { applyInlineFormat, applyNodeFormat } from './utils/formatting';
 import { $selectTrailingParagraph } from './utils/select-trailing-paragraph';
 import { hasSendableInputContent } from './utils/sendable-content';
+
+/**
+ * What the composer offers beyond text, formatting and file attachments.
+ * Hosts that carry only those, such as a WhatsApp group, switch the rest off.
+ */
+export type ChannelInputFeatures = {
+  /** `@` mentions of people, agents and Macro items, including Ask Macro. */
+  mentions: boolean;
+  /** Creating Macro items from the composer: tasks, documents, polls, forms. */
+  createItems: boolean;
+  gifs: boolean;
+  /** Blocks plain-text hosts can't carry: headings, checklists, tables, math, embeds. */
+  richBlocks: boolean;
+};
+
+const ALL_FEATURES: ChannelInputFeatures = {
+  mentions: true,
+  createItems: true,
+  gifs: true,
+  richBlocks: true,
+};
+
+/** Slash actions behind each switchable feature. */
+const CREATE_ITEM_ACTION_IDS = [
+  'task',
+  'document',
+  'database',
+  'database-query',
+];
+const RICH_BLOCK_ACTION_IDS = [
+  'heading1',
+  'heading2',
+  'heading3',
+  'list-check',
+  'table',
+];
 
 export type ChannelInputProps = InputCallbacks & {
   input: InputData;
@@ -127,6 +164,12 @@ export type ChannelInputProps = InputCallbacks & {
    * Defaults to `false`.
    */
   collapsible?: boolean;
+  /** Defaults to every feature; calls are offered through `onStartCall`. */
+  features?: Partial<ChannelInputFeatures>;
+  /** Uploads one picked or dropped file. Defaults to Macro's chat upload. */
+  uploadAttachment?: (file: File) => Promise<UploadResult>;
+  /** File picker filter. Defaults to the media and documents channels accept. */
+  fileAccept?: string;
   /**
    * Drop the composer's own card chrome (rounding, background, shadow) and sit
    * flat on whatever surface hosts it. For composers that already live inside a
@@ -204,6 +247,10 @@ function DefaultActions(props: {
 }
 
 export function ChannelInput(props: ChannelInputProps) {
+  const features = (): ChannelInputFeatures => ({
+    ...ALL_FEATURES,
+    ...props.features,
+  });
   const [layout, setLayout] = createSignal<HTMLDivElement>();
   const [scrollContainer, setScrollContainer] = createSignal<HTMLElement>();
   let clearComposer = () => {};
@@ -230,6 +277,7 @@ export function ChannelInput(props: ChannelInputProps) {
         files,
         tracker: attachmentTracker,
         uploadFile: (file) =>
+          props.uploadAttachment?.(file) ??
           uploadFile(file, chatRuleset, { hideProgressIndicator: true }),
       });
     },
@@ -316,11 +364,19 @@ export function ChannelInput(props: ChannelInputProps) {
   ]);
 
   const groupMentions = !props.parent || props.parent.type === 'channel';
+  // The editor is configured once, at mount.
+  const initialFeatures = features();
   const markdownEditor = createConfiguredChannelMarkdownEditor({
     groupMentions,
     namespace: props.markdownNamespace ?? 'channel-input-markdown',
     resolveAppLink: useMacroMentionLinkResolver(),
-    enableMentions: true,
+    enableMentions: initialFeatures.mentions,
+    composerActions: initialFeatures.createItems,
+    ignoreActionIds: [
+      ...(initialFeatures.createItems ? [] : CREATE_ITEM_ACTION_IDS),
+      ...(initialFeatures.richBlocks ? [] : RICH_BLOCK_ACTION_IDS),
+      ...(initialFeatures.gifs ? [] : ['gif']),
+    ],
     users: mentionUsers,
     scrollContainer,
     onMentionCreate: (mention) => {
@@ -426,7 +482,7 @@ export function ChannelInput(props: ChannelInputProps) {
     // The picker opens at the caret, so the editor takes focus first.
     const gif = (): ComposerAddMenuGroup['items'] => {
       const action = slashAction('gif');
-      if (!action) return [];
+      if (!action || !features().gifs) return [];
       return [
         {
           id: 'gif',
@@ -440,20 +496,25 @@ export function ChannelInput(props: ChannelInputProps) {
         },
       ];
     };
-    const macro = macroUser();
+    const macro = features().mentions ? macroUser() : undefined;
     const startCall = props.onStartCall;
     const callInProgress = !!props.callInProgress;
     return [
       {
         items: [
-          {
-            id: 'mention',
-            label: 'Mention',
-            icon: <AtIcon class="size-3.5" />,
-            hint: '@',
-            onSelect: () => runInEditor(openMentionTypeahead, { focus: true }),
-            focusesEditor: true,
-          },
+          ...(features().mentions
+            ? [
+                {
+                  id: 'mention',
+                  label: 'Mention',
+                  icon: <AtIcon class="size-3.5" />,
+                  hint: '@',
+                  onSelect: () =>
+                    runInEditor(openMentionTypeahead, { focus: true }),
+                  focusesEditor: true,
+                },
+              ]
+            : []),
           {
             id: 'attach',
             label: 'Attach files',
@@ -465,28 +526,30 @@ export function ChannelInput(props: ChannelInputProps) {
       },
       {
         label: 'Create',
-        items: [
-          ...create(
-            'task',
-            'New task',
-            <EntityIcon targetType="task" size="xs" />
-          ),
-          ...create(
-            'poll',
-            'New poll',
-            <ChartBarIcon class="size-3.5 text-violet" />
-          ),
-          ...create(
-            'form',
-            'New form',
-            <EntityIcon targetType="form" size="xs" />
-          ),
-          ...create(
-            'document',
-            'New document',
-            <EntityIcon targetType="md" size="xs" />
-          ),
-        ],
+        items: !features().createItems
+          ? []
+          : [
+              ...create(
+                'task',
+                'New task',
+                <EntityIcon targetType="task" size="xs" />
+              ),
+              ...create(
+                'poll',
+                'New poll',
+                <ChartBarIcon class="size-3.5 text-violet" />
+              ),
+              ...create(
+                'form',
+                'New form',
+                <EntityIcon targetType="form" size="xs" />
+              ),
+              ...create(
+                'document',
+                'New document',
+                <EntityIcon targetType="md" size="xs" />
+              ),
+            ],
       },
       {
         items: [
@@ -769,7 +832,7 @@ export function ChannelInput(props: ChannelInputProps) {
         type="file"
         class="hidden"
         multiple
-        accept={CHANNEL_FILE_PICKER_ACCEPT}
+        accept={props.fileAccept ?? CHANNEL_FILE_PICKER_ACCEPT}
         onChange={collapsedInput.onFilePickerChange}
         data-collapsed-input-file-picker
       />

@@ -183,7 +183,7 @@ type ShareBlockType = BlockName | BlockAlias | 'initiative' | 'whatsapp_group';
 
 function shareUrl(type: ShareBlockType, id: string): string {
   if (type === 'whatsapp_group')
-    return buildSimpleEntityUrl({ type: 'whatsapp-group', id });
+    return buildSimpleEntityUrl({ type: 'external/whatsapp', id });
   if (type !== 'initiative') return buildSimpleEntityUrl({ type, id });
   return buildSimpleEntityUrl({
     type: 'component',

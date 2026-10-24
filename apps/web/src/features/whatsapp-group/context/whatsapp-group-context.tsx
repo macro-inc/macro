@@ -1,3 +1,4 @@
+import type { Result } from 'neverthrow';
 import {
   type Accessor,
   createContext,
@@ -9,19 +10,30 @@ import type {
   GroupDetail,
   GroupMessage,
   GroupSend,
-  PendingSend,
+  SendFailure,
+  SendProgress,
 } from '../core/group';
 
 /** One mounted group's independent data and writes. */
 export type WhatsAppGroupCapabilities = {
   group: SourceRead<GroupDetail>;
+  /** Messages DSS stored, oldest first. */
   timeline: SourceRead<GroupMessage[]>;
-  sends: SourceRead<PendingSend[]>;
   hasOlder: Accessor<boolean>;
   loadingOlder: Accessor<boolean>;
   loadOlder: () => Promise<unknown>;
-  send: (request: GroupSend, idempotencyKey: string) => Promise<unknown>;
-  upload: (file: File) => Promise<{ uploadId: string; audio: boolean }>;
+  /** Records one write; DSS dedupes a retry that reuses its key. */
+  send: (
+    request: GroupSend,
+    idempotencyKey: string
+  ) => Promise<Result<SendProgress, SendFailure>>;
+  /** Progress of the recorded sends the page is waiting on. */
+  delivery: (sendIds: Accessor<string[]>) => SourceRead<SendProgress[]>;
+  upload: (
+    file: File
+  ) => Promise<Result<{ uploadId: string; audio: boolean }, SendFailure>>;
+  /** A short-lived URL for an imported file's bytes, to play it inline. */
+  fileUrl: (documentId: Accessor<string>) => SourceRead<string>;
   markRead: (messageId: string) => Promise<unknown>;
   stopSync: () => Promise<unknown>;
 };

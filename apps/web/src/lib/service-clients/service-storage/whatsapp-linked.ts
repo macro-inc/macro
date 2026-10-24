@@ -11,15 +11,20 @@ import type { LinkedGroupInfo } from './generated/schemas/linkedGroupInfo';
 import type { LinkedPairing } from './generated/schemas/linkedPairing';
 import type { LinkedPairState } from './generated/schemas/linkedPairState';
 import type { LinkedPasskeyBody } from './generated/schemas/linkedPasskeyBody';
+import {
+  type WhatsAppErrorCode,
+  whatsappErrorResponse,
+} from './whatsapp-errors';
 
 const root = `${SERVER_HOSTS['document-storage-service']}/meta/linked`;
 const pairing = (id: string) => `${root}/pairing/${encodeURIComponent(id)}`;
 
 function post<T extends ObjectLike>(url: string, body: unknown) {
-  return fetchWithToken<T>(url, {
+  return fetchWithToken<T, WhatsAppErrorCode>(url, {
     method: 'POST',
     body: JSON.stringify(body),
     headers: { 'Content-Type': 'application/json' },
+    errorResponseHandler: whatsappErrorResponse,
   });
 }
 

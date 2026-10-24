@@ -239,7 +239,7 @@ it.each(['split', 'closed'] as const)(
   }
 );
 
-it('opens a WhatsApp notification in its own component without a channel block', async () => {
+it('opens a WhatsApp notification in External without a channel block', async () => {
   vi.mocked(isFeatureEnabled).mockImplementation(
     (flag) => flag === enableWhatsappLinked
   );
@@ -256,10 +256,22 @@ it('opens a WhatsApp notification in its own component without a channel block',
     layout
   );
   expect(open).toHaveBeenCalledWith(
-    expect.objectContaining({
+    {
       type: 'component',
-      id: 'whatsapp-group:11111111-1111-4111-8111-111111111111',
-    }),
+      id: 'external',
+      entryMetadata: {
+        route: {
+          matches: [
+            expect.anything(),
+            { id: 'view-external', params: {} },
+            {
+              id: 'external-whatsapp-group',
+              params: { groupId: '11111111-1111-4111-8111-111111111111' },
+            },
+          ],
+        },
+      },
+    },
     expect.anything()
   );
   expect(createBlockInstance).not.toHaveBeenCalled();

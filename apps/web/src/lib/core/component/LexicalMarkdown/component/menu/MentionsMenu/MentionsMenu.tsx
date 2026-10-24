@@ -1,16 +1,22 @@
 import { useCrmContactMentionSource } from '@app/features/crm/record-adapter';
+import { whatsappGroupApi } from '@app/features/whatsapp-group/queries/production-api';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import type { BlockName } from '@core/block';
 import { useMaybeBlockId, useMaybeBlockName } from '@core/block';
 import { SUPPORTED_CHAT_ATTACHMENT_BLOCKS } from '@core/component/AI/constant/fileType';
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
-import { enableCrm, isFeatureEnabled } from '@core/constant/featureFlags';
+import {
+  enableCrm,
+  enableWhatsappLinked,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import {
   type EntityBucket,
   type EntityItem,
   useQuickAccess,
 } from '@core/context/quickAccess';
+import { useUserId } from '@core/context/user';
 import clickOutside from '@core/directive/clickOutside';
 import { isMobile } from '@core/mobile/isMobile';
 import type { ChannelWithParticipants, IUser } from '@core/user';
@@ -20,7 +26,9 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import type { EmailEntity } from '@entity';
 import { Telemetry } from '@macro-inc/observability';
+import { queryReadyGate } from '@queries/gate';
 import type { HistoryItem as Item } from '@queries/history/history';
+import { useWhatsappGroupsQuery } from '@queries/whatsapp-groups';
 import { Key } from '@solid-primitives/keyed';
 import { createLazyMemo } from '@solid-primitives/memo';
 import { createVirtualizer } from '@tanstack/solid-virtual';
@@ -47,6 +55,7 @@ import type {
   DateMentionItem,
   MentionItem,
   UserMentionRecord,
+  WhatsAppGroupMentionItem,
 } from '../../../utils/mentionsUtils';
 import { useMenuKeyboardNavigation } from '../useMenuKeyboardNavigation';
 import { ItemBin } from './components/ItemBin';
@@ -254,6 +263,30 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         enabled: () => !props.sources || props.sources.includes('emails'),
       });
 
+  // A WhatsApp group mentioned in a channel is shared with its members.
+  const whatsappGroupsEnabled = () =>
+    !hasCustomEntities() &&
+    props.block === 'channel' &&
+    props.menu.isOpen() &&
+    isFeatureEnabled(enableWhatsappLinked) &&
+    (!props.sources || props.sources.includes('whatsappGroups'));
+  const userId = useUserId();
+  const whatsappGroupsQuery = useWhatsappGroupsQuery(whatsappGroupApi, () =>
+    whatsappGroupsEnabled() ? (userId() ?? '') : ''
+  );
+  const whatsappGroups = createLazyMemo((): WhatsAppGroupMentionItem[] => {
+    if (!whatsappGroupsEnabled() || !queryReadyGate(whatsappGroupsQuery))
+      return [];
+    const term = searchTerm().trim().toLocaleLowerCase();
+    return whatsappGroupsQuery.data
+      .filter((group) => group.name.toLocaleLowerCase().includes(term))
+      .map((group) => ({
+        kind: 'whatsappGroup',
+        id: group.id,
+        data: { id: group.id, name: group.name },
+      }));
+  });
+
   const dateOptions = useDateSearch({ query: searchTerm });
   const dates = createLazyMemo((): DateMentionItem[] => {
     return dateOptions().map(
@@ -340,6 +373,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       ...users,
       ...(sourceEnabled('documents') ? (docs() ?? []) : []),
       ...(sourceEnabled('channels') ? (channels() ?? []) : []),
+      ...whatsappGroups(),
       ...(sourceEnabled('agentSessions') ? agentSessions() : []),
       ...(sourceEnabled('companies') ? (companies() ?? []) : []),
       ...(sourceEnabled('emails') ? (emails() ?? []) : []),
@@ -366,6 +400,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
             (sourceEnabled('documents') ? docsMention.totalCount() : 0) +
             (sourceEnabled('agentSessions') ? agentSessions().length : 0) +
             (sourceEnabled('channels') ? channelsMention.totalCount() : 0) +
+            whatsappGroups().length +
             (sourceEnabled('companies')
               ? (companyMention?.totalCount() ?? 0)
               : 0) +
@@ -445,6 +480,12 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         hasMore: channelsMention.hasMore,
         isLoadingMore: channelsMention.isLoadingMore,
         loadMore: channelsMention.loadMore,
+      },
+      {
+        id: 'whatsappGroups',
+        label: 'WhatsApp groups',
+        getData: whatsappGroups,
+        getFullCount: () => whatsappGroups().length,
       },
       {
         id: 'agentSessions',

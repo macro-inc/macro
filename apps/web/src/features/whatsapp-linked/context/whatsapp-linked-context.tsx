@@ -5,8 +5,8 @@ import {
   type ParentProps,
   useContext,
 } from 'solid-js';
-import type { GroupSummary } from '../../whatsapp-group/core/group';
 import type { WhatsAppAccount } from '../core/account';
+import type { AdoptFailure } from '../core/adopt';
 import type { WhatsAppGroup } from '../core/group';
 import type { PairingStep, PasskeyChallenge } from '../core/pairing';
 
@@ -75,8 +75,6 @@ export type WhatsAppLinkedCapabilities = {
   account: SourceRead<WhatsAppAccount | null>;
   /** Groups of the connected account; read only while `enabled`. */
   groups: (enabled: Accessor<boolean>) => SourceRead<WhatsAppGroup[]>;
-  /** All adopted groups this viewer can read, including shared groups without WhatsApp. */
-  sharedGroups: SourceRead<GroupSummary[]>;
   /** The live step of one pairing, polled while it is open. */
   pairing: (pairingId: Accessor<string>) => SourceRead<PairingRead>;
   passkey: PasskeyCapability;
@@ -88,14 +86,11 @@ export type WhatsAppLinkedCapabilities = {
   disconnect: (
     generation: number
   ) => ResultAsync<{ remoteUnlinkRequested: boolean }, RequestFailure>;
-  adopt: (request: {
-    groupJid: string;
-    name: string;
-  }) => ResultAsync<{ groupId: string }, RequestFailure>;
+  /** One click: the Macro group takes the WhatsApp group's name and follows it. */
+  adopt: (groupJid: string) => ResultAsync<{ groupId: string }, AdoptFailure>;
   isConnecting: Accessor<boolean>;
   isDisconnecting: Accessor<boolean>;
-  isAdopting: Accessor<boolean>;
-  /** Host action: open an adopted group. */
+  /** Host action: open a group in Macro. */
   openGroup: (groupId: string) => void;
 };
 

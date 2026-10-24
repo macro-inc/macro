@@ -19,7 +19,8 @@ export type MessageReferenceKind =
   | 'group'
   | 'automation'
   | 'crm_company'
-  | 'crm_contact';
+  | 'crm_contact'
+  | 'whatsapp_group';
 export type AuthoredMessageReference = {
   entityType: MessageReferenceKind;
   entityId: string;
@@ -52,7 +53,9 @@ export function messageReference(
         'group',
         'automation',
         'crm_company',
-        'crm_contact'
+        'crm_contact',
+        // Mentioning a WhatsApp group in a channel shares it with the members.
+        'whatsapp_group'
       ),
       (entityType) => ({ entityType, entityId: id })
     )

@@ -8,6 +8,7 @@ type Group = {
   name: string;
   members: number;
   group: { id: string; name: string } | null;
+  shared?: { id: string; name: string; owner_id: string };
 };
 
 /** Server state the mocked DSS `/meta/linked` routes answer from. */
@@ -30,6 +31,10 @@ type LinkedServer = {
   grants: { userId: string; accessLevel: string }[];
   permissionUpdates: unknown[];
   readMessages: string[];
+  /** Responses for the next sends, in order; afterwards a send is recorded. */
+  sendReplies: { status: number; json: unknown }[];
+  /** Progress `POST /delivery` reports, by send id. */
+  delivery: Record<string, { state: string; message_id: string | null }>;
 };
 
 function server(): LinkedServer {
@@ -49,6 +54,17 @@ function server(): LinkedServer {
         members: 23,
         group: null,
       },
+      {
+        jid: '120363004@g.us',
+        name: 'Ana, Ben, +2',
+        members: 4,
+        group: null,
+        shared: {
+          id: 'group-shared-family',
+          name: 'Ana, Ben, +2',
+          owner_id: 'macro|owner@example.test',
+        },
+      },
     ],
     requests: [],
     adoptions: [],
@@ -59,6 +75,8 @@ function server(): LinkedServer {
     grants: [],
     permissionUpdates: [],
     readMessages: [],
+    sendReplies: [],
+    delivery: {},
   };
 }
 
@@ -235,31 +253,38 @@ async function mount(page: Page, state: LinkedServer, query = '') {
                   ],
             },
           });
-        if (suffix === '/sends' && method === 'GET')
-          return route.fulfill({
-            json: [
-              {
-                id: 'send-unknown',
-                message_id: null,
-                state: 'unknown',
-                error_code: null,
-                payload: {
-                  idempotency_key: 'unknown-intent',
-                  message: {
-                    type: 'text',
-                    text: 'Running 10 minutes late, start without me',
-                  },
-                  reply_to: null,
-                },
-              },
-            ],
-          });
         if (suffix === '/sends' && method === 'POST') {
-          state.outgoing.push(route.request().postDataJSON());
+          const body = route.request().postDataJSON();
+          state.outgoing.push(body);
+          const reply = state.sendReplies.shift();
+          if (reply)
+            return route.fulfill({ status: reply.status, json: reply.json });
+          const id = `send-${body.idempotency_key}`;
+          state.delivery[id] ??= { state: 'pending', message_id: null };
           return route.fulfill({
-            json: { id: 'new-send', state: 'pending', message_id: null },
+            json: {
+              id,
+              group_id: GROUP_ID,
+              user_id: USER_ID,
+              created_at: new Date().toISOString(),
+              payload: body,
+              ...state.delivery[id],
+            },
           });
         }
+        if (suffix === '/delivery')
+          return route.fulfill({
+            json: (route.request().postDataJSON() as string[])
+              .filter((id) => state.delivery[id])
+              .map((id) => ({
+                id,
+                group_id: GROUP_ID,
+                user_id: USER_ID,
+                created_at: new Date().toISOString(),
+                payload: {},
+                ...state.delivery[id],
+              })),
+          });
         if (suffix === '/read') {
           state.readMessages.push(route.request().postDataJSON().message_id);
           return route.fulfill({ json: {} });
@@ -300,7 +325,10 @@ async function mount(page: Page, state: LinkedServer, query = '') {
             .map((item) => ({
               id: item.group?.id,
               name: item.group?.name,
-              unread_count: 2,
+              user_id: USER_ID,
+              unread_count: item.group?.id === GROUP_ID ? 2 : 0,
+              can_send: item.group?.id === GROUP_ID,
+              send_reason: item.group?.id === GROUP_ID ? null : 'not_observing',
             })),
         });
       if (path === 'account')
@@ -352,6 +380,7 @@ async function mount(page: Page, state: LinkedServer, query = '') {
             disappearing: false,
             observedAt: '2026-10-20T12:00:00Z',
             group: group.group,
+            shared: group.shared ?? null,
             participants: Array.from({ length: group.members }, (_, i) => ({
               jid: `1415555${String(i).padStart(4, '0')}@s.whatsapp.net`,
               admin: i === 0,
@@ -361,7 +390,6 @@ async function mount(page: Page, state: LinkedServer, query = '') {
       if (path === 'groups/adopt' && method === 'POST') {
         const body = route.request().postDataJSON() as { group_jid: string };
         state.adoptions.push(body);
-        // The group's name follows WhatsApp.
         const group = state.groups.find(({ jid }) => jid === body.group_jid);
         if (group) group.group = { id: 'group-new', name: group.name };
         return route.fulfill({
@@ -369,6 +397,7 @@ async function mount(page: Page, state: LinkedServer, query = '') {
             id: 'binding-1',
             group_id: 'group-new',
             group_jid: body.group_jid,
+            team_id: 'team-acme',
             user_id: USER_ID,
             adopted_at: '2026-10-20T12:00:00Z',
             ownership_state: 'active',
@@ -414,23 +443,71 @@ test('links WhatsApp by QR, then adds a shareable WhatsApp group', async ({
   await expect(dialog).toBeHidden();
   expect(state.requests).not.toContain('DELETE pairing/pairing-1');
 
-  const groups = page.getByRole('list', { name: 'Your WhatsApp groups' });
-  await expect(groups.getByText('Design Crit')).toBeVisible();
-  await expect(groups.getByLabel('2 unread messages')).toBeVisible();
-  await groups.getByRole('button', { name: /In Macro/ }).click();
-  expect(await page.evaluate(() => window.openedGroups)).toEqual([GROUP_ID]);
+  const groups = page.getByRole('list', { name: 'Groups to add to Macro' });
+  await expect(groups.getByText('Launch War Room')).toBeVisible();
+  // Already in Macro: listed in External's sidebar instead.
+  await expect(groups.getByText('Design Crit')).toHaveCount(0);
+  await groups
+    .getByRole('button', { name: /Shared with you by Group Owner/ })
+    .click();
+  expect(await page.evaluate(() => window.openedGroups)).toEqual([
+    'group-shared-family',
+  ]);
 
   await groups.getByRole('button', { name: 'Add to Macro' }).click();
-  const add = page.getByRole('dialog');
-  await expect(add.getByText('Add “Launch War Room” to Macro')).toBeVisible();
-  await expect(add.getByLabel('Group name')).toHaveValue('Launch War Room');
-  await expect(add.getByRole('checkbox')).toHaveCount(0);
-  await expect(add.getByText(/Only you have access at first/)).toBeVisible();
-  await add.getByRole('button', { name: 'Add group' }).click();
-  await expect(
-    groups.getByRole('button', { name: 'In Macro → Launch War Room' })
-  ).toBeVisible();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(groups.getByText('Launch War Room')).toHaveCount(0);
   expect(state.adoptions).toEqual([{ group_jid: '120363003@g.us' }]);
+  expect(unexpected).toEqual([]);
+});
+
+test('a refused add says why, on that group', async ({ page }) => {
+  const state = server();
+  state.account = {
+    id: 'account-1',
+    user_id: USER_ID,
+    authorization_generation: 4,
+    identity_jid: '14155550142:3@s.whatsapp.net',
+    state: 'connected',
+  };
+  const unexpected = await mount(page, state);
+  // Registered last, so it answers before the catch-all mock.
+  await page.route('**/dss/meta/linked/groups/adopt', (route) =>
+    route.fulfill({
+      status: 409,
+      json: {
+        code: 'disconnected',
+        message: 'connect your WhatsApp account first',
+      },
+    })
+  );
+  const row = page
+    .getByRole('list', { name: 'Groups to add to Macro' })
+    .getByRole('listitem')
+    .filter({ hasText: 'Launch War Room' });
+  await row.getByRole('button', { name: 'Add to Macro' }).click();
+  await expect(row.getByRole('alert')).toHaveText(
+    'Your WhatsApp is disconnected. Reconnect it, then add the group.'
+  );
+  expect(unexpected).toEqual([]);
+});
+
+test('External lists groups in Macro with unread counts and read-only tags', async ({
+  page,
+}) => {
+  const state = server();
+  state.groups[1].group = { id: 'group-shared', name: 'Launch War Room' };
+  const unexpected = await mount(page, state, '?view=in-macro');
+  const nav = page.getByRole('navigation', {
+    name: 'WhatsApp groups in Macro',
+  });
+  const design = nav.getByRole('button', { name: /design-crit/ });
+  await expect(design.getByLabel('2 unread messages')).toBeVisible();
+  await expect(
+    nav.getByRole('button', { name: /Launch War Room/ }).getByText('Read-only')
+  ).toBeVisible();
+  await design.click();
+  expect(await page.evaluate(() => window.openedGroups)).toEqual([GROUP_ID]);
   expect(unexpected).toEqual([]);
 });
 
@@ -504,7 +581,16 @@ test('Macro desktop shows its authenticator’s QR while the phone confirms', as
   ).toBeDisabled();
 });
 
-test('an independent group reads, replies, reacts and pages without channel requests', async ({
+/** The shared channel composer; Lexical takes typed text. */
+async function typeInComposer(page: Page, text: string) {
+  const editor = page.locator(
+    '[data-input-editor-shell] [contenteditable="true"]'
+  );
+  await editor.click();
+  await page.keyboard.type(text);
+}
+
+test('an independent group reads, replies, reacts and pages through channel rows', async ({
   page,
 }) => {
   const state = server();
@@ -514,24 +600,25 @@ test('an independent group reads, replies, reacts and pages without channel requ
   ).toBeVisible();
   await expect(page.getByText('Sending as +14155550142')).toBeVisible();
   await expect(page.getByText('Loading design.pdf…')).toBeVisible();
-  await expect(page.getByText(/may already have arrived/)).toBeVisible();
+  await expect(page.getByText(/may already have arrived/)).toHaveCount(0);
   await expect.poll(() => state.readMessages).toContain('message-2');
   expect(state.outgoing).toEqual([]);
-  await page
-    .getByRole('button', { name: 'Reply', exact: true })
-    .first()
-    .click();
-  await page
-    .getByRole('textbox', { name: 'Message WhatsApp group' })
-    .fill('Thanks from my own WhatsApp');
-  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await page.locator('[data-message-id="message-1"]').hover();
+  await page.getByRole('button', { name: 'Reply', exact: true }).click();
+  await expect(page.getByText('Replying to Ana Ruiz')).toBeVisible();
+  await typeInComposer(page, 'Thanks from my own WhatsApp');
+  await page.getByRole('button', { name: 'Send message' }).click();
   await expect.poll(() => state.outgoing.length).toBe(1);
   expect(state.outgoing[0]).toMatchObject({
     message: { type: 'text', text: 'Thanks from my own WhatsApp' },
     reply_to: 'message-1',
   });
-  await expect(page.getByRole('textbox')).toHaveValue('');
-  await page.getByRole('button', { name: '👍 2' }).click();
+  // Shown at once, before WhatsApp accepts it.
+  await expect(
+    page.getByText('Thanks from my own WhatsApp', { exact: true })
+  ).toBeVisible();
+  await expect(page.getByText('Replying to Ana Ruiz')).toHaveCount(0);
+  await page.locator('[data-message-reaction-chip][data-emoji="👍"]').click();
   await expect.poll(() => state.outgoing.length).toBe(2);
   expect(state.outgoing[1]).toMatchObject({
     message: {
@@ -546,6 +633,57 @@ test('an independent group reads, replies, reacts and pages without channel requ
   expect(state.requests.some((request) => request.includes('channels/'))).toBe(
     false
   );
+  expect(unexpected).toEqual([]);
+});
+
+test('a refused send leaves the conversation, says why and restores the draft', async ({
+  page,
+}) => {
+  const state = server();
+  state.sendReplies.push({
+    status: 403,
+    json: {
+      code: 'forbidden',
+      message: 'you do not have permission for this WhatsApp operation',
+    },
+  });
+  const unexpected = await mount(page, state, `?group=${GROUP_ID}`);
+  await typeInComposer(page, 'Not allowed here');
+  await page.getByRole('button', { name: 'Send message' }).click();
+  await expect(
+    page.getByText("Your WhatsApp can't send to this group.")
+  ).toBeVisible();
+  await expect(
+    page.locator('[role="log"]').getByText('Not allowed here')
+  ).toHaveCount(0);
+  await expect(
+    page.locator('[data-input-editor-shell]').getByText('Not allowed here')
+  ).toBeVisible();
+  expect(state.outgoing).toHaveLength(1);
+  expect(unexpected).toEqual([]);
+});
+
+test('an unknown outcome retries quietly under the same key', async ({
+  page,
+}) => {
+  const state = server();
+  state.sendReplies.push({
+    status: 503,
+    json: {
+      code: 'temporarily_unavailable',
+      message: 'WhatsApp is temporarily unavailable; retry shortly',
+    },
+  });
+  const unexpected = await mount(page, state, `?group=${GROUP_ID}`);
+  await typeInComposer(page, 'Arrives once');
+  await page.getByRole('button', { name: 'Send message' }).click();
+  await expect.poll(() => state.outgoing.length).toBe(2);
+  const [first, second] = state.outgoing as { idempotency_key: string }[];
+  expect(second?.idempotency_key).toBe(first?.idempotency_key);
+  await expect(page.getByText(/Couldn't reach WhatsApp/)).toHaveCount(0);
+  await expect(
+    page.locator('[role="log"]').getByText('Arrives once')
+  ).toBeVisible();
   expect(unexpected).toEqual([]);
 });
 
@@ -583,7 +721,7 @@ for (const mobile of [false, true]) {
         const unexpected = await mount(page, state, `?group=${GROUP_ID}`);
         await expect(page.getByText('Sending as +14155550142')).toBeVisible();
         await expect(
-          page.getByRole('button', { name: 'Send', exact: true })
+          page.getByRole('textbox', { name: 'Message Design Crit' })
         ).toBeVisible();
         expect(await page.evaluate(() => innerWidth)).toBe(mobile ? 390 : 1440);
         expect(
