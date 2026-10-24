@@ -967,6 +967,12 @@ export const listTypedNotificationsResponse = zod
                             .enum(['free', 'premium'])
                             .optional()
                             .describe('What a team invitee gets by joining.'),
+                          reminder: zod
+                            .boolean()
+                            .optional()
+                            .describe(
+                              'Whether this email reminds the invitee of an invite they have not answered.'
+                            ),
                           role: zod
                             .string()
                             .nullish()
@@ -2963,6 +2969,12 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                             .enum(['free', 'premium'])
                             .optional()
                             .describe('What a team invitee gets by joining.'),
+                          reminder: zod
+                            .boolean()
+                            .optional()
+                            .describe(
+                              'Whether this email reminds the invitee of an invite they have not answered.'
+                            ),
                           role: zod
                             .string()
                             .nullish()
@@ -4953,6 +4965,12 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                             .enum(['free', 'premium'])
                             .optional()
                             .describe('What a team invitee gets by joining.'),
+                          reminder: zod
+                            .boolean()
+                            .optional()
+                            .describe(
+                              'Whether this email reminds the invitee of an invite they have not answered.'
+                            ),
                           role: zod
                             .string()
                             .nullish()
@@ -6882,6 +6900,12 @@ export const getTypedNotificationByIdResponse = zod
                     .enum(['free', 'premium'])
                     .optional()
                     .describe('What a team invitee gets by joining.'),
+                  reminder: zod
+                    .boolean()
+                    .optional()
+                    .describe(
+                      'Whether this email reminds the invitee of an invite they have not answered.'
+                    ),
                   role: zod
                     .string()
                     .nullish()

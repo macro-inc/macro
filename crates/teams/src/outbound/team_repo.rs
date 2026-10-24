@@ -1,11 +1,11 @@
 //! Implementation for TeamRepository using MacroDB.
 use crate::domain::{
     model::{
-        AcceptedTeamInvite, CreateTeamError, InviteUsersToTeamError, PatchTeamRequest,
-        RemoveTeamInviteError, RemoveUserFromTeamError, SeatPlan, Team, TeamError, TeamInvite,
-        TeamInviteDetails, TeamInviteLinkTeam, TeamInviteLinkToken, TeamInviteSnapshot, TeamMember,
-        TeamMembers, TeamPlan, TeamRole, TeamWithMembers, ToggleAutoJoinDomainError,
-        is_generic_email_domain, normalize_team_slug,
+        AcceptedTeamInvite, CreateTeamError, DueInviteReminder, InviteUsersToTeamError,
+        PatchTeamRequest, RemoveTeamInviteError, RemoveUserFromTeamError, SeatPlan, Team,
+        TeamError, TeamInvite, TeamInviteDetails, TeamInviteLinkTeam, TeamInviteLinkToken,
+        TeamInviteSnapshot, TeamMember, TeamMembers, TeamPlan, TeamRole, TeamWithMembers,
+        ToggleAutoJoinDomainError, is_generic_email_domain, normalize_team_slug,
     },
     owned_entity_cleanup::ClearedTeam,
     team_repo::{TeamMembersService, TeamRepository},
@@ -542,6 +542,80 @@ impl TeamRepository for TeamRepositoryImpl {
         .execute(&self.pool)
         .await?;
         Ok(())
+    }
+
+    #[tracing::instrument(skip(self), fields(claimed = tracing::field::Empty), err)]
+    async fn claim_due_invite_reminders(
+        &self,
+        limit: i64,
+    ) -> Result<Vec<DueInviteReminder>, TeamError> {
+        // The first reminder goes 3 days after the last email, the second 4
+        // days after the first. Invites older than 14 days are left alone, so
+        // a deploy never reminds people about invites from long ago. Skips
+        // invites the invitee could not accept (the team stopped paying for
+        // its subscription), already-members, and invites whose sender left
+        // the team, since the email is written in the sender's name.
+        let reminders = sqlx::query!(
+            r#"
+            WITH due AS (
+                SELECT ti.id
+                FROM team_invite ti
+                JOIN team t ON t.id = ti.team_id
+                WHERE ti.created_at > NOW() - INTERVAL '14 days'
+                  AND (
+                      (ti.reminders_sent = 0 AND ti.last_sent_at <= NOW() - INTERVAL '3 days')
+                      OR (ti.reminders_sent = 1 AND ti.last_sent_at <= NOW() - INTERVAL '4 days')
+                  )
+                  AND (t.enterprise OR t.paying OR t.subscription_id IS NULL)
+                  AND EXISTS (
+                      SELECT 1 FROM team_user tu
+                      WHERE tu.team_id = ti.team_id AND tu.user_id = ti.invited_by
+                  )
+                  AND NOT EXISTS (
+                      SELECT 1 FROM team_user tu
+                      WHERE tu.team_id = ti.team_id AND tu.user_id = 'macro|' || ti.email
+                  )
+                ORDER BY ti.created_at
+                LIMIT $1
+                FOR UPDATE OF ti SKIP LOCKED
+            )
+            UPDATE team_invite ti
+            SET reminders_sent = ti.reminders_sent + 1,
+                last_sent_at = NOW()
+            FROM due, team t
+            WHERE ti.id = due.id AND t.id = ti.team_id
+            RETURNING
+                ti.id,
+                ti.team_id,
+                t.name AS team_name,
+                ti.email,
+                ti.invited_by,
+                ti.reminders_sent,
+                t.enterprise,
+                t.paying,
+                t.subscription_id IS NOT NULL AS "has_subscription!"
+            "#,
+            limit,
+        )
+        .fetch_all(&self.pool)
+        .await?
+        .into_iter()
+        .map(|r| {
+            Ok(DueInviteReminder {
+                team_invite_id: r.id,
+                team_id: r.team_id,
+                team_name: r.team_name,
+                email: r.email,
+                invited_by: r.invited_by,
+                reminder_number: u8::try_from(r.reminders_sent).map_err(anyhow::Error::from)?,
+                enterprise: r.enterprise,
+                paying: r.paying,
+                has_subscription: r.has_subscription,
+            })
+        })
+        .collect::<Result<Vec<_>, TeamError>>()?;
+        tracing::Span::current().record("claimed", reminders.len());
+        Ok(reminders)
     }
 
     #[tracing::instrument(skip(self), err)]

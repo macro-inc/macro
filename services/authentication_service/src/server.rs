@@ -94,7 +94,7 @@ use crate::{
     outbound::team_owned_entity_cleanup::TeamOwnedEntityCleanupAdapter,
 };
 use std::{sync::Arc, time::Duration};
-use tokio_util::task::TaskTracker;
+use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
 /// Build the service from the environment and serve until shutdown.
 pub async fn run() -> anyhow::Result<()> {
@@ -634,6 +634,19 @@ pub async fn run() -> anyhow::Result<()> {
     .with_open_seat_release((*ai_billing_service).clone())
     .with_owned_entity_cleanup(team_owned_entity_cleanup);
     let teams_service = Arc::new(teams_service_impl);
+    // Reminds people of team invites they have not answered. Replicas claim
+    // disjoint invites, so every replica sweeps.
+    let invite_reminders_stop = CancellationToken::new();
+    let invite_reminders = TaskTracker::new();
+    invite_reminders.spawn(
+        teams::inbound::invite_reminder_worker::run_invite_reminder_sweep(
+            teams_service.clone(),
+            teams::inbound::invite_reminder_worker::INVITE_REMINDER_SWEEP_INITIAL_DELAY,
+            teams::inbound::invite_reminder_worker::INVITE_REMINDER_SWEEP_INTERVAL,
+            invite_reminders_stop.clone().cancelled_owned(),
+        ),
+    );
+    invite_reminders.close();
     let user_deletion = Arc::new(
         crate::outbound::user_deletion::UserDeletionAdapter::new(
             db.clone(),
@@ -744,6 +757,19 @@ pub async fn run() -> anyhow::Result<()> {
         sweep.abort();
     }
 
+    // Lets a sweep in progress finish: its reminders are already counted as
+    // sent, so abandoning the batch would drop them.
+    invite_reminders_stop.cancel();
+    if tokio::time::timeout(INVITE_REMINDER_DRAIN_TIMEOUT, invite_reminders.wait())
+        .await
+        .is_err()
+    {
+        tracing::warn!(
+            timeout_seconds = INVITE_REMINDER_DRAIN_TIMEOUT.as_secs(),
+            "timed out waiting for the team invite reminder sweep to finish"
+        );
+    }
+
     tracing::info!("waiting for event broker publishes to drain");
     event_broker_tracker.close();
     match tokio::time::timeout(EVENT_BROKER_DRAIN_TIMEOUT, event_broker_tracker.wait()).await {
@@ -761,6 +787,7 @@ pub async fn run() -> anyhow::Result<()> {
 }
 
 const EVENT_BROKER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
+const INVITE_REMINDER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
 const MICROSOFT_GRANT_CLEANUP_INTERVAL: Duration = Duration::from_secs(5 * 60);
 
 // SAFETY: this is not a secret value
