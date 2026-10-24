@@ -637,7 +637,9 @@ where `Email guests` does, with no recipients, the title as subject, a plain-tex
 the body (title, when in the viewer's zone, the repeat rule in words, location, organizer and
 description, never guests or a join link) and the `.ics` attached as a picked file would be.
 Nothing is saved as a draft until you edit something. The file is `METHOD:PUBLISH`, so
-recipients get a copy to add to their calendar, not an invitation they can answer. If the file
+recipients get a copy to add to their calendar, not an invitation they can answer; in Macro the
+received email shows it as a shared event (see [Calendar invitations in
+email](#calendar-invitations-in-email)). If the file
 cannot be fetched, no composer opens and a `Failed to forward event` toast shows; to check it,
 answer the `.ics` route with an error.
 On desktop, every icon button in the details header (`Copy event`, `Download .ics`, `Forward
@@ -1256,10 +1258,12 @@ ICS attachments show a calendar icon in the attachment pill and file headers on
 desktop and mobile, including when the email uses `application/ics` or a
 parameterized `text/calendar` MIME type. Opening the attachment of a message that shows a
 card opens a dialog (a drawer on phones) with the same card, so its RSVP or `Add to calendar`
-works there, and `Download .ics`, which saves the file without adding it to Drive. When the
-card falls back to the saved invitation (the event matches nothing on your calendars, as with
-a forwarded event), its status line reads `Saved invitation.` in the dialog; the card in the
-email adds that the original email or invitation attachment has more options. The card
+works there, and `Download .ics`, which saves the file without adding it to Drive. When an
+invitation's card falls back to the saved invitation (the event matches nothing on your
+calendars), its status line reads `Saved invitation.` in the dialog; the card in the email
+adds that the original email or invitation attachment has more options. A shared event shown
+without a calendar check reads `Shared event.` in the dialog the same way, while the card in
+the email points at the original email or event attachment. The card
 stays put while the thread refreshes, and `Open in calendar` closes the dialog before the
 calendar opens, including when Calendar is already open in another split. A calendar file with
 no card (nothing Macro could read) downloads directly, and an Outlook cloud-reference `.ics`
@@ -1273,6 +1277,27 @@ Descriptions render sanitized rich text, including emphasis, links, and lists.
 Plain-text line breaks and literal angle brackets (such as `<bob@example.com>`)
 remain readable. Use `Show more` / `Show less` to expand or collapse the description;
 description links use the host's normal link-opening behavior.
+
+A published event file (`METHOD:PUBLISH`, what `Forward by email` attaches) is a shared
+event, not an invitation: the card reads `Shared event organized by <organizer>` and never
+shows Yes / Maybe / No, a last response, or a waiting-for-sync line. When the viewer already
+holds the meeting it says `On your calendar.` with `Open in calendar` and `View your day`;
+when the meeting is on more than one of the viewer's accounts it says
+`This event matches multiple accounts. Open your calendar to choose.`, as an invitation does.
+When the calendar check confirms the viewer does not hold it, the card says
+`Not on your calendar.` and, behind the `enable-calendar-add-shared-event` flag, offers
+`Add to calendar`, which imports the same snapshot as the channel-share card
+(the viewer's only writable Google calendar, or one picked from a menu; the real organizer
+kept, the viewer as the only guest, nobody notified) through email service's
+`POST /email/threads/{thread_id}/messages/{message_id}/calendar-invitations/{invitation_id}/copy`.
+The server reads the event from the saved email, never from the request. The card then
+resolves to the snapshot. A single occurrence, a cancelled event, a time that cannot be read,
+and mail saved before recurrence was recorded on the snapshot get no `Add to calendar`.
+Nor does a card whose check is not confirmed: it says `Checking your connected calendar…`
+while loading, `Connect a calendar to add this event.` without a calendar, and
+`Calendar unavailable. Saved event details are shown.` when the check fails; a failed
+refresh after an earlier `Not on your calendar.` keeps that line under the unavailable notice
+but withholds the button.
 
 A connected, resolved invitation shows the responding address and Yes / Maybe / No.
 Calendars connected through a linked inbox also resolve here, using that inbox's

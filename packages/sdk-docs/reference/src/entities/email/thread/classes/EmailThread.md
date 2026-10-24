@@ -29,6 +29,36 @@ up to the first 100 messages) loads lazily on first field access.
 
 ## Methods
 
+### addEventToCalendar()
+
+> **addEventToCalendar**(`message`, `invitation`, `options?`): `Promise`\<[`CalendarEvent`](../../../calendar/event/classes/CalendarEvent.md)\>
+
+Add a shared event one of this thread's messages carries (a published
+`.ics`, such as one sent with Forward by email) to one of the
+requester's Google calendars, and return a handle to the synced
+snapshot. The event is read from the saved message, never from the
+caller, and lands the way [CalendarEvent.addToCalendar](../../../calendar/event/classes/CalendarEvent.md#addtocalendar) adds a
+channel-shared one: the meeting's iCalendar UID and organizer, only the
+requester as a guest, no join link, nobody notified. Refused with
+`invalid_input` for an invitation, which is answered from the calendar
+instead, `already_on_calendar` when the meeting is already on one of
+their calendars, and `copy_refused` when Google will not import it.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `message` | [`EmailMessage`](../../message/classes/EmailMessage.md) |
+| `invitation` | [`CalendarInvitation`](../../../../../generated/email/types.gen/type-aliases/CalendarInvitation.md) |
+| `options?` | \{ `calendar?`: [`Calendar`](../../../calendar/calendar/classes/Calendar.md); \} |
+| `options.calendar?` | [`Calendar`](../../../calendar/calendar/classes/Calendar.md) |
+
+#### Returns
+
+`Promise`\<[`CalendarEvent`](../../../calendar/event/classes/CalendarEvent.md)\>
+
+***
+
 ### addLabel()
 
 > **addLabel**(`label`): `Promise`\<`void`\>

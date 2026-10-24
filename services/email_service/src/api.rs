@@ -72,6 +72,10 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
             "/email/threads/{thread_id}/calendar-invitations",
             axum::routing::get(calendar_invitations::handler),
         )
+        .route(
+            "/email/threads/{thread_id}/messages/{message_id}/calendar-invitations/{invitation_id}/copy",
+            axum::routing::post(calendar_invitations::copy_handler),
+        )
         .nest("/email", email::router(state))
         .nest("/gmail", gmail::router())
         .nest("/outlook", outlook::router())

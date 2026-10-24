@@ -119,7 +119,10 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   (`src/inbound/toolset/add_shared_calendar_event.rs`) only while the
   `ENABLE_CALENDAR_ADD_SHARED_EVENT` deployment switch is on (off unless set,
   like the card's `enable-calendar-add-shared-event`); without a `calendarId`
-  it takes the card's only target calendar or asks which one.
+  it takes the card's only target calendar or asks which one. An event file
+  forwarded by email takes the same import through
+  `CalendarSnapshotImporter::import_snapshot`, fed an `EventSnapshot` that
+  `crates/email`'s `invitation_import` builds from the email's saved snapshot.
 - Asking to join a channel-shared event (`src/domain/join_requests.rs`) is a
   Macro-stored request, not an `entity_access` row: the grant is a provider guest
   write. Eligibility is the invite path's own `copy_capabilities` on the

@@ -76,7 +76,7 @@ sfs_map = []
 sfs_delete = []
 
 [dependencies]
-calendar_events = { path = "../../crates/calendar_events", features = ["google", "postgres", "schema"] }
+calendar_events = { path = "../../crates/calendar_events", features = ["google", "inbound", "postgres", "schema"] }
 ammonia = { workspace = true }
 anyhow = { workspace = true }
 authentication_service_client = { path = "../../crates/authentication_service_client" }

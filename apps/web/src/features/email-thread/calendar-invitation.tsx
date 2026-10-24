@@ -1,20 +1,30 @@
+import { toast } from '@core/component/Toast/Toast';
 import { useAddInboxFlow } from '@core/email-link';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { openExternalUrl } from '@core/util/url';
 import {
   getCachedCalendarInvitations,
   useCalendarInvitationsQuery,
+  useCopyCalendarInvitationMutation,
 } from '@queries/calendar/invitations';
 import type { EventTime } from '@service-email/generated/schemas/eventTime';
 import { createSignal, Show, Suspense } from 'solid-js';
 import { EventRsvpScopeDialog } from '../calendar/components/EventRsvpScopeDialog';
 import { createCalendarRsvpController } from '../calendar/hooks/create-calendar-rsvp-controller';
-import { useCalendarUiFlag } from '../calendar/hooks/use-calendar-ui-flag';
+import {
+  useCalendarAddSharedEventFlag,
+  useCalendarUiFlag,
+} from '../calendar/hooks/use-calendar-ui-flag';
+import {
+  AddToCalendarButton,
+  toastAddToCalendarFailure,
+} from '../calendar-view/components/AddToCalendarButton';
 import { CalendarInviteCard } from '../email-message/components/calendar-invite-card';
 import {
   type CalendarInvitation,
   displayedInvitation,
   type InvitationResolution,
+  invitationCanBeAdded,
 } from '../email-message/core/calendar-invitation';
 import { CalendarInvitationDay } from './calendar-invitation-day';
 import { invitationResolution } from './queries/calendar-invitation';
@@ -106,12 +116,41 @@ function ConnectedInvitation(
     const value = resolved();
     return value?.canRespond ? value : undefined;
   });
+  const addSharedEvent = useCalendarAddSharedEventFlag();
+  // A forwarded event the viewer does not hold yet is added as a snapshot,
+  // like a channel-shared one; once it lands the card resolves to it.
+  const copy = useCopyCalendarInvitationMutation({
+    onSuccess: () => toast.success('Added to your calendar'),
+    onError: toastAddToCalendarFailure,
+  });
+  // Like the response actions, adding waits for a calendar check that worked.
+  const canAdd = () =>
+    addSharedEvent() &&
+    !query.isError &&
+    state().kind === 'no_match' &&
+    invitationCanBeAdded(props.invitation);
   return (
     <>
       <CalendarInviteCard
         invitation={props.invitation}
         hour12={props.hour12}
         inCalendarFile={props.inCalendarFile}
+        addToCalendar={
+          <Show when={canAdd()}>
+            <AddToCalendarButton
+              size="md"
+              pending={copy.isPending}
+              onAdd={(calendarId) =>
+                copy.mutate({
+                  threadId: props.threadId,
+                  messageId: props.messageId,
+                  invitationId: props.invitation.id,
+                  calendarId,
+                })
+              }
+            />
+          </Show>
+        }
         actions={{
           get resolution() {
             return state();

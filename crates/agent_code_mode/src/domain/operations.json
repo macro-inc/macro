@@ -266,6 +266,7 @@
   "email.updateThreadState": "Update Thread State",
   "email.getThread": "Get Thread",
   "email.getThreadCalendarInvitations": "Get Thread Calendar Invitations",
+  "email.copyThreadCalendarInvitation": "Copy Thread Calendar Invitation",
   "email.updateThreadProject": "Update Thread Project",
   "email.healthHandler": "Health",
   "notification.healthHandler": "Health",

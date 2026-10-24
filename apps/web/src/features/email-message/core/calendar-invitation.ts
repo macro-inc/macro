@@ -126,6 +126,20 @@ export function invitationIsCancelled(invite: CalendarInvitation): boolean {
   );
 }
 
+/**
+ * Whether a saved event can be added to the viewer's calendar: a whole
+ * published event (a forwarded .ics) with a readable time, saved after its
+ * recurrence was recorded. The email service checks the same before importing.
+ */
+export function invitationCanBeAdded(invite: CalendarInvitation): boolean {
+  if (invite.method !== 'publish' || invitationIsCancelled(invite))
+    return false;
+  if (invite.recurrence_id_raw || invite.recurrence == null) return false;
+  const start = invite.start?.kind;
+  const end = invite.end?.kind;
+  return (start === 'date' || start === 'zoned') && (!end || end === start);
+}
+
 export function invitationSchedule(
   invite: CalendarInvitation,
   hour12: boolean,

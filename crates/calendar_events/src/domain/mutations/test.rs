@@ -607,7 +607,7 @@ struct FakeProvider {
     created_drafts: Arc<Mutex<Vec<CalendarEventDraft>>>,
     updated_patches: Arc<Mutex<Vec<CalendarEventPatch>>>,
     invited_guests: Arc<Mutex<Vec<Vec<CalendarAttendeeInput>>>>,
-    imported: Arc<Mutex<Vec<(String, crate::domain::ics::CalendarEventExport)>>>,
+    imported: Arc<Mutex<Vec<(String, crate::domain::ics::EventSnapshot)>>>,
     invited_as: Arc<Mutex<Vec<Vec<String>>>>,
 }
 
@@ -771,7 +771,7 @@ impl CalendarMutationProvider for FakeProvider {
         &self,
         _access_token: &str,
         target: &ProviderCalendarTarget,
-        source: &crate::domain::ics::CalendarEventExport,
+        source: &crate::domain::ics::EventSnapshot,
     ) -> Result<ProviderImportOutcome, CalendarProviderError> {
         self.calls.lock().unwrap().push("import".to_string());
         self.imported

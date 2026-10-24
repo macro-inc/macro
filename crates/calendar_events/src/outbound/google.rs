@@ -11,7 +11,7 @@ use uuid::Uuid;
 mod import;
 
 use crate::domain::{
-    ics::CalendarEventExport,
+    ics::EventSnapshot,
     models::{
         ActorInboxes, AttendeeResponseStatus, CalendarAttendee, CalendarAttendeeInput,
         CalendarEvent, CalendarEventDraft, CalendarEventOverride, CalendarEventPatch,
@@ -1513,7 +1513,7 @@ impl<G: GoogleRequestGate> CalendarMutationProvider for GoogleCalendarClient<G> 
         &self,
         access_token: &str,
         target: &ProviderCalendarTarget,
-        source: &CalendarEventExport,
+        source: &EventSnapshot,
     ) -> Result<ProviderImportOutcome, CalendarProviderError> {
         self.import_copy(access_token, target, source).await
     }

@@ -246,7 +246,7 @@ impl<G: CalendarMutationProvider, O: CalendarMutationProvider> CalendarMutationP
         &self,
         access_token: &str,
         target: &ProviderCalendarTarget,
-        source: &super::ics::CalendarEventExport,
+        source: &super::ics::EventSnapshot,
     ) -> Result<ProviderImportOutcome, CalendarProviderError> {
         match target.provider {
             CalendarProvider::Google => {

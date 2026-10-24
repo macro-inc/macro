@@ -20,7 +20,8 @@ tools — hexagonal, heavily feature-gated.
 ## Scope
 
 - Owns: email/thread domain logic, scheduled delivery, reminders/followups,
-  calendar invitation extraction and resolution.
+  calendar invitation extraction and resolution, and adding a forwarded
+  event (`METHOD:PUBLISH`) to the viewer's calendar (`domain/invitation_import.rs`).
 - Not here: raw provider API calls → `email_api_client`; HTML
   parsing/sanitization → `email_utils`; SQLx queries over email tables →
   `email_db_client`.
@@ -56,6 +57,9 @@ tools — hexagonal, heavily feature-gated.
 - Forwarded attachments register through `domain/draft_attachments.rs` and resolve
   bytes through `domain/attachment_access.rs`; scheduled delivery also rechecks
   source inbox access in `domain/forwarded_attachments.rs`, including legacy jobs.
+- Saved invitation snapshots are JSONB and never re-extracted. `recurrence`
+  is `None` on snapshots saved before it was recorded, where a series looks
+  like a single event, so those cannot be added to a calendar.
 - The feature matrix (`ports`/`inbound`/`outbound`/`http_client`/`s3`/
   `gmail_token`/`ai_tools`/`attachment`/`calendar_invitations`/`axum`) gates
   most modules; check `Cargo.toml`'s `[features]` block for which one a new
