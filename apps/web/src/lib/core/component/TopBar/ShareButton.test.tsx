@@ -1443,7 +1443,7 @@ describe('native project sharing', () => {
     }
   );
 
-  it('copies the project route instead of a block URL', () => {
+  it('copies the project link that pastes as a mention', () => {
     mocks.inBlock = false;
     render(() => (
       <ShareTrigger
@@ -1454,7 +1454,7 @@ describe('native project sharing', () => {
     ));
     fireEvent.click(screen.getByRole('button', { name: 'Copy Share Link' }));
     expect(mocks.copyLink).toHaveBeenCalledWith(
-      'https://macro.com/app/component/initiative-view~initiative-1~overview'
+      'https://macro.com/app/initiative/initiative-1'
     );
   });
 });

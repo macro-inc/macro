@@ -260,9 +260,7 @@ export const openEntityInNewTab = ({
   location ??= getRowClickFallbackLocation(entity);
   // Build URL for the entity
   let entityPath: string;
-  if (entity.type === 'initiative') {
-    entityPath = `/app/component/${projectRouteId({ id: entity.id, section: 'overview' })}`;
-  } else if (entity.type === 'calendar_event') {
+  if (entity.type === 'calendar_event') {
     entityPath = `/app${calendarPath(getPreferredCalendarPeriodView())}`;
   } else if (entity.type === 'document') {
     const { fileType, subType } = entity;

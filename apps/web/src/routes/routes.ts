@@ -31,6 +31,7 @@ import {
   homeBaseBlockType,
   homePreviewRouteParams,
 } from '@app/features/home/home-route-schema';
+import { parseProjectRoute } from '@app/features/projects/core/route';
 import { reviewsTabSearch } from '@app/features/reviews-view/reviews-tab-search';
 import {
   ROUTINE_CREATE_ROUTE_ID,
@@ -784,6 +785,12 @@ export const legacyContentRoute = defineRoute({
       namespace: 'block',
       id: `${content.aliasContext?.baseType ?? content.type}:${id}`,
     };
+  },
+  toReference: ({ type, id }) => {
+    const project = type === 'component' ? parseProjectRoute(id) : undefined;
+    return project
+      ? uuidRouteReference(project.id, 'initiative')
+      : uuidRouteReference(id, type);
   },
 });
 
