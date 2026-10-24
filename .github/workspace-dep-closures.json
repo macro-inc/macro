@@ -13838,6 +13838,12 @@
       "crates/whatsapp_linked",
       "crates/workspace-hack"
     ],
+    "whatsapp_store_pg": [
+      "crates/whatsapp_store_pg",
+      "crates/whatsmeow",
+      "crates/whatsmeow_proto",
+      "crates/workspace-hack"
+    ],
     "whatsmeow": [
       "crates/whatsmeow",
       "crates/whatsmeow_proto",

@@ -127,6 +127,7 @@ members = [
   "crates/webhook_signature",
   "crates/whatsapp_fake_server",
   "crates/whatsapp_linked",
+  "crates/whatsapp_store_pg",
   "crates/whatsmeow",
   "crates/whatsmeow_proto",
   "crates/whatsmeow_signal",

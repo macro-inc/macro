@@ -21508,6 +21508,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "whatsapp_store_pg"
+version = "0.1.0"
+dependencies = [
+ "aes-gcm 0.10.3",
+ "async-trait",
+ "aws-sdk-kms",
+ "chrono",
+ "futures",
+ "hex",
+ "macro_db_migrator",
+ "postcard",
+ "prost 0.14.3",
+ "rand 0.9.4",
+ "rootcause",
+ "serde",
+ "sqlx",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "uuid",
+ "whatsmeow",
+ "workspace-hack",
+ "zeroize",
+]
+
+[[package]]
 name = "whatsmeow"
 version = "0.1.0"
 dependencies = [
