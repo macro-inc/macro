@@ -13,6 +13,7 @@ async fn sends_and_roster_refreshes_share_a_consistent_lock_order(pool: PgPool) 
                 idempotency_key: Uuid::now_v7(),
                 message: ReplyContent::Text {
                     text: format!("Concurrent send {index}"),
+                    mentions: vec![],
                 },
                 reply_to: None,
             };

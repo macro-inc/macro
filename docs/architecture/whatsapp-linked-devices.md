@@ -132,6 +132,23 @@ ambiguous are quarantined and retried. Missing reaction/revision targets
 are deferred. Edits follow source revision order; deletes are permanent tombstones.
 Reactions and media live in `whatsapp_group_reaction` and `whatsapp_group_attachment`.
 
+Besides text and media, a message may carry structured content in
+`whatsapp_group_message.rich` (`whatsapp_linked::domain::rich::RichContent`):
+polls, locations, contact cards and WhatsApp events, plus `mentions` (WhatsApp
+ids the text @-mentions) and `forwarded`. Poll votes are decrypted by the
+replica with the poll's message secret and kept per voter in
+`whatsapp_group_poll_vote` (latest revision wins); history pages bring them
+already decrypted. System lines (`kind = 'system'`) record what happened in a
+group: live `w:gp2` notifications (subject, description, disappearing timer,
+members added, removed, left, joined by link, promoted, demoted; each gets a
+stable synthetic source id), group icon changes, pins, call logs and the stub
+messages of history pages (including group creation). They never notify and
+never count as unread. The timeline resolves the ids in mentions, system lines
+and votes to names (people seen in the group, then the roster, then the phone
+number). View-once media and shapes Macro does not read stay readable
+placeholders. Attachments keep WhatsApp's declared width, height and length,
+and whether WhatsApp shows them as a sticker, GIF or voice note.
+
 `GET /meta/linked/whatsapp-groups` lists shared groups with viewer-specific unread
 counts and sending eligibility. Detail and messages live under
 `/meta/linked/whatsapp-groups/{group_id}`. Messages page newest-first using stable
@@ -144,7 +161,7 @@ DSS drains a durable notification outbox through the generic notification ingres
 channel members, and known link viewers who have read the group, except the verified sender. Link
 viewers must still have access when recipients are resolved; unknown link visitors cannot be
 enumerated. Notifications use the message id for idempotency and are suppressed
-for history, replays, edits and reactions. They link to the standalone group entity.
+for history, system lines, replays, edits, reactions and poll votes. They link to the standalone group entity.
 GraphQL notification targets use the canonical entity enum while groups remain outside Soup.
 
 ## Sending
@@ -183,6 +200,9 @@ bytes are never rewritten. Failures retry with backoff and then expose an
 Outbound: the attachments route stages one file per send in the blob table;
 `ReplyContent::Media` names it, the replica fetches it with `outbound_media`,
 and on acceptance it becomes the message's document, owned by the sender.
+A text send may @-mention participants (`ReplyContent::Text.mentions`, their
+WhatsApp ids; the text names each as `@<digits>`); the replica sends them as
+the message's `mentionedJid`.
 
 ## Passkey pairing
 

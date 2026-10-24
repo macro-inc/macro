@@ -33,7 +33,10 @@ export const group: GroupDetail = {
 export const messages: GroupMessage[] = [
   {
     id: 'message-1',
+    kind: 'message',
     sender: { name: 'Ana Ruiz' },
+    mentions: [],
+    forwarded: false,
     body: 'The *updated* designs are ready for review.',
     sentAt: '2026-10-21T10:00:00Z',
     edited: false,
@@ -43,7 +46,10 @@ export const messages: GroupMessage[] = [
   },
   {
     id: 'message-2',
+    kind: 'message',
     sender: { name: 'Me', userId: 'macro|me@example.test' },
+    mentions: [],
+    forwarded: false,
     body: 'Looking now. Thanks, Ana!',
     sentAt: new Date().toISOString(),
     edited: false,

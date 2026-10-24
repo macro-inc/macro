@@ -86,7 +86,10 @@ async fn messages_and_send_outcomes_signal_their_group(pool: PgPool) {
             &receipt::<MessageWrite>(ALICE, binding.id),
             &SendReply {
                 idempotency_key: Uuid::now_v7(),
-                message: ReplyContent::Text { text: "hi".into() },
+                message: ReplyContent::Text {
+                    text: "hi".into(),
+                    mentions: vec![],
+                },
                 reply_to: None,
             },
             SendAuthority::Human,
@@ -123,6 +126,7 @@ async fn a_retried_send_returns_the_original_whatever_happened_since(pool: PgPoo
         idempotency_key: Uuid::now_v7(),
         message: ReplyContent::Text {
             text: "once".into(),
+            mentions: vec![],
         },
         reply_to: None,
     };
@@ -152,6 +156,7 @@ async fn a_retried_send_returns_the_original_whatever_happened_since(pool: PgPoo
     let changed = SendReply {
         message: ReplyContent::Text {
             text: "twice".into(),
+            mentions: vec![],
         },
         ..request
     };

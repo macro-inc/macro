@@ -119,7 +119,8 @@ impl BindingRepository for PgLinkedRepository {
         messages: &[Uuid],
     ) -> LinkedResult<Vec<MessageAttachments>> {
         let rows = sqlx::query!(
-            r#"SELECT m.message_id AS "message_id!", a.ordinal, a.state, a.filename, a.mime, a.size, a.document_id
+            r#"SELECT m.message_id AS "message_id!", a.ordinal, a.state, a.filename, a.mime, a.size, a.document_id,
+                a.width, a.height, a.duration_seconds, a.presentation
             FROM whatsapp_group_attachment a
             JOIN whatsapp_group_message m ON m.binding_id = a.binding_id AND m.person_id = a.person_id AND m.source_id = a.source_id
             WHERE a.binding_id = $1 AND m.message_id = ANY($2) AND a.state <> 'deleted'
@@ -146,6 +147,13 @@ impl BindingRepository for PgLinkedRepository {
                 mime,
                 size: row.size.unwrap_or(0).max(0) as u64,
                 document_id: (state == AttachmentState::Ready).then_some(row.document_id),
+                width: row.width.map(|value| value.max(0) as u32),
+                height: row.height.map(|value| value.max(0) as u32),
+                duration_seconds: row.duration_seconds.map(|value| value.max(0) as u32),
+                presentation: row
+                    .presentation
+                    .as_deref()
+                    .and_then(MediaPresentation::parse),
             };
             match result.last_mut() {
                 Some(last) if last.message_id == row.message_id => {

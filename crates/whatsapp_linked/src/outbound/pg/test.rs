@@ -21,6 +21,7 @@ mod changes;
 mod concurrency;
 mod media;
 mod pairing;
+mod rich;
 mod timeline;
 
 const GROUP: &str = "120363000000000001@g.us";
@@ -175,6 +176,9 @@ fn text(event: u128, sender: &str, source: &str, body: &str) -> InboundEvent {
             revision: 0,
             target: None,
             media: vec![],
+            mentions: vec![],
+            forwarded: false,
+            rich: None,
         }),
     }
 }
@@ -521,6 +525,9 @@ async fn a_reaction_before_its_message_is_deferred_and_replayed(pool: PgPool) {
                 sender_jid: CUSTOMER_JID.into(),
             }),
             media: vec![],
+            mentions: vec![],
+            forwarded: false,
+            rich: None,
         }),
         ..text(1, BOB_JID, "unused", "")
     };
@@ -578,6 +585,9 @@ async fn edits_apply_in_source_order_and_deletes_are_permanent(pool: PgPool) {
                 sender_jid: CUSTOMER_JID.into(),
             }),
             media: vec![],
+            mentions: vec![],
+            forwarded: false,
+            rich: None,
         }),
         ..text(event, CUSTOMER_JID, "unused", "")
     };
@@ -620,6 +630,7 @@ async fn a_dispatched_send_becomes_unknown_after_takeover_and_settles_from_its_e
         idempotency_key: Uuid::now_v7(),
         message: ReplyContent::Text {
             text: "On it".into(),
+            mentions: vec![],
         },
         reply_to: None,
     };
@@ -694,7 +705,8 @@ async fn a_dispatched_send_becomes_unknown_after_takeover_and_settles_from_its_e
         claimed[0].content,
         OutgoingContent::Text {
             text: "On it".into(),
-            quote: None
+            quote: None,
+            mentions: vec![],
         }
     );
     session
@@ -760,6 +772,7 @@ async fn an_accepted_send_writes_the_group_message_and_its_echo_converges(pool: 
                 idempotency_key: Uuid::now_v7(),
                 message: ReplyContent::Text {
                     text: "Answer".into(),
+                    mentions: vec![],
                 },
                 reply_to: Some(question),
             },
@@ -779,7 +792,8 @@ async fn an_accepted_send_writes_the_group_message_and_its_echo_converges(pool: 
             quote: Some(Target {
                 source_id: "3EB0Q".into(),
                 sender_jid: CUSTOMER_JID.into()
-            })
+            }),
+            mentions: vec![],
         }
     );
     session
@@ -865,6 +879,7 @@ async fn disconnecting_fails_undispatched_sends_and_stops_observation(pool: PgPo
                 idempotency_key: Uuid::now_v7(),
                 message: ReplyContent::Text {
                     text: "later".into(),
+                    mentions: vec![],
                 },
                 reply_to: None,
             },
@@ -942,7 +957,10 @@ async fn stored_group_facts_authorize_adoption_and_sending_however_old(pool: PgP
             &receipt::<MessageWrite>(ALICE, binding.id),
             &SendReply {
                 idempotency_key: Uuid::now_v7(),
-                message: ReplyContent::Text { text: "hi".into() },
+                message: ReplyContent::Text {
+                    text: "hi".into(),
+                    mentions: vec![],
+                },
                 reply_to: None,
             },
             SendAuthority::Human,
@@ -1031,6 +1049,7 @@ async fn rate_limited_send_never_creates_a_dispatchable_intent(pool: PgPool) {
         idempotency_key: Uuid::now_v7(),
         message: ReplyContent::Text {
             text: "Rate limited".into(),
+            mentions: vec![],
         },
         reply_to: None,
     };

@@ -84,7 +84,11 @@ export class WhatsAppSend extends MacroEntity<LinkedSendProgress> {
         operation: wire.operation,
         text: wire.text ?? undefined,
       }))
-      .with({ type: 'text' }, (wire) => wire)
+      .with({ type: 'text' }, (wire) => ({
+        type: 'text',
+        text: wire.text,
+        mentions: wire.mentions ?? [],
+      }))
       .exhaustive();
     return {
       idempotencyKey: payload.idempotency_key,

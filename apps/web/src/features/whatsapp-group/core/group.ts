@@ -1,5 +1,6 @@
 import { match, P } from 'ts-pattern';
 import type { InboundAttachment } from './attachments';
+import type { Mention, RichContent } from './rich';
 
 /** Feature vocabulary; transport decoding lives in queries/. */
 export type GroupSummary = {
@@ -41,8 +42,16 @@ export type GroupDetail = {
 };
 export type GroupMessage = {
   id: string;
+  /** `system`: a group event (`rich.type === 'system'`), drawn as a line. */
+  kind: 'message' | 'system';
   sender: { name: string; userId?: string };
   body: string;
+  /** People `@<token>` in the body stands for. */
+  mentions: Mention[];
+  /** WhatsApp marked it forwarded. */
+  forwarded: boolean;
+  /** A poll, location, contact card, event or system line. */
+  rich?: RichContent;
   sentAt: string;
   edited: boolean;
   deleted: boolean;
@@ -54,7 +63,8 @@ export type GroupMessage = {
 };
 export type MessagePage = { messages: GroupMessage[]; before?: string };
 export type GroupSend =
-  | { kind: 'text'; text: string; replyTo?: string }
+  /** `mentions`: participant ids; the text names each as `@<digits>`. */
+  | { kind: 'text'; text: string; replyTo?: string; mentions?: string[] }
   | { kind: 'media'; uploadId: string; caption?: string; replyTo?: string }
   | { kind: 'reaction'; messageId: string; emoji: string }
   | { kind: 'edit'; messageId: string; text: string }

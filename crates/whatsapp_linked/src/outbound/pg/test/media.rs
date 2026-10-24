@@ -39,6 +39,10 @@ fn photo(event: u128, sender: &str, source: &str, bytes: &[u8]) -> InboundEvent 
             size: bytes.len() as u64,
             sha256: Sha256::digest(bytes).into(),
             locator: b"sealed locator".to_vec(),
+            width: Some(800),
+            height: Some(600),
+            duration_seconds: None,
+            presentation: None,
         }];
     }
     event
@@ -172,6 +176,10 @@ async fn an_inbound_photo_is_downloaded_once_and_becomes_a_private_document(pool
             mime: "image/jpeg".into(),
             size: bytes.len() as u64,
             document_id: Some(stored[0].0),
+            width: Some(800),
+            height: Some(600),
+            duration_seconds: None,
+            presentation: None,
         }
     );
     // Imported documents inherit ordinary group shares dynamically.

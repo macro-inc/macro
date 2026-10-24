@@ -17,7 +17,9 @@ import type {
   MessageActionContext,
   MessageActions,
 } from '@core/messages/types';
+import type { IUser } from '@core/user/types';
 import { fireAndForget } from '@core/util/fireAndForget';
+import ShareFatIcon from '@phosphor/share-fat.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
 import WhatsappIcon from '@phosphor/whatsapp-logo.svg';
 import { Button, ConfirmDialog } from '@ui';
@@ -32,11 +34,14 @@ import {
   onMount,
   Show,
 } from 'solid-js';
+import { match } from 'ts-pattern';
 import { InboundAttachmentPlaceholder } from '../components/inbound-attachment';
 import {
   InboundMedia,
   type InboundMediaFile,
 } from '../components/inbound-media';
+import { RichCard } from '../components/rich-cards';
+import { WhatsAppSystemLine } from '../components/system-line';
 import { useWhatsAppGroup } from '../context/whatsapp-group-context';
 import { type InboundAttachment, inlineMediaKind } from '../core/attachments';
 import { whatsappToMarkdown } from '../core/formatting';
@@ -45,30 +50,72 @@ import {
   canChangeMessage,
   composerNote,
   composerPlaceholder,
+  type GroupDetail,
   type GroupMessage,
   historyStartNote,
 } from '../core/group';
+import { mentionToken } from '../core/mentions';
 import { groupMessageData, senderKey } from '../core/message-data';
+import { richPreview } from '../core/rich';
 import {
   type ConversationTarget,
   createConversation,
   type Draft,
 } from '../primitives/conversation';
 
-/** WhatsApp carries text, formatting and files; nothing Macro-only. */
+/**
+ * WhatsApp carries text, formatting, files and mentions of the group's own
+ * participants; nothing Macro-only.
+ */
 const WHATSAPP_COMPOSER = {
-  mentions: false,
+  mentions: 'participants',
   createItems: false,
   gifs: false,
   richBlocks: false,
 } as const;
+
+/**
+ * The group's WhatsApp participants as the composer's `@` people, minus the
+ * sender. The chip carries the participant id; sending turns it into
+ * `@<digits>` and a WhatsApp mention.
+ */
+function mentionable(group: GroupDetail): IUser[] {
+  const own = group.phone?.replace(/\D/g, '');
+  return group.members.flatMap((member) => {
+    const phone = `+${mentionToken(member.id)}`;
+    if (own && mentionToken(member.id) === own) return [];
+    return [{ id: member.id, name: member.name, email: phone }];
+  });
+}
 
 /** A draft the conversation refused; the composer keeps it. */
 class DraftRefusal extends Error {}
 
 function quotePreview(message: GroupMessage) {
   if (message.deleted) return 'Deleted message';
-  return message.body || message.attachments[0]?.fileName || 'Attachment';
+  if (message.body) return message.body;
+  if (message.rich) return richPreview(message.rich);
+  const attachment = message.attachments[0];
+  if (!attachment) return 'Attachment';
+  return match(attachment.presentation)
+    .with('sticker', () => 'Sticker')
+    .with('gif', () => 'GIF')
+    .with('voice_note', () => 'Voice note')
+    .with(undefined, () => attachment.fileName)
+    .exhaustive();
+}
+
+/** WhatsApp's own "Forwarded" mark, above the message. */
+function ForwardedTag() {
+  return (
+    <span
+      class="mb-0.5 flex items-center gap-1 text-xs text-ink-muted italic"
+      data-whatsapp-forwarded
+    >
+      <ShareFatIcon class="size-3.5 shrink-0" aria-hidden="true" />
+      Forwarded
+    </span>
+  );
 }
 
 /** A message's images, video and voice notes, played inline. */
@@ -89,6 +136,10 @@ function MessageMedia(props: { attachments: InboundAttachment[] }) {
       kind: file.kind,
       fileName: file.attachment.fileName,
       url: url.data,
+      width: file.attachment.width,
+      height: file.attachment.height,
+      durationSeconds: file.attachment.durationSeconds,
+      presentation: file.attachment.presentation,
     });
   });
   return (
@@ -137,6 +188,27 @@ export function WhatsAppGroupView(props: {
   onCleanup(() => {
     alive = false;
   });
+  // Media WhatsApp sent no size for grows after it loads; a reader who was
+  // at the bottom stays there. Rows with loaded media are watched for that
+  // growth (it lands after the load event).
+  const pinBottom = () => {
+    if (alive && scroller && fromBottom < 80)
+      scroller.scrollTop = scroller.scrollHeight;
+  };
+  const grown = new ResizeObserver(pinBottom);
+  onCleanup(() => grown.disconnect());
+  const holdBottom = (event: Event) => {
+    const row =
+      event.target instanceof Element
+        ? event.target.closest('[data-message-id]')
+        : null;
+    if (row) grown.observe(row);
+  };
+  const setScroller = (element: HTMLDivElement) => {
+    scroller = element;
+    element.addEventListener('load', holdBottom, true);
+    element.addEventListener('loadedmetadata', holdBottom, true);
+  };
 
   /** Choosing a reply or an edit puts the composer in that mode. */
   const setTarget = (target: ConversationTarget | undefined) => {
@@ -171,11 +243,21 @@ export function WhatsAppGroupView(props: {
   const unreadIndex = () => {
     const unread = conversation.initialUnreadCount();
     const read = conversation.initialRead();
+    const stored = source.timeline.data ?? [];
     const index = read
-      ? (source.timeline.data ?? []).findIndex((message) => message.id === read)
+      ? stored.findIndex((message) => message.id === read)
       : -1;
     if (index >= 0) return index + 1;
-    return unread ? Math.max(0, storedCount() - unread) : -1;
+    if (!unread) return -1;
+    // System lines never count as unread: the first new row is the
+    // `unread`-th message from the end.
+    let remaining = unread;
+    for (let at = stored.length - 1; at >= 0; at--) {
+      if (stored[at]?.kind === 'system') continue;
+      remaining--;
+      if (remaining === 0) return at;
+    }
+    return 0;
   };
   const listMeta = createMemo(() => {
     const firstNew = unreadIndex();
@@ -185,16 +267,23 @@ export function WhatsAppGroupView(props: {
         : (source.timeline.data ?? []).slice(firstNew).map((row) => row.id)
     );
     return buildChannelMessageListMeta(
-      rows().map((message) => ({
-        type: 'message' as const,
-        message: {
-          id: message.id,
-          sender_id: senderKey(message),
-          created_at: message.sentAt,
-          attachments: [],
-          deleted_at: message.deleted ? message.sentAt : null,
-        },
-      })),
+      rows().map((message) =>
+        message.kind === 'system'
+          ? {
+              type: 'activity' as const,
+              activity: { id: message.id, occurred_at: message.sentAt },
+            }
+          : {
+              type: 'message' as const,
+              message: {
+                id: message.id,
+                sender_id: senderKey(message),
+                created_at: message.sentAt,
+                attachments: [],
+                deleted_at: message.deleted ? message.sentAt : null,
+              },
+            }
+      ),
       (message) => newIds.has(message.id),
       !source.hasOlder()
     );
@@ -402,7 +491,7 @@ export function WhatsAppGroupView(props: {
       <StaticMarkdownContext>
         <MaybeMessageActionDrawerManager>
           <div
-            ref={scroller}
+            ref={setScroller}
             class="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-4 [overflow-anchor:none] mobile:pb-(--mobile-content-inset-bottom)"
             role="log"
             aria-label="WhatsApp messages"
@@ -470,7 +559,16 @@ export function WhatsAppGroupView(props: {
             </Show>
             <For each={rows()}>
               {(message) => {
-                const meta = () => listMeta()[message.id];
+                const systemLine = () =>
+                  message.kind === 'system' && message.rich?.type === 'system'
+                    ? message.rich
+                    : undefined;
+                const meta = () =>
+                  listMeta()[
+                    message.kind === 'system'
+                      ? `activity:${message.id}`
+                      : message.id
+                  ];
                 const quoted = () =>
                   message.replyTo
                     ? messagesById().get(message.replyTo)
@@ -481,7 +579,26 @@ export function WhatsAppGroupView(props: {
                     (attachment) => attachment.state !== 'ready'
                   );
                 return (
-                  <>
+                  <Show
+                    when={message.kind !== 'system'}
+                    fallback={
+                      <>
+                        <DateDivider
+                          createdAt={message.sentAt}
+                          listMeta={meta()}
+                        />
+                        <Show when={systemLine()}>
+                          {(line) => (
+                            <WhatsAppSystemLine
+                              id={message.id}
+                              line={line()}
+                              occurredAt={message.sentAt}
+                            />
+                          )}
+                        </Show>
+                      </>
+                    }
+                  >
                     <DateDivider createdAt={message.sentAt} listMeta={meta()} />
                     <NewDivider
                       createdAt={message.sentAt}
@@ -501,6 +618,9 @@ export function WhatsAppGroupView(props: {
                       }
                       renderContent={(content) => (
                         <>
+                          <Show when={!message.deleted && message.forwarded}>
+                            <ForwardedTag />
+                          </Show>
                           <Show when={!message.deleted && message.replyTo}>
                             {(id) => (
                               <button
@@ -533,6 +653,9 @@ export function WhatsAppGroupView(props: {
                             )}
                           </Show>
                           {content}
+                          <Show when={!message.deleted && message.rich}>
+                            {(rich) => <RichCard rich={rich()} />}
+                          </Show>
                           <MessageMedia attachments={message.attachments} />
                           <Show when={placeholders().length > 0}>
                             <div class="mt-1 flex flex-wrap gap-2">
@@ -548,7 +671,7 @@ export function WhatsAppGroupView(props: {
                         </>
                       )}
                     />
-                  </>
+                  </Show>
                 );
               }}
             </For>
@@ -626,6 +749,7 @@ export function WhatsAppGroupView(props: {
                       placeholder: composerPlaceholder(group()),
                     }}
                     features={WHATSAPP_COMPOSER}
+                    participants={() => mentionable(group())}
                     fileAccept={group().limits.attachmentTypes.join(',')}
                     uploadAttachment={async (file) => {
                       const result = await conversation.upload(file);

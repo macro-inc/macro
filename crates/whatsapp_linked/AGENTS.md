@@ -21,6 +21,14 @@ rows and `NOTIFY` (the `outbound::pg` notify helper).
   first (`resolve_sender_in`): WhatsApp's from-me flag means the account's own
   identity; a LID-only sender takes its phone number from the account's roster
   pair. Only what is still LID-only is quarantined.
+- `src/domain/rich.rs`: stored structured content (`RichContent`: poll, poll
+  vote, location, contact cards, event, system line) in
+  `whatsapp_group_message.rich`; `kind = 'system'` rows never notify or count
+  as unread. `src/domain/timeline/view.rs` resolves ids in mentions, system
+  lines and votes to names and tallies polls. Poll votes are stored per voter
+  in `whatsapp_group_poll_vote` through the reaction path of `reserve_in`. A
+  re-ingested message fills in `rich`/`mentions`/`forwarded` an earlier copy
+  lacked (re-importing history upgrades old placeholders).
 - `src/outbound/pg/chats.rs`: the account's chat list (`whatsapp_chat`,
   `GET /chats` via `LinkedService::chats`) and importing earlier messages of
   added groups (`backfill_*` columns on `whatsapp_group`; limits
@@ -66,8 +74,9 @@ rows and `NOTIFY` (the `outbound::pg` notify helper).
 - `src/domain/timeline.rs` and `src/domain/service/timeline.rs` own list/detail,
   timeline, unread and sharing use cases. Group HTTP paths are
   `/meta/linked/whatsapp-groups/{group_id}`. Soup/search are deferred.
-- Store messages/reactions/attachments in `whatsapp_group_message`,
-  `whatsapp_group_reaction`, and `whatsapp_group_attachment`; never native comms tables.
+- Store messages/reactions/attachments/poll votes in `whatsapp_group_message`,
+  `whatsapp_group_reaction`, `whatsapp_group_attachment` and
+  `whatsapp_group_poll_vote`; never native comms tables.
 - Attachment bytes cross Postgres (`whatsapp_media_blob`, ≤ 32 MiB) because the
   session service has no document storage; DSS imports and deletes them.
   `events::Media::locator` is sealed by the session service; never read it.

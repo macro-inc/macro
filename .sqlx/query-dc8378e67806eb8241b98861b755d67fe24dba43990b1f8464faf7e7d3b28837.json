@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO whatsapp_group_poll_vote (message_id, person_id, selected, user_id, source_id, revision, updated_at)\n            VALUES ($1, $2, $3, $4, $5, $6, $7)\n            ON CONFLICT (message_id, person_id) DO UPDATE SET selected = excluded.selected, user_id = excluded.user_id,\n                source_id = excluded.source_id, revision = excluded.revision, updated_at = excluded.updated_at\n            WHERE (excluded.revision, excluded.updated_at, excluded.source_id)\n                > (whatsapp_group_poll_vote.revision, whatsapp_group_poll_vote.updated_at, whatsapp_group_poll_vote.source_id)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "TextArray",
+        "Text",
+        "Text",
+        "Int8",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "dc8378e67806eb8241b98861b755d67fe24dba43990b1f8464faf7e7d3b28837"
+}

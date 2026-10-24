@@ -40,7 +40,7 @@ describe('sending to a WhatsApp group', () => {
     await delivery._unsafeUnwrap();
     const key = state.fake.capabilities.send.mock.calls[0]?.[1];
     expect(state.fake.capabilities.send).toHaveBeenCalledWith(
-      { kind: 'text', text: 'On *it*', replyTo: 'message-1' },
+      { kind: 'text', text: 'On *it*', replyTo: 'message-1', mentions: [] },
       key
     );
     state.fake.setDelivery([
@@ -51,7 +51,10 @@ describe('sending to a WhatsApp group', () => {
       ...messages,
       {
         id: 'message-3',
+        kind: 'message',
         sender: { name: 'Me', userId: group.ownerId },
+        mentions: [],
+        forwarded: false,
         body: 'On *it*',
         sentAt: new Date().toISOString(),
         edited: false,
@@ -191,7 +194,7 @@ describe('sending to a WhatsApp group', () => {
         caption: undefined,
         replyTo: undefined,
       },
-      { kind: 'text', text: 'Listen' },
+      { kind: 'text', text: 'Listen', mentions: [] },
       {
         kind: 'media',
         uploadId: 'upload-2',

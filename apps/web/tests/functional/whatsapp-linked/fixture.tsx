@@ -27,6 +27,9 @@ import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
 import { FloatRegionHost } from '@components/app/mobile/float-regions/FloatRegionHost';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
+import { ChannelsContextProvider } from '@core/context/channels';
+import { QuickAccessContextProvider } from '@core/context/quickAccess/context';
+import type { QuickAccessContextValue } from '@core/context/quickAccess/types';
 import { UserContextProvider } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { queryClient } from '@queries/client';
@@ -54,6 +57,23 @@ const nativePasskey: PasskeyCapability = {
     onEvent({ type: 'qr', value: 'FIDO:/5103963548272401838013624816' });
     return new ResultAsync(new Promise(() => {}));
   },
+};
+
+const noQuickAccess: QuickAccessContextValue = {
+  useList: () => ({
+    error: () => undefined,
+    items: () => [],
+    totalCount: () => 0,
+    hasMore: () => false,
+    isLoading: () => false,
+    isLoadingMore: () => false,
+    loadMore: async () => {},
+  }),
+  usesRecordSelection: () => false,
+  usesSearchProjection: () => false,
+  isLoading: () => false,
+  refresh: () => {},
+  getById: () => undefined,
 };
 
 function GroupHarness(props: { groupId: string }) {
@@ -164,16 +184,22 @@ render(
           <UserContextProvider>
             <Suspense fallback={<p>Loading identity…</p>}>
               <EmailLinksContextProvider>
-                <Router
-                  root={(props) => (
-                    <>
-                      {props.children}
-                      <ImperativeDialogHost />
-                    </>
-                  )}
-                >
-                  <Route path="*" component={Page} />
-                </Router>
+                {/* The app root provides Macro's items; the composer's `@` menu
+                    reads them. A WhatsApp group offers only its people. */}
+                <ChannelsContextProvider>
+                  <QuickAccessContextProvider value={noQuickAccess}>
+                    <Router
+                      root={(props) => (
+                        <>
+                          {props.children}
+                          <ImperativeDialogHost />
+                        </>
+                      )}
+                    >
+                      <Route path="*" component={Page} />
+                    </Router>
+                  </QuickAccessContextProvider>
+                </ChannelsContextProvider>
               </EmailLinksContextProvider>
             </Suspense>
           </UserContextProvider>

@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO whatsapp_group_attachment (binding_id, person_id, source_id, ordinal, document_id, sha256, state, account_id, locator, mime, filename, size,\n                width, height, duration_seconds, presentation)\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)\n            ON CONFLICT (binding_id, person_id, source_id, ordinal) DO UPDATE SET account_id = excluded.account_id, locator = excluded.locator\n            WHERE whatsapp_group_attachment.state = 'pending'\n              AND (whatsapp_group_attachment.claimed_until IS NULL OR whatsapp_group_attachment.claimed_until < now())",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Int2",
+        "Uuid",
+        "Bytea",
+        "Text",
+        "Uuid",
+        "Bytea",
+        "Text",
+        "Text",
+        "Int8",
+        "Int4",
+        "Int4",
+        "Int4",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1ec648607537f38f6f11d01800720aa9d036a1d349e2b3ff71c8ecb299720b5a"
+}

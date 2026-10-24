@@ -260,7 +260,7 @@ test('owner-token send preserves intent and unknown delivery is read without res
   expect(await sent.state()).toBe('unknown');
   expect(await requests[0].json()).toEqual({
     idempotency_key: 'stable',
-    message: { type: 'text', text: 'hello' },
+    message: { type: 'text', text: 'hello', mentions: [] },
   });
   await sent.refresh();
   expect(await sent.state()).toBe('unknown');
@@ -311,6 +311,26 @@ test('mutations and replies accept only standalone WhatsApp messages', async () 
       message_id: 'message',
       operation: 'reaction',
       text: '👍',
+    },
+  });
+});
+
+test('a text reply names the participants it mentions by their WhatsApp ids', async () => {
+  const { group, requests } = fixture(() => Response.json(progress));
+  await group.reply(
+    {
+      type: 'text',
+      text: 'hi @15550001111',
+      mentions: ['15550001111@s.whatsapp.net'],
+    },
+    { idempotencyKey: 'mention' },
+  );
+  expect(await requests[0].json()).toEqual({
+    idempotency_key: 'mention',
+    message: {
+      type: 'text',
+      text: 'hi @15550001111',
+      mentions: ['15550001111@s.whatsapp.net'],
     },
   });
 });

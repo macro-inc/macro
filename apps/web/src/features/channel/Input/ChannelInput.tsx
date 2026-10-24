@@ -102,8 +102,12 @@ import { hasSendableInputContent } from './utils/sendable-content';
  * Hosts that carry only those, such as a WhatsApp group, switch the rest off.
  */
 export type ChannelInputFeatures = {
-  /** `@` mentions of people, agents and Macro items, including Ask Macro. */
-  mentions: boolean;
+  /**
+   * `@` mentions of people, agents and Macro items, including Ask Macro.
+   * `'participants'` offers only the `participants` prop: no agents, items,
+   * `@here` or mention tracking (a WhatsApp group's own members).
+   */
+  mentions: boolean | 'participants';
   /** Creating Macro items from the composer: tasks, documents, polls, forms. */
   createItems: boolean;
   gifs: boolean;
@@ -358,19 +362,25 @@ export function ChannelInput(props: ChannelInputProps) {
       : () => [];
   // Connection-prompt behavior for the built-in agents lives in
   // useAgentMentionUsers; participants and parent agents feed it here.
-  const mentionUsers = useAgentMentionUsers(() => [
-    ...(props.participants?.() ?? parentParticipants()),
-    ...(props.bots?.() ?? parentBots()),
-  ]);
-
-  const groupMentions = !props.parent || props.parent.type === 'channel';
   // The editor is configured once, at mount.
   const initialFeatures = features();
+  const participantsOnly = initialFeatures.mentions === 'participants';
+  const mentionUsers = participantsOnly
+    ? () => props.participants?.() ?? []
+    : useAgentMentionUsers(() => [
+        ...(props.participants?.() ?? parentParticipants()),
+        ...(props.bots?.() ?? parentBots()),
+      ]);
+
+  const groupMentions =
+    !participantsOnly && (!props.parent || props.parent.type === 'channel');
   const markdownEditor = createConfiguredChannelMarkdownEditor({
     groupMentions,
     namespace: props.markdownNamespace ?? 'channel-input-markdown',
     resolveAppLink: useMacroMentionLinkResolver(),
-    enableMentions: initialFeatures.mentions,
+    enableMentions: initialFeatures.mentions !== false,
+    mentionSources: participantsOnly ? ['users'] : undefined,
+    disableMentionTracking: participantsOnly || undefined,
     composerActions: initialFeatures.createItems,
     ignoreActionIds: [
       ...(initialFeatures.createItems ? [] : CREATE_ITEM_ACTION_IDS),
@@ -496,7 +506,7 @@ export function ChannelInput(props: ChannelInputProps) {
         },
       ];
     };
-    const macro = features().mentions ? macroUser() : undefined;
+    const macro = features().mentions === true ? macroUser() : undefined;
     const startCall = props.onStartCall;
     const callInProgress = !!props.callInProgress;
     return [

@@ -2,6 +2,8 @@
 pub mod events;
 /// Account, binding and send models shared with the web app.
 pub mod models;
+/// Polls, locations, contact cards, events and system lines.
+pub mod rich;
 
 /// Native notification outbox.
 #[cfg(feature = "ports")]

@@ -364,7 +364,7 @@ impl GroupRepository for PgLinkedRepository {
     }
 
     async fn binding_roster(&self, binding: &Binding) -> LinkedResult<Option<GroupInfo>> {
-        sqlx::query_scalar!(
+        let roster = sqlx::query_scalar!(
             r#"SELECT r.metadata FROM whatsapp_group_roster r
             JOIN whatsapp_group_membership m ON m.account_id = r.account_id
             WHERE m.binding_id = $1 AND m.consent_ended_at IS NULL AND r.group_jid = $2
@@ -375,8 +375,51 @@ impl GroupRepository for PgLinkedRepository {
         .fetch_optional(&self.pool)
         .await
         .map_err(failure)?
-        .map(decode)
-        .transpose()
+        .map(decode::<GroupInfo>)
+        .transpose()?;
+        let Some(mut roster) = roster else {
+            return Ok(None);
+        };
+        // WhatsApp's group metadata has no names; people who wrote in the
+        // group are known by their WhatsApp name.
+        let jids: Vec<String> = roster
+            .participants
+            .iter()
+            .filter(|participant| participant.identity.display_name.is_none())
+            .flat_map(|participant| {
+                [
+                    Some(participant.identity.jid.clone()),
+                    participant.identity.alternate_jid.clone(),
+                ]
+            })
+            .flatten()
+            .collect();
+        if jids.is_empty() {
+            return Ok(Some(roster));
+        }
+        let names = sqlx::query!(
+            r#"SELECT a.jid, p.display_name AS "display_name!" FROM whatsapp_identity_alias a
+            JOIN whatsapp_external_person p ON p.id = a.person_id
+            WHERE a.binding_id = $1 AND a.jid = ANY($2) AND p.display_name IS NOT NULL"#,
+            binding.id,
+            &jids
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(failure)?;
+        for participant in &mut roster.participants {
+            let identity = &mut participant.identity;
+            if identity.display_name.is_none() {
+                identity.display_name = names
+                    .iter()
+                    .find(|row| {
+                        row.jid == identity.jid
+                            || identity.alternate_jid.as_deref() == Some(row.jid.as_str())
+                    })
+                    .map(|row| row.display_name.clone());
+            }
+        }
+        Ok(Some(roster))
     }
 
     async fn account_chats(&self, account: Uuid) -> LinkedResult<Vec<StoredChat>> {

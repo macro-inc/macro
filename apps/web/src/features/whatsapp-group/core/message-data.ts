@@ -2,6 +2,7 @@ import type { MessageData } from '@core/messages/types';
 import { inlineMediaKind } from './attachments';
 import { whatsappToMarkdown } from './formatting';
 import type { GroupMessage } from './group';
+import { withMentions } from './mentions';
 
 /**
  * A group message in the shape the shared channel rows render. Senders show
@@ -13,7 +14,9 @@ export function groupMessageData(
 ): MessageData {
   return {
     id: message.id,
-    content: message.deleted ? '' : whatsappToMarkdown(message.body),
+    content: message.deleted
+      ? ''
+      : withMentions(whatsappToMarkdown(message.body), message.mentions),
     sender_id: message.sender.userId ?? '',
     // WhatsApp's name for everyone, Macro users included: a Macro profile
     // without a name would otherwise show its email.

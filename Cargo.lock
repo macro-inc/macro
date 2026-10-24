@@ -21551,6 +21551,7 @@ dependencies = [
  "macro_entrypoint",
  "macro_env",
  "macro_service_urls",
+ "nom 8.0.0",
  "rootcause",
  "rustls",
  "serde",

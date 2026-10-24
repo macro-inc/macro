@@ -8,7 +8,7 @@ use async_trait::async_trait;
 impl EffectsRepository for PgLinkedRepository {
     async fn pending_effects(&self, limit: i64) -> LinkedResult<Vec<GroupEffect>> {
         sqlx::query!(
-            r#"SELECT b.id AS group_id, m.message_id AS "message_id!", m.effect_revision, m.published_revision, m.origin, m.content_revision, m.deleted_at, p.user_id
+            r#"SELECT b.id AS group_id, m.message_id AS "message_id!", m.effect_revision, m.published_revision, m.origin, m.content_revision, m.deleted_at, p.user_id, m.kind
             FROM whatsapp_group_message m
             JOIN whatsapp_group b ON b.id = m.binding_id
             JOIN whatsapp_external_person p ON p.id = m.person_id
@@ -33,6 +33,7 @@ impl EffectsRepository for PgLinkedRepository {
                     _ => return Err(LinkedError::Unavailable.into()),
                 },
                 associated_user: row.user_id,
+                system: row.kind == "system",
             })
         })
         .collect()

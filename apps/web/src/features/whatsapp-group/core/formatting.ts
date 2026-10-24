@@ -35,8 +35,8 @@ function markdownInline(text: string): string {
       if (italic !== undefined) return `_${markdownInline(italic)}_`;
       if (strike !== undefined) return `~${markdownInline(strike)}~`;
       if (linkText !== undefined && linkUrl !== undefined)
-        return linkText === linkUrl
-          ? linkUrl
+        return linkText === linkUrl || `https://${linkText}` === linkUrl
+          ? linkText
           : `${markdownInline(linkText)} (${linkUrl})`;
       return autolink ?? '';
     }
@@ -71,7 +71,15 @@ export function markdownToWhatsApp(markdown: string): string {
 
 /** WhatsApp's markers, bounded by a non-word character or the line edge. */
 const WHATSAPP_INLINE =
-  /(`[^`\n]+`)|(^|[^\p{L}\p{N}*_~])([*_~])(?!\s)([^\n]*?[^\s*_~]|[^\s*_~])\3(?![\p{L}\p{N}*_~])/gu;
+  /(`[^`\n]+`)|((?:https?:\/\/|www\.)[^\s<>]*[^\s<>.,;:!?'")\]*_~])|(^|[^\p{L}\p{N}*_~])([*_~])(?!\s)([^\n]*?[^\s*_~]|[^\s*_~])\4(?![\p{L}\p{N}*_~])/gu;
+
+/** A bare URL as a Markdown link, so it renders like Chat's links (with their preview). */
+function urlLink(url: string): string {
+  const href = (url.startsWith('www.') ? `https://${url}` : url)
+    .replace(/\(/g, '%28')
+    .replace(/\)/g, '%29');
+  return `[${url.replace(/[[\]\\]/g, '\\$&')}](${href})`;
+}
 const MARKDOWN_FOR: Record<string, string> = { '*': '**', _: '*', '~': '~~' };
 
 function whatsappInline(text: string): string {
@@ -80,11 +88,13 @@ function whatsappInline(text: string): string {
     (
       match,
       code: string | undefined,
+      url: string | undefined,
       before: string | undefined,
       marker: string,
       inner: string
     ) => {
       if (code !== undefined) return match;
+      if (url !== undefined) return urlLink(url);
       const markdown = MARKDOWN_FOR[marker] ?? marker;
       return `${before ?? ''}${markdown}${whatsappInline(inner)}${markdown}`;
     }

@@ -51,6 +51,19 @@ describe('WhatsApp to Markdown for display', () => {
       'look \n```\na *b* c\n```\n done'
     );
   });
+  it('links bare URLs, leaving punctuation and code alone', () => {
+    expect(
+      whatsappToMarkdown('see https://example.com/a_b_c. or www.macro.com!')
+    ).toBe(
+      'see [https://example.com/a_b_c](https://example.com/a_b_c). or [www.macro.com](https://www.macro.com)!'
+    );
+    expect(whatsappToMarkdown('`https://x.com`')).toBe('`https://x.com`');
+  });
+  it('sends a linked URL back as the bare URL', () => {
+    expect(
+      markdownToWhatsApp(whatsappToMarkdown('go to https://example.com now'))
+    ).toBe('go to https://example.com now');
+  });
   it('round-trips what the composer sends', () => {
     expect(whatsappToMarkdown(markdownToWhatsApp('**hi** *there* ~~x~~'))).toBe(
       '**hi** *there* ~~x~~'

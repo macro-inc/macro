@@ -46,6 +46,10 @@ pub(super) enum Reserve {
     Skip,
 }
 
+/// Namespace of each group's stand-in person: the author of system lines
+/// WhatsApp reported without naming anyone.
+const GROUP_PERSON_NAMESPACE: Uuid = Uuid::from_u128(0x2f7c_9a41_5d0e_4b83_9c16_7e2a_b04d_51f8);
+
 /// How far before adoption or consent a message may be stamped and still be
 /// imported. WhatsApp stamps messages in whole seconds by its own clock, which
 /// can differ from ours; comparing exactly drops messages sent in the same
@@ -116,16 +120,26 @@ pub(super) async fn reserve_in(
         return Ok(Reserve::Defer);
     }
     let sender = &message.sender;
-    let mut aliases = vec![sender.jid.clone()];
-    aliases.extend(sender.alternate_jid.clone());
-    let people = sqlx::query_scalar!(
-        "SELECT DISTINCT person_id FROM whatsapp_identity_alias WHERE binding_id = $1 AND jid = ANY($2)",
-        binding.id,
-        &aliases
-    )
-    .fetch_all(&mut **tx)
-    .await
-    .map_err(failure)?;
+    // A group change WhatsApp made without naming anyone belongs to the
+    // group's own stand-in person, which has no alias.
+    let group_itself = sender.jid == binding.group_jid;
+    let mut aliases = vec![];
+    if !group_itself {
+        aliases.push(sender.jid.clone());
+        aliases.extend(sender.alternate_jid.clone());
+    }
+    let people = if group_itself {
+        vec![Uuid::new_v5(&GROUP_PERSON_NAMESPACE, binding.id.as_bytes())]
+    } else {
+        sqlx::query_scalar!(
+            "SELECT DISTINCT person_id FROM whatsapp_identity_alias WHERE binding_id = $1 AND jid = ANY($2)",
+            binding.id,
+            &aliases
+        )
+        .fetch_all(&mut **tx)
+        .await
+        .map_err(failure)?
+    };
     // A LID alone cannot be matched to a phone-number alias already seen.
     if people.len() > 1
         || (people.is_empty() && sender.jid.ends_with("@lid") && sender.alternate_jid.is_none())
@@ -166,7 +180,9 @@ pub(super) async fn reserve_in(
         .await
         .map_err(failure)?;
     }
-    if message.kind == MessageKind::Reaction {
+    // Reactions and poll votes belong to the person who sent them, on the
+    // target's message.
+    if matches!(message.kind, MessageKind::Reaction | MessageKind::PollVote) {
         let target = message
             .target
             .as_ref()
@@ -241,9 +257,24 @@ pub(super) async fn reserve_in(
     let deleted = (message.kind == MessageKind::Delete).then_some(event.source_at);
     let content = (message.kind == MessageKind::Edit).then(|| message.text.clone());
     let content_revision = if revision { message.revision.max(1) } else { 0 };
+    let entry_kind = if message.kind == MessageKind::System {
+        "system"
+    } else {
+        "message"
+    };
+    let rich = message
+        .rich
+        .as_ref()
+        .map(serde_json::to_value)
+        .transpose()
+        .map_err(failure)?;
+    // A redelivered or re-imported message fills in what an earlier copy
+    // lacked (an older importer stored polls and the like as placeholders);
+    // revisions carry none of it and keep what is stored.
     sqlx::query!(
-        r#"INSERT INTO whatsapp_group_message (id, binding_id, person_id, source_id, origin, source_at, content_revision, deleted_at, revision_content, revised_at)
-        VALUES ($11, $1, $2, $3, $4, $5, $6, $7, $8, $9)
+        r#"INSERT INTO whatsapp_group_message (id, binding_id, person_id, source_id, origin, source_at, content_revision, deleted_at, revision_content, revised_at,
+            kind, rich, mentions, forwarded)
+        VALUES ($11, $1, $2, $3, $4, $5, $6, $7, $8, $9, $12, $13, $14, $15)
         ON CONFLICT (binding_id, person_id, source_id) DO UPDATE SET
             deleted_at = COALESCE(whatsapp_group_message.deleted_at, excluded.deleted_at),
             revision_content = CASE WHEN excluded.content_revision > whatsapp_group_message.content_revision
@@ -251,7 +282,11 @@ pub(super) async fn reserve_in(
             revised_at = CASE WHEN excluded.content_revision > whatsapp_group_message.content_revision
                 THEN excluded.revised_at ELSE whatsapp_group_message.revised_at END,
             content_revision = GREATEST(whatsapp_group_message.content_revision, excluded.content_revision),
-            source_at = CASE WHEN $10 THEN whatsapp_group_message.source_at ELSE excluded.source_at END"#,
+            source_at = CASE WHEN $10 THEN whatsapp_group_message.source_at ELSE excluded.source_at END,
+            kind = CASE WHEN $10 THEN whatsapp_group_message.kind ELSE excluded.kind END,
+            rich = CASE WHEN $10 THEN whatsapp_group_message.rich ELSE COALESCE(excluded.rich, whatsapp_group_message.rich) END,
+            mentions = CASE WHEN $10 OR cardinality(excluded.mentions) = 0 THEN whatsapp_group_message.mentions ELSE excluded.mentions END,
+            forwarded = whatsapp_group_message.forwarded OR excluded.forwarded"#,
         binding.id,
         person,
         source,
@@ -262,7 +297,11 @@ pub(super) async fn reserve_in(
         content,
         revision.then_some(event.source_at),
         revision,
-        send.as_ref().map_or_else(Uuid::now_v7, |s| s.id)
+        send.as_ref().map_or_else(Uuid::now_v7, |s| s.id),
+        entry_kind,
+        rich,
+        &message.mentions,
+        message.forwarded
     )
     .execute(&mut **tx)
     .await
@@ -309,6 +348,13 @@ pub(super) async fn reserve_in(
     })))
 }
 
+/// A declared pixel size, when it is one.
+fn dimension(value: Option<u32>) -> Option<i32> {
+    value
+        .filter(|value| *value > 0)
+        .map(|value| value.min(i32::MAX as u32) as i32)
+}
+
 /// One reservation per attachment ordinal. Every observer offers its sealed
 /// locator; a pending reservation takes the newest one so a working observer
 /// can download it. Unsupported types fail at once.
@@ -324,8 +370,9 @@ async fn reserve_attachments_in(
             "failed"
         };
         sqlx::query!(
-            r#"INSERT INTO whatsapp_group_attachment (binding_id, person_id, source_id, ordinal, document_id, sha256, state, account_id, locator, mime, filename, size)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            r#"INSERT INTO whatsapp_group_attachment (binding_id, person_id, source_id, ordinal, document_id, sha256, state, account_id, locator, mime, filename, size,
+                width, height, duration_seconds, presentation)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
             ON CONFLICT (binding_id, person_id, source_id, ordinal) DO UPDATE SET account_id = excluded.account_id, locator = excluded.locator
             WHERE whatsapp_group_attachment.state = 'pending'
               AND (whatsapp_group_attachment.claimed_until IS NULL OR whatsapp_group_attachment.claimed_until < now())"#,
@@ -340,7 +387,11 @@ async fn reserve_attachments_in(
             &media.locator,
             media.mime,
             media.filename.chars().take(255).collect::<String>(),
-            media.size.min(i64::MAX as u64) as i64
+            media.size.min(i64::MAX as u64) as i64,
+            dimension(media.width),
+            dimension(media.height),
+            media.duration_seconds.map(|seconds| seconds.min(i32::MAX as u32) as i32),
+            media.presentation.map(MediaPresentation::as_str)
         )
         .execute(&mut **tx)
         .await
@@ -356,6 +407,32 @@ pub(super) async fn persist_in(
     message: &Message,
     r: &Reservation,
 ) -> LinkedResult<bool> {
+    if message.kind == MessageKind::PollVote {
+        let (Some(actor), Some(RichContent::PollVote(vote))) = (r.reaction_actor, &message.rich)
+        else {
+            return Err(LinkedError::Invalid("poll vote without a choice").into());
+        };
+        return Ok(sqlx::query!(
+            r#"INSERT INTO whatsapp_group_poll_vote (message_id, person_id, selected, user_id, source_id, revision, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            ON CONFLICT (message_id, person_id) DO UPDATE SET selected = excluded.selected, user_id = excluded.user_id,
+                source_id = excluded.source_id, revision = excluded.revision, updated_at = excluded.updated_at
+            WHERE (excluded.revision, excluded.updated_at, excluded.source_id)
+                > (whatsapp_group_poll_vote.revision, whatsapp_group_poll_vote.updated_at, whatsapp_group_poll_vote.source_id)"#,
+            r.message,
+            actor,
+            &vote.selected,
+            r.associated_user,
+            message.source_id,
+            message.revision,
+            event.source_at
+        )
+        .execute(&mut **tx)
+        .await
+        .map_err(failure)?
+        .rows_affected()
+            > 0);
+    }
     if let Some(actor) = r.reaction_actor {
         return Ok(sqlx::query!(r#"INSERT INTO whatsapp_group_reaction (message_id,person_id,emoji,user_id,source_id,revision,updated_at)
             VALUES ($1,$2,$3,$4,$5,$6,$7)

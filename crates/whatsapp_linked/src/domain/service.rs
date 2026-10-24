@@ -710,12 +710,36 @@ fn validate_text(text: &str) -> LinkedResult<()> {
     Ok(())
 }
 
+/// Each mention is a person's WhatsApp id that the text names as
+/// `@<user part>`, the way WhatsApp renders it.
+fn validate_mentions(text: &str, mentions: &[String]) -> LinkedResult<()> {
+    if mentions.len() > MENTION_LIMIT {
+        return Err(LinkedError::Invalid("too many mentions in one message").into());
+    }
+    for mention in mentions {
+        let user = mention
+            .strip_suffix("@s.whatsapp.net")
+            .or_else(|| mention.strip_suffix("@lid"))
+            .filter(|user| !user.is_empty() && user.bytes().all(|byte| byte.is_ascii_digit()))
+            .ok_or(LinkedError::Invalid(
+                "a mention is not a WhatsApp participant",
+            ))?;
+        if !text.contains(&format!("@{user}")) {
+            return Err(LinkedError::Invalid("a mentioned person is not named in the text").into());
+        }
+    }
+    Ok(())
+}
+
 pub(crate) fn validate_request(request: &SendReply) -> LinkedResult<()> {
     if request.idempotency_key.is_nil() {
         return Err(LinkedError::Invalid("a stable send intent key is required").into());
     }
     match &request.message {
-        ReplyContent::Text { text } => validate_text(text),
+        ReplyContent::Text { text, mentions } => {
+            validate_text(text)?;
+            validate_mentions(text, mentions)
+        }
         ReplyContent::Media { caption: None, .. } => Ok(()),
         ReplyContent::Media {
             caption: Some(caption),

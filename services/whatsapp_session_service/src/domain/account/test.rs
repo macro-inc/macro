@@ -541,6 +541,9 @@ fn group_text(event: u128) -> InboundEvent {
             revision: 0,
             target: None,
             media: vec![],
+            mentions: vec![],
+            forwarded: false,
+            rich: None,
         }),
     }
 }

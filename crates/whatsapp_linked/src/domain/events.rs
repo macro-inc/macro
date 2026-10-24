@@ -1,7 +1,8 @@
 //! Types exchanged in-process with the WhatsApp session service. They carry no
 //! whatsmeow types: the session service maps protocol events onto them.
 
-use super::models::{BackfillState, ChatKind, Identity, PairingState};
+use super::models::{BackfillState, ChatKind, Identity, MediaPresentation, PairingState};
+pub use super::rich::RichContent;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -94,6 +95,38 @@ pub enum MessageKind {
     Delete,
     /// A shape Macro does not import; `text` is a readable placeholder.
     Unsupported,
+    /// A poll, location, contact card or event: `rich` holds it, `text` any
+    /// caption.
+    Rich,
+    /// Something that happened in the group (`rich` is a system line); never
+    /// notifies or counts as unread.
+    System,
+    /// A vote on the poll `target` (`rich` is the vote).
+    PollVote,
+}
+
+impl MessageKind {
+    /// Snake-case name, as serialized.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Text => "text",
+            Self::Reaction => "reaction",
+            Self::Edit => "edit",
+            Self::Delete => "delete",
+            Self::Unsupported => "unsupported",
+            Self::Rich => "rich",
+            Self::System => "system",
+            Self::PollVote => "poll_vote",
+        }
+    }
+
+    /// A new timeline entry rather than a change to an existing one.
+    pub fn is_entry(self) -> bool {
+        matches!(
+            self,
+            Self::Text | Self::Unsupported | Self::Rich | Self::System
+        )
+    }
 }
 
 /// Source message reference for quotes and mutations.
@@ -120,10 +153,22 @@ pub struct Media {
     /// returned unchanged by `claim_media_imports`.
     #[serde(default)]
     pub locator: Vec<u8>,
+    /// Pixel size of an image, sticker or video, as WhatsApp declared it.
+    #[serde(default)]
+    pub width: Option<u32>,
+    /// Pixel height, as declared.
+    #[serde(default)]
+    pub height: Option<u32>,
+    /// Length of audio or video in whole seconds, as declared.
+    #[serde(default)]
+    pub duration_seconds: Option<u32>,
+    /// How WhatsApp shows it, when not as a plain file of its kind.
+    #[serde(default)]
+    pub presentation: Option<MediaPresentation>,
 }
 
 /// One normalized group message or revision.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Message {
     /// WhatsApp message id.
     pub source_id: String,
@@ -145,6 +190,16 @@ pub struct Message {
     pub target: Option<Target>,
     /// Attachments.
     pub media: Vec<Media>,
+    /// People the text @-mentions, as WhatsApp ids; the text carries
+    /// `@<user part>` for each.
+    #[serde(default)]
+    pub mentions: Vec<String>,
+    /// Forwarded from another chat.
+    #[serde(default)]
+    pub forwarded: bool,
+    /// Structured content of rich, system and poll-vote messages.
+    #[serde(default)]
+    pub rich: Option<RichContent>,
 }
 
 /// One participant's receipt, never proof of group-wide delivery.
@@ -159,8 +214,12 @@ pub struct Receipt {
 }
 
 /// What happened in the group.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "one event per WhatsApp message, built and moved once, never held in bulk"
+)]
 pub enum InboundKind {
     /// A message, reaction, edit or delete.
     Message(Message),
@@ -172,7 +231,7 @@ pub enum InboundKind {
 
 /// One event from an observed group. `event_id` must be stable across
 /// redelivery of the same protocol event.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct InboundEvent {
     /// Stable id for deferral and quarantine.
     pub event_id: Uuid,
@@ -208,6 +267,9 @@ pub enum OutgoingContent {
         text: String,
         /// Quoted message.
         quote: Option<Target>,
+        /// Mentioned participants (WhatsApp ids); the text carries
+        /// `@<user part>` for each.
+        mentions: Vec<String>,
     },
     /// Reaction; empty emoji removes it.
     Reaction {

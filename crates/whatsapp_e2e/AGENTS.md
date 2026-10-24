@@ -24,7 +24,16 @@ database. Nothing talks to WhatsApp or AWS (the KMS is
   loss or duplicates, drain handover, crash between enqueue and ingest, inbound
   image download for import, outbound attachment, a send cut off after
   submission is `unknown` and never resent, a send without an ack times out as
-  `unknown`, and a real client's group events through the service's mapping.
+  `unknown`, a real client's group events through the service's mapping, and
+  WhatsApp renames and removals reaching Macro live (a rename WhatsApp made
+  is a system line without an actor).
+- Message types (`src/test/message_types.rs`): media dimensions, durations
+  and presentation (sticker, GIF, voice note), a media reply keeping its
+  quote, view-once as a placeholder without an attachment; mentions and
+  forwards, polls with a vote and a changed vote, places, contact cards,
+  events, pins and call logs as structured content; a mention sent from
+  Macro; group changes made by a member (added, left, renamed) as system
+  lines once with two observing accounts, never unread or notified.
 
 ## Checks
 

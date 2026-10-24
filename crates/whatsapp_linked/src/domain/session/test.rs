@@ -25,6 +25,9 @@ fn message(kind: MessageKind, sender: &str, target: Option<&str>) -> InboundEven
                 sender_jid: jid.into(),
             }),
             media: vec![],
+            mentions: vec![],
+            forwarded: false,
+            rich: None,
         }),
     }
 }
@@ -66,4 +69,48 @@ fn malformed_events_are_rejected_before_storage() {
         m.text = "x".repeat(INBOUND_TEXT_LIMIT_BYTES + 1);
     }
     assert!(validate_event(&huge).is_err());
+}
+
+fn system_line(sender: &str) -> InboundEvent {
+    let mut event = message(MessageKind::System, sender, None);
+    if let InboundKind::Message(m) = &mut event.kind {
+        m.sender.alternate_jid = None;
+        m.rich = Some(RichContent::System(crate::domain::rich::SystemLine {
+            action: crate::domain::rich::SystemAction::SubjectChanged,
+            participants: vec![],
+            value: Some("Launch".into()),
+            call: None,
+            by_whatsapp: true,
+        }));
+    }
+    event
+}
+
+#[test]
+fn only_a_system_line_may_come_from_the_group_itself_and_content_must_fit_the_kind() {
+    let group = "120363000000000001@g.us";
+    validate_event(&system_line(group)).unwrap();
+    assert!(
+        validate_event(&message(MessageKind::Text, group, None)).is_err(),
+        "a message is always from a person"
+    );
+    let mut no_line = system_line(group);
+    if let InboundKind::Message(m) = &mut no_line.kind {
+        m.rich = None;
+    }
+    assert!(validate_event(&no_line).is_err());
+    let mut text_with_rich = system_line("15550000001@s.whatsapp.net");
+    if let InboundKind::Message(m) = &mut text_with_rich.kind {
+        m.kind = MessageKind::Text;
+    }
+    assert!(validate_event(&text_with_rich).is_err());
+    assert!(
+        validate_event(&message(
+            MessageKind::PollVote,
+            "15550000001@s.whatsapp.net",
+            None
+        ))
+        .is_err(),
+        "a vote names its poll"
+    );
 }

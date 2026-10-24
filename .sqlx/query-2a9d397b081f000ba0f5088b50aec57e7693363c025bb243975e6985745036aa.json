@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT v.message_id, v.selected, p.user_id, COALESCE(p.display_name, 'WhatsApp participant') AS \"name!\"\n            FROM whatsapp_group_poll_vote v JOIN whatsapp_external_person p ON p.id = v.person_id\n            WHERE v.message_id = ANY($1) AND cardinality(v.selected) > 0\n            ORDER BY v.updated_at",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "selected",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 2,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "name!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      null
+    ]
+  },
+  "hash": "2a9d397b081f000ba0f5088b50aec57e7693363c025bb243975e6985745036aa"
+}

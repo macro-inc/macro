@@ -124,7 +124,10 @@ fn requests_are_bounded_and_operations_carry_the_right_text() {
     let key = Uuid::from_u128(9);
     let message = Uuid::from_u128(10);
     let valid = [
-        ReplyContent::Text { text: "hi".into() },
+        ReplyContent::Text {
+            text: "hi".into(),
+            mentions: vec![],
+        },
         ReplyContent::Mutation {
             message_id: message,
             operation: Mutation::Reaction,
@@ -150,9 +153,13 @@ fn requests_are_bounded_and_operations_carry_the_right_text() {
         .unwrap();
     }
     let invalid = [
-        ReplyContent::Text { text: "  ".into() },
+        ReplyContent::Text {
+            text: "  ".into(),
+            mentions: vec![],
+        },
         ReplyContent::Text {
             text: "x".repeat(TEXT_LIMIT_BYTES + 1),
+            mentions: vec![],
         },
         ReplyContent::Mutation {
             message_id: message,
@@ -178,7 +185,10 @@ fn requests_are_bounded_and_operations_carry_the_right_text() {
     assert!(
         validate_request(&SendReply {
             idempotency_key: Uuid::nil(),
-            message: ReplyContent::Text { text: "hi".into() },
+            message: ReplyContent::Text {
+                text: "hi".into(),
+                mentions: vec![]
+            },
             reply_to: None,
         })
         .is_err()

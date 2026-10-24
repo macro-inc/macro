@@ -430,12 +430,14 @@ pub struct GroupEffect {
     pub origin: Origin,
     /// Verified Macro user behind a phone-origin message, never notified of it.
     pub associated_user: Option<String>,
+    /// A system line (added, left, renamed…), never a notification.
+    pub system: bool,
 }
 
 impl GroupEffect {
     /// Only a newly received live message creates a notification.
     pub fn should_notify(&self) -> bool {
-        self.first_publication && self.origin != Origin::History
+        self.first_publication && self.origin != Origin::History && !self.system
     }
 }
 

@@ -1,6 +1,13 @@
 //! Queries over standalone WhatsApp entities, messages and read cursors.
 use super::*;
-use crate::domain::{ports::BindingRepository, timeline::*};
+use crate::domain::{
+    ports::BindingRepository,
+    rich::RichContent,
+    timeline::{
+        view::{self, People, StoredVote},
+        *,
+    },
+};
 use async_trait::async_trait;
 use models_permissions::share_permission::{
     LinkShare, SharePermissionV2, UpdateSharePermissionRequestV2, access_level::AccessLevel,
@@ -13,12 +20,91 @@ fn backfill(state: Option<&str>, imported: i32) -> Option<Backfill> {
     })
 }
 
+impl PgLinkedRepository {
+    /// Names for WhatsApp ids in a group: people seen in it first (their
+    /// WhatsApp name and verified Macro user), then the owner's roster.
+    async fn people(&self, binding: &Binding, jids: &[String]) -> LinkedResult<People> {
+        let mut people = People::default();
+        if jids.is_empty() {
+            return Ok(people);
+        }
+        let seen = sqlx::query!(
+            r#"SELECT a.jid, p.user_id, p.display_name FROM whatsapp_identity_alias a
+            JOIN whatsapp_external_person p ON p.id = a.person_id
+            WHERE a.binding_id = $1 AND a.jid = ANY($2)"#,
+            binding.id,
+            jids
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(failure)?;
+        let roster = sqlx::query_scalar!(
+            r#"SELECT r.metadata FROM whatsapp_group_roster r
+            JOIN whatsapp_linked_account a ON a.id = r.account_id
+            JOIN whatsapp_group g ON g.user_id = a.user_id AND g.group_jid = r.group_jid
+            WHERE g.id = $1"#,
+            binding.id
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(failure)?
+        .map(decode::<GroupInfo>)
+        .transpose()?;
+        for row in seen {
+            let roster_name = roster.as_ref().and_then(|roster| {
+                roster
+                    .participants
+                    .iter()
+                    .find(|participant| {
+                        participant.identity.jid == row.jid
+                            || participant.identity.alternate_jid.as_deref() == Some(&row.jid)
+                    })
+                    .and_then(|participant| participant.identity.label())
+            });
+            let name = row
+                .display_name
+                .filter(|name| !name.trim().is_empty())
+                .or(roster_name);
+            if let Some(name) = name {
+                people.learn(
+                    &row.jid,
+                    WhatsAppPersonRef {
+                        name,
+                        user_id: row.user_id,
+                    },
+                );
+            }
+        }
+        for participant in roster.iter().flat_map(|roster| &roster.participants) {
+            let Some(name) = participant.identity.label() else {
+                continue;
+            };
+            for jid in [
+                Some(&participant.identity.jid),
+                participant.identity.alternate_jid.as_ref(),
+            ]
+            .into_iter()
+            .flatten()
+            {
+                people.learn(
+                    jid,
+                    WhatsAppPersonRef {
+                        name: name.clone(),
+                        user_id: None,
+                    },
+                );
+            }
+        }
+        Ok(people)
+    }
+}
+
 #[async_trait]
 impl TimelineRepository for PgLinkedRepository {
     async fn visible_groups(&self, user: &str) -> LinkedResult<Vec<VisibleGroup>> {
         let rows = sqlx::query!(r#"SELECT g.id,g.name,g.user_id,g.group_jid,g.state,g.ownership_state,g.adopted_at,g.backfill_state,g.backfill_imported,
             (SELECT count(*) FROM whatsapp_group_message m WHERE m.binding_id=g.id AND m.message_id IS NOT NULL
-              AND m.deleted_at IS NULL AND m.origin<>'history'
+              AND m.deleted_at IS NULL AND m.origin<>'history' AND m.kind<>'system'
               AND NOT EXISTS(SELECT 1 FROM whatsapp_external_person p WHERE p.id=m.person_id AND p.user_id=$1)
               AND (r.message_id IS NULL OR (m.source_at,m.id)>(r.read_at,r.message_id))) AS "unread_count!",
             (SELECT max(source_at) FROM whatsapp_group_message WHERE binding_id=g.id AND message_id IS NOT NULL) AS last_message_at,
@@ -63,7 +149,7 @@ impl TimelineRepository for PgLinkedRepository {
     async fn summary(&self, group: Uuid, user: &str) -> LinkedResult<WhatsAppGroupSummary> {
         let row = sqlx::query!(r#"SELECT g.id,g.name,g.user_id,g.backfill_state,g.backfill_imported,
             (SELECT count(*) FROM whatsapp_group_message m WHERE m.binding_id = g.id AND m.message_id IS NOT NULL
-              AND m.deleted_at IS NULL AND m.origin <> 'history'
+              AND m.deleted_at IS NULL AND m.origin <> 'history' AND m.kind <> 'system'
               AND NOT EXISTS (SELECT 1 FROM whatsapp_external_person p WHERE p.id = m.person_id AND p.user_id = $2)
               AND (r.message_id IS NULL OR (m.source_at,m.id) > (r.read_at,r.message_id))) AS "unread_count!",
             (SELECT max(source_at) FROM whatsapp_group_message WHERE binding_id = g.id AND message_id IS NOT NULL) AS last_message_at
@@ -88,7 +174,7 @@ impl TimelineRepository for PgLinkedRepository {
         limit: i64,
     ) -> LinkedResult<WhatsAppGroupMessages> {
         let rows = sqlx::query!(r#"SELECT m.id,m.person_id,p.user_id,COALESCE(p.display_name,'WhatsApp participant') AS "name!",
-            m.body,m.reply_to,m.source_at,m.ingested_at,m.revised_at,m.deleted_at,
+            m.body,m.reply_to,m.source_at,m.ingested_at,m.revised_at,m.deleted_at,m.kind,m.rich,m.mentions,m.forwarded,
             (SELECT state FROM whatsapp_send s WHERE s.message_id = m.id AND s.user_id = $2 ORDER BY s.created_at DESC LIMIT 1) AS delivery
             FROM whatsapp_group_message m JOIN whatsapp_external_person p ON p.id = m.person_id
             WHERE m.binding_id = $1 AND m.message_id IS NOT NULL
@@ -100,10 +186,58 @@ impl TimelineRepository for PgLinkedRepository {
         let binding = self.binding(group).await?.ok_or(LinkedError::NotFound)?;
         let ids: Vec<_> = rows.iter().take(limit as usize).map(|r| r.id).collect();
         let attachments = self.message_attachments(&binding, &ids).await?;
+        let mut rich = Vec::with_capacity(ids.len());
+        let mut wanted = vec![];
+        for row in rows.iter().take(limit as usize) {
+            let content: Option<RichContent> = match (&row.deleted_at, &row.rich) {
+                (None, Some(value)) => Some(decode(value.clone())?),
+                _ => None,
+            };
+            if let Some(RichContent::System(line)) = &content {
+                wanted.extend(line.participants.iter().cloned());
+            }
+            wanted.extend(row.mentions.iter().cloned());
+            rich.push(content);
+        }
+        let people = self.people(&binding, &wanted).await?;
+        let polls: Vec<Uuid> = rows
+            .iter()
+            .zip(&rich)
+            .filter(|(_, content)| matches!(content, Some(RichContent::Poll(_))))
+            .map(|(row, _)| row.id)
+            .collect();
+        let votes: Vec<StoredVote> = sqlx::query!(
+            r#"SELECT v.message_id, v.selected, p.user_id, COALESCE(p.display_name, 'WhatsApp participant') AS "name!"
+            FROM whatsapp_group_poll_vote v JOIN whatsapp_external_person p ON p.id = v.person_id
+            WHERE v.message_id = ANY($1) AND cardinality(v.selected) > 0
+            ORDER BY v.updated_at"#,
+            &polls
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(failure)?
+        .into_iter()
+        .map(|row| StoredVote {
+            message_id: row.message_id,
+            selected: row.selected,
+            voter: WhatsAppPersonRef {
+                name: row.name,
+                user_id: row.user_id,
+            },
+        })
+        .collect();
         let reactions=sqlx::query!(r#"SELECT message_id,emoji,count(*) AS "count!",COALESCE(bool_or(user_id=$2),false) AS "mine!"
             FROM whatsapp_group_reaction WHERE message_id=ANY($1) AND emoji<>'' GROUP BY message_id,emoji ORDER BY message_id,emoji"#,&ids,user)
             .fetch_all(&self.pool).await.map_err(failure)?;
-        for row in rows.into_iter().take(limit as usize) {
+        for (row, content) in rows.into_iter().take(limit as usize).zip(rich) {
+            let sender = WhatsAppPersonRef {
+                name: row.name.clone(),
+                user_id: row.user_id.clone(),
+            };
+            let message_votes: Vec<&StoredVote> = votes
+                .iter()
+                .filter(|vote| vote.message_id == row.id)
+                .collect();
             let grouped = reactions
                 .iter()
                 .filter(|r| r.message_id == row.id)
@@ -137,6 +271,20 @@ impl TimelineRepository for PgLinkedRepository {
                     .map(|a| a.linked_attachments.clone())
                     .unwrap_or_default(),
                 delivery_state: row.delivery.as_deref().and_then(DeliveryState::parse),
+                kind: if row.kind == "system" {
+                    WhatsAppMessageKind::System
+                } else {
+                    WhatsAppMessageKind::Message
+                },
+                forwarded: row.forwarded,
+                mentions: if row.deleted_at.is_some() {
+                    vec![]
+                } else {
+                    view::mentions_view(&row.mentions, &people)
+                },
+                rich: content.and_then(|content| {
+                    view::rich_view(content, &sender, &message_votes, user, &people)
+                }),
             });
         }
         let next_cursor = more.then(|| messages.last().map(|m| m.id)).flatten();

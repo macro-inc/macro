@@ -6,6 +6,9 @@ use models_permissions::share_permission::{SharePermissionV2, UpdateSharePermiss
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+/// Names, tallies and system lines as the timeline shows them.
+pub mod view;
+
 /// Adopted group visible through ordinary entity sharing.
 #[derive(Debug, Clone, Serialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
@@ -94,7 +97,112 @@ pub struct WhatsAppGroupMessage {
     pub attachments: Vec<LinkedAttachment>,
     /// Delivery state for the caller's deliberate send only.
     pub delivery_state: Option<DeliveryState>,
+    /// A message, or a system line.
+    pub kind: WhatsAppMessageKind,
+    /// Forwarded from another chat.
+    pub forwarded: bool,
+    /// People the body @-mentions.
+    pub mentions: Vec<WhatsAppMention>,
+    /// Poll, location, contact cards, event or system line.
+    pub rich: Option<WhatsAppRichContent>,
 }
+/// What a timeline entry is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub enum WhatsAppMessageKind {
+    /// Something someone sent.
+    Message,
+    /// Something that happened in the group (`rich` is a system line): shown
+    /// as a centered line, never notified or counted as unread.
+    System,
+}
+
+/// A person named in a message: a Macro user when verified, else their
+/// WhatsApp name, else their phone number.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct WhatsAppPersonRef {
+    /// Display name, never authentication evidence.
+    pub name: String,
+    /// Verified Macro user, if any.
+    pub user_id: Option<String>,
+}
+
+/// An @-mention in a message body.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct WhatsAppMention {
+    /// What follows the `@` in the body (the digits of the person's WhatsApp
+    /// id); replace `@<token>` with the name.
+    pub token: String,
+    /// Who it is.
+    #[serde(flatten)]
+    pub person: WhatsAppPersonRef,
+}
+
+/// One option of a poll with its votes.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct WhatsAppPollOption {
+    /// Option text.
+    pub name: String,
+    /// People who chose it.
+    pub votes: i64,
+    /// The caller chose it.
+    pub mine: bool,
+    /// Who chose it.
+    pub voters: Vec<WhatsAppPersonRef>,
+}
+
+/// A poll, read-only in Macro.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct WhatsAppPoll {
+    /// The question.
+    pub question: String,
+    /// Options in order, with tallies.
+    pub options: Vec<WhatsAppPollOption>,
+    /// How many options one person may choose; 0 means any number.
+    pub selectable_count: u32,
+    /// People who voted for anything.
+    pub voters: i64,
+}
+
+/// Something that happened in the group.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct WhatsAppSystemLine {
+    /// What happened.
+    pub action: super::rich::SystemAction,
+    /// Who did it; absent when WhatsApp did not say.
+    pub actor: Option<WhatsAppPersonRef>,
+    /// Who it happened to (added, removed, promoted, …).
+    pub participants: Vec<WhatsAppPersonRef>,
+    /// New subject or description; disappearing-messages timer in seconds
+    /// (`"0"` is off).
+    pub value: Option<String>,
+    /// For `call`: video or voice, and how it went.
+    pub call: Option<super::rich::Call>,
+}
+
+/// Structured content of a message besides its body.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub enum WhatsAppRichContent {
+    /// A poll with current votes.
+    Poll(WhatsAppPoll),
+    /// A place (or the start of a live location); link to a maps URL.
+    Location(super::rich::Location),
+    /// Contact cards.
+    Contacts(super::rich::Contacts),
+    /// A WhatsApp event.
+    Event(super::rich::Event),
+    /// A system line.
+    System(WhatsAppSystemLine),
+}
+
 /// Newest-first timeline page; `before` is the last returned message id.
 #[derive(Debug, Clone, Serialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]

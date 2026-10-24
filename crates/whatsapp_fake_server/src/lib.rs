@@ -14,6 +14,7 @@
 #![deny(missing_docs)]
 
 mod connection;
+mod group_change;
 mod media;
 mod phone;
 mod signal;
@@ -36,6 +37,7 @@ use whatsmeow::store::{MemoryStore, StoreError};
 use whatsmeow::types::Jid;
 use whatsmeow_signal::LibsignalCurveSignatures;
 
+pub use group_change::GroupChange;
 pub use phone::{FakePhone, ReceivedMessage, ReceivedReceipt};
 pub use signal::{TestSignal, test_root_key, test_signal};
 
@@ -90,6 +92,9 @@ pub enum SendError {
     /// Uploading an attachment to the media host failed.
     #[error("media upload: {0}")]
     Upload(#[source] whatsmeow::upload::UploadError),
+    /// Encrypting with an earlier message's secret (a poll vote) failed.
+    #[error("message secret: {0}")]
+    MessageSecret(#[source] whatsmeow::errors::ClientError),
 }
 
 impl SendError {
@@ -344,6 +349,8 @@ impl FakeWhatsApp {
                 .iter()
                 .map(|phone| phone.phone().to_owned())
                 .collect(),
+            admins: Vec::new(),
+            description: None,
         };
         let group_node = state.group_node(&group);
         let creator = state
@@ -394,46 +401,6 @@ impl FakeWhatsApp {
             .lock()
             .lid_only_groups
             .insert(group.user.clone());
-    }
-
-    /// Renames a group and notifies its members' linked devices.
-    pub fn rename_group(&self, group: &Jid, subject: &str) {
-        let mut state = self.shared.lock();
-        let Some(stored) = state.groups.get_mut(&group.user) else {
-            return;
-        };
-        stored.subject = subject.to_owned();
-        let members = stored.members.clone();
-        let change = node("subject", vec![("subject", text(subject))], None);
-        notify_group(&mut state, group, &members, change);
-        drop(state);
-        self.shared.changed();
-    }
-
-    /// Removes a phone's user from a group and notifies the remaining
-    /// members' and the removed user's linked devices.
-    pub fn remove_from_group(&self, group: &Jid, phone: &FakePhone) {
-        let mut state = self.shared.lock();
-        let Some(stored) = state.groups.get_mut(&group.user) else {
-            return;
-        };
-        let notified = stored.members.clone();
-        stored.members.retain(|member| member != phone.phone());
-        let Some(lid) = state.users.get(phone.phone()).map(|user| user.lid.clone()) else {
-            return;
-        };
-        let change = node(
-            "remove",
-            vec![],
-            children(vec![node(
-                "participant",
-                vec![("jid", jid(&device_jid(&lid, 0, true)))],
-                None,
-            )]),
-        );
-        notify_group(&mut state, group, &notified, change);
-        drop(state);
-        self.shared.changed();
     }
 
     /// The linked devices of a user, as phone-number device JIDs.
@@ -627,38 +594,5 @@ impl FakeWhatsApp {
         self.shared.cancel.cancel();
         self.shared.tasks.close();
         self.shared.tasks.wait().await;
-    }
-}
-
-/// Delivers a `w:gp2` change notification about `group` to every device of
-/// the given members.
-fn notify_group(
-    state: &mut State,
-    group: &Jid,
-    members: &[String],
-    change: whatsmeow::binary::Node,
-) {
-    let targets: Vec<DeviceAddress> = members
-        .iter()
-        .filter_map(|member| state.users.get(member))
-        .flat_map(|user| {
-            user.devices.keys().map(|device| DeviceAddress {
-                phone: user.phone.clone(),
-                device: *device,
-            })
-        })
-        .collect();
-    for target in targets {
-        let notification = node(
-            "notification",
-            vec![
-                ("from", jid(group)),
-                ("id", text(random_id())),
-                ("t", now()),
-                ("type", text("w:gp2")),
-            ],
-            children(vec![change.clone()]),
-        );
-        state.deliver(&target, notification);
     }
 }

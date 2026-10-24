@@ -23,6 +23,8 @@ use whatsmeow::types::Jid;
 
 use super::*;
 
+mod message_types;
+
 const TIMEOUT: Duration = Duration::from_secs(60);
 const ALICE: &str = "macro|alice@example.com";
 const BOB: &str = "macro|bob@example.com";
@@ -326,6 +328,7 @@ impl World {
                     idempotency_key: Uuid::now_v7(),
                     message: ReplyContent::Text {
                         text: text.to_owned(),
+                        mentions: vec![],
                     },
                     reply_to: None,
                 },
@@ -682,8 +685,8 @@ async fn a_phone_group_message_maps_to_one_inbound_text() {
             ));
         }
     }
-    assert!(mapped[0].is_none(), "the key-only part is not content");
-    let Some(Mapped::Inbound(event)) = &mapped[1] else {
+    assert!(mapped[0].is_empty(), "the key-only part is not content");
+    let [Mapped::Inbound(event)] = mapped[1].as_slice() else {
         panic!("the text maps to an inbound event");
     };
     assert_eq!(event.group_jid, group.to_string());
@@ -870,6 +873,27 @@ async fn group_renames_and_removals_in_whatsapp_reach_macro_live(pool: PgPool) {
     world
         .expect(renamed, "the Macro group follows the WhatsApp rename")
         .await;
+    // WhatsApp did not say who renamed it: a system line without an actor.
+    let line = wait_for_rows(&world.pool, TIMEOUT, || async {
+        sqlx::query!(
+            r#"SELECT rich->>'action' AS "action!", rich->>'value' AS value, (rich->>'by_whatsapp')::boolean AS "by_whatsapp!"
+            FROM whatsapp_group_message WHERE binding_id = $1 AND kind = 'system' AND message_id IS NOT NULL"#,
+            binding.id
+        )
+        .fetch_optional(&world.pool)
+        .await
+        .unwrap()
+        .map(|row| (row.action, row.value, row.by_whatsapp))
+    })
+    .await;
+    assert_eq!(
+        world.expect(line, "the rename is a system line").await,
+        (
+            "subject_changed".to_owned(),
+            Some("Escalations, renamed".to_owned()),
+            true
+        )
+    );
 
     world.whatsapp.remove_from_group(&world.group, &world.alice);
     let left = wait_for_rows(&world.pool, TIMEOUT, || async {

@@ -15,7 +15,12 @@ import { WhatsAppUpload } from './upload';
 
 /** Deliberate content from the credential owner's own WhatsApp account. */
 export type WhatsAppReply =
-  | { type: 'text'; text: string }
+  | {
+      type: 'text';
+      text: string;
+      /** WhatsApp ids of mentioned participants (`roster.participants[].jid`); the text names each as `@<digits>`. */
+      mentions?: string[];
+    }
   | { type: 'media'; upload: WhatsAppUpload; caption?: string }
   | {
       type: 'mutation';
@@ -142,7 +147,11 @@ export class WhatsAppGroup extends FavoritableEntity<WhatsAppGroupDetail> {
     if (options.replyTo) this.assertGroup(options.replyTo.groupId);
     const message = match(content)
       .returnType<LinkedReplyContent>()
-      .with({ type: 'text' }, (value) => value)
+      .with({ type: 'text' }, (value) => ({
+        type: 'text',
+        text: value.text,
+        mentions: value.mentions ?? [],
+      }))
       .with({ type: 'media' }, (value) => {
         this.assertGroup(value.upload.groupId);
         return {

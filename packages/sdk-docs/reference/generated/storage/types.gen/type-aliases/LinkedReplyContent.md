@@ -1,6 +1,6 @@
 # Type Alias: LinkedReplyContent
 
-> **LinkedReplyContent** = \{ `text`: `string`; `type`: `"text"`; \} \| \{ `caption?`: `string` \| `null`; `type`: `"media"`; `upload_id`: `string`; \} \| \{ `message_id`: `string`; `operation`: [`LinkedMutation`](LinkedMutation.md); `text?`: `string` \| `null`; `type`: `"mutation"`; \}
+> **LinkedReplyContent** = \{ `mentions?`: `string`[]; `text`: `string`; `type`: `"text"`; \} \| \{ `caption?`: `string` \| `null`; `type`: `"media"`; `upload_id`: `string`; \} \| \{ `message_id`: `string`; `operation`: [`LinkedMutation`](LinkedMutation.md); `text?`: `string` \| `null`; `type`: `"mutation"`; \}
 
 Content of a deliberate send.
 
@@ -8,10 +8,11 @@ Content of a deliberate send.
 
 ### Type Literal
 
-\{ `text`: `string`; `type`: `"text"`; \}
+\{ `mentions?`: `string`[]; `text`: `string`; `type`: `"text"`; \}
 
 | Name | Type | Description |
 | ------ | ------ | ------ |
+| `mentions?` | `string`[] | Group participants the text @-mentions, by their WhatsApp id (`jid` of a roster participant); the text must contain `@<digits before the @ of the id>` for each. |
 | `text` | `string` | UTF-8 text, at most [`TEXT_LIMIT_BYTES`] bytes. |
 | `type` | `"text"` | - |
 

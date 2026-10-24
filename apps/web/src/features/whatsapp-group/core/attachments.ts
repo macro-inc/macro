@@ -6,6 +6,11 @@ export type InboundAttachment = {
   mime: string;
   /** The Macro document holding the file, once ready. */
   documentId: string | undefined;
+  /** As WhatsApp declared them, to reserve space before the file loads. */
+  width?: number;
+  height?: number;
+  durationSeconds?: number;
+  presentation?: 'sticker' | 'gif' | 'voice_note';
 };
 
 /** How a ready file plays inline, like Chat's media; undefined for a file chip. */

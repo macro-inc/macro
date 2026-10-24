@@ -381,12 +381,13 @@ async fn content_in(
                 },
             })
         }
-        ReplyContent::Text { text } => Some(OutgoingContent::Text {
+        ReplyContent::Text { text, mentions } => Some(OutgoingContent::Text {
             text: text.clone(),
             quote: match request.reply_to {
                 Some(quoted) => target_in(tx, binding, quoted, identity).await?,
                 None => None,
             },
+            mentions: mentions.clone(),
         }),
         ReplyContent::Mutation {
             message_id,
@@ -628,6 +629,10 @@ impl PgLinkedRepository {
                                 .try_into()
                                 .map_err(|_| LinkedError::Unavailable)?,
                             locator: vec![],
+                            width: None,
+                            height: None,
+                            duration_seconds: None,
+                            presentation: None,
                         });
                         upload = Some(*upload_id);
                         (
@@ -641,7 +646,7 @@ impl PgLinkedRepository {
                             },
                         )
                     }
-                    ReplyContent::Text { text } => (
+                    ReplyContent::Text { text, .. } => (
                         MessageKind::Text,
                         text.clone(),
                         match request.reply_to {
@@ -695,6 +700,12 @@ impl PgLinkedRepository {
                         revision: server_at.timestamp_millis(),
                         target,
                         media,
+                        mentions: match &request.message {
+                            ReplyContent::Text { mentions, .. } => mentions.clone(),
+                            _ => vec![],
+                        },
+                        forwarded: false,
+                        rich: None,
                     }),
                 };
                 let InboundKind::Message(message) = &event.kind else {

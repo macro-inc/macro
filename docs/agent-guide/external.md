@@ -67,16 +67,31 @@ The timeline pages newest-first from
 replies, grouped reactions, edit/delete flags, attachment states, and delivery
 for the caller's own sends. Entering the view marks messages read through `/read`.
 Ready images and videos show inline in Chat's media grid (click opens the
-viewer), voice notes and audio in an inline player; their bytes come from the
-imported document's presigned URL. Other ready files show as document chips;
-other states show loading, unavailable or unsupported. Senders show their
-WhatsApp name. The header has the group name, a **N members** button that
+viewer), sized from WhatsApp's declared width/height before they load so the
+timeline opens at the bottom. Stickers show small and unframed, GIFs loop muted
+in place, voice notes read **Voice note · 0:42** above an inline player; bytes
+come from the imported document's presigned URL. Other ready files show as
+document chips; other states show loading, unavailable or unsupported. Senders
+show their WhatsApp name. `@<number>` in a body shows the person: a verified
+Macro user as Chat's mention chip, anyone else their WhatsApp name in bold.
+Bare URLs are links with Chat's hover preview. **Forwarded** marks forwarded
+messages. Polls (read-only tallies, "Vote in WhatsApp"), locations (**Open in
+Maps**, no map tiles), contact cards and WhatsApp events render as small cards
+(`data-whatsapp-card="poll|location|contacts|event"`). Group changes, pins and
+calls (`kind: "system"`) are one-line system rows like Chat's
+(`data-system-activity="<id>"`, e.g. "Ana added Ben", "Missed group video
+call"): no avatar, no actions, never unread. View-once and unknown types keep
+DSS's placeholder text. The header has the group name, a **N members** button that
 toggles the WhatsApp roster, and **Share**. The layout supports phone-width panes.
 
 The composer placeholder names the caller's own sending phone ("Message Test 11
 as +1…"); otherwise the reason replies are unavailable shows in its place. Sending requires view access, the caller's own connected account,
 and current membership that permits posting. A shared second member can send
-from their number without owning or re-adopting the group. Text/media/replies,
+from their number without owning or re-adopting the group. Typing `@` in the
+composer offers only the group's WhatsApp participants (not the sender, agents,
+Macro items or `@here`); a picked person is sent as `@<digits>` with
+`mentions: [jid]`, and a mentioning text follows files instead of captioning
+them. Text/media/replies,
 reactions, and edits/deletes of the caller's own recent messages use
 `POST /meta/linked/whatsapp-groups/<id>/sends`; files stage through `/attachments`.
 The detail's `limits` supplies allowed MIME types, bytes and the edit window.

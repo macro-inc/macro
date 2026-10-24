@@ -60,6 +60,14 @@ export class WhatsAppMessage extends MacroEntity<WhatsAppGroupMessage> {
   readonly reactions = this.field('reactions');
   /** Caller-owned send's delivery state, when present. */
   readonly deliveryState = this.field('delivery_state');
+  /** `message`, or `system` for something that happened in the group (see `rich`). */
+  readonly kind = this.field('kind');
+  /** Forwarded from another chat. */
+  readonly forwarded = this.field('forwarded');
+  /** People the body @-mentions: `@<token>` in the body is this person. */
+  readonly mentions = this.field('mentions');
+  /** Poll (with tallies), location, contact cards, event or system line. */
+  readonly rich = this.field('rich');
   /** Quoted message in this group. */
   readonly replyTo: () => Promise<WhatsAppMessage | undefined> =
     this.mappedField('reply_to', (id) =>
@@ -73,6 +81,10 @@ export class WhatsAppMessage extends MacroEntity<WhatsAppGroupMessage> {
       fileName: record.file_name,
       mime: record.mime,
       size: record.size,
+      width: record.width ?? undefined,
+      height: record.height ?? undefined,
+      durationSeconds: record.duration_seconds ?? undefined,
+      presentation: record.presentation ?? undefined,
       document: record.document_id
         ? Document.byId(this.client, record.document_id)
         : undefined,

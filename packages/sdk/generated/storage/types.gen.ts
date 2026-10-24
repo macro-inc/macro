@@ -9001,9 +9001,17 @@ export type LinkedAttachment = {
      */
     document_id?: string | null;
     /**
+     * Length of audio or video in whole seconds, when declared.
+     */
+    duration_seconds?: number | null;
+    /**
      * Display filename.
      */
     file_name: string;
+    /**
+     * Pixel height, when declared.
+     */
+    height?: number | null;
     /**
      * Declared MIME type.
      */
@@ -9012,6 +9020,7 @@ export type LinkedAttachment = {
      * Position within the message.
      */
     ordinal: number;
+    presentation?: null | LinkedMediaPresentation;
     /**
      * Declared size in bytes.
      */
@@ -9020,6 +9029,10 @@ export type LinkedAttachment = {
      * Current state.
      */
     state: LinkedAttachmentState;
+    /**
+     * Pixel width of an image, sticker or video, when WhatsApp declared it.
+     */
+    width?: number | null;
 };
 
 /**
@@ -9263,6 +9276,11 @@ export type LinkedIdentity = {
 export type LinkedMediaKind = 'image' | 'audio' | 'video' | 'document';
 
 /**
+ * How WhatsApp shows an attachment, when not as a plain file of its kind.
+ */
+export type LinkedMediaPresentation = 'sticker' | 'gif' | 'voice_note';
+
+/**
  * The attachments of one linked group message.
  */
 export type LinkedMessageAttachments = {
@@ -9361,6 +9379,12 @@ export type LinkedReplyBlock = 'sending_disabled' | 'no_account' | 'disconnected
  * Content of a deliberate send.
  */
 export type LinkedReplyContent = {
+    /**
+     * Group participants the text @-mentions, by their WhatsApp id
+     * (`jid` of a roster participant); the text must contain
+     * `@<digits before the @ of the id>` for each.
+     */
+    mentions?: Array<string>;
     /**
      * UTF-8 text, at most [`TEXT_LIMIT_BYTES`] bytes.
      */
@@ -16062,6 +16086,87 @@ export type WebhookValidationTestEvent = {
 };
 
 /**
+ * A call in the group.
+ */
+export type WhatsAppCall = {
+    /**
+     * Length, when it connected.
+     */
+    duration_seconds?: number | null;
+    /**
+     * How it went for the account that saw it.
+     */
+    outcome: WhatsAppCallOutcome;
+    /**
+     * Video rather than voice.
+     */
+    video: boolean;
+};
+
+/**
+ * How a call went.
+ */
+export type WhatsAppCallOutcome = 'answered' | 'missed' | 'rejected' | 'other';
+
+/**
+ * One contact card, from its vCard.
+ */
+export type WhatsAppContactCard = {
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * Phone numbers as written on the card.
+     */
+    phones: Array<string>;
+};
+
+/**
+ * Contact cards.
+ */
+export type WhatsAppContacts = {
+    /**
+     * The cards, in order.
+     */
+    contacts: Array<WhatsAppContactCard>;
+};
+
+/**
+ * A WhatsApp event.
+ */
+export type WhatsAppEvent = {
+    /**
+     * Canceled by its organizer.
+     */
+    canceled?: boolean;
+    /**
+     * Description.
+     */
+    description?: string | null;
+    /**
+     * End.
+     */
+    end_at?: string | null;
+    /**
+     * Call link for an online event.
+     */
+    join_link?: string | null;
+    /**
+     * Place name or address.
+     */
+    location?: string | null;
+    /**
+     * Title.
+     */
+    name: string;
+    /**
+     * Start.
+     */
+    start_at?: string | null;
+};
+
+/**
  * Full group detail and current viewer capabilities.
  */
 export type WhatsAppGroupDetail = WhatsAppGroupSummary & {
@@ -16106,9 +16211,21 @@ export type WhatsAppGroupMessage = {
      */
     edited_at?: string | null;
     /**
+     * Forwarded from another chat.
+     */
+    forwarded: boolean;
+    /**
      * Stable message id.
      */
     id: string;
+    /**
+     * A message, or a system line.
+     */
+    kind: WhatsAppMessageKind;
+    /**
+     * People the body @-mentions.
+     */
+    mentions: Array<WhatsAppMention>;
     /**
      * Reactions grouped by emoji.
      */
@@ -16121,6 +16238,7 @@ export type WhatsAppGroupMessage = {
      * Message quoted by this one.
      */
     reply_to?: string | null;
+    rich?: null | WhatsAppRichContent;
     /**
      * Sender.
      */
@@ -16211,6 +16329,156 @@ export type WhatsAppGroupSummary = {
      * Actual entity owner.
      */
     user_id: string;
+};
+
+/**
+ * A shared place.
+ */
+export type WhatsAppLocation = {
+    /**
+     * Street address.
+     */
+    address?: string | null;
+    /**
+     * Caption or comment.
+     */
+    comment?: string | null;
+    /**
+     * Degrees.
+     */
+    latitude: number;
+    /**
+     * Shared as a live location (this is where it started).
+     */
+    live?: boolean;
+    /**
+     * Degrees.
+     */
+    longitude: number;
+    /**
+     * Place name.
+     */
+    name?: string | null;
+    /**
+     * Link the sender attached.
+     */
+    url?: string | null;
+};
+
+/**
+ * An @-mention in a message body.
+ */
+export type WhatsAppMention = WhatsAppPersonRef & {
+    /**
+     * What follows the `@` in the body (the digits of the person's WhatsApp
+     * id); replace `@<token>` with the name.
+     */
+    token: string;
+};
+
+/**
+ * What a timeline entry is.
+ */
+export type WhatsAppMessageKind = 'message' | 'system';
+
+/**
+ * A person named in a message: a Macro user when verified, else their
+ * WhatsApp name, else their phone number.
+ */
+export type WhatsAppPersonRef = {
+    /**
+     * Display name, never authentication evidence.
+     */
+    name: string;
+    /**
+     * Verified Macro user, if any.
+     */
+    user_id?: string | null;
+};
+
+/**
+ * A poll, read-only in Macro.
+ */
+export type WhatsAppPoll = {
+    /**
+     * Options in order, with tallies.
+     */
+    options: Array<WhatsAppPollOption>;
+    /**
+     * The question.
+     */
+    question: string;
+    /**
+     * How many options one person may choose; 0 means any number.
+     */
+    selectable_count: number;
+    /**
+     * People who voted for anything.
+     */
+    voters: number;
+};
+
+/**
+ * One option of a poll with its votes.
+ */
+export type WhatsAppPollOption = {
+    /**
+     * The caller chose it.
+     */
+    mine: boolean;
+    /**
+     * Option text.
+     */
+    name: string;
+    /**
+     * Who chose it.
+     */
+    voters: Array<WhatsAppPersonRef>;
+    /**
+     * People who chose it.
+     */
+    votes: number;
+};
+
+/**
+ * Structured content of a message besides its body.
+ */
+export type WhatsAppRichContent = (WhatsAppPoll & {
+    type: 'poll';
+}) | (WhatsAppLocation & {
+    type: 'location';
+}) | (WhatsAppContacts & {
+    type: 'contacts';
+}) | (WhatsAppEvent & {
+    type: 'event';
+}) | (WhatsAppSystemLine & {
+    type: 'system';
+});
+
+/**
+ * Kinds of system lines.
+ */
+export type WhatsAppSystemAction = 'group_created' | 'participants_added' | 'participants_removed' | 'participants_left' | 'participants_joined' | 'participants_promoted' | 'participants_demoted' | 'subject_changed' | 'icon_changed' | 'description_changed' | 'disappearing_changed' | 'message_pinned' | 'message_unpinned' | 'call';
+
+/**
+ * Something that happened in the group.
+ */
+export type WhatsAppSystemLine = {
+    /**
+     * What happened.
+     */
+    action: WhatsAppSystemAction;
+    actor?: null | WhatsAppPersonRef;
+    call?: null | WhatsAppCall;
+    /**
+     * Who it happened to (added, removed, promoted, …).
+     */
+    participants: Array<WhatsAppPersonRef>;
+    /**
+     * New subject or description; disappearing-messages timer in seconds
+     * (`"0"` is off).
+     */
+    value?: string | null;
 };
 
 /**

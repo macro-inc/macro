@@ -43,7 +43,6 @@ use whatsmeow::signal::{
 };
 use whatsmeow::store::Device;
 use whatsmeow::types::{GROUP_SERVER, Jid, SERVER_JID};
-use whatsmeow::upload::upload;
 use whatsmeow_signal::{LibsignalCurveSignatures, LibsignalProtocol};
 
 use crate::connection::adv_hmac;
@@ -52,6 +51,8 @@ use crate::stanza::{
 };
 use crate::state::{DeviceAddress, PendingPair, device_jid, group_jid};
 use crate::{PairError, SendError, Shared};
+
+mod content;
 
 /// How long a phone waits for the client to sign a pair-success.
 const PAIR_CONFIRMATION_TIMEOUT: Duration = Duration::from_secs(30);
@@ -244,14 +245,7 @@ impl FakePhone {
         image: &[u8],
         caption: &str,
     ) -> Result<String, SendError> {
-        let uploaded = upload(
-            &self.media_http(),
-            &self.media_conn(),
-            image,
-            MediaType::Image,
-        )
-        .await
-        .map_err(SendError::Upload)?;
+        let uploaded = self.upload_media(image, MediaType::Image).await?;
         let message = Message {
             image_message: Some(Box::new(ImageMessage {
                 url: Some(uploaded.url),
@@ -1091,6 +1085,8 @@ impl FakePhone {
 fn message_type(message: &Message) -> &'static str {
     if message.reaction_message.is_some() {
         "reaction"
+    } else if message.poll_creation_message.is_some() || message.poll_update_message.is_some() {
+        "poll"
     } else if message.conversation.is_some() || message.extended_text_message.is_some() {
         "text"
     } else {

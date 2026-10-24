@@ -75,6 +75,10 @@ pub(crate) struct Group {
     pub(crate) created: u64,
     /// Members by phone number, in join order.
     pub(crate) members: Vec<String>,
+    /// Members made admins (the creator is always the super admin).
+    pub(crate) admins: Vec<String>,
+    /// The group description, if set.
+    pub(crate) description: Option<String>,
 }
 
 /// A connection that is pairing a new device.
@@ -274,10 +278,23 @@ impl State {
                 ];
                 if user.phone == group.creator {
                     attrs.push(("type", text("superadmin")));
+                } else if group.admins.contains(&user.phone) {
+                    attrs.push(("type", text("admin")));
                 }
                 node("participant", attrs, None)
             })
-            .collect();
+            .collect::<Vec<_>>();
+        let description = group.description.iter().map(|description| {
+            node(
+                "description",
+                vec![
+                    ("id", text(format!("{:X}", group.created))),
+                    ("t", text(group.created.to_string())),
+                ],
+                children(vec![node("body", vec![], bytes(description.as_bytes()))]),
+            )
+        });
+        let group_children = participants.into_iter().chain(description).collect();
         let creator_lid = self
             .users
             .get(&group.creator)
@@ -296,7 +313,7 @@ impl State {
                 ("addressing_mode", text("lid")),
                 ("size", text(group.members.len().to_string())),
             ],
-            children(participants),
+            children(group_children),
         )
     }
 

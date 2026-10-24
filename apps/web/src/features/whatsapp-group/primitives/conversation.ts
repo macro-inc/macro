@@ -21,6 +21,7 @@ import {
   recordedOutcome,
   type SendFailure,
 } from '../core/group';
+import { composerMentions, mentionToken } from '../core/mentions';
 
 /** What the composer hands over: its Markdown and the files it staged. */
 export type Draft = {
@@ -204,6 +205,7 @@ export function createConversation(
   const partsOf = (
     draft: Draft,
     text: string,
+    mentions: string[],
     sentTarget: ConversationTarget | undefined
   ): GroupSend[] => {
     if (sentTarget?.kind === 'edit')
@@ -211,10 +213,13 @@ export function createConversation(
     const replyTo =
       sentTarget?.kind === 'reply' ? sentTarget.message.id : undefined;
     if (draft.attachments.length === 0)
-      return [{ kind: 'text', text, replyTo }];
-    const captioned = draft.attachments.find(
-      (file) => !audioUploads.has(file.id)
-    );
+      return [{ kind: 'text', text, replyTo, mentions }];
+    // WhatsApp mentions ride on text only, so a mentioning text follows the
+    // files instead of captioning them.
+    const captioned =
+      mentions.length > 0
+        ? undefined
+        : draft.attachments.find((file) => !audioUploads.has(file.id));
     const media = draft.attachments.map(
       (file, index): GroupSend => ({
         kind: 'media',
@@ -224,7 +229,9 @@ export function createConversation(
       })
     );
     // WhatsApp refuses captions on audio, so the text follows on its own.
-    return text && !captioned ? [...media, { kind: 'text', text }] : media;
+    return text && !captioned
+      ? [...media, { kind: 'text', text, mentions }]
+      : media;
   };
 
   /**
@@ -236,7 +243,11 @@ export function createConversation(
     const senderId = userId();
     if (!group || !senderId) return err('This group is still loading.');
     if (!group.canSend) return err(composerNote(group));
-    const text = markdownToWhatsApp(draft.markdown);
+    const mentioned = composerMentions(
+      draft.markdown,
+      group.members.map((member) => member.id)
+    );
+    const text = markdownToWhatsApp(mentioned.markdown);
     const sentTarget = target();
     if (new TextEncoder().encode(text).length > group.limits.textBytes)
       return err('This message is too long for WhatsApp.');
@@ -255,7 +266,10 @@ export function createConversation(
       )
         return err('This message can no longer be edited.');
     }
-    const requests = partsOf(draft, text, sentTarget);
+    const requests = partsOf(draft, text, mentioned.mentions, sentTarget);
+    const names = new Map(
+      group.members.map((member) => [member.id, member.name])
+    );
     if (requests.length === 0) return err('Write a message first.');
     const draftFingerprint = fingerprint(draft, sentTarget);
     const key = draftKeys.get(draftFingerprint) ?? crypto.randomUUID();
@@ -276,7 +290,16 @@ export function createConversation(
                 target: sentTarget,
                 row: {
                   id: partKey,
+                  kind: 'message',
                   sender: { name: '', userId: senderId },
+                  mentions:
+                    request.kind === 'text'
+                      ? (request.mentions ?? []).map((jid) => ({
+                          token: mentionToken(jid),
+                          name: names.get(jid) ?? `+${mentionToken(jid)}`,
+                        }))
+                      : [],
+                  forwarded: false,
                   body:
                     request.kind === 'text'
                       ? request.text

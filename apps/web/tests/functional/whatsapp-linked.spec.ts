@@ -101,6 +101,10 @@ function server(): LinkedServer {
 const GROUP_ID = '019a061e-0000-7000-8000-000000000001';
 const incomingMessage = {
   id: 'message-1',
+  kind: 'message',
+  mentions: [],
+  forwarded: false,
+  rich: null,
   sender: { name: 'Ana Ruiz', user_id: null },
   body: 'The updated designs are ready for review.',
   sent_at: '2026-10-21T10:00:00Z',
@@ -430,6 +434,11 @@ async function mount(page: Page, state: LinkedServer, query = '') {
       }
       return route.fulfill({ status: 404, json: {} });
     }
+    // Chat's channel list feeds the composer's `@` menu; this account has none.
+    if (url.pathname === '/dss/channels/activity')
+      return route.fulfill({ json: [] });
+    if (url.pathname === '/dss/comms/channels')
+      return route.fulfill({ json: { items: [], next_cursor: null } });
     if (/^\/(auth|dss|notification|connection-gateway)\//.test(url.pathname))
       return route.fulfill({ json: {} });
     return route.fulfill({ response: await route.fetch() });
@@ -672,6 +681,263 @@ test('an independent group reads, replies, reacts and pages through channel rows
   expect(state.requests.some((request) => request.includes('channels/'))).toBe(
     false
   );
+  expect(unexpected).toEqual([]);
+});
+
+/** One of each WhatsApp message type Macro shows, oldest first. */
+function everyMessageType() {
+  const at = (minute: number) =>
+    `2026-10-21T09:${String(minute).padStart(2, '0')}:00Z`;
+  const base = {
+    ...incomingMessage,
+    body: '',
+    reactions: [],
+    attachments: [],
+  };
+  const file = (id: string, mime: string, extra: Record<string, unknown>) => ({
+    ordinal: 0,
+    state: 'ready',
+    file_name: id,
+    mime,
+    size: 1024,
+    document_id: `document-${id}`,
+    width: null,
+    height: null,
+    duration_seconds: null,
+    presentation: null,
+    ...extra,
+  });
+  return [
+    {
+      ...base,
+      id: 'type-system',
+      kind: 'system',
+      sent_at: at(1),
+      rich: {
+        type: 'system',
+        action: 'participants_added',
+        actor: { name: 'Ana Ruiz', user_id: null },
+        participants: [{ name: '+1 555 0100', user_id: null }],
+        value: null,
+        call: null,
+      },
+    },
+    {
+      ...base,
+      id: 'type-mention',
+      sent_at: at(2),
+      forwarded: true,
+      body: 'Ping @15550001111 about https://example.com',
+      mentions: [{ token: '15550001111', name: 'Ben Ode', user_id: null }],
+    },
+    {
+      ...base,
+      id: 'type-poll',
+      sent_at: at(3),
+      rich: {
+        type: 'poll',
+        question: 'Lunch?',
+        options: [
+          { name: 'Tacos', votes: 2, mine: true, voters: [] },
+          { name: 'Pho', votes: 0, mine: false, voters: [] },
+        ],
+        selectable_count: 1,
+        voters: 2,
+      },
+    },
+    {
+      ...base,
+      id: 'type-location',
+      sent_at: at(4),
+      rich: {
+        type: 'location',
+        latitude: 40.7128,
+        longitude: -74.006,
+        name: 'City Hall',
+        address: null,
+        url: null,
+        live: false,
+        comment: null,
+      },
+    },
+    {
+      ...base,
+      id: 'type-contacts',
+      sent_at: at(5),
+      rich: {
+        type: 'contacts',
+        contacts: [{ name: 'Dee Vee', phones: ['+1 555 0200'] }],
+      },
+    },
+    {
+      ...base,
+      id: 'type-event',
+      sent_at: at(6),
+      rich: {
+        type: 'event',
+        name: 'Launch party',
+        description: null,
+        start_at: '2026-10-24T22:00:00Z',
+        end_at: null,
+        location: 'Rooftop',
+        join_link: null,
+        canceled: false,
+      },
+    },
+    {
+      ...base,
+      id: 'type-sticker',
+      sent_at: at(7),
+      attachments: [
+        file('sticker.webp', 'image/webp', {
+          presentation: 'sticker',
+          width: 512,
+          height: 512,
+        }),
+      ],
+    },
+    {
+      ...base,
+      id: 'type-gif',
+      sent_at: at(8),
+      attachments: [
+        file('gif.mp4', 'video/mp4', {
+          presentation: 'gif',
+          width: 320,
+          height: 240,
+        }),
+      ],
+    },
+    {
+      ...base,
+      id: 'type-voice',
+      sent_at: at(9),
+      attachments: [
+        file('voice.ogg', 'audio/ogg', {
+          presentation: 'voice_note',
+          duration_seconds: 42,
+        }),
+      ],
+    },
+    {
+      ...base,
+      id: 'type-photo',
+      sent_at: at(10),
+      attachments: [
+        file('photo.jpg', 'image/jpeg', { width: 800, height: 400 }),
+      ],
+    },
+    {
+      ...base,
+      id: 'type-call',
+      kind: 'system',
+      sent_at: at(11),
+      rich: {
+        type: 'system',
+        action: 'call',
+        actor: null,
+        participants: [],
+        value: null,
+        call: { video: true, outcome: 'missed', duration_seconds: null },
+      },
+    },
+    {
+      ...base,
+      id: 'type-view-once',
+      sent_at: at(12),
+      body: 'View-once message — open it on your phone',
+    },
+  ];
+}
+
+test('every WhatsApp message type renders with Chat parts and small cards', async ({
+  page,
+}) => {
+  const state = server();
+  state.imported = everyMessageType();
+  const unexpected = await mount(page, state, `?group=${GROUP_ID}`);
+  const timeline = page.getByRole('log', { name: 'WhatsApp messages' });
+  await expect(
+    timeline.locator('[data-system-activity="type-system"]')
+  ).toContainText('Ana Ruiz added +1 555 0100');
+  await expect(
+    timeline.locator('[data-system-activity="type-call"]')
+  ).toContainText('Missed group video call');
+  // System lines are rows of their own, never messages with actions.
+  await expect(timeline.locator('[data-message-id="type-system"]')).toHaveCount(
+    0
+  );
+  const mention = timeline.locator('[data-message-id="type-mention"]');
+  await expect(mention.getByText('Forwarded')).toBeVisible();
+  await expect(mention.getByText('@Ben Ode')).toBeVisible();
+  await expect(mention.getByText('@15550001111')).toHaveCount(0);
+  await expect(
+    mention.getByRole('link', { name: 'https://example.com' })
+  ).toHaveAttribute('href', 'https://example.com');
+  const poll = timeline.locator('[data-whatsapp-card="poll"]');
+  await expect(poll).toContainText('Lunch?');
+  await expect(poll).toContainText('2 votes from 2 people');
+  await expect(poll.getByRole('button')).toHaveCount(0);
+  await expect(
+    timeline.getByRole('link', { name: 'Open in Maps' })
+  ).toHaveAttribute(
+    'href',
+    'https://www.google.com/maps/search/?api=1&query=40.7128%2C-74.006'
+  );
+  await expect(
+    timeline.locator('[data-whatsapp-card="contacts"]')
+  ).toContainText('Dee Vee');
+  await expect(timeline.locator('[data-whatsapp-card="event"]')).toContainText(
+    'Launch party'
+  );
+  await expect(timeline.getByText('Voice note · 0:42')).toBeVisible();
+  // Media reserves its declared shape while it loads.
+  const reserved = await timeline
+    .locator('[role="status"][aria-label^="Loading "]')
+    .evaluateAll((boxes) =>
+      boxes.map((box) => [
+        box.getAttribute('aria-label'),
+        Math.round(box.getBoundingClientRect().width),
+        Math.round(box.getBoundingClientRect().height),
+      ])
+    );
+  expect(reserved).toEqual(
+    expect.arrayContaining([
+      ['Loading sticker.webp', 144, 144],
+      ['Loading gif.mp4', 320, 240],
+      ['Loading photo.jpg', 400, 200],
+    ])
+  );
+  await expect(
+    timeline.getByText('View-once message — open it on your phone')
+  ).toBeVisible();
+  // The newest row is in view: the timeline opened at the bottom.
+  await expect(
+    timeline.locator('[data-message-id="message-2"]')
+  ).toBeInViewport();
+  expect(unexpected).toEqual([]);
+});
+
+test('the composer mentions group participants as WhatsApp mentions', async ({
+  page,
+}) => {
+  const state = server();
+  const unexpected = await mount(page, state, `?group=${GROUP_ID}`);
+  await typeInComposer(page, 'Thanks @Ana');
+  // Only the group's own people: no agents, Macro items or @here.
+  await expect(page.getByText('+14155550199')).toBeVisible();
+  await expect(page.getByText('@here')).toHaveCount(0);
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('!');
+  await page.getByRole('button', { name: 'Send message' }).click();
+  await expect.poll(() => state.outgoing.length).toBe(1);
+  expect(state.outgoing[0]).toMatchObject({
+    message: {
+      type: 'text',
+      text: expect.stringMatching(/^Thanks @14155550199 ?!$/),
+      mentions: ['14155550199@s.whatsapp.net'],
+    },
+  });
   expect(unexpected).toEqual([]);
 });
 

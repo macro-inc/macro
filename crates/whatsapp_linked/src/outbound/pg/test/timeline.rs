@@ -91,6 +91,7 @@ async fn shared_viewer_without_whatsapp_reads_history_and_unread_but_cannot_send
         idempotency_key: Uuid::now_v7(),
         message: ReplyContent::Text {
             text: "cannot send".into(),
+            mentions: vec![],
         },
         reply_to: None,
     };
@@ -393,6 +394,7 @@ async fn shared_sender_uses_own_roster_without_adopting_again(pool: PgPool) {
                 idempotency_key: Uuid::now_v7(),
                 message: ReplyContent::Text {
                     text: "from Bob's own connection".into(),
+                    mentions: vec![],
                 },
                 reply_to: None,
             },

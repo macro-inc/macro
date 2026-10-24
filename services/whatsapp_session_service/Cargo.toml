@@ -26,6 +26,7 @@ macro_config = { path = "../../crates/macro_config" }
 macro_entrypoint = { path = "../../crates/macro_entrypoint" }
 macro_env = { path = "../../crates/macro_env" }
 macro_service_urls = { path = "../../crates/macro_service_urls" }
+nom = { workspace = true }
 rootcause = { workspace = true }
 rustls = { workspace = true }
 serde = { workspace = true }

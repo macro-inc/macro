@@ -33374,9 +33374,21 @@
             "format": "uuid",
             "description": "The private document, once ready."
           },
+          "duration_seconds": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Length of audio or video in whole seconds, when declared.",
+            "minimum": 0
+          },
           "file_name": {
             "type": "string",
             "description": "Display filename."
+          },
+          "height": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Pixel height, when declared.",
+            "minimum": 0
           },
           "mime": {
             "type": "string",
@@ -33387,6 +33399,17 @@
             "format": "int32",
             "description": "Position within the message."
           },
+          "presentation": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LinkedMediaPresentation",
+                "description": "Sticker, GIF or voice note; `null` for an ordinary file of its kind."
+              }
+            ]
+          },
           "size": {
             "type": "integer",
             "format": "int64",
@@ -33396,6 +33419,12 @@
           "state": {
             "$ref": "#/components/schemas/LinkedAttachmentState",
             "description": "Current state."
+          },
+          "width": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Pixel width of an image, sticker or video, when WhatsApp declared it.",
+            "minimum": 0
           }
         }
       },
@@ -33734,6 +33763,11 @@
         "description": "Attachment categories WhatsApp distinguishes.",
         "enum": ["image", "audio", "video", "document"]
       },
+      "LinkedMediaPresentation": {
+        "type": "string",
+        "description": "How WhatsApp shows an attachment, when not as a plain file of its kind.",
+        "enum": ["sticker", "gif", "voice_note"]
+      },
       "LinkedMessageAttachments": {
         "type": "object",
         "description": "The attachments of one linked group message.",
@@ -33867,6 +33901,13 @@
             "description": "Plain text.",
             "required": ["text", "type"],
             "properties": {
+              "mentions": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Group participants the text @-mentions, by their WhatsApp id\n(`jid` of a roster participant); the text must contain\n`@<digits before the @ of the id>` for each."
+              },
               "text": {
                 "type": "string",
                 "description": "UTF-8 text, at most [`TEXT_LIMIT_BYTES`] bytes."
@@ -44535,6 +44576,101 @@
           }
         }
       },
+      "WhatsAppCall": {
+        "type": "object",
+        "description": "A call in the group.",
+        "required": ["video", "outcome"],
+        "properties": {
+          "duration_seconds": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Length, when it connected.",
+            "minimum": 0
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/WhatsAppCallOutcome",
+            "description": "How it went for the account that saw it."
+          },
+          "video": {
+            "type": "boolean",
+            "description": "Video rather than voice."
+          }
+        }
+      },
+      "WhatsAppCallOutcome": {
+        "type": "string",
+        "description": "How a call went.",
+        "enum": ["answered", "missed", "rejected", "other"]
+      },
+      "WhatsAppContactCard": {
+        "type": "object",
+        "description": "One contact card, from its vCard.",
+        "required": ["name", "phones"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "phones": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Phone numbers as written on the card."
+          }
+        }
+      },
+      "WhatsAppContacts": {
+        "type": "object",
+        "description": "Contact cards.",
+        "required": ["contacts"],
+        "properties": {
+          "contacts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WhatsAppContactCard"
+            },
+            "description": "The cards, in order."
+          }
+        }
+      },
+      "WhatsAppEvent": {
+        "type": "object",
+        "description": "A WhatsApp event.",
+        "required": ["name"],
+        "properties": {
+          "canceled": {
+            "type": "boolean",
+            "description": "Canceled by its organizer."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Description."
+          },
+          "end_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "End."
+          },
+          "join_link": {
+            "type": ["string", "null"],
+            "description": "Call link for an online event."
+          },
+          "location": {
+            "type": ["string", "null"],
+            "description": "Place name or address."
+          },
+          "name": {
+            "type": "string",
+            "description": "Title."
+          },
+          "start_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Start."
+          }
+        }
+      },
       "WhatsAppGroupDetail": {
         "allOf": [
           {
@@ -44588,7 +44724,10 @@
           "received_at",
           "deleted",
           "reactions",
-          "attachments"
+          "attachments",
+          "kind",
+          "forwarded",
+          "mentions"
         ],
         "properties": {
           "attachments": {
@@ -44622,10 +44761,25 @@
             "format": "date-time",
             "description": "Last edit timestamp."
           },
+          "forwarded": {
+            "type": "boolean",
+            "description": "Forwarded from another chat."
+          },
           "id": {
             "type": "string",
             "format": "uuid",
             "description": "Stable message id."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/WhatsAppMessageKind",
+            "description": "A message, or a system line."
+          },
+          "mentions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WhatsAppMention"
+            },
+            "description": "People the body @-mentions."
           },
           "reactions": {
             "type": "array",
@@ -44643,6 +44797,17 @@
             "type": ["string", "null"],
             "format": "uuid",
             "description": "Message quoted by this one."
+          },
+          "rich": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WhatsAppRichContent",
+                "description": "Poll, location, contact cards, event or system line."
+              }
+            ]
           },
           "sender": {
             "$ref": "#/components/schemas/WhatsAppGroupSender",
@@ -44767,6 +44932,302 @@
           "user_id": {
             "type": "string",
             "description": "Actual entity owner."
+          }
+        }
+      },
+      "WhatsAppLocation": {
+        "type": "object",
+        "description": "A shared place.",
+        "required": ["latitude", "longitude"],
+        "properties": {
+          "address": {
+            "type": ["string", "null"],
+            "description": "Street address."
+          },
+          "comment": {
+            "type": ["string", "null"],
+            "description": "Caption or comment."
+          },
+          "latitude": {
+            "type": "number",
+            "format": "double",
+            "description": "Degrees."
+          },
+          "live": {
+            "type": "boolean",
+            "description": "Shared as a live location (this is where it started)."
+          },
+          "longitude": {
+            "type": "number",
+            "format": "double",
+            "description": "Degrees."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Place name."
+          },
+          "url": {
+            "type": ["string", "null"],
+            "description": "Link the sender attached."
+          }
+        }
+      },
+      "WhatsAppMention": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/WhatsAppPersonRef",
+            "description": "Who it is."
+          },
+          {
+            "type": "object",
+            "required": ["token"],
+            "properties": {
+              "token": {
+                "type": "string",
+                "description": "What follows the `@` in the body (the digits of the person's WhatsApp\nid); replace `@<token>` with the name."
+              }
+            }
+          }
+        ],
+        "description": "An @-mention in a message body."
+      },
+      "WhatsAppMessageKind": {
+        "type": "string",
+        "description": "What a timeline entry is.",
+        "enum": ["message", "system"]
+      },
+      "WhatsAppPersonRef": {
+        "type": "object",
+        "description": "A person named in a message: a Macro user when verified, else their\nWhatsApp name, else their phone number.",
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Display name, never authentication evidence."
+          },
+          "user_id": {
+            "type": ["string", "null"],
+            "description": "Verified Macro user, if any."
+          }
+        }
+      },
+      "WhatsAppPoll": {
+        "type": "object",
+        "description": "A poll, read-only in Macro.",
+        "required": ["question", "options", "selectable_count", "voters"],
+        "properties": {
+          "options": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WhatsAppPollOption"
+            },
+            "description": "Options in order, with tallies."
+          },
+          "question": {
+            "type": "string",
+            "description": "The question."
+          },
+          "selectable_count": {
+            "type": "integer",
+            "format": "int32",
+            "description": "How many options one person may choose; 0 means any number.",
+            "minimum": 0
+          },
+          "voters": {
+            "type": "integer",
+            "format": "int64",
+            "description": "People who voted for anything."
+          }
+        }
+      },
+      "WhatsAppPollOption": {
+        "type": "object",
+        "description": "One option of a poll with its votes.",
+        "required": ["name", "votes", "mine", "voters"],
+        "properties": {
+          "mine": {
+            "type": "boolean",
+            "description": "The caller chose it."
+          },
+          "name": {
+            "type": "string",
+            "description": "Option text."
+          },
+          "voters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WhatsAppPersonRef"
+            },
+            "description": "Who chose it."
+          },
+          "votes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "People who chose it."
+          }
+        }
+      },
+      "WhatsAppRichContent": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WhatsAppPoll",
+                "description": "A poll with current votes."
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["poll"]
+                  }
+                }
+              }
+            ],
+            "description": "A poll with current votes."
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WhatsAppLocation",
+                "description": "A place (or the start of a live location); link to a maps URL."
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["location"]
+                  }
+                }
+              }
+            ],
+            "description": "A place (or the start of a live location); link to a maps URL."
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WhatsAppContacts",
+                "description": "Contact cards."
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["contacts"]
+                  }
+                }
+              }
+            ],
+            "description": "Contact cards."
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WhatsAppEvent",
+                "description": "A WhatsApp event."
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["event"]
+                  }
+                }
+              }
+            ],
+            "description": "A WhatsApp event."
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WhatsAppSystemLine",
+                "description": "A system line."
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["system"]
+                  }
+                }
+              }
+            ],
+            "description": "A system line."
+          }
+        ],
+        "description": "Structured content of a message besides its body."
+      },
+      "WhatsAppSystemAction": {
+        "type": "string",
+        "description": "Kinds of system lines.",
+        "enum": [
+          "group_created",
+          "participants_added",
+          "participants_removed",
+          "participants_left",
+          "participants_joined",
+          "participants_promoted",
+          "participants_demoted",
+          "subject_changed",
+          "icon_changed",
+          "description_changed",
+          "disappearing_changed",
+          "message_pinned",
+          "message_unpinned",
+          "call"
+        ]
+      },
+      "WhatsAppSystemLine": {
+        "type": "object",
+        "description": "Something that happened in the group.",
+        "required": ["action", "participants"],
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/WhatsAppSystemAction",
+            "description": "What happened."
+          },
+          "actor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WhatsAppPersonRef",
+                "description": "Who did it; absent when WhatsApp did not say."
+              }
+            ]
+          },
+          "call": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WhatsAppCall",
+                "description": "For `call`: video or voice, and how it went."
+              }
+            ]
+          },
+          "participants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WhatsAppPersonRef"
+            },
+            "description": "Who it happened to (added, removed, promoted, …)."
+          },
+          "value": {
+            "type": ["string", "null"],
+            "description": "New subject or description; disappearing-messages timer in seconds\n(`\"0\"` is off)."
           }
         }
       },

@@ -1,0 +1,88 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT g.id,g.name,g.user_id,g.group_jid,g.state,g.ownership_state,g.adopted_at,g.backfill_state,g.backfill_imported,\n            (SELECT count(*) FROM whatsapp_group_message m WHERE m.binding_id=g.id AND m.message_id IS NOT NULL\n              AND m.deleted_at IS NULL AND m.origin<>'history' AND m.kind<>'system'\n              AND NOT EXISTS(SELECT 1 FROM whatsapp_external_person p WHERE p.id=m.person_id AND p.user_id=$1)\n              AND (r.message_id IS NULL OR (m.source_at,m.id)>(r.read_at,r.message_id))) AS \"unread_count!\",\n            (SELECT max(source_at) FROM whatsapp_group_message WHERE binding_id=g.id AND message_id IS NOT NULL) AS last_message_at,\n            roster.metadata AS \"metadata?\"\n            FROM whatsapp_group g\n            LEFT JOIN whatsapp_group_read_state r ON r.group_id=g.id AND r.user_id=$1\n            LEFT JOIN whatsapp_linked_account a ON a.user_id=$1\n            LEFT JOIN whatsapp_group_roster roster ON roster.account_id=a.id AND roster.group_jid=g.group_jid\n            WHERE whatsapp_group_can_view(g.id,$1)\n              AND (r.user_id IS NOT NULL OR EXISTS (SELECT 1 FROM entity_access ea\n                WHERE ea.entity_id=g.id AND ea.entity_type='whatsapp_group'\n                  AND (ea.source_id=$1 OR ea.source_id IN (SELECT team_id::text FROM team_user WHERE user_id=$1)\n                    OR ea.source_id IN (SELECT channel_id::text FROM comms_channel_participants WHERE user_id=$1 AND left_at IS NULL))))\n            ORDER BY g.adopted_at DESC LIMIT 2000",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "group_jid",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "state",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "ownership_state",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "adopted_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "backfill_state",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "backfill_imported",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 9,
+        "name": "unread_count!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 10,
+        "name": "last_message_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "metadata?",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      null,
+      null,
+      false
+    ]
+  },
+  "hash": "50773a57cfaf6d27a0b82eccd55e722c5f3e7f18489c57b7a016998f7ab2c4a2"
+}

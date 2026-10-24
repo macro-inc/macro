@@ -264,6 +264,9 @@ impl Forwarder {
             messages = page.messages,
             complete = page.complete,
             stored = tracing::field::Empty,
+            unreadable = tracing::field::Empty,
+            skipped = tracing::field::Empty,
+            skipped_stub_types = tracing::field::Empty,
             outcome = tracing::field::Empty,
         );
         async {
@@ -271,34 +274,61 @@ impl Forwarder {
                 return;
             };
             let mut stored = 0usize;
+            let mut unreadable: Vec<i32> = vec![];
+            // Messages Macro does not import, by WhatsApp stub type (0: not
+            // a stub), so a page that stores less than it got is explained.
+            let mut skipped: Vec<i32> = vec![];
             let mut kept = true;
             for message in &conversation.messages {
                 let Some(web) = message.message.clone() else {
                     continue;
                 };
+                let stub_type = web.message_stub_type.unwrap_or(0);
                 let parsed = match Box::pin(client.parse_web_message(&chat, web)).await {
                     Ok(parsed) => parsed,
                     Err(error) => {
-                        tracing::debug!(error = %error, "Skipping an unreadable history message");
+                        unreadable.push(stub_type);
+                        tracing::debug!(error = %error, stub_type, "Skipping an unreadable history message");
                         continue;
                     }
                 };
-                let Some(mut event) = events::map_history_message(
+                let now = Utc::now();
+                let Some(event) = events::map_history_message(
                     self.account,
                     &parsed,
-                    Utc::now(),
+                    now,
                     &|locator: &MediaLocator| self.seal(locator),
                 ) else {
+                    skipped.push(stub_type);
                     continue;
                 };
-                events::complete_sender(self.store.as_ref(), &mut event).await;
-                if Box::pin(self.inbound.accept(&event)).await {
+                // The phone sends a poll's votes with it, already decrypted;
+                // they apply after the poll.
+                let votes = events::history_poll_votes(self.account, &parsed, now);
+                let mut message_kept = true;
+                for mut event in std::iter::once(event).chain(votes) {
+                    events::complete_sender(self.store.as_ref(), &mut event).await;
+                    message_kept &= Box::pin(self.inbound.accept(&event)).await;
+                }
+                if message_kept {
                     stored += 1;
                 } else {
                     kept = false;
                 }
             }
-            tracing::Span::current().record("stored", stored);
+            let span = tracing::Span::current();
+            span.record("stored", stored);
+            span.record("unreadable", unreadable.len());
+            span.record("skipped", skipped.len());
+            span.record("skipped_stub_types", format!("{skipped:?}"));
+            tracing::info!(
+                stored,
+                unreadable = unreadable.len(),
+                unreadable_stub_types = ?unreadable,
+                skipped = skipped.len(),
+                skipped_stub_types = ?skipped,
+                "WhatsApp history page received"
+            );
             if !kept {
                 tracing::Span::current().record("outcome", "not_stored");
                 tracing::warn!("A history page could not be stored; it will be requested again");
@@ -309,6 +339,35 @@ impl Forwarder {
         }
         .instrument(span)
         .await;
+    }
+}
+
+impl Forwarder {
+    /// A poll vote, decrypted with the poll's message secret. `None` when the
+    /// message is not a vote; a vote that cannot be decrypted (the poll was
+    /// sent before this device saw it) is acknowledged and dropped.
+    async fn poll_vote(&self, message: &whatsmeow::types::events::Message) -> Option<bool> {
+        message.message.as_ref()?.poll_update_message.as_ref()?;
+        let client = self.client.upgrade()?;
+        let selected = match client.decrypt_poll_vote(message).await {
+            Ok(vote) => vote.selected_options,
+            Err(error) => {
+                tracing::debug!(
+                    name: "whatsapp.inbound.skipped",
+                    account_id = %self.account,
+                    reason = "undecryptable_poll_vote",
+                    error = %error,
+                    "Acknowledged a WhatsApp poll vote without storing it"
+                );
+                return Some(true);
+            }
+        };
+        let Some(mut event) = events::map_poll_vote(self.account, message, &selected, Utc::now())
+        else {
+            return Some(true);
+        };
+        events::complete_sender(self.store.as_ref(), &mut event).await;
+        Some(self.inbound.accept(&event).await)
     }
 }
 
@@ -330,28 +389,34 @@ impl EventHandler for Forwarder {
                 Box::pin(self.chats(events::chat_setting(event).into_iter().collect())).await;
             }
         }
+        if let Event::Message(message) = event
+            && let Some(vote) = Box::pin(self.poll_vote(message)).await
+        {
+            return vote;
+        }
         let seal = |locator: &MediaLocator| self.seal(locator);
-        match events::map_event(self.account, event, Utc::now(), &seal) {
-            Some(Mapped::Inbound(mut event)) => {
-                events::complete_sender(self.store.as_ref(), &mut event).await;
-                self.inbound.accept(&event).await
-            }
-            Some(Mapped::Session(event)) => {
-                let _ = self.events.send(event);
-                true
-            }
-            None => {
-                if matches!(event, Event::Message(_)) {
-                    tracing::debug!(
-                        name: "whatsapp.inbound.skipped",
-                        account_id = %self.account,
-                        reason = "not_group_content",
-                        "Acknowledged a WhatsApp message without storing it"
-                    );
+        let mapped = events::map_event(self.account, event, Utc::now(), &seal);
+        if mapped.is_empty() && matches!(event, Event::Message(_)) {
+            tracing::debug!(
+                name: "whatsapp.inbound.skipped",
+                account_id = %self.account,
+                reason = "not_group_content",
+                "Acknowledged a WhatsApp message without storing it"
+            );
+        }
+        let mut stored = true;
+        for mapped in mapped {
+            match mapped {
+                Mapped::Inbound(mut event) => {
+                    events::complete_sender(self.store.as_ref(), &mut event).await;
+                    stored &= self.inbound.accept(&event).await;
                 }
-                true
+                Mapped::Session(event) => {
+                    let _ = self.events.send(event);
+                }
             }
         }
+        stored
     }
 }
 
@@ -530,21 +595,30 @@ impl WhatsmeowSession {
         media: Option<&UploadedMedia>,
     ) -> Result<wa_e2e::Message, SendFailure> {
         Ok(match content {
-            OutgoingContent::Text { text, quote: None } => wa_e2e::Message {
+            OutgoingContent::Text {
+                text,
+                quote: None,
+                mentions,
+            } if mentions.is_empty() => wa_e2e::Message {
                 conversation: Some(text.clone()),
                 ..Default::default()
             },
             OutgoingContent::Text {
                 text,
-                quote: Some(quote),
-            } => wa_e2e::Message {
-                extended_text_message: Some(Box::new(wa_e2e::ExtendedTextMessage {
-                    text: Some(text.clone()),
-                    context_info: quote_context(Some(quote)),
+                quote,
+                mentions,
+            } => {
+                let mut context_info = quote_context(quote.as_ref()).unwrap_or_default();
+                context_info.mentioned_jid = mentions.clone();
+                wa_e2e::Message {
+                    extended_text_message: Some(Box::new(wa_e2e::ExtendedTextMessage {
+                        text: Some(text.clone()),
+                        context_info: Some(context_info),
+                        ..Default::default()
+                    })),
                     ..Default::default()
-                })),
-                ..Default::default()
-            },
+                }
+            }
             OutgoingContent::Media {
                 kind,
                 mime,

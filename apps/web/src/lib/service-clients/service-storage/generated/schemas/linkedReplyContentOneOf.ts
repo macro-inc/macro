@@ -10,6 +10,10 @@ import type { LinkedReplyContentOneOfType } from './linkedReplyContentOneOfType'
  * Plain text.
  */
 export type LinkedReplyContentOneOf = {
+  /** Group participants the text @-mentions, by their WhatsApp id
+(`jid` of a roster participant); the text must contain
+`@<digits before the @ of the id>` for each. */
+  mentions?: string[];
   /** UTF-8 text, at most [`TEXT_LIMIT_BYTES`] bytes. */
   text: string;
   type: LinkedReplyContentOneOfType;

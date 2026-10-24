@@ -547,6 +547,11 @@ pub enum ReplyContent {
     Text {
         /// UTF-8 text, at most [`TEXT_LIMIT_BYTES`] bytes.
         text: String,
+        /// Group participants the text @-mentions, by their WhatsApp id
+        /// (`jid` of a roster participant); the text must contain
+        /// `@<digits before the @ of the id>` for each.
+        #[serde(default)]
+        mentions: Vec<String>,
     },
     /// One attachment staged through the attachments route.
     Media {
@@ -688,6 +693,41 @@ impl MediaKind {
     }
 }
 
+/// How WhatsApp shows an attachment, when not as a plain file of its kind.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = LinkedMediaPresentation))]
+pub enum MediaPresentation {
+    /// A sticker: a small image (WebP, possibly animated), no caption.
+    Sticker,
+    /// A short video WhatsApp plays as a looping, muted GIF.
+    Gif,
+    /// A voice note recorded in WhatsApp (push to talk).
+    VoiceNote,
+}
+
+impl MediaPresentation {
+    /// Stored form.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Sticker => "sticker",
+            Self::Gif => "gif",
+            Self::VoiceNote => "voice_note",
+        }
+    }
+
+    /// Parses the stored form.
+    pub fn parse(value: &str) -> Option<Self> {
+        Some(match value {
+            "sticker" => Self::Sticker,
+            "gif" => Self::Gif,
+            "voice_note" => Self::VoiceNote,
+            _ => return None,
+        })
+    }
+}
+
 /// Largest attachment imported or sent, in bytes.
 pub const MEDIA_LIMIT_BYTES: usize = 32 * 1024 * 1024;
 
@@ -737,6 +777,14 @@ pub struct LinkedAttachment {
     pub size: u64,
     /// The private document, once ready.
     pub document_id: Option<Uuid>,
+    /// Pixel width of an image, sticker or video, when WhatsApp declared it.
+    pub width: Option<u32>,
+    /// Pixel height, when declared.
+    pub height: Option<u32>,
+    /// Length of audio or video in whole seconds, when declared.
+    pub duration_seconds: Option<u32>,
+    /// Sticker, GIF or voice note; `null` for an ordinary file of its kind.
+    pub presentation: Option<MediaPresentation>,
 }
 
 /// The attachments of one linked group message.
@@ -750,6 +798,8 @@ pub struct MessageAttachments {
     pub linked_attachments: Vec<LinkedAttachment>,
 }
 
+/// Most people one text send may @-mention.
+pub const MENTION_LIMIT: usize = 64;
 /// Maximum UTF-8 bytes in one text send.
 pub const TEXT_LIMIT_BYTES: usize = 16 * 1024;
 /// Edits and deletes are offered for this long after the original send.
