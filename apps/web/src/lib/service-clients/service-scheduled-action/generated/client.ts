@@ -9,9 +9,13 @@ import type {
   ActionExecutionRecord,
   AiAdmissionErrorBody,
   CreateScheduledAction,
+  DeliverScheduledActionWebhookBody,
   EmptyResponse,
   InProgressExecution,
+  IssuedRoutineWebhook,
   ListScheduledActionsParams,
+  RoutineWebhook,
+  RoutineWebhookDelivery,
   ScheduledActionResponse,
   SetScheduledActionEnabled,
   UpdateScheduledAction,
@@ -196,6 +200,80 @@ export const createScheduledAction = async (
     status: res.status,
     headers: res.headers,
   } as createScheduledActionResponse;
+};
+
+/**
+ * @summary Run the routine this URL belongs to with the JSON body as its event. The
+token in the path is the only credential.
+ */
+export type deliverScheduledActionWebhookResponse202 = {
+  data: RoutineWebhookDelivery;
+  status: 202;
+};
+
+export type deliverScheduledActionWebhookResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type deliverScheduledActionWebhookResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type deliverScheduledActionWebhookResponse413 = {
+  data: string;
+  status: 413;
+};
+
+export type deliverScheduledActionWebhookResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type deliverScheduledActionWebhookResponseSuccess =
+  deliverScheduledActionWebhookResponse202 & {
+    headers: Headers;
+  };
+export type deliverScheduledActionWebhookResponseError = (
+  | deliverScheduledActionWebhookResponse400
+  | deliverScheduledActionWebhookResponse404
+  | deliverScheduledActionWebhookResponse413
+  | deliverScheduledActionWebhookResponse500
+) & {
+  headers: Headers;
+};
+
+export type deliverScheduledActionWebhookResponse =
+  | deliverScheduledActionWebhookResponseSuccess
+  | deliverScheduledActionWebhookResponseError;
+
+export const getDeliverScheduledActionWebhookUrl = (token: string) => {
+  return `/scheduled-actions/webhooks/${token}`;
+};
+
+export const deliverScheduledActionWebhook = async (
+  token: string,
+  deliverScheduledActionWebhookBody: DeliverScheduledActionWebhookBody,
+  options?: RequestInit
+): Promise<deliverScheduledActionWebhookResponse> => {
+  const res = await fetch(getDeliverScheduledActionWebhookUrl(token), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(deliverScheduledActionWebhookBody),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: deliverScheduledActionWebhookResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as deliverScheduledActionWebhookResponse;
 };
 
 export type getScheduledActionResponse200 = {
@@ -614,4 +692,191 @@ export const listScheduledActionHistory = async (
     status: res.status,
     headers: res.headers,
   } as listScheduledActionHistoryResponse;
+};
+
+export type getScheduledActionWebhookResponse200 = {
+  data: RoutineWebhook;
+  status: 200;
+};
+
+export type getScheduledActionWebhookResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type getScheduledActionWebhookResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type getScheduledActionWebhookResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type getScheduledActionWebhookResponseSuccess =
+  getScheduledActionWebhookResponse200 & {
+    headers: Headers;
+  };
+export type getScheduledActionWebhookResponseError = (
+  | getScheduledActionWebhookResponse401
+  | getScheduledActionWebhookResponse404
+  | getScheduledActionWebhookResponse500
+) & {
+  headers: Headers;
+};
+
+export type getScheduledActionWebhookResponse =
+  | getScheduledActionWebhookResponseSuccess
+  | getScheduledActionWebhookResponseError;
+
+export const getGetScheduledActionWebhookUrl = (id: string) => {
+  return `/scheduled-actions/${id}/webhook`;
+};
+
+export const getScheduledActionWebhook = async (
+  id: string,
+  options?: RequestInit
+): Promise<getScheduledActionWebhookResponse> => {
+  const res = await fetch(getGetScheduledActionWebhookUrl(id), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getScheduledActionWebhookResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getScheduledActionWebhookResponse;
+};
+
+/**
+ * @summary Issue the routine's webhook URL token, replacing any earlier one. The
+token is shown only in this response.
+ */
+export type issueScheduledActionWebhookResponse201 = {
+  data: IssuedRoutineWebhook;
+  status: 201;
+};
+
+export type issueScheduledActionWebhookResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type issueScheduledActionWebhookResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type issueScheduledActionWebhookResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type issueScheduledActionWebhookResponseSuccess =
+  issueScheduledActionWebhookResponse201 & {
+    headers: Headers;
+  };
+export type issueScheduledActionWebhookResponseError = (
+  | issueScheduledActionWebhookResponse401
+  | issueScheduledActionWebhookResponse404
+  | issueScheduledActionWebhookResponse500
+) & {
+  headers: Headers;
+};
+
+export type issueScheduledActionWebhookResponse =
+  | issueScheduledActionWebhookResponseSuccess
+  | issueScheduledActionWebhookResponseError;
+
+export const getIssueScheduledActionWebhookUrl = (id: string) => {
+  return `/scheduled-actions/${id}/webhook`;
+};
+
+export const issueScheduledActionWebhook = async (
+  id: string,
+  options?: RequestInit
+): Promise<issueScheduledActionWebhookResponse> => {
+  const res = await fetch(getIssueScheduledActionWebhookUrl(id), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: issueScheduledActionWebhookResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as issueScheduledActionWebhookResponse;
+};
+
+export type revokeScheduledActionWebhookResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type revokeScheduledActionWebhookResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type revokeScheduledActionWebhookResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type revokeScheduledActionWebhookResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type revokeScheduledActionWebhookResponseSuccess =
+  revokeScheduledActionWebhookResponse204 & {
+    headers: Headers;
+  };
+export type revokeScheduledActionWebhookResponseError = (
+  | revokeScheduledActionWebhookResponse401
+  | revokeScheduledActionWebhookResponse404
+  | revokeScheduledActionWebhookResponse500
+) & {
+  headers: Headers;
+};
+
+export type revokeScheduledActionWebhookResponse =
+  | revokeScheduledActionWebhookResponseSuccess
+  | revokeScheduledActionWebhookResponseError;
+
+export const getRevokeScheduledActionWebhookUrl = (id: string) => {
+  return `/scheduled-actions/${id}/webhook`;
+};
+
+export const revokeScheduledActionWebhook = async (
+  id: string,
+  options?: RequestInit
+): Promise<revokeScheduledActionWebhookResponse> => {
+  const res = await fetch(getRevokeScheduledActionWebhookUrl(id), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: revokeScheduledActionWebhookResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as revokeScheduledActionWebhookResponse;
 };

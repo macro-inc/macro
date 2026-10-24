@@ -16,6 +16,8 @@ export type RoutineEditorSlots = {
   Triggers: Component<{
     triggers: RoutineTriggerDraft[];
     onChange(triggers: RoutineTriggerDraft[]): void;
+    /** Absent while the routine is being created. */
+    routineId?: string;
   }>;
 };
 export type RoutineDetailSlots = RoutineEditorSlots & {

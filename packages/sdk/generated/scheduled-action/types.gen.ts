@@ -133,6 +133,11 @@ export type EmptyResponse = {
 /**
  * An event name AND an entity ID must match within the same filter. A
  * condition further requires the event's content to answer it with yes.
+ *
+ * `github` and `webhook.received` come from outside Macro and carry their
+ * payload: each stands alone in its filter, takes no ids, and may require
+ * exact payload values with `match`. A `github` filter narrows deliveries
+ * with its `github` selector.
  */
 export type EventFilter = {
     /**
@@ -141,7 +146,12 @@ export type EventFilter = {
      */
     condition?: string | null;
     events: Array<EventName>;
+    github?: null | GithubSelector;
     ids?: Array<string> | null;
+    /**
+     * Exact tests on the payload, all of which must pass.
+     */
+    match?: Array<PayloadCondition> | null;
 };
 
 /**
@@ -153,7 +163,7 @@ export type EventFilters = Array<EventFilter>;
  * Closed allowlist: unknown names, deletions and ambiguous attribution are not
  * selectors. Adding a broker variant does not automatically enable routines.
  */
-export type EventName = 'document.created' | 'document.updated' | 'document.deleted' | 'task.created' | 'task.status_changed' | 'task.priority_changed' | 'task.property_changed' | 'email.message_received' | 'channel.created' | 'channel.message_posted' | 'channel.mentioned' | 'channel.message_patched' | 'channel.message_attachment_created' | 'call.started' | 'call.ended';
+export type EventName = 'document.created' | 'document.updated' | 'document.deleted' | 'task.created' | 'task.status_changed' | 'task.priority_changed' | 'task.property_changed' | 'email.message_received' | 'channel.created' | 'channel.message_posted' | 'channel.mentioned' | 'channel.message_patched' | 'channel.message_attachment_created' | 'call.started' | 'call.ended' | 'github' | 'webhook.received';
 
 /**
  * Transcript resource created by a run. Never infer this from current task configuration.
@@ -179,10 +189,44 @@ export type ExecutionResult = {
     version: number;
 };
 
+/**
+ * Which GitHub deliveries match.
+ */
+export type GithubSelector = {
+    /**
+     * Payload actions, such as `completed` or `opened`; any when empty.
+     */
+    actions?: Array<string>;
+    /**
+     * GitHub event names, such as `workflow_run` or `pull_request`; any when empty.
+     */
+    events?: Array<string>;
+    /**
+     * Also run for deliveries caused by bots and apps, including Macro's own.
+     */
+    includeBots?: boolean;
+    /**
+     * Repositories as `owner/name`, matched without regard to case; every
+     * repository the owner's installations cover when empty. A renamed
+     * repository stops matching until it is chosen again.
+     */
+    repositories?: Array<string>;
+};
+
 export type InProgressExecution = {
     action_id: string;
     chat_id?: string | null;
     resource?: null | ExecutionResource;
+};
+
+/**
+ * A newly issued webhook URL token. The token is never available again.
+ */
+export type IssuedRoutineWebhook = RoutineWebhook & {
+    /**
+     * Secret path segment: POST to `/scheduled-actions/webhooks/{token}`.
+     */
+    token: string;
 };
 
 /**
@@ -198,6 +242,40 @@ export type LegacyActionConfiguration = {
     };
     timezone: string;
 };
+
+/**
+ * `path` walks objects by key; `*` steps into every element of an array and
+ * a number into one. Give exactly one test. `notIn` also passes when the
+ * path finds nothing.
+ */
+export type PayloadCondition = {
+    equals?: null | PayloadScalar;
+    /**
+     * Whether the path finds a non-null value.
+     */
+    exists?: boolean | null;
+    /**
+     * Some text found matches this glob; `*` matches any run of characters.
+     */
+    glob?: string | null;
+    /**
+     * Some value found is one of these.
+     */
+    in?: Array<PayloadScalar> | null;
+    /**
+     * No value found is one of these.
+     */
+    notIn?: Array<PayloadScalar> | null;
+    /**
+     * Keys from the payload's root, e.g. `["workflow_run", "conclusion"]`.
+     */
+    path: Array<string>;
+};
+
+/**
+ * A JSON text, number, boolean or null that payload values are compared with.
+ */
+export type PayloadScalar = null | boolean | number | string;
 
 /**
  * A nonblank model identifier. Runtime catalogs, not the scheduler, own availability.
@@ -220,6 +298,29 @@ export type RoutineTrigger = {
  * Bounded schedules and one combined set of event filters.
  */
 export type RoutineTriggers = Array<RoutineTrigger>;
+
+/**
+ * A routine's webhook URL, without its secret.
+ */
+export type RoutineWebhook = {
+    createdAt: string;
+    /**
+     * The start of the token, enough to recognize it.
+     */
+    tokenPrefix: string;
+};
+
+/**
+ * What became of a delivery.
+ */
+export type RoutineWebhookDelivery = {
+    eventId: string;
+    /**
+     * Whether the routine will run for it. False when the routine is paused,
+     * has no webhook trigger, or its payload match left the delivery out.
+     */
+    queued: boolean;
+};
 
 /**
  * Whether a routine's runs are listed in Home and the Agents list. Routines
@@ -387,6 +488,38 @@ export type CreateScheduledActionResponses = {
 };
 
 export type CreateScheduledActionResponse = CreateScheduledActionResponses[keyof CreateScheduledActionResponses];
+
+export type DeliverScheduledActionWebhookData = {
+    /**
+     * Any JSON value, at most 64 KiB
+     */
+    body: {
+        [key: string]: unknown;
+    };
+    path: {
+        /**
+         * The routine's webhook token
+         */
+        token: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/webhooks/{token}';
+};
+
+export type DeliverScheduledActionWebhookErrors = {
+    400: string;
+    404: string;
+    413: string;
+    500: string;
+};
+
+export type DeliverScheduledActionWebhookError = DeliverScheduledActionWebhookErrors[keyof DeliverScheduledActionWebhookErrors];
+
+export type DeliverScheduledActionWebhookResponses = {
+    202: RoutineWebhookDelivery;
+};
+
+export type DeliverScheduledActionWebhookResponse = DeliverScheduledActionWebhookResponses[keyof DeliverScheduledActionWebhookResponses];
 
 export type DeleteScheduledActionData = {
     body?: never;
@@ -566,3 +699,84 @@ export type ListScheduledActionHistoryResponses = {
 };
 
 export type ListScheduledActionHistoryResponse = ListScheduledActionHistoryResponses[keyof ListScheduledActionHistoryResponses];
+
+export type RevokeScheduledActionWebhookData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the scheduled action
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/{id}/webhook';
+};
+
+export type RevokeScheduledActionWebhookErrors = {
+    401: string;
+    404: string;
+    500: string;
+};
+
+export type RevokeScheduledActionWebhookError = RevokeScheduledActionWebhookErrors[keyof RevokeScheduledActionWebhookErrors];
+
+export type RevokeScheduledActionWebhookResponses = {
+    204: void;
+};
+
+export type RevokeScheduledActionWebhookResponse = RevokeScheduledActionWebhookResponses[keyof RevokeScheduledActionWebhookResponses];
+
+export type GetScheduledActionWebhookData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the scheduled action
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/{id}/webhook';
+};
+
+export type GetScheduledActionWebhookErrors = {
+    401: string;
+    /**
+     * No such routine, or it has no webhook URL
+     */
+    404: string;
+    500: string;
+};
+
+export type GetScheduledActionWebhookError = GetScheduledActionWebhookErrors[keyof GetScheduledActionWebhookErrors];
+
+export type GetScheduledActionWebhookResponses = {
+    200: RoutineWebhook;
+};
+
+export type GetScheduledActionWebhookResponse = GetScheduledActionWebhookResponses[keyof GetScheduledActionWebhookResponses];
+
+export type IssueScheduledActionWebhookData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the scheduled action
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/{id}/webhook';
+};
+
+export type IssueScheduledActionWebhookErrors = {
+    401: string;
+    404: string;
+    500: string;
+};
+
+export type IssueScheduledActionWebhookError = IssueScheduledActionWebhookErrors[keyof IssueScheduledActionWebhookErrors];
+
+export type IssueScheduledActionWebhookResponses = {
+    201: IssuedRoutineWebhook;
+};
+
+export type IssueScheduledActionWebhookResponse = IssueScheduledActionWebhookResponses[keyof IssueScheduledActionWebhookResponses];

@@ -5,7 +5,7 @@ import {
 } from '@core/util/fetchWithToken';
 import type { ObjectLike, ResultError } from '@core/util/result';
 import type { SafeFetchInit } from '@core/util/safeFetch';
-import type { Result } from 'neverthrow';
+import { ok, type Result } from 'neverthrow';
 import {
   type AI_USAGE_LIMIT_ERROR,
   aiUsageErrorResponseHandler,
@@ -14,6 +14,8 @@ import type {
   ActionExecutionRecord,
   CreateScheduledAction,
   InProgressExecution,
+  IssuedRoutineWebhook,
+  RoutineWebhook,
   ScheduledAction,
   SetScheduledActionEnabled,
   UpdateScheduledAction,
@@ -100,4 +102,37 @@ export const scheduledActionClient = {
       `/scheduled-actions/${args.scheduleId}/history`,
       { method: 'GET' }
     ),
+
+  /** The routine's webhook URL, or null when it has none. */
+  getWebhook: async (args: {
+    scheduleId: string;
+  }): Promise<
+    Result<
+      { webhook: RoutineWebhook | null },
+      ResultError<FetchWithTokenErrorCode>[]
+    >
+  > => {
+    const result = await scheduledActionFetch<RoutineWebhook>(
+      `/scheduled-actions/${args.scheduleId}/webhook`,
+      { method: 'GET' }
+    );
+    if (
+      result.isErr() &&
+      result.error.some((error) => error.code === 'NOT_FOUND')
+    )
+      return ok({ webhook: null });
+    return result.map((webhook) => ({ webhook }));
+  },
+
+  /** Issue the URL's token, replacing any earlier one. Shown only once. */
+  issueWebhook: async (args: { scheduleId: string }) =>
+    scheduledActionFetch<IssuedRoutineWebhook>(
+      `/scheduled-actions/${args.scheduleId}/webhook`,
+      { method: 'POST' }
+    ),
+
+  revokeWebhook: async (args: { scheduleId: string }) =>
+    scheduledActionFetch(`/scheduled-actions/${args.scheduleId}/webhook`, {
+      method: 'DELETE',
+    }),
 };

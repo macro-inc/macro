@@ -159,6 +159,7 @@ export function RoutineDetailView(props: {
             >
               {(draft) => (
                 <props.slots.Triggers
+                  routineId={schedule()?.id ?? undefined}
                   triggers={draft().triggers ?? []}
                   onChange={(triggers) =>
                     setState((current) => ({ ...current, triggers }))

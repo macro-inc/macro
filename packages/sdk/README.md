@@ -376,6 +376,32 @@ Event triggers use `{ type: 'events', filters: [{ events, entities, condition }]
 Use `{ type: 'multiple', triggers: [...] }` to combine schedules and events.
 `routine.update(options)` replaces task and trigger settings; `delete()` removes it.
 
+GitHub and webhook triggers each take a filter of their own, with optional exact
+payload tests in `match`:
+
+```ts
+await routine.update({
+  ...options,
+  trigger: {
+    type: 'events',
+    filters: [
+      {
+        events: ['github'],
+        github: { events: ['workflow_run'], actions: ['completed'], repositories: ['macro-inc/macro'] },
+        match: [
+          { path: ['workflow_run', 'name'], equals: 'CI' },
+          { path: ['workflow_run', 'conclusion'], in: ['failure', 'timed_out'] },
+        ],
+      },
+      { events: ['webhook.received'], match: [{ path: ['severity'], equals: 'page' }] },
+    ],
+  },
+});
+const { url } = await routine.issueWebhook(); // shown once; POST JSON to it
+```
+
+`routine.webhook()` reads the current URL's prefix and `revokeWebhook()` turns it off.
+
 ### Agents, conversations and hosts
 
 `macro.agents.list/create/byId` manage agent configuration. `AgentOptions` takes

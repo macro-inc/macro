@@ -6,10 +6,12 @@ import CheckCircleIcon from '@phosphor/check-circle.svg';
 import ClockIcon from '@phosphor/clock.svg';
 import EnvelopeIcon from '@phosphor/envelope.svg';
 import FileIcon from '@phosphor/file-text.svg';
+import GithubIcon from '@phosphor/github-logo.svg';
 import HashIcon from '@phosphor/hash.svg';
 import SearchIcon from '@phosphor/magnifying-glass.svg';
 import PhoneIcon from '@phosphor/phone.svg';
 import PlusIcon from '@phosphor/plus.svg';
+import WebhookIcon from '@phosphor/webhooks-logo.svg';
 import { Button, badgeTriggerClasses } from '@ui';
 import { format } from 'date-fns';
 import {
@@ -26,6 +28,7 @@ import {
 import {
   type EventTriggerDraft,
   eventScopeKind,
+  eventTriggerDescription,
   eventTriggerLabel,
   isGlobalEvent,
   newScheduleTrigger,
@@ -47,6 +50,11 @@ type EventSlots = {
   renderEventScope: (
     trigger: Accessor<EventTriggerDraft>,
     change: (ids: string[] | undefined) => void
+  ) => JSX.Element;
+  /** Settings particular to some events, such as GitHub's selector. */
+  renderEventSettings?: (
+    trigger: Accessor<EventTriggerDraft>,
+    change: (patch: Partial<EventTriggerDraft>) => void
   ) => JSX.Element;
   /** Absent where conditions are unavailable. */
   renderEventCondition?: (
@@ -86,6 +94,12 @@ function EventIcon(props: { group: RoutineEventGroup; class: string }) {
       <Match when={props.group === 'Calls'}>
         <PhoneIcon class={props.class} />
       </Match>
+      <Match when={props.group === 'GitHub'}>
+        <GithubIcon class={props.class} />
+      </Match>
+      <Match when={props.group === 'Webhooks'}>
+        <WebhookIcon class={props.class} />
+      </Match>
     </Switch>
   );
 }
@@ -98,6 +112,8 @@ function TriggerIcon(props: { trigger?: RoutineTriggerDraft }) {
     if (kind === 'THREAD') return 'Email';
     if (kind === 'DOCUMENT') return 'Documents';
     if (kind === 'CALL_RECORD') return 'Calls';
+    if (kind === 'GITHUB') return 'GitHub';
+    if (kind === 'WEBHOOK') return 'Webhooks';
     return 'Channels';
   };
   return (
@@ -222,6 +238,7 @@ function TriggerChoices(props: {
                         kind: 'event',
                         events: [event.value],
                         ids: isGlobalEvent([event.value]) ? undefined : [],
+                        ...structuredClone(event.preset),
                       })
                     }
                   >
@@ -391,14 +408,11 @@ function TriggerChip(
                 {(value) => (
                   <>
                     <p class="mb-3 text-xs text-ink-muted">
-                      {value()
-                        .events.map(
-                          (name) =>
-                            routineEvents.find((item) => item.value === name)
-                              ?.description
-                        )
-                        .join(' ')}
+                      {eventTriggerDescription(value())}
                     </p>
+                    {props.renderEventSettings?.(value, (patch) =>
+                      edit({ ...value(), ...patch })
+                    )}
                     {props.renderEventScope(value, (ids) =>
                       edit({ ...value(), ids })
                     )}
@@ -458,6 +472,7 @@ export function RoutineTriggers(
             trigger={props.triggers.find((trigger) => trigger.id === id)}
             renderEventLabel={props.renderEventLabel}
             renderEventScope={props.renderEventScope}
+            renderEventSettings={props.renderEventSettings}
             renderEventCondition={props.renderEventCondition}
             onSave={(value) =>
               props.onChange(
@@ -477,6 +492,7 @@ export function RoutineTriggers(
       <TriggerChip
         renderEventLabel={props.renderEventLabel}
         renderEventScope={props.renderEventScope}
+        renderEventSettings={props.renderEventSettings}
         renderEventCondition={props.renderEventCondition}
         onSave={(trigger) => props.onChange([...props.triggers, trigger])}
       />

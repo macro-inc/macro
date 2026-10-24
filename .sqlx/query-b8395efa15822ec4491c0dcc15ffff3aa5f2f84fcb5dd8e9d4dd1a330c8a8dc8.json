@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT EXISTS (\n                SELECT 1 FROM github_app_installation i\n                WHERE i.id = $1 AND (\n                    (i.source_type = 'user' AND i.source_id = $2)\n                    OR (i.source_type = 'team' AND EXISTS (\n                        SELECT 1 FROM team_user t\n                        WHERE t.team_id::text = i.source_id AND t.user_id = $2\n                    ))\n                )\n            ) AS \"claimed!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "claimed!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "b8395efa15822ec4491c0dcc15ffff3aa5f2f84fcb5dd8e9d4dd1a330c8a8dc8"
+}

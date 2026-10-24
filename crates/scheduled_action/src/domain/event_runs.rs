@@ -13,7 +13,8 @@ use rootcause::Report;
 use serde::{Deserialize, Serialize};
 
 use super::event_trigger::{
-    EventEntityType, EventFilters, EventId, EventReference, EventRejection, IncomingEvent,
+    EventEntityType, EventFilters, EventId, EventReference, EventRejection, EventSource,
+    IncomingEvent,
 };
 use super::models::{ActionExecutionRecord, ScheduledAction};
 
@@ -22,7 +23,7 @@ pub mod condition;
 pub mod dispatch;
 
 #[cfg(test)]
-mod test_support;
+pub(crate) mod test_support;
 
 /// Independent of `updated_at`, which execution bookkeeping also changes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -210,6 +211,16 @@ pub enum EventAccessCapability {
     Channel(EntityAccessReceipt<ViewOnly>),
     EmailThread(EntityAccessReceipt<ViewAccessLevel>),
     Call(EntityAccessReceipt<ViewAccessLevel>),
+    /// The owner has a claim to the GitHub App installation that delivered.
+    GithubInstallation {
+        owner: MacroUserIdStr<'static>,
+        installation_id: u64,
+    },
+    /// The owner's own routine received the delivery at its webhook URL.
+    Webhook {
+        owner: MacroUserIdStr<'static>,
+        action_id: Uuid,
+    },
 }
 
 impl EventAccessCapability {
@@ -229,6 +240,26 @@ impl EventAccessCapability {
             (Self::Call(receipt), EventEntityType::Call) => {
                 receipt_matches(receipt, owner, event, EntityType::Call)
             }
+            (
+                Self::GithubInstallation {
+                    owner: claimant,
+                    installation_id,
+                },
+                EventEntityType::GithubInstallation,
+            ) => {
+                claimant == owner
+                    && matches!(
+                        event.source(),
+                        EventSource::Github(delivery) if delivery.installation_id == *installation_id
+                    )
+            }
+            (
+                Self::Webhook {
+                    owner: action_owner,
+                    action_id,
+                },
+                EventEntityType::Routine,
+            ) => action_owner == owner && event.webhook_action_id() == Some(*action_id),
             _ => false,
         }
     }
@@ -244,7 +275,9 @@ fn receipt_matches<T: RequiredPermission>(
         .get_authenticated_user()
         .is_ok_and(|user| user == owner)
         && receipt.entity().entity_type == kind
-        && Uuid::parse_str(&receipt.entity().entity_id).ok() == Some(event.entity_id())
+        && event
+            .entity_id()
+            .is_some_and(|id| Uuid::parse_str(&receipt.entity().entity_id).ok() == Some(id))
 }
 
 /// Receipt minted for the current action owner and triggering entity.
@@ -282,6 +315,14 @@ impl EventActionConfiguration {
             || !self.filters.matches(&pending.event, self.activated_at)
         {
             return Err(CancellationReason::Superseded);
+        }
+        // A webhook URL belongs to one routine; its deliveries run nothing else.
+        if pending
+            .event
+            .webhook_action_id()
+            .is_some_and(|id| id != self.action_id)
+        {
+            return Err(CancellationReason::AccessDenied);
         }
         if !matches!(self.owner, Owner::User(_)) {
             return Err(CancellationReason::NotUserOwned);
@@ -384,7 +425,8 @@ pub trait EventRunRepository: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<ClaimedEventRun>, Report>> + Send;
 
     /// Idempotent bookkeeping only: history, terminal outcome and fenced action
-    /// release must commit together. Retain the deduplication row until deletion.
+    /// release must commit together. Retain the deduplication row until deletion,
+    /// without an external delivery's payload: nothing reads a finished run's event.
     fn finalize(
         &self,
         run: FinalizeEventRun,
@@ -456,4 +498,14 @@ pub trait EventExecutor: Send + Sync + 'static {
         run: &ClaimedEventRun,
         cancellation: impl Future<Output = ()> + Send,
     ) -> impl Future<Output = EventExecutionResult> + Send;
+}
+
+/// Admits a delivery to the one routine whose webhook URL received it. Ok(false)
+/// when that routine does not run for it now: disabled, without a webhook
+/// filter, or filtered out by its payload match.
+pub trait WebhookEventAdmission: Send + Sync + 'static {
+    fn admit_webhook(
+        &self,
+        event: &EventReference,
+    ) -> impl Future<Output = Result<bool, Report>> + Send;
 }

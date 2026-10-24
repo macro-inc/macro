@@ -57,6 +57,31 @@ Completed executions, with their routine scoped identity.
 
 ***
 
+### issueWebhook()
+
+> **issueWebhook**(): `Promise`\<[`RoutineWebhook`](../../../../../generated/scheduled-action/types.gen/type-aliases/RoutineWebhook.md) & \{ `url`: `string`; \}\>
+
+Issue the routine's webhook URL, replacing any earlier one. The URL is
+only ever returned here; anyone holding it can run the routine.
+
+#### Returns
+
+`Promise`\<[`RoutineWebhook`](../../../../../generated/scheduled-action/types.gen/type-aliases/RoutineWebhook.md) & \{ `url`: `string`; \}\>
+
+***
+
+### revokeWebhook()
+
+> **revokeWebhook**(): `Promise`\<`void`\>
+
+Stop the webhook URL working.
+
+#### Returns
+
+`Promise`\<`void`\>
+
+***
+
 ### setEnabled()
 
 > **setEnabled**(`enabled`): `Promise`\<`void`\>
@@ -109,6 +134,19 @@ Replace the routine's task and trigger configuration.
 #### Returns
 
 `Promise`\<`void`\>
+
+***
+
+### webhook()
+
+> **webhook**(): `Promise`\<[`RoutineWebhook`](../../../../../generated/scheduled-action/types.gen/type-aliases/RoutineWebhook.md) \| `undefined`\>
+
+The routine's webhook URL without its secret, or undefined when it has
+none. A `webhook.received` trigger runs the routine on each POST to it.
+
+#### Returns
+
+`Promise`\<[`RoutineWebhook`](../../../../../generated/scheduled-action/types.gen/type-aliases/RoutineWebhook.md) \| `undefined`\>
 
 ***
 

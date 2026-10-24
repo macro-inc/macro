@@ -250,6 +250,9 @@ export const propertiesBacklog =
   [] as const satisfies readonly (keyof PropertiesSdk)[];
 
 export const scheduledActionExcluded = [
+  // Called by third parties holding a routine's webhook URL; its token, not
+  // the SDK's credentials, authenticates it.
+  'deliverScheduledActionWebhook',
   'scheduledActionHealth',
 ] as const satisfies readonly (keyof ScheduledActionSdk)[];
 

@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO scheduled_action_webhook (action_id, token_prefix, token_hash)\n            VALUES ($1, $2, $3)\n            ON CONFLICT (action_id) DO UPDATE\n                SET token_prefix = EXCLUDED.token_prefix,\n                    token_hash = EXCLUDED.token_hash,\n                    created_at = now()\n            RETURNING token_prefix, created_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "token_prefix",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Bytea"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "96401e3c441aacffdac7a371550ba4eec084a73d8205dbb449ab3f8be414e5cb"
+}

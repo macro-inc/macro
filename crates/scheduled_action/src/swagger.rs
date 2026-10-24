@@ -10,13 +10,25 @@ use crate::inbound::axum_router::{
     __path_update_action, ScheduledActionResponse, SetScheduledActionEnabled,
 };
 
-use crate::domain::event_trigger::{ActionTrigger, EventFilter, EventFilters, EventName};
+#[expect(
+    unused_imports,
+    reason = "utoipa path macros require these generated symbols in scope"
+)]
+use crate::inbound::webhook_router::{
+    __path_deliver, __path_get_webhook, __path_issue_webhook, __path_revoke_webhook,
+};
+
+use crate::domain::event_trigger::{
+    ActionTrigger, EventFilter, EventFilters, EventName, GithubSelectorInput,
+    PayloadConditionInput, PayloadScalar,
+};
 use crate::domain::models::{
     ActionConfiguration, ActionConfigurationUpdate, ActionExecutionRecord, ActionKind, AgentTask,
     AgentTaskAgent, CreateScheduledAction, ExecutionResource, ExecutionResourceType,
     ExecutionResult, InProgressExecution, LegacyActionConfiguration, RoutineModelId, Schedule,
     ScheduledAction, ScheduledActionUpdate, UpdateScheduledAction,
 };
+use crate::domain::webhooks::{IssuedRoutineWebhook, RoutineWebhook, RoutineWebhookDelivery};
 use ai_billing::inbound::admission::AiAdmissionErrorBody;
 use model::response::EmptyResponse;
 
@@ -37,6 +49,10 @@ use model::response::EmptyResponse;
         crate::inbound::axum_router::delete_action,
         crate::inbound::axum_router::execute_action,
         crate::inbound::axum_router::list_history,
+        crate::inbound::webhook_router::deliver,
+        crate::inbound::webhook_router::get_webhook,
+        crate::inbound::webhook_router::issue_webhook,
+        crate::inbound::webhook_router::revoke_webhook,
     ),
     components(
         schemas(
@@ -52,6 +68,12 @@ use model::response::EmptyResponse;
             EventFilter,
             EventFilters,
             EventName,
+            GithubSelectorInput,
+            PayloadConditionInput,
+            PayloadScalar,
+            RoutineWebhook,
+            IssuedRoutineWebhook,
+            RoutineWebhookDelivery,
             CreateScheduledAction,
             UpdateScheduledAction,
             SetScheduledActionEnabled,

@@ -157,6 +157,87 @@
         }
       }
     },
+    "/scheduled-actions/webhooks/{token}": {
+      "post": {
+        "tags": ["scheduled actions"],
+        "summary": "Run the routine this URL belongs to with the JSON body as its event. The\ntoken in the path is the only credential.",
+        "operationId": "deliver_scheduled_action_webhook",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "description": "The routine's webhook token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Any JSON value, at most 64 KiB",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoutineWebhookDelivery"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/scheduled-actions/{id}": {
       "get": {
         "tags": ["scheduled actions"],
@@ -602,6 +683,173 @@
           }
         }
       }
+    },
+    "/scheduled-actions/{id}/webhook": {
+      "get": {
+        "tags": ["scheduled actions"],
+        "operationId": "get_scheduled_action_webhook",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the scheduled action",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoutineWebhook"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such routine, or it has no webhook URL",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["scheduled actions"],
+        "summary": "Issue the routine's webhook URL token, replacing any earlier one. The\ntoken is shown only in this response.",
+        "operationId": "issue_scheduled_action_webhook",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the scheduled action",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssuedRoutineWebhook"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["scheduled actions"],
+        "operationId": "revoke_scheduled_action_webhook",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the scheduled action",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -871,7 +1119,7 @@
       },
       "EventFilter": {
         "type": "object",
-        "description": "An event name AND an entity ID must match within the same filter. A\ncondition further requires the event's content to answer it with yes.",
+        "description": "An event name AND an entity ID must match within the same filter. A\ncondition further requires the event's content to answer it with yes.\n\n`github` and `webhook.received` come from outside Macro and carry their\npayload: each stands alone in its filter, takes no ids, and may require\nexact payload values with `match`. A `github` filter narrows deliveries\nwith its `github` selector.",
         "required": ["events"],
         "properties": {
           "condition": {
@@ -885,11 +1133,29 @@
               "$ref": "#/components/schemas/EventName"
             }
           },
+          "github": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GithubSelector",
+                "description": "Which GitHub deliveries match; required for, and only for, `github`."
+              }
+            ]
+          },
           "ids": {
             "type": ["array", "null"],
             "items": {
               "type": "string"
             }
+          },
+          "match": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/PayloadCondition"
+            },
+            "description": "Exact tests on the payload, all of which must pass."
           }
         }
       },
@@ -918,7 +1184,9 @@
           "channel.message_patched",
           "channel.message_attachment_created",
           "call.started",
-          "call.ended"
+          "call.ended",
+          "github",
+          "webhook.received"
         ]
       },
       "ExecutionResource": {
@@ -975,6 +1243,38 @@
           }
         }
       },
+      "GithubSelector": {
+        "type": "object",
+        "description": "Which GitHub deliveries match.",
+        "properties": {
+          "actions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Payload actions, such as `completed` or `opened`; any when empty."
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "GitHub event names, such as `workflow_run` or `pull_request`; any when empty."
+          },
+          "includeBots": {
+            "type": "boolean",
+            "description": "Also run for deliveries caused by bots and apps, including Macro's own."
+          },
+          "repositories": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Repositories as `owner/name`, matched without regard to case; every\nrepository the owner's installations cover when empty. A renamed\nrepository stops matching until it is chosen again."
+          }
+        },
+        "additionalProperties": false
+      },
       "InProgressExecution": {
         "type": "object",
         "required": ["action_id"],
@@ -998,6 +1298,24 @@
             ]
           }
         }
+      },
+      "IssuedRoutineWebhook": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/RoutineWebhook"
+          },
+          {
+            "type": "object",
+            "required": ["token"],
+            "properties": {
+              "token": {
+                "type": "string",
+                "description": "Secret path segment: POST to `/scheduled-actions/webhooks/{token}`."
+              }
+            }
+          }
+        ],
+        "description": "A newly issued webhook URL token. The token is never available again."
       },
       "LegacyActionConfiguration": {
         "type": "object",
@@ -1024,6 +1342,73 @@
           }
         },
         "additionalProperties": false
+      },
+      "PayloadCondition": {
+        "type": "object",
+        "description": "`path` walks objects by key; `*` steps into every element of an array and\na number into one. Give exactly one test. `notIn` also passes when the\npath finds nothing.",
+        "required": ["path"],
+        "properties": {
+          "equals": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PayloadScalar",
+                "description": "Some value found equals this."
+              }
+            ]
+          },
+          "exists": {
+            "type": ["boolean", "null"],
+            "description": "Whether the path finds a non-null value."
+          },
+          "glob": {
+            "type": ["string", "null"],
+            "description": "Some text found matches this glob; `*` matches any run of characters."
+          },
+          "in": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/PayloadScalar"
+            },
+            "description": "Some value found is one of these."
+          },
+          "notIn": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/PayloadScalar"
+            },
+            "description": "No value found is one of these."
+          },
+          "path": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Keys from the payload's root, e.g. `[\"workflow_run\", \"conclusion\"]`."
+          }
+        },
+        "additionalProperties": false
+      },
+      "PayloadScalar": {
+        "oneOf": [
+          {
+            "type": "null",
+            "default": null
+          },
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "number",
+            "format": "double"
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "description": "A JSON text, number, boolean or null that payload values are compared with."
       },
       "RoutineModelId": {
         "type": "string",
@@ -1069,6 +1454,36 @@
           "$ref": "#/components/schemas/RoutineTrigger"
         },
         "description": "Bounded schedules and one combined set of event filters."
+      },
+      "RoutineWebhook": {
+        "type": "object",
+        "description": "A routine's webhook URL, without its secret.",
+        "required": ["tokenPrefix", "createdAt"],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "tokenPrefix": {
+            "type": "string",
+            "description": "The start of the token, enough to recognize it."
+          }
+        }
+      },
+      "RoutineWebhookDelivery": {
+        "type": "object",
+        "description": "What became of a delivery.",
+        "required": ["eventId", "queued"],
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "queued": {
+            "type": "boolean",
+            "description": "Whether the routine will run for it. False when the routine is paused,\nhas no webhook trigger, or its payload match left the delivery out."
+          }
+        }
       },
       "RunVisibility": {
         "type": "string",

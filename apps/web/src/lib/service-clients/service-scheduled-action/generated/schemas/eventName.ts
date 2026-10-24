@@ -29,4 +29,6 @@ export const EventName = {
   channelmessage_attachment_created: 'channel.message_attachment_created',
   callstarted: 'call.started',
   callended: 'call.ended',
+  github: 'github',
+  webhookreceived: 'webhook.received',
 } as const;

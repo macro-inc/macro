@@ -283,6 +283,10 @@ fn view_receipt(id: Uuid) -> EntityAccessReceipt<ViewAccessLevel> {
     )
 }
 
+pub(crate) fn repo(service: &TestService) -> Arc<FakeRepo> {
+    Arc::clone(&service.repo)
+}
+
 pub(crate) fn user() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(USER.to_owned()).unwrap()
 }

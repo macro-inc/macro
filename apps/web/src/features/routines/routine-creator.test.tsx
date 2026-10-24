@@ -38,6 +38,19 @@ vi.mock('@components/app/split-layout/layout', () => ({
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitPanelOrThrow: () => ({ handle: { close: vi.fn() } }),
 }));
+vi.mock('@queries/agent-repositories/repositories', () => ({
+  useAgentRepositoriesQuery: () => ({
+    isSuccess: true,
+    isLoading: false,
+    isError: false,
+    data: {
+      repositories: [
+        { url: 'https://github.com/macro-inc/macro' },
+        { url: 'https://github.com/macro-inc/docs' },
+      ],
+    },
+  }),
+}));
 vi.mock('./routine-event-scope', () => ({
   RoutineEventScope: () => <span>Any document</span>,
   RoutineEventScopeLabel: () => <span>Any document</span>,
@@ -561,6 +574,77 @@ describe('routine composer execution selection', () => {
           },
         ],
       },
+    });
+  });
+
+  it('saves a GitHub workflow trigger narrowed to one repository and workflow', async () => {
+    host.create.mockImplementation(async (body) => created(body));
+    await mount();
+    inputPrompt();
+    fireEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Workflow failed' })
+    );
+    const panel = screen.getByRole('dialog', { name: 'Add trigger' });
+    fireEvent.click(
+      within(panel).getByRole('checkbox', { name: 'macro-inc/macro' })
+    );
+    fireEvent.click(
+      within(panel).getByRole('button', { name: 'Add a field test' })
+    );
+    const fields = within(panel).getAllByRole('textbox', {
+      name: 'Payload field',
+    });
+    fireEvent.input(fields[1], { target: { value: 'workflow_run.name' } });
+    const values = within(panel).getAllByRole('textbox', { name: 'Value' });
+    fireEvent.input(values[1], { target: { value: 'CI' } });
+    fireEvent.click(within(panel).getByRole('button', { name: 'Add trigger' }));
+    expect(
+      screen.getByRole('button', { name: 'Edit Workflow failed trigger' })
+        .textContent
+    ).toContain('Workflow failed · macro-inc/macro');
+    fireEvent.click(screen.getByRole('button', { name: /Create routine/i }));
+    await waitFor(() => expect(host.create).toHaveBeenCalledTimes(1));
+    expect(host.create.mock.calls[0][0]).toMatchObject({
+      trigger: {
+        type: 'events',
+        filters: [
+          {
+            events: ['github'],
+            github: {
+              events: ['workflow_run'],
+              actions: ['completed'],
+              repositories: ['macro-inc/macro'],
+              includeBots: false,
+            },
+            match: [
+              {
+                path: ['workflow_run', 'conclusion'],
+                in: ['failure', 'timed_out'],
+              },
+              { path: ['workflow_run', 'name'], equals: 'CI' },
+            ],
+          },
+        ],
+      },
+    });
+  });
+
+  it('adds a webhook trigger whose URL appears once the routine exists', async () => {
+    host.create.mockImplementation(async (body) => created(body));
+    await mount();
+    inputPrompt();
+    fireEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Webhook received' })
+    );
+    const panel = screen.getByRole('dialog', { name: 'Add trigger' });
+    expect(within(panel).getByText(/Create the routine first/)).toBeTruthy();
+    fireEvent.click(within(panel).getByRole('button', { name: 'Add trigger' }));
+    fireEvent.click(screen.getByRole('button', { name: /Create routine/i }));
+    await waitFor(() => expect(host.create).toHaveBeenCalledTimes(1));
+    expect(host.create.mock.calls[0][0]).toMatchObject({
+      trigger: { type: 'events', filters: [{ events: ['webhook.received'] }] },
     });
   });
 

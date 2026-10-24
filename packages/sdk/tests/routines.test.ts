@@ -171,3 +171,42 @@ test('routine options carry run visibility and updates that omit it keep it', as
   expect(bodies[0]).toMatchObject({ run_visibility: 'listed' });
   expect(bodies[1]).not.toHaveProperty('run_visibility');
 });
+test('a routine issues its webhook URL once and reads none as undefined', async () => {
+  let issued = false;
+  globalThis.fetch = Object.assign(
+    async (input: RequestInfo | URL) => {
+      const request = input instanceof Request ? input : new Request(input);
+      if (request.method === 'POST') {
+        issued = true;
+        return Response.json(
+          {
+            token: 'mrw_0123456789ab_secret',
+            tokenPrefix: 'mrw_0123456789ab',
+            createdAt: '2026-10-19T00:00:00Z',
+          },
+          { status: 201 },
+        );
+      }
+      if (!issued) return new Response('no webhook URL', { status: 404 });
+      return Response.json({
+        tokenPrefix: 'mrw_0123456789ab',
+        createdAt: '2026-10-19T00:00:00Z',
+      });
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  const macro = new Macro({
+    auth: { type: 'bot', token: 'mbot_test' },
+    requestedAs: record.owner,
+    hosts: { 'scheduled-action': 'https://routines.test' },
+  });
+  const routine = macro.routines.byId('routine-1');
+
+  expect(await routine.webhook()).toBeUndefined();
+  expect(await routine.issueWebhook()).toEqual({
+    tokenPrefix: 'mrw_0123456789ab',
+    createdAt: '2026-10-19T00:00:00Z',
+    url: 'https://routines.test/scheduled-actions/webhooks/mrw_0123456789ab_secret',
+  });
+  expect((await routine.webhook())?.tokenPrefix).toBe('mrw_0123456789ab');
+});

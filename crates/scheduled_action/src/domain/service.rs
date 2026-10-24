@@ -92,22 +92,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets>
         &self,
         receipt: &EntityAccessReceipt<T>,
     ) -> Result<ScheduledAction> {
-        if receipt.entity().entity_type != EntityType::ScheduledAction {
-            bail!("scheduled action receipt has the wrong entity type");
-        }
-        let Ok(id) = receipt.entity().entity_id.parse::<Uuid>() else {
-            bail!("scheduled action receipt id is not a uuid");
-        };
-        match self.repo.get_action(&id).await? {
-            Some(action)
-                if receipt
-                    .acting_user_id()
-                    .is_some_and(|user| action.owner.is_user(user)) =>
-            {
-                Ok(action)
-            }
-            _ => Err(ActionPolicyError::NotFound.into()),
-        }
+        granted_action(self.repo.as_ref(), receipt).await
     }
 
     /// Delete `action` and hand its removal to the dispatcher. The permit is
@@ -197,6 +182,29 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets>
             .await
             .map_err(|e| anyhow::anyhow!("failed to dispatch update event: {e}"))?;
         Ok(updated)
+    }
+}
+
+/// The routine a receipt names, when the receipt's user owns it.
+pub(crate) async fn granted_action<R: ScheduledActionRepo, T: RequiredPermission>(
+    repo: &R,
+    receipt: &EntityAccessReceipt<T>,
+) -> Result<ScheduledAction> {
+    if receipt.entity().entity_type != EntityType::ScheduledAction {
+        bail!("scheduled action receipt has the wrong entity type");
+    }
+    let Ok(id) = receipt.entity().entity_id.parse::<Uuid>() else {
+        bail!("scheduled action receipt id is not a uuid");
+    };
+    match repo.get_action(&id).await? {
+        Some(action)
+            if receipt
+                .acting_user_id()
+                .is_some_and(|user| action.owner.is_user(user)) =>
+        {
+            Ok(action)
+        }
+        _ => Err(ActionPolicyError::NotFound.into()),
     }
 }
 

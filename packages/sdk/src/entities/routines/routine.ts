@@ -5,10 +5,11 @@ import type {
   EventFilter,
   RoutineModelId,
   RoutineTrigger,
+  RoutineWebhook,
   RunVisibility,
   ScheduledActionResponse,
 } from '../../../generated/scheduled-action/types.gen';
-import { unwrap } from '../../utils';
+import { MacroApiError, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { AgentSession } from '../agent-sessions/agent-session';
 import type { Agent } from '../agents/agent';
@@ -172,6 +173,50 @@ export class Routine extends MacroEntity<ScheduledActionResponse> {
         path: { id: this.id },
       }),
     ).map((record) => new RoutineExecution(this, record));
+  }
+
+  /**
+   * The routine's webhook URL without its secret, or undefined when it has
+   * none. A `webhook.received` trigger runs the routine on each POST to it.
+   */
+  async webhook(): Promise<RoutineWebhook | undefined> {
+    try {
+      return unwrap(
+        await this.client.scheduledAction.getScheduledActionWebhook({
+          path: { id: this.id },
+        }),
+      );
+    } catch (error) {
+      if (error instanceof MacroApiError && error.status === 404)
+        return undefined;
+      throw error;
+    }
+  }
+
+  /**
+   * Issue the routine's webhook URL, replacing any earlier one. The URL is
+   * only ever returned here; anyone holding it can run the routine.
+   */
+  async issueWebhook(): Promise<RoutineWebhook & { url: string }> {
+    const issued = unwrap(
+      await this.client.scheduledAction.issueScheduledActionWebhook({
+        path: { id: this.id },
+      }),
+    );
+    return {
+      tokenPrefix: issued.tokenPrefix,
+      createdAt: issued.createdAt,
+      url: `${this.client.hosts['scheduled-action']}/scheduled-actions/webhooks/${issued.token}`,
+    };
+  }
+
+  /** Stop the webhook URL working. */
+  async revokeWebhook(): Promise<void> {
+    unwrap(
+      await this.client.scheduledAction.revokeScheduledActionWebhook({
+        path: { id: this.id },
+      }),
+    );
   }
 
   /** Delete the routine. */

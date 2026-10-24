@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { CreateScheduledActionData, CreateScheduledActionErrors, CreateScheduledActionResponses, DeleteScheduledActionData, DeleteScheduledActionErrors, DeleteScheduledActionResponses, ExecuteScheduledActionNowData, ExecuteScheduledActionNowErrors, ExecuteScheduledActionNowResponses, GetScheduledActionData, GetScheduledActionErrors, GetScheduledActionResponses, ListScheduledActionHistoryData, ListScheduledActionHistoryErrors, ListScheduledActionHistoryResponses, ListScheduledActionsData, ListScheduledActionsErrors, ListScheduledActionsResponses, ScheduledActionHealthData, ScheduledActionHealthResponses, SetScheduledActionEnabledData, SetScheduledActionEnabledErrors, SetScheduledActionEnabledResponses, UpdateScheduledActionData, UpdateScheduledActionErrors, UpdateScheduledActionResponses } from './types.gen';
+import type { CreateScheduledActionData, CreateScheduledActionErrors, CreateScheduledActionResponses, DeleteScheduledActionData, DeleteScheduledActionErrors, DeleteScheduledActionResponses, DeliverScheduledActionWebhookData, DeliverScheduledActionWebhookErrors, DeliverScheduledActionWebhookResponses, ExecuteScheduledActionNowData, ExecuteScheduledActionNowErrors, ExecuteScheduledActionNowResponses, GetScheduledActionData, GetScheduledActionErrors, GetScheduledActionResponses, GetScheduledActionWebhookData, GetScheduledActionWebhookErrors, GetScheduledActionWebhookResponses, IssueScheduledActionWebhookData, IssueScheduledActionWebhookErrors, IssueScheduledActionWebhookResponses, ListScheduledActionHistoryData, ListScheduledActionHistoryErrors, ListScheduledActionHistoryResponses, ListScheduledActionsData, ListScheduledActionsErrors, ListScheduledActionsResponses, RevokeScheduledActionWebhookData, RevokeScheduledActionWebhookErrors, RevokeScheduledActionWebhookResponses, ScheduledActionHealthData, ScheduledActionHealthResponses, SetScheduledActionEnabledData, SetScheduledActionEnabledErrors, SetScheduledActionEnabledResponses, UpdateScheduledActionData, UpdateScheduledActionErrors, UpdateScheduledActionResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -76,6 +76,21 @@ export class Sdk extends HeyApiClient {
         });
     }
     
+    /**
+     * Run the routine this URL belongs to with the JSON body as its event. The
+     * token in the path is the only credential.
+     */
+    public deliverScheduledActionWebhook<ThrowOnError extends boolean = false>(options: Options<DeliverScheduledActionWebhookData, ThrowOnError>): RequestResult<DeliverScheduledActionWebhookResponses, DeliverScheduledActionWebhookErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<DeliverScheduledActionWebhookResponses, DeliverScheduledActionWebhookErrors, ThrowOnError>({
+            url: '/scheduled-actions/webhooks/{token}',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
     public deleteScheduledAction<ThrowOnError extends boolean = false>(options: Options<DeleteScheduledActionData, ThrowOnError>): RequestResult<DeleteScheduledActionResponses, DeleteScheduledActionErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteScheduledActionResponses, DeleteScheduledActionErrors, ThrowOnError>({ url: '/scheduled-actions/{id}', ...options });
     }
@@ -112,5 +127,21 @@ export class Sdk extends HeyApiClient {
     
     public listScheduledActionHistory<ThrowOnError extends boolean = false>(options: Options<ListScheduledActionHistoryData, ThrowOnError>): RequestResult<ListScheduledActionHistoryResponses, ListScheduledActionHistoryErrors, ThrowOnError> {
         return (options.client ?? this.client).get<ListScheduledActionHistoryResponses, ListScheduledActionHistoryErrors, ThrowOnError>({ url: '/scheduled-actions/{id}/history', ...options });
+    }
+    
+    public revokeScheduledActionWebhook<ThrowOnError extends boolean = false>(options: Options<RevokeScheduledActionWebhookData, ThrowOnError>): RequestResult<RevokeScheduledActionWebhookResponses, RevokeScheduledActionWebhookErrors, ThrowOnError> {
+        return (options.client ?? this.client).delete<RevokeScheduledActionWebhookResponses, RevokeScheduledActionWebhookErrors, ThrowOnError>({ url: '/scheduled-actions/{id}/webhook', ...options });
+    }
+    
+    public getScheduledActionWebhook<ThrowOnError extends boolean = false>(options: Options<GetScheduledActionWebhookData, ThrowOnError>): RequestResult<GetScheduledActionWebhookResponses, GetScheduledActionWebhookErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetScheduledActionWebhookResponses, GetScheduledActionWebhookErrors, ThrowOnError>({ url: '/scheduled-actions/{id}/webhook', ...options });
+    }
+    
+    /**
+     * Issue the routine's webhook URL token, replacing any earlier one. The
+     * token is shown only in this response.
+     */
+    public issueScheduledActionWebhook<ThrowOnError extends boolean = false>(options: Options<IssueScheduledActionWebhookData, ThrowOnError>): RequestResult<IssueScheduledActionWebhookResponses, IssueScheduledActionWebhookErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<IssueScheduledActionWebhookResponses, IssueScheduledActionWebhookErrors, ThrowOnError>({ url: '/scheduled-actions/{id}/webhook', ...options });
     }
 }

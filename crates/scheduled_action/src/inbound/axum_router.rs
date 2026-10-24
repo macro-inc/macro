@@ -31,7 +31,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 
 #[cfg(test)]
-mod test;
+pub(crate) mod test;
 
 /// Canonical trigger plus deprecated cron fields for existing clients. Event
 /// responses omit legacy fields rather than inventing a schedule or timezone.

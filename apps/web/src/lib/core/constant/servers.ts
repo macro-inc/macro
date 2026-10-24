@@ -240,6 +240,14 @@ export function staticFileReferenceEndpoint(id: string): string {
   return `${referenceHost}/file/${id}`;
 }
 
+/** A routine's webhook URL, which outside services call, outside the browser proxy. */
+export function scheduledActionWebhookEndpoint(token: string): string {
+  const host = SERVER_HOSTS['scheduled-action'];
+  const remote = directServerHostRemote['scheduled-action'];
+  const referenceHost = host === developmentProxyUrl(remote) ? remote : host;
+  return `${referenceHost}/scheduled-actions/webhooks/${token}`;
+}
+
 type StaticFileSize = 'small' | 'medium';
 
 const staticFileSizes: Record<StaticFileSize, number> = {

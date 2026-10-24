@@ -6594,6 +6594,14 @@ type GraphqlScheduledActionEventFilter {
 	"""
 	entityIds: [ID!]
 	"""
+	Which GitHub App deliveries satisfy a `GITHUB` filter.
+	"""
+	github: GraphqlScheduledActionGithubSelector
+	"""
+	Exact payload tests a GitHub or webhook delivery must pass, as a reader would state them.
+	"""
+	payloadMatch: [String!]!
+	"""
 	Yes/no question the triggering content must answer with yes before the routine runs.
 	"""
 	condition: String
@@ -6663,6 +6671,14 @@ enum GraphqlScheduledActionEventName {
 	A call the routine's owner joined ended.
 	"""
 	CALL_ENDED
+	"""
+	Macro's GitHub App received a delivery.
+	"""
+	GITHUB
+	"""
+	The routine's webhook URL received a delivery.
+	"""
+	WEBHOOK_RECEIVED
 }
 
 """
@@ -6673,6 +6689,28 @@ type GraphqlScheduledActionEventsTrigger {
 	Event filters. A run starts when any filter matches.
 	"""
 	filters: [GraphqlScheduledActionEventFilter!]!
+}
+
+"""
+GitHub deliveries a filter watches. Empty lists match everything.
+"""
+type GraphqlScheduledActionGithubSelector {
+	"""
+	GitHub event names, such as `workflow_run`.
+	"""
+	events: [String!]!
+	"""
+	Payload actions, such as `completed`.
+	"""
+	actions: [String!]!
+	"""
+	Repositories, as `owner/name`.
+	"""
+	repositories: [String!]!
+	"""
+	Whether deliveries caused by bots also match.
+	"""
+	includeBots: Boolean!
 }
 
 """

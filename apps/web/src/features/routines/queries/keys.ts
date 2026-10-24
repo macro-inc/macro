@@ -9,4 +9,7 @@ export const scheduledActionKeys = createQueryKeys('scheduledAction', {
   history: (params: { scheduleId: string }) => ({
     queryKey: [params.scheduleId, 'history'],
   }),
+  webhook: (params: { scheduleId: string }) => ({
+    queryKey: [params.scheduleId, 'webhook'],
+  }),
 });

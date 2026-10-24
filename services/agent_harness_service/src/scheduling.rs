@@ -7,6 +7,7 @@ use connection_gateway_client::client::ConnectionGatewayClient;
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use entity_registry::OwnerGrantPolicy;
 use entity_registry_db_utils::OwnedEntityRegistrar;
+use github::outbound::pg_installation_claims::PgGithubInstallationClaims;
 use jev::{domain::JevClassifier, outbound::TypesafeJev};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{
@@ -24,9 +25,13 @@ use scheduled_action::domain::ports::ScheduledActionDispatcher;
 use scheduled_action::domain::service::ScheduledActionServiceImpl;
 use scheduled_action::domain::target_runner::TargetRunner;
 use scheduled_action::domain::target_validation::TargetValidation;
+use scheduled_action::domain::webhooks::RoutineWebhookService;
 use scheduled_action::inbound::axum_router::{ScheduledActionRouterState, scheduled_action_router};
 use scheduled_action::inbound::event_run_worker::run_event_worker;
 use scheduled_action::inbound::kafka_consumer::run_scheduled_action_event_consumer;
+use scheduled_action::inbound::webhook_router::{
+    RoutineWebhookRouterState, routine_webhook_router,
+};
 use scheduled_action::outbound::agent_session_client::AgentSessionClient;
 use scheduled_action::outbound::conn_gateway_live_updates::ConnGatewayLiveUpdates;
 use scheduled_action::outbound::event_access::EventAccessAdapter;
@@ -36,6 +41,7 @@ use scheduled_action::outbound::pg_event_run_repo::PgEventRunRepo;
 use scheduled_action::outbound::pg_polling_dispatcher::{
     PgPollingDispatcher, PgPollingDispatcherLifecycle,
 };
+use scheduled_action::outbound::pg_routine_webhook_repo::PgRoutineWebhookRepo;
 use scheduled_action::outbound::pg_scheduled_action_repo::PgScheduledActionRepo;
 use scheduled_action::swagger::ApiDoc;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
@@ -104,7 +110,19 @@ pub async fn build(
     let access = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
         db.clone(),
     )));
-    let event_access = Arc::new(EventAccessAdapter::new(access.as_ref().clone()));
+    let event_access = Arc::new(EventAccessAdapter::new(
+        access.as_ref().clone(),
+        PgGithubInstallationClaims::new(db.clone()),
+    ));
+    let webhooks = Arc::new(RoutineWebhookService::new(
+        PgRoutineWebhookRepo::new(db.clone()),
+        Arc::clone(&repo),
+        Arc::new(EventAdmissionService::new(
+            Arc::clone(&event_repo),
+            Arc::clone(&event_access),
+            PageSize::try_from(ADMISSION_PAGE_SIZE).expect("valid admission bound"),
+        )),
+    ));
     let ai_admission = ai_billing::composition::pg_admission_service(
         db.clone(),
         config.enable_ai_usage_enforcement,
@@ -251,6 +269,11 @@ pub async fn build(
             config.routine_agents_enabled,
         )),
     );
+    let webhook_routes = routine_webhook_router::<_, _, _, ()>(RoutineWebhookRouterState {
+        webhooks,
+        access_service: Arc::clone(&access),
+        authorization_state: authorization_state.clone(),
+    });
     let state = ScheduledActionRouterState {
         service,
         access_service: access,
@@ -258,7 +281,7 @@ pub async fn build(
     };
     let authed_routes = scheduled_action_router::<_, _, _, ()>(state);
 
-    let router = mount_router(authed_routes)
+    let router = mount_router(authed_routes.merge(webhook_routes))
         .layer(macro_cors::cors_layer())
         .layer(
             macro_tower_layers::MacroRequestIdAndTracingLayer::new(Duration::from_millis(200))
