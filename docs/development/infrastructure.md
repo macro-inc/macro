@@ -166,6 +166,14 @@ local resources.
 
 - Only stacks listed in `services-config.json` deploy automatically. `gateway`,
   `macrodb`, `doppler-projects`, `monitoring`, and a few others are manual.
+- Dev MacroDB's primary and replica are both configured as `db.t4g.large`
+  (8 GiB). Replica resizing requires a separate `macrodb` deployment; dev's
+  `applyImmediately` setting makes that resize interrupt replica connections.
+  Resize the replica before deploying the DSS pool change through the service
+  stack, and verify that old DSS tasks have drained before relying on the new
+  cap. Three dev tasks permit 60 replica connections after rollout, or 120
+  during a full overlap on later rollouts. The first rollout can permit 360:
+  three old tasks at 100 connections each plus three new tasks at 20 each.
 - Services marked `bootstrap_pending` or `deploy_enabled: false` are skipped.
 - **Migrations deploy before services** and must work with the code already
   running ([database guide](database.md)).

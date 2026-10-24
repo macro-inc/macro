@@ -247,14 +247,26 @@ pub async fn run() -> anyhow::Result<()> {
         "initialized db connection"
     );
 
+    let (readonly_min_connections, readonly_max_connections) = match config.environment {
+        // Once all tasks use this cap, three dev tasks allow 60 replica sessions,
+        // or 120 during a full rolling overlap.
+        // Keep excess reads queued in the service instead of exhausting replica memory.
+        Environment::Develop => (2, 20),
+        Environment::Production | Environment::Local => (min_connections, max_connections),
+    };
+
     let readonly_db = match PgPoolOptions::new()
-        .min_connections(min_connections)
-        .max_connections(max_connections)
+        .min_connections(readonly_min_connections)
+        .max_connections(readonly_max_connections)
         .connect(&config.database_url_readonly)
         .await
     {
         Ok(pool) => {
-            tracing::trace!("initialized readonly db connection");
+            tracing::trace!(
+                min_connections = readonly_min_connections,
+                max_connections = readonly_max_connections,
+                "initialized readonly db connection"
+            );
             pool
         }
         Err(e) => {

@@ -64,6 +64,11 @@ threads, pins, recents, notifications, folders, activity.
 - Soup GraphQL reads a replica with multi-second lag; a read immediately after
   a write through the same request needs the primary-reading loader, not the
   default one — see `crates/graphql_soup`.
+- Dev's readonly pool keeps 2–20 connections per task, independently of the
+  primary pool's 25–100. Once all tasks use this cap, three dev tasks allow 60
+  sessions, or 120 while a rolling deployment overlaps all three. Old tasks
+  retain their previous cap until they drain during the initial rollout.
+  Production and local pools retain their existing primary/readonly limits.
 - The GraphQL calendar feed (occurrence ranges and `calendarChanges`) reads the
   primary, like the REST calendar routes: a `refresh_calendar` poke goes out as
   a write commits, so a replica-backed delta misses the change it announces.
