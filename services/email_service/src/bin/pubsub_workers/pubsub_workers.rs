@@ -140,10 +140,13 @@ async fn main() -> anyhow::Result<()> {
         ),
     });
 
+    // One message per receive: messages are processed one at a time and only the one in
+    // progress renews its visibility, so the rest of a batch would time out behind a long
+    // mailbox purge and be processed again by another worker.
     let link_manager_worker = sqs_worker::SQSWorker::new(
         aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
         link_manager_queue.to_string(),
-        config.queue_max_messages,
+        1,
         config.queue_wait_time_seconds,
     );
 

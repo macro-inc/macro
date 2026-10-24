@@ -231,6 +231,7 @@ deny = [
     "dictation",                 # Metadata tracing and content-redaction tests only
     "documents",                 # Dev logging only
     "email",                     # Dev logging only
+    "email_db_client",           # Purge phase span tests only
     "genai_telemetry",           # GenAI span tests
     "graphql_entity_mutation",   # Batch failure span field tests only
     "lambda_runtime_api_client", # External crate allowed to use tracing-subscriber

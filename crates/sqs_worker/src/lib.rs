@@ -1,3 +1,4 @@
+mod change_message_visibility;
 mod delete_message;
 mod receive_messages;
 
@@ -56,6 +57,29 @@ impl SQSWorker {
     #[tracing::instrument(skip(self))]
     pub async fn delete_message(&self, receipt_handle: &str) -> anyhow::Result<()> {
         delete_message::delete_message(&self.inner, &self.queue_url, receipt_handle).await
+    }
+
+    /// Hides a received message from other consumers for `seconds` from now.
+    #[tracing::instrument(
+        skip(self, message),
+        fields(message_id = message.message_id),
+        err(level = tracing::Level::WARN)
+    )]
+    pub async fn extend_visibility(
+        &self,
+        message: &aws_sdk_sqs::types::Message,
+        seconds: i32,
+    ) -> anyhow::Result<()> {
+        let Some(receipt_handle) = message.receipt_handle.as_ref() else {
+            anyhow::bail!("no receipt handle found for message");
+        };
+        change_message_visibility::change_message_visibility(
+            &self.inner,
+            &self.queue_url,
+            receipt_handle,
+            seconds,
+        )
+        .await
     }
 }
 
