@@ -120,7 +120,7 @@ prost = { version = "0.12", features = ["prost-derive"] }
 rand-274715c4dabd11b0 = { package = "rand", version = "0.9" }
 rand-c38e5c1d305a1b54 = { package = "rand", version = "0.8", features = ["small_rng"] }
 rand_core = { version = "0.6", default-features = false, features = ["std"] }
-redis = { version = "1", features = ["cluster-async", "tokio-rustls-comp"] }
+redis = { version = "1", features = ["cluster-async", "connection-manager", "tokio-rustls-comp"] }
 regex = { version = "1" }
 regex-automata = { version = "0.4" }
 regex-syntax = { version = "0.8" }
@@ -284,7 +284,7 @@ quote = { version = "1" }
 rand-274715c4dabd11b0 = { package = "rand", version = "0.9" }
 rand-c38e5c1d305a1b54 = { package = "rand", version = "0.8", features = ["small_rng"] }
 rand_core = { version = "0.6", default-features = false, features = ["std"] }
-redis = { version = "1", features = ["cluster-async", "tokio-rustls-comp"] }
+redis = { version = "1", features = ["cluster-async", "connection-manager", "tokio-rustls-comp"] }
 regex = { version = "1" }
 regex-automata = { version = "0.4" }
 regex-syntax = { version = "0.8" }

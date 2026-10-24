@@ -12,14 +12,15 @@ use super::super::models::{
 use super::super::ports::{
     MailboxAttachmentClient, MailboxBlocklistClient, MailboxContactsClient, MailboxLabelClient,
     MailboxMessageClient, MailboxSendClient, MailboxSubscriptionClient, MailboxSyncClient,
-    ProviderRateLimiter, ProviderTokenSource,
+    ProviderRequestGate, ProviderTokenSource,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum Call {
     Token(Uuid, TokenFreshness),
     HealthNeutralToken(Uuid, TokenFreshness),
-    RateLimit(Uuid, ApiOperationKind),
+    Acquire(Uuid, ApiOperationKind),
+    Finish(Uuid, Option<EmailApiError>),
     Repository(&'static str),
 }
 
@@ -94,28 +95,35 @@ impl ProviderTokenSource for FakeTokenSource {
 }
 
 #[derive(Clone)]
-pub(super) struct FakeRateLimiter {
+pub(super) struct FakeGate {
     calls: CallLog,
     result: Result<(), RateLimitRefusal>,
 }
 
-impl FakeRateLimiter {
+impl FakeGate {
     pub(super) fn new(calls: CallLog, result: Result<(), RateLimitRefusal>) -> Self {
         Self { calls, result }
     }
 }
 
-impl ProviderRateLimiter for FakeRateLimiter {
-    async fn check_rate_limit(
+impl ProviderRequestGate for FakeGate {
+    async fn acquire(
         &self,
         link_id: Uuid,
         operation: ApiOperationKind,
-    ) -> Result<(), RateLimitRefusal> {
+    ) -> Result<Uuid, RateLimitRefusal> {
         self.calls
             .lock()
             .unwrap()
-            .push(Call::RateLimit(link_id, operation));
-        self.result.clone()
+            .push(Call::Acquire(link_id, operation));
+        self.result.clone().map(|()| Uuid::nil())
+    }
+
+    async fn finish(&self, link_id: Uuid, _: Uuid, error: Option<&EmailApiError>) {
+        self.calls
+            .lock()
+            .unwrap()
+            .push(Call::Finish(link_id, error.cloned()));
     }
 }
 

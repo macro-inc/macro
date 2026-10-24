@@ -72,9 +72,9 @@ impl EmailApiError {
 
 /// Where a rate-limit refusal originated.
 ///
-/// Callers use this to distinguish a local budget refusal (no provider quota
-/// was consumed; a drop-and-wait policy may be appropriate) from the provider
-/// itself throttling the request (retrying preserves delivery guarantees).
+/// Callers use this to distinguish a local refusal (no provider request was
+/// made, so the mailbox needs no cooldown) from the provider itself throttling
+/// the request. Both defer the work; neither drops it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RateLimitOrigin {
     /// Refused by local quota policy before any provider call was made.

@@ -315,6 +315,26 @@ pub trait ProviderRateLimiter: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), RateLimitRefusal>> + Send;
 }
 
+/// Admits provider requests for a linked mailbox. An admitted request holds a
+/// permit until it completes; a crashed caller's permit expires on its own.
+pub trait ProviderRequestGate: Send + Sync + 'static {
+    /// Admits one operation, or reports when the mailbox may try again.
+    fn acquire(
+        &self,
+        link_id: Uuid,
+        operation: ApiOperationKind,
+    ) -> impl Future<Output = Result<Uuid, RateLimitRefusal>> + Send;
+
+    /// Releases a permit. A provider rate limit in `error` makes every caller
+    /// for the mailbox wait out a shared cooldown.
+    fn finish(
+        &self,
+        link_id: Uuid,
+        permit: Uuid,
+        error: Option<&EmailApiError>,
+    ) -> impl Future<Output = ()> + Send;
+}
+
 /// Mailbox adapter used when provider capabilities are intentionally unavailable.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct NoOpMailboxClient;
@@ -556,4 +576,12 @@ impl ProviderRateLimiter for AlwaysAllowRateLimiter {
     async fn check_rate_limit(&self, _: Uuid, _: ApiOperationKind) -> Result<(), RateLimitRefusal> {
         Ok(())
     }
+}
+
+impl ProviderRequestGate for AlwaysAllowRateLimiter {
+    async fn acquire(&self, _: Uuid, _: ApiOperationKind) -> Result<Uuid, RateLimitRefusal> {
+        Ok(Uuid::nil())
+    }
+
+    async fn finish(&self, _: Uuid, _: Uuid, _: Option<&EmailApiError>) {}
 }

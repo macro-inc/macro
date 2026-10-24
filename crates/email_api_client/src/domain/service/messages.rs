@@ -3,7 +3,7 @@ use uuid::Uuid;
 
 use super::super::models::{CalendarPart, EmailApiError, MessageWithCalendarParts, ThreadListPage};
 use super::super::ports::{
-    MailboxCalendarClient, MailboxMessageClient, ProviderRateLimiter, ProviderTokenSource,
+    MailboxCalendarClient, MailboxMessageClient, ProviderRequestGate, ProviderTokenSource,
 };
 use super::{ApiOperationKind, EmailApiClientServiceImpl, log_operation_error};
 
@@ -11,7 +11,7 @@ impl<R, T, L> EmailApiClientServiceImpl<R, T, L>
 where
     R: MailboxMessageClient,
     T: ProviderTokenSource,
-    L: ProviderRateLimiter,
+    L: ProviderRequestGate,
 {
     /// Fetches and normalizes one provider message, including any calendar
     /// invitation parts, in a single provider read.
@@ -120,19 +120,22 @@ where
         labels_to_add: &[String],
         labels_to_remove: &[String],
     ) -> Result<(), EmailApiError> {
-        let access_token = self
-            .prepare(link_id, ApiOperationKind::ModifyMessageLabels)
-            .await?;
-
-        self.repository
-            .modify_message_labels(
-                &access_token,
-                provider_message_id,
-                labels_to_add,
-                labels_to_remove,
-            )
-            .await
-            .inspect_err(log_operation_error)
+        self.call_with_token(
+            link_id,
+            ApiOperationKind::ModifyMessageLabels,
+            |token| async move {
+                self.repository
+                    .modify_message_labels(
+                        &token,
+                        provider_message_id,
+                        labels_to_add,
+                        labels_to_remove,
+                    )
+                    .await
+                    .inspect_err(log_operation_error)
+            },
+        )
+        .await
     }
 }
 
@@ -140,7 +143,7 @@ impl<R, T, L> EmailApiClientServiceImpl<R, T, L>
 where
     R: MailboxCalendarClient,
     T: ProviderTokenSource,
-    L: ProviderRateLimiter,
+    L: ProviderRequestGate,
 {
     /// Finds calendar invitation parts in one provider message via a fresh
     /// provider fetch.
@@ -154,11 +157,13 @@ where
         link_id: Uuid,
         provider_message_id: &str,
     ) -> Result<Vec<CalendarPart>, EmailApiError> {
-        let access_token = self.prepare(link_id, ApiOperationKind::GetMessage).await?;
-        self.repository
-            .get_calendar_parts(&access_token, provider_message_id)
-            .await
-            .inspect_err(log_operation_error)
+        self.call_with_token(link_id, ApiOperationKind::GetMessage, |token| async move {
+            self.repository
+                .get_calendar_parts(&token, provider_message_id)
+                .await
+                .inspect_err(log_operation_error)
+        })
+        .await
     }
 }
 

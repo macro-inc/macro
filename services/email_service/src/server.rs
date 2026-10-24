@@ -9,7 +9,7 @@ use crate::calendar_refresh::ConnectionGatewayCalendarRefresh;
 use crate::calendar_request_gate::RedisCalendarRequestGate;
 use crate::calendar_tokens::CalendarTokenProviderAdapter;
 use crate::outbound::email_api::{
-    EmailServiceTokenSource, GmailApi, RateBudget, RedisProviderRateLimiter,
+    EmailServiceTokenSource, GmailApi, RateBudget, RedisGmailRequestGate,
 };
 use anyhow::Context;
 use calendar_events::{
@@ -121,8 +121,6 @@ pub async fn run() -> anyhow::Result<()> {
 
     let redis_client = crate::util::redis::RedisClient::new(
         redis_inner_client,
-        config.redis_rate_limit_reqs,
-        config.redis_rate_limit_reqs_backfill,
         config.redis_rate_limit_window_secs,
     );
 
@@ -203,7 +201,12 @@ pub async fn run() -> anyhow::Result<()> {
             auth_service_client.as_ref().clone(),
             sqs_client.as_ref().clone(),
         ),
-        RedisProviderRateLimiter::new(redis_client.clone(), RateBudget::Live),
+        RedisGmailRequestGate::new(
+            redis_client.inner.get_connection_manager().await.context(
+                "failed to get reconnecting redis connection for the gmail request gate",
+            )?,
+            RateBudget::Live,
+        ),
     );
     let redis_client = Arc::new(redis_client);
     let gmail_token_state = GmailTokenState::new(GmailTokenProviderImpl::new(

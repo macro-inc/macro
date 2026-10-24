@@ -2,14 +2,14 @@ use models_email::service::link::Link;
 use uuid::Uuid;
 
 use super::super::models::{EmailApiError, ProviderSubscription, TokenFreshness};
-use super::super::ports::{MailboxSubscriptionClient, ProviderRateLimiter, ProviderTokenSource};
+use super::super::ports::{MailboxSubscriptionClient, ProviderRequestGate, ProviderTokenSource};
 use super::{ApiOperationKind, EmailApiClientServiceImpl, log_operation_error};
 
 impl<R, T, L> EmailApiClientServiceImpl<R, T, L>
 where
     R: MailboxSubscriptionClient,
     T: ProviderTokenSource,
-    L: ProviderRateLimiter,
+    L: ProviderRequestGate,
 {
     /// Registers or renews the linked mailbox's notification subscription.
     #[tracing::instrument(skip(self))]
@@ -17,11 +17,13 @@ where
         &self,
         link_id: Uuid,
     ) -> Result<ProviderSubscription, EmailApiError> {
-        let access_token = self.prepare(link_id, ApiOperationKind::Subscribe).await?;
-        self.repository
-            .subscribe(&access_token)
-            .await
-            .inspect_err(log_operation_error)
+        self.call_with_token(link_id, ApiOperationKind::Subscribe, |token| async move {
+            self.repository
+                .subscribe(&token)
+                .await
+                .inspect_err(log_operation_error)
+        })
+        .await
     }
 
     /// Registers a subscription using a freshly fetched token.
@@ -33,29 +35,36 @@ where
         &self,
         link: &Link,
     ) -> Result<ProviderSubscription, EmailApiError> {
-        self.check_rate_limit(link.id, ApiOperationKind::Subscribe)
-            .await?;
-        let access_token = self
-            .token_source
-            .get_access_token_for_link(link, TokenFreshness::Fresh)
-            .await
-            .map_err(super::map_token_error)
-            .inspect_err(log_operation_error)?;
-
-        self.repository
-            .subscribe(&access_token)
-            .await
-            .inspect_err(log_operation_error)
+        let token = async {
+            self.token_source
+                .get_access_token_for_link(link, TokenFreshness::Fresh)
+                .await
+                .map_err(super::map_token_error)
+        };
+        self.attempt(
+            link.id,
+            ApiOperationKind::Subscribe,
+            token,
+            |token| async move {
+                self.repository
+                    .subscribe(&token)
+                    .await
+                    .inspect_err(log_operation_error)
+            },
+        )
+        .await?
     }
 
     /// Stops the linked mailbox's notification subscription.
     #[tracing::instrument(skip(self))]
     pub async fn stop_subscription(&self, link_id: Uuid) -> Result<(), EmailApiError> {
-        let access_token = self.prepare(link_id, ApiOperationKind::Unsubscribe).await?;
-        self.repository
-            .unsubscribe(&access_token)
-            .await
-            .inspect_err(log_operation_error)
+        self.call_with_token(link_id, ApiOperationKind::Unsubscribe, |token| async move {
+            self.repository
+                .unsubscribe(&token)
+                .await
+                .inspect_err(log_operation_error)
+        })
+        .await
     }
 
     /// Stops the mailbox's subscription without token-health side effects.
@@ -65,19 +74,24 @@ where
     /// notification for an inbox that is being intentionally removed.
     #[tracing::instrument(skip(self, link), fields(link_id = %link.id))]
     pub async fn stop_subscription_for_link(&self, link: &Link) -> Result<(), EmailApiError> {
-        self.check_rate_limit(link.id, ApiOperationKind::Unsubscribe)
-            .await?;
-        let access_token = self
-            .token_source
-            .get_access_token_health_neutral(link, TokenFreshness::Cached)
-            .await
-            .map_err(super::map_token_error)
-            .inspect_err(log_operation_error)?;
-
-        self.repository
-            .unsubscribe(&access_token)
-            .await
-            .inspect_err(log_operation_error)
+        let token = async {
+            self.token_source
+                .get_access_token_health_neutral(link, TokenFreshness::Cached)
+                .await
+                .map_err(super::map_token_error)
+        };
+        self.attempt(
+            link.id,
+            ApiOperationKind::Unsubscribe,
+            token,
+            |token| async move {
+                self.repository
+                    .unsubscribe(&token)
+                    .await
+                    .inspect_err(log_operation_error)
+            },
+        )
+        .await?
     }
 }
 

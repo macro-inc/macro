@@ -9,11 +9,12 @@ Outlook (Microsoft Graph) outbound adapters.
 ## Start here
 
 - `src/domain/service.rs`: `EmailApiClientServiceImpl<R, T, L>` — the
-  orchestration layer, generic over a repository, token source, and rate
-  limiter port; submodules `attachments`/`blocklist`/`contacts`/`labels`/
+  orchestration layer, generic over a repository, token source, and request
+  gate port; submodules `attachments`/`blocklist`/`contacts`/`labels`/
   `messages`/`send`/`subscription`/`sync` hold one capability each.
-- `src/domain/ports.rs`: `ProviderRateLimiter`, `ProviderTokenSource`, and the
-  repository trait adapters implement.
+- `src/domain/ports.rs`: `ProviderRequestGate` (per-mailbox admission for the
+  service above), `ProviderRateLimiter` (the Outlook `MailboxApiService`'s),
+  `ProviderTokenSource`, and the repository traits adapters implement.
 - `src/outbound/gmail.rs`: the Gmail adapter (feature `outbound-gmail`).
 - `src/outbound/outlook.rs`: the Microsoft Graph adapter (feature
   `outbound-outlook`); every Graph call goes through `outlook/transport.rs`,
@@ -47,13 +48,18 @@ Outlook (Microsoft Graph) outbound adapters.
 ## Gotchas
 
 - `#![deny(missing_docs)]`.
-- The service is generic over `<R, T, L>` (repository, token source, rate
-  limiter) — add a new dependency as a port + generic bound, not a concrete
+- The service is generic over `<R, T, L>` (repository, token source, request
+  gate) — add a new dependency as a port + generic bound, not a concrete
   field.
+- Every provider call holds a `ProviderRequestGate` permit for its duration
+  and releases it with the call's error, so a provider rate limit cools the
+  mailbox down for every caller. New service methods go through
+  `read_with_token` or `call_with_token`; a call made with a bare token is
+  invisible to the in-flight cap.
 - Link-based reads go through `read_with_token`, which retries once with a
   fresh token when the provider answers `AuthRequired`; a cached token can
   outlive a revoked grant, and only the fresh fetch lets the token source mark
-  the link for reauthorization. Writes use `prepare` and do not retry.
+  the link for reauthorization. Writes use `call_with_token` and do not retry.
 - Graph answers a bodyless POST or PATCH without `Content-Length: 0` with 411
   Length Required. `transport.rs` adds the header, so new Graph calls must go
   through `request`/`conditional_request` rather than the raw client.

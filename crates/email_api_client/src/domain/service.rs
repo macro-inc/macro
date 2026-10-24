@@ -5,7 +5,7 @@ use uuid::Uuid;
 use super::models::{
     AccessToken, ApiOperationKind, EmailApiError, RateLimitOrigin, TokenError, TokenFreshness,
 };
-use super::ports::{ProviderRateLimiter, ProviderTokenSource};
+use super::ports::{ProviderRequestGate, ProviderTokenSource};
 
 mod attachments;
 mod blocklist;
@@ -28,16 +28,16 @@ mod test_support;
 pub struct EmailApiClientServiceImpl<R, T, L> {
     repository: R,
     token_source: T,
-    rate_limiter: L,
+    gate: L,
 }
 
 impl<R, T, L> EmailApiClientServiceImpl<R, T, L> {
     /// Creates an email API service from its provider and infrastructure ports.
-    pub fn new(repository: R, token_source: T, rate_limiter: L) -> Self {
+    pub fn new(repository: R, token_source: T, gate: L) -> Self {
         Self {
             repository,
             token_source,
-            rate_limiter,
+            gate,
         }
     }
 }
@@ -45,7 +45,7 @@ impl<R, T, L> EmailApiClientServiceImpl<R, T, L> {
 impl<R, T, L> EmailApiClientServiceImpl<R, T, L>
 where
     T: ProviderTokenSource,
-    L: ProviderRateLimiter,
+    L: ProviderRequestGate,
 {
     /// Acquires an access token for health probes or provider-adjacent work.
     ///
@@ -64,22 +64,27 @@ where
             .map_err(map_token_error)
     }
 
-    /// Admits an operation and acquires its access token, logging a failure in
-    /// the calling operation's span.
-    async fn prepare(
+    /// Runs one provider call with the cached token, without retrying.
+    ///
+    /// Admission and token failures are logged in the calling operation's
+    /// span; the call's own errors are left to the caller.
+    async fn call_with_token<O, F, Fut>(
         &self,
         link_id: Uuid,
         operation: ApiOperationKind,
-    ) -> Result<AccessToken, EmailApiError> {
-        // Check the cheap local limiter first: under throttling this avoids
-        // paying the full token dance (SELECT + Redis + possible auth-service
-        // refresh + health write) per refused attempt. The limiter does not
-        // consume provider quota on denial.
-        self.check_rate_limit(link_id, operation).await?;
-
-        self.get_access_token(link_id, TokenFreshness::Cached)
-            .await
-            .inspect_err(log_operation_error)
+        call: F,
+    ) -> Result<O, EmailApiError>
+    where
+        F: FnOnce(AccessToken) -> Fut,
+        Fut: Future<Output = Result<O, EmailApiError>>,
+    {
+        self.attempt(
+            link_id,
+            operation,
+            self.get_access_token(link_id, TokenFreshness::Cached),
+            call,
+        )
+        .await?
     }
 
     /// Runs a provider read with the cached token, retrying once with a fresh
@@ -101,31 +106,55 @@ where
         F: Fn(AccessToken) -> Fut,
         Fut: Future<Output = Result<O, EmailApiError>>,
     {
-        let access_token = self.prepare(link_id, operation).await?;
-        let result = match read(access_token).await {
+        let cached = self.get_access_token(link_id, TokenFreshness::Cached);
+        let result = match self.attempt(link_id, operation, cached, &read).await? {
             Err(EmailApiError::AuthRequired) => {
                 tracing::Span::current().record("retry_count", 1);
-                self.check_rate_limit(link_id, operation).await?;
-                let fresh = self
-                    .get_access_token(link_id, TokenFreshness::Fresh)
-                    .await
-                    .inspect_err(log_operation_error)?;
-                read(fresh).await
+                let fresh = self.get_access_token(link_id, TokenFreshness::Fresh);
+                self.attempt(link_id, operation, fresh, &read).await?
             }
             result => result,
         };
         result.inspect_err(log_operation_error)
     }
 
-    /// Applies local quota policy, logging a refusal in the calling
-    /// operation's span.
-    async fn check_rate_limit(
+    /// Makes one provider call under an admission permit.
+    ///
+    /// The gate is checked before `token` runs: under throttling this avoids
+    /// paying the token dance (SELECT + Redis + possible auth-service refresh +
+    /// health write) per refused attempt. An admission or token failure is
+    /// logged and returned as the outer error; the provider's answer is the
+    /// inner result, which also decides whether the mailbox cools down.
+    async fn attempt<O, F, Fut>(
         &self,
         link_id: Uuid,
         operation: ApiOperationKind,
-    ) -> Result<(), EmailApiError> {
-        self.rate_limiter
-            .check_rate_limit(link_id, operation)
+        token: impl Future<Output = Result<AccessToken, EmailApiError>>,
+        call: F,
+    ) -> Result<Result<O, EmailApiError>, EmailApiError>
+    where
+        F: FnOnce(AccessToken) -> Fut,
+        Fut: Future<Output = Result<O, EmailApiError>>,
+    {
+        let permit = self.admit(link_id, operation).await?;
+        let result = match token.await.inspect_err(log_operation_error) {
+            Ok(token) => Ok(call(token).await),
+            Err(error) => Err(error),
+        };
+        let provider_error = result.as_ref().ok().and_then(|call| call.as_ref().err());
+        self.gate.finish(link_id, permit, provider_error).await;
+        result
+    }
+
+    /// Takes an admission permit, logging a refusal in the calling
+    /// operation's span.
+    async fn admit(
+        &self,
+        link_id: Uuid,
+        operation: ApiOperationKind,
+    ) -> Result<Uuid, EmailApiError> {
+        self.gate
+            .acquire(link_id, operation)
             .await
             .map_err(EmailApiError::from)
             .inspect_err(log_operation_error)
@@ -136,7 +165,7 @@ where
 ///
 /// Unlike `#[instrument(err)]`, whose level is fixed, this distinguishes a
 /// local rate-limit refusal: expected backpressure where no provider request
-/// was made and the caller decides whether to retry or drop. It is logged at
+/// was made and the caller decides when to retry. It is logged at
 /// DEBUG; every other failure, including provider throttling, stays at ERROR.
 fn log_operation_error(error: &EmailApiError) {
     match error {

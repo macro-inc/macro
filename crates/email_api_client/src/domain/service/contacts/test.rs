@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use models_email::service::contact::{Contact, ContactList};
 use uuid::Uuid;
 
-use super::super::test_support::{Call, FakeRateLimiter, FakeTokenSource, call_log};
+use super::super::test_support::{Call, FakeGate, FakeTokenSource, call_log};
 use super::*;
 use crate::domain::models::{AccessToken, TokenFreshness};
 
@@ -69,7 +69,7 @@ async fn assert_call<F, E>(operation: ApiOperationKind, expected_repository_call
 where
     E: FnOnce(Uuid) -> ContactCall,
     F: AsyncFnOnce(
-        &EmailApiClientServiceImpl<ContactsClient, FakeTokenSource, FakeRateLimiter>,
+        &EmailApiClientServiceImpl<ContactsClient, FakeTokenSource, FakeGate>,
         Uuid,
     ) -> Result<(), EmailApiError>,
 {
@@ -80,7 +80,7 @@ where
     let service = EmailApiClientServiceImpl::new(
         repository,
         FakeTokenSource::new(calls.clone(), Ok(AccessToken::new("token"))),
-        FakeRateLimiter::new(calls.clone(), Ok(())),
+        FakeGate::new(calls.clone(), Ok(())),
     );
 
     assert_eq!(invoke(&service, link_id).await, Err(expected_error()));
@@ -91,8 +91,9 @@ where
     assert_eq!(
         *calls.lock().unwrap(),
         vec![
-            Call::RateLimit(link_id, operation),
+            Call::Acquire(link_id, operation),
             Call::Token(link_id, TokenFreshness::Cached),
+            Call::Finish(link_id, Some(expected_error())),
         ]
     );
 }

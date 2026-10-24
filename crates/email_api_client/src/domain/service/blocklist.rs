@@ -1,14 +1,14 @@
 use uuid::Uuid;
 
 use super::super::models::EmailApiError;
-use super::super::ports::{MailboxBlocklistClient, ProviderRateLimiter, ProviderTokenSource};
+use super::super::ports::{MailboxBlocklistClient, ProviderRequestGate, ProviderTokenSource};
 use super::{ApiOperationKind, EmailApiClientServiceImpl, log_operation_error};
 
 impl<R, T, L> EmailApiClientServiceImpl<R, T, L>
 where
     R: MailboxBlocklistClient,
     T: ProviderTokenSource,
-    L: ProviderRateLimiter,
+    L: ProviderRequestGate,
 {
     /// Ensures messages from an email address are sent to trash.
     #[tracing::instrument(skip(self, email_address))]
@@ -17,12 +17,13 @@ where
         link_id: Uuid,
         email_address: &str,
     ) -> Result<(), EmailApiError> {
-        let access_token = self.prepare(link_id, ApiOperationKind::BlockSender).await?;
-
-        self.repository
-            .block_sender(&access_token, email_address)
-            .await
-            .inspect_err(log_operation_error)
+        self.call_with_token(link_id, ApiOperationKind::BlockSender, |token| async move {
+            self.repository
+                .block_sender(&token, email_address)
+                .await
+                .inspect_err(log_operation_error)
+        })
+        .await
     }
 
     /// Removes the blocked-sender rule for an email address, when present.
@@ -32,27 +33,33 @@ where
         link_id: Uuid,
         email_address: &str,
     ) -> Result<(), EmailApiError> {
-        let access_token = self
-            .prepare(link_id, ApiOperationKind::UnblockSender)
-            .await?;
-
-        self.repository
-            .unblock_sender(&access_token, email_address)
-            .await
-            .inspect_err(log_operation_error)
+        self.call_with_token(
+            link_id,
+            ApiOperationKind::UnblockSender,
+            |token| async move {
+                self.repository
+                    .unblock_sender(&token, email_address)
+                    .await
+                    .inspect_err(log_operation_error)
+            },
+        )
+        .await
     }
 
     /// Lists email addresses covered by blocked-sender rules.
     #[tracing::instrument(skip(self))]
     pub async fn list_blocked_senders(&self, link_id: Uuid) -> Result<Vec<String>, EmailApiError> {
-        let access_token = self
-            .prepare(link_id, ApiOperationKind::ListBlockedSenders)
-            .await?;
-
-        self.repository
-            .list_blocked_senders(&access_token)
-            .await
-            .inspect_err(log_operation_error)
+        self.call_with_token(
+            link_id,
+            ApiOperationKind::ListBlockedSenders,
+            |token| async move {
+                self.repository
+                    .list_blocked_senders(&token)
+                    .await
+                    .inspect_err(log_operation_error)
+            },
+        )
+        .await
     }
 }
 

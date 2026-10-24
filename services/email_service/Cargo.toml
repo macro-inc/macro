@@ -146,6 +146,7 @@ once_cell = { workspace = true }
 models_properties = { path = "../../crates/models_properties" }
 redis = { workspace = true, features = [
   "cluster-async",
+  "connection-manager",
   "tokio-rustls-comp",
 ] }
 regex = { workspace = true }
