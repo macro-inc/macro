@@ -28,7 +28,8 @@ named decisions through cognition.
 - Depends on: `ai_usage` (usage metering); `outbound` feature adds
   `macro_env_var`, `reqwest`, `tokio`.
 - Used by: `scheduled_action` (trigger conditions),
-  `document_cognition_service` (the `/decisions` endpoint).
+  `document_cognition_service` (the `/decisions` endpoint), `agent_trigger`
+  (routing unmentioned thread replies to agent sessions).
 
 ## Checks
 

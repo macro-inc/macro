@@ -1663,6 +1663,14 @@ async fn run() -> anyhow::Result<()> {
         }
     });
 
+    let trigger_classifier = config
+        .typesafe_api_key
+        .value()
+        .map(jev::outbound::TypesafeJev::new)
+        .transpose()
+        .context("invalid TYPESAFE_API_KEY")?
+        .map(|provider| Arc::new(jev::domain::JevClassifier::new(provider, recorder.clone())));
+
     // Keep trigger generation in this deployment while retaining Kafka as the
     // boundary between channel events and harness commands.
     let mut trigger = tokio::spawn(trigger::supervise(
@@ -1671,6 +1679,7 @@ async fn run() -> anyhow::Result<()> {
         config.internal_api_key.clone(),
         config.document_storage_service_auth_key.clone(),
         trigger::TriggerServices {
+            classifier: trigger_classifier,
             recorder,
             admission,
             messages: message_service,
