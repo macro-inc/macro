@@ -68,6 +68,9 @@ DecideReview are eager internal tools in both standard and code modes.
   code mode; legacy `ReadChat` must not appear in either runtime tool catalog.
 - Replay tool calls using `_meta.macro.toolName`; ACP titles may be human-readable
   MCP labels, so only use the title for older frames without tool-name metadata.
+- The fast opener may answer `true|<line>` for a promised action. `ends_turn`
+  refuses to cancel the turn's model when the line announces work, so
+  "I'll bring them over." cannot stand as the whole reply.
 
 ## Related
 

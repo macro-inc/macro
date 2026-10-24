@@ -5,7 +5,9 @@
 //! greeting, thanks, a trivial fact) and `false|<line>` when it only opens
 //! one. Either way the line streams to the user as the fast model writes it,
 //! long before the turn's model has its first token; `true` also stops the
-//! turn's model, which has nothing left to say.
+//! turn's model, which has nothing left to say. A `true` line that still
+//! announces work ("I'll bring them over.") is treated as `false` so the
+//! turn's model can do it.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -160,13 +162,74 @@ pub(super) async fn verdict(lines: &mut mpsc::Receiver<String>) -> Option<Verdic
     None
 }
 
-fn system_prompt(speaker: &Speaker<'_>, tool_names: &str, follow_up: bool) -> String {
+/// Whether a finished opener line should stand as the whole reply.
+///
+/// A `true` verdict that still announces work is not enough: the turn's own
+/// model has to run the tools.
+pub(super) fn ends_turn(complete: bool, finished: bool, line: &str) -> bool {
+    complete && finished && !line.trim().is_empty() && !announces_work(line)
+}
+
+/// Prefixes of a line that is still promising to do something.
+const WORK_PREFIXES: &[&str] = &[
+    "i'll ",
+    "i will ",
+    "i am going to ",
+    "i'm going to ",
+    "im going to ",
+    "let me ",
+    "let's ",
+    "lets ",
+    "going to ",
+    "on it ",
+    "sending ",
+    "bringing ",
+    "checking ",
+    "looking ",
+    "searching ",
+    "creating ",
+    "importing ",
+    "scheduling ",
+    "sharing ",
+    "moving ",
+    "posting ",
+];
+
+/// Whole lines that promise work with no trailing object.
+const WORK_LINES: &[&str] = &["i'll", "on it", "let me", "let's", "lets"];
+
+/// Whether `line` announces work instead of being the reply.
+pub(super) fn announces_work(line: &str) -> bool {
+    let line = normalize_line(line);
+    WORK_LINES.contains(&line.as_str())
+        || WORK_PREFIXES.iter().any(|prefix| line.starts_with(prefix))
+}
+
+fn normalize_line(line: &str) -> String {
+    let normalized: String = line
+        .trim()
+        .chars()
+        .map(|character| match character {
+            '\u{2018}' | '\u{2019}' | '`' => '\'',
+            other => other,
+        })
+        .collect();
+    normalized
+        .trim_end_matches(['.', '!', ',', '—', '-'])
+        .trim()
+        .to_ascii_lowercase()
+}
+
+pub(super) fn system_prompt(speaker: &Speaker<'_>, tool_names: &str, follow_up: bool) -> String {
     let Speaker { agent, model } = speaker;
     // Mid-conversation, a generic "Let me check that." often reads oddly;
     // there the model may show nothing instead.
     let silence = if follow_up {
         "This is a follow-up. If the reply is complete, answer true as usual. Otherwise write an \
 opener only if it is specific to this request (\"move it to 3\" → false|Let me move it to 3.). \
+If the assistant just asked the user to choose, confirm, or approve, and the user is answering \
+(\"all issues\", \"yes\", \"send it\", \"3 is good\"), that is false: the work still needs \
+doing (\"all issues\" → false|I'll bring them all over.). \
 If the only line you would write is filler like \"Let me check that.\", \"On it.\", \"Sure —\" or \
 \"Got it.\", output skip| instead (\"shorter\" → skip|, \"who is priya again\" → skip|).\n"
     } else {
@@ -181,8 +244,9 @@ Output format, exactly: <verdict>|<line>
 {silence}- true only if <line> is the ENTIRE reply and nothing else needs doing: greetings, \
 thanks, acknowledgements, arithmetic, who you are or which model you run on (\"hi there\" → \
 true|Hi!, \"thanks\" → true|You're welcome!, \"what's 2+2\" → true|4.). A message that also \
-asks for anything to be done or looked up is false (\"thanks, now add Sarah\" → false). If in \
-any doubt, false.
+asks for anything to be done or looked up is false (\"thanks, now add Sarah\" → false). Never \
+true a line that promises work (\"I'll bring them over.\", \"Let me send it.\", \"On it.\") — \
+those are false. If in any doubt, false.
 - false for everything else. Then <line> only shows the assistant is starting, in \
 the obvious direction, states no facts or answers, and never claims anything was done \
 (\"false|Let me check your calendar.\", \"false|On it.\", \"false|Good question.\", \

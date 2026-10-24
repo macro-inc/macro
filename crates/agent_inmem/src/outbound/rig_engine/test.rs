@@ -384,6 +384,57 @@ async fn a_summary_turns_closed_opener_has_no_verdict() {
 }
 
 #[test]
+fn a_complete_opener_that_promises_work_does_not_end_the_turn() {
+    assert!(!opener::ends_turn(
+        true,
+        true,
+        "I'll bring over all of them."
+    ));
+    assert!(!opener::ends_turn(true, true, "I’ll send it now."));
+    assert!(!opener::ends_turn(
+        true,
+        true,
+        "Let me check your calendar."
+    ));
+    assert!(!opener::ends_turn(true, true, "On it."));
+    assert!(!opener::ends_turn(true, true, "Bringing them all over."));
+}
+
+#[test]
+fn a_complete_opener_that_is_the_whole_reply_ends_the_turn() {
+    assert!(opener::ends_turn(true, true, "Hi!"));
+    assert!(opener::ends_turn(true, true, "You're welcome!"));
+    assert!(opener::ends_turn(true, true, "4"));
+    assert!(!opener::ends_turn(true, false, "Hi!"));
+    assert!(!opener::ends_turn(false, true, "Hi!"));
+    assert!(!opener::ends_turn(true, true, "   "));
+}
+
+#[test]
+fn opener_prompt_treats_an_approval_as_work_still_to_do() {
+    let follow_up = opener::system_prompt(
+        &opener::Speaker {
+            agent: "Macro",
+            model: "test",
+        },
+        "NameSearch",
+        true,
+    );
+    assert!(follow_up.contains("all issues"));
+    assert!(follow_up.contains("Never true a line that promises work"));
+    let first = opener::system_prompt(
+        &opener::Speaker {
+            agent: "Macro",
+            model: "test",
+        },
+        "NameSearch",
+        false,
+    );
+    assert!(first.contains("Never true a line that promises work"));
+    assert!(!first.contains("all issues"));
+}
+
+#[test]
 fn opening_transcript_leaves_out_the_hidden_agent_context() {
     let messages = vec![agent::types::ChatMessage {
         content: agent::types::ChatMessageContent::Text(

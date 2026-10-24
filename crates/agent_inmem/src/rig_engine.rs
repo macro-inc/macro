@@ -727,10 +727,12 @@ async fn drive_turn(
                 if let Some((complete, head)) = line {
                     let deadline = tokio::time::Instant::now() + opener::LINE_TIMEOUT;
                     let mut line_chars = 0;
+                    let mut collected = String::new();
                     let mut finished = false;
                     let mut delta = Some(head);
                     while let Some(text) = delta {
                         line_chars += text.chars().count();
+                        collected.push_str(&text);
                         opener_span.record("agent.opener.line_chars", line_chars);
                         if !text.is_empty()
                             && parts.send(Ok(StreamPart::Content(text))).await.is_err()
@@ -746,11 +748,18 @@ async fn drive_turn(
                             Err(_) => None,
                         };
                     }
-                    // Only a whole line stands alone: one that stalled or
-                    // came out empty leaves the reply to this model.
-                    if complete && finished && line_chars > 0 {
+                    // Only a whole line that is the entire reply stands
+                    // alone. A promised action ("I'll bring them over.")
+                    // still needs this model, even when the opener said true.
+                    if opener::ends_turn(complete, finished, &collected) {
                         loop_cancel.cancel();
                         return Ok(());
+                    }
+                    if complete && finished && opener::announces_work(&collected) {
+                        tracing::info!(
+                            line = collected.as_str(),
+                            "opener promised work as a complete reply; continuing the turn"
+                        );
                     }
                     separate = line_chars > 0;
                 }
