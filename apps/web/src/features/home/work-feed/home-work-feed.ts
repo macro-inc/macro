@@ -94,18 +94,28 @@ export function useWorkFeedHomeDataSource(
   });
 
   const facetContext = (): HomeFacetContext => ({ notificationSource });
+
+  // The work feed is only used for signal tab; filter out noise emails as a
+  // client-side defense in case the server or cache has stale signal flags.
+  const feedEntities = () =>
+    enabled()
+      ? feed
+          .entries()
+          .filter(
+            (entry) =>
+              entry.entity.type !== 'email' || entry.entity.isSignal !== false
+          )
+          .map((entry) =>
+            withEntityNotifications(entry.entity, notificationSource)
+          )
+      : [];
+
   const entities = createMemo<HomeAdmission>(
     (previous) =>
       admitHomeEntities(previous, {
         // The server scoped each row's notifications to its item; the
         // shared source still layers local seen/done overrides on top.
-        entities: enabled()
-          ? feed
-              .entries()
-              .map((entry) =>
-                withEntityNotifications(entry.entity, notificationSource)
-              )
-          : [],
+        entities: feedEntities(),
         tab: state.tab,
         facets: state.facets,
         facetContext: facetContext(),
