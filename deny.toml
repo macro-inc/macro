@@ -232,6 +232,7 @@ deny = [
     "documents",                 # Dev logging only
     "email",                     # Dev logging only
     "genai_telemetry",           # GenAI span tests
+    "graphql_email",             # Unavailable-thread warning field and span tests only
     "graphql_entity_mutation",   # Batch failure span field tests only
     "lambda_runtime_api_client", # External crate allowed to use tracing-subscriber
     "loom",                      # External concurrency testing dependency
