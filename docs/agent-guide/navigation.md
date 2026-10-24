@@ -517,6 +517,14 @@ dragging at non-default zoom, and closing a split during a drag; later pointer
 movement must not keep resizing the removed split. Arrow keys still resize
 immediately, with Shift selecting the larger step.
 
+A view's narrow/wide layout reads its width when it mounts, then applies later
+split or window resizes on the next animation frame. Open a channel beside Home,
+drag the split gutter back and forth across the narrow breakpoint, and resize
+the window: the console should show no `ResizeObserver loop completed with
+undelivered notifications` errors, and the sidebar should switch between docked
+and overlay as the split crosses the breakpoint. Drive and other `virtua` lists
+can still report it from the virtualizer's own observer.
+
 Email, Tasks, and Agents use the same sidebar rows, including favorites, tags,
 inboxes, and recent agent chats: 32px high on desktop and 44px on touch devices,
 with regular-weight labels and consistent icon spacing.
