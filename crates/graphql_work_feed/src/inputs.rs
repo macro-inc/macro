@@ -1,7 +1,7 @@
 use async_graphql::{Enum, ID, InputObject};
+use attention_feed::domain::models::{FeedKey, FeedPosition, FeedRevision};
 use work_feed::domain::models::{
-    WorkFeedDoneTarget, WorkFeedItemKey, WorkFeedItemType, WorkFeedMode, WorkFeedPosition,
-    WorkFeedQuery, WorkFeedRevision, WorkFeedScope,
+    WorkFeedDoneTarget, WorkFeedItemType, WorkFeedMode, WorkFeedQuery, WorkFeedScope,
 };
 
 #[cfg(test)]
@@ -121,7 +121,7 @@ impl WorkFeedInput {
             graphql_common::parse_limit(self.limit, DEFAULT_WORK_FEED_LIMIT, MAX_WORK_FEED_LIMIT)?;
         let after = self
             .cursor
-            .map(|cursor| WorkFeedPosition::decode(&cursor))
+            .map(|cursor| FeedPosition::decode(&cursor))
             .transpose()
             .map_err(|_| async_graphql::Error::new("invalid work feed cursor"))?;
         Ok(WorkFeedQuery {
@@ -160,11 +160,11 @@ impl MarkWorkFeedItemsDoneInput {
         self.items
             .into_iter()
             .map(|item| {
-                let key = WorkFeedItemKey::parse(&item.id)
+                let key = FeedKey::parse(&item.id)
                     .map_err(|_| async_graphql::Error::new("invalid work feed item id"))?;
                 let revision = item
                     .revision
-                    .map(|revision| WorkFeedRevision::decode(&revision))
+                    .map(|revision| FeedRevision::decode(&revision))
                     .transpose()
                     .map_err(|_| async_graphql::Error::new("invalid work feed revision"))?;
                 Ok(WorkFeedDoneTarget { key, revision })

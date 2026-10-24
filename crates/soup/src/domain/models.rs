@@ -940,21 +940,24 @@ pub struct NotifiedEntity {
     pub notified_at: chrono::DateTime<chrono::Utc>,
 }
 
-/// Which reasons admit an entity to the work feed.
+/// How the attention candidate query keys the notifications that place its
+/// candidates.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum WorkFeedSoupMode {
-    /// Live notifications plus the viewer's own work.
-    Work,
-    /// Live notifications only.
-    Attention,
+pub enum AttentionKeying {
+    /// A channel notification naming a thread root (`secondary_event_item`
+    /// of type `channel_message`) keys to a `channel_message` candidate on
+    /// it, like the notified-at feed; others key to their own entity.
+    ThreadScoped,
+    /// Every notification keys to the entity it is filed under.
+    FiledEntity,
 }
 
-/// Keyset position for a work feed page: the sort time and entity id of the
-/// last candidate the previous page walked.
+/// Keyset position for an attention feed page: the sort time and entity id
+/// of the last candidate the previous page walked.
 ///
 /// Like [`NotifiedPagePosition`], the id stays the raw stored string.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct WorkFeedPagePosition {
+pub struct AttentionPagePosition {
     /// The last candidate's sort time: the later of its attention and
     /// own-work timestamps.
     pub sort_at: chrono::DateTime<chrono::Utc>,
@@ -962,17 +965,19 @@ pub struct WorkFeedPagePosition {
     pub entity_id: String,
 }
 
-/// Parameters for one page of work feed candidates.
+/// Parameters for one page of attention feed candidates.
 #[derive(Debug)]
-pub struct WorkFeedCandidateRequest<'a> {
+pub struct AttentionCandidateRequest<'a> {
     /// User whose feed is listed; also the access-check subject.
     pub user_id: MacroUserIdStr<'a>,
     /// Maximum candidates to return.
     pub limit: u16,
-    /// Whether own work admits candidates.
-    pub mode: WorkFeedSoupMode,
+    /// Whether the viewer's own work admits candidates besides attention.
+    pub own_work: bool,
+    /// How notifications key to candidates.
+    pub keying: AttentionKeying,
     /// Resume after this position; `None` for the first page.
-    pub after: Option<WorkFeedPagePosition>,
+    pub after: Option<AttentionPagePosition>,
     /// Entity types the caller asked for. Narrowed further by the filter
     /// and by which hydration legs are active.
     pub types: &'a [EntityType],
@@ -985,17 +990,20 @@ pub struct WorkFeedCandidateRequest<'a> {
     pub foreign_entity_sources: &'a [SourceId],
     /// Entity types whose candidates the domain can hydrate for this request.
     pub hydratable: NotifiedHydratableTypes,
+    /// Whether CRM company and contact candidates can be hydrated: the viewer
+    /// has a CRM team receipt.
+    pub crm: bool,
     /// Restrict the feed to these candidate keys, for recomputing known items.
     pub only: Option<&'a [Entity<'static>]>,
 }
 
-/// One work feed candidate and the timestamps of its two reasons.
+/// One attention feed candidate and the timestamps of its two reasons.
 ///
 /// Each candidate carries the reason that places it in the feed: its
 /// `sort_at` is the later of the two timestamps, and exactly one of the
 /// candidate query's two streams emits it.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct WorkFeedCandidate {
+pub struct AttentionCandidate {
     /// The candidate's entity; channel-thread candidates are keyed on their
     /// thread root as a `channel_message`, like the notified-at feed.
     pub entity: Entity<'static>,
@@ -1010,48 +1018,51 @@ pub struct WorkFeedCandidate {
     pub sort_at: chrono::DateTime<chrono::Utc>,
 }
 
-/// Request for one page of the hydrated work feed.
+/// Request for one page of a hydrated attention feed: Home's work feed or
+/// the notifications inbox.
 #[derive(Debug, Clone)]
-pub struct WorkFeedSoupRequest {
+pub struct AttentionSoupRequest {
     /// User whose feed is listed.
     pub user: MacroUserIdStr<'static>,
     /// Every inbox the caller can read.
     pub link_ids: Vec<Uuid>,
     /// Maximum items to return.
     pub limit: u16,
-    /// Whether own work admits items.
-    pub mode: WorkFeedSoupMode,
+    /// Whether the viewer's own work admits items besides attention.
+    pub own_work: bool,
+    /// How notifications key to candidates.
+    pub keying: AttentionKeying,
     /// Entity types to include.
     pub types: Vec<EntityType>,
     /// Membership filters, folded into the candidate gates and applied in
     /// full by each domain's hydration leg.
     pub filter: EntityFilterAst,
     /// Resume after this position; `None` for the first page.
-    pub after: Option<WorkFeedPagePosition>,
+    pub after: Option<AttentionPagePosition>,
     /// Restrict the feed to these candidate keys, for recomputing known items.
     pub only: Option<Vec<Entity<'static>>>,
 }
 
-/// One hydrated work feed item and its reason timestamps.
+/// One hydrated attention feed item and its reason timestamps.
 #[derive(Debug)]
-pub struct WorkFeedSoupItem {
+pub struct AttentionSoupItem {
     /// The authorized Soup item with its server facts.
     pub hydration: SoupProjectionHydration,
-    /// See [`WorkFeedCandidate::attention_at`].
+    /// See [`AttentionCandidate::attention_at`].
     pub attention_at: Option<chrono::DateTime<chrono::Utc>>,
-    /// See [`WorkFeedCandidate::touched_at`].
+    /// See [`AttentionCandidate::touched_at`].
     pub touched_at: Option<chrono::DateTime<chrono::Utc>>,
-    /// See [`WorkFeedCandidate::sort_at`].
+    /// See [`AttentionCandidate::sort_at`].
     pub sort_at: chrono::DateTime<chrono::Utc>,
 }
 
-/// One page of the hydrated work feed.
+/// One page of a hydrated attention feed.
 #[derive(Debug)]
-pub struct WorkFeedSoupPage {
+pub struct AttentionSoupPage {
     /// The page's items, newest first.
-    pub items: Vec<WorkFeedSoupItem>,
+    pub items: Vec<AttentionSoupItem>,
     /// Where the next page starts; `None` once the feed is exhausted.
-    pub next: Option<WorkFeedPagePosition>,
+    pub next: Option<AttentionPagePosition>,
 }
 
 /// Whether the notified-at candidate query can fold this calendar filter.

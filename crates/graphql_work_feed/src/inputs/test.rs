@@ -49,7 +49,7 @@ fn scope_input_maps_types_and_mode() {
 
 #[test]
 fn done_input_parses_ids_and_revisions() {
-    let revision = WorkFeedRevision::default().encode();
+    let revision = FeedRevision::default().encode();
     let targets = MarkWorkFeedItemsDoneInput {
         items: vec![WorkFeedDoneItemInput {
             id: ID("document:11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa".to_string()),
@@ -59,7 +59,7 @@ fn done_input_parses_ids_and_revisions() {
     .into_targets()
     .unwrap();
     assert_eq!(targets.len(), 1);
-    assert_eq!(targets[0].revision, Some(WorkFeedRevision::default()));
+    assert_eq!(targets[0].revision, Some(FeedRevision::default()));
 
     let bad_id = MarkWorkFeedItemsDoneInput {
         items: vec![WorkFeedDoneItemInput {

@@ -257,7 +257,7 @@ on the other.
   view with a bind-placeholder collision.
 - **Feeds** (if it belongs in Recent, inbox, or the Home work feed):
   `candidate_gates.rs`, `touched.rs` (Recent, which reads activity, so section 7
-  is a prerequisite), `notified.rs` with `notified/query.sql`, `work_feed/`, and
+  is a prerequisite), `notified.rs` with `notified/query.sql`, `attention/`, and
   the routing arms in `crates/soup/src/domain/service.rs` and
   `domain/service/favorites.rs`. Keep new gates index-only; these queries have
   been cancelled on the replica in production for scanning too much.

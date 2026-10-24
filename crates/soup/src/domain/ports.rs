@@ -1,10 +1,11 @@
 use std::sync::Arc;
 
 use crate::domain::models::{
-    AdvancedSortParams, CrmPropertyEdge, EnrichedSoupItem, GroupedSortRequest, IntoSoupReqAst,
+    AdvancedSortParams, AttentionCandidate, AttentionCandidateRequest, AttentionSoupPage,
+    AttentionSoupRequest, CrmPropertyEdge, EnrichedSoupItem, GroupedSortRequest, IntoSoupReqAst,
     NotifiedEntity, NotifiedSoupRequest, SimpleSortRequest, SoupErr, SoupProjectionHydration,
-    SoupPropertiesField, SoupRequest, TouchedEntity, TouchedSoupRequest, WorkFeedCandidate,
-    WorkFeedCandidateRequest, WorkFeedSoupPage, WorkFeedSoupRequest, grouping::ItemGroupingInfo,
+    SoupPropertiesField, SoupRequest, TouchedEntity, TouchedSoupRequest,
+    grouping::ItemGroupingInfo,
 };
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -115,14 +116,14 @@ pub trait SoupRepo: Send + Sync + 'static {
         req: NotifiedSoupRequest<'a>,
     ) -> impl Future<Output = Result<Vec<NotifiedEntity>, Self::Err>> + Send;
 
-    /// Fetch one page of work feed candidates: entities with live attention
-    /// or own work, newest `sort_at` first, already gated on existence,
+    /// Fetch one page of attention feed candidates: entities with live
+    /// attention or own work, newest `sort_at` first, already gated on existence,
     /// deletion and access, and on the request's entity filters where soup
     /// owns the fold.
-    fn work_feed_soup_page<'a>(
+    fn attention_soup_page<'a>(
         &self,
-        req: WorkFeedCandidateRequest<'a>,
-    ) -> impl Future<Output = Result<Vec<WorkFeedCandidate>, Self::Err>> + Send;
+        req: AttentionCandidateRequest<'a>,
+    ) -> impl Future<Output = Result<Vec<AttentionCandidate>, Self::Err>> + Send;
 }
 
 /// The possible outputs of soup — one paginated page per query mode.
@@ -328,21 +329,22 @@ pub trait SoupService: Send + Sync + 'static {
         user_id: MacroUserIdStr<'a>,
     ) -> impl Future<Output = Result<Vec<PropertyDefinitionWithOptions>, SoupErr>> + Send;
 
-    /// Fetch one hydrated page of the viewer's work feed: entities with live
-    /// attention or own work, newest `sort_at` first, each with its reason
-    /// timestamps and authoritative server facts.
+    /// Fetch one hydrated page of one of the viewer's attention feeds (Home's
+    /// work feed, the notifications inbox): entities with live attention or
+    /// own work, newest `sort_at` first, each with its reason timestamps and
+    /// authoritative server facts.
     ///
-    /// Services without a work feed reject the request. The production
+    /// Services without attention feeds reject the request. The production
     /// service overrides this method.
-    fn get_work_feed_page(
+    fn get_attention_page(
         &self,
-        req: WorkFeedSoupRequest,
+        req: AttentionSoupRequest,
         team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
-    ) -> impl Future<Output = Result<WorkFeedSoupPage, SoupErr>> + Send {
+    ) -> impl Future<Output = Result<AttentionSoupPage, SoupErr>> + Send {
         let _ = (req, team_receipt);
         async move {
             Err(SoupErr::SoupDbErr(anyhow::anyhow!(
-                "this soup service does not serve the work feed"
+                "this soup service does not serve attention feeds"
             )))
         }
     }
@@ -448,12 +450,12 @@ where
         (**self).caller_tag_sets(user_id).await
     }
 
-    async fn get_work_feed_page(
+    async fn get_attention_page(
         &self,
-        req: WorkFeedSoupRequest,
+        req: AttentionSoupRequest,
         team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
-    ) -> Result<WorkFeedSoupPage, SoupErr> {
-        (**self).get_work_feed_page(req, team_receipt).await
+    ) -> Result<AttentionSoupPage, SoupErr> {
+        (**self).get_attention_page(req, team_receipt).await
     }
 }
 

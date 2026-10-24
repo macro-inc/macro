@@ -34,6 +34,7 @@ graphql_entity_mutation = { path = "../graphql_entity_mutation" }
 graphql_favorite = { path = "../graphql_favorite" }
 graphql_initiative = { path = "../graphql_initiative" }
 graphql_notification = { path = "../graphql_notification" }
+graphql_notification_inbox = { path = "../graphql_notification_inbox" }
 graphql_permission = { path = "../graphql_permission" }
 graphql_properties = { path = "../graphql_properties" }
 graphql_scheduled_action = { path = "../graphql_scheduled_action" }
@@ -63,6 +64,8 @@ bot_id = { path = "../bot_id" }
 crm = { path = "../crm", default-features = false, features = ["ports"] }
 databases = { path = "../databases", default-features = false, features = ["ports"] }
 activity = { path = "../activity", default-features = false, features = ["realtime"] }
+attention_feed = { path = "../attention_feed", features = ["inbound"] }
+notification_inbox = { path = "../notification_inbox" }
 work_feed = { path = "../work_feed" }
 agent_runtime_protocol = { path = "../agent_runtime_protocol" }
 apollo-compiler = { workspace = true }
