@@ -42,6 +42,11 @@ hexagonal architecture pattern.
 
 - `cargo test -p favorites --all-features` (`SQLX_OFFLINE` unset).
 
+## Gotchas
+
+- Authorize adds with `ports::FavoriteView`, not `ViewAccessLevel`: channels
+  resolve to channel roles, which `ViewAccessLevel` never accepts.
+
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/db.md`
