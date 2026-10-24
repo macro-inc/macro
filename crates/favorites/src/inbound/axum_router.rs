@@ -14,7 +14,7 @@ use axum::{
 };
 use axum_extra::extract::Query;
 use entity_access::{
-    domain::{models::ViewAccessLevel, ports::EntityAccessService},
+    domain::{models::AnyEntityPermission, ports::EntityAccessService},
     inbound::axum_extractors::EntityBodyAccessLevelExtractor,
 };
 use macro_authorization::{
@@ -203,7 +203,14 @@ where
 #[tracing::instrument(err, skip_all)]
 pub async fn add_favorite_handler<S, AccessSvc, Auth>(
     State(state): State<FavoritesRouterState<S, AccessSvc, Auth>>,
-    access: EntityBodyAccessLevelExtractor<ViewAccessLevel, AccessSvc, AddFavoriteRequest, Auth>,
+    // Any permission, not a leveled one: a channel resolves to
+    // `ChannelRole`/`ChannelViewOnly`, which a leveled receipt never matches.
+    access: EntityBodyAccessLevelExtractor<
+        AnyEntityPermission,
+        AccessSvc,
+        AddFavoriteRequest,
+        Auth,
+    >,
 ) -> Result<Json<Favorite>, FavoritesError>
 where
     S: FavoritesService,

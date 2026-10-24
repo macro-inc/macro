@@ -97,6 +97,7 @@ fn validate_favoritable(entity_type: EntityType) -> Result<(), FavoritesError> {
         | EntityType::Call
         | EntityType::ForeignEntity
         | EntityType::CrmCompany
+        | EntityType::AgentSession
         | EntityType::CrmContact => Ok(()),
         EntityType::User
         | EntityType::Team
@@ -105,7 +106,6 @@ fn validate_favoritable(entity_type: EntityType) -> Result<(), FavoritesError> {
         | EntityType::CalendarEvent
         | EntityType::Reminder
         | EntityType::Skill
-        | EntityType::AgentSession
         | EntityType::ScheduledAction
         | EntityType::Initiative
         // Databases and forms are not favoritable yet, and rows never are.

@@ -10,7 +10,7 @@ use documents_hex::domain::{
     starter::seed_starter_documents,
 };
 use entity_access::domain::{
-    models::{BotAccessScope, EditAccessLevel, ViewAccessLevel},
+    models::{AnyEntityPermission, BotAccessScope, EditAccessLevel},
     ports::EntityAccessService,
 };
 use favorites::domain::ports::FavoritesService;
@@ -378,7 +378,7 @@ pub async fn handler(
         let favorite_result = async {
             let how_to_guide_receipt = state
                 .entity_access_service
-                .generate_entity_access_receipt::<ViewAccessLevel>(
+                .generate_entity_access_receipt::<AnyEntityPermission>(
                     user_id,
                     organization_id,
                     &guide_id,

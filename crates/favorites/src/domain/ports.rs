@@ -1,9 +1,12 @@
 //! Ports (trait contracts) for the favorites domain.
 
+#[cfg(test)]
+mod test;
+
 use std::collections::HashSet;
 
 use entity_access::domain::{
-    models::{AccessError, EntityAccessReceipt, ViewAccessLevel},
+    models::{AccessError, AnyEntityPermission, EntityAccessReceipt},
     ports::EntityAccessService,
 };
 use macro_user_id::user_id::MacroUserIdStr;
@@ -72,11 +75,16 @@ pub trait FavoritesRepo: Send + Sync + 'static {
 /// Authorization port used by favorites mutation use cases.
 pub trait FavoritesAuthorizer: Send + Sync + 'static {
     /// Verify that the actor can view the entity being added to favorites.
+    ///
+    /// The requirement is [`AnyEntityPermission`], not a leveled one: a channel
+    /// resolves to `ChannelRole`/`ChannelViewOnly`, which a leveled receipt
+    /// never matches, and a receipt exists at all only when the actor has some
+    /// access to the entity.
     fn authorize_favorite(
         &self,
         actor: &FavoritesMutationActor,
         entity: &Entity<'static>,
-    ) -> impl Future<Output = Result<EntityAccessReceipt<ViewAccessLevel>, FavoritesError>> + Send;
+    ) -> impl Future<Output = Result<EntityAccessReceipt<AnyEntityPermission>, FavoritesError>> + Send;
 }
 
 impl<A> FavoritesAuthorizer for A
@@ -87,8 +95,8 @@ where
         &self,
         actor: &FavoritesMutationActor,
         entity: &Entity<'static>,
-    ) -> Result<EntityAccessReceipt<ViewAccessLevel>, FavoritesError> {
-        self.generate_entity_access_receipt::<ViewAccessLevel>(
+    ) -> Result<EntityAccessReceipt<AnyEntityPermission>, FavoritesError> {
+        self.generate_entity_access_receipt::<AnyEntityPermission>(
             &actor.user_id,
             actor.organization_id,
             &entity.entity_id,
@@ -131,7 +139,7 @@ pub trait FavoritesService: Send + Sync + 'static {
     /// Add an entity to the user's favorites (idempotent).
     fn add_favorite(
         &self,
-        receipt: &EntityAccessReceipt<ViewAccessLevel>,
+        receipt: &EntityAccessReceipt<AnyEntityPermission>,
     ) -> impl Future<Output = Result<Favorite, FavoritesError>> + Send;
 
     /// Add an entity after a trusted caller has already established that the

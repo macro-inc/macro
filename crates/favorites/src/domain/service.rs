@@ -5,7 +5,7 @@ mod test;
 
 use std::collections::HashSet;
 
-use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
+use entity_access::domain::models::{AnyEntityPermission, EntityAccessReceipt};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 
@@ -78,7 +78,7 @@ where
     #[tracing::instrument(err, skip(self))]
     async fn add_favorite(
         &self,
-        receipt: &EntityAccessReceipt<ViewAccessLevel>,
+        receipt: &EntityAccessReceipt<AnyEntityPermission>,
     ) -> Result<Favorite, FavoritesError> {
         let user_id = receipt
             .get_authenticated_user()

@@ -79,7 +79,7 @@ fn collection() -> Vec<Favorite> {
 impl FavoritesService for FakeFavoritesService {
     async fn add_favorite(
         &self,
-        _receipt: &entity_access::domain::models::EntityAccessReceipt<ViewAccessLevel>,
+        _receipt: &entity_access::domain::models::EntityAccessReceipt<AnyEntityPermission>,
     ) -> Result<Favorite, FavoritesError> {
         unimplemented!("the list boundary does not add favorites")
     }

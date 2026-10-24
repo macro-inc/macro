@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
 use chrono::Utc;
-use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
+use entity_access::domain::models::{AnyEntityPermission, EntityAccessReceipt};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, EntityType};
 
@@ -124,7 +124,7 @@ fn user_id() -> MacroUserIdStr<'static> {
 fn authenticated_receipt(
     entity_id: &str,
     entity_type: EntityType,
-) -> EntityAccessReceipt<ViewAccessLevel> {
+) -> EntityAccessReceipt<AnyEntityPermission> {
     EntityAccessReceipt::dangerously_assert_authenticated_user(user_id(), entity_id, entity_type)
 }
 
@@ -189,7 +189,7 @@ async fn add_favorite_with_established_access_forwards_user_and_entity() {
 async fn add_favorite_rejects_internal_receipt_before_repository_calls() {
     let repo = FakeFavoritesRepo::new(0);
     let service = FavoritesServiceImpl::new(repo.clone());
-    let receipt = EntityAccessReceipt::<ViewAccessLevel>::dangerously_assert_internal_user(
+    let receipt = EntityAccessReceipt::<AnyEntityPermission>::dangerously_assert_internal_user(
         "doc-123",
         EntityType::Document,
     );

@@ -1,7 +1,7 @@
 use std::{collections::HashSet, sync::Mutex};
 
 use chrono::Utc;
-use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
+use entity_access::domain::models::{AnyEntityPermission, EntityAccessReceipt};
 
 use super::*;
 use crate::domain::ports::FavoritesAuthorizer;
@@ -31,7 +31,7 @@ impl FakeFavoritesService {
 impl FavoritesService for FakeFavoritesService {
     async fn add_favorite(
         &self,
-        receipt: &EntityAccessReceipt<ViewAccessLevel>,
+        receipt: &EntityAccessReceipt<AnyEntityPermission>,
     ) -> Result<Favorite, FavoritesError> {
         let entity = receipt.entity();
         self.calls
@@ -133,7 +133,7 @@ impl FavoritesAuthorizer for FakeAuthorizer {
         &self,
         actor: &FavoritesMutationActor,
         entity: &Entity<'static>,
-    ) -> Result<EntityAccessReceipt<ViewAccessLevel>, FavoritesError> {
+    ) -> Result<EntityAccessReceipt<AnyEntityPermission>, FavoritesError> {
         self.calls
             .lock()
             .expect("calls lock poisoned")
@@ -147,7 +147,7 @@ impl FavoritesAuthorizer for FakeAuthorizer {
             return Err(FavoritesError::Unauthorized);
         }
         Ok(
-            EntityAccessReceipt::<ViewAccessLevel>::dangerously_assert_authenticated_user(
+            EntityAccessReceipt::<AnyEntityPermission>::dangerously_assert_authenticated_user(
                 actor.user_id.clone(),
                 &entity.entity_id,
                 entity.entity_type,
@@ -250,6 +250,7 @@ async fn every_supported_interactive_entity_can_be_added_and_removed() {
         EntityType::ForeignEntity,
         EntityType::CrmCompany,
         EntityType::CrmContact,
+        EntityType::AgentSession,
     ] {
         let favorites = Arc::new(FakeFavoritesService::default());
         let authorizer = Arc::new(FakeAuthorizer::default());
