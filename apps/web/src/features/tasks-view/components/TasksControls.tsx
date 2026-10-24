@@ -93,6 +93,7 @@ function DesktopTasksControls() {
             onOpenChange={handleMenuOpenChange('filters')}
             triggerRef={(element) => (filterTrigger = element)}
             isSelected={filters.isSelected}
+            selectedIds={filters.selectedIds}
             onSelectionChange={filters.setSelected}
             onClear={filters.clear}
             aiFilter={{

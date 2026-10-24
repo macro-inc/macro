@@ -60,7 +60,7 @@ afterEach(() => {
 });
 
 it.each(['pointer', 'keyboard'])(
-  'keeps the Drive Type submenu mounted while Shift-selecting and deselecting file types (%s)',
+  'keeps the Drive Type submenu mounted while toggling file types, then adds and closes (%s)',
   async (input) => {
     const [value, setValue] = createSignal<DriveState>({
       location: { kind: 'tab', tab: 'owned' },
@@ -104,14 +104,13 @@ it.each(['pointer', 'keyboard'])(
     const select = (element: HTMLElement) => {
       if (input === 'keyboard') {
         element.focus();
-        fireEvent.keyDown(element, { key: 'Enter', shiftKey: true });
+        fireEvent.keyDown(element, { key: ' ' });
       } else
         fireEvent(
-          element,
+          element.querySelector<HTMLElement>('[data-multiselect-checkbox]')!,
           new MouseEvent('pointerup', {
             button: 0,
             bubbles: true,
-            shiftKey: true,
           })
         );
     };
@@ -131,6 +130,6 @@ it.each(['pointer', 'keyboard'])(
     pdf.focus();
     fireEvent.keyDown(pdf, { key: 'Enter' });
     await waitFor(() => expect(pdf.isConnected).toBe(false));
-    expect(value().facets.type).toBeUndefined();
+    expect(value().facets.type).toEqual(['file-pdf']);
   }
 );

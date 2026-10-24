@@ -196,6 +196,9 @@ ownership. Cancel, logout, and the ten-minute timeout retire pending callbacks.
   names; completed step snapshots come from the shared fold of the tool receipt.
   Session `ExecuteCode` activity uses the same Calling N tools peek window as
   ordinary consecutive tool calls.
+- Compose multiselect filters with `Dropdown.MultiSelectItem` and the shared
+  searchable filters; follow [multiselect dropdowns](../../docs/agent-guide/ui-conventions.md#multiselect-dropdowns)
+  for checkbox, row, Only, keyboard, and touch behavior.
 - All API/network calls live in service-clients.
 - Open projects through `openProject` (`features/projects/open-project.ts`): it
   retargets an already-open project split to the section or comment in place.

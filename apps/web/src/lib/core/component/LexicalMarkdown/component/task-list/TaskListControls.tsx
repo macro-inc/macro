@@ -383,6 +383,7 @@ function TaskListBar(props: {
             onOpenChange={setMenuOpen}
             groups={filterGroups()}
             isSelected={isSelected}
+            selectedIds={(group) => props.settings().filters[group]}
             onSelectionChange={setFilterValue}
             onClear={() =>
               props.update({

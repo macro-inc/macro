@@ -90,6 +90,30 @@ at the top-right and bottom-left corners. Light themes keep a soft highlight
 through those corners so they are only slightly dimmer. The iOS app also uses shared
 [glass press feedback](navigation.md#mobile-glass-feedback).
 
+## Multiselect dropdowns
+
+Use `Dropdown.MultiSelectItem` for filter options, not independent settings.
+Clicking the left checkbox toggles only that option and keeps the menu open.
+Clicking the rest of the row adds the option and closes the whole dropdown;
+clicking an already-selected row leaves it selected. Shift-click or **Only**
+replaces that group's selection with the option and keeps the menu open, even
+when it is already the sole selection. Other filter groups stay unchanged.
+Only also clears persisted selections missing from the current options. Dynamic
+`ListFilterDropdown` callers supply `selectedIds` so hidden values remain known;
+ordinary checkbox and row actions preserve those values.
+
+Arrow keys navigate. Space toggles a focused menu row; Enter adds and closes;
+Shift+Enter selects only that option without closing. Searchable filters retain
+input focus and use Enter/Shift+Enter on the highlighted search result.
+**Only** sits at the right on hover or keyboard highlight and remains visible on
+touch devices. Touch rows and checkbox hit areas use the shared touch sizing.
+Existing mobile filter drawers retain their toggle-and-stay-open behavior.
+Inbox selectors retain their explicit **Only**/**All** reset action.
+
+| Pointer dropdown | Touch dropdown |
+| --- | --- |
+| ![Only appears on the highlighted row](assets/multiselect-dropdown-desktop.png) | ![Only stays visible on touch rows](assets/multiselect-dropdown-touch.png) |
+
 ## Mobile filters
 
 Adjacent checked options in a filter section share one continuous selection
