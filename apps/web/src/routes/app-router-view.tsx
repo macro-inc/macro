@@ -76,6 +76,7 @@ import {
   LoginPage,
   LoginPopupSuccess,
   OnboardingPage,
+  ProjectPortalRoutePage,
   PublicBookingRoutePage,
   SignupPage,
   TaskSlugPage,
@@ -133,6 +134,7 @@ import {
   onboardingRoute,
   prDetailRoute,
   projectDetailRoute,
+  projectPortalRoute,
   projectTaskRoute,
   publicBookingRoute,
   publicRoute,
@@ -158,6 +160,7 @@ import {
   FocusedShell,
   withFormRespondShell,
   withMeetingShell,
+  withProjectPortalShell,
 } from './shells';
 
 const { Router, Route } = SplitRouter;
@@ -221,6 +224,10 @@ export function AppRouterView() {
       <Route
         definition={formRespondRoute}
         component={withFormRespondShell(FormRespondRoutePage)}
+      />
+      <Route
+        definition={projectPortalRoute}
+        component={withProjectPortalShell(ProjectPortalRoutePage)}
       />
       <Route
         definition={meetRoute}
