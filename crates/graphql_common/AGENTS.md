@@ -30,7 +30,8 @@ schema types (entity type, owner type, property filters).
   `model-entity`, `model_owner`, `models_properties`.
 - Used by: every `graphql_*` domain adapter crate (favorite, initiative,
   calendar, email, notification, soup_filter_input, entity_mutation,
-  properties, crm, soup, channel, work_feed, activity) and `complete_graph`
+  properties, crm, soup, channel, work_feed, notification_inbox, activity) and
+  `complete_graph`
   (the schema that composes them all).
 
 ## Recipes

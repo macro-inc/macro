@@ -103,7 +103,8 @@ export function useRequestToJoinCalendarEventMutation(
 }
 
 export type RespondToCalendarJoinRequestArgs = {
-  request: CalendarJoinRequest;
+  /** The request, or just its ids, as a notification carries them. */
+  request: Pick<CalendarJoinRequest, 'id' | 'eventId'>;
   decision: CalendarJoinRequestDecision;
 };
 

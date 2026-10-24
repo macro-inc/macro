@@ -1,6 +1,7 @@
 //! Composition of the domain GraphQL adapter crates (`graphql_soup`,
 //! `graphql_channel`, `graphql_properties`, `graphql_notification`, `graphql_email`,
-//! `graphql_favorite`, `graphql_entity_mutation`, `graphql_work_feed`) into the
+//! `graphql_favorite`, `graphql_entity_mutation`, `graphql_work_feed`,
+//! `graphql_notification_inbox`) into the
 //! complete schema served by
 //! `document_storage_service` and exported as SDL.
 #![deny(missing_docs)]
@@ -60,6 +61,9 @@ pub use graphql_notification::{
     NotificationMutationRoot, NotificationMutationService, SoupNotificationEdgeReader,
     UpdateNotificationsForEntityInput, UpdateNotificationsInput, entity_notifications_loader,
 };
+pub use graphql_notification_inbox::{
+    NotificationInboxGraphqlContext, NotificationInboxGraphqlService,
+};
 pub use graphql_permission::{
     EntityPermissionEdgeReader, EntityPermissionLoader, GraphqlAccessLevelPermission,
     GraphqlChannelParticipantRole, GraphqlChannelRolePermission, GraphqlChannelViewOnlyPermission,
@@ -71,10 +75,7 @@ pub use graphql_properties::{
     PropertiesEntityPropertyReader, PropertiesEntityPropertyWriter, PropertiesMutationRoot,
     entity_properties_loader,
 };
-pub use graphql_work_feed::{
-    EntityAccessWorkFeedViewers, WorkFeedGraphqlContext, WorkFeedGraphqlService,
-    WorkFeedViewerResolver,
-};
+pub use graphql_work_feed::{WorkFeedGraphqlContext, WorkFeedGraphqlService};
 pub use realtime::{AgentSessionLogSubscriptions, agent_session_log_subscriptions};
 pub use schema::{
     EmailThreadInput, SchemaOnlySoupSchema, SchemaOnlyState, SharedSoupSchema, SoupQueryRoot,

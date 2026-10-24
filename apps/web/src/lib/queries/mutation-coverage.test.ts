@@ -54,6 +54,12 @@ const policies = {
     'authoritative: exact affected notification IDs required for undo',
   UndoWorkFeedItemsDone:
     'authoritative: the server returns the restored feed entries',
+  MarkNotificationInboxRowsDone:
+    'custom: inbox rows stay hidden until the server removes them',
+  UndoNotificationInboxRowsDone:
+    'authoritative: the server returns the restored inbox entries',
+  MarkNotificationInboxRowsSeen:
+    'custom: inbox rows read as seen until the server returns their entries',
   MoveEntities:
     'authoritative: destination authorization and membership refresh',
   UpdateEntitySharePolicies:

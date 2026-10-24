@@ -1,33 +1,34 @@
 //! The work feed use cases: list a page, recompute known items, mark items
-//! done, and undo a done.
+//! done, and undo a done. Paging, refill, notification loading and
+//! acknowledgment are the shared feed layer's; this service builds Home's
+//! items from what it loads.
 
 use std::collections::{HashMap, HashSet};
 
-use model_entity::{Entity, EntityType};
+use attention_feed::domain::{
+    acknowledge::Acknowledger,
+    models::{
+        Acknowledgment, CandidateKeying, CandidateRequest, DoneReceipt, EntityFacts, FeedError,
+        FeedKey, FeedViewer, Loaded, counts_as_unseen,
+    },
+    ports::{CandidateSource, FeedMail, FeedNotifications, FeedSignals},
+    reader::FeedReader,
+};
+use model_entity::EntityType;
 use model_notifications::NotifEvent;
 use rootcause::Report;
 use uuid::Uuid;
 
 use super::{
     models::{
-        FeedNotification, WorkFeedChange, WorkFeedDoneOutcome, WorkFeedDoneReceipt,
-        WorkFeedDoneTarget, WorkFeedEntry, WorkFeedError, WorkFeedItem, WorkFeedItemKey,
+        WorkFeedChange, WorkFeedDoneOutcome, WorkFeedDoneTarget, WorkFeedEntry, WorkFeedItem,
         WorkFeedItemState, WorkFeedPage, WorkFeedPrimaryReason, WorkFeedQuery, WorkFeedScope,
-        WorkFeedViewer, counts_as_unseen,
     },
-    policy,
-    ports::{
-        EntityFacts, SourceItem, SourceRequest, WorkFeedMail, WorkFeedNotifications,
-        WorkFeedSignals, WorkFeedSource,
-    },
-    stacking,
+    policy, stacking,
 };
 
 #[cfg(test)]
 mod test;
-
-/// Most candidate keys recomputed per source request.
-const RECOMPUTE_CHUNK: usize = 200;
 
 /// The work feed's use cases.
 pub trait WorkFeedService: Send + Sync + 'static {
@@ -37,18 +38,18 @@ pub trait WorkFeedService: Send + Sync + 'static {
     /// One page of the viewer's feed, newest first.
     fn page(
         &self,
-        viewer: WorkFeedViewer,
+        viewer: FeedViewer,
         query: WorkFeedQuery,
-    ) -> impl Future<Output = Result<WorkFeedPage<Self::Entity>, WorkFeedError>> + Send;
+    ) -> impl Future<Output = Result<WorkFeedPage<Self::Entity>, FeedError>> + Send;
 
     /// The current membership and content of known items in one feed: each
     /// key comes back upserted with its placement, or removed.
     fn recompute(
         &self,
-        viewer: WorkFeedViewer,
+        viewer: FeedViewer,
         scope: WorkFeedScope,
-        keys: Vec<WorkFeedItemKey>,
-    ) -> impl Future<Output = Result<Vec<WorkFeedChange<Self::Entity>>, WorkFeedError>> + Send;
+        keys: Vec<FeedKey>,
+    ) -> impl Future<Output = Result<Vec<WorkFeedChange<Self::Entity>>, FeedError>> + Send;
 
     /// Acknowledge the attention the caller observed on each item: its
     /// notifications move to done and its inbox email is archived. Own work
@@ -57,36 +58,39 @@ pub trait WorkFeedService: Send + Sync + 'static {
     /// and pull requests are not completed.
     fn mark_done(
         &self,
-        viewer: WorkFeedViewer,
+        viewer: FeedViewer,
         targets: Vec<WorkFeedDoneTarget>,
-    ) -> impl Future<Output = Result<WorkFeedDoneOutcome, WorkFeedError>> + Send;
+    ) -> impl Future<Output = Result<WorkFeedDoneOutcome, FeedError>> + Send;
 
     /// Reverse exactly what one mark-done changed, then recompute its items
     /// for the caller's feed.
     fn undo_done(
         &self,
-        viewer: WorkFeedViewer,
+        viewer: FeedViewer,
         scope: WorkFeedScope,
-        receipt: WorkFeedDoneReceipt,
-    ) -> impl Future<Output = Result<Vec<WorkFeedChange<Self::Entity>>, WorkFeedError>> + Send;
+        receipt: DoneReceipt,
+    ) -> impl Future<Output = Result<Vec<WorkFeedChange<Self::Entity>>, FeedError>> + Send;
 }
 
-/// The work feed service over its ports.
+/// The work feed service over the shared feed layer.
 pub struct WorkFeedServiceImpl<S, N, M, G> {
-    source: S,
-    notifications: N,
-    mail: M,
-    signals: G,
+    reader: FeedReader<S, N>,
+    acknowledger: Acknowledger<N, M, G>,
 }
 
-impl<S, N, M, G> WorkFeedServiceImpl<S, N, M, G> {
-    /// Create the service from its ports.
+impl<S, N, M, G> WorkFeedServiceImpl<S, N, M, G>
+where
+    S: CandidateSource,
+    N: FeedNotifications + Clone,
+    M: FeedMail,
+    G: FeedSignals,
+{
+    /// Create the service from its ports; the reader and the acknowledger
+    /// share the notification port.
     pub fn new(source: S, notifications: N, mail: M, signals: G) -> Self {
         Self {
-            source,
-            notifications,
-            mail,
-            signals,
+            reader: FeedReader::new(source, notifications.clone()),
+            acknowledger: Acknowledger::new(notifications, mail, signals),
         }
     }
 }
@@ -97,43 +101,40 @@ struct Assembled<E> {
     facts: EntityFacts,
 }
 
-/// The notifications an item's scope is drawn from: a thread shares its
-/// channel's notifications, every other item reads its own entity's.
-fn notification_source(item: &SourceItem<impl Sized>) -> Option<Entity<'static>> {
-    match item.key.entity_type {
-        EntityType::ChannelMessage => item
-            .facts
-            .thread_channel
-            .map(|channel| EntityType::Channel.with_entity_string(channel.to_string())),
-        _ => Some(item.key.clone()),
+/// The candidate request for one feed scope. The reader sets the limit,
+/// cursor and key restriction per read.
+fn candidate_request(viewer: &FeedViewer, scope: &WorkFeedScope) -> CandidateRequest {
+    CandidateRequest {
+        viewer: viewer.clone(),
+        keying: CandidateKeying::ThreadScoped,
+        own_work: scope.mode.own_work(),
+        types: policy::candidate_types(&scope.types),
+        filter: policy::signal_filter(&viewer.user, scope.include_snippets),
+        limit: 0,
+        after: None,
+        only: None,
     }
 }
 
-/// Build one item from its candidate and its source's active notifications.
-/// Returns `None` when, after scoping, the item has no reason left.
-fn assemble_item<E>(
-    item: SourceItem<E>,
-    loaded: &HashMap<Entity<'static>, Vec<FeedNotification>>,
-) -> Option<Assembled<E>> {
-    let source = notification_source(&item);
-    let available = source
-        .as_ref()
-        .and_then(|source| loaded.get(source))
-        .map(Vec::as_slice)
-        .unwrap_or_default();
+/// Build one item from its loaded candidate. Returns `None` when, after
+/// scoping, the item has no reason left.
+fn assemble_item<E>(loaded: Loaded<E>) -> Option<Assembled<E>> {
+    let Loaded {
+        candidate: item,
+        notifications: available,
+    } = loaded;
     let mut scoped = match item.key.entity_type {
-        EntityType::Channel => stacking::scope_channel(available),
+        EntityType::Channel => stacking::scope_channel(&available),
         EntityType::ChannelMessage => {
-            stacking::scope_channel_thread(available, item.key.entity_id.as_ref())
+            stacking::scope_channel_thread(&available, item.key.entity_id.as_ref())
         }
-        _ => available.to_vec(),
+        _ => available,
     };
     // An email's attention lasts while it is in the inbox: archive is mail's
     // own done, whatever its notifications' states.
     if item.facts.mail.is_some_and(|mail| !mail.inbox_visible) {
         scoped.clear();
     }
-    stacking::sort_newest_first(&mut scoped);
     if scoped.is_empty() && item.touched_at.is_none() {
         return None;
     }
@@ -164,7 +165,7 @@ fn assemble_item<E>(
         entry: WorkFeedEntry {
             sort_at: item.sort_at,
             item: WorkFeedItem {
-                key: WorkFeedItemKey::new(item.key),
+                key: FeedKey::new(item.key),
                 entity: item.entity,
                 state: if unseen {
                     WorkFeedItemState::Unseen
@@ -184,70 +185,30 @@ fn assemble_item<E>(
 
 impl<S, N, M, G> WorkFeedServiceImpl<S, N, M, G>
 where
-    S: WorkFeedSource,
-    N: WorkFeedNotifications,
-    M: WorkFeedMail,
-    G: WorkFeedSignals,
+    S: CandidateSource,
+    N: FeedNotifications,
+    M: FeedMail,
+    G: FeedSignals,
 {
-    /// Load the candidates' notifications and build their items, in order.
-    async fn assemble(
-        &self,
-        viewer: &WorkFeedViewer,
-        items: Vec<SourceItem<S::Entity>>,
-    ) -> Result<Vec<Assembled<S::Entity>>, Report> {
-        let mut sources = Vec::new();
-        let mut seen = HashSet::new();
-        for source in items.iter().filter_map(notification_source) {
-            if seen.insert(source.clone()) {
-                sources.push(source);
-            }
-        }
-        let loaded = if sources.is_empty() {
-            HashMap::new()
-        } else {
-            self.notifications
-                .active(viewer.user.clone(), sources)
-                .await?
-        };
-        Ok(items
-            .into_iter()
-            .filter_map(|item| assemble_item(item, &loaded))
-            .collect())
-    }
-
     /// Current items for `keys` in `scope`, keyed by item.
     async fn current(
         &self,
-        viewer: &WorkFeedViewer,
+        viewer: &FeedViewer,
         scope: &WorkFeedScope,
-        keys: &[WorkFeedItemKey],
-    ) -> Result<HashMap<WorkFeedItemKey, Assembled<S::Entity>>, Report> {
-        let filter = policy::signal_filter(&viewer.user, scope.include_snippets);
-        let types = policy::candidate_types(&scope.types);
-        let mut current = HashMap::with_capacity(keys.len());
-        for chunk in keys.chunks(RECOMPUTE_CHUNK) {
-            let page = self
-                .source
-                .page(SourceRequest {
-                    viewer: viewer.clone(),
-                    mode: scope.mode,
-                    types: types.clone(),
-                    filter: filter.clone(),
-                    limit: u16::try_from(chunk.len()).unwrap_or(u16::MAX),
-                    after: None,
-                    only: Some(chunk.iter().map(|key| key.entity().clone()).collect()),
-                })
-                .await?;
-            for assembled in self.assemble(viewer, page.items).await? {
-                current.insert(assembled.entry.item.key.clone(), assembled);
-            }
-        }
-        Ok(current)
+        keys: &[FeedKey],
+    ) -> Result<HashMap<FeedKey, Assembled<S::Entity>>, Report> {
+        Ok(self
+            .reader
+            .current(candidate_request(viewer, scope), keys)
+            .await?
+            .into_iter()
+            .filter_map(|(key, loaded)| assemble_item(loaded).map(|assembled| (key, assembled)))
+            .collect())
     }
 }
 
 /// Keys deduplicated in first-seen order.
-fn unique_keys(keys: impl IntoIterator<Item = WorkFeedItemKey>) -> Vec<WorkFeedItemKey> {
+fn unique_keys(keys: impl IntoIterator<Item = FeedKey>) -> Vec<FeedKey> {
     let mut seen = HashSet::new();
     keys.into_iter()
         .filter(|key| seen.insert(key.clone()))
@@ -255,7 +216,7 @@ fn unique_keys(keys: impl IntoIterator<Item = WorkFeedItemKey>) -> Vec<WorkFeedI
 }
 
 /// An email thread item's thread id.
-fn email_thread_id(key: &WorkFeedItemKey) -> Option<Uuid> {
+fn email_thread_id(key: &FeedKey) -> Option<Uuid> {
     (key.entity().entity_type == EntityType::EmailThread)
         .then(|| Uuid::parse_str(key.entity().entity_id.as_ref()).ok())
         .flatten()
@@ -263,39 +224,32 @@ fn email_thread_id(key: &WorkFeedItemKey) -> Option<Uuid> {
 
 impl<S, N, M, G> WorkFeedService for WorkFeedServiceImpl<S, N, M, G>
 where
-    S: WorkFeedSource,
-    N: WorkFeedNotifications,
-    M: WorkFeedMail,
-    G: WorkFeedSignals,
+    S: CandidateSource,
+    N: FeedNotifications,
+    M: FeedMail,
+    G: FeedSignals,
 {
     type Entity = S::Entity;
 
     #[tracing::instrument(err, skip(self, viewer), fields(user = %viewer.user))]
     async fn page(
         &self,
-        viewer: WorkFeedViewer,
+        viewer: FeedViewer,
         query: WorkFeedQuery,
-    ) -> Result<WorkFeedPage<Self::Entity>, WorkFeedError> {
+    ) -> Result<WorkFeedPage<Self::Entity>, FeedError> {
+        let request = CandidateRequest {
+            limit: query.limit,
+            after: query.after,
+            ..candidate_request(&viewer, &query.scope)
+        };
         let page = self
-            .source
-            .page(SourceRequest {
-                viewer: viewer.clone(),
-                mode: query.scope.mode,
-                types: policy::candidate_types(&query.scope.types),
-                filter: policy::signal_filter(&viewer.user, query.scope.include_snippets),
-                limit: query.limit,
-                after: query.after,
-                only: None,
+            .reader
+            .page(request, |loaded| {
+                assemble_item(loaded).map(|assembled| assembled.entry)
             })
             .await?;
-        let entries = self
-            .assemble(&viewer, page.items)
-            .await?
-            .into_iter()
-            .map(|assembled| assembled.entry)
-            .collect();
         Ok(WorkFeedPage {
-            entries,
+            entries: page.entries,
             next: page.next,
         })
     }
@@ -303,10 +257,10 @@ where
     #[tracing::instrument(err, skip(self, viewer, keys), fields(user = %viewer.user, keys = keys.len()))]
     async fn recompute(
         &self,
-        viewer: WorkFeedViewer,
+        viewer: FeedViewer,
         scope: WorkFeedScope,
-        keys: Vec<WorkFeedItemKey>,
-    ) -> Result<Vec<WorkFeedChange<Self::Entity>>, WorkFeedError> {
+        keys: Vec<FeedKey>,
+    ) -> Result<Vec<WorkFeedChange<Self::Entity>>, FeedError> {
         let keys = unique_keys(keys);
         if keys.is_empty() {
             return Ok(Vec::new());
@@ -324,110 +278,72 @@ where
     #[tracing::instrument(err, skip(self, viewer, targets), fields(user = %viewer.user, targets = targets.len()))]
     async fn mark_done(
         &self,
-        viewer: WorkFeedViewer,
+        viewer: FeedViewer,
         targets: Vec<WorkFeedDoneTarget>,
-    ) -> Result<WorkFeedDoneOutcome, WorkFeedError> {
+    ) -> Result<WorkFeedDoneOutcome, FeedError> {
         let keys = unique_keys(targets.iter().map(|target| target.key.clone()));
         if keys.is_empty() {
             return Ok(WorkFeedDoneOutcome {
                 items: Vec::new(),
-                receipt: WorkFeedDoneReceipt::default(),
+                receipt: DoneReceipt::default(),
             });
         }
         // Evaluate each item in every feed's scope, whatever feed the caller
         // was looking at, so done acknowledges what they observed.
-        let current = self
+        let mut current = self
             .current(&viewer, &WorkFeedScope::everything(), &keys)
             .await?;
 
-        let mut notification_ids = Vec::new();
-        let mut archive = Vec::new();
+        let mut acknowledgments = Vec::with_capacity(keys.len());
         let mut planned = HashSet::new();
-        for target in &targets {
+        for target in targets {
             if !planned.insert(target.key.clone()) {
                 continue;
             }
-            let Some(assembled) = current.get(&target.key) else {
-                // Already gone from every feed: nothing left to acknowledge.
-                continue;
-            };
-            let item = &assembled.entry.item;
-            let observed = target.revision.unwrap_or_else(|| item.revision());
-            if let Some(through) = observed.attention_through {
-                notification_ids.extend(
-                    item.notifications
-                        .iter()
-                        .filter(|notification| notification.created_at <= through)
-                        .map(|notification| notification.notification_id),
-                );
-            }
-            if assembled.facts.mail.is_some_and(|mail| mail.inbox_visible)
-                && let Some(thread_id) = email_thread_id(&target.key)
-            {
-                archive.push(thread_id);
-            }
-        }
-
-        let user = viewer.user.clone();
-        let changed_notifications = if notification_ids.is_empty() {
-            Vec::new()
-        } else {
-            self.notifications
-                .set_done(user.clone(), notification_ids, true)
-                .await?
-        };
-        // Archiving is best effort: the thread's notifications are already
-        // done, which removes its attention on their own.
-        let mut archived = Vec::new();
-        for thread_id in archive {
-            match self.mail.set_archived(user.clone(), thread_id, true).await {
-                Ok(()) => archived.push(thread_id),
-                Err(error) => {
-                    tracing::warn!(error = ?error, %thread_id, "failed to archive work feed email")
+            // An item already gone from every feed has nothing left to
+            // acknowledge, but is still reported done.
+            let acknowledgment = match current.remove(&target.key) {
+                Some(assembled) => {
+                    let item = &assembled.entry.item;
+                    let observed = target.revision.unwrap_or_else(|| item.revision());
+                    Acknowledgment {
+                        notification_ids: observed.acknowledged(&item.notifications),
+                        archive_thread: assembled
+                            .facts
+                            .mail
+                            .is_some_and(|mail| mail.inbox_visible)
+                            .then(|| email_thread_id(&target.key))
+                            .flatten(),
+                        key: target.key,
+                    }
                 }
-            }
+                None => Acknowledgment {
+                    key: target.key,
+                    notification_ids: Vec::new(),
+                    archive_thread: None,
+                },
+            };
+            acknowledgments.push(acknowledgment);
         }
 
-        self.signals
-            .items_changed(user, keys.iter().map(|key| key.entity().clone()).collect())
-            .await;
-
+        let receipt = self
+            .acknowledger
+            .acknowledge(&viewer, acknowledgments)
+            .await?;
         Ok(WorkFeedDoneOutcome {
-            receipt: WorkFeedDoneReceipt {
-                items: keys.iter().map(WorkFeedItemKey::id).collect(),
-                notification_ids: changed_notifications,
-                archived_threads: archived,
-            },
             items: keys,
+            receipt,
         })
     }
 
     #[tracing::instrument(err, skip(self, viewer, receipt), fields(user = %viewer.user))]
     async fn undo_done(
         &self,
-        viewer: WorkFeedViewer,
+        viewer: FeedViewer,
         scope: WorkFeedScope,
-        receipt: WorkFeedDoneReceipt,
-    ) -> Result<Vec<WorkFeedChange<Self::Entity>>, WorkFeedError> {
-        let user = viewer.user.clone();
-        if !receipt.notification_ids.is_empty() {
-            self.notifications
-                .set_done(user.clone(), receipt.notification_ids.clone(), false)
-                .await?;
-        }
-        for thread_id in &receipt.archived_threads {
-            if let Err(error) = self
-                .mail
-                .set_archived(user.clone(), *thread_id, false)
-                .await
-            {
-                tracing::warn!(error = ?error, %thread_id, "failed to unarchive work feed email");
-            }
-        }
-        let keys = receipt.item_keys();
-        self.signals
-            .items_changed(user, keys.iter().map(|key| key.entity().clone()).collect())
-            .await;
+        receipt: DoneReceipt,
+    ) -> Result<Vec<WorkFeedChange<Self::Entity>>, FeedError> {
+        let keys = self.acknowledger.undo(&viewer, &receipt).await?;
         self.recompute(viewer, scope, keys).await
     }
 }

@@ -133,6 +133,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/companies/<company-or-contact>/<uuid>` | Customers with a company or contact opened inline, keeping its list's `sN.crm.tab`; a record tab other than Overview adds `/<team-emails-files-tasks-or-calls>`. On desktop, `/app/company/<uuid>` and `/app/contact/<uuid>` redirect here, a `comment_id` moving to `sN.crm-record.commentId`; touch devices keep those standalone pages |
 | `/app/companies/pipeline/<uuid>` | Customers on a pipeline; `/<company-or-contact>/<uuid>` after it opens a record from the pipeline. `/app/pipeline/<uuid>` redirects here |
 | `/app/activity` | Activity heatmap + feed |
+| `/app/notifications` | Unified Notifications view (`enable-unified-notifications`); redirects to Home when the flag is off |
 | `/app/calendar/<month-or-week-or-day>` | Calendar; the focused event, its occurrence, and the locator range use `sN.calendar.*` |
 | `/app/scheduling` | Scheduling workspace: booking links, availability, bookings, insights, and booking page |
 | `/app/<document-type>/<uuid>` | Legacy document URL (including `md`, `pdf`, `canvas`, `spreadsheet`, and the other Drive document types); redirects to `/app/drive/<document-type>/<uuid>` |
@@ -378,6 +379,10 @@ Showing Scheduling removes its duplicate from More; the choice survives reload.
 Activity appears in Customize sidebar only when the `enable-activity-feed` flag
 is on and, like Scheduling, starts hidden in More (also for existing preferences)
 until enabled on the rail.
+Notifications (bell, `g i`) appears directly below Home only when the
+`enable-unified-notifications` flag is on, and is shown on the rail by default.
+`g i` reaches Home while it is off; with it on, Home answers only `g h`. Its
+unread dot follows Home's unread dot.
 
 - Top: buttons `Create` and `Search`. Clicking `Search` opens a menu
   with `Command Menu` (⌘K on Mac / Ctrl+K elsewhere) and `Search everything`
@@ -385,8 +390,8 @@ until enabled on the rail.
   global search. Hold Shift while selecting `Search everything` to open it in a
   new split, including when Search is already active. This left-click menu shares
   its surface and item styling with the sidebar right-click menus.
-- Nav: `Home`, `Drive`, `Email`, `Chat`, `Tasks`, `Calendar`,
-  `Agents`, `Customers`. Calendar and Customers appear only when
+- Nav: `Home`, `Notifications`, `Drive`, `Email`, `Chat`, `Tasks`, `Calendar`,
+  `Agents`, `Customers`. Notifications, Calendar and Customers appear only when
   their features are enabled.
 - Bottom: `Settings` (`Ctrl ;`) — a gear with the signed-in account's profile
   photo as a badge in its corner. It opens Settings directly in the active

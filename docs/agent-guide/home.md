@@ -205,6 +205,8 @@ On mobile, the dock uses the bell icon and **Notifications**
 label; Home is desktop-only. Notifications has no merged own-activity feed or
 chat starting pane. Opening a row navigates to its entity. On iOS, rows fade
 underneath the filters and status bar using the shared top edge gradient.
+With `enable-unified-notifications` on, the bell opens the unified
+Notifications view instead (see [notifications.md](notifications.md)).
 
 Notifications have three lifecycle states: `unseen`, `seen`, and `done`. Active means
 unseen or seen. Viewing must not reopen a done notification; undoing done (`Ctrl+Z`

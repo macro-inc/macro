@@ -2,6 +2,7 @@ import { LIST_VIEW_PATHS } from '@app/constants/list-views';
 import { calendarPath } from '@app/features/calendar-view/calendar-url';
 import type { SidebarItem } from '@components/app/app-sidebar/sidebar';
 import { TOKENS } from '@core/hotkey/tokens';
+import BellIcon from '@phosphor/bell.svg';
 import BuildingsIcon from '@phosphor/buildings.svg';
 import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
 import CalendarCheckIcon from '@phosphor/calendar-check.svg';
@@ -14,6 +15,7 @@ import ListChecksIcon from '@phosphor/list-checks.svg';
 import PhoneCallIcon from '@phosphor/phone-call.svg';
 import PulseIcon from '@phosphor/pulse.svg';
 import AgentIcon from '@phosphor/sparkle.svg';
+import BellFillIcon from '@phosphor-fill/bell-fill.svg';
 import BuildingsFillIcon from '@phosphor-fill/buildings-fill.svg';
 import CalendarBlankFillIcon from '@phosphor-fill/calendar-blank-fill.svg';
 import CalendarCheckFillIcon from '@phosphor-fill/calendar-check-fill.svg';
@@ -68,6 +70,15 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
     iconActive: HouseFillIcon,
     hotkey: 'h',
     hotkeyToken: TOKENS.sidebar.goTo.home,
+  },
+  {
+    id: 'notifications',
+    label: 'Notifications',
+    href: '/notifications',
+    icon: BellIcon,
+    iconActive: BellFillIcon,
+    hotkey: 'i',
+    hotkeyToken: TOKENS.sidebar.goTo.notifications,
   },
   {
     id: 'documents',
@@ -170,6 +181,7 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
 
 /** Feature flag gates for sidebar destinations. */
 export type NavItemGates = {
+  showNotifications: boolean;
   showCalendar: boolean;
   showScheduling: boolean;
   showCustomers: boolean;
@@ -185,6 +197,7 @@ export const isNavItemAvailable = (
   item: SidebarNextNavItem,
   gates: NavItemGates
 ): boolean => {
+  if (item.id === 'notifications') return gates.showNotifications;
   if (item.id === 'calendar') return gates.showCalendar;
   if (item.id === 'booking-links') return gates.showScheduling;
   if (item.id === 'companies') return gates.showCustomers;

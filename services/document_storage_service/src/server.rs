@@ -2065,36 +2065,62 @@ pub async fn run() -> anyhow::Result<()> {
         entity_access_service.clone(),
     ));
 
-    // Home's work feed: Soup candidates over the replica, notification
-    // acknowledgement on the primary, and live updates recomputed from the
-    // viewer's notification, activity and Soup streams. Done publishes a
-    // viewer-addressed Soup patch so the viewer's other sessions recompute
-    // too: GraphQL notification writes publish no realtime update.
-    let graphql_work_feed_context = complete_graph::WorkFeedGraphqlContext::new(
-        work_feed::domain::service::WorkFeedServiceImpl::new(
-            work_feed::outbound::source::SoupWorkFeedSource::new(
-                soup_service.clone(),
-                Arc::new(email_service.clone()),
-            ),
-            work_feed::outbound::notifications::ReaderWorkFeedNotifications::new(
-                graphql_notification_reader.clone(),
-            ),
-            work_feed::outbound::mail::EmailWorkFeedMail::new(Arc::new(email_service.clone())),
-            work_feed::outbound::signals::SoupRealtimeWorkFeedSignals::new(
-                KafkaSoupRealtimePublisher::new(macro_event_broker.clone()),
-            ),
-        ),
-        work_feed::outbound::triggers::RealtimeWorkFeedTriggers::new(
+    // Attention feeds (Home's work feed and the notifications inbox) share
+    // one feed layer and these adapters: Soup
+    // candidates over the replica, notification acknowledgement on the
+    // primary, and live updates recomputed from the viewer's notification,
+    // activity and Soup streams. Done publishes a viewer-addressed Soup patch
+    // so the viewer's other sessions recompute too: GraphQL notification
+    // writes publish no realtime update.
+    let feed_triggers: Arc<dyn attention_feed::domain::ports::FeedTriggers> = Arc::new(
+        attention_feed::outbound::triggers::RealtimeFeedTriggers::new(
             websocket_notification_consumer_service.clone(),
             activity_realtime_service.clone(),
             soup_realtime_service.clone(),
         ),
-        complete_graph::EntityAccessWorkFeedViewers(entity_access_service.clone()),
+    );
+    let feed_viewers: Arc<dyn attention_feed::inbound::viewers::FeedViewerResolver> = Arc::new(
+        attention_feed::inbound::viewers::EntityAccessFeedViewers(entity_access_service.clone()),
+    );
+    let graphql_work_feed_context = complete_graph::WorkFeedGraphqlContext::new(
+        work_feed::domain::service::WorkFeedServiceImpl::new(
+            attention_feed::outbound::soup::SoupCandidateSource::new(
+                soup_service.clone(),
+                Arc::new(email_service.clone()),
+            ),
+            attention_feed::outbound::notifications::ReaderFeedNotifications::new(
+                graphql_notification_reader.clone(),
+            ),
+            attention_feed::outbound::mail::EmailFeedMail::new(Arc::new(email_service.clone())),
+            attention_feed::outbound::signals::SoupRealtimeFeedSignals::new(
+                KafkaSoupRealtimePublisher::new(macro_event_broker.clone()),
+            ),
+        ),
+        feed_triggers.clone(),
+        feed_viewers.clone(),
+    );
+    let graphql_notification_inbox_context = complete_graph::NotificationInboxGraphqlContext::new(
+        notification_inbox::domain::service::NotificationInboxServiceImpl::new(
+            attention_feed::outbound::soup::SoupCandidateSource::new(
+                soup_service.clone(),
+                Arc::new(email_service.clone()),
+            ),
+            attention_feed::outbound::notifications::ReaderFeedNotifications::new(
+                graphql_notification_reader.clone(),
+            ),
+            attention_feed::outbound::mail::EmailFeedMail::new(Arc::new(email_service.clone())),
+            attention_feed::outbound::signals::SoupRealtimeFeedSignals::new(
+                KafkaSoupRealtimePublisher::new(macro_event_broker.clone()),
+            ),
+        ),
+        feed_triggers,
+        feed_viewers,
     );
 
     let api_context = ApiContext {
         dictation_state,
         graphql_work_feed_context,
+        graphql_notification_inbox_context,
         contacts_ingress: contacts_ingress.clone(),
         soup_router_state: SoupRouterState::from_arc(
             soup_service.clone(),

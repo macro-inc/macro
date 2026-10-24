@@ -30,7 +30,7 @@ model.
   `models_pagination`, `models_properties`.
 - Used by: `ai_tools`, `complete_graph`, `databases_sql`, `graphql_initiative`,
   `graphql_soup`, `models_search`, `search_service`, `skills`, `soup`,
-  `soup_filter_projection`, `work_feed`.
+  `soup_filter_projection`, `attention_feed`.
 
 ## Recipes
 

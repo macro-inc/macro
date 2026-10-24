@@ -1,5 +1,6 @@
 import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-flag';
 import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
+import { useUnifiedNotificationsFlag } from '@app/features/notifications-inbox/use-unified-notifications-flag';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   ENABLE_CALLS,
@@ -17,6 +18,7 @@ import { useSidebarPrefs } from './use-sidebar-prefs';
  * agree about which apps exist.
  */
 export function useNavItemGates(): Accessor<NavItemGates> {
+  const notifications = useUnifiedNotificationsFlag();
   const calendar = useCalendarUiFlag();
   const scheduling = useFeatureFlag(enableCalendarScheduling);
   const crm = useFeatureFlag(enableCrm);
@@ -25,6 +27,7 @@ export function useNavItemGates(): Accessor<NavItemGates> {
   const { prefs } = useSidebarPrefs();
 
   return createMemo(() => ({
+    showNotifications: notifications(),
     showCalendar: calendar(),
     showScheduling: scheduling().enabled,
     showCustomers: crm().enabled,

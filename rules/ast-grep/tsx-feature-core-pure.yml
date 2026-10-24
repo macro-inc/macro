@@ -15,6 +15,7 @@ note: |-
   The shared @core/util/base64 codec, cron helpers, and dateSearch/parseTime parser are pure utilities and may be reused.
   Block-agent names its rendering layers `ui/` and `component/`.
 files:
+  - apps/web/src/features/notifications-inbox/core/**
   - apps/web/src/features/calendar-notes/core/**
   - apps/web/src/features/access-requests/core/**
   - apps/web/src/features/agent-activity/core/**

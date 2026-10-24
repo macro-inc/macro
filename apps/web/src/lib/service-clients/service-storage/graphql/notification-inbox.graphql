@@ -1,0 +1,94 @@
+# One notification inbox entry: the entity a group of notifications is filed
+# under, and its rows newest first.
+fragment NotificationInboxEntryFields on NotificationInboxEntry {
+	groupId
+	sortAt
+	entity {
+		...SoupItemPreviewFields
+	}
+	rows {
+		id
+		rowType
+		threadId
+		revision
+		latestAt
+		actor {
+			kind
+			principalId
+			name
+		}
+		actions {
+			kind
+			targetId
+			url
+		}
+		unseen
+		count
+		notifications(limit: 20) {
+			...SoupNotificationFields
+		}
+	}
+}
+
+fragment NotificationInboxPatchFields on NotificationInboxPatch {
+	__typename
+	... on NotificationInboxEntryUpserted {
+		entry {
+			...NotificationInboxEntryFields
+		}
+	}
+	... on NotificationInboxEntryRemoved {
+		groupId
+	}
+	... on NotificationInboxInvalidated {
+		refresh
+	}
+}
+
+query NotificationInbox($input: NotificationInboxInput) {
+	user {
+		id
+		notificationInbox(input: $input) {
+			entries {
+				...NotificationInboxEntryFields
+			}
+			nextCursor
+		}
+	}
+}
+
+mutation MarkNotificationInboxRowsDone(
+	$input: MarkNotificationInboxRowsDoneInput!
+) {
+	markNotificationInboxRowsDone(input: $input) {
+		rowIds
+		undoToken
+	}
+}
+
+mutation UndoNotificationInboxRowsDone(
+	$input: UndoNotificationInboxRowsDoneInput!
+) {
+	undoNotificationInboxRowsDone(input: $input) {
+		patches {
+			...NotificationInboxPatchFields
+		}
+	}
+}
+
+mutation MarkNotificationInboxRowsSeen(
+	$input: MarkNotificationInboxRowsSeenInput!
+) {
+	markNotificationInboxRowsSeen(input: $input) {
+		patches {
+			...NotificationInboxPatchFields
+		}
+	}
+}
+
+# Entry changes for one inbox scope, applied as batches.
+subscription NotificationInboxUpdates($scope: NotificationInboxScopeInput) {
+	notificationInboxUpdates(scope: $scope) {
+		...NotificationInboxPatchFields
+	}
+}

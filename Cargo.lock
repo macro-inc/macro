@@ -2080,6 +2080,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "attention_feed"
+version = "0.1.0"
+dependencies = [
+ "activity",
+ "async-stream",
+ "base64 0.22.1",
+ "chrono",
+ "cowlike",
+ "email",
+ "entity_access",
+ "futures",
+ "item_filters",
+ "macro_user_id",
+ "model-entity",
+ "model_notifications",
+ "models_soup",
+ "notification",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "soup",
+ "soup_realtime",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "authentication_service"
 version = "0.1.0"
 dependencies = [
@@ -4702,6 +4732,7 @@ dependencies = [
  "apollo-compiler",
  "async-graphql",
  "async-stream",
+ "attention_feed",
  "axum",
  "bot_id",
  "bots",
@@ -4723,6 +4754,7 @@ dependencies = [
  "graphql_favorite",
  "graphql_initiative",
  "graphql_notification",
+ "graphql_notification_inbox",
  "graphql_permission",
  "graphql_properties",
  "graphql_scheduled_action",
@@ -4739,6 +4771,7 @@ dependencies = [
  "models_properties",
  "models_soup",
  "notification",
+ "notification_inbox",
  "predicate-index",
  "rootcause",
  "scheduled_action",
@@ -6405,6 +6438,7 @@ dependencies = [
  "async-graphql",
  "async-graphql-axum",
  "async-trait",
+ "attention_feed",
  "authentication_service_client",
  "aws-sdk-dynamodb",
  "aws-sdk-s3",
@@ -6514,6 +6548,7 @@ dependencies = [
  "models_properties",
  "models_soup",
  "notification",
+ "notification_inbox",
  "opensearch_client",
  "ordered-float",
  "projects",
@@ -9067,6 +9102,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "graphql_notification_inbox"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "async-stream",
+ "attention_feed",
+ "futures",
+ "graphql_common",
+ "graphql_notification",
+ "graphql_soup",
+ "macro_user_id",
+ "notification_inbox",
+ "soup",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
 name = "graphql_permission"
 version = "0.1.0"
 dependencies = [
@@ -9188,22 +9241,14 @@ version = "0.1.0"
 dependencies = [
  "async-graphql",
  "async-stream",
- "chrono",
- "entity_access",
+ "attention_feed",
  "futures",
  "graphql_common",
  "graphql_notification",
  "graphql_soup",
  "macro_user_id",
- "model-entity",
- "model_notifications",
- "notification",
- "rootcause",
- "serde_json",
  "soup",
- "tokio",
  "tracing",
- "uuid",
  "work_feed",
  "workspace-hack",
 ]
@@ -13520,6 +13565,27 @@ dependencies = [
  "serde",
  "serde_json",
  "sqlx",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "notification_inbox"
+version = "0.1.0"
+dependencies = [
+ "attention_feed",
+ "chrono",
+ "filter_ast",
+ "item_filters",
+ "macro_user_id",
+ "model-entity",
+ "model_notifications",
+ "notification",
+ "rootcause",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
  "tracing",
  "uuid",
  "workspace-hack",
@@ -22142,27 +22208,18 @@ dependencies = [
 name = "work_feed"
 version = "0.1.0"
 dependencies = [
- "activity",
- "base64 0.22.1",
+ "attention_feed",
  "chrono",
- "cowlike",
  "document_sub_type",
- "email",
- "entity_access",
  "filter_ast",
- "futures",
  "item_filters",
  "macro_user_id",
  "model-entity",
  "model_notifications",
- "models_soup",
  "notification",
  "rootcause",
  "serde",
  "serde_json",
- "soup",
- "soup_realtime",
- "thiserror 2.0.18",
  "tokio",
  "tracing",
  "uuid",

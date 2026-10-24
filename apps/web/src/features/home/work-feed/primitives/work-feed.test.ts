@@ -1,8 +1,9 @@
 import type { EntityData } from '@entity';
+import { ATTENTION_FEED_RESUBSCRIBE_DELAY_MS } from '@queries/attention-feed/live-attention-feed';
+import { createFakeAttentionFeedClient } from '@queries/attention-feed/tests/fake-client';
 import { createRoot } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { WorkFeedScope } from '../core/work-feed';
-import { createFakeWorkFeedClient } from '../tests/fake-client';
 import {
   documentEntry,
   invalidatedPatch,
@@ -10,7 +11,7 @@ import {
   upsertedPatch,
   workFeedPage,
 } from '../tests/wire';
-import { createWorkFeed, WORK_FEED_RESUBSCRIBE_DELAY_MS } from './work-feed';
+import { createWorkFeed } from './work-feed';
 
 // Row mapping imports allBlocks, which loads every block module; one of them
 // opens a websocket that jsdom rejects after the test ends.
@@ -50,7 +51,7 @@ function setup(
   mutationData: Record<string, unknown> = {},
   options: { cache?: boolean } = {}
 ) {
-  const fake = createFakeWorkFeedClient(mutationData);
+  const fake = createFakeAttentionFeedClient(mutationData);
   const revalidateNotifications = vi.fn(async () => {});
   let feed!: ReturnType<typeof createWorkFeed>;
   const dispose = createRoot((rootDispose) => {
@@ -276,7 +277,7 @@ describe('createWorkFeed', () => {
     await flush();
 
     fake.subscriptions[0].fail('work feed subscription ended');
-    await vi.advanceTimersByTimeAsync(WORK_FEED_RESUBSCRIBE_DELAY_MS - 1);
+    await vi.advanceTimersByTimeAsync(ATTENTION_FEED_RESUBSCRIBE_DELAY_MS - 1);
     expect(fake.subscriptions).toHaveLength(1);
 
     const reads = fake.queries.length;

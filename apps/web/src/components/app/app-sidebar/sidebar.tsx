@@ -6,6 +6,7 @@ import { calendarPath } from '@app/features/calendar-view/calendar-url';
 import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
 import { requestSearchFocus } from '@app/features/next-soup/soup-view/search-controllers';
 import { useRecentViewFlag } from '@app/features/next-soup/use-recent-view-flag';
+import { useUnifiedNotificationsFlag } from '@app/features/notifications-inbox/use-unified-notifications-flag';
 import {
   InviteModal,
   setInviteModalOpen,
@@ -65,19 +66,25 @@ export interface SidebarItem {
   standaloneHotkey?: boolean;
 }
 
-const SIDEBAR_LINKS = [
-  {
-    id: 'home',
-    get label() {
-      return isTouchDevice() ? 'Notifications' : 'Home';
-    },
-    href: LIST_VIEW_PATHS.home,
-    get icon() {
-      return isTouchDevice() ? BellIcon : HomeIcon;
-    },
-    hotkey: ['h', 'i'],
-    hotkeyToken: TOKENS.sidebar.goTo.home,
+/**
+ * Home answers `g i` too, unless the Notifications link is on the rail: two
+ * links on one key run only the first, so `i` belongs to Notifications then.
+ */
+const homeLink = (hotkey: ValidHotkey | ValidHotkey[]): SidebarItem => ({
+  id: 'home',
+  get label() {
+    return isTouchDevice() ? 'Notifications' : 'Home';
   },
+  href: LIST_VIEW_PATHS.home,
+  get icon() {
+    return isTouchDevice() ? BellIcon : HomeIcon;
+  },
+  hotkey,
+  hotkeyToken: TOKENS.sidebar.goTo.home,
+});
+
+const SIDEBAR_LINKS = [
+  homeLink(['h', 'i']),
   {
     id: 'search',
     label: 'Search',
@@ -219,12 +226,14 @@ export const GoToHotkeys = () => {
   const activityFeedEnabled = useActivityFeedFlag();
   const recentViewEnabled = useRecentViewFlag();
   const reviews = useFeatureFlag(enableTasksReviews);
+  const notificationsEnabled = useUnifiedNotificationsFlag();
   const links = createMemo((): SidebarItem[] =>
     buildSidebarLinks(
       calendarUiEnabled(),
       activityFeedEnabled(),
       recentViewEnabled(),
-      reviews().enabled
+      reviews().enabled,
+      notificationsEnabled()
     )
   );
 
@@ -369,6 +378,15 @@ const COMPANIES_LINK: SidebarItem = {
   hotkeyToken: TOKENS.sidebar.goTo.companies,
 };
 
+const NOTIFICATIONS_LINK: SidebarItem = {
+  id: 'notifications',
+  label: 'Notifications',
+  href: '/notifications',
+  icon: BellIcon,
+  hotkey: 'i',
+  hotkeyToken: TOKENS.sidebar.goTo.notifications,
+};
+
 const ACTIVITY_LINK: SidebarItem = {
   id: 'activity',
   label: 'Activity',
@@ -400,15 +418,16 @@ const REVIEWS_LINK: SidebarItem = {
 
 /**
  * Assemble the ordered sidebar link list: the static links plus the
- * flag-gated Recent, Activity, Calendar, Calls, Reviews, and CRM
+ * flag-gated Notifications, Recent, Activity, Calendar, Calls, Reviews, and CRM
  * entries in their correct positions.
  * Call from a reactive context — it reads `ENABLE_CALLS` / `isFeatureEnabled(enableCrm)`.
  */
-const buildSidebarLinks = (
+export const buildSidebarLinks = (
   showCalendar: boolean,
   showActivity: boolean,
   showRecent: boolean,
-  showReviews: boolean
+  showReviews: boolean,
+  showNotifications: boolean
 ): SidebarItem[] => {
   let links: SidebarItem[] = SIDEBAR_LINKS.filter(
     (link) => showCalendar || link.id !== 'calendar'
@@ -419,8 +438,13 @@ const buildSidebarLinks = (
     links = [...links.slice(0, idx + 1), link, ...links.slice(idx + 1)];
   };
 
-  // Home leads; Recent and Activity follow it in that order.
+  // Home leads; Notifications, Recent and Activity follow it in that order.
   let anchorId = 'home';
+  if (showNotifications) {
+    links = links.map((link) => (link.id === 'home' ? homeLink('h') : link));
+    insertAfter(anchorId, NOTIFICATIONS_LINK);
+    anchorId = 'notifications';
+  }
   if (showRecent) {
     insertAfter(anchorId, RECENT_LINK);
     anchorId = 'recent';

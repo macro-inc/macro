@@ -18,6 +18,8 @@ threads, pins, recents, notifications, folders, activity.
 - `src/server.rs`: composition root, including access-request routes and the
   tracked delivery dispatcher; `src/outbound/access_requests.rs` composes the
   notification/withdrawal/realtime ports. Policy lives in `crates/access_requests`.
+  It also builds the attention feeds (Home's work feed and the notifications
+  inbox) from one set of `attention_feed` adapters, triggers and viewer lookup.
 - Guest call chat is mounted outside account auth at `/call/guest-chat/{call_id}`;
   `call` verifies the RTC session and `messages` owns the shared discussion.
 - `src/service/entity_mutation.rs`: generic entity-mutation plumbing used
@@ -53,7 +55,8 @@ threads, pins, recents, notifications, folders, activity.
 
 - `cargo test -p document_storage_service` (`SQLX_OFFLINE` unset; needs
   MacroDB + Redis — `just run_dbs` from repo root; DynamoDB local via
-  `just ensure::ensure_dynamodb`, see `justfile`).
+  `just ensure::ensure_dynamodb` from `services/document_storage_service`,
+  whose `justfile` declares the `ensure` module).
 - After query changes: `nix develop --command just prepare_db` from the repo root.
 
 ## Gotchas

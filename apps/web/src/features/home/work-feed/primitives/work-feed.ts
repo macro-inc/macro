@@ -6,16 +6,14 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import type { EntityData } from '@entity';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { setDoneOverride } from '@notifications/notification-source';
-import type { WorkFeedPatchFieldsFragment } from '@service-storage/graphql/generated/graphql';
-import type { Client } from '@urql/core';
+import { createLiveAttentionFeed } from '@queries/attention-feed/live-attention-feed';
 import {
-  type Accessor,
-  createEffect,
-  createMemo,
-  createSignal,
-  on,
-  onCleanup,
-} from 'solid-js';
+  WorkFeedDocument,
+  type WorkFeedPatchFieldsFragment,
+  WorkFeedUpdatesDocument,
+} from '@service-storage/graphql/generated/graphql';
+import { type Client, stringifyDocument } from '@urql/core';
+import { type Accessor, createMemo, createSignal } from 'solid-js';
 import {
   markWorkFeedDone,
   settleWorkFeedDone,
@@ -26,7 +24,7 @@ import {
   withoutDoneWorkFeedEntries,
   workFeedEntityKey,
 } from '../core/work-feed';
-import { writeWorkFeedPatches } from '../queries/work-feed-cache';
+import { encodeWorkFeedScope } from '../queries/decode';
 import {
   markWorkFeedItemsDone,
   undoWorkFeedItemsDone,
@@ -35,12 +33,7 @@ import {
   createWorkFeedQuery,
   workFeedPageVariables,
 } from '../queries/work-feed-query';
-import { subscribeToWorkFeedUpdates } from '../queries/work-feed-updates';
-
-/** First delay before following a feed again after its live stream ended. */
-export const WORK_FEED_RESUBSCRIBE_DELAY_MS = 3_000;
-/** Longest delay between attempts while the live stream keeps failing. */
-export const WORK_FEED_MAX_RESUBSCRIBE_DELAY_MS = 60_000;
+import { workFeedShape } from '../queries/work-feed-shape';
 
 export type WorkFeedOptions = {
   client: Accessor<Client>;
@@ -54,6 +47,11 @@ export type WorkFeedOptions = {
   revalidateNotifications?: (client: Client) => Promise<void>;
 };
 
+const workFeedCachedQuery = {
+  query: stringifyDocument(WorkFeedDocument),
+  operationName: 'WorkFeed',
+};
+
 /** Raw notification ids an entry's row shows, for local done overrides. */
 function notificationIds(entry: WorkFeedEntry): string[] {
   const notifications = entry.entity.notifications;
@@ -63,10 +61,7 @@ function notificationIds(entry: WorkFeedEntry): string[] {
 }
 
 /**
- * One live work feed. The server sends each change already placed in the
- * feed, and the change is written into the cached pages, so the paged query
- * shows it without a network read. The feed reads again only when changes
- * may have been missed. Its `markDone` delegate completes rows as feed
+ * One live Home work feed. Its `markDone` delegate completes rows as feed
  * items, hiding them until their removal arrives, with undo.
  */
 export function createWorkFeed(options: WorkFeedOptions) {
@@ -74,129 +69,43 @@ export function createWorkFeed(options: WorkFeedOptions) {
   const [done, setDone] = createSignal<WorkFeedDone>(new Map());
   const loaded = () => query.data?.entries ?? [];
 
-  // A read requested while one runs is followed by one more.
-  let refetching = false;
-  let refetchAgain = false;
-  const refetch = async () => {
-    if (refetching) {
-      refetchAgain = true;
-      return;
-    }
-    refetching = true;
-    try {
-      do {
-        refetchAgain = false;
-        await query.refetch({ requestPolicy: 'network-only' });
-        setDone((current) => settleWorkFeedDone(current, loaded()));
-      } while (refetchAgain);
-    } catch (error) {
-      console.warn('Work feed refresh failed', error);
-    } finally {
-      refetching = false;
-    }
-  };
-
-  // Batches are written in arrival order, and only between page reads, so a
-  // read that started before a batch cannot land over it.
-  let pending: WorkFeedPatchFieldsFragment[] = [];
-  let writing = false;
-  const writePending = async () => {
-    if (writing || pending.length === 0 || query.isFetching) return;
-    const host = options.cacheHost();
-    const batch = pending;
-    pending = [];
-    // Without the cache there are no pages to place changes in.
-    if (!host) {
-      fireAndForget(refetch(), 'home');
-      return;
-    }
-    writing = true;
-    try {
-      const pages = query.data?.cursors ?? [];
-      const placed = await writeWorkFeedPatches(
-        host,
-        pages.map((cursor) => workFeedPageVariables(options.scope(), cursor)),
-        batch,
-        query.hasNextPage
-      );
-      if (!placed) fireAndForget(refetch(), 'home');
-    } catch (error) {
-      console.warn('Work feed update failed', error);
-      fireAndForget(refetch(), 'home');
-    } finally {
-      writing = false;
-      fireAndForget(writePending(), 'home');
-    }
-  };
-  createEffect(
-    on(
-      () => query.isFetching,
-      (fetching) => {
-        if (!fetching) fireAndForget(writePending(), 'home');
-      }
-    )
-  );
-
-  const applyPatches = (patches: readonly WorkFeedPatchFieldsFragment[]) => {
+  const live = createLiveAttentionFeed({
+    client: options.client,
+    cacheHost: options.cacheHost,
+    enabled: options.enabled,
+    shape: workFeedShape,
+    query,
+    pages: {
+      cachedQuery: workFeedCachedQuery,
+      variables: (cursor) => workFeedPageVariables(options.scope(), cursor),
+    },
+    updates: {
+      document: WorkFeedUpdatesDocument,
+      patches: (data) => data.workFeedUpdates,
+      variables: () => ({ scope: encodeWorkFeedScope(options.scope()) }),
+    },
+    onReconnected: options.onReconnected,
     // A done item that left the feed and returns with the reasons it
     // acknowledged was reopened, so it shows again; while it is still
     // loaded, the same revision is a change computed before the done.
-    const present = new Set(loaded().map((entry) => entry.itemId));
-    const reopened = patches.flatMap((patch) => {
-      if (patch.__typename !== 'WorkFeedEntryUpserted') return [];
-      const { item, revision } = patch.entry;
-      const acknowledged = done().get(item.id);
-      return acknowledged !== undefined &&
-        (acknowledged !== revision || !present.has(item.id))
-        ? [item.id]
-        : [];
-    });
-    if (reopened.length > 0) {
-      setDone((current) => unmarkWorkFeedDone(current, reopened));
-    }
-    pending.push(...patches);
-    fireAndForget(writePending(), 'home');
-  };
-
-  // The live stream is an external system: follow it while the feed is
-  // enabled, and again with each new client or scope.
-  createEffect(() => {
-    if (!options.enabled()) return;
-    const client = options.client();
-    const scope = options.scope();
-    let disposed = false;
-    let retry: ReturnType<typeof setTimeout> | undefined;
-    let delay = WORK_FEED_RESUBSCRIBE_DELAY_MS;
-    let unsubscribe = () => {};
-    const follow = () => {
-      unsubscribe = subscribeToWorkFeedUpdates(client, scope, {
-        patches: (patches) => {
-          delay = WORK_FEED_RESUBSCRIBE_DELAY_MS;
-          applyPatches(patches);
-        },
-        interrupted: () => {
-          if (disposed) return;
-          retry = setTimeout(() => {
-            if (disposed) return;
-            follow();
-            // Changes made while the stream was down are only in a read.
-            fireAndForget(refetch(), 'home');
-          }, delay);
-          delay = Math.min(delay * 2, WORK_FEED_MAX_RESUBSCRIBE_DELAY_MS);
-        },
+    onPatches: (patches) => {
+      const present = new Set(loaded().map((entry) => entry.itemId));
+      const reopened = patches.flatMap((patch) => {
+        if (patch.__typename !== 'WorkFeedEntryUpserted') return [];
+        const { item, revision } = patch.entry;
+        const acknowledged = done().get(item.id);
+        return acknowledged !== undefined &&
+          (acknowledged !== revision || !present.has(item.id))
+          ? [item.id]
+          : [];
       });
-    };
-    follow();
-    const stopReconnects = options.onReconnected?.(() =>
-      fireAndForget(refetch(), 'home')
-    );
-    onCleanup(() => {
-      disposed = true;
-      pending = [];
-      if (retry !== undefined) clearTimeout(retry);
-      unsubscribe();
-      stopReconnects?.();
-    });
+      if (reopened.length > 0) {
+        setDone((current) => unmarkWorkFeedDone(current, reopened));
+      }
+    },
+    onRefetched: () =>
+      setDone((current) => settleWorkFeedDone(current, loaded())),
+    surface: 'home',
   });
 
   const entries = createMemo(() =>
@@ -257,14 +166,11 @@ export function createWorkFeed(options: WorkFeedOptions) {
         fireAndForget(options.revalidateNotifications?.(client), 'home');
         return {
           undo: async () => {
-            const patches = await undoWorkFeedItemsDone(
-              client,
-              undoToken,
-              scope
-            );
+            const patches: WorkFeedPatchFieldsFragment[] =
+              await undoWorkFeedItemsDone(client, undoToken, scope);
             fireAndForget(options.revalidateNotifications?.(client), 'home');
             // The restored places land now rather than with the stream.
-            applyPatches(patches);
+            live.applyPatches(patches);
           },
         };
       },
@@ -272,5 +178,5 @@ export function createWorkFeed(options: WorkFeedOptions) {
   };
   const markDone: MarkDoneDelegate = { canComplete, prepare };
 
-  return { query, entries, refetch, markDone };
+  return { query, entries, refetch: live.refetch, markDone };
 }

@@ -1,5 +1,6 @@
+use attention_feed::test_support::viewer_id;
+
 use super::*;
-use crate::domain::test_support::viewer_id;
 
 #[test]
 fn no_types_means_every_type() {

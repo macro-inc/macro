@@ -1,14 +1,19 @@
 use std::sync::{Arc, Mutex};
 
-use ::work_feed::domain::{
-    models::{
-        WorkFeedChange, WorkFeedDoneOutcome, WorkFeedDoneReceipt, WorkFeedDoneTarget,
-        WorkFeedEntry, WorkFeedError, WorkFeedItem, WorkFeedItemKey, WorkFeedItemState,
-        WorkFeedItemType, WorkFeedMode, WorkFeedPage, WorkFeedPosition, WorkFeedPrimaryReason,
-        WorkFeedQuery, WorkFeedRevision, WorkFeedScope, WorkFeedStack, WorkFeedStackKind,
-        WorkFeedTrigger, WorkFeedViewer,
+use ::attention_feed::{
+    domain::{
+        models::{
+            CandidateKeying, DoneReceipt, FeedError, FeedKey, FeedPosition, FeedRevision,
+            FeedTrigger, FeedViewer,
+        },
+        ports::FeedTriggers,
     },
-    ports::WorkFeedTriggers,
+    inbound::viewers::FeedViewerResolver,
+};
+use ::work_feed::domain::models::{
+    WorkFeedChange, WorkFeedDoneOutcome, WorkFeedDoneTarget, WorkFeedEntry, WorkFeedItem,
+    WorkFeedItemState, WorkFeedItemType, WorkFeedMode, WorkFeedPage, WorkFeedPrimaryReason,
+    WorkFeedQuery, WorkFeedScope, WorkFeedStack, WorkFeedStackKind,
 };
 use async_graphql::futures_util::{StreamExt as _, future::BoxFuture, pin_mut};
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
@@ -17,7 +22,7 @@ use notification::domain::models::{NotificationState, UserNotificationRow};
 use soup::domain::models::SoupProjectionHydration;
 
 use super::*;
-use crate::{WorkFeedGraphqlContext, WorkFeedGraphqlService, WorkFeedViewerResolver};
+use crate::{WorkFeedGraphqlContext, WorkFeedGraphqlService};
 
 const DOC_ID: Uuid = Uuid::from_u128(0xD0C);
 
@@ -28,8 +33,8 @@ fn at(minute: u32) -> chrono::DateTime<chrono::Utc> {
         .unwrap()
 }
 
-fn doc_key() -> WorkFeedItemKey {
-    WorkFeedItemKey::new(ModelEntityType::Document.with_entity_string(DOC_ID.to_string()))
+fn doc_key() -> FeedKey {
+    FeedKey::new(ModelEntityType::Document.with_entity_string(DOC_ID.to_string()))
 }
 
 fn comment(id: u128, minute: u32) -> Arc<UserNotificationRow<NotifEvent>> {
@@ -86,10 +91,10 @@ fn doc_entry() -> WorkFeedEntry<SoupProjectionHydration> {
 
 #[derive(Default)]
 struct RecordingWorkFeedService {
-    pages: Mutex<Vec<(WorkFeedViewer, WorkFeedQuery)>>,
-    recomputes: Mutex<Vec<(WorkFeedScope, Vec<WorkFeedItemKey>)>>,
+    pages: Mutex<Vec<(FeedViewer, WorkFeedQuery)>>,
+    recomputes: Mutex<Vec<(WorkFeedScope, Vec<FeedKey>)>>,
     dones: Mutex<Vec<Vec<WorkFeedDoneTarget>>>,
-    undos: Mutex<Vec<(WorkFeedScope, WorkFeedDoneReceipt)>>,
+    undos: Mutex<Vec<(WorkFeedScope, DoneReceipt)>>,
 }
 
 /// Shares the recording service between the schema and the assertions.
@@ -98,14 +103,14 @@ struct Recording(Arc<RecordingWorkFeedService>);
 impl WorkFeedGraphqlService for Recording {
     fn page(
         &self,
-        viewer: WorkFeedViewer,
+        viewer: FeedViewer,
         query: WorkFeedQuery,
-    ) -> BoxFuture<'_, Result<WorkFeedPage<SoupProjectionHydration>, WorkFeedError>> {
+    ) -> BoxFuture<'_, Result<WorkFeedPage<SoupProjectionHydration>, FeedError>> {
         self.0.pages.lock().unwrap().push((viewer, query));
         Box::pin(async {
             Ok(WorkFeedPage {
                 entries: vec![doc_entry()],
-                next: Some(WorkFeedPosition {
+                next: Some(FeedPosition {
                     sort_at: at(9),
                     entity_id: DOC_ID.to_string(),
                 }),
@@ -115,10 +120,10 @@ impl WorkFeedGraphqlService for Recording {
 
     fn recompute(
         &self,
-        _viewer: WorkFeedViewer,
+        _viewer: FeedViewer,
         scope: WorkFeedScope,
-        keys: Vec<WorkFeedItemKey>,
-    ) -> BoxFuture<'_, Result<Vec<WorkFeedChange<SoupProjectionHydration>>, WorkFeedError>> {
+        keys: Vec<FeedKey>,
+    ) -> BoxFuture<'_, Result<Vec<WorkFeedChange<SoupProjectionHydration>>, FeedError>> {
         self.0
             .recomputes
             .lock()
@@ -140,9 +145,9 @@ impl WorkFeedGraphqlService for Recording {
 
     fn mark_done(
         &self,
-        _viewer: WorkFeedViewer,
+        _viewer: FeedViewer,
         targets: Vec<WorkFeedDoneTarget>,
-    ) -> BoxFuture<'_, Result<WorkFeedDoneOutcome, WorkFeedError>> {
+    ) -> BoxFuture<'_, Result<WorkFeedDoneOutcome, FeedError>> {
         let items = targets
             .iter()
             .map(|target| target.key.clone())
@@ -150,8 +155,8 @@ impl WorkFeedGraphqlService for Recording {
         self.0.dones.lock().unwrap().push(targets);
         Box::pin(async move {
             Ok(WorkFeedDoneOutcome {
-                receipt: WorkFeedDoneReceipt {
-                    items: items.iter().map(WorkFeedItemKey::id).collect(),
+                receipt: DoneReceipt {
+                    keys: items.iter().map(FeedKey::id).collect(),
                     notification_ids: vec![Uuid::from_u128(1)],
                     ..Default::default()
                 },
@@ -162,10 +167,10 @@ impl WorkFeedGraphqlService for Recording {
 
     fn undo_done(
         &self,
-        _viewer: WorkFeedViewer,
+        _viewer: FeedViewer,
         scope: WorkFeedScope,
-        receipt: WorkFeedDoneReceipt,
-    ) -> BoxFuture<'_, Result<Vec<WorkFeedChange<SoupProjectionHydration>>, WorkFeedError>> {
+        receipt: DoneReceipt,
+    ) -> BoxFuture<'_, Result<Vec<WorkFeedChange<SoupProjectionHydration>>, FeedError>> {
         self.0.undos.lock().unwrap().push((scope, receipt));
         Box::pin(async { Ok(vec![WorkFeedChange::Upserted(doc_entry())]) })
     }
@@ -174,25 +179,30 @@ impl WorkFeedGraphqlService for Recording {
 /// Triggers a test drives by hand.
 #[derive(Default, Clone)]
 struct ManualTriggers {
-    sender: Arc<Mutex<Option<tokio::sync::mpsc::Sender<WorkFeedTrigger>>>>,
-    subscribed: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
+    sender: Arc<Mutex<Option<tokio::sync::mpsc::Sender<FeedTrigger>>>>,
+    subscribed: Arc<Mutex<Vec<(MacroUserIdStr<'static>, CandidateKeying, bool)>>>,
 }
 
-impl WorkFeedTriggers for ManualTriggers {
+impl FeedTriggers for ManualTriggers {
     fn subscribe(
         &self,
         user: MacroUserIdStr<'static>,
-    ) -> tokio::sync::mpsc::Receiver<WorkFeedTrigger> {
+        keying: CandidateKeying,
+        own_work: bool,
+    ) -> tokio::sync::mpsc::Receiver<FeedTrigger> {
         let (sender, receiver) = tokio::sync::mpsc::channel(8);
         *self.sender.lock().unwrap() = Some(sender);
-        self.subscribed.lock().unwrap().push(user);
+        self.subscribed
+            .lock()
+            .unwrap()
+            .push((user, keying, own_work));
         receiver
     }
 }
 
 struct NoTeam;
 
-impl WorkFeedViewerResolver for NoTeam {
+impl FeedViewerResolver for NoTeam {
     fn team(
         &self,
         _user: MacroUserIdStr<'static>,
@@ -205,7 +215,11 @@ fn context(
     service: &Arc<RecordingWorkFeedService>,
     triggers: &ManualTriggers,
 ) -> WorkFeedGraphqlContext {
-    WorkFeedGraphqlContext::new(Recording(Arc::clone(service)), triggers.clone(), NoTeam)
+    WorkFeedGraphqlContext::new(
+        Recording(Arc::clone(service)),
+        Arc::new(triggers.clone()),
+        Arc::new(NoTeam),
+    )
 }
 
 fn viewer_id() -> MacroUserIdStr<'static> {
@@ -254,7 +268,7 @@ async fn work_feed_pages_hydrated_stacked_entries_for_the_viewer() {
     assert_eq!(entry["touchedAt"], at(9).to_rfc3339());
     assert_eq!(entry["primaryReason"], "OWN_WORK");
     assert!(entry["primaryStackIndex"].is_null());
-    let revision = WorkFeedRevision::decode(entry["revision"].as_str().unwrap()).unwrap();
+    let revision = FeedRevision::decode(entry["revision"].as_str().unwrap()).unwrap();
     assert_eq!(revision.attention_through, Some(at(7)));
 
     let item = &entry["item"];
@@ -274,7 +288,7 @@ async fn work_feed_pages_hydrated_stacked_entries_for_the_viewer() {
         Uuid::from_u128(2).to_string()
     );
 
-    let position = WorkFeedPosition::decode(page["nextCursor"].as_str().unwrap()).unwrap();
+    let position = FeedPosition::decode(page["nextCursor"].as_str().unwrap()).unwrap();
     assert_eq!(position.entity_id, DOC_ID.to_string());
 
     let pages = service.pages.lock().unwrap();
@@ -312,7 +326,7 @@ async fn mark_done_completes_the_observed_revision_and_undo_restores_it() {
     let harness = harness();
     let service = Arc::new(RecordingWorkFeedService::default());
     let triggers = ManualTriggers::default();
-    let revision = WorkFeedRevision {
+    let revision = FeedRevision {
         attention_through: Some(at(7)),
     }
     .encode();
@@ -396,9 +410,8 @@ async fn work_feed_updates_batch_recomputed_patches() {
     let harness = harness();
     let service = Arc::new(RecordingWorkFeedService::default());
     let triggers = ManualTriggers::default();
-    let other = WorkFeedItemKey::new(
-        ModelEntityType::Chat.with_entity_string(Uuid::from_u128(0xC4A7).to_string()),
-    );
+    let other =
+        FeedKey::new(ModelEntityType::Chat.with_entity_string(Uuid::from_u128(0xC4A7).to_string()));
 
     let request = async_graphql::Request::new(
         r#"subscription { workFeedUpdates(scope: { mode: WORK }) {
@@ -426,11 +439,11 @@ async fn work_feed_updates_batch_recomputed_patches() {
             };
             // A burst inside one window becomes one recompute.
             sender
-                .send(WorkFeedTrigger::Changed(vec![doc_key().into_entity()]))
+                .send(FeedTrigger::Changed(vec![doc_key().into_entity()]))
                 .await
                 .unwrap();
             sender
-                .send(WorkFeedTrigger::Changed(vec![
+                .send(FeedTrigger::Changed(vec![
                     other.into_entity(),
                     doc_key().into_entity(),
                 ]))
@@ -459,7 +472,7 @@ async fn work_feed_updates_batch_recomputed_patches() {
     }
 
     let sender = first.await.unwrap();
-    sender.send(WorkFeedTrigger::Invalidated).await.unwrap();
+    sender.send(FeedTrigger::Invalidated).await.unwrap();
     let response = responses.next().await.expect("invalidation");
     let data = response.data.into_json().unwrap();
     assert_eq!(
@@ -474,6 +487,6 @@ async fn work_feed_updates_batch_recomputed_patches() {
     assert!(!response.errors.is_empty());
     assert_eq!(
         triggers.subscribed.lock().unwrap().as_slice(),
-        &[viewer_id()]
+        &[(viewer_id(), CandidateKeying::ThreadScoped, true)]
     );
 }

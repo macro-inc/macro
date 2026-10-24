@@ -11,6 +11,8 @@ note: |-
   with fake clients and controllers with fake capabilities; neither imports
   rendering code, including block-agent’s `ui/` and `component/` layers.
 files:
+  - apps/web/src/features/notifications-inbox/queries/**
+  - apps/web/src/features/notifications-inbox/primitives/**
   - apps/web/src/features/calendar-notes/queries/**
   - apps/web/src/features/calendar-notes/primitives/**
   - apps/web/src/features/access-requests/queries/**

@@ -459,6 +459,13 @@ export const activityRoute = defineRoute({
   claim: () => ({ namespace: 'component', id: 'activity' }),
 });
 
+export const notificationsRoute = defineRoute({
+  id: 'view-notifications',
+  path: 'notifications',
+  search: '*' as const,
+  claim: () => ({ namespace: 'component', id: 'notifications' }),
+});
+
 export const routinesRoute = defineRoute({
   id: ROUTINES_ROUTE_ID,
   path: 'routines',

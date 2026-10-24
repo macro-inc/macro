@@ -1,5 +1,76 @@
 # Notifications
 
+## Notifications view — `/app/notifications`
+
+Behind `enable-unified-notifications` (with GraphQL Soup), the bell below Home
+on the outer rail (`g i`) opens one list of everything that needs you, newest
+first. The flag is off everywhere by default, dev included, because no PostHog
+flag exists yet; run the frontend with `VITE_ENABLE_UNIFIED_NOTIFICATIONS=true`
+to see it locally. With the flag off the route redirects to Home once flags
+load, and `g i` stays on Home; with it on, Home keeps `g h`.
+
+Each row is one row of the server's notification inbox
+(`user.notificationInbox`): an email thread, a channel's top-level messages, one thread, one
+top-level mention, an entity's comments, one comment thread, a task
+assignment, a pull request, a calendar event, an access request or grant, or
+an agent session. A message that mentions you appears once,
+in its mention row. Rows show a type glyph, a muted line saying who did what
+(for example **Jacob assigned you a task**), the subject (email subject,
+message or comment text, task name, PR or event title), a count when the row
+stands for several notifications, the time, and an unread dot. The author is
+the row's actor: a Macro user by first name, an agent by its bot name, or
+**Macro**; a row from outside Macro names its email sender, and GitHub rows
+keep the GitHub login. A row type, author kind, or button this build doesn't
+know yet shows as a plain row with a bell glyph, no author, and no button.
+
+Click a row or press Enter to preview it beside the list, opened at the
+notification's message, thread, or comment, under a **Notifications >**
+breadcrumb that clears the preview. Previewing marks the row seen, including
+notifications the row hides, and drops its unread dot. With a preview open, `j`/`k` move it along the
+list; choosing the shown row again re-aims it. Calendar events and projects
+open in their own views instead. Shift-click or the alternate key opens a new
+split. Hover a row and choose **Mark done**, or press `e`, to complete that row
+only: the channel thread stays when the channel's top-level row is done, and an
+open preview moves to the next row. A toast offers **Undo**, as does
+`⌘Z`/`Ctrl+Z`. A new notification in a done row brings it back. An empty inbox
+reads **You’re all caught up**; with nothing chosen the pane reads **No
+notification selected**.
+
+Rows carry the buttons the server lists for them under the subject, the first
+one highlighted. An access request offers **Approve** (grants the level asked
+for) and **Deny**; a request to join an event you shared offers **Accept** and
+**Decline**. Deciding disables the buttons until it finishes, shows a toast
+(**Access granted**, **Access request denied**, **Added to the event**,
+**Join request declined**), and removes the row; a failed decision leaves the
+row and says so. An agent waiting for you offers **Answer** and a granted
+access request **Open**; both open the row as choosing it does. A pull request
+whose review was requested offers **Review**, which opens the pull request on
+GitHub and marks the row seen.
+
+**Filter notifications** (funnel, or `f`) offers **Status** (Unread, Read, All;
+single choice) and **Type** checkboxes that start checked: Mentions, Replies,
+Messages, Comments, Email, Tasks, Pull requests, Calendar, Access requests,
+and Agents. Unchecking a type hides its rows (Mentions covers
+both channel and comment mentions, Replies both channel and comment threads).
+The trigger counts hidden types plus a narrowed status, and **Reset filters**
+restores everything. Choices persist per user across reloads. Hiding every type
+shows **Every kind of notification is hidden** with Reset filters; filters that
+hide every row show **No notifications match these filters**. The gear beside
+the filter opens **Settings → Notifications**, which decides what is delivered
+at all (including push and email).
+
+On touch devices the dock's bell (**Notifications**) opens this view with the
+flag on, as the list alone under a floating **Notifications** header with a
+filter drawer (Status and Type). Rows keep the same anatomy with 44px targets
+and inline row buttons; tapping a row opens it full-screen in place, a left
+swipe marks it done (with the same Undo), and pulling down refreshes. Hover
+controls and the preview pane are desktop-only. The dock keeps the bell active
+while the view shows.
+
+Verify with two accounts: a reply in a thread you're in, a top-level mention,
+and a document comment each add their own row; marking one done leaves the
+others, and Undo restores it in place.
+
 ## Notifications
 
 In the desktop app, **Settings → Notifications → Delivery → Desktop notifications**
