@@ -300,6 +300,12 @@ export default function GlobalShortcuts() {
   const { openWithSplit } = useSplitLayout();
 
   const createNewSplit = () => {
+    if (!canFit()) {
+      toast.alert('Too many splits open', {
+        subtext: 'Close a split to open a new one',
+      });
+      return true;
+    }
     analytics.track('split_created', { from: 'global_hotkey' });
     openWithSplit(
       { type: 'component', id: 'home' },
@@ -316,7 +322,6 @@ export default function GlobalShortcuts() {
     hotkey: 'cmd+\\',
     scopeId: 'global',
     description: 'Create new split',
-    condition: canFit,
     keyDownHandler: createNewSplit,
     runWithInputFocused: true,
   });
@@ -326,7 +331,6 @@ export default function GlobalShortcuts() {
     hotkey: '\\',
     scopeId: 'global',
     description: 'Create new split',
-    condition: canFit,
     keyDownHandler: createNewSplit,
   });
 
