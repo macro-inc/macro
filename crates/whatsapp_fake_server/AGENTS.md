@@ -31,6 +31,11 @@ Lets the session service and its tests run end to end without WhatsApp.
   delivery counters, waiters).
 - `src/state.rs`: routing, IQ handlers (encrypt, usync, w:g2, w:m), offline queues.
 - `src/phone.rs`: fake phones: send/receive with real Signal, QR approval.
+  Phones remember chat messages and answer their linked devices' peer
+  requests: on-demand history pages and placeholder resends
+  (`answer_history_requests(false)` is an offline phone).
+  `send_history_sync` / `chat_list()` send history-sync bundles inline.
+  `FakeWhatsApp::address_by_lid_only` drops `participant_pn` in a group.
 - `src/connection.rs`: handshake, login, `conflict replaced`, pairing.
 
 ## Checks

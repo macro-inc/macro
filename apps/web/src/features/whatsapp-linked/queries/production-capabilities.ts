@@ -12,8 +12,8 @@ import {
   useDisconnectWhatsappMutation,
   useSubmitWhatsappPasskeyMutation,
   useWhatsappLinkedAccountQuery,
+  useWhatsappLinkedChatsQuery,
   useWhatsappLinkedConfigurationQuery,
-  useWhatsappLinkedGroupsQuery,
   useWhatsappLinkedPairingQuery,
 } from '@queries/whatsapp-linked';
 import {
@@ -31,7 +31,7 @@ import type {
 } from '../context/whatsapp-linked-context';
 import { accountStatus, type WhatsAppAccount } from '../core/account';
 import type { AdoptFailure } from '../core/adopt';
-import type { WhatsAppGroup } from '../core/group';
+import type { WhatsAppChat } from '../core/chat';
 import {
   authenticateWhatsAppPasskey,
   canAuthenticatePasskey,
@@ -40,7 +40,7 @@ import {
 import {
   decodeAccount,
   decodeAdoptRefusal,
-  decodeGroups,
+  decodeChats,
   decodePairing,
 } from './decode';
 
@@ -67,24 +67,26 @@ function sourceRead<Wire, Value>(
   };
 }
 
-/** The page has loaded once the account, and a connected account's groups, have. */
+/** The page has loaded once the account, and a connected account's chats, have. */
 function pageLoad(
   account: SourceRead<WhatsAppAccount | null>,
-  groups: SourceRead<WhatsAppGroup[]> | undefined
+  chats: SourceRead<WhatsAppChat[]> | undefined
 ): WhatsappLoadResult | undefined {
   if (account.isError) return { outcome: 'error' };
   if (account.data === undefined) return;
   if (accountStatus(account.data).kind !== 'connected')
     return { outcome: 'success', attrs: { 'whatsapp.connected': false } };
-  if (groups?.isError) return { outcome: 'error' };
-  const list = groups?.data;
+  if (chats?.isError) return { outcome: 'error' };
+  const list = chats?.data;
   if (!list) return;
   return {
     outcome: 'success',
     attrs: {
       'whatsapp.connected': true,
-      'whatsapp.groups.count': list.length,
-      'whatsapp.groups.in_macro': list.filter((group) => group.inMacro).length,
+      'whatsapp.chats.count': list.length,
+      'whatsapp.chats.direct': list.filter((chat) => chat.kind === 'direct')
+        .length,
+      'whatsapp.chats.in_macro': list.filter((chat) => chat.inMacro).length,
     },
   };
 }
@@ -123,26 +125,25 @@ export function createWhatsAppLinkedCapabilities(host: {
     useWhatsappLinkedAccountQuery(currentUser),
     (view) => decodeAccount(view.account)
   );
-  const [groupsRead, setGroupsRead] =
-    createSignal<SourceRead<WhatsAppGroup[]>>();
-  traceWhatsappLoad('page.load', () => pageLoad(account, groupsRead()));
+  const [chatsRead, setChatsRead] = createSignal<SourceRead<WhatsAppChat[]>>();
+  traceWhatsappLoad('page.load', () => pageLoad(account, chatsRead()));
   return {
     features: sourceRead(useWhatsappLinkedConfigurationQuery(), (features) => ({
       pairing: features.pairing,
       adoption: features.adoption,
     })),
     account,
-    groups: (enabled: Accessor<boolean>) => {
+    chats: (enabled: Accessor<boolean>) => {
       const read = sourceRead(
-        useWhatsappLinkedGroupsQuery(currentUser, enabled),
-        (groups) =>
-          decodeGroups(groups, (ownerId) =>
+        useWhatsappLinkedChatsQuery(currentUser, enabled),
+        (chats) =>
+          decodeChats(chats, (ownerId) =>
             isMacroId(ownerId)
               ? getDisplayName(ownerId) || 'a teammate'
               : 'a teammate'
           )
       );
-      setGroupsRead(() => read);
+      setChatsRead(() => read);
       return read;
     },
     passkey,
@@ -151,8 +152,8 @@ export function createWhatsAppLinkedCapabilities(host: {
         useWhatsappLinkedPairingQuery(currentUser, pairingId),
         decodePairing
       ),
-    connect: (replace) =>
-      ResultAsync.fromPromise(connect.mutateAsync(replace), failure).map(
+    connect: () =>
+      ResultAsync.fromPromise(connect.mutateAsync(), failure).map(
         (pairing) => ({ pairingId: pairing.id, expiresAt: pairing.expires_at })
       ),
     cancelPairing: (pairingId) =>

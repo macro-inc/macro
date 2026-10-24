@@ -75,7 +75,7 @@ impl BindingRepository for PgLinkedRepository {
                 share_permission_db_utils::insert_private_permission(&mut *tx, &permission)
                     .await
                     .map_err(failure)?;
-                let row = sqlx::query_as!(BindingRow,"INSERT INTO whatsapp_group (id, group_jid, name, user_id, state, share_permission_id) VALUES ($1,$2,$3,$4,'active',$5) RETURNING id, group_jid, user_id, state, ownership_state, adopted_at",id,group.jid,name,user,permission)
+                let row = sqlx::query_as!(BindingRow,"INSERT INTO whatsapp_group (id, group_jid, name, user_id, state, share_permission_id, backfill_state) VALUES ($1,$2,$3,$4,'active',$5,'pending') RETURNING id, group_jid, user_id, state, ownership_state, adopted_at",id,group.jid,name,user,permission)
                     .fetch_one(&mut *tx).await.map_err(failure)?;
                 let owner = Owner::from_principal_str(user).map_err(failure)?;
                 entity_registry_db_utils::insert_entity(

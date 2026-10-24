@@ -142,6 +142,7 @@ where
             get(pairing::<Eas, Auth>).delete(cancel::<Eas, Auth>),
         )
         .route("/groups", get(groups::<Eas, Auth>))
+        .route("/chats", get(chats::<Eas, Auth>))
         .route("/groups/adopt", post(adopt::<Eas, Auth>))
         .route("/whatsapp-groups", get(adopted_groups::<Eas, Auth>))
         .route(
@@ -377,6 +378,21 @@ pub async fn groups<Eas, Auth: MacroAuthorizationService>(
         state
             .service
             .groups(auth.authorization.macro_user_id.as_ref())
+            .await?,
+    ))
+}
+
+/// The caller's WhatsApp chat list (groups and direct chats), newest
+/// activity first, with what can be added to Macro.
+#[utoipa::path(get, path = "/meta/linked/chats", operation_id = "linked_chats", responses((status = 200, body = ChatList)))]
+pub async fn chats<Eas, Auth: MacroAuthorizationService>(
+    State(state): State<LinkedRouterState<Eas, Auth>>,
+    auth: MacroAuthorizationExtractor<Auth, UserOnly>,
+) -> Result<Json<ChatList>, ApiError> {
+    Ok(Json(
+        state
+            .service
+            .chats(auth.authorization.macro_user_id.as_ref())
             .await?,
     ))
 }

@@ -11,8 +11,8 @@ use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 use whatsapp_linked::domain::events::{
-    ClaimedSend, InboundEvent, InboundKind, MediaImport, Message, MessageKind, OutboundMedia,
-    SessionScope,
+    ClaimedSend, InboundEvent, InboundKind, MediaImport, Message, MessageAnchor, MessageKind,
+    OutboundMedia, SessionScope,
 };
 use whatsapp_linked::domain::models::{GroupInfo, Identity, Participant};
 use whatsapp_linked::domain::session::SessionService;
@@ -41,6 +41,10 @@ enum Call {
     PasskeyResponse(serde_json::Value),
     ConfirmPasskey,
     Group(String),
+    /// Chat, message id before which, count.
+    RequestHistory(String, String, u32),
+    /// Chat, message id.
+    RequestMessage(String, String),
 }
 
 #[derive(Clone)]
@@ -128,6 +132,38 @@ impl WhatsAppSession for FakeSession {
         _media: Option<&UploadedMedia>,
     ) -> Result<DateTime<Utc>, SendFailure> {
         Err(SendFailure::Unknown)
+    }
+
+    async fn request_history(
+        &self,
+        chat_jid: &str,
+        before: &MessageAnchor,
+        count: u32,
+    ) -> Result<(), SessionError> {
+        self.whatsapp
+            .calls
+            .send(Call::RequestHistory(
+                chat_jid.to_owned(),
+                before.id.clone(),
+                count,
+            ))
+            .unwrap();
+        Ok(())
+    }
+
+    async fn request_message(
+        &self,
+        chat_jid: &str,
+        message: &MessageAnchor,
+    ) -> Result<(), SessionError> {
+        self.whatsapp
+            .calls
+            .send(Call::RequestMessage(
+                chat_jid.to_owned(),
+                message.id.clone(),
+            ))
+            .unwrap();
+        Ok(())
     }
 
     async fn joined_groups(&self) -> Result<Vec<GroupInfo>, SessionError> {
@@ -257,6 +293,8 @@ fn runner_with(
             send_batch: 16,
             tick_every,
             groups_refresh_interval,
+            backfill_timeout: Duration::from_secs(60),
+            backfill_retry: Duration::from_secs(300),
         },
     ));
     (runner, whatsapp, call_receiver)
@@ -499,6 +537,7 @@ fn group_text(event: u128) -> InboundEvent {
             kind: MessageKind::Text,
             text: "hello".to_owned(),
             history: false,
+            from_me: false,
             revision: 0,
             target: None,
             media: vec![],

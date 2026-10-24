@@ -3,10 +3,12 @@ import { expect, type Page, test } from '@playwright/test';
 
 const USER_ID = 'macro|wa-tester@example.test';
 
-type Group = {
+/** One row of the account's WhatsApp chat list. */
+type Chat = {
   jid: string;
+  kind: 'group' | 'direct';
   name: string;
-  members: number;
+  last_activity_at: string | null;
   group: { id: string; name: string } | null;
   shared?: { id: string; name: string; owner_id: string };
 };
@@ -21,7 +23,11 @@ type LinkedServer = {
     state: string;
   };
   pairingState: string;
-  groups: Group[];
+  chats: Chat[];
+  /** The added group's history import, as `GET /whatsapp-groups/{id}` reports it. */
+  backfill: { state: string; imported: number } | null;
+  /** History the owner's phone sent so far, older than everything shown. */
+  imported: unknown[];
   requests: string[];
   adoptions: unknown[];
   passkeyAnswers: unknown[];
@@ -41,23 +47,35 @@ function server(): LinkedServer {
   return {
     account: null,
     pairingState: 'qr',
-    groups: [
+    backfill: null,
+    imported: [],
+    chats: [
+      {
+        jid: '14155550199@s.whatsapp.net',
+        kind: 'direct',
+        name: 'Ana Ruiz',
+        last_activity_at: '2026-10-21T10:00:00Z',
+        group: null,
+      },
       {
         jid: '120363001@g.us',
+        kind: 'group',
         name: 'Design Crit',
-        members: 14,
+        last_activity_at: '2026-10-21T09:00:00Z',
         group: { id: GROUP_ID, name: 'design-crit' },
       },
       {
         jid: '120363003@g.us',
+        kind: 'group',
         name: 'Launch War Room',
-        members: 23,
+        last_activity_at: '2026-10-20T09:00:00Z',
         group: null,
       },
       {
         jid: '120363004@g.us',
+        kind: 'group',
         name: 'Ana, Ben, +2',
-        members: 4,
+        last_activity_at: null,
         group: null,
         shared: {
           id: 'group-shared-family',
@@ -202,6 +220,7 @@ async function mount(page: Page, state: LinkedServer, query = '') {
                 ? '14155550142@s.whatsapp.net'
                 : null,
               unread_count: 1,
+              backfill: state.backfill,
               roster: {
                 participants: [
                   {
@@ -238,6 +257,7 @@ async function mount(page: Page, state: LinkedServer, query = '') {
                     },
                   ]
                 : [
+                    ...state.imported,
                     incomingMessage,
                     {
                       ...incomingMessage,
@@ -320,7 +340,7 @@ async function mount(page: Page, state: LinkedServer, query = '') {
         });
       if (path === 'whatsapp-groups')
         return route.fulfill({
-          json: state.groups
+          json: state.chats
             .filter((item) => item.group)
             .map((item) => ({
               id: item.group?.id,
@@ -370,27 +390,26 @@ async function mount(page: Page, state: LinkedServer, query = '') {
           },
         });
       }
-      if (path === 'groups' && method === 'GET')
+      if (path === 'chats' && method === 'GET')
         return route.fulfill({
-          json: state.groups.map((group) => ({
-            jid: group.jid,
-            name: group.name,
-            announce: false,
-            community: false,
-            disappearing: false,
-            observedAt: '2026-10-20T12:00:00Z',
-            group: group.group,
-            shared: group.shared ?? null,
-            participants: Array.from({ length: group.members }, (_, i) => ({
-              jid: `1415555${String(i).padStart(4, '0')}@s.whatsapp.net`,
-              admin: i === 0,
+          json: {
+            chats: state.chats.map((chat) => ({
+              ...chat,
+              archived: false,
+              pinned: false,
+              shared: chat.group ? null : (chat.shared ?? null),
+              can_add: chat.kind === 'group' && !chat.group && !chat.shared,
+              cannot_add_reason:
+                chat.kind === 'direct'
+                  ? "direct chats can't be added to Macro yet"
+                  : null,
             })),
-          })),
+          },
         });
       if (path === 'groups/adopt' && method === 'POST') {
         const body = route.request().postDataJSON() as { group_jid: string };
         state.adoptions.push(body);
-        const group = state.groups.find(({ jid }) => jid === body.group_jid);
+        const group = state.chats.find(({ jid }) => jid === body.group_jid);
         if (group) group.group = { id: 'group-new', name: group.name };
         return route.fulfill({
           json: {
@@ -445,10 +464,28 @@ test('links WhatsApp by QR, then adds a shareable WhatsApp group', async ({
 
   const groups = page.getByRole('list', { name: 'Groups to add to Macro' });
   await expect(groups.getByText('Launch War Room')).toBeVisible();
-  // Already in Macro: listed in External's sidebar instead.
   await expect(groups.getByText('Design Crit')).toHaveCount(0);
+  // Direct chats are listed by recent activity but can't be added yet.
+  await page.getByRole('button', { name: /Can't be added \(1\)/ }).click();
+  const direct = page
+    .getByRole('list', { name: "Can't be added" })
+    .getByRole('listitem')
+    .filter({ hasText: 'Ana Ruiz' });
+  await expect(direct.getByText("Can't add direct chats yet")).toBeVisible();
+  await expect(direct.getByRole('button')).toHaveCount(0);
+  const search = page.getByRole('searchbox', { name: 'Search WhatsApp chats' });
+  await search.fill('design');
+  await expect(
+    page
+      .getByRole('list', { name: 'WhatsApp chats in Macro' })
+      .getByText('Design Crit')
+  ).toBeVisible();
+  await search.fill('launch');
+  await expect(groups.getByRole('listitem')).toHaveCount(1);
+  await search.fill('');
+  await expect(groups.getByRole('listitem')).toHaveCount(2);
   await groups
-    .getByRole('button', { name: /Shared with you by Group Owner/ })
+    .getByRole('button', { name: /shared with you by Group Owner/i })
     .click();
   expect(await page.evaluate(() => window.openedGroups)).toEqual([
     'group-shared-family',
@@ -496,7 +533,7 @@ test('External lists groups in Macro with unread counts and read-only tags', asy
   page,
 }) => {
   const state = server();
-  state.groups[1].group = { id: 'group-shared', name: 'Launch War Room' };
+  state.chats[2].group = { id: 'group-shared', name: 'Launch War Room' };
   const unexpected = await mount(page, state, '?view=in-macro');
   const nav = page.getByRole('navigation', {
     name: 'WhatsApp groups in Macro',
@@ -598,7 +635,9 @@ test('an independent group reads, replies, reacts and pages through channel rows
   await expect(
     page.getByRole('heading', { name: 'Design Crit' })
   ).toBeVisible();
-  await expect(page.getByText('Sending as +14155550142')).toBeVisible();
+  await expect(
+    page.getByRole('textbox', { name: 'Message Design Crit as +14155550142' })
+  ).toBeVisible();
   await expect(page.getByText('Loading design.pdf…')).toBeVisible();
   await expect(page.getByText(/may already have arrived/)).toHaveCount(0);
   await expect.poll(() => state.readMessages).toContain('message-2');
@@ -633,6 +672,40 @@ test('an independent group reads, replies, reacts and pages through channel rows
   expect(state.requests.some((request) => request.includes('channels/'))).toBe(
     false
   );
+  expect(unexpected).toEqual([]);
+});
+
+test('history imported after adding shows up older, with the import state', async ({
+  page,
+}) => {
+  const state = server();
+  state.backfill = { state: 'waiting_for_phone', imported: 0 };
+  const unexpected = await mount(page, state, `?group=${GROUP_ID}`);
+  await expect(
+    page.getByText('WhatsApp · Waiting for your phone to import history')
+  ).toBeVisible();
+  // The phone answers; the next read (push or fallback re-fetch) shows it.
+  state.backfill = { state: 'done', imported: 1 };
+  state.imported = [
+    {
+      ...incomingMessage,
+      id: 'message-imported',
+      body: 'From before the group was added',
+      sent_at: '2026-10-19T10:00:00Z',
+      reactions: [],
+      attachments: [],
+    },
+  ];
+  await expect(page.getByText('From before the group was added')).toBeVisible();
+  await expect(page.getByText(/import history|Importing history/)).toHaveCount(
+    0
+  );
+  const ids = await page
+    .locator('[data-message-id]')
+    .evaluateAll((rows) =>
+      rows.map((row) => row.getAttribute('data-message-id'))
+    );
+  expect(ids.slice(0, 2)).toEqual(['message-imported', 'message-1']);
   expect(unexpected).toEqual([]);
 });
 
@@ -719,7 +792,11 @@ for (const mobile of [false, true]) {
         await page.emulateMedia({ colorScheme: dark ? 'dark' : 'light' });
         const state = server();
         const unexpected = await mount(page, state, `?group=${GROUP_ID}`);
-        await expect(page.getByText('Sending as +14155550142')).toBeVisible();
+        await expect(
+          page.getByRole('textbox', {
+            name: 'Message Design Crit as +14155550142',
+          })
+        ).toBeVisible();
         await expect(
           page.getByRole('textbox', { name: 'Message Design Crit' })
         ).toBeVisible();

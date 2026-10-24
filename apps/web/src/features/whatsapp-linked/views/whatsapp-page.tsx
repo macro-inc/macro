@@ -1,22 +1,25 @@
+import { SearchBar } from '@app/components/view-shell';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Button, ConfirmDialog } from '@ui';
-import { createSignal, Match, onMount, Show, Switch } from 'solid-js';
+import { createSignal, type JSX, Match, onMount, Show, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
-import { AccountCard, ConnectCard } from '../components/account-card';
+import { AccountStrip, ConnectCard } from '../components/account-card';
 import {
-  AddableGroupList,
-  UnsupportedGroupList,
-} from '../components/group-list';
+  AddableChatList,
+  ChatSectionHeading,
+  InMacroChatList,
+  UnsupportedChatList,
+} from '../components/chat-list';
 import { PairingDialog, type PasskeyMode } from '../components/pairing-dialog';
 import { useWhatsAppLinked } from '../context/whatsapp-linked-context';
 import { accountStatus } from '../core/account';
 import { adoptFailureMessage } from '../core/adopt';
-import { groupSections, type WhatsAppGroup } from '../core/group';
+import { chatSections, type WhatsAppChat } from '../core/chat';
 import { createPairingFlow } from '../primitives/pairing-flow';
 
 function Notice(props: { children: string }) {
   return (
-    <p role="alert" class="px-1 text-sm text-ink-muted">
+    <p role="alert" class="text-sm text-ink-muted">
       {props.children}
     </p>
   );
@@ -24,7 +27,7 @@ function Notice(props: { children: string }) {
 
 function LoadFailure(props: { what: string; onRetry: () => void }) {
   return (
-    <div class="flex items-center gap-3 px-1 text-sm text-ink-muted">
+    <div class="flex items-center gap-3 px-4 py-2 text-sm text-ink-muted">
       <span role="alert">Couldn't load {props.what}.</span>
       <Button type="button" size="sm" variant="outline" onClick={props.onRetry}>
         Try again
@@ -33,9 +36,22 @@ function LoadFailure(props: { what: string; onRetry: () => void }) {
   );
 }
 
+function ChatSection(props: {
+  id: string;
+  title: string;
+  children: JSX.Element;
+}) {
+  return (
+    <section class="flex flex-col" aria-labelledby={props.id}>
+      <ChatSectionHeading id={props.id}>{props.title}</ChatSectionHeading>
+      {props.children}
+    </section>
+  );
+}
+
 /**
- * The External tab's WhatsApp page: link an account, then add its groups.
- * Groups already in Macro are listed in External's sidebar.
+ * The External tab's WhatsApp page: link an account, then add its chats from
+ * WhatsApp's chat list, newest activity first.
  */
 export function WhatsAppPage(props: {
   /** A pairing to show at once, handed off by id from another device. */
@@ -55,7 +71,8 @@ export function WhatsAppPage(props: {
     return current?.kind === 'not-connected' ? current : undefined;
   };
   const connected = () => linked() !== undefined;
-  const groups = whatsapp.groups(connected);
+  const chats = whatsapp.chats(connected);
+  const [query, setQuery] = createSignal('');
   const pairing = createPairingFlow(connected, whatsapp);
   // A pairing handed off from a browser opens here in Macro desktop.
   onMount(() => {
@@ -75,7 +92,6 @@ export function WhatsAppPage(props: {
       .exhaustive();
   };
   const [confirmingDisconnect, setConfirmingDisconnect] = createSignal(false);
-  const [confirmingReplace, setConfirmingReplace] = createSignal(false);
   const [notice, setNotice] = createSignal<string>();
   const [adding, setAdding] = createSignal<ReadonlySet<string>>(new Set());
   const [addErrors, setAddErrors] = createSignal<Record<string, string>>({});
@@ -104,24 +120,24 @@ export function WhatsAppPage(props: {
       else next.delete(jid);
       return next;
     });
-  const adopt = async (group: WhatsAppGroup) => {
-    if (adding().has(group.jid)) return;
-    setAddErrors(({ [group.jid]: _previous, ...rest }) => rest);
-    setPending(group.jid, true);
-    const result = await whatsapp.adopt(group.jid);
-    setPending(group.jid, false);
+  const adopt = async (chat: WhatsAppChat) => {
+    if (adding().has(chat.jid)) return;
+    setAddErrors(({ [chat.jid]: _previous, ...rest }) => rest);
+    setPending(chat.jid, true);
+    const result = await whatsapp.adopt(chat.jid);
+    setPending(chat.jid, false);
     if (result.isErr())
       setAddErrors((current) => ({
         ...current,
-        [group.jid]: adoptFailureMessage(result.error),
+        [chat.jid]: adoptFailureMessage(result.error),
       }));
   };
 
   return (
-    <div class="flex max-w-2xl flex-col gap-6">
+    <div class="flex min-w-0 flex-col">
       <Switch>
         <Match when={whatsapp.account.isPending}>
-          <p role="status" class="px-1 text-sm text-ink-muted">
+          <p role="status" class="px-4 py-4 text-sm text-ink-muted">
             Loading your WhatsApp connection…
           </p>
         </Match>
@@ -134,56 +150,89 @@ export function WhatsAppPage(props: {
         <Match when={linked()}>
           {(current) => (
             <>
-              <AccountCard
-                account={current().account}
-                pending={whatsapp.isDisconnecting() || whatsapp.isConnecting()}
-                onDisconnect={() => setConfirmingDisconnect(true)}
-                onReplace={() => setConfirmingReplace(true)}
-              />
-              <Show when={pairing.startFailed()}>
-                <Notice>Couldn't start linking WhatsApp. Try again.</Notice>
-              </Show>
-              <Show when={notice()}>{(text) => <Notice>{text()}</Notice>}</Show>
+              <div class="sticky top-0 z-10 flex flex-col gap-2 bg-panel px-4 pt-4 pb-1 touch:static">
+                <div class="flex min-w-0 items-center gap-3 touch:flex-col-reverse touch:items-stretch">
+                  <SearchBar
+                    label="Search WhatsApp chats"
+                    placeholder="Search chats"
+                    value={query()}
+                    onValueChange={setQuery}
+                    class="max-w-md flex-1 touch:max-w-none"
+                  />
+                  <div class="ml-auto min-w-0 touch:ml-0">
+                    <AccountStrip
+                      account={current().account}
+                      pending={
+                        whatsapp.isDisconnecting() || whatsapp.isConnecting()
+                      }
+                      onDisconnect={() => setConfirmingDisconnect(true)}
+                    />
+                  </div>
+                </div>
+                <Show when={pairing.startFailed()}>
+                  <Notice>Couldn't start linking WhatsApp. Try again.</Notice>
+                </Show>
+                <Show when={notice()}>
+                  {(text) => <Notice>{text()}</Notice>}
+                </Show>
+              </div>
               <Switch>
-                <Match when={groups.data}>
-                  {(list) => (
-                    <>
-                      <section
-                        class="flex flex-col gap-1"
-                        aria-labelledby="whatsapp-add-groups"
-                      >
-                        <h2
+                <Match when={chats.data}>
+                  {(list) => {
+                    const sections = () => chatSections(list(), query());
+                    const searching = () => query().trim() !== '';
+                    return (
+                      <>
+                        {/* External's sidebar (or the phone's drill-in list)
+                            already lists added chats; here only search hits. */}
+                        <Show when={searching() && sections().inMacro.length}>
+                          <ChatSection id="whatsapp-in-macro" title="In Macro">
+                            <InMacroChatList
+                              chats={sections().inMacro}
+                              onOpenGroup={whatsapp.openGroup}
+                            />
+                          </ChatSection>
+                        </Show>
+                        <ChatSection
                           id="whatsapp-add-groups"
-                          class="px-3 pb-1 text-xs font-medium text-ink-subtle"
+                          title="Add to Macro"
                         >
-                          Add to Macro
-                        </h2>
-                        <AddableGroupList
-                          groups={groupSections(list()).addable}
-                          canAdd={whatsapp.features.data?.adoption ?? false}
-                          adding={adding()}
-                          errors={addErrors()}
-                          onAdd={(group) =>
-                            fireAndForget(adopt(group), 'whatsapp-linked.adopt')
-                          }
-                          onOpenGroup={whatsapp.openGroup}
-                        />
-                      </section>
-                      <Show when={groupSections(list()).unsupported.length}>
-                        <UnsupportedGroupList
-                          groups={groupSections(list()).unsupported}
-                        />
-                      </Show>
-                    </>
-                  )}
+                          <AddableChatList
+                            chats={sections().addable}
+                            canAdd={whatsapp.features.data?.adoption ?? false}
+                            adding={adding()}
+                            errors={addErrors()}
+                            empty={
+                              searching()
+                                ? 'No chats to add match your search.'
+                                : 'Every WhatsApp group you can add is already in Macro.'
+                            }
+                            onAdd={(chat) =>
+                              fireAndForget(
+                                adopt(chat),
+                                'whatsapp-linked.adopt'
+                              )
+                            }
+                            onOpenGroup={whatsapp.openGroup}
+                          />
+                        </ChatSection>
+                        <Show when={sections().unsupported.length}>
+                          <UnsupportedChatList
+                            chats={sections().unsupported}
+                            forceOpen={searching()}
+                          />
+                        </Show>
+                      </>
+                    );
+                  }}
                 </Match>
-                <Match when={groups.isPending}>
-                  <p role="status" class="px-3 py-2 text-sm text-ink-muted">
-                    Loading groups…
+                <Match when={chats.isPending}>
+                  <p role="status" class="px-4 py-2 text-sm text-ink-muted">
+                    Loading chats…
                   </p>
                 </Match>
-                <Match when={groups.isError}>
-                  <LoadFailure what="your groups" onRetry={groups.refetch} />
+                <Match when={chats.isError}>
+                  <LoadFailure what="your chats" onRetry={chats.refetch} />
                 </Match>
               </Switch>
               <ConfirmDialog
@@ -196,28 +245,17 @@ export function WhatsAppPage(props: {
                 pending={whatsapp.isDisconnecting()}
                 onConfirm={() => disconnect(current().account.generation)}
               />
-              <ConfirmDialog
-                open={confirmingReplace()}
-                onOpenChange={setConfirmingReplace}
-                title="Use a different WhatsApp account?"
-                body="Sending and syncing from this account stop. Group history stays in Macro. After linking the new account, add its groups again."
-                confirmLabel="Link another account"
-                onConfirm={() => {
-                  setConfirmingReplace(false);
-                  fireAndForget(pairing.start(true), 'whatsapp-linked.replace');
-                }}
-              />
             </>
           )}
         </Match>
         <Match when={unlinked()}>
           {(current) => (
-            <div class="flex flex-col gap-3">
+            <div class="flex flex-col gap-3 px-4 py-4">
               <ConnectCard
                 reconnect={current().reconnect}
                 unavailable={whatsapp.features.data?.pairing === false}
                 pending={whatsapp.isConnecting()}
-                onConnect={() => pairing.start(false)}
+                onConnect={() => pairing.start()}
               />
               <Show when={pairing.startFailed()}>
                 <Notice>Couldn't start linking WhatsApp. Try again.</Notice>

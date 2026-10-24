@@ -50,10 +50,24 @@ current, ingests standalone `whatsapp_group` traffic through `whatsapp_linked`'s
 - `outbound/whatsapp.rs` (+ `events.rs`): `whatsapp_store_pg` device store,
   whatsmeow `Client` (`whatsmeow_signal::libsignal()`), event mapping. Only
   group events become inbound events; the gate drops groups the account has
-  not adopted. Adopted groups stay cached until `whatsapp_account_changed`;
+  not adopted. Before storing, `events::complete_sender` fills the other half
+  of a sender's phone-number/LID pair from the account's LID store (pairing,
+  group participant lists, message addressing); `from_me` carries WhatsApp's
+  own-message flag. Adopted groups stay cached until `whatsapp_account_changed`;
   a miss always waits for a load that started after the event arrived
   (single-flight), so an adoption that committed just before is seen. Media locators (direct path, media key, hashes) are sealed with
   `PgWhatsAppStore::seal("media-locator", …)` before they leave the process.
+- Chat list and history: `outbound/whatsapp.rs` `Forwarder` turns history
+  sync bundles, live messages (any chat) and contact/archive/pin events into
+  `ChatUpdate`s (`events.rs`: `history_chats`, `message_chat`,
+  `chat_setting`; direct chats by phone number) that the runner stores with
+  `update_chats`. On-demand history answers are parsed with
+  `Client::parse_web_message`, ingested as history events through the inbound
+  gate, then reported as a `HistoryPage`. The runner's `backfill` asks the
+  phone for pages of added groups (`request_history`, plus `request_message`
+  for an anchor that predates adoption), marks unanswered requests
+  `waiting_for_phone` after `backfill_timeout` and retries after
+  `backfill_retry` or on reconnect.
 - Passkey pairing: `PairPasskeyRequest` → `PairingUpdate::Passkey { challenge }`;
   on `whatsapp_pairing_requested`, and on every tick in case the notify was
   missed, the runner takes the owner's assertion (`take_passkey_response`)
@@ -81,7 +95,8 @@ current, ingests standalone `whatsapp_group` traffic through `whatsapp_linked`'s
 Spans: `whatsapp.account.{lease,release,rescan,connect}`,
 `whatsapp.inbound.ingest`, `whatsapp.media.import`, `whatsapp.send.dispatch`
 (parented on the trace of the request that recorded the send),
-`whatsapp.groups.{refresh,event}`, `whatsapp.signal.receive`, `whatsapp.drain`. Log events read by `infra/stacks/monitoring/monitors/
+`whatsapp.groups.{refresh,event}`, `whatsapp.signal.receive`, `whatsapp.drain`,
+`whatsapp.history.{sync,page}`, `whatsapp.backfill.request`. Log events read by `infra/stacks/monitoring/monitors/
 whatsapp-session.ts` (`telemetry_event` = `whatsapp_session_health`,
 `whatsapp_session_reconnect`, `whatsapp_send_outcome`,
 `whatsapp_session_drain`): keep their field names. Opaque ids only; never
@@ -119,8 +134,9 @@ JIDs, phone numbers, QR codes or message text.
   event `whatsapp.inbound.skipped` with a `reason` (`not_group_content`,
   `group_not_adopted`, `invalid_event`). Once stored, the domain may still
   drop an event as not observed (consent boundary).
-- whatsmeow's media futures are large: the adapter boxes them, or nesting
-  them in the runner overflows a 2 MiB stack in debug builds.
+- whatsmeow's media, send and history futures are large: the adapter and the
+  runner box them, or nesting them overflows a 2 MiB stack in debug builds
+  (the local stack runs debug binaries).
 - Every send sets `no_disconnect_retry`: a send cut off by a disconnect is
   recorded `unknown` instead of being resent after reconnect.
 - whatsmeow emits a sender key distribution as its own message event with

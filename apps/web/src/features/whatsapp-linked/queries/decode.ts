@@ -1,11 +1,12 @@
 import { ThrownResultError } from '@core/util/result';
 import type { LinkedAccount } from '@service-storage/generated/schemas/linkedAccount';
-import type { LinkedGroupInfo } from '@service-storage/generated/schemas/linkedGroupInfo';
+import type { LinkedChat } from '@service-storage/generated/schemas/linkedChat';
+import type { LinkedChats } from '@service-storage/generated/schemas/linkedChats';
 import type { LinkedPairState } from '@service-storage/generated/schemas/linkedPairState';
 import { match } from 'ts-pattern';
 import { phoneFromJid, type WhatsAppAccount } from '../core/account';
 import type { AdoptRefusal } from '../core/adopt';
-import type { WhatsAppGroup } from '../core/group';
+import type { WhatsAppChat } from '../core/chat';
 import { type PairingStep, pairingStep } from '../core/pairing';
 
 export function decodeAccount(
@@ -22,29 +23,28 @@ export function decodeAccount(
 }
 
 /** `ownerName` resolves a Macro user id; production reads the shared name cache. */
-export function decodeGroup(
-  group: LinkedGroupInfo,
+export function decodeChat(
+  chat: LinkedChat,
   ownerName: (ownerId: string) => string
-): WhatsAppGroup {
+): WhatsAppChat {
   return {
-    jid: group.jid,
-    name: group.name,
-    memberCount: group.participants.length,
-    inMacro: group.group
-      ? { kind: 'own', groupId: group.group.id }
-      : group.shared
+    jid: chat.jid,
+    kind: chat.kind,
+    name: chat.name,
+    lastActivityAt: chat.last_activity_at ?? undefined,
+    archived: chat.archived,
+    inMacro: chat.group
+      ? { kind: 'own', groupId: chat.group.id }
+      : chat.shared
         ? {
             kind: 'shared',
-            groupId: group.shared.id,
-            ownerId: group.shared.owner_id,
-            ownerName: ownerName(group.shared.owner_id),
+            groupId: chat.shared.id,
+            ownerId: chat.shared.owner_id,
+            ownerName: ownerName(chat.shared.owner_id),
           }
         : undefined,
-    unsupported: group.community
-      ? 'community'
-      : group.disappearing
-        ? 'disappearing'
-        : undefined,
+    canAdd: chat.can_add,
+    cannotAddReason: chat.cannot_add_reason ?? undefined,
   };
 }
 
@@ -72,14 +72,12 @@ export function decodeAdoptRefusal(error: unknown): AdoptRefusal {
     .otherwise(() => ({ reason: 'unavailable' }));
 }
 
-/** By name, so adding a group or a refetch never moves a row. */
-export function decodeGroups(
-  groups: LinkedGroupInfo[],
+/** DSS's order (newest activity first) is kept. */
+export function decodeChats(
+  chats: LinkedChats,
   ownerName: (ownerId: string) => string
-): WhatsAppGroup[] {
-  return groups
-    .map((group) => decodeGroup(group, ownerName))
-    .sort((a, b) => a.name.localeCompare(b.name));
+): WhatsAppChat[] {
+  return chats.chats.map((chat) => decodeChat(chat, ownerName));
 }
 
 export function decodePairing(state: LinkedPairState): {

@@ -14,7 +14,7 @@ use sqlx::{Connection, PgConnection, PgPool};
 use uuid::Uuid;
 use whatsapp_fake_server::{FakePhone, FakeWhatsApp};
 use whatsapp_linked::domain::models::{
-    AccountState, AdoptGroup, Binding, Features, ReplyContent, SendAuthority, SendReply,
+    AccountState, AdoptGroup, Binding, ChatKind, Features, ReplyContent, SendAuthority, SendReply,
 };
 use whatsapp_linked::domain::ports::{Authorizer, LinkedResult};
 use whatsapp_linked::domain::service::LinkedService;
@@ -139,6 +139,18 @@ impl World {
         })
         .await
         .expect("the account connects as the phone's number");
+        // Like a real phone, send the new device its chat list once it can
+        // be encrypted to; this also starts the phone's session with it.
+        assert!(
+            self.whatsapp
+                .wait_until_keys_uploaded(&device, TIMEOUT)
+                .await,
+            "the new device uploads its keys"
+        );
+        phone
+            .send_history_sync(phone.chat_list())
+            .await
+            .expect("the phone sends the initial chat list");
         device
     }
 
@@ -271,6 +283,17 @@ impl World {
                 "accounts (id, state, lease epoch)",
                 sqlx::query_scalar!(
                     r#"SELECT id::text || ' ' || state || ' ' || lease_epoch AS "row!" FROM whatsapp_linked_account"#
+                )
+                .fetch_all(pool)
+                .await,
+            ),
+            (
+                "chats (jid, kind, anchor, backfill)",
+                sqlx::query_scalar!(
+                    r#"SELECT c.chat_jid || ' ' || c.kind || ' ' || coalesce(c.anchor->>'id', '-') || ' '
+                        || coalesce((SELECT string_agg(coalesce(g.backfill_state, '-') || '/' || g.backfill_imported, ',')
+                            FROM whatsapp_group g WHERE g.group_jid = c.chat_jid), '') AS "row!"
+                    FROM whatsapp_chat c"#
                 )
                 .fetch_all(pool)
                 .await,
@@ -873,5 +896,302 @@ async fn group_renames_and_removals_in_whatsapp_reach_macro_live(pool: PgPool) {
         .find(|group| group.id == binding.id)
         .expect("history and access stay");
     assert!(!detail.can_send, "Alice can no longer send");
+    replica.drain(TIMEOUT).await.unwrap();
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn senders_named_only_by_lid_land_as_the_people_they_are(pool: PgPool) {
+    let world = World::new(pool).await;
+    let replica = world.replica().await;
+    let (_, binding) = world.alice_adopted().await;
+    world.whatsapp.address_by_lid_only(&world.group);
+
+    // Alice writes from her phone: WhatsApp names her by LID only, but the
+    // message is flagged as her own.
+    let own = world
+        .alice
+        .send_text(&world.group, "Hi there")
+        .await
+        .unwrap();
+    // The customer, named by LID only, is known from the group's participants.
+    let customer = world
+        .customer
+        .send_text(&world.group, "hello from a LID")
+        .await
+        .unwrap();
+    assert_eq!(world.timeline(&binding, &own).await, ["Hi there"]);
+    assert_eq!(
+        world.timeline(&binding, &customer).await,
+        ["hello from a LID"]
+    );
+
+    let authors = sqlx::query!(
+        r#"SELECT m.source_id, p.user_id, array_agg(a.jid ORDER BY a.jid) AS "aliases!"
+        FROM whatsapp_group_message m JOIN whatsapp_external_person p ON p.id = m.person_id
+        JOIN whatsapp_identity_alias a ON a.person_id = p.id
+        WHERE m.binding_id = $1 GROUP BY m.source_id, p.user_id"#,
+        binding.id
+    )
+    .fetch_all(&world.pool)
+    .await
+    .unwrap();
+    let author = |source: &str| {
+        authors
+            .iter()
+            .find(|row| row.source_id == source)
+            .map(|row| (row.user_id.clone(), row.aliases.clone()))
+            .unwrap()
+    };
+    assert_eq!(
+        author(&own),
+        (
+            Some(ALICE.to_owned()),
+            vec![world.alice.lid().to_string(), world.alice.jid().to_string()]
+        )
+    );
+    assert_eq!(
+        author(&customer),
+        (
+            None,
+            vec![
+                world.customer.lid().to_string(),
+                world.customer.jid().to_string()
+            ]
+        )
+    );
+    let quarantined = sqlx::query_scalar!(
+        r#"SELECT count(*) AS "count!" FROM whatsapp_inbound_event WHERE state = 'quarantined'"#
+    )
+    .fetch_one(&world.pool)
+    .await
+    .unwrap();
+    assert_eq!(quarantined, 0);
+    replica.drain(TIMEOUT).await.unwrap();
+}
+
+/// The group's backfill state and count once it is one of `states`.
+async fn backfill_state(world: &World, binding: &Binding, states: &[&str]) -> (String, i32) {
+    let state = wait_for_rows(&world.pool, TIMEOUT, || async {
+        let row = sqlx::query!(
+            "SELECT backfill_state, backfill_imported FROM whatsapp_group WHERE id = $1",
+            binding.id
+        )
+        .fetch_one(&world.pool)
+        .await
+        .unwrap();
+        let state = row.backfill_state?;
+        states
+            .contains(&state.as_str())
+            .then_some((state, row.backfill_imported))
+    })
+    .await;
+    world
+        .expect(state, &format!("the backfill reaches one of {states:?}"))
+        .await
+}
+
+/// Every stored copy of each message with its origin, by text (WhatsApp
+/// stamps whole seconds, so time does not order them within a test).
+async fn origins(pool: &PgPool, binding: Uuid) -> Vec<(String, String)> {
+    sqlx::query!(
+        "SELECT body, origin FROM whatsapp_group_message WHERE binding_id = $1 AND message_id IS NOT NULL ORDER BY body",
+        binding
+    )
+    .fetch_all(pool)
+    .await
+    .unwrap()
+    .into_iter()
+    .map(|row| (row.body, row.origin))
+    .collect()
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn adding_a_group_imports_its_earlier_messages_once_without_notifying(pool: PgPool) {
+    let world = World::new(pool).await;
+    let replica = world.replica().await;
+    world.pair(ALICE, &world.alice).await;
+    let mut before = vec![];
+    for text in ["first", "second", "third"] {
+        before.push(world.customer.send_text(&world.group, text).await.unwrap());
+    }
+    // Alice's device saw the newest one live: it is the chat's anchor.
+    let anchored = wait_for_rows(&world.pool, TIMEOUT, || async {
+        sqlx::query_scalar!(
+            "SELECT 1 AS found FROM whatsapp_chat WHERE chat_jid = $1 AND anchor->>'id' = $2",
+            world.group.to_string(),
+            before[2]
+        )
+        .fetch_optional(&world.pool)
+        .await
+        .unwrap()
+    })
+    .await;
+    world
+        .expect(anchored, "the chat list knows the group's newest message")
+        .await;
+
+    let binding = world.adopt(ALICE, &[]).await;
+    assert_eq!(
+        backfill_state(&world, &binding, &["done", "partial"]).await,
+        ("done".to_owned(), 2)
+    );
+    let imported = wait_for_rows(&world.pool, TIMEOUT, || async {
+        let stored = origins(&world.pool, binding.id).await;
+        (stored.len() == 3).then_some(stored)
+    })
+    .await;
+    assert_eq!(
+        world
+            .expect(imported, "all three earlier messages land")
+            .await,
+        [
+            ("first".to_owned(), "history".to_owned()),
+            ("second".to_owned(), "history".to_owned()),
+            ("third".to_owned(), "history".to_owned()),
+        ]
+    );
+    let summary = world
+        .linked
+        .adopted_groups(ALICE)
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|group| group.id == binding.id)
+        .unwrap();
+    assert_eq!(summary.unread_count, 0, "history is never unread");
+    let notifying = sqlx::query_scalar!(
+        r#"SELECT count(*) AS "count!" FROM whatsapp_group_message WHERE binding_id = $1 AND origin <> 'history'"#,
+        binding.id
+    )
+    .fetch_one(&world.pool)
+    .await
+    .unwrap();
+    assert_eq!(notifying, 0, "nothing imported notifies");
+    replica.drain(TIMEOUT).await.unwrap();
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn backfill_waits_for_an_offline_phone_and_never_duplicates_live_messages(pool: PgPool) {
+    let world = World::new(pool).await;
+    let replica = world.replica().await;
+    world.pair(ALICE, &world.alice).await;
+    world
+        .customer
+        .send_text(&world.group, "old one")
+        .await
+        .unwrap();
+    world.alice.answer_history_requests(false);
+    let binding = world.adopt(ALICE, &[]).await;
+
+    // Live while the import waits: kept live, once.
+    let live = world
+        .customer
+        .send_text(&world.group, "live during import")
+        .await
+        .unwrap();
+    assert_eq!(
+        world.timeline(&binding, &live).await,
+        ["live during import"]
+    );
+    backfill_state(&world, &binding, &["waiting_for_phone"]).await;
+    let newest = world
+        .customer
+        .send_text(&world.group, "newest")
+        .await
+        .unwrap();
+    world.timeline(&binding, &newest).await;
+
+    // The phone comes back: the import resumes and the page that contains
+    // the live message adds only what was missing.
+    world.alice.answer_history_requests(true);
+    backfill_state(&world, &binding, &["done"]).await;
+    let stored = wait_for_rows(&world.pool, TIMEOUT, || async {
+        let stored = origins(&world.pool, binding.id).await;
+        (stored.len() == 3).then_some(stored)
+    })
+    .await;
+    let stored = world.expect(stored, "three messages, each once").await;
+    assert_eq!(
+        stored
+            .iter()
+            .map(|(body, _)| body.as_str())
+            .collect::<Vec<_>>(),
+        ["live during import", "newest", "old one"]
+    );
+    // "old one" may also have arrived live, within adoption's clock skew.
+    assert_eq!(
+        (stored[0].1.as_str(), stored[1].1.as_str()),
+        ("whatsapp", "whatsapp")
+    );
+    replica.drain(TIMEOUT).await.unwrap();
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_chat_list_follows_history_sync_and_live_messages(pool: PgPool) {
+    let world = World::new(pool).await;
+    // Before linking: a direct chat and a group message on Alice's phone.
+    world
+        .customer
+        .send_text(&world.alice.jid(), "are you there?")
+        .await
+        .unwrap();
+    world
+        .customer
+        .send_text(&world.group, "hi all")
+        .await
+        .unwrap();
+    let replica = world.replica().await;
+    world.pair(ALICE, &world.alice).await;
+    world
+        .alice
+        .send_history_sync(world.alice.chat_list())
+        .await
+        .unwrap();
+    let listed = wait_for_rows(&world.pool, TIMEOUT, || async {
+        let chats = world.linked.chats(ALICE).await.ok()?.chats;
+        let direct = chats
+            .iter()
+            .find(|chat| chat.jid == world.customer.jid().to_string())?
+            .clone();
+        // History sync can land before the roster refresh that decides
+        // whether the group can be added.
+        let group = chats
+            .iter()
+            .find(|chat| {
+                chat.jid == world.group.to_string()
+                    && chat.last_activity_at.is_some()
+                    && chat.can_add
+            })?
+            .clone();
+        Some((direct, group))
+    })
+    .await;
+    let (direct, group) = world
+        .expect(listed, "history sync lists the direct chat and the group")
+        .await;
+    assert_eq!(direct.kind, ChatKind::Direct);
+    assert_eq!(direct.name, "Customer");
+    assert!(!direct.can_add);
+    assert_eq!(
+        direct.cannot_add_reason.as_deref(),
+        Some("direct chats can't be added to Macro yet")
+    );
+    assert_eq!(group.kind, ChatKind::Group);
+    assert_eq!(group.name, "Customer escalations");
+    assert!(group.can_add);
+
+    // A live direct message moves its chat to the top.
+    world
+        .bob
+        .send_text(&world.alice.jid(), "lunch?")
+        .await
+        .unwrap();
+    let top = wait_for_rows(&world.pool, TIMEOUT, || async {
+        let chats = world.linked.chats(ALICE).await.ok()?.chats;
+        (chats.first()?.jid == world.bob.jid().to_string()).then(|| chats[0].clone())
+    })
+    .await;
+    let top = world.expect(top, "Bob's new chat is first").await;
+    assert_eq!(top.name, "Bob");
     replica.drain(TIMEOUT).await.unwrap();
 }

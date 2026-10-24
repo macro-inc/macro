@@ -15,7 +15,7 @@ export type PairingFlow = {
   secondsLeft: Accessor<number | undefined>;
   /** Starting a pairing failed before any dialog opened. */
   startFailed: Accessor<boolean>;
-  start: (replace: boolean) => Promise<void>;
+  start: () => Promise<void>;
   /** Shows a pairing started elsewhere, e.g. handed off to Macro desktop. */
   resume: (pairingId: string) => void;
   pairingId: Accessor<string | undefined>;
@@ -41,7 +41,6 @@ export function createPairingFlow(
   >
 ): PairingFlow {
   const [current, setCurrent] = createSignal<StartedPairing>();
-  const [replacing, setReplacing] = createSignal(false);
   const [startFailed, setStartFailed] = createSignal(false);
   const [handedOff, setHandedOff] = createSignal(false);
   const [passkey, setPasskey] = createSignal<PasskeyCeremony>({
@@ -52,9 +51,7 @@ export function createPairingFlow(
     () => current()?.expiresAt ?? poll.data?.expiresAt
   );
 
-  // While replacing, the old account still reads linked; only the new
-  // pairing's own success counts.
-  const linkedByAccount = () => !replacing() && accountLinked();
+  const linkedByAccount = accountLinked;
   const step = (): PairingStep => {
     const polled = poll.data?.step ?? { kind: 'preparing' };
     // The deadline is the server's; once it passes, a stale QR is not scannable.
@@ -81,10 +78,9 @@ export function createPairingFlow(
     )
   );
 
-  const start = async (replace: boolean) => {
+  const start = async () => {
     setStartFailed(false);
-    setReplacing(replace);
-    const started = await capabilities.connect(replace);
+    const started = await capabilities.connect();
     if (started.isErr()) {
       setStartFailed(true);
       return;
@@ -139,7 +135,6 @@ export function createPairingFlow(
     startFailed,
     start,
     resume: (pairingId) => {
-      setReplacing(false);
       setHandedOff(false);
       setPasskey({ kind: 'idle' });
       setCurrent({ pairingId });
@@ -148,7 +143,7 @@ export function createPairingFlow(
     passkey,
     handOff: () => setHandedOff(true),
     confirmPasskey,
-    retry: () => start(replacing()),
+    retry: start,
     cancel,
   };
 }

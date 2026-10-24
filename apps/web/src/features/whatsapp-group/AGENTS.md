@@ -36,6 +36,15 @@ lists belong to `features/whatsapp-linked` and `features/external-view`.
 - Row actions are getters: `ChannelMessage` reads them once per row.
 - Reads do not poll; DSS pushes `whatsapp_changed`, with one fallback
   re-fetch 3 s after opening. Only in-flight sends poll their progress.
+- History imported after adding (`backfill` on the detail) lands older than
+  the rows shown; the view keeps its distance from the bottom when rows appear
+  above, and says "Importing history…" / "Waiting for … phone" until DSS
+  reports `done` or `partial`.
+- Images, video and audio play inline: `fileUrl` resolves the imported
+  document's presigned URL and `InboundMedia` hands it to Chat's
+  `MediaPreview` (or an audio player); `groupMessageData` keeps them out of
+  the document chips. DSS sends no dimensions, so images size on load.
+- Senders show their WhatsApp name (`imported_author`), Macro users included.
 - Use backend limits for text, files, edits and deletes.
 - Keep phone numbers and message bodies out of telemetry.
 - Soup/search registration is deferred; External is the list entry point.

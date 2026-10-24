@@ -91,6 +91,26 @@ pub trait GroupRepository: Send + Sync {
     ) -> LinkedResult<Vec<VisibleAdoption>>;
     /// Latest metadata for a binding's group from any account consenting to it.
     async fn binding_roster(&self, binding: &Binding) -> LinkedResult<Option<GroupInfo>>;
+
+    /// The account's stored chat list (without the roster), newest first.
+    async fn account_chats(&self, account: Uuid) -> LinkedResult<Vec<StoredChat>>;
+}
+
+/// One stored row of an account's chat list.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StoredChat {
+    /// Chat JID.
+    pub jid: String,
+    /// Group or direct.
+    pub kind: ChatKind,
+    /// Name WhatsApp reported, if any.
+    pub name: Option<String>,
+    /// Newest activity.
+    pub last_activity_at: Option<DateTime<Utc>>,
+    /// Archived in WhatsApp.
+    pub archived: bool,
+    /// Pinned in WhatsApp.
+    pub pinned: bool,
 }
 
 /// A new binding, authorized by the domain.
@@ -336,6 +356,26 @@ pub trait SessionRepository: Send + Sync {
     ) -> LinkedResult<()>;
     /// Groups this account currently observes for at least one adopted binding.
     async fn observed_groups(&self, scope: SessionScope) -> LinkedResult<Vec<String>>;
+
+    /// Upsert chat-list rows. Signals the owner's list when something changed.
+    async fn update_chats(&self, scope: SessionScope, chats: &[ChatUpdate]) -> LinkedResult<()>;
+
+    /// The account owner's groups still importing earlier messages.
+    async fn backfill_work(&self, scope: SessionScope) -> LinkedResult<Vec<BackfillWork>>;
+
+    /// A page was requested from the phone just now (`running`).
+    async fn backfill_requested(&self, scope: SessionScope, group: Uuid) -> LinkedResult<()>;
+
+    /// The phone did not answer the last request (`waiting_for_phone`).
+    async fn backfill_unanswered(&self, scope: SessionScope, group: Uuid) -> LinkedResult<()>;
+
+    /// Record a page the phone sent for a chat; returns the resulting state of
+    /// each of the owner's groups for that chat that was importing.
+    async fn backfill_page(
+        &self,
+        scope: SessionScope,
+        page: &HistoryPage,
+    ) -> LinkedResult<Vec<(Uuid, BackfillState)>>;
     /// Persist one validated event into every binding it is observed for.
     async fn ingest(
         &self,

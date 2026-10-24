@@ -1,6 +1,7 @@
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { WhatsAppAccount } from './account';
+import { WhatsAppChat } from './chat';
 import { WhatsAppGroup } from './group';
 import { WhatsAppRemoteGroup } from './remote-group';
 
@@ -19,6 +20,13 @@ export class WhatsAppNamespace {
   async groups(): Promise<WhatsAppGroup[]> {
     return unwrap(await this.client.storage.whatsappGroups()).map((record) =>
       WhatsAppGroup.byId(this.client, record.id),
+    );
+  }
+
+  /** The caller's WhatsApp chat list (groups and direct chats), newest activity first. */
+  async chats(): Promise<WhatsAppChat[]> {
+    return unwrap(await this.client.storage.linkedChats()).chats.map((record) =>
+      WhatsAppChat.from(this.client, record),
     );
   }
 

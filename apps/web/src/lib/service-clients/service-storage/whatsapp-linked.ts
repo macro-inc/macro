@@ -5,9 +5,9 @@ import type { ObjectLike } from '@core/util/result';
 import type { AdoptedGroup } from './generated/schemas/adoptedGroup';
 import type { LinkedAccountView } from './generated/schemas/linkedAccountView';
 import type { LinkedAdoptGroup } from './generated/schemas/linkedAdoptGroup';
+import type { LinkedChats } from './generated/schemas/linkedChats';
 import type { LinkedDisconnect } from './generated/schemas/linkedDisconnect';
 import type { LinkedFeatures } from './generated/schemas/linkedFeatures';
-import type { LinkedGroupInfo } from './generated/schemas/linkedGroupInfo';
 import type { LinkedPairing } from './generated/schemas/linkedPairing';
 import type { LinkedPairState } from './generated/schemas/linkedPairState';
 import type { LinkedPasskeyBody } from './generated/schemas/linkedPasskeyBody';
@@ -31,9 +31,9 @@ function post<T extends ObjectLike>(url: string, body: unknown) {
 export const whatsappLinkedClient = {
   configuration: () => fetchWithToken<LinkedFeatures>(`${root}/configuration`),
   account: () => fetchWithToken<LinkedAccountView>(`${root}/account`),
-  /** Starts an owner-bound pairing; `replace` retires the retained identity. */
-  connect: (replace: boolean) =>
-    post<LinkedPairing>(`${root}/connect`, { replace }),
+  /** Starts an owner-bound pairing. One account at a time: switching means
+   * disconnecting first, so the web never retires a linked identity here. */
+  connect: () => post<LinkedPairing>(`${root}/connect`, { replace: false }),
   disconnect: (authorizationGeneration: number) =>
     post<LinkedDisconnect>(`${root}/disconnect`, {
       authorization_generation: authorizationGeneration,
@@ -46,7 +46,8 @@ export const whatsappLinkedClient = {
   /** The WebAuthn assertion answering WhatsApp's passkey challenge. */
   passkey: (id: string, response: LinkedPasskeyBody) =>
     post<Record<string, never>>(`${pairing(id)}/passkey`, response),
-  groups: () => fetchWithToken<LinkedGroupInfo[]>(`${root}/groups`),
+  /** Every WhatsApp chat, newest activity first; asks DSS for a group refresh. */
+  chats: () => fetchWithToken<LinkedChats>(`${root}/chats`),
   adopt: (request: LinkedAdoptGroup) =>
     post<AdoptedGroup>(`${root}/groups/adopt`, request),
 };

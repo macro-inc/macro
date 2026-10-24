@@ -1,8 +1,12 @@
 import { useNavigate } from '@app/lib/split-router';
 import { externalRoute } from '@app/routes/routes';
-import { useSplitDisplayName } from '@components/app/split-layout/layoutUtils';
+import {
+  useSplitDisplayName,
+  useSplitPanel,
+} from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { getPermissions } from '@core/component/SharePermissions';
+import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
 import { useUserId } from '@core/context/user';
 import type { JSX } from 'solid-js';
@@ -17,6 +21,7 @@ export function WhatsAppGroup(props: {
   leading?: JSX.Element;
 }) {
   const userId = useUserId();
+  const panel = useSplitPanel();
   const navigate = useNavigate();
   const source = createWhatsAppGroupCapabilities(
     whatsappGroupApi,
@@ -41,7 +46,14 @@ export function WhatsAppGroup(props: {
       <WhatsAppGroupView
         leading={props.leading ?? <SplitPanel.CloseButton class="shrink-0" />}
         userId={userId()}
-        onShare={share}
+        share={
+          <ShareTrigger
+            onClick={share}
+            id={props.groupId}
+            blockType="whatsapp_group"
+            hotkeyScope={panel?.splitHotkeyScope}
+          />
+        }
         onConnect={() => navigate({ route: externalRoute, params: {} })}
       />
     </WhatsAppGroupProvider>

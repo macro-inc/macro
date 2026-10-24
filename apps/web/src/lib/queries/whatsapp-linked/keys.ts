@@ -6,5 +6,5 @@ export const whatsappLinkedKeys = createQueryKeys('whatsapp-linked', {
   configuration: null,
   account: (userId: string) => [userId],
   pairing: (userId: string, pairingId: string) => [userId, pairingId],
-  groups: (userId: string) => [userId],
+  chats: (userId: string) => [userId],
 });

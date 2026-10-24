@@ -387,6 +387,15 @@ impl FakeWhatsApp {
         group
     }
 
+    /// From now on, messages in the group name their sender by LID only
+    /// (no `participant_pn`), so receivers must know the sender's pair.
+    pub fn address_by_lid_only(&self, group: &Jid) {
+        self.shared
+            .lock()
+            .lid_only_groups
+            .insert(group.user.clone());
+    }
+
     /// Renames a group and notifies its members' linked devices.
     pub fn rename_group(&self, group: &Jid, subject: &str) {
         let mut state = self.shared.lock();

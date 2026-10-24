@@ -40,10 +40,10 @@ function pairingOptions(userId: string, pairingId: string) {
   });
 }
 
-function groupsOptions(userId: string, enabled: boolean) {
+function chatsOptions(userId: string, enabled: boolean) {
   return queryOptions({
-    queryKey: whatsappLinkedKeys.groups(userId).queryKey,
-    queryFn: () => throwOnErr(client.groups),
+    queryKey: whatsappLinkedKeys.chats(userId).queryKey,
+    queryFn: () => throwOnErr(client.chats),
     enabled: !!userId && enabled,
     staleTime: 10_000,
   });
@@ -67,27 +67,25 @@ export function useWhatsappLinkedPairingQuery(
   return useQuery(() => pairingOptions(userId(), pairingId()));
 }
 
-/** Groups the connected account belongs to, with their adopted channel. */
-export function useWhatsappLinkedGroupsQuery(
+/** The connected account's chat list, newest activity first, with Macro state. */
+export function useWhatsappLinkedChatsQuery(
   userId: Accessor<string>,
   enabled: Accessor<boolean>
 ) {
-  return useQuery(() => groupsOptions(userId(), enabled()));
+  return useQuery(() => chatsOptions(userId(), enabled()));
 }
 
 const invalidateAccount = () =>
   queryClient.invalidateQueries({
     queryKey: whatsappLinkedKeys.account._def,
   });
-const invalidateGroups = () =>
-  queryClient.invalidateQueries({ queryKey: whatsappLinkedKeys.groups._def });
+const invalidateChats = () =>
+  queryClient.invalidateQueries({ queryKey: whatsappLinkedKeys.chats._def });
 
 export function useConnectWhatsappMutation() {
   return useMutation(() => ({
-    mutationFn: (replace: boolean) =>
-      whatsappOperation('connect', () =>
-        throwOnErr(() => client.connect(replace))
-      ),
+    mutationFn: () =>
+      whatsappOperation('connect', () => throwOnErr(() => client.connect())),
     onSuccess: invalidateAccount,
   }));
 }
@@ -98,7 +96,7 @@ export function useDisconnectWhatsappMutation() {
       whatsappOperation('disconnect', () =>
         throwOnErr(() => client.disconnect(authorizationGeneration))
       ),
-    onSuccess: () => Promise.all([invalidateAccount(), invalidateGroups()]),
+    onSuccess: () => Promise.all([invalidateAccount(), invalidateChats()]),
   }));
 }
 
@@ -112,9 +110,9 @@ export function useCancelWhatsappPairingMutation() {
   }));
 }
 
-/** Pairing finished: the account and its groups changed. */
+/** Pairing finished: the account and its chats changed. */
 export function refreshWhatsappLinkedAccount() {
-  return Promise.all([invalidateAccount(), invalidateGroups()]);
+  return Promise.all([invalidateAccount(), invalidateChats()]);
 }
 
 export function useSubmitWhatsappPasskeyMutation() {
@@ -133,6 +131,6 @@ export function useAdoptWhatsappGroupMutation() {
         throwOnErr(() => client.adopt(request))
       ),
     onSuccess: () =>
-      Promise.all([invalidateGroups(), invalidateWhatsappGroups()]),
+      Promise.all([invalidateChats(), invalidateWhatsappGroups()]),
   }));
 }

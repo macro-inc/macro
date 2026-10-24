@@ -122,6 +122,7 @@
 - [src/entities/webhooks/namespace](src/entities/webhooks/namespace/README.md)
 - [src/entities/webhooks/webhook](src/entities/webhooks/webhook/README.md)
 - [src/entities/whatsapp/account](src/entities/whatsapp/account/README.md)
+- [src/entities/whatsapp/chat](src/entities/whatsapp/chat/README.md)
 - [src/entities/whatsapp/group](src/entities/whatsapp/group/README.md)
 - [src/entities/whatsapp/message](src/entities/whatsapp/message/README.md)
 - [src/entities/whatsapp/namespace](src/entities/whatsapp/namespace/README.md)

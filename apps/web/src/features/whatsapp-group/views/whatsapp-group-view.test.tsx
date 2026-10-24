@@ -11,7 +11,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { err } from 'neverthrow';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { WhatsAppGroupProvider } from '../context/whatsapp-group-context';
-import { createFakeGroup, group } from '../tests/fake-capabilities';
+import { createFakeGroup, group, messages } from '../tests/fake-capabilities';
 import { WhatsAppGroupView } from './whatsapp-group-view';
 
 const mocks = vi.hoisted(() => ({
@@ -70,7 +70,11 @@ function mount(fake: ReturnType<typeof createFakeGroup>) {
       <WhatsAppGroupProvider value={fake.capabilities}>
         <WhatsAppGroupView
           userId={group.ownerId}
-          onShare={share}
+          share={
+            <button type="button" onClick={share}>
+              Share
+            </button>
+          }
           onConnect={connect}
         />
       </WhatsAppGroupProvider>
@@ -86,7 +90,10 @@ it('renders WhatsApp messages as channel rows with quotes and reactions', () => 
   const fake = createFakeGroup();
   const { share } = mount(fake);
   expect(screen.getByText('Ana Ruiz')).toBeTruthy();
-  expect(screen.getByText('Sending as +14155550142')).toBeTruthy();
+  // The composer says who is sending.
+  expect(mocks.composer?.input.placeholder).toBe(
+    'Message Design Crit as +14155550142'
+  );
   // WhatsApp's `*updated*` renders bold.
   expect(screen.getByText('updated').className).toContain('font-bold');
   expect(
@@ -183,4 +190,90 @@ it('offers actions on rows that rendered before the viewer could send', () => {
   if (!row) throw new Error('message row missing');
   fireEvent.pointerEnter(row);
   expect(screen.getByRole('button', { name: 'Reply' })).toBeTruthy();
+});
+
+it('says while history imports and shows older messages as they land', () => {
+  const fake = createFakeGroup({
+    group: { ...group, backfill: { state: 'running', imported: 0 } },
+    messages: [messages[1]],
+  });
+  mount(fake);
+  expect(screen.getByText('WhatsApp · Importing history…')).toBeTruthy();
+  expect(screen.getByRole('status').textContent).toBe('Importing history…');
+
+  fake.setGroup({
+    ...group,
+    backfill: { state: 'waiting_for_phone', imported: 1 },
+  });
+  fake.setMessages(messages);
+  expect(screen.getByRole('status').textContent).toBe(
+    'Waiting for your phone to import history'
+  );
+  const ids = [...document.querySelectorAll('[data-message-id]')].map((row) =>
+    row.getAttribute('data-message-id')
+  );
+  expect(ids).toEqual(['message-1', 'message-2']);
+
+  fake.setGroup({ ...group, backfill: { state: 'done', imported: 1 } });
+  expect(screen.queryByText(/Importing history|Waiting for/)).toBeNull();
+  expect(screen.getByText('WhatsApp').textContent).toBe('WhatsApp');
+
+  fake.setGroup({ ...group, backfill: { state: 'partial', imported: 500 } });
+  expect(screen.getByText('Earlier messages stay in WhatsApp')).toBeTruthy();
+});
+
+it('tells a shared viewer whose phone the import waits for', () => {
+  const fake = createFakeGroup({
+    group: {
+      ...group,
+      accessLevel: 'view',
+      canSend: false,
+      sendReason: 'no_account',
+      backfill: { state: 'waiting_for_phone', imported: 0 },
+    },
+    messages: [],
+  });
+  mount(fake);
+  expect(
+    screen.getAllByText(/Waiting for the owner's phone to import history/)
+  ).toHaveLength(2);
+  // Not "No messages yet" while history is still coming.
+  expect(screen.queryByText(/No messages yet/)).toBeNull();
+});
+
+it('plays imported images and voice notes inline, like Chat', () => {
+  const fake = createFakeGroup({
+    messages: [
+      {
+        ...messages[0],
+        body: '',
+        attachments: [
+          {
+            ordinal: 0,
+            state: 'ready',
+            fileName: 'photo.jpeg',
+            mime: 'image/jpeg',
+            documentId: 'document-photo',
+          },
+          {
+            ordinal: 1,
+            state: 'ready',
+            fileName: 'voice.ogg',
+            mime: 'audio/ogg',
+            documentId: 'document-voice',
+          },
+        ],
+      },
+    ],
+  });
+  mount(fake);
+  expect(
+    screen.getByRole('button', { name: 'Open image viewer' })
+  ).toBeTruthy();
+  const voice = screen.getByLabelText('voice.ogg');
+  expect(voice.getAttribute('src')).toBe(
+    'https://files.example.test/document-voice'
+  );
+  // Not as document chips.
+  expect(screen.queryByText('photo.jpeg')).toBeNull();
 });

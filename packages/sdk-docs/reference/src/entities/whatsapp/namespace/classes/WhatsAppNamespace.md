@@ -52,6 +52,18 @@ Reference an adopted entity without fetching it.
 
 ***
 
+### chats()
+
+> **chats**(): `Promise`\<[`WhatsAppChat`](../../chat/classes/WhatsAppChat.md)[]\>
+
+The caller's WhatsApp chat list (groups and direct chats), newest activity first.
+
+#### Returns
+
+`Promise`\<[`WhatsAppChat`](../../chat/classes/WhatsAppChat.md)[]\>
+
+***
+
 ### groups()
 
 > **groups**(): `Promise`\<[`WhatsAppGroup`](../../group/classes/WhatsAppGroup.md)[]\>

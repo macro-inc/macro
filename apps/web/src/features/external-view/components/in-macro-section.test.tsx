@@ -6,7 +6,7 @@ import {
   within,
 } from '@solidjs/testing-library';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { InMacroSection } from './in-macro-section';
+import { InMacroGroups } from './in-macro-section';
 
 beforeEach(() => {
   vi.stubGlobal(
@@ -26,7 +26,7 @@ afterEach(() => {
 it('lists readable groups with unread counts and marks read-only ones', () => {
   const onOpenGroup = vi.fn();
   render(() => (
-    <InMacroSection
+    <InMacroGroups
       groups={[
         {
           id: 'group-design',
@@ -44,8 +44,6 @@ it('lists readable groups with unread counts and marks read-only ones', () => {
       isPending={false}
       isError={false}
       activeGroupId="group-family"
-      open
-      onOpenChange={vi.fn()}
       onOpenGroup={onOpenGroup}
       onRetry={vi.fn()}
     />

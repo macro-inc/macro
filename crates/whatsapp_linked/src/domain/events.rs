@@ -1,7 +1,7 @@
 //! Types exchanged in-process with the WhatsApp session service. They carry no
 //! whatsmeow types: the session service maps protocol events onto them.
 
-use super::models::{Identity, PairingState};
+use super::models::{BackfillState, ChatKind, Identity, PairingState};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -129,6 +129,10 @@ pub struct Message {
     pub source_id: String,
     /// Actual author, not the observing account.
     pub sender: Identity,
+    /// WhatsApp's from-me flag: the observing account itself sent it, so
+    /// the sender is the account's own identity whatever address it carries.
+    #[serde(default)]
+    pub from_me: bool,
     /// Kind.
     pub kind: MessageKind,
     /// Plain text, emoji or placeholder.
@@ -323,4 +327,77 @@ pub enum SendOutcome {
     },
     /// The request may have reached WhatsApp but no acknowledgement arrived.
     Unknown,
+}
+
+/// A message WhatsApp knows by its key: where importing earlier messages
+/// starts (a chat's newest message) or continues (the oldest imported).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MessageAnchor {
+    /// WhatsApp message id.
+    pub id: String,
+    /// Protocol timestamp.
+    pub at: DateTime<Utc>,
+    /// Sent by the account itself.
+    pub from_me: bool,
+    /// Author in a group (asking the phone to resend one message needs it).
+    #[serde(default)]
+    pub sender_jid: Option<String>,
+}
+
+/// What the session service learned about one chat of the account's list.
+/// `None` fields keep what is stored.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChatUpdate {
+    /// Chat JID (groups; direct chats by phone-number JID when known).
+    pub jid: String,
+    /// Group or direct.
+    pub kind: ChatKind,
+    /// Group subject, or the contact or WhatsApp name of a direct chat.
+    pub name: Option<String>,
+    /// Activity; only ever moves forward.
+    pub last_activity_at: Option<DateTime<Utc>>,
+    /// Archived in WhatsApp.
+    pub archived: Option<bool>,
+    /// Pinned in WhatsApp.
+    pub pinned: Option<bool>,
+    /// A message in the chat; kept when newer than the stored one.
+    pub anchor: Option<MessageAnchor>,
+    /// Add the chat when it is not listed yet. Name, archive and pin updates
+    /// alone never add a chat.
+    pub create: bool,
+}
+
+/// A group whose earlier messages the owner's account is importing.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BackfillWork {
+    /// Group entity.
+    pub group_id: Uuid,
+    /// WhatsApp group.
+    pub group_jid: String,
+    /// Progress.
+    pub state: BackfillState,
+    /// Messages received so far.
+    pub imported: u32,
+    /// Oldest message imported so far; the next page is requested before it.
+    pub cursor: Option<MessageAnchor>,
+    /// The chat's newest known message, where the first page starts.
+    pub anchor: Option<MessageAnchor>,
+    /// When the group was added.
+    pub adopted_at: DateTime<Utc>,
+    /// When the last page was requested and not answered yet.
+    pub requested_at: Option<DateTime<Utc>>,
+}
+
+/// One page of earlier messages the phone sent for a chat.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HistoryPage {
+    /// Chat JID.
+    pub chat_jid: String,
+    /// Messages in the page.
+    pub messages: u32,
+    /// The oldest of them.
+    pub oldest: Option<MessageAnchor>,
+    /// The phone says there is nothing older.
+    pub complete: bool,
 }

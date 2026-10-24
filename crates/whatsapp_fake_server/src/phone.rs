@@ -6,6 +6,8 @@
 //! groups, decrypts what it receives and sends delivery receipts. It also
 //! approves pairing QR codes, like scanning one in "Linked devices".
 
+use std::io::Write as _;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
@@ -24,9 +26,17 @@ use whatsmeow::pair::ADV_ACCOUNT_SIGNATURE_PREFIX;
 use whatsmeow::proto::wa_adv::{
     AdvDeviceIdentity, AdvSignedDeviceIdentity, AdvSignedDeviceIdentityHmac,
 };
+use whatsmeow::proto::wa_common::MessageKey;
 use whatsmeow::proto::wa_e2e::{
-    DeviceSentMessage, ImageMessage, Message, SenderKeyDistributionMessage,
+    DeviceSentMessage, HistorySyncNotification, ImageMessage, Message,
+    PeerDataOperationRequestMessage, PeerDataOperationRequestResponseMessage,
+    PeerDataOperationRequestType, ProtocolMessage, SenderKeyDistributionMessage,
+    peer_data_operation_request_response_message, protocol_message,
 };
+use whatsmeow::proto::wa_history_sync::conversation::EndOfHistoryTransferType;
+use whatsmeow::proto::wa_history_sync::history_sync::HistorySyncType;
+use whatsmeow::proto::wa_history_sync::{Conversation, HistorySync, HistorySyncMsg};
+use whatsmeow::proto::wa_web::WebMessageInfo;
 use whatsmeow::signal::{
     CiphertextType, CurveSignatures, SenderKeyName, SignalAddress, SignalProtocol,
     SignalProtocolStore,
@@ -90,6 +100,11 @@ pub(crate) struct Inbox {
     pub(crate) receipts: Vec<ReceivedReceipt>,
     /// Why stanzas failed to decrypt, for test diagnostics.
     pub(crate) failures: Vec<String>,
+    /// Every chat message the phone sent or received, oldest first: what it
+    /// answers history requests from.
+    pub(crate) history: Vec<WebMessageInfo>,
+    /// History requests its linked devices sent (on demand and resends).
+    pub(crate) history_requests: usize,
 }
 
 /// One fake user's phone.
@@ -101,6 +116,9 @@ pub(crate) struct PhoneCore {
     /// Serializes Signal operations, like whatsmeow's send lock.
     crypto: tokio::sync::Mutex<()>,
     pub(crate) inbox: Mutex<Inbox>,
+    /// Answers its linked devices' history requests; off is a phone that is
+    /// offline (requests are dropped, unanswered).
+    answers: AtomicBool,
 }
 
 impl PhoneCore {
@@ -112,6 +130,7 @@ impl PhoneCore {
             signal: LibsignalProtocol::new(),
             crypto: tokio::sync::Mutex::new(()),
             inbox: Mutex::new(Inbox::default()),
+            answers: AtomicBool::new(true),
         }
     }
 
@@ -297,8 +316,288 @@ impl FakePhone {
             .route_message(&self.core.address(), &stanza);
         self.shared.changed();
         match attr_string(&ack, "error").as_str() {
+            "" => {
+                if message.protocol_message.is_none() && message.reaction_message.is_none() {
+                    self.remember(chat, &id, true, None, &message);
+                }
+                Ok(id)
+            }
+            code => Err(SendError::Rejected(code.to_owned())),
+        }
+    }
+
+    /// Keeps a chat message for answering history requests.
+    fn remember(
+        &self,
+        chat: &Jid,
+        id: &str,
+        from_me: bool,
+        sender: Option<&Jid>,
+        message: &Message,
+    ) {
+        let participant = sender
+            .filter(|_| chat.server == GROUP_SERVER)
+            .map(|sender| sender.to_non_ad().to_string());
+        self.core.inbox().history.push(WebMessageInfo {
+            key: MessageKey {
+                remote_jid: Some(chat.to_string()),
+                from_me: Some(from_me),
+                id: Some(id.to_owned()),
+                participant: participant.clone(),
+            },
+            message: Some(message.clone()),
+            message_timestamp: Some(chrono::Utc::now().timestamp().max(0) as u64),
+            participant,
+            ..WebMessageInfo::default()
+        });
+    }
+
+    /// Whether the phone answers its linked devices' history requests (an
+    /// offline phone doesn't; requests sent meanwhile are lost).
+    pub fn answer_history_requests(&self, answers: bool) {
+        self.core.answers.store(answers, Ordering::SeqCst);
+    }
+
+    /// How many history requests (on demand or message resends) the phone's
+    /// linked devices sent it, answered or not.
+    pub fn history_requests(&self) -> usize {
+        self.core.inbox().history_requests
+    }
+
+    /// Sends a history-sync bundle to the user's linked devices, inline like
+    /// an initial bootstrap.
+    pub async fn send_history_sync(&self, history: HistorySync) -> Result<String, SendError> {
+        let payload = {
+            let mut encoder =
+                flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::fast());
+            encoder
+                .write_all(&history.encode_to_vec())
+                .map_err(|_| SendError::UnknownChat)?;
+            encoder.finish().map_err(|_| SendError::UnknownChat)?
+        };
+        self.send_to_own_devices(Message {
+            protocol_message: Some(Box::new(ProtocolMessage {
+                r#type: Some(protocol_message::Type::HistorySyncNotification as i32),
+                history_sync_notification: Some(HistorySyncNotification {
+                    sync_type: Some(history.sync_type),
+                    chunk_order: history.chunk_order,
+                    initial_hist_bootstrap_inline_payload: Some(payload),
+                    ..HistorySyncNotification::default()
+                }),
+                ..ProtocolMessage::default()
+            })),
+            ..Message::default()
+        })
+        .await
+    }
+
+    /// The phone's chat list as an initial-bootstrap history sync: every chat
+    /// it has messages in, named (group subject; the other person's name),
+    /// with its newest message.
+    pub fn chat_list(&self) -> HistorySync {
+        let history = self.core.inbox().history.clone();
+        let mut conversations: Vec<Conversation> = vec![];
+        for message in history.iter().rev() {
+            let chat = message.key.remote_jid.clone().unwrap_or_default();
+            if conversations
+                .iter()
+                .any(|conversation| conversation.id == chat)
+            {
+                continue;
+            }
+            // Direct chats are LID chats, with the phone number alongside.
+            let (name, pn_jid) = chat
+                .parse::<Jid>()
+                .ok()
+                .map(|jid| {
+                    let state = self.shared.lock();
+                    if jid.server == GROUP_SERVER {
+                        let name = state
+                            .groups
+                            .get(&jid.user)
+                            .map(|group| group.subject.clone());
+                        (name, None)
+                    } else {
+                        let phone = state.phone_of(&jid);
+                        let name = phone
+                            .as_ref()
+                            .and_then(|phone| state.users.get(phone))
+                            .map(|user| user.push_name.clone());
+                        (
+                            name,
+                            phone.map(|phone| device_jid(&phone, 0, false).to_string()),
+                        )
+                    }
+                })
+                .unwrap_or_default();
+            conversations.push(Conversation {
+                id: chat,
+                name,
+                pn_jid,
+                conversation_timestamp: message.message_timestamp,
+                messages: vec![HistorySyncMsg {
+                    message: Some(message.clone()),
+                    msg_order_id: None,
+                }],
+                ..Conversation::default()
+            });
+        }
+        HistorySync {
+            sync_type: HistorySyncType::InitialBootstrap as i32,
+            conversations,
+            ..HistorySync::default()
+        }
+    }
+
+    /// Sends a protocol message to the user's own linked devices only, as a
+    /// peer message.
+    async fn send_to_own_devices(&self, message: Message) -> Result<String, SendError> {
+        let id = random_id();
+        let _crypto = self.core.crypto.lock().await;
+        let targets: Vec<Jid> = {
+            let state = self.shared.lock();
+            let user = state
+                .users
+                .get(&self.core.phone)
+                .ok_or(SendError::UnknownChat)?;
+            user.devices
+                .keys()
+                .filter(|device| **device != 0)
+                .map(|device| {
+                    state.jid_of(
+                        &DeviceAddress {
+                            phone: self.core.phone.clone(),
+                            device: *device,
+                        },
+                        true,
+                    )
+                })
+                .collect()
+        };
+        let store = self.core.device.signal_store(None);
+        let plaintext = message.encode_to_vec();
+        let mut participants = Vec::new();
+        for target in targets {
+            participants.extend(self.encrypt_for(&store, &target, &plaintext).await?);
+        }
+        let stanza = node(
+            "message",
+            vec![
+                ("id", text(&id)),
+                ("to", jid(&self.jid())),
+                ("type", text("text")),
+                ("category", text("peer")),
+            ],
+            children(vec![node("participants", vec![], children(participants))]),
+        );
+        let ack = self
+            .shared
+            .lock()
+            .route_message(&self.core.address(), &stanza);
+        self.shared.changed();
+        match attr_string(&ack, "error").as_str() {
             "" => Ok(id),
             code => Err(SendError::Rejected(code.to_owned())),
+        }
+    }
+
+    /// Answers a linked device's history request: an on-demand page of a
+    /// chat's messages before a given one, or one message sent again.
+    async fn answer(&self, request_id: String, request: PeerDataOperationRequestMessage) {
+        {
+            let mut inbox = self.core.inbox();
+            inbox.history_requests += 1;
+        }
+        self.shared.changed();
+        if !self.core.answers.load(Ordering::SeqCst) {
+            return;
+        }
+        let history = self.core.inbox().history.clone();
+        let kind = request
+            .peer_data_operation_request_type
+            .and_then(|kind| PeerDataOperationRequestType::try_from(kind).ok());
+        let result = match kind {
+            Some(PeerDataOperationRequestType::HistorySyncOnDemand) => {
+                let Some(on_demand) = request.history_sync_on_demand_request else {
+                    return;
+                };
+                let chat = on_demand.chat_jid.unwrap_or_default();
+                let in_chat: Vec<&WebMessageInfo> = history
+                    .iter()
+                    .filter(|message| message.key.remote_jid.as_deref() == Some(chat.as_str()))
+                    .collect();
+                let before = in_chat
+                    .iter()
+                    .position(|message| message.key.id == on_demand.oldest_msg_id)
+                    .unwrap_or(0);
+                let count = usize::try_from(on_demand.on_demand_msg_count.unwrap_or(50).max(0))
+                    .unwrap_or(50);
+                let start = before.saturating_sub(count);
+                let page: Vec<HistorySyncMsg> = in_chat[start..before]
+                    .iter()
+                    .map(|message| HistorySyncMsg {
+                        message: Some((*message).clone()),
+                        msg_order_id: None,
+                    })
+                    .collect();
+                let end = if start == 0 {
+                    EndOfHistoryTransferType::CompleteAndNoMoreMessageRemainOnPrimary
+                } else {
+                    EndOfHistoryTransferType::CompleteOnDemandSyncButMoreMsgRemainOnPrimary
+                };
+                self.send_history_sync(HistorySync {
+                    sync_type: HistorySyncType::OnDemand as i32,
+                    conversations: vec![Conversation {
+                        id: chat,
+                        messages: page,
+                        end_of_history_transfer_type: Some(end as i32),
+                        ..Conversation::default()
+                    }],
+                    ..HistorySync::default()
+                })
+                .await
+            }
+            Some(PeerDataOperationRequestType::PlaceholderMessageResend) => {
+                let results = request
+                    .placeholder_message_resend_request
+                    .iter()
+                    .filter_map(|resend| {
+                        let key = resend.message_key.as_ref()?;
+                        let message = history.iter().find(|message| message.key.id == key.id)?;
+                        Some(peer_data_operation_request_response_message::PeerDataOperationResult {
+                            placeholder_message_resend_response: Some(
+                                peer_data_operation_request_response_message::peer_data_operation_result::PlaceholderMessageResendResponse {
+                                    web_message_info_bytes: Some(message.encode_to_vec()),
+                                },
+                            ),
+                            ..Default::default()
+                        })
+                    })
+                    .collect();
+                self.send_to_own_devices(Message {
+                    protocol_message: Some(Box::new(ProtocolMessage {
+                        r#type: Some(
+                            protocol_message::Type::PeerDataOperationRequestResponseMessage as i32,
+                        ),
+                        peer_data_operation_request_response_message: Some(
+                            PeerDataOperationRequestResponseMessage {
+                                peer_data_operation_request_type: Some(
+                                    PeerDataOperationRequestType::PlaceholderMessageResend as i32,
+                                ),
+                                stanza_id: Some(request_id),
+                                peer_data_operation_result: results,
+                            },
+                        ),
+                        ..ProtocolMessage::default()
+                    })),
+                    ..Message::default()
+                })
+                .await
+            }
+            _ => return,
+        };
+        if let Err(error) = result {
+            self.fail(&format!("answering a history request: {error:?}"));
         }
     }
 
@@ -758,6 +1057,20 @@ impl FakePhone {
         }
         if message == Message::default() {
             return;
+        }
+        if let Some(request) = message
+            .protocol_message
+            .as_ref()
+            .and_then(|protocol| protocol.peer_data_operation_request_message.clone())
+        {
+            // Answered once this stanza's crypto lock is released.
+            let phone = self.clone();
+            let id = id.to_owned();
+            tokio::spawn(async move { phone.answer(id, request).await });
+            return;
+        }
+        if message.protocol_message.is_none() && message.reaction_message.is_none() {
+            self.remember(&chat, id, false, Some(sender), &message);
         }
         self.core.inbox().messages.push(ReceivedMessage {
             id: id.to_owned(),

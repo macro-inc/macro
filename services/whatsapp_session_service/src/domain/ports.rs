@@ -10,7 +10,8 @@ use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 use whatsapp_linked::domain::events::{
-    ClaimedSend, InboundEvent, MediaImport, OutboundMedia, SessionScope,
+    ChatUpdate, ClaimedSend, HistoryPage, InboundEvent, MediaImport, MessageAnchor, OutboundMedia,
+    SessionScope,
 };
 use whatsapp_linked::domain::models::GroupInfo;
 
@@ -156,6 +157,12 @@ pub enum SessionEvent {
     LoggedOut,
     /// Another connection with the same keys replaced this one.
     Replaced,
+    /// What WhatsApp told the account about chats in its list (history sync,
+    /// a message, a contact name, archive or pin).
+    Chats(Vec<ChatUpdate>),
+    /// The phone answered a request for a chat's earlier messages; the
+    /// messages themselves went to the [`InboundSink`] as history.
+    HistoryPage(HistoryPage),
     /// The account joined a group, or a group's name or participants changed.
     GroupChanged {
         /// The group.
@@ -283,6 +290,23 @@ pub trait WhatsAppSession: Send + Sync + 'static {
         &self,
         group_jid: &str,
     ) -> impl Future<Output = Result<Option<GroupInfo>, SessionError>> + Send;
+
+    /// Asks the account's phone for up to `count` messages of a chat older
+    /// than `before`; the answer arrives later as a history page.
+    fn request_history(
+        &self,
+        chat_jid: &str,
+        before: &MessageAnchor,
+        count: u32,
+    ) -> impl Future<Output = Result<(), SessionError>> + Send;
+
+    /// Asks the account's phone to send one message again (one the device
+    /// saw but did not keep); it arrives as a history message.
+    fn request_message(
+        &self,
+        chat_jid: &str,
+        message: &MessageAnchor,
+    ) -> impl Future<Output = Result<(), SessionError>> + Send;
 
     /// Unlinks the device at WhatsApp.
     fn logout(&self) -> impl Future<Output = ()> + Send;

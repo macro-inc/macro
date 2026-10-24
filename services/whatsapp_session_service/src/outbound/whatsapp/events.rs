@@ -6,15 +6,20 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use whatsapp_linked::domain::events::{
-    InboundEvent, InboundKind, Media, Message, MessageKind, Receipt, Target,
+    ChatUpdate, HistoryPage, InboundEvent, InboundKind, Media, Message, MessageAnchor, MessageKind,
+    Receipt, Target,
 };
-use whatsapp_linked::domain::models::Identity;
+use whatsapp_linked::domain::models::{ChatKind, Identity};
 use whatsmeow::Event;
 use whatsmeow::download::{DownloadableMessage, MediaType};
 use whatsmeow::proto::wa_common::MessageKey;
 use whatsmeow::proto::wa_e2e;
 use whatsmeow::proto::wa_e2e::protocol_message;
-use whatsmeow::types::{GROUP_SERVER, Jid};
+use whatsmeow::proto::wa_history_sync::conversation::EndOfHistoryTransferType;
+use whatsmeow::proto::wa_history_sync::{Conversation, HistorySync, Pushname};
+use whatsmeow::proto::wa_web::WebMessageInfo;
+use whatsmeow::store::{ContactStore, LidStore};
+use whatsmeow::types::{DEFAULT_USER_SERVER, GROUP_SERVER, HIDDEN_USER_SERVER, Jid};
 
 use crate::domain::ports::SessionEvent;
 
@@ -88,9 +93,14 @@ pub fn map_event(
     seal: &dyn Fn(&MediaLocator) -> Option<Vec<u8>>,
 ) -> Option<Mapped> {
     Some(match event {
-        Event::Message(message) => {
-            Mapped::Inbound(Box::new(map_message(account, message, now, seal)?))
-        }
+        // A message the phone sent again on request is an earlier message.
+        Event::Message(message) => Mapped::Inbound(Box::new(map_message(
+            account,
+            message,
+            now,
+            seal,
+            !message.unavailable_request_id.is_empty(),
+        )?)),
         Event::Receipt(receipt) => Mapped::Inbound(Box::new(map_receipt(account, receipt, now)?)),
         Event::JoinedGroup(joined) => Mapped::Session(SessionEvent::GroupChanged {
             group_jid: joined.group_info.jid.to_non_ad().to_string(),
@@ -126,6 +136,35 @@ fn map_session(event: &Event) -> Option<SessionEvent> {
         Event::LoggedOut(_) => Some(SessionEvent::LoggedOut),
         Event::StreamReplaced(_) => Some(SessionEvent::Replaced),
         _ => None,
+    }
+}
+
+/// Fills the other half of a message sender's phone-number/LID pair from the
+/// account's LID store, which whatsmeow fills at pairing (the account's own
+/// pair), from group participant lists and from message addressing. Without
+/// it a LID-only sender cannot be matched to the person already seen by phone
+/// number and is quarantined.
+pub async fn complete_sender(lids: &dyn LidStore, event: &mut InboundEvent) {
+    let InboundKind::Message(message) = &mut event.kind else {
+        return;
+    };
+    let sender = &mut message.sender;
+    if sender.alternate_jid.is_some() {
+        return;
+    }
+    let Ok(jid) = sender.jid.parse::<Jid>() else {
+        return;
+    };
+    let alternate = match jid.server.as_str() {
+        HIDDEN_USER_SERVER => lids.get_pn_for_lid(&jid).await,
+        DEFAULT_USER_SERVER => lids.get_lid_for_pn(&jid).await,
+        _ => return,
+    };
+    match alternate {
+        Ok(alternate) => sender.alternate_jid = alternate.as_ref().and_then(person),
+        Err(error) => {
+            tracing::debug!(error = %error, "Reading a sender's LID mapping failed");
+        }
     }
 }
 
@@ -281,11 +320,23 @@ fn media_of(
     })
 }
 
+/// An earlier message the phone sent in a history page, as an inbound event
+/// marked history: imported without notifications or unread counts.
+pub fn map_history_message(
+    account: Uuid,
+    event: &whatsmeow::types::events::Message,
+    now: DateTime<Utc>,
+    seal: &dyn Fn(&MediaLocator) -> Option<Vec<u8>>,
+) -> Option<InboundEvent> {
+    map_message(account, event, now, seal, true)
+}
+
 fn map_message(
     account: Uuid,
     event: &whatsmeow::types::events::Message,
     now: DateTime<Utc>,
     seal: &dyn Fn(&MediaLocator) -> Option<Vec<u8>>,
+    history: bool,
 ) -> Option<InboundEvent> {
     let info = &event.info;
     if info.chat.server != GROUP_SERVER {
@@ -397,7 +448,8 @@ fn map_message(
             sender,
             kind,
             text,
-            history: false,
+            from_me: info.is_from_me,
+            history,
             revision,
             target,
             media,
@@ -444,5 +496,268 @@ fn map_receipt(
             participant_jid: participant,
             state: state.to_owned(),
         }),
+    })
+}
+
+/// A chat in the account's list: groups, and direct chats with people.
+/// Status updates, broadcasts and channels are not chats.
+fn chat_kind(jid: &Jid) -> Option<ChatKind> {
+    match jid.server.as_str() {
+        GROUP_SERVER => Some(ChatKind::Group),
+        DEFAULT_USER_SERVER | HIDDEN_USER_SERVER if !jid.user.is_empty() => Some(ChatKind::Direct),
+        _ => None,
+    }
+}
+
+fn timestamp(seconds: Option<u64>) -> Option<DateTime<Utc>> {
+    DateTime::from_timestamp(
+        i64::try_from(seconds.filter(|seconds| *seconds > 0)?).ok()?,
+        0,
+    )
+}
+
+/// Whether a message is something a chat list counts as activity: content,
+/// not reactions, protocol messages or key distributions.
+fn is_activity(message: &wa_e2e::Message) -> bool {
+    !carries_only_keys(message)
+        && message.protocol_message.is_none()
+        && message.reaction_message.is_none()
+}
+
+/// A live message moves its chat to the top of the account's list, adding
+/// the chat if it is new. Only names and ids; never content.
+pub fn message_chat(event: &whatsmeow::types::events::Message) -> Option<ChatUpdate> {
+    let info = &event.info;
+    if !event.unavailable_request_id.is_empty() || !is_activity(event.message.as_ref()?) {
+        return None;
+    }
+    // A direct chat WhatsApp addresses by LID is listed by phone number when
+    // the message carries it.
+    let alternate = if info.is_from_me {
+        &info.recipient_alt
+    } else {
+        &info.sender_alt
+    };
+    let chat = if info.chat.server == HIDDEN_USER_SERVER && alternate.server == DEFAULT_USER_SERVER
+    {
+        alternate.to_non_ad()
+    } else {
+        info.chat.to_non_ad()
+    };
+    let kind = chat_kind(&chat)?;
+    let at = info.timestamp?;
+    Some(ChatUpdate {
+        jid: chat.to_string(),
+        kind,
+        // A direct chat is named after the other person, never after us.
+        name: (kind == ChatKind::Direct && !info.is_from_me && !info.push_name.is_empty())
+            .then(|| info.push_name.clone()),
+        last_activity_at: Some(at),
+        archived: None,
+        pinned: None,
+        anchor: Some(MessageAnchor {
+            id: info.id.clone(),
+            at,
+            from_me: info.is_from_me,
+            sender_jid: person(&info.sender),
+        }),
+        create: true,
+    })
+}
+
+/// The key of a history message, as an anchor.
+pub fn web_message_anchor(message: &WebMessageInfo) -> Option<MessageAnchor> {
+    let key = &message.key;
+    Some(MessageAnchor {
+        id: key.id.clone().filter(|id| !id.is_empty())?,
+        at: timestamp(message.message_timestamp)?,
+        from_me: key.from_me.unwrap_or(false),
+        sender_jid: message
+            .participant
+            .as_deref()
+            .or(key.participant.as_deref())
+            .and_then(person_text),
+    })
+}
+
+/// The chat of a history-sync conversation, by phone number when WhatsApp
+/// gave one for a LID chat.
+fn conversation_chat(conversation: &Conversation) -> Option<(Jid, ChatKind)> {
+    let id: Jid = conversation.id.parse().ok()?;
+    let id = match (id.server.as_str(), conversation.pn_jid.as_deref()) {
+        (HIDDEN_USER_SERVER, Some(pn)) => pn.parse().unwrap_or(id),
+        _ => id,
+    }
+    .to_non_ad();
+    let kind = chat_kind(&id)?;
+    Some((id, kind))
+}
+
+/// The chats of a history-sync bundle (the initial chat list, recent and
+/// full syncs): names, activity, archive and pin, and each chat's newest
+/// message as its anchor. Push-name bundles only rename known direct chats.
+pub fn history_chats(history: &HistorySync) -> Vec<ChatUpdate> {
+    let mut chats: Vec<ChatUpdate> = history
+        .conversations
+        .iter()
+        .filter_map(|conversation| {
+            let (jid, kind) = conversation_chat(conversation)?;
+            let anchor = conversation
+                .messages
+                .iter()
+                .filter_map(|message| web_message_anchor(message.message.as_ref()?))
+                .max_by_key(|anchor| anchor.at);
+            let activity = [
+                timestamp(conversation.conversation_timestamp),
+                timestamp(conversation.last_msg_timestamp),
+                anchor.as_ref().map(|anchor| anchor.at),
+            ]
+            .into_iter()
+            .flatten()
+            .max();
+            let name = [
+                conversation.name.as_deref(),
+                conversation.display_name.as_deref(),
+            ]
+            .into_iter()
+            .flatten()
+            .map(str::trim)
+            .find(|name| !name.is_empty())
+            .map(str::to_owned);
+            Some(ChatUpdate {
+                jid: jid.to_string(),
+                kind,
+                name,
+                last_activity_at: activity,
+                archived: conversation.archived,
+                pinned: conversation.pinned.map(|pinned| pinned > 0),
+                anchor,
+                create: true,
+            })
+        })
+        .collect();
+    chats.extend(history.pushnames.iter().filter_map(push_name_chat));
+    chats
+}
+
+fn push_name_chat(push_name: &Pushname) -> Option<ChatUpdate> {
+    let jid: Jid = push_name.id.as_deref()?.parse().ok()?;
+    let name = push_name.pushname.as_deref()?.trim();
+    (chat_kind(&jid) == Some(ChatKind::Direct) && !name.is_empty()).then(|| ChatUpdate {
+        jid: jid.to_non_ad().to_string(),
+        kind: ChatKind::Direct,
+        name: Some(name.to_owned()),
+        last_activity_at: None,
+        archived: None,
+        pinned: None,
+        anchor: None,
+        create: false,
+    })
+}
+
+/// A setting change (archive, pin) or a new name for a chat already listed.
+fn setting_chat(jid: &Jid, update: impl FnOnce(&mut ChatUpdate)) -> Option<ChatUpdate> {
+    let jid = jid.to_non_ad();
+    let mut chat = ChatUpdate {
+        jid: jid.to_string(),
+        kind: chat_kind(&jid)?,
+        name: None,
+        last_activity_at: None,
+        archived: None,
+        pinned: None,
+        anchor: None,
+        create: false,
+    };
+    update(&mut chat);
+    Some(chat)
+}
+
+/// What an app-state or contact event changes in the chat list.
+pub fn chat_setting(event: &Event) -> Option<ChatUpdate> {
+    match event {
+        Event::Archive(archive) => setting_chat(&archive.jid, |chat| {
+            chat.archived = archive.action.as_ref().and_then(|action| action.archived);
+        }),
+        Event::Pin(pin) => setting_chat(&pin.jid, |chat| {
+            chat.pinned = pin.action.as_ref().and_then(|action| action.pinned);
+        }),
+        Event::PushName(push_name) if !push_name.new_push_name.is_empty() => {
+            setting_chat(&push_name.jid, |chat| {
+                chat.name = Some(push_name.new_push_name.clone());
+            })
+            .filter(|chat| chat.kind == ChatKind::Direct)
+        }
+        Event::Contact(contact) => {
+            let action = contact.action.as_ref()?;
+            let name = action
+                .full_name
+                .as_deref()
+                .or(action.first_name.as_deref())
+                .filter(|name| !name.trim().is_empty())?;
+            setting_chat(&contact.jid, |chat| chat.name = Some(name.to_owned()))
+                .filter(|chat| chat.kind == ChatKind::Direct)
+        }
+        _ => None,
+    }
+}
+
+/// Direct chats by phone number when the LID store knows it, and named after
+/// the address book (else the WhatsApp name) when nothing better was given.
+pub async fn complete_chats(
+    lids: &dyn LidStore,
+    contacts: &dyn ContactStore,
+    chats: &mut [ChatUpdate],
+) {
+    for chat in chats
+        .iter_mut()
+        .filter(|chat| chat.kind == ChatKind::Direct)
+    {
+        let Ok(mut jid) = chat.jid.parse::<Jid>() else {
+            continue;
+        };
+        if jid.server == HIDDEN_USER_SERVER
+            && let Ok(Some(pn)) = lids.get_pn_for_lid(&jid).await
+        {
+            jid = pn.to_non_ad();
+            chat.jid = jid.to_string();
+        }
+        if let Ok(Some(contact)) = contacts.get_contact(&jid).await {
+            let address_book = [contact.full_name, contact.first_name]
+                .into_iter()
+                .find(|name| !name.trim().is_empty());
+            if let Some(name) = address_book {
+                chat.name = Some(name);
+            } else if chat.name.is_none() {
+                chat.name = [contact.push_name, contact.business_name]
+                    .into_iter()
+                    .find(|name| !name.trim().is_empty());
+            }
+        }
+    }
+}
+
+/// The page an on-demand history answer is for: its chat, how many messages
+/// came, the oldest of them, and whether the phone has nothing older.
+pub fn history_page(conversation: &Conversation) -> Option<HistoryPage> {
+    let (jid, _) = conversation_chat(conversation)?;
+    let anchors: Vec<MessageAnchor> = conversation
+        .messages
+        .iter()
+        .filter_map(|message| web_message_anchor(message.message.as_ref()?))
+        .collect();
+    let complete = matches!(
+        conversation
+            .end_of_history_transfer_type
+            .and_then(|value| EndOfHistoryTransferType::try_from(value).ok()),
+        Some(
+            EndOfHistoryTransferType::CompleteAndNoMoreMessageRemainOnPrimary
+                | EndOfHistoryTransferType::CompleteOnDemandSyncWithMoreMsgOnPrimaryButNoAccess
+        )
+    );
+    Some(HistoryPage {
+        chat_jid: jid.to_string(),
+        messages: u32::try_from(anchors.len()).unwrap_or(u32::MAX),
+        oldest: anchors.into_iter().min_by_key(|anchor| anchor.at),
+        complete,
     })
 }

@@ -44,6 +44,7 @@ field and mutate.
 - [`Team`](../../teams/team/classes/Team.md)
 - [`Webhook`](../../webhooks/webhook/classes/Webhook.md)
 - [`WhatsAppAccount`](../../whatsapp/account/classes/WhatsAppAccount.md)
+- [`WhatsAppChat`](../../whatsapp/chat/classes/WhatsAppChat.md)
 - [`WhatsAppMessage`](../../whatsapp/message/classes/WhatsAppMessage.md)
 - [`WhatsAppRemoteGroup`](../../whatsapp/remote-group/classes/WhatsAppRemoteGroup.md)
 - [`WhatsAppSend`](../../whatsapp/send/classes/WhatsAppSend.md)

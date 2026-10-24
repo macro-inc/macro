@@ -75,6 +75,29 @@ change. `GET /groups` marks each remote group with the caller's own Macro group
 (`group`) or, when they have none, one shared with them by someone else
 (`shared`, with its owner).
 
+`whatsapp_chat` is each account's chat list as WhatsApp Web shows it, groups
+and direct chats: name, last activity, archived and pinned, and the newest
+known message (the anchor). WhatsApp's history sync right after pairing fills
+it (initial, recent and full bundles; push-name bundles rename direct chats);
+live messages in any chat bump activity and add new chats; contact, push-name,
+archive and pin updates change existing rows. It never holds message content.
+`GET /chats` merges it with the roster (the roster names groups and decides
+what can be added; direct chats are listed but not addable yet), newest first.
+An account paired before the list existed only gets groups and chats with new
+messages: WhatsApp sends the full list once, at pairing.
+
+Adding a group sets `backfill_state = 'pending'`. The owner's account then
+imports the chat's earlier messages from the phone, on demand only: it asks for
+the anchor message itself when it predates adoption (a placeholder resend) and
+for pages of 50 messages before the oldest imported one (history sync on
+demand), until the phone has nothing older (`done`) or 500 messages / 90 days
+(`partial`). An unanswered request (60 s) means `waiting_for_phone`, retried
+every 5 minutes and at once on reconnect; a chat without an anchor waits for its
+first live message. Imported messages are ingested as history (origin
+`history`): no notifications, no unread, deduplicated with live messages by
+source id, and only into the owner's own groups, which replaces the
+adoption-time boundary for them.
+
 Viewing uses ordinary entity sharing: direct people grants and access requests
 at `/entities/whatsapp_group/{id}/...`, canonical explicit team grants, link
 sharing, and channel grants: mentioning a group in a channel message shares it
@@ -102,7 +125,10 @@ The replica keeps only events for adopted groups, persists them before ACK and
 calls `ingest_event`. Unadopted events never enter storage. Every observer converges
 on `(group, verified person, source id)` in `whatsapp_group_message`; messages do
 not reference native comms storage. Sender associations use verified phone/LID
-aliases; ambiguous identities are quarantined. Missing reaction/revision targets
+aliases: WhatsApp's from-me flag makes the sender the account's own identity,
+and the session service fills the other half of a sender's pair from the
+account's LID store (ingest also from the account's roster). Identities still
+ambiguous are quarantined and retried. Missing reaction/revision targets
 are deferred. Edits follow source revision order; deletes are permanent tombstones.
 Reactions and media live in `whatsapp_group_reaction` and `whatsapp_group_attachment`.
 

@@ -9,6 +9,15 @@ export type GroupSummary = {
   /** False for viewers who can only read. */
   canSend: boolean;
 };
+/**
+ * Importing the chat's earlier messages from the owner's phone after it was
+ * added. Absent for groups added before imports existed.
+ */
+export type GroupBackfill = {
+  state: 'pending' | 'running' | 'waiting_for_phone' | 'done' | 'partial';
+  /** Messages the phone sent, including ones already shown. */
+  imported: number;
+};
 export type GroupDetail = {
   id: string;
   name: string;
@@ -20,6 +29,7 @@ export type GroupDetail = {
   lastReadMessageId?: string;
   unreadCount: number;
   members: { id: string; name: string; admin: boolean }[];
+  backfill?: GroupBackfill;
   limits: {
     textBytes: number;
     attachmentBytes: number;
@@ -119,6 +129,13 @@ export function composerNote(group: GroupDetail): string {
     .otherwise(() => 'Sending to WhatsApp is unavailable right now');
 }
 
+/** "Message Test 11 as +1…": the composer says who is sending. */
+export function composerPlaceholder(group: GroupDetail): string {
+  return group.phone
+    ? `Message ${group.name} as ${group.phone}`
+    : `Message ${group.name}`;
+}
+
 /** A send's outcome after DSS recorded it. */
 export function recordedOutcome(
   progress: SendProgress
@@ -159,4 +176,31 @@ function deliveryFailure(progress: SendProgress): string {
       () => 'Your WhatsApp disconnected before this was sent.'
     )
     .otherwise(() => "WhatsApp didn't accept this message.");
+}
+
+/** While history is still coming from the owner's phone; quiet once it settled. */
+export function backfillStatus(
+  backfill: GroupBackfill | undefined,
+  /** The import runs on the owner's phone; others are told whose. */
+  viewerOwns: boolean
+): string | undefined {
+  if (!backfill) return undefined;
+  return match(backfill.state)
+    .with(P.union('pending', 'running'), () => 'Importing history…')
+    .with('waiting_for_phone', () =>
+      viewerOwns
+        ? 'Waiting for your phone to import history'
+        : "Waiting for the owner's phone to import history"
+    )
+    .with(P.union('done', 'partial'), () => undefined)
+    .exhaustive();
+}
+
+/** Shown above the oldest message once the import stopped at its limit. */
+export function historyStartNote(
+  backfill: GroupBackfill | undefined
+): string | undefined {
+  return backfill?.state === 'partial'
+    ? 'Earlier messages stay in WhatsApp'
+    : undefined;
 }

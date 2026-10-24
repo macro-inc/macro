@@ -24,6 +24,9 @@ pub struct WhatsAppGroupSummary {
     pub can_send: bool,
     /// Reason sending is blocked.
     pub send_reason: Option<ReplyBlock>,
+    /// Importing earlier messages after the group was added; `null` for
+    /// groups added before this existed.
+    pub backfill: Option<Backfill>,
 }
 /// Full group detail and current viewer capabilities.
 #[derive(Debug, Clone, Serialize)]

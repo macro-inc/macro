@@ -1,12 +1,13 @@
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { ImperativeDialogHost } from '@ui';
 import '@fontsource-variable/inter';
-import { InMacroSection } from '@app/features/external-view/components/in-macro-section';
+import { InMacroGroups } from '@app/features/external-view/components/in-macro-section';
 import { WhatsAppGroupProvider } from '@app/features/whatsapp-group/context/whatsapp-group-context';
 import { createWhatsAppGroupCapabilities } from '@app/features/whatsapp-group/queries/capabilities';
 import { whatsappGroupApi } from '@app/features/whatsapp-group/queries/production-api';
 import { WhatsAppGroupView } from '@app/features/whatsapp-group/views/whatsapp-group-view';
 import { getPermissions } from '@core/component/SharePermissions';
+import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
 import { useUserId } from '@core/context/user';
 import { Route, Router } from '@solidjs/router';
@@ -84,7 +85,13 @@ function GroupHarness(props: { groupId: string }) {
       <WhatsAppGroupProvider value={source}>
         <WhatsAppGroupView
           userId={userId()}
-          onShare={share}
+          share={
+            <ShareTrigger
+              onClick={share}
+              id={props.groupId}
+              blockType="whatsapp_group"
+            />
+          }
           onConnect={() => {
             location.search = '';
           }}
@@ -100,13 +107,11 @@ function InMacroHarness() {
   const groups = useWhatsappGroupsQuery(whatsappGroupApi, () => userId() ?? '');
   return (
     <main class="w-72 bg-panel p-2 text-ink">
-      <InMacroSection
+      <InMacroGroups
         groups={queryReadyGate(groups) ? groups.data : undefined}
         isPending={groups.isPending}
         isError={groups.isError}
         activeGroupId={undefined}
-        open
-        onOpenChange={() => {}}
         onOpenGroup={(groupId) => window.openedGroups.push(groupId)}
         onRetry={() => {}}
       />

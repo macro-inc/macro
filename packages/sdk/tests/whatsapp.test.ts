@@ -144,6 +144,56 @@ test('remote discovery shows groups shared by others and adoption takes only the
   expect(await requests[1].json()).toEqual({ group_jid: remote.jid });
 });
 
+test('the chat list lists groups and direct chats and adds a group by its handle', async () => {
+  const { macro, requests } = fixture((request) =>
+    Response.json(
+      request.method === 'POST'
+        ? { group_id: 'group' }
+        : {
+            chats: [
+              {
+                jid: '15558880001@s.whatsapp.net',
+                kind: 'direct',
+                name: 'Customer',
+                last_activity_at: '2026-10-22T10:00:00Z',
+                archived: false,
+                pinned: true,
+                group: null,
+                shared: null,
+                can_add: false,
+                cannot_add_reason: "direct chats can't be added to Macro yet",
+              },
+              {
+                jid: remote.jid,
+                kind: 'group',
+                name: 'Remote support',
+                last_activity_at: null,
+                archived: false,
+                pinned: false,
+                group: null,
+                shared: null,
+                can_add: true,
+                cannot_add_reason: null,
+              },
+            ],
+          },
+    ),
+  );
+  const [direct, group] = await macro.whatsapp.chats();
+  expect(await direct.kind()).toBe('direct');
+  expect(await direct.cannotAddReason()).toBe(
+    "direct chats can't be added to Macro yet",
+  );
+  expect(await group.canAdd()).toBe(true);
+  const adopted = await group.adopt();
+  expect(adopted.id).toBe('group');
+  expect(requests.map((r) => new URL(r.url).pathname)).toEqual([
+    '/meta/linked/chats',
+    '/meta/linked/groups/adopt',
+  ]);
+  expect(await requests[1].json()).toEqual({ group_jid: remote.jid });
+});
+
 test('account access stays owner-scoped and no account normalizes to undefined', async () => {
   let current: unknown = { account: null };
   const { macro } = fixture(() => Response.json(current));

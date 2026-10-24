@@ -622,6 +622,12 @@ Re-exports [WhatsAppAccount](../entities/whatsapp/account/classes/WhatsAppAccoun
 
 ***
 
+### WhatsAppChat
+
+Re-exports [WhatsAppChat](../entities/whatsapp/chat/classes/WhatsAppChat.md)
+
+***
+
 ### WhatsAppGroup
 
 Re-exports [WhatsAppGroup](../entities/whatsapp/group/classes/WhatsAppGroup.md)

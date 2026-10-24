@@ -1,6 +1,6 @@
 # Type Alias: WhatsAppGroupSummary
 
-> **WhatsAppGroupSummary** = \{ `can_send`: `boolean`; `id`: `string`; `last_message_at?`: `string` \| `null`; `name`: `string`; `send_reason?`: `null` \| [`LinkedReplyBlock`](LinkedReplyBlock.md); `unread_count`: `number`; `user_id`: `string`; \}
+> **WhatsAppGroupSummary** = \{ `backfill?`: `null` \| [`LinkedBackfill`](LinkedBackfill.md); `can_send`: `boolean`; `id`: `string`; `last_message_at?`: `string` \| `null`; `name`: `string`; `send_reason?`: `null` \| [`LinkedReplyBlock`](LinkedReplyBlock.md); `unread_count`: `number`; `user_id`: `string`; \}
 
 Adopted group visible through ordinary entity sharing.
 
@@ -8,6 +8,7 @@ Adopted group visible through ordinary entity sharing.
 
 | Property | Type | Description |
 | ------ | ------ | ------ |
+| <a id="property-backfill"></a> `backfill?` | `null` \| [`LinkedBackfill`](LinkedBackfill.md) | - |
 | <a id="property-can_send"></a> `can_send` | `boolean` | Caller may currently send from their own account. |
 | <a id="property-id"></a> `id` | `string` | Entity identifier. |
 | <a id="property-last_message_at"></a> `last_message_at?` | `string` \| `null` | Latest message timestamp. |

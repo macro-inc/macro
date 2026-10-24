@@ -10,7 +10,7 @@ import type {
 } from '../context/whatsapp-linked-context';
 import type { WhatsAppAccount } from '../core/account';
 import type { AdoptFailure } from '../core/adopt';
-import type { WhatsAppGroup } from '../core/group';
+import type { WhatsAppChat } from '../core/chat';
 import type { PairingStep } from '../core/pairing';
 
 function signalRead<Value>(
@@ -35,13 +35,13 @@ function signalRead<Value>(
 /** Server state a test drives by setting signals; actions are spies. */
 export function createFakeWhatsApp(initial: {
   account: WhatsAppAccount | null;
-  groups?: WhatsAppGroup[];
+  chats?: WhatsAppChat[];
   passkey?: PasskeyCapability;
 }) {
   const [account, setAccount] = signalRead<WhatsAppAccount | null>(
     initial.account
   );
-  const [groups, setGroups] = signalRead<WhatsAppGroup[]>(initial.groups);
+  const [chats, setChats] = signalRead<WhatsAppChat[]>(initial.chats);
   const [features] = signalRead({ pairing: true, adoption: true });
   const [pairing, setPairingRead] = signalRead<PairingRead>(undefined);
   const setPairing = (step: PairingStep, expiresAt?: string) =>
@@ -49,13 +49,13 @@ export function createFakeWhatsApp(initial: {
       step,
       expiresAt: expiresAt ?? new Date(Date.now() + 52_000).toISOString(),
     });
-  const groupsEnabled: Accessor<boolean>[] = [];
+  const chatsEnabled: Accessor<boolean>[] = [];
   const capabilities = {
     features,
     account,
-    groups: vi.fn((enabled: Accessor<boolean>) => {
-      groupsEnabled.push(enabled);
-      return groups;
+    chats: vi.fn((enabled: Accessor<boolean>) => {
+      chatsEnabled.push(enabled);
+      return chats;
     }),
     passkey: initial.passkey ?? {
       kind: 'handoff',
@@ -64,9 +64,7 @@ export function createFakeWhatsApp(initial: {
     },
     pairing: vi.fn((_pairingId: Accessor<string>) => pairing),
     connect: vi.fn(
-      (
-        _replace: boolean
-      ): ResultAsync<
+      (): ResultAsync<
         { pairingId: string; expiresAt: string },
         RequestFailure
       > =>
@@ -94,5 +92,5 @@ export function createFakeWhatsApp(initial: {
     isDisconnecting: () => false,
     openGroup: vi.fn(),
   } satisfies WhatsAppLinkedCapabilities;
-  return { capabilities, setAccount, setGroups, setPairing, groupsEnabled };
+  return { capabilities, setAccount, setChats, setPairing, chatsEnabled };
 }

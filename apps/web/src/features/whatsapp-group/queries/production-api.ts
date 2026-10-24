@@ -145,6 +145,9 @@ export const whatsappGroupApi: WhatsAppGroupApi = {
           'WhatsApp participant',
         admin: person.admin,
       })),
+      backfill: view.backfill
+        ? { state: view.backfill.state, imported: view.backfill.imported }
+        : undefined,
       limits: {
         textBytes: view.limits.text_limit_bytes,
         attachmentBytes: view.limits.attachment_limit_bytes,

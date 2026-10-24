@@ -7,6 +7,7 @@ use uuid::Uuid;
 
 mod accounts;
 mod bindings;
+mod chats;
 mod effects;
 mod groups;
 mod ingest;

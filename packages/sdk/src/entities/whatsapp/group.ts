@@ -50,6 +50,8 @@ export class WhatsAppGroup extends FavoritableEntity<WhatsAppGroupDetail> {
   readonly sendingIdentity = this.field('sending_identity');
   /** Per-user unread count. */
   readonly unreadCount = this.field('unread_count');
+  /** Importing earlier messages from the owner's phone after adding, if any. */
+  readonly backfill = this.field('backfill');
   /** Supported sizes and mutation window. */
   readonly limits = this.field('limits');
   /** Current remote roster, when available. */

@@ -458,6 +458,7 @@ use utoipa::OpenApi;
         whatsapp_linked::inbound::router::passkey,
         whatsapp_linked::inbound::router::disconnect,
         whatsapp_linked::inbound::router::groups,
+        whatsapp_linked::inbound::router::chats,
         whatsapp_linked::inbound::router::adopt,
         whatsapp_linked::inbound::router::group,
         whatsapp_linked::inbound::router::reply,

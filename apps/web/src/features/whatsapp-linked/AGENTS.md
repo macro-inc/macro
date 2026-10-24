@@ -3,22 +3,29 @@
 ## What it is
 
 Personal WhatsApp accounts linked as devices (External tab → WhatsApp): link an
-account by QR, list its groups, and add a group as its own shareable Macro
-entity. Each person sends from their own account. Behind the `enable-whatsapp-linked` flag.
+account by QR, list its WhatsApp chats, and add a group as its own shareable
+Macro entity. Each person sends from their own account. Behind the `enable-whatsapp-linked` flag.
 
 ## Start here
 
 - `whatsapp-linked.tsx`: production wiring (shared queries + split navigation).
 - `context/whatsapp-linked-context.tsx`: the capability contract tests fake.
-- `views/whatsapp-page.tsx`: account states, the Add to Macro and Can't be
-  added sections, and the pairing/confirm dialogs.
+- `views/whatsapp-page.tsx`: account states, the header (search + account
+  strip), the Add to Macro and Can't be added sections (plus In Macro while
+  searching), and the pairing/confirm dialogs.
+- `components/chat-list.tsx`: one-line chat rows styled like Macro's list rows
+  (`bg-list-hover`, actions on hover/focus, always on touch).
+- `core/chat.ts`: chat sections, search matching and row wording.
 
 ## Scope
 
 - Owns: the WhatsApp account page, pairing dialog and one-click adoption
   (no dialog; DSS names the group after WhatsApp).
 - Group timeline and sending: `features/whatsapp-group`; no channel integration.
-- Not here: the External tab shell, its In Macro sidebar and the
+- One account at a time: there is no replace flow; switching means
+  Disconnect, then Connect.
+- Not here: the External tab shell, the groups nested under WhatsApp in its
+  sidebar and the
   `/external/whatsapp/:groupId` route → `features/external-view`;
   HTTP → `lib/service-clients/service-storage/whatsapp-linked.ts`; shared
   queries → `lib/queries/whatsapp-linked`; DSS routes → `crates/whatsapp_linked`.
@@ -37,6 +44,10 @@ entity. Each person sends from their own account. Behind the `enable-whatsapp-li
   (`Linked*`); change `crates/whatsapp_linked` and regenerate, never hand-type.
 - Adoption failures carry DSS's `LinkedError` code (`whatsappErrorResponse`);
   `core/adopt.ts` words each one. Never show a catch-all message.
+- The chat list (`GET /meta/linked/chats`) arrives sorted by recent activity;
+  keep DSS's order. Sections follow its `group`/`shared`/`can_add`/
+  `cannot_add_reason` fields; direct chats are listed but not addable until DSS
+  says `can_add`.
 - Adoption grants access only to its owner; the generic Share dialog manages
   later access. No special audience lists or WhatsApp membership requirement
   for viewing.

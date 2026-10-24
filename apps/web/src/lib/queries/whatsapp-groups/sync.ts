@@ -42,12 +42,12 @@ function fallbackRefetch(refetch: () => void) {
 
 const refreshGroupLists = () =>
   Promise.all([
-    queryClient.invalidateQueries({ queryKey: whatsappLinkedKeys.groups._def }),
+    queryClient.invalidateQueries({ queryKey: whatsappLinkedKeys.chats._def }),
     queryClient.invalidateQueries({ queryKey: whatsappGroupsKeys.list._def }),
   ]);
 
 /**
- * While External is open: the owner's WhatsApp groups (`groups`) and every
+ * While External is open: the owner's WhatsApp chat list (`groups`) and every
  * readable group's summary (`group`, for unread counts and names).
  */
 export function useWhatsappGroupListsSync() {
@@ -61,7 +61,7 @@ export function useWhatsappGroupListsSync() {
     cancel();
     if (change.scope === 'groups') {
       queryClient.invalidateQueries({
-        queryKey: whatsappLinkedKeys.groups._def,
+        queryKey: whatsappLinkedKeys.chats._def,
       });
     }
     queryClient.invalidateQueries({ queryKey: whatsappGroupsKeys.list._def });

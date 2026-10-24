@@ -374,6 +374,155 @@ impl GroupInfo {
     }
 }
 
+/// Whether a WhatsApp chat is a group or a one-to-one chat.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = LinkedChatKind))]
+pub enum ChatKind {
+    /// A group chat (`…@g.us`).
+    Group,
+    /// A direct chat with one person.
+    Direct,
+}
+
+impl ChatKind {
+    /// Stable storage spelling.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Group => "group",
+            Self::Direct => "direct",
+        }
+    }
+
+    /// Parse the storage spelling.
+    pub fn parse(value: &str) -> Option<Self> {
+        Some(match value {
+            "group" => Self::Group,
+            "direct" => Self::Direct,
+            _ => return None,
+        })
+    }
+}
+
+/// Why a chat can't be added to Macro. The same sentences adoption refuses with.
+pub mod cannot_add {
+    /// The account's WhatsApp left the group or was removed.
+    pub const NOT_IN_GROUP: &str = "your WhatsApp is not in this group any more";
+    /// Community announcement or parent groups.
+    pub const COMMUNITY: &str = "community groups can't be added to Macro";
+    /// Disappearing messages are on.
+    pub const DISAPPEARING: &str = "groups with disappearing messages can't be added to Macro";
+    /// Direct chats are listed but not addable yet.
+    pub const DIRECT: &str = "direct chats can't be added to Macro yet";
+}
+
+/// One chat of the caller's WhatsApp chat list, as WhatsApp Web lists it.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = LinkedChat))]
+pub struct Chat {
+    /// WhatsApp chat JID: a group, or the other person's phone-number JID
+    /// (LID when WhatsApp never told us the number).
+    pub jid: String,
+    /// Group or direct chat.
+    pub kind: ChatKind,
+    /// Group: the subject, or member names for an unnamed group. Direct: the
+    /// contact or WhatsApp name, else `+<phone>`. Always non-empty.
+    pub name: String,
+    /// Newest activity WhatsApp reported (message or history sync); `null`
+    /// when unknown. The list is sorted by it, newest first, unknown last.
+    pub last_activity_at: Option<DateTime<Utc>>,
+    /// Archived in WhatsApp.
+    pub archived: bool,
+    /// Pinned in WhatsApp.
+    pub pinned: bool,
+    /// The caller's own Macro group for this chat, once added.
+    pub group: Option<GroupReference>,
+    /// Someone else's Macro group for this chat shared with the caller, when
+    /// the caller has not added their own.
+    pub shared: Option<SharedGroupReference>,
+    /// "Add to Macro" works now.
+    pub can_add: bool,
+    /// Why it can't be added, when it is neither added, shared nor addable.
+    pub cannot_add_reason: Option<String>,
+}
+
+/// The caller's WhatsApp chat list.
+#[derive(Debug, Clone, Serialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = LinkedChats))]
+pub struct ChatList {
+    /// Newest activity first; chats with unknown activity last, by name.
+    pub chats: Vec<Chat>,
+}
+
+/// Where importing a group's earlier messages stands.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = LinkedBackfillState))]
+pub enum BackfillState {
+    /// Waiting to start: the owner's account has not seen a message in this
+    /// chat yet, or has not picked it up.
+    Pending,
+    /// Asking the owner's phone for earlier messages.
+    Running,
+    /// The owner's phone did not answer; retried when it is back.
+    WaitingForPhone,
+    /// Everything the phone had (within the limits) was imported.
+    Done,
+    /// Stopped at the limits ([`BACKFILL_MESSAGE_LIMIT`] messages or
+    /// [`BACKFILL_MAX_AGE_DAYS`] days); older messages stay in WhatsApp.
+    Partial,
+}
+
+impl BackfillState {
+    /// Stable storage spelling.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Pending => "pending",
+            Self::Running => "running",
+            Self::WaitingForPhone => "waiting_for_phone",
+            Self::Done => "done",
+            Self::Partial => "partial",
+        }
+    }
+
+    /// Parse the storage spelling.
+    pub fn parse(value: &str) -> Option<Self> {
+        Some(match value {
+            "pending" => Self::Pending,
+            "running" => Self::Running,
+            "waiting_for_phone" => Self::WaitingForPhone,
+            "done" => Self::Done,
+            "partial" => Self::Partial,
+            _ => return None,
+        })
+    }
+
+    /// Still importing (show "Importing history…").
+    pub const fn is_active(self) -> bool {
+        matches!(self, Self::Pending | Self::Running | Self::WaitingForPhone)
+    }
+}
+
+/// Earlier messages imported after adding a group.
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = LinkedBackfill))]
+pub struct Backfill {
+    /// Progress.
+    pub state: BackfillState,
+    /// Messages received from the phone so far (including ones already shown).
+    pub imported: u32,
+}
+
+/// Most earlier messages imported when a group is added.
+pub const BACKFILL_MESSAGE_LIMIT: u32 = 500;
+/// Earlier messages older than this many days before adding are not imported.
+pub const BACKFILL_MAX_AGE_DAYS: i64 = 90;
+
 /// Deliberate operations on an existing linked-group message.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]

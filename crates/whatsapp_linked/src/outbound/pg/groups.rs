@@ -1,7 +1,7 @@
 //! Group metadata observed by accounts, and membership reconciliation.
 
 use super::*;
-use crate::domain::ports::{GroupRepository, VisibleAdoption};
+use crate::domain::ports::{GroupRepository, StoredChat, VisibleAdoption};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 
@@ -377,5 +377,9 @@ impl GroupRepository for PgLinkedRepository {
         .map_err(failure)?
         .map(decode)
         .transpose()
+    }
+
+    async fn account_chats(&self, account: Uuid) -> LinkedResult<Vec<StoredChat>> {
+        super::chats::account_chats(&self.pool, account).await
     }
 }

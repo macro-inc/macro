@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, backfill_imported, backfill_cursor, adopted_at FROM whatsapp_group\n        WHERE user_id = $1 AND group_jid = $2 AND state = 'active'\n          AND backfill_state IN ('pending', 'running', 'waiting_for_phone')\n        ORDER BY id FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "backfill_imported",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "backfill_cursor",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "adopted_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "24e02b9f9df426d070d8f52a6a167e94f381ab8457c515c42287830741b73c7c"
+}

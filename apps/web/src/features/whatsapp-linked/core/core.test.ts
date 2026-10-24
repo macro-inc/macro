@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { accountStatus, phoneFromJid } from './account';
-import { groupInitials } from './group';
 import { formatCountdown, pairingStep, secondsLeft } from './pairing';
 
 describe('pairingStep', () => {
@@ -68,12 +67,5 @@ describe('account', () => {
     expect(
       accountStatus({ generation: 2, phone: undefined, health: 'pairing' })
     ).toEqual({ kind: 'not-connected', reconnect: false });
-  });
-});
-
-describe('group', () => {
-  it('uses at most two letter initials', () => {
-    expect(groupInitials('Launch War Room')).toBe('LW');
-    expect(groupInitials('🎉 Design Crit')).toBe('DC');
   });
 });

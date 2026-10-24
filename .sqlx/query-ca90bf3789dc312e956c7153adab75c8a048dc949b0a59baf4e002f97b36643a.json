@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO whatsapp_chat AS c (account_id, chat_jid, kind, name, last_activity_at, archived, pinned, anchor)\n                VALUES ($1, $2, $3, $4, $5, COALESCE($6, false), COALESCE($7, false), $8)\n                ON CONFLICT (account_id, chat_jid) DO UPDATE SET\n                    name = COALESCE(excluded.name, c.name),\n                    last_activity_at = GREATEST(c.last_activity_at, excluded.last_activity_at),\n                    archived = COALESCE($6, c.archived),\n                    pinned = COALESCE($7, c.pinned),\n                    anchor = CASE WHEN excluded.anchor IS NOT NULL AND (c.anchor IS NULL\n                        OR (excluded.anchor->>'at')::timestamptz >= (c.anchor->>'at')::timestamptz)\n                        THEN excluded.anchor ELSE c.anchor END,\n                    updated_at = now()\n                WHERE c.name IS DISTINCT FROM COALESCE(excluded.name, c.name)\n                   OR c.last_activity_at IS DISTINCT FROM GREATEST(c.last_activity_at, excluded.last_activity_at)\n                   OR c.archived IS DISTINCT FROM COALESCE($6, c.archived)\n                   OR c.pinned IS DISTINCT FROM COALESCE($7, c.pinned)\n                   OR (excluded.anchor IS NOT NULL AND c.anchor IS DISTINCT FROM excluded.anchor AND (c.anchor IS NULL\n                       OR (excluded.anchor->>'at')::timestamptz >= (c.anchor->>'at')::timestamptz))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Bool",
+        "Bool",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ca90bf3789dc312e956c7153adab75c8a048dc949b0a59baf4e002f97b36643a"
+}

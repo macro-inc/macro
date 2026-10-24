@@ -9,6 +9,7 @@ import { DateDivider } from '@channel/Message/DateDivider';
 import { NewDivider } from '@channel/Message/NewDivider';
 import { SenderName } from '@channel/Message/SenderName';
 import { MaybeMessageActionDrawerManager } from '@channel/Mobile/MessageActionDrawerManager';
+import { HeaderActionButton } from '@components/app/HeaderActionButton';
 import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { toast } from '@core/component/Toast/Toast';
@@ -17,6 +18,8 @@ import type {
   MessageActions,
 } from '@core/messages/types';
 import { fireAndForget } from '@core/util/fireAndForget';
+import UsersThreeIcon from '@phosphor/users-three.svg';
+import WhatsappIcon from '@phosphor/whatsapp-logo.svg';
 import { Button, ConfirmDialog } from '@ui';
 import {
   createEffect,
@@ -24,17 +27,26 @@ import {
   createSignal,
   For,
   type JSX,
+  mapArray,
   onCleanup,
   onMount,
   Show,
 } from 'solid-js';
 import { InboundAttachmentPlaceholder } from '../components/inbound-attachment';
+import {
+  InboundMedia,
+  type InboundMediaFile,
+} from '../components/inbound-media';
 import { useWhatsAppGroup } from '../context/whatsapp-group-context';
+import { type InboundAttachment, inlineMediaKind } from '../core/attachments';
 import { whatsappToMarkdown } from '../core/formatting';
 import {
+  backfillStatus,
   canChangeMessage,
   composerNote,
+  composerPlaceholder,
   type GroupMessage,
+  historyStartNote,
 } from '../core/group';
 import { groupMessageData, senderKey } from '../core/message-data';
 import {
@@ -59,10 +71,38 @@ function quotePreview(message: GroupMessage) {
   return message.body || message.attachments[0]?.fileName || 'Attachment';
 }
 
+/** A message's images, video and voice notes, played inline. */
+function MessageMedia(props: { attachments: InboundAttachment[] }) {
+  const source = useWhatsAppGroup();
+  const media = createMemo(() =>
+    props.attachments.flatMap((attachment) => {
+      const kind = inlineMediaKind(attachment);
+      return kind && attachment.documentId
+        ? [{ attachment, kind, documentId: attachment.documentId }]
+        : [];
+    })
+  );
+  const files = mapArray(media, (file) => {
+    const url = source.fileUrl(() => file.documentId);
+    return (): InboundMediaFile => ({
+      id: file.documentId,
+      kind: file.kind,
+      fileName: file.attachment.fileName,
+      url: url.data,
+    });
+  });
+  return (
+    <Show when={files().length > 0}>
+      <InboundMedia files={files().map((file) => file())} />
+    </Show>
+  );
+}
+
 export function WhatsAppGroupView(props: {
   userId?: string;
   leading?: JSX.Element;
-  onShare: () => void;
+  /** The Share control; the host owns the share dialog. */
+  share: JSX.Element;
   onConnect: () => void;
 }) {
   const source = useWhatsAppGroup();
@@ -90,6 +130,10 @@ export function WhatsAppGroupView(props: {
   let scroller: HTMLDivElement | undefined;
   let alive = true;
   let newest: string | undefined;
+  let oldest: string | undefined;
+  // Distance from the bottom at the last scroll, to hold the view in place
+  // when imported history lands above it.
+  let fromBottom = 0;
   onCleanup(() => {
     alive = false;
   });
@@ -178,6 +222,28 @@ export function WhatsAppGroupView(props: {
       markRead();
     });
   });
+  createEffect(() => {
+    const first = rows()[0]?.id;
+    const grewAbove = !!oldest && !!first && first !== oldest;
+    oldest = first;
+    if (!grewAbove || !scroller) return;
+    scroller.scrollTop =
+      scroller.scrollHeight - scroller.clientHeight - fromBottom;
+  });
+  const memberLabel = () => {
+    const count = source.group.data?.members.length;
+    if (count === undefined) return 'Members';
+    return count === 1 ? '1 member' : `${count} members`;
+  };
+  const importing = () =>
+    backfillStatus(
+      source.group.data?.backfill,
+      source.group.data?.accessLevel === 'owner'
+    );
+  const historyStart = () =>
+    source.hasOlder()
+      ? undefined
+      : historyStartNote(source.group.data?.backfill);
   const older = async () => {
     const height = scroller?.scrollHeight ?? 0;
     const offset = scroller?.scrollTop ?? 0;
@@ -276,29 +342,32 @@ export function WhatsAppGroupView(props: {
       class="flex h-full min-h-0 min-w-0 flex-col bg-panel text-ink touch:pt-(--mobile-content-inset-top)"
       style={{ '--user-icon-width': '32px', '--message-padding-x': '16px' }}
     >
-      <header class="flex min-h-14 shrink-0 items-center gap-2 border-b border-edge-muted px-4">
+      <header class="flex h-12 shrink-0 items-center gap-2 px-3 touch:px-(--mobile-chrome-gutter)">
         {props.leading}
-        <div class="min-w-0 flex-1">
-          <h1 class="truncate text-sm font-semibold">
+        <span
+          aria-hidden="true"
+          class="flex size-5 shrink-0 items-center justify-center rounded-full bg-[#25D366] text-[#fff]"
+        >
+          <WhatsappIcon class="size-3" />
+        </span>
+        <div class="flex min-w-0 flex-1 items-baseline gap-2">
+          <h1 class="ph-no-capture min-w-0 truncate text-sm font-semibold">
             {source.group.data?.name ?? 'WhatsApp group'}
           </h1>
-          <span class="text-xs text-ink-muted">WhatsApp</span>
+          <span class="shrink-0 truncate text-xs text-ink-extra-muted mobile:hidden">
+            WhatsApp
+            <Show when={importing()}>{(status) => <> · {status()}</>}</Show>
+          </span>
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setRoster((value) => !value)}
-        >
-          Members
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={!source.group.data}
-          onClick={props.onShare}
-        >
-          Share
-        </Button>
+        <div class="flex shrink-0 items-center gap-1">
+          <HeaderActionButton
+            label={memberLabel()}
+            icon={<UsersThreeIcon />}
+            tooltip="WhatsApp members"
+            onClick={() => setRoster((value) => !value)}
+          />
+          {props.share}
+        </div>
       </header>
       <Show when={roster()}>
         <aside class="max-h-56 shrink-0 overflow-y-auto border-b border-edge-muted p-4">
@@ -338,14 +407,12 @@ export function WhatsAppGroupView(props: {
             role="log"
             aria-label="WhatsApp messages"
             onScroll={() => {
-              if (
-                scroller &&
+              if (!scroller) return;
+              fromBottom =
                 scroller.scrollHeight -
-                  scroller.scrollTop -
-                  scroller.clientHeight <
-                  60
-              )
-                markRead();
+                scroller.scrollTop -
+                scroller.clientHeight;
+              if (fromBottom < 60) markRead();
             }}
           >
             <Show when={source.group.isPending || source.timeline.isPending}>
@@ -382,7 +449,21 @@ export function WhatsAppGroupView(props: {
                 </Button>
               </div>
             </Show>
-            <Show when={source.timeline.data && rows().length === 0}>
+            <Show when={source.timeline.data && !source.hasOlder()}>
+              <Show when={importing() ?? historyStart()}>
+                {(note) => (
+                  <p
+                    role="status"
+                    class="p-3 text-center text-xs text-ink-muted"
+                  >
+                    {note()}
+                  </p>
+                )}
+              </Show>
+            </Show>
+            <Show
+              when={source.timeline.data && rows().length === 0 && !importing()}
+            >
               <p class="p-6 text-center text-sm text-ink-muted">
                 No messages yet. New WhatsApp messages will appear here.
               </p>
@@ -452,6 +533,7 @@ export function WhatsAppGroupView(props: {
                             )}
                           </Show>
                           {content}
+                          <MessageMedia attachments={message.attachments} />
                           <Show when={placeholders().length > 0}>
                             <div class="mt-1 flex flex-wrap gap-2">
                               <For each={placeholders()}>
@@ -504,9 +586,6 @@ export function WhatsAppGroupView(props: {
             >
               <ChannelInputContainer>
                 <div class="flex w-full min-w-0 flex-col px-3 touch:px-0">
-                  <p class="px-1 pb-1 text-xs text-ink-muted">
-                    {composerNote(group())}
-                  </p>
                   <Show when={conversation.target()}>
                     {(target) => (
                       <InputFlag
@@ -544,7 +623,7 @@ export function WhatsAppGroupView(props: {
                     input={{
                       mode: 'channel',
                       id: `whatsapp-group-input-${group().id}`,
-                      placeholder: `Message ${group().name}`,
+                      placeholder: composerPlaceholder(group()),
                     }}
                     features={WHATSAPP_COMPOSER}
                     fileAccept={group().limits.attachmentTypes.join(',')}

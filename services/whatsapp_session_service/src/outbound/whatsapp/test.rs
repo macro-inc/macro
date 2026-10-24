@@ -138,6 +138,8 @@ async fn a_phone_scanning_the_qr_links_the_account_through_the_encrypted_store(p
             send_batch: 16,
             tick_every: Duration::from_secs(600),
             groups_refresh_interval: crate::domain::account::GROUPS_REFRESH_INTERVAL,
+            backfill_timeout: crate::domain::account::BACKFILL_TIMEOUT,
+            backfill_retry: crate::domain::account::BACKFILL_RETRY,
         },
     ));
     let (_signals, signal_receiver) = mpsc::channel(8);

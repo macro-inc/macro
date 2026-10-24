@@ -1,7 +1,7 @@
 //! The account's WhatsApp connection: the encrypted Postgres device store,
 //! a whatsmeow [`Client`], and the mapping between whatsmeow and the domain.
 
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use std::time::Duration;
 
 use async_trait::async_trait;
@@ -9,19 +9,23 @@ use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
+use tracing::Instrument;
 use uuid::Uuid;
 use whatsapp_linked::domain::events::{
-    ClaimedSend, MediaImport, OutboundMedia, OutgoingContent, SessionScope, Target,
+    ChatUpdate, ClaimedSend, MediaImport, MessageAnchor, OutboundMedia, OutgoingContent,
+    SessionScope, Target,
 };
 use whatsapp_linked::domain::models::{GroupInfo, Identity, MediaKind, Participant};
 use whatsapp_store_pg::kms::WhatsAppKms;
 use whatsapp_store_pg::{PgWhatsAppStore, WhatsAppStoreError};
 use whatsmeow::download::{DownloadError, MediaType};
 use whatsmeow::proto::wa_e2e;
+use whatsmeow::proto::wa_history_sync::Conversation;
+use whatsmeow::proto::wa_history_sync::history_sync::HistorySyncType;
 use whatsmeow::send::{SendRequestExtra, build_edit};
 use whatsmeow::signal::CurveSignatures;
 use whatsmeow::store::Device;
-use whatsmeow::types::{Jid, WebAuthnResponse};
+use whatsmeow::types::{Jid, MessageInfo, MessageSource, WebAuthnResponse};
 use whatsmeow::{
     Client, ClientConfig, ClientError, Dialer, Event, EventHandler, QrChannelItem, Signal,
 };
@@ -167,6 +171,7 @@ impl<Kms: WhatsAppKms + 'static> WhatsmeowConnector<Kms> {
         let (sender, receiver) = mpsc::unbounded_channel();
         client.add_event_handler(Arc::new(Forwarder {
             account: scope.account_id,
+            client: Arc::downgrade(&client),
             store: Arc::clone(&store),
             events: sender.clone(),
             inbound,
@@ -189,26 +194,148 @@ impl<Kms: WhatsAppKms + 'static> WhatsmeowConnector<Kms> {
 /// runner, which may itself be waiting for a send's acknowledgement.
 struct Forwarder {
     account: Uuid,
+    /// The client this handler is registered on, to parse history messages.
+    client: Weak<Client>,
     store: Arc<PgWhatsAppStore>,
     events: mpsc::UnboundedSender<SessionEvent>,
     inbound: Arc<dyn InboundSink>,
+}
+
+impl Forwarder {
+    fn seal(&self, locator: &MediaLocator) -> Option<Vec<u8>> {
+        let plaintext = serde_json::to_vec(locator).ok()?;
+        self.store
+            .seal(LOCATOR_PURPOSE, &plaintext)
+            .inspect_err(|error| tracing::warn!(error = ?error, "Sealing a media locator failed"))
+            .ok()
+    }
+
+    /// Chat-list updates go to the runner, by phone number and with
+    /// address-book names where the stores know them.
+    async fn chats(&self, mut chats: Vec<ChatUpdate>) {
+        if chats.is_empty() {
+            return;
+        }
+        events::complete_chats(self.store.as_ref(), self.store.as_ref(), &mut chats).await;
+        let _ = self.events.send(SessionEvent::Chats(chats));
+    }
+
+    /// A history-sync bundle: the chat list (initial, recent, full and
+    /// push-name syncs), or an answer to an on-demand request for a chat's
+    /// earlier messages.
+    async fn history_sync(&self, history: &whatsmeow::types::events::HistorySync) {
+        let data = &history.data;
+        let on_demand = data.sync_type == HistorySyncType::OnDemand as i32;
+        let span = tracing::info_span!(
+            "whatsapp.history.sync",
+            account_id = %self.account,
+            sync_type = data.sync_type,
+            conversations = data.conversations.len(),
+            chats = tracing::field::Empty,
+        );
+        async {
+            if on_demand {
+                for conversation in &data.conversations {
+                    Box::pin(self.history_page(conversation)).await;
+                }
+                return;
+            }
+            let chats = events::history_chats(data);
+            tracing::Span::current().record("chats", chats.len());
+            self.chats(chats).await;
+        }
+        .instrument(span)
+        .await;
+    }
+
+    /// Stores a page of a chat's earlier messages as history events, then
+    /// reports the page. A page whose messages could not all be stored is not
+    /// reported: the request times out and is asked again.
+    async fn history_page(&self, conversation: &Conversation) {
+        let Some(page) = events::history_page(conversation) else {
+            return;
+        };
+        let Some(client) = self.client.upgrade() else {
+            return;
+        };
+        let span = tracing::info_span!(
+            "whatsapp.history.page",
+            account_id = %self.account,
+            messages = page.messages,
+            complete = page.complete,
+            stored = tracing::field::Empty,
+            outcome = tracing::field::Empty,
+        );
+        async {
+            let Ok(chat) = page.chat_jid.parse::<Jid>() else {
+                return;
+            };
+            let mut stored = 0usize;
+            let mut kept = true;
+            for message in &conversation.messages {
+                let Some(web) = message.message.clone() else {
+                    continue;
+                };
+                let parsed = match Box::pin(client.parse_web_message(&chat, web)).await {
+                    Ok(parsed) => parsed,
+                    Err(error) => {
+                        tracing::debug!(error = %error, "Skipping an unreadable history message");
+                        continue;
+                    }
+                };
+                let Some(mut event) = events::map_history_message(
+                    self.account,
+                    &parsed,
+                    Utc::now(),
+                    &|locator: &MediaLocator| self.seal(locator),
+                ) else {
+                    continue;
+                };
+                events::complete_sender(self.store.as_ref(), &mut event).await;
+                if Box::pin(self.inbound.accept(&event)).await {
+                    stored += 1;
+                } else {
+                    kept = false;
+                }
+            }
+            tracing::Span::current().record("stored", stored);
+            if !kept {
+                tracing::Span::current().record("outcome", "not_stored");
+                tracing::warn!("A history page could not be stored; it will be requested again");
+                return;
+            }
+            tracing::Span::current().record("outcome", "stored");
+            let _ = self.events.send(SessionEvent::HistoryPage(page));
+        }
+        .instrument(span)
+        .await;
+    }
 }
 
 // Object safe (`Arc<dyn EventHandler>`), hence `async_trait`.
 #[async_trait]
 impl EventHandler for Forwarder {
     async fn handle(&self, event: &Event) -> bool {
-        let seal = |locator: &MediaLocator| {
-            let plaintext = serde_json::to_vec(locator).ok()?;
-            self.store
-                .seal(LOCATOR_PURPOSE, &plaintext)
-                .inspect_err(
-                    |error| tracing::warn!(error = ?error, "Sealing a media locator failed"),
-                )
-                .ok()
-        };
+        match event {
+            // Boxed: these futures are large, and the handler runs nested
+            // in the client's node handling.
+            Event::HistorySync(history) => {
+                Box::pin(self.history_sync(history)).await;
+                return true;
+            }
+            Event::Message(message) => {
+                Box::pin(self.chats(events::message_chat(message).into_iter().collect())).await;
+            }
+            event => {
+                Box::pin(self.chats(events::chat_setting(event).into_iter().collect())).await;
+            }
+        }
+        let seal = |locator: &MediaLocator| self.seal(locator);
         match events::map_event(self.account, event, Utc::now(), &seal) {
-            Some(Mapped::Inbound(event)) => self.inbound.accept(&event).await,
+            Some(Mapped::Inbound(mut event)) => {
+                events::complete_sender(self.store.as_ref(), &mut event).await;
+                self.inbound.accept(&event).await
+            }
             Some(Mapped::Session(event)) => {
                 let _ = self.events.send(event);
                 true
@@ -458,6 +585,30 @@ impl WhatsmeowSession {
     }
 }
 
+/// The message an anchor names, as whatsmeow's request builders take it. Our
+/// own messages have no sender (the key says from-me).
+fn anchor_info(chat_jid: &str, anchor: &MessageAnchor) -> Result<MessageInfo, SessionError> {
+    let invalid =
+        |what: &str| SessionError::Internal(rootcause::report!("invalid {what}").into_dynamic());
+    let chat: Jid = chat_jid.parse().map_err(|_| invalid("chat"))?;
+    let sender = match (&anchor.sender_jid, anchor.from_me) {
+        (Some(sender), false) => sender.parse().map_err(|_| invalid("sender"))?,
+        _ => Jid::default(),
+    };
+    Ok(MessageInfo {
+        source: MessageSource {
+            is_group: chat.server == whatsmeow::types::GROUP_SERVER,
+            chat,
+            sender,
+            is_from_me: anchor.from_me,
+            ..MessageSource::default()
+        },
+        id: anchor.id.clone(),
+        timestamp: Some(anchor.at),
+        ..MessageInfo::default()
+    })
+}
+
 fn group_info(group: whatsmeow::types::GroupInfo, observed_at: DateTime<Utc>) -> GroupInfo {
     GroupInfo {
         jid: group.jid.to_string(),
@@ -636,6 +787,37 @@ impl WhatsAppSession for WhatsmeowSession {
             Err(error) if not_a_member(&error) => Ok(None),
             Err(error) => Err(internal(error)),
         }
+    }
+
+    async fn request_history(
+        &self,
+        chat_jid: &str,
+        before: &MessageAnchor,
+        count: u32,
+    ) -> Result<(), SessionError> {
+        let info = anchor_info(chat_jid, before)?;
+        let request = self
+            .client
+            .build_history_sync_request(&info, i32::try_from(count).unwrap_or(i32::MAX));
+        Box::pin(self.client.send_peer_message(request))
+            .await
+            .map(|_| ())
+            .map_err(internal)
+    }
+
+    async fn request_message(
+        &self,
+        chat_jid: &str,
+        message: &MessageAnchor,
+    ) -> Result<(), SessionError> {
+        let info = anchor_info(chat_jid, message)?;
+        let request =
+            self.client
+                .build_unavailable_message_request(&info.chat, &info.sender, &info.id);
+        Box::pin(self.client.send_peer_message(request))
+            .await
+            .map(|_| ())
+            .map_err(internal)
     }
 
     async fn logout(&self) {

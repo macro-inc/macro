@@ -57,6 +57,7 @@ fn text(event: u128) -> InboundEvent {
             kind: MessageKind::Text,
             text: "hello".to_owned(),
             history: false,
+            from_me: false,
             revision: 0,
             target: None,
             media: vec![],

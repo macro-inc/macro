@@ -1,0 +1,65 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT g.id, g.group_jid, g.backfill_state AS \"state!\", g.backfill_imported, g.backfill_cursor,\n            g.adopted_at, g.backfill_requested_at, c.anchor AS \"anchor?\"\n        FROM whatsapp_group g\n        LEFT JOIN whatsapp_chat c ON c.account_id = $1 AND c.chat_jid = g.group_jid\n        WHERE g.user_id = $2 AND g.state = 'active'\n          AND g.backfill_state IN ('pending', 'running', 'waiting_for_phone')\n        ORDER BY g.adopted_at, g.id LIMIT 20",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "group_jid",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "state!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "backfill_imported",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "backfill_cursor",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 5,
+        "name": "adopted_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "backfill_requested_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "anchor?",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      true,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "c412870d6e6e8be6878bfe1bd793ce3292bc74417b2f18890c481265f4f2a1d6"
+}

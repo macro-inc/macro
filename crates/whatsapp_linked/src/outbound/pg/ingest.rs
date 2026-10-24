@@ -53,12 +53,15 @@ pub(super) enum Reserve {
 /// is acceptable.
 const CONSENT_SKEW_SECONDS: f64 = 10.0;
 
-/// Bindings whose consent covers this observation.
+/// Bindings whose consent covers this observation. Live messages count from
+/// adoption on; earlier messages the owner's phone sends as history go only to
+/// the owner's own groups, which asked for them by being added.
 pub(super) async fn observed_bindings_in(
     tx: &mut Transaction<'_, Postgres>,
     account: &Fenced,
     group: &str,
     source_at: DateTime<Utc>,
+    history: bool,
 ) -> LinkedResult<Vec<Binding>> {
     sqlx::query_as!(
         bindings::BindingRow,
@@ -67,8 +70,9 @@ pub(super) async fn observed_bindings_in(
         WHERE b.group_jid = $1 AND b.state = 'active'
           AND m.account_id = $2 AND m.generation = $3 AND m.consent_ended_at IS NULL
           AND m.remote_member AND m.reconciled
-          AND $4 >= date_trunc('second', b.adopted_at) - make_interval(secs => $6)
-          AND $4 >= date_trunc('second', m.consent_at) - make_interval(secs => $6)
+          AND CASE WHEN $7 THEN b.user_id = $5 ELSE
+            $4 >= date_trunc('second', b.adopted_at) - make_interval(secs => $6)
+            AND $4 >= date_trunc('second', m.consent_at) - make_interval(secs => $6) END
           AND whatsapp_group_can_view(b.id, $5)
         ORDER BY b.id LIMIT 100"#,
         group,
@@ -76,7 +80,8 @@ pub(super) async fn observed_bindings_in(
         account.generation,
         source_at,
         account.user_id,
-        CONSENT_SKEW_SECONDS
+        CONSENT_SKEW_SECONDS,
+        history
     )
     .fetch_all(&mut **tx)
     .await
@@ -465,6 +470,54 @@ pub(super) async fn finish_in(
     Ok(())
 }
 
+fn is_lid(jid: &str) -> bool {
+    jid.ends_with("@lid")
+}
+
+/// The sender with both halves of its phone-number/LID pair when the account
+/// knows them. A message with WhatsApp's from-me flag is the account's own,
+/// whatever address it carries. A LID-only sender takes its phone number from
+/// the account's roster of the group, which lists each participant's pair as
+/// WhatsApp reported it. Anything still LID-only is quarantined by
+/// `reserve_in`.
+async fn resolve_sender_in(
+    tx: &mut Transaction<'_, Postgres>,
+    account: &Fenced,
+    group: &str,
+    message: &Message,
+) -> LinkedResult<Identity> {
+    let mut sender = message.sender.clone();
+    if message.from_me
+        && let Some(own) = &account.identity_jid
+    {
+        let lid = [Some(&sender.jid), sender.alternate_jid.as_ref()]
+            .into_iter()
+            .flatten()
+            .find(|jid| is_lid(jid))
+            .cloned();
+        sender.jid = own.clone();
+        sender.alternate_jid = lid;
+        return Ok(sender);
+    }
+    if !is_lid(&sender.jid) || sender.alternate_jid.is_some() {
+        return Ok(sender);
+    }
+    sender.alternate_jid = sqlx::query_scalar!(
+        r#"SELECT p->>'jid' AS "jid!" FROM whatsapp_group_roster r
+        CROSS JOIN LATERAL jsonb_array_elements(r.metadata->'participants') p
+        WHERE r.account_id = $1 AND r.group_jid = $2 AND p->>'alternateJid' = $3
+          AND p->>'jid' LIKE '%@s.whatsapp.net'
+        LIMIT 1"#,
+        account.id,
+        group,
+        sender.jid
+    )
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(failure)?;
+    Ok(sender)
+}
+
 /// Retain an event for later ingestion or retry, bounded per account.
 async fn retain_in(
     tx: &mut Transaction<'_, Postgres>,
@@ -542,8 +595,18 @@ async fn apply_in(
             })
         }
         InboundKind::Message(message) => {
-            let bindings =
-                observed_bindings_in(tx, account, &event.group_jid, event.source_at).await?;
+            let message = &Message {
+                sender: resolve_sender_in(tx, account, &event.group_jid, message).await?,
+                ..message.clone()
+            };
+            let bindings = observed_bindings_in(
+                tx,
+                account,
+                &event.group_jid,
+                event.source_at,
+                message.history,
+            )
+            .await?;
             if bindings.is_empty() {
                 tracing::debug!(
                     account_id = %account.id,

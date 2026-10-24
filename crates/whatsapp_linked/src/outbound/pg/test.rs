@@ -171,6 +171,7 @@ fn text(event: u128, sender: &str, source: &str, body: &str) -> InboundEvent {
             kind: MessageKind::Text,
             text: body.into(),
             history: false,
+            from_me: false,
             revision: 0,
             target: None,
             media: vec![],
@@ -416,6 +417,89 @@ async fn an_unverified_lid_is_quarantined_instead_of_guessed(pool: PgPool) {
     assert_eq!(state, "quarantined");
 }
 
+/// The person and Macro user each alias of the binding resolves to.
+async fn aliases(pool: &PgPool, binding: Uuid) -> Vec<(String, Uuid, Option<String>)> {
+    sqlx::query!(
+        "SELECT a.jid, a.person_id, p.user_id FROM whatsapp_identity_alias a JOIN whatsapp_external_person p ON p.id = a.person_id WHERE a.binding_id = $1 ORDER BY a.jid",
+        binding
+    )
+    .fetch_all(pool)
+    .await
+    .unwrap()
+    .into_iter()
+    .map(|row| (row.jid, row.person_id, row.user_id))
+    .collect()
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_message_from_me_is_the_account_owner_even_when_addressed_by_lid(pool: PgPool) {
+    let (_, session, _, binding, alice, _) = adopted(&pool).await;
+    let by_phone = text(1, ALICE_JID, "3EB0D001", "from my phone number");
+    session.ingest_event(alice, &by_phone).await.unwrap();
+    let mut by_lid = text(2, "53949570789492@lid", "3EB0D002", "Hi there");
+    let InboundKind::Message(message) = &mut by_lid.kind else {
+        unreachable!()
+    };
+    message.from_me = true;
+
+    assert_eq!(
+        session.ingest_event(alice, &by_lid).await.unwrap(),
+        IngestOutcome::Applied
+    );
+    let aliases = aliases(&pool, binding.id).await;
+    assert_eq!(
+        aliases
+            .iter()
+            .map(|(jid, _, user)| (jid.as_str(), user.as_deref()))
+            .collect::<Vec<_>>(),
+        [
+            (ALICE_JID, Some(ALICE)),
+            ("53949570789492@lid", Some(ALICE))
+        ]
+    );
+    assert_eq!(aliases[0].1, aliases[1].1, "one person for both addresses");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_quarantined_lid_sender_ingests_once_the_roster_pairs_it(pool: PgPool) {
+    let (_, session, _, binding, alice, _) = adopted(&pool).await;
+    const CUSTOMER_LID: &str = "987654321@lid";
+    session
+        .ingest_event(alice, &text(1, CUSTOMER_JID, "3EB0E001", "by phone"))
+        .await
+        .unwrap();
+    let by_lid = text(2, CUSTOMER_LID, "3EB0E002", "by lid");
+    assert_eq!(
+        session.ingest_event(alice, &by_lid).await.unwrap(),
+        IngestOutcome::Quarantined
+    );
+
+    let mut info = group(&[ALICE_JID, BOB_JID, CUSTOMER_JID]);
+    info.participants[2].identity.alternate_jid = Some(CUSTOMER_LID.to_owned());
+    session.update_groups(alice, &[info], true).await.unwrap();
+    sqlx::query!("UPDATE whatsapp_inbound_event SET retry_at = now()")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    assert_eq!(session.replay_deferred(alice).await.unwrap(), 1);
+    let aliases = aliases(&pool, binding.id).await;
+    assert_eq!(
+        aliases
+            .iter()
+            .map(|(jid, _, _)| jid.as_str())
+            .collect::<Vec<_>>(),
+        [CUSTOMER_JID, CUSTOMER_LID]
+    );
+    assert_eq!(aliases[0].1, aliases[1].1, "one person for both addresses");
+    let remaining =
+        sqlx::query_scalar!(r#"SELECT count(*) AS "count!" FROM whatsapp_inbound_event"#)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(remaining, 0);
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_reaction_before_its_message_is_deferred_and_replayed(pool: PgPool) {
     let (_, session, repository, binding, alice, _) = adopted(&pool).await;
@@ -430,6 +514,7 @@ async fn a_reaction_before_its_message_is_deferred_and_replayed(pool: PgPool) {
             kind: MessageKind::Reaction,
             text: "👍".into(),
             history: false,
+            from_me: false,
             revision: 1,
             target: Some(Target {
                 source_id: "3EB0ORIG".into(),
@@ -486,6 +571,7 @@ async fn edits_apply_in_source_order_and_deletes_are_permanent(pool: PgPool) {
             kind: MessageKind::Edit,
             text: body.into(),
             history: false,
+            from_me: false,
             revision,
             target: Some(Target {
                 source_id: "3EB0EDIT".into(),
@@ -959,3 +1045,5 @@ async fn rate_limited_send_never_creates_a_dispatchable_intent(pool: PgPool) {
     assert_eq!(error.current_context(), &LinkedError::RateLimited);
     assert!(session.claim_sends(alice, 8).await.unwrap().is_empty());
 }
+
+mod chats;

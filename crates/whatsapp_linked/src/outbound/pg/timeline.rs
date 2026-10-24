@@ -6,10 +6,17 @@ use models_permissions::share_permission::{
     LinkShare, SharePermissionV2, UpdateSharePermissionRequestV2, access_level::AccessLevel,
 };
 
+fn backfill(state: Option<&str>, imported: i32) -> Option<Backfill> {
+    Some(Backfill {
+        state: BackfillState::parse(state?)?,
+        imported: imported.max(0) as u32,
+    })
+}
+
 #[async_trait]
 impl TimelineRepository for PgLinkedRepository {
     async fn visible_groups(&self, user: &str) -> LinkedResult<Vec<VisibleGroup>> {
-        let rows = sqlx::query!(r#"SELECT g.id,g.name,g.user_id,g.group_jid,g.state,g.ownership_state,g.adopted_at,
+        let rows = sqlx::query!(r#"SELECT g.id,g.name,g.user_id,g.group_jid,g.state,g.ownership_state,g.adopted_at,g.backfill_state,g.backfill_imported,
             (SELECT count(*) FROM whatsapp_group_message m WHERE m.binding_id=g.id AND m.message_id IS NOT NULL
               AND m.deleted_at IS NULL AND m.origin<>'history'
               AND NOT EXISTS(SELECT 1 FROM whatsapp_external_person p WHERE p.id=m.person_id AND p.user_id=$1)
@@ -38,6 +45,7 @@ impl TimelineRepository for PgLinkedRepository {
                         last_message_at: row.last_message_at,
                         can_send: false,
                         send_reason: None,
+                        backfill: backfill(row.backfill_state.as_deref(), row.backfill_imported),
                     },
                     binding: bindings::binding(bindings::BindingRow {
                         id: row.id,
@@ -53,7 +61,7 @@ impl TimelineRepository for PgLinkedRepository {
             .collect()
     }
     async fn summary(&self, group: Uuid, user: &str) -> LinkedResult<WhatsAppGroupSummary> {
-        let row = sqlx::query!(r#"SELECT g.id,g.name,g.user_id,
+        let row = sqlx::query!(r#"SELECT g.id,g.name,g.user_id,g.backfill_state,g.backfill_imported,
             (SELECT count(*) FROM whatsapp_group_message m WHERE m.binding_id = g.id AND m.message_id IS NOT NULL
               AND m.deleted_at IS NULL AND m.origin <> 'history'
               AND NOT EXISTS (SELECT 1 FROM whatsapp_external_person p WHERE p.id = m.person_id AND p.user_id = $2)
@@ -69,6 +77,7 @@ impl TimelineRepository for PgLinkedRepository {
             last_message_at: row.last_message_at,
             can_send: false,
             send_reason: None,
+            backfill: backfill(row.backfill_state.as_deref(), row.backfill_imported),
         })
     }
     async fn messages(

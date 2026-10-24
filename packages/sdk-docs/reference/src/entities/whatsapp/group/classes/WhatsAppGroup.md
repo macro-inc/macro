@@ -10,6 +10,7 @@ Independently shareable adopted WhatsApp group entity.
 
 | Property | Modifier | Type | Description | Overrides | Inherited from |
 | ------ | ------ | ------ | ------ | ------ | ------ |
+| <a id="property-backfill"></a> `backfill` | `readonly` | () => `Promise`\<[`LinkedBackfill`](../../../../../generated/storage/types.gen/type-aliases/LinkedBackfill.md) \| `undefined`\> | Importing earlier messages from the owner's phone after adding, if any. | - | - |
 | <a id="property-cansend"></a> `canSend` | `readonly` | () => `Promise`\<`boolean`\> | Whether the caller can send from their own connected account. | - | - |
 | <a id="property-entitytype"></a> `entityType` | `readonly` | `"whatsapp_group"` | Canonical sharing and favorites kind. | [`FavoritableEntity`](../../../entity/classes/FavoritableEntity.md).[`entityType`](../../../entity/classes/FavoritableEntity.md#property-entitytype) | - |
 | <a id="property-id"></a> `id` | `public readonly` | `string` | - | - | [`FavoritableEntity`](../../../entity/classes/FavoritableEntity.md).[`id`](../../../entity/classes/FavoritableEntity.md#property-id) |

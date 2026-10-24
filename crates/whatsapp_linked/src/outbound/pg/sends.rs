@@ -691,6 +691,7 @@ impl PgLinkedRepository {
                         kind,
                         text,
                         history: false,
+                        from_me: true,
                         revision: server_at.timestamp_millis(),
                         target,
                         media,

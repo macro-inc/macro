@@ -16,7 +16,7 @@ import { createSignal, Show } from 'solid-js';
 import { z } from 'zod';
 import { whatsappGroupApi } from '../whatsapp-group/queries/production-api';
 import { WhatsAppLinked } from '../whatsapp-linked/whatsapp-linked';
-import { InMacroSection } from './components/in-macro-section';
+import { InMacroGroups, UnreadCount } from './components/in-macro-section';
 
 /**
  * External: accounts on outside messaging apps that bring conversations into
@@ -61,19 +61,19 @@ export function ExternalView() {
       navigate({ route: externalRoute, params: {} }),
       'external-view'
     );
-  const [inMacroOpen, setInMacroOpen] = createSignal(true);
-  const inMacroSection = () => (
-    <InMacroSection
+  const [groupsOpen, setGroupsOpen] = createSignal(true);
+  const inMacroGroups = () => (
+    <InMacroGroups
       groups={inMacro()}
       isPending={groups.isPending}
       isError={groups.isError}
       activeGroupId={params.groupId}
-      open={inMacroOpen()}
-      onOpenChange={setInMacroOpen}
       onOpenGroup={openGroup}
       onRetry={() => fireAndForget(groups.refetch(), 'external-view')}
     />
   );
+  const unread = () =>
+    (inMacro() ?? []).reduce((sum, group) => sum + group.unreadCount, 0);
 
   const whatsappPage = () => (
     <>
@@ -82,14 +82,22 @@ export function ExternalView() {
           WhatsApp
         </h1>
       </ViewShell.TopBar>
-      <ViewShell.Content class="overflow-y-auto px-4 py-4 mobile:pt-(--mobile-content-inset-top) mobile:pb-(--mobile-content-inset-bottom)">
+      <ViewShell.Content class="overflow-y-auto pb-4 mobile:pt-(--mobile-content-inset-top) mobile:pb-(--mobile-content-inset-bottom)">
         {/* The top bar is desktop chrome; touch layouts title the page here. */}
-        <h1 class="hidden px-1 pb-3 text-lg font-semibold text-ink touch:block">
+        <h1 class="hidden px-4 pt-2 text-lg font-semibold text-ink touch:block">
           WhatsApp
         </h1>
         {/* Touch has no sidebar: the groups in Macro lead the page. */}
         <Show when={isTouchDevice()}>
-          <div class="pb-4">{inMacroSection()}</div>
+          <section aria-labelledby="external-whatsapp-groups" class="px-2">
+            <h2
+              id="external-whatsapp-groups"
+              class="px-2 pt-4 pb-1 text-xs font-semibold tracking-tight text-ink-extra-muted"
+            >
+              Groups
+            </h2>
+            {inMacroGroups()}
+          </section>
         </Show>
         <WhatsAppLinked resumePairingId={handedOffPairing} />
       </ViewShell.Content>
@@ -114,18 +122,25 @@ export function ExternalView() {
               </ViewSidebar.Header>
               <ViewSidebar.Content>
                 <ViewSidebar.Nav aria-label="External apps">
-                  <ViewSidebar.Item
+                  <ViewSidebar.TreeItem
                     active={!params.groupId}
-                    title="WhatsApp"
+                    label="WhatsApp"
+                    expanded={groupsOpen()}
+                    onToggle={() => setGroupsOpen((open) => !open)}
                     onClick={openWhatsApp}
                   >
                     <ViewSidebar.Icon>
-                      <WhatsappIcon class="size-4" />
+                      <WhatsappIcon />
                     </ViewSidebar.Icon>
-                    <span class="truncate">WhatsApp</span>
-                  </ViewSidebar.Item>
+                    <span class="min-w-0 flex-1 truncate">WhatsApp</span>
+                    <Show when={!groupsOpen()}>
+                      <UnreadCount count={unread()} />
+                    </Show>
+                  </ViewSidebar.TreeItem>
+                  <ViewSidebar.Branch open={groupsOpen()}>
+                    {inMacroGroups()}
+                  </ViewSidebar.Branch>
                 </ViewSidebar.Nav>
-                {inMacroSection()}
               </ViewSidebar.Content>
             </ViewSidebar.Root>
           </ViewShell.Aside>

@@ -226,6 +226,62 @@ impl SessionService {
         self.repository.observed_groups(scope).await
     }
 
+    /// Record what the account learned about chats in its WhatsApp chat list
+    /// (history sync, live messages, contact and chat-setting updates).
+    #[tracing::instrument(name = "whatsapp.session.update_chats", skip_all, err, fields(account_id = %scope.account_id, count = chats.len()))]
+    pub async fn update_chats(
+        &self,
+        scope: SessionScope,
+        chats: &[ChatUpdate],
+    ) -> LinkedResult<()> {
+        let valid: Vec<ChatUpdate> = chats
+            .iter()
+            .filter(|chat| match chat.kind {
+                ChatKind::Group => is_group_jid(&chat.jid),
+                ChatKind::Direct => is_user_jid(&chat.jid) || is_lid_jid(&chat.jid),
+            })
+            .cloned()
+            .collect();
+        if valid.is_empty() {
+            return Ok(());
+        }
+        self.repository.update_chats(scope, &valid).await
+    }
+
+    /// The owner's groups still importing earlier messages from the phone.
+    #[tracing::instrument(name = "whatsapp.session.backfill_work", skip_all, err, fields(account_id = %scope.account_id, count))]
+    pub async fn backfill_work(&self, scope: SessionScope) -> LinkedResult<Vec<BackfillWork>> {
+        let work = self.repository.backfill_work(scope).await?;
+        tracing::Span::current().record("count", work.len());
+        Ok(work)
+    }
+
+    /// A page of earlier messages was requested from the phone just now.
+    #[tracing::instrument(name = "whatsapp.session.backfill_requested", skip_all, err, fields(account_id = %scope.account_id, group_id = %group))]
+    pub async fn backfill_requested(&self, scope: SessionScope, group: Uuid) -> LinkedResult<()> {
+        self.repository.backfill_requested(scope, group).await
+    }
+
+    /// The phone did not answer; the import waits for it.
+    #[tracing::instrument(name = "whatsapp.session.backfill_unanswered", skip_all, err, fields(account_id = %scope.account_id, group_id = %group))]
+    pub async fn backfill_unanswered(&self, scope: SessionScope, group: Uuid) -> LinkedResult<()> {
+        self.repository.backfill_unanswered(scope, group).await
+    }
+
+    /// The phone sent a page of a chat's earlier messages (the messages
+    /// themselves are ingested as history events).
+    #[tracing::instrument(name = "whatsapp.session.backfill_page", skip_all, err, fields(account_id = %scope.account_id, messages = page.messages, complete = page.complete))]
+    pub async fn backfill_page(
+        &self,
+        scope: SessionScope,
+        page: &HistoryPage,
+    ) -> LinkedResult<Vec<(Uuid, BackfillState)>> {
+        if !is_group_jid(&page.chat_jid) {
+            return Ok(vec![]);
+        }
+        self.repository.backfill_page(scope, page).await
+    }
+
     /// Persist one event from an observed group. Safe to repeat: every observing
     /// account converges on one group message per (binding, sender, source id).
     #[tracing::instrument(
@@ -415,4 +471,11 @@ pub(crate) fn validate_event(event: &InboundEvent) -> LinkedResult<()> {
             Ok(())
         }
     }
+}
+
+fn is_lid_jid(jid: &str) -> bool {
+    jid.len() <= 256
+        && jid
+            .strip_suffix("@lid")
+            .is_some_and(|user| !user.is_empty() && user.bytes().all(|b| b.is_ascii_digit()))
 }

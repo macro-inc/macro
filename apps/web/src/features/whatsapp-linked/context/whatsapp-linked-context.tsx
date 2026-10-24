@@ -7,7 +7,7 @@ import {
 } from 'solid-js';
 import type { WhatsAppAccount } from '../core/account';
 import type { AdoptFailure } from '../core/adopt';
-import type { WhatsAppGroup } from '../core/group';
+import type { WhatsAppChat } from '../core/chat';
 import type { PairingStep, PasskeyChallenge } from '../core/pairing';
 
 /** A server read as the WhatsApp page needs it; `data` is set once loaded. */
@@ -73,15 +73,18 @@ export type WhatsAppLinkedCapabilities = {
   features: SourceRead<{ pairing: boolean; adoption: boolean }>;
   /** The person's own account, `null` when they never connected one. */
   account: SourceRead<WhatsAppAccount | null>;
-  /** Groups of the connected account; read only while `enabled`. */
-  groups: (enabled: Accessor<boolean>) => SourceRead<WhatsAppGroup[]>;
+  /**
+   * The connected account's WhatsApp chat list, newest activity first; read
+   * only while `enabled`.
+   */
+  chats: (enabled: Accessor<boolean>) => SourceRead<WhatsAppChat[]>;
   /** The live step of one pairing, polled while it is open. */
   pairing: (pairingId: Accessor<string>) => SourceRead<PairingRead>;
   passkey: PasskeyCapability;
-  /** `replace` retires the current identity for a different WhatsApp account. */
-  connect: (replace: boolean) => ResultAsync<StartedPairing, RequestFailure>;
+  /** One account at a time: switching means disconnecting first. */
+  connect: () => ResultAsync<StartedPairing, RequestFailure>;
   cancelPairing: (pairingId: string) => ResultAsync<void, RequestFailure>;
-  /** Pairing finished: refresh the account and its groups. */
+  /** Pairing finished: refresh the account and its chats. */
   pairingFinished: () => Promise<unknown>;
   disconnect: (
     generation: number

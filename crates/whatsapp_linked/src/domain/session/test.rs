@@ -18,6 +18,7 @@ fn message(kind: MessageKind, sender: &str, target: Option<&str>) -> InboundEven
             kind,
             text: "hello".into(),
             history: false,
+            from_me: false,
             revision: 1,
             target: target.map(|jid| Target {
                 source_id: "3EB0A0".into(),

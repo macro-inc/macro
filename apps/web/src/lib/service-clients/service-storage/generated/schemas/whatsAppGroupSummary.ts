@@ -4,6 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { WhatsAppGroupSummaryBackfill } from './whatsAppGroupSummaryBackfill';
 import type { WhatsAppGroupSummaryLastMessageAt } from './whatsAppGroupSummaryLastMessageAt';
 import type { WhatsAppGroupSummarySendReason } from './whatsAppGroupSummarySendReason';
 
@@ -11,6 +12,7 @@ import type { WhatsAppGroupSummarySendReason } from './whatsAppGroupSummarySendR
  * Adopted group visible through ordinary entity sharing.
  */
 export interface WhatsAppGroupSummary {
+  backfill?: WhatsAppGroupSummaryBackfill;
   /** Caller may currently send from their own account. */
   can_send: boolean;
   /** Entity identifier. */

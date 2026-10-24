@@ -45,6 +45,8 @@ pub const TIMINGS: Timings = Timings {
     drain_deadline: Duration::from_secs(30),
     health_every: Duration::from_secs(60),
     groups_refresh_interval: Duration::ZERO,
+    backfill_timeout: Duration::from_secs(3),
+    backfill_retry: Duration::from_secs(2),
 };
 
 /// One fake KMS shared by every replica, as they share the real KMS key.

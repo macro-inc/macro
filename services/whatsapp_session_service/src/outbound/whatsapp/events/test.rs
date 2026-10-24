@@ -437,3 +437,128 @@ fn joining_carries_the_group_and_info_changes_name_only_the_group() {
         other => panic!("expected a group change, got {other:?}"),
     }
 }
+
+fn lid_message(id: &str, sender: &str, from_me: bool) -> Event {
+    Event::Message(Box::new(Message {
+        info: MessageInfo {
+            source: MessageSource {
+                chat: "120363000000000001@g.us".parse().unwrap(),
+                sender: sender.parse().unwrap(),
+                is_from_me: from_me,
+                is_group: true,
+                ..MessageSource::default()
+            },
+            id: id.to_owned(),
+            push_name: "Wolf".to_owned(),
+            timestamp: Some(Utc.with_ymd_and_hms(2026, 10, 21, 11, 59, 0).unwrap()),
+            ..MessageInfo::default()
+        },
+        message: Some(wa_e2e::Message {
+            conversation: Some("Hi there".to_owned()),
+            ..Default::default()
+        }),
+        ..Message::default()
+    }))
+}
+
+fn sender_of(event: &whatsapp_linked::domain::events::InboundEvent) -> (&str, Option<&str>, bool) {
+    let InboundKind::Message(message) = &event.kind else {
+        panic!("expected a message");
+    };
+    (
+        message.sender.jid.as_str(),
+        message.sender.alternate_jid.as_deref(),
+        message.from_me,
+    )
+}
+
+#[tokio::test]
+async fn a_message_from_me_addressed_by_lid_carries_the_from_me_flag_and_own_pair() {
+    let lids = whatsmeow::store::MemoryStore::default();
+    whatsmeow::store::LidStore::put_lid_mapping(
+        &lids,
+        &"53949570789492@lid".parse().unwrap(),
+        &"12127679653@s.whatsapp.net".parse().unwrap(),
+    )
+    .await
+    .unwrap();
+    let mut event = inbound(map_event(
+        ACCOUNT,
+        &lid_message("3EB0F001", "53949570789492:12@lid", true),
+        now(),
+        &plain_locator,
+    ));
+
+    super::complete_sender(&lids, &mut event).await;
+
+    assert_eq!(
+        sender_of(&event),
+        (
+            "53949570789492@lid",
+            Some("12127679653@s.whatsapp.net"),
+            true
+        )
+    );
+}
+
+#[tokio::test]
+async fn another_member_addressed_only_by_lid_is_paired_from_the_lid_store() {
+    let lids = whatsmeow::store::MemoryStore::default();
+    whatsmeow::store::LidStore::put_lid_mapping(
+        &lids,
+        &"987654321@lid".parse().unwrap(),
+        &"15550001111@s.whatsapp.net".parse().unwrap(),
+    )
+    .await
+    .unwrap();
+    let mut known = inbound(map_event(
+        ACCOUNT,
+        &lid_message("3EB0F002", "987654321@lid", false),
+        now(),
+        &plain_locator,
+    ));
+    let mut unknown = inbound(map_event(
+        ACCOUNT,
+        &lid_message("3EB0F003", "111222333@lid", false),
+        now(),
+        &plain_locator,
+    ));
+
+    super::complete_sender(&lids, &mut known).await;
+    super::complete_sender(&lids, &mut unknown).await;
+
+    assert_eq!(
+        sender_of(&known),
+        ("987654321@lid", Some("15550001111@s.whatsapp.net"), false)
+    );
+    assert_eq!(sender_of(&unknown), ("111222333@lid", None, false));
+}
+
+#[test]
+fn a_live_message_moves_its_chat_up_with_the_message_as_anchor() {
+    let Event::Message(message) = group_message(
+        "3EB0C001",
+        wa_e2e::Message {
+            conversation: Some("hello".to_owned()),
+            ..Default::default()
+        },
+    ) else {
+        unreachable!()
+    };
+
+    let chat = super::message_chat(&message).expect("a chat update");
+
+    assert_eq!(chat.jid, "120363000000000001@g.us");
+    assert_eq!(chat.kind, whatsapp_linked::domain::models::ChatKind::Group);
+    assert_eq!(chat.name, None, "groups are named by their roster");
+    assert!(chat.create);
+    let anchor = chat.anchor.expect("an anchor");
+    assert_eq!(
+        (
+            anchor.id.as_str(),
+            anchor.from_me,
+            anchor.sender_jid.as_deref()
+        ),
+        ("3EB0C001", false, Some("15550001111@s.whatsapp.net"))
+    );
+}

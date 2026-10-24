@@ -21483,6 +21483,7 @@ dependencies = [
  "axum",
  "base64 0.22.1",
  "chrono",
+ "flate2",
  "futures",
  "hmac 0.12.1",
  "nom 8.0.0",

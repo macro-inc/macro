@@ -165,32 +165,114 @@ impl LinkedService {
         self.groups.request_groups_refresh(&[account.id]).await?;
         let mut groups = self.groups.account_groups(account.id).await?;
         let jids: Vec<String> = groups.iter().map(|g| g.jid.clone()).collect();
-        for adoption in self.groups.visible_adoptions(user, &jids).await? {
-            let Some(group) = groups.iter_mut().find(|g| g.jid == adoption.group_jid) else {
-                continue;
-            };
-            if adoption.owner_id == user {
-                group.group = Some(GroupReference {
-                    id: adoption.id,
-                    name: adoption.name,
-                });
-            } else if group.shared.is_none() {
-                group.shared = Some(SharedGroupReference {
-                    id: adoption.id,
-                    name: adoption.name,
-                    owner_id: adoption.owner_id,
-                });
-            }
-        }
+        let adoptions = self.groups.visible_adoptions(user, &jids).await?;
         for group in &mut groups {
-            if group.group.is_some() {
-                group.shared = None;
-            }
+            (group.group, group.shared) = adoption_of(user, &adoptions, &group.jid);
             group.name = group.display_name(&identity);
         }
         groups.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
         tracing::Span::current().record("count", groups.len());
         Ok(groups)
+    }
+
+    /// The person's WhatsApp chat list, as WhatsApp Web shows it: groups and
+    /// direct chats, newest activity first. Groups carry the same added /
+    /// shared / addable facts as [`Self::groups`]; direct chats are listed but
+    /// not addable yet. Returns stored data and requests a group refresh.
+    #[tracing::instrument(name = "whatsapp.linked.chats", skip_all, err, fields(count))]
+    pub async fn chats(&self, user: &str) -> LinkedResult<ChatList> {
+        if !self.features.adoption {
+            return Err(LinkedError::ConfigurationRequired.into());
+        }
+        let (account, identity) = self.connected(user).await?;
+        self.groups.request_groups_refresh(&[account.id]).await?;
+        let roster = self.groups.account_groups(account.id).await?;
+        let stored = self.groups.account_chats(account.id).await?;
+        let mut group_jids: Vec<String> = roster.iter().map(|g| g.jid.clone()).collect();
+        group_jids.extend(
+            stored
+                .iter()
+                .filter(|chat| chat.kind == ChatKind::Group)
+                .map(|chat| chat.jid.clone()),
+        );
+        group_jids.sort();
+        group_jids.dedup();
+        let adoptions = self.groups.visible_adoptions(user, &group_jids).await?;
+        let mut chats: Vec<Chat> = Vec::with_capacity(stored.len() + roster.len());
+        let mut listed = std::collections::HashMap::new();
+        for chat in stored {
+            listed.insert(chat.jid.clone(), chats.len());
+            let (group, shared) = adoption_of(user, &adoptions, &chat.jid);
+            let name = chat
+                .name
+                .clone()
+                .filter(|name| !name.trim().is_empty())
+                .unwrap_or_else(|| chat_fallback_name(&chat.jid, chat.kind, &identity));
+            let reason = match chat.kind {
+                ChatKind::Direct => cannot_add::DIRECT,
+                // Listed by WhatsApp but not in the account's groups any more.
+                ChatKind::Group => cannot_add::NOT_IN_GROUP,
+            };
+            chats.push(Chat {
+                name: if chat.jid == identity {
+                    "You".to_owned()
+                } else {
+                    name
+                },
+                jid: chat.jid,
+                kind: chat.kind,
+                last_activity_at: chat.last_activity_at,
+                archived: chat.archived,
+                pinned: chat.pinned,
+                can_add: false,
+                cannot_add_reason: (group.is_none() && shared.is_none()).then(|| reason.to_owned()),
+                group,
+                shared,
+            });
+        }
+        for info in roster {
+            let index = match listed.get(&info.jid) {
+                Some(index) => *index,
+                None => {
+                    chats.push(Chat {
+                        jid: info.jid.clone(),
+                        kind: ChatKind::Group,
+                        name: String::new(),
+                        last_activity_at: None,
+                        archived: false,
+                        pinned: false,
+                        group: None,
+                        shared: None,
+                        can_add: false,
+                        cannot_add_reason: None,
+                    });
+                    chats.len() - 1
+                }
+            };
+            let chat = &mut chats[index];
+            chat.kind = ChatKind::Group;
+            chat.name = info.display_name(&identity);
+            (chat.group, chat.shared) = adoption_of(user, &adoptions, &info.jid);
+            let reason = if info.community {
+                Some(cannot_add::COMMUNITY)
+            } else if info.disappearing {
+                Some(cannot_add::DISAPPEARING)
+            } else if info.participant(&identity).is_none() {
+                Some(cannot_add::NOT_IN_GROUP)
+            } else {
+                None
+            };
+            let open = chat.group.is_none() && chat.shared.is_none();
+            chat.can_add = open && reason.is_none();
+            chat.cannot_add_reason = reason.filter(|_| open).map(str::to_owned);
+        }
+        chats.sort_by(|a, b| {
+            b.last_activity_at
+                .cmp(&a.last_activity_at)
+                .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+        });
+        tracing::Span::current().record("count", chats.len());
+        Ok(ChatList { chats })
     }
 
     /// Add an existing group the person has joined as their own Macro group;
@@ -547,6 +629,45 @@ fn view_scope<T: RequiredPermission>(
 }
 
 /// WhatsApp group JIDs: digits, optionally `creator-timestamp`, at `g.us`.
+/// The caller's own Macro group for a WhatsApp group, else someone else's
+/// group for it that was shared with them.
+fn adoption_of(
+    user: &str,
+    adoptions: &[VisibleAdoption],
+    jid: &str,
+) -> (Option<GroupReference>, Option<SharedGroupReference>) {
+    let mine = adoptions
+        .iter()
+        .find(|adoption| adoption.group_jid == jid && adoption.owner_id == user)
+        .map(|adoption| GroupReference {
+            id: adoption.id,
+            name: adoption.name.clone(),
+        });
+    let shared = mine.is_none().then(|| {
+        adoptions
+            .iter()
+            .find(|adoption| adoption.group_jid == jid && adoption.owner_id != user)
+            .map(|adoption| SharedGroupReference {
+                id: adoption.id,
+                name: adoption.name.clone(),
+                owner_id: adoption.owner_id.clone(),
+            })
+    });
+    (mine, shared.flatten())
+}
+
+/// A chat WhatsApp gave no name: a direct chat by its phone number.
+fn chat_fallback_name(jid: &str, kind: ChatKind, identity: &str) -> String {
+    match kind {
+        ChatKind::Group => "WhatsApp group".to_owned(),
+        ChatKind::Direct if jid == identity => "You".to_owned(),
+        ChatKind::Direct => jid
+            .strip_suffix("@s.whatsapp.net")
+            .map(|phone| format!("+{phone}"))
+            .unwrap_or_else(|| "WhatsApp contact".to_owned()),
+    }
+}
+
 pub(crate) fn is_group_jid(jid: &str) -> bool {
     jid.len() <= 256
         && jid.strip_suffix("@g.us").is_some_and(|user| {

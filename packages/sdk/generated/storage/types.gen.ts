@@ -9028,6 +9028,25 @@ export type LinkedAttachment = {
 export type LinkedAttachmentState = 'loading' | 'ready' | 'unavailable' | 'unsupported';
 
 /**
+ * Earlier messages imported after adding a group.
+ */
+export type LinkedBackfill = {
+    /**
+     * Messages received from the phone so far (including ones already shown).
+     */
+    imported: number;
+    /**
+     * Progress.
+     */
+    state: LinkedBackfillState;
+};
+
+/**
+ * Where importing a group's earlier messages stands.
+ */
+export type LinkedBackfillState = 'pending' | 'running' | 'waiting_for_phone' | 'done' | 'partial';
+
+/**
  * Operations implemented for linked groups, independent of current permission.
  */
 export type LinkedCapabilities = {
@@ -9055,6 +9074,64 @@ export type LinkedCapabilities = {
      * Maximum UTF-8 bytes per text send.
      */
     text_limit_bytes: number;
+};
+
+/**
+ * One chat of the caller's WhatsApp chat list, as WhatsApp Web lists it.
+ */
+export type LinkedChat = {
+    /**
+     * Archived in WhatsApp.
+     */
+    archived: boolean;
+    /**
+     * "Add to Macro" works now.
+     */
+    can_add: boolean;
+    /**
+     * Why it can't be added, when it is neither added, shared nor addable.
+     */
+    cannot_add_reason?: string | null;
+    group?: null | LinkedGroupReference;
+    /**
+     * WhatsApp chat JID: a group, or the other person's phone-number JID
+     * (LID when WhatsApp never told us the number).
+     */
+    jid: string;
+    /**
+     * Group or direct chat.
+     */
+    kind: LinkedChatKind;
+    /**
+     * Newest activity WhatsApp reported (message or history sync); `null`
+     * when unknown. The list is sorted by it, newest first, unknown last.
+     */
+    last_activity_at?: string | null;
+    /**
+     * Group: the subject, or member names for an unnamed group. Direct: the
+     * contact or WhatsApp name, else `+<phone>`. Always non-empty.
+     */
+    name: string;
+    /**
+     * Pinned in WhatsApp.
+     */
+    pinned: boolean;
+    shared?: null | LinkedSharedGroupReference;
+};
+
+/**
+ * Whether a WhatsApp chat is a group or a one-to-one chat.
+ */
+export type LinkedChatKind = 'group' | 'direct';
+
+/**
+ * The caller's WhatsApp chat list.
+ */
+export type LinkedChats = {
+    /**
+     * Newest activity first; chats with unknown activity last, by name.
+     */
+    chats: Array<LinkedChat>;
 };
 
 /**
@@ -16108,6 +16185,7 @@ export type WhatsAppGroupSender = {
  * Adopted group visible through ordinary entity sharing.
  */
 export type WhatsAppGroupSummary = {
+    backfill?: null | LinkedBackfill;
     /**
      * Caller may currently send from their own account.
      */
@@ -22784,6 +22862,19 @@ export type LinkedAccountResponses = {
 };
 
 export type LinkedAccountResponse = LinkedAccountResponses[keyof LinkedAccountResponses];
+
+export type LinkedChatsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/meta/linked/chats';
+};
+
+export type LinkedChatsResponses = {
+    200: LinkedChats;
+};
+
+export type LinkedChatsResponse = LinkedChatsResponses[keyof LinkedChatsResponses];
 
 export type LinkedConfigurationData = {
     body?: never;
