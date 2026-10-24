@@ -436,8 +436,9 @@ describe('shared call lifecycle', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it('leaves the channel view before slow media teardown completes', async () => {
-    const { lifecycle, ports, join } = setup();
+  it('leaves the channel view and the server before slow media teardown completes', async () => {
+    const leave = vi.fn(async () => ({ callEnded: true }));
+    const { lifecycle, ports, join } = setup({ leave });
     await join();
     const teardown = deferred<void>();
     ports.disconnect.mockReturnValueOnce(teardown.promise);
@@ -445,16 +446,24 @@ describe('shared call lifecycle', () => {
     lifecycle.onLeave(onLeave);
     const leaving = lifecycle.leave(call.channelId);
     expect(onLeave).toHaveBeenCalledExactlyOnceWith(call.channelId);
-    expect(ports.leave).not.toHaveBeenCalled();
+    // The last participant's RTC departure ends the call on the server, so a
+    // leave sent after teardown could not report it.
+    expect(leave).toHaveBeenCalledExactlyOnceWith(call.channelId);
     teardown.resolve();
-    await leaving;
+    await expect(leaving).resolves.toEqual({ callEnded: true });
     expect(onLeave).toHaveBeenCalledOnce();
   });
 
   it('handles native call end through the same leave lifecycle', async () => {
     const { ports, nativeEnd, join } = setup();
     await join();
+    const teardown = deferred<void>();
+    ports.disconnect.mockReturnValueOnce(teardown.promise);
     nativeEnd();
+    await vi.advanceTimersByTimeAsync(0);
+    // A restored session may still supersede native-end cleanup.
+    expect(ports.leave).not.toHaveBeenCalled();
+    teardown.resolve();
     await vi.advanceTimersByTimeAsync(0);
     expect(ports.disconnect).toHaveBeenCalledExactlyOnceWith({
       endNativeCall: false,
@@ -583,7 +592,8 @@ describe('shared call lifecycle', () => {
       oldDisconnect.resolve();
       await vi.advanceTimersByTimeAsync(0);
       expect(ports.disconnect).toHaveBeenCalledTimes(2);
-      expect(ports.leave).toHaveBeenCalledOnce();
+      // Each hangup reaches the server before teardown; leaving is idempotent.
+      expect(ports.leave).toHaveBeenCalledTimes(2);
       expect(ports.onLeft).toHaveBeenCalledOnce();
     }
   );

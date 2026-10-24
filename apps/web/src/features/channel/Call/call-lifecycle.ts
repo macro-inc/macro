@@ -474,6 +474,14 @@ export function createCallLifecycle(options: {
           LEAVE_TIMEOUT_MS
         );
         async function disconnect() {
+          // A hangup reaches the server before media teardown: the last
+          // participant's RTC departure archives the call, and a later leave
+          // could no longer report that it ended. Native-end cleanup may yield
+          // to a restored session or rejoin, so its leave waits.
+          const releasing =
+            !request.skipServerLeave && request.options?.endNativeCall !== false
+              ? leaveServer(request.channelId)
+              : undefined;
           let result: LeaveResult = undefined;
           try {
             try {
@@ -481,7 +489,8 @@ export function createCallLifecycle(options: {
               if (!active) return;
               options.onLeft(request.channelId);
             } finally {
-              if (active && !request.skipServerLeave)
+              if (releasing) result = await releasing;
+              else if (active && !request.skipServerLeave)
                 result = await leaveServer(request.channelId);
             }
             finish(undefined, result);
