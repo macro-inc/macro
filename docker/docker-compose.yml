@@ -67,6 +67,18 @@ services:
   # connection_gateway (Port 8082)
   # WebSocket gateway - Redis only
   # ============================================================================
+  sync_router:
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/sync_router"]
+    environment:
+      - SYNC_SERVICE_URL=http://sync-service:8787
+    depends_on:
+      - redis
+      - sync_service
+    networks:
+      databases:
+      services:
+
   connection_gateway:
     <<: [*common-env, *rust-services-image]
     command: ["/app/out/connection_gateway_service"]
@@ -348,9 +360,6 @@ services:
       # FusionAuth, which lives on that network only.
       auth:
       databases:
-      # `auth` too: the public MCP resolves the Google identity provider in
-      # FusionAuth at boot, and FusionAuth answers only on this network.
-      auth:
       services:
         aliases:
           # Hyphens, because a sandbox's git reaches the egress proxy by this

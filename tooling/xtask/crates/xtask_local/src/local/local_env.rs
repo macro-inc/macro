@@ -693,8 +693,17 @@ impl BootStubEnv {
             "MACRO_DB_URL".into(),
             "postgres://user:password@postgres:5432/macrodb".into(),
         );
-        // search_processing_service; the local cluster has the security plugin
-        // disabled so these are accepted but ignored (same as opensearch.rs).
+        // The harness requires Pipedream credentials even when integrations
+        // are unused. Real credentials can override these boot placeholders.
+        env.insert(
+            "PIPEDREAM_CLIENT_ID".into(),
+            "local-pipedream-client".into(),
+        );
+        env.insert(
+            "PIPEDREAM_CLIENT_SECRET".into(),
+            "local-pipedream-secret".into(),
+        );
+        env.insert("PIPEDREAM_PROJECT_ID".into(), "proj_local".into());
         // the harness cognition module mounts the Pipedream webhook when both
         // values are set. Nothing local can receive Pipedream's callbacks, so
         // these only need to be well-formed: the URI must carry the same
@@ -704,6 +713,8 @@ impl BootStubEnv {
             "http://localhost:8080/pipedream/mcp/webhook?secret=local".into(),
         );
         env.insert("PIPEDREAM_WEBHOOK_SECRET".into(), "local".into());
+        // search_processing_service; the local cluster has the security plugin
+        // disabled so these are accepted but ignored (same as opensearch.rs).
         env.insert("OPENSEARCH_USERNAME".into(), "macrouser".into());
         env.insert("OPENSEARCH_PASSWORD".into(), "local".into());
         // Local document URLs use the instance endpoint supplied by InfraEnv;
