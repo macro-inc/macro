@@ -1,4 +1,3 @@
-import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 import Banner from '@app/features/auth/banner/Banner';
 import { CalendarPermissionPrompt } from '@app/features/auth/CalendarPermissionPrompt';
@@ -23,6 +22,7 @@ import {
   isAddInboxDialogOpen,
 } from '@app/features/inbox/AddInboxDialog';
 import { MacroMcpSetupModal } from '@app/features/integrations/mcp-setup/MacroMcpSetupModal';
+import { onboardingRedirectPath } from '@app/features/onboarding/core/next-target';
 import { AiUsageLimitDialog } from '@app/features/paywall/AiUsageLimitDialog';
 import { observeAiUsageLimitMutations } from '@app/features/paywall/ai-usage-limit-handling';
 import { MobileSettingsProvider } from '@app/features/settings/context/mobile-settings';
@@ -218,19 +218,12 @@ function useNewOnboardingRedirect() {
     if (data?.authenticated !== true || data.tutorialComplete !== false) {
       return;
     }
-    // Preserve the deep link the user arrived on (a shared doc, an invite):
-    // onboarding carries it as ?next and its finish() returns there instead of
-    // the post-setup landing. Base-relative so navigate() can resolve it
-    // against the router.
+    // Preserve the deep link the user arrived on (a shared doc, an invite)
+    // as ?next, and a lifecycle-email ?step, so finish() and the flow can
+    // resume. Base-relative so navigate() can resolve it against the router.
     const target =
       location.pathname.slice(ROUTER_BASE_CONCAT.length - 1) + location.search;
-    const isGenericEntry = target === '/' || target.startsWith(DEFAULT_ROUTE);
-    navigate(
-      isGenericEntry
-        ? '/onboarding'
-        : `/onboarding?next=${encodeURIComponent(target)}`,
-      { replace: true }
-    );
+    navigate(onboardingRedirectPath(target), { replace: true });
   });
 }
 

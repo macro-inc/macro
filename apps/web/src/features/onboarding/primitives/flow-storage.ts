@@ -6,8 +6,10 @@ import {
 import type { OnboardingStep } from '../core/steps';
 
 /**
- * Session state that must survive full-page round-trips: Google sign-up,
- * inbox OAuth, and Stripe checkout all reload the app mid-flow.
+ * State that must survive full-page round-trips: Google sign-up, inbox OAuth,
+ * and Stripe checkout all reload the app mid-flow. The step lives in
+ * localStorage so a later visit on this browser can resume it; the rest is
+ * only needed for the round-trip in this tab.
  */
 const KEYS = {
   /** `{ user, step }`: the step to resume, scoped to who saved it. */
@@ -20,26 +22,48 @@ const KEYS = {
   signupDraft: 'onboarding-signup-draft',
 } as const;
 
-function read(key: string): string | null {
+function read(storage: Storage, key: string): string | null {
   try {
-    return sessionStorage.getItem(key);
+    return storage.getItem(key);
   } catch {
     return null;
   }
 }
 
-function write(key: string, value: string | undefined) {
+function write(storage: Storage, key: string, value: string | undefined) {
   try {
-    if (value === undefined) sessionStorage.removeItem(key);
-    else sessionStorage.setItem(key, value);
+    if (value === undefined) storage.removeItem(key);
+    else storage.setItem(key, value);
   } catch {
     // Storage blocked: the flow still works, it just can't resume.
   }
 }
 
-/** The saved step for `userId`; another user's progress is discarded. */
-export function readSavedStep(userId: string): string | undefined {
-  const raw = read(KEYS.step);
+function readSession(key: string) {
+  return read(sessionStorage, key);
+}
+
+function writeSession(key: string, value: string | undefined) {
+  write(sessionStorage, key, value);
+}
+
+/** localStorage, with a one-time copy from the old per-tab record. */
+function readStepRaw(): string | null {
+  const saved = read(localStorage, KEYS.step);
+  if (saved !== null) return saved;
+  const legacy = read(sessionStorage, KEYS.step);
+  if (legacy === null) return null;
+  write(localStorage, KEYS.step, legacy);
+  write(sessionStorage, KEYS.step, undefined);
+  return legacy;
+}
+
+function writeStep(value: string | undefined) {
+  write(localStorage, KEYS.step, value);
+  write(sessionStorage, KEYS.step, undefined);
+}
+
+function savedStepFor(raw: string | null, userId: string): string | undefined {
   if (raw === null) return undefined;
   try {
     const saved: unknown = JSON.parse(raw);
@@ -55,36 +79,45 @@ export function readSavedStep(userId: string): string | undefined {
   } catch {
     // Fall through: malformed progress is discarded like a stranger's.
   }
-  write(KEYS.step, undefined);
-  write(KEYS.next, undefined);
+  writeStep(undefined);
+  writeSession(KEYS.next, undefined);
   return undefined;
 }
 
-export const saveStep = (userId: string, step: OnboardingStep) =>
-  write(KEYS.step, JSON.stringify({ user: userId, step }));
+/** The saved step for `userId`; another user's progress is discarded. */
+export function readSavedStep(userId: string): string | undefined {
+  return savedStepFor(readStepRaw(), userId);
+}
 
-export const readSavedNext = () => read(KEYS.next) ?? undefined;
-export const saveNext = (next: string) => write(KEYS.next, next);
+export const saveStep = (userId: string, step: OnboardingStep) =>
+  writeStep(JSON.stringify({ user: userId, step }));
+
+export const readSavedNext = () => readSession(KEYS.next) ?? undefined;
+export const saveNext = (next: string) => writeSession(KEYS.next, next);
 
 /** Forget resumable progress once the user leaves onboarding for good. */
 export function clearFlowProgress() {
-  write(KEYS.step, undefined);
-  write(KEYS.next, undefined);
+  writeStep(undefined);
+  writeSession(KEYS.next, undefined);
 }
 
 export function readConnectBaseline(): number | undefined {
-  const raw = read(KEYS.connectBaseline);
+  const raw = readSession(KEYS.connectBaseline);
   if (raw === null) return undefined;
   const value = Number(raw);
   return Number.isFinite(value) ? value : undefined;
 }
 
 export const saveConnectBaseline = (count: number | undefined) =>
-  write(KEYS.connectBaseline, count === undefined ? undefined : String(count));
+  writeSession(
+    KEYS.connectBaseline,
+    count === undefined ? undefined : String(count)
+  );
 
-export const readSignupDraft = () => parseSignupDraft(read(KEYS.signupDraft));
+export const readSignupDraft = () =>
+  parseSignupDraft(readSession(KEYS.signupDraft));
 
 export const saveSignupDraft = (draft: SignupDraft) =>
-  write(KEYS.signupDraft, serializeSignupDraft(draft));
+  writeSession(KEYS.signupDraft, serializeSignupDraft(draft));
 
-export const clearSignupDraft = () => write(KEYS.signupDraft, undefined);
+export const clearSignupDraft = () => writeSession(KEYS.signupDraft, undefined);

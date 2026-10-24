@@ -62,12 +62,6 @@ export type AppEvents = {
   tutorial_skipped: Record<string, unknown>;
 
   // --- Onboarding v4 (the full-screen /onboarding stepper) -----------------
-  /**
-   * Flow entered. `signup_method` is inferred from the inbox state at
-   * entry: a Google SSO signup arrives with its Gmail inbox already
-   * linked, an email-code signup with none. `entry_step` is where the
-   * user landed ('email' unless a persisted step was restored).
-   */
   /** A GTM invite welcome page resolved its link (`/invite?token=`). */
   gtm_invite_opened: { status: string };
   /** The recipient pressed Continue on the welcome page. */
@@ -78,6 +72,12 @@ export type AppEvents = {
   gtm_invite_offer_viewed: { link_id: string; promo_code: string };
   /** Staff created an invite link in the internal portal. */
   gtm_invite_link_created: { link_id: string };
+  /**
+   * Flow entered. `signup_method` is inferred from the inbox state at
+   * entry: a Google signup arrives with its inbox already linked, an
+   * email-code signup with none. `entry_step` is the step shown first:
+   * a checkout return, saved progress, a `?step` link, or welcome.
+   */
   onboarding_v4_started: {
     signup_method: 'google' | 'email_code';
     entry_step: string;

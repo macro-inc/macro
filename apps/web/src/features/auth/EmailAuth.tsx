@@ -2,6 +2,7 @@ import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { openAddInboxDialog } from '@app/features/inbox/AddInboxDialog';
 import { AdminConsentRequiredDialog } from '@app/features/inbox/AdminConsentRequiredDialog';
 import { ShareInboxConflictDialog } from '@app/features/inbox/ShareInboxConflictDialog';
+import { onboardingPathWithStep } from '@app/features/onboarding/core/next-target';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { updateUserAuth } from '@core/auth';
 import { redirectToEmailAuth } from '@core/auth/email';
@@ -203,7 +204,7 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
       !isNativeMobilePlatform() &&
       userInfoQuery.data?.tutorialComplete === false
     ) {
-      navigate('/onboarding', { replace: true });
+      navigate(onboardingPathWithStep(searchParams.step), { replace: true });
       return;
     }
     if (linkId && restoreLayoutBeforeConsent(linkId)) return;
