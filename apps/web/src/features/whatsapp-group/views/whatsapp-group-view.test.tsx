@@ -534,3 +534,121 @@ it('quotes stickers, voice notes and cards by what they are', () => {
     screen.getByRole('button', { name: 'Ana Ruiz: Poll: Lunch?' })
   ).toBeTruthy();
 });
+
+it('shows a sent image at once and keeps it in place when WhatsApp stores it', async () => {
+  const fake = createFakeGroup();
+  mount(fake);
+  await mocks.composer?.onSend?.({
+    value: '',
+    mentions: [],
+    attachments: [
+      {
+        id: 'upload-1',
+        name: 'photo.png',
+        kind: 'image',
+        mimeType: 'image/png',
+        previewSrc: 'blob:local-photo',
+        width: 800,
+        height: 600,
+      },
+    ],
+  });
+  await waitFor(() =>
+    expect(fake.capabilities.send).toHaveBeenCalledWith(
+      {
+        kind: 'media',
+        uploadId: 'upload-1',
+        caption: undefined,
+        replyTo: undefined,
+      },
+      expect.any(String)
+    )
+  );
+  // The local preview, at its size, before WhatsApp has it: no file chip.
+  const pending = screen.getByRole('button', { name: 'Open image viewer' });
+  expect(pending.style.width).toBe('400px');
+  expect(screen.queryByText(/Loading photo\.png/)).toBeNull();
+  expect(
+    [...document.querySelectorAll('img')].some(
+      (image) => image.getAttribute('src') === 'blob:local-photo'
+    )
+  ).toBe(true);
+
+  const key = fake.capabilities.send.mock.calls[0]?.[1];
+  fake.setDelivery([
+    { id: `send-${key}`, state: 'accepted', messageId: 'message-3' },
+  ]);
+  fake.setMessages([
+    ...messages,
+    {
+      ...messages[1],
+      id: 'message-3',
+      body: '',
+      replyTo: undefined,
+      sentAt: new Date().toISOString(),
+      // DSS stores no size for files sent from Macro.
+      attachments: [
+        {
+          ordinal: 0,
+          state: 'ready',
+          fileName: 'photo.png',
+          mime: 'image/png',
+          documentId: 'document-sent',
+        },
+      ],
+    },
+  ]);
+  await waitFor(() =>
+    expect(document.querySelector('[data-message-id="message-3"]')).toBeTruthy()
+  );
+  // One image, the stored one, still at the sent size.
+  const shown = screen.getAllByRole('button', { name: 'Open image viewer' });
+  expect(shown).toHaveLength(1);
+  expect(shown[0]?.style.width).toBe('400px');
+  expect(
+    [...document.querySelectorAll('img')].some(
+      (image) =>
+        image.getAttribute('src') === 'https://files.example.test/document-sent'
+    )
+  ).toBe(true);
+});
+
+it('names the community and notes disappearing messages quietly', () => {
+  const fake = createFakeGroup({
+    group: {
+      ...group,
+      name: 'Design',
+      community: { name: 'Launch', announcements: false },
+      disappearingSeconds: 604800,
+    },
+  });
+  mount(fake);
+  expect(screen.getByRole('heading', { name: 'Launch · Design' })).toBeTruthy();
+  const note =
+    'Disappearing messages are on in WhatsApp (7 days). Macro keeps them.';
+  expect(screen.getByLabelText(note)).toBeTruthy();
+  expect(screen.getByText(note)).toBeTruthy();
+  // Sending works as in any group.
+  expect(screen.getByTestId('whatsapp-composer')).toBeTruthy();
+});
+
+it('shows a direct chat as the person, and who can reply when shared', () => {
+  const fake = createFakeGroup({
+    group: {
+      ...group,
+      kind: 'direct',
+      name: 'Ana Ruiz',
+      members: [],
+      accessLevel: 'view',
+      canSend: false,
+      sendReason: 'not_observing',
+    },
+  });
+  mount(fake);
+  expect(screen.getByRole('heading', { name: 'Ana Ruiz' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: /member/ })).toBeNull();
+  expect(screen.getByRole('status').textContent).toMatch(
+    /^Only .+ can reply in this chat$/
+  );
+  expect(screen.queryByTestId('whatsapp-composer')).toBeNull();
+});

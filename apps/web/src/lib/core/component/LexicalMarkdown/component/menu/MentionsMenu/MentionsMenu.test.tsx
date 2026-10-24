@@ -420,7 +420,7 @@ it('offers WhatsApp groups to share by mention, only in channel composers', () =
       onPick={vi.fn()}
     />
   ));
-  expect(screen.getByText('WhatsApp groups')).toBeTruthy();
+  expect(screen.getByText('WhatsApp chats')).toBeTruthy();
   expect(screen.getByText('Design Crit')).toBeTruthy();
   expect(screen.queryByText('Launch Room')).toBeNull();
   cleanup();
@@ -434,6 +434,6 @@ it('offers WhatsApp groups to share by mention, only in channel composers', () =
       onPick={vi.fn()}
     />
   ));
-  expect(screen.queryByText('WhatsApp groups')).toBeNull();
+  expect(screen.queryByText('WhatsApp chats')).toBeNull();
   expect(mocks.whatsappUserIds.every((id) => id === '')).toBe(true);
 });

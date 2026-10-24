@@ -64,6 +64,8 @@ export class WhatsAppMessage extends MacroEntity<WhatsAppGroupMessage> {
   readonly kind = this.field('kind');
   /** Forwarded from another chat. */
   readonly forwarded = this.field('forwarded');
+  /** Sent as view-once in WhatsApp; Macro keeps and shows it like any media. */
+  readonly viewOnce = this.field('view_once');
   /** People the body @-mentions: `@<token>` in the body is this person. */
   readonly mentions = this.field('mentions');
   /** Poll (with tallies), location, contact cards, event or system line. */

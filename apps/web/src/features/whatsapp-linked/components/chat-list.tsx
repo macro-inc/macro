@@ -1,12 +1,18 @@
 import { formatRelativeDate } from '@core/util/time';
 import CaretDownIcon from '@phosphor/caret-down.svg';
+import MegaphoneIcon from '@phosphor/megaphone-simple.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import UserIcon from '@phosphor/user.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
 import { Button, cn } from '@ui';
 import { CollapseTransition } from '@ui/components/CollapseTransition';
 import { createSignal, For, type JSX, Match, Show, Switch } from 'solid-js';
-import { cannotAddLabel, chatMetadata, type WhatsAppChat } from '../core/chat';
+import {
+  cannotAddLabel,
+  chatMetadata,
+  communityTitle,
+  type WhatsAppChat,
+} from '../core/chat';
 
 /** A list heading, on the same 16px rail as the rows' icons. */
 export function ChatSectionHeading(props: { id: string; children: string }) {
@@ -40,15 +46,17 @@ function ChatRow(props: {
       data-whatsapp-chat-kind={props.chat.kind}
     >
       <span aria-hidden="true" class="flex size-4 shrink-0 text-ink-muted">
-        <Show
-          when={props.chat.kind === 'direct'}
-          fallback={<UsersThreeIcon class="size-4" />}
-        >
-          <UserIcon class="size-4" />
-        </Show>
+        <Switch fallback={<UsersThreeIcon class="size-4" />}>
+          <Match when={props.chat.kind === 'direct'}>
+            <UserIcon class="size-4" />
+          </Match>
+          <Match when={props.chat.community?.announcements}>
+            <MegaphoneIcon class="size-4" />
+          </Match>
+        </Switch>
       </span>
       <span class="ph-no-capture min-w-0 shrink truncate font-medium text-ink">
-        {props.chat.name}
+        {communityTitle(props.chat.name, props.chat.community)}
       </span>
       <span class="min-w-0 shrink-[2] truncate text-xs text-ink-extra-muted">
         {chatMetadata(props.chat)}
@@ -141,7 +149,7 @@ export function AddableChatList(props: {
   onOpenGroup: (groupId: string) => void;
 }) {
   return (
-    <ul class="flex flex-col" aria-label="Groups to add to Macro">
+    <ul class="flex flex-col" aria-label="Chats to add to Macro">
       <For
         each={props.chats}
         fallback={
@@ -178,7 +186,7 @@ export function AddableChatList(props: {
                         tooltip={
                           props.canAdd
                             ? undefined
-                            : 'Adding WhatsApp groups is turned off'
+                            : 'Adding WhatsApp chats is turned off'
                         }
                         onClick={() => props.onAdd(chat)}
                       >

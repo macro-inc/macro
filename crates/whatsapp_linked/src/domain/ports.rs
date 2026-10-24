@@ -91,6 +91,13 @@ pub trait GroupRepository: Send + Sync {
     ) -> LinkedResult<Vec<VisibleAdoption>>;
     /// Latest metadata for a binding's group from any account consenting to it.
     async fn binding_roster(&self, binding: &Binding) -> LinkedResult<Option<GroupInfo>>;
+    /// Latest metadata for the binding's community (`community_jid`) from any
+    /// account consenting to the binding.
+    async fn binding_community(
+        &self,
+        binding: &Binding,
+        community_jid: &str,
+    ) -> LinkedResult<Option<GroupInfo>>;
 
     /// The account's stored chat list (without the roster), newest first.
     async fn account_chats(&self, account: Uuid) -> LinkedResult<Vec<StoredChat>>;
@@ -113,16 +120,29 @@ pub struct StoredChat {
     pub pinned: bool,
 }
 
+/// What the domain authorized adding.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Adoption {
+    /// The chat's JID.
+    pub jid: String,
+    /// Group or direct chat.
+    pub kind: ChatKind,
+    /// Display name, following WhatsApp.
+    pub name: String,
+    /// The account may post now (always for a direct chat).
+    pub can_post: bool,
+    /// When the facts that authorized it were observed.
+    pub observed_at: DateTime<Utc>,
+}
+
 /// A new binding, authorized by the domain.
 pub struct AdoptionRecord<'a> {
     /// Adopting person.
     pub user: &'a str,
     /// Their account at the generation that authorized adoption.
     pub account: &'a Account,
-    /// Display name, following WhatsApp.
-    pub name: &'a str,
-    /// Stored metadata that authorized adoption.
-    pub group: &'a GroupInfo,
+    /// What to add.
+    pub adoption: &'a Adoption,
 }
 
 /// Result of adoption.
@@ -162,6 +182,16 @@ pub struct SendingFacts {
     pub remote_member: bool,
     /// The account may post under current group settings.
     pub can_post: bool,
+}
+
+/// A direct chat has two people: only its owner's own account is in it.
+pub(crate) fn direct_sending_facts(account: &Account, binding: &Binding) -> SendingFacts {
+    let owner = account.user_id == binding.user_id;
+    SendingFacts {
+        observing: owner,
+        remote_member: owner,
+        can_post: owner,
+    }
 }
 
 /// Membership eligibility derived only from the caller's own protocol metadata.
@@ -225,6 +255,8 @@ pub struct StagedUpload<'a> {
     pub bytes: &'a [u8],
     /// SHA-256 of `bytes`.
     pub sha256: [u8; 32],
+    /// Pixel size and length read from the file.
+    pub shape: crate::domain::events::MediaShape,
 }
 
 /// Durable send intents.

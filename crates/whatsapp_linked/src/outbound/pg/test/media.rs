@@ -358,6 +358,7 @@ async fn an_uploaded_attachment_is_sent_once_and_becomes_the_messages_document(p
             filename: "quote.pdf".into(),
             caption: Some("Signed quote".into()),
             quote: None,
+            shape: MediaShape::default(),
         }
     );
     let outbound = session.outbound_media(alice, progress.id).await.unwrap();
@@ -489,4 +490,74 @@ async fn a_failed_attachment_preserves_the_plain_caption(pool: PgPool) {
         .await
         .unwrap();
     assert_eq!(content(&pool, binding.id).await, vec!["Look at this"]);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_sent_image_keeps_the_size_read_from_its_file(pool: PgPool) {
+    let (linked, session, _, binding, alice, _) = adopted(&pool).await;
+    let mut png = Vec::new();
+    image::RgbImage::new(64, 48)
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .unwrap();
+    let uploaded = linked
+        .upload_attachment(
+            &receipt::<MessageWrite>(ALICE, binding.id),
+            "plan.png",
+            "image/png",
+            &png,
+            SendAuthority::Human,
+        )
+        .await
+        .unwrap();
+    let progress = linked
+        .send_reply(
+            &receipt::<MessageWrite>(ALICE, binding.id),
+            &SendReply {
+                idempotency_key: Uuid::now_v7(),
+                message: ReplyContent::Media {
+                    upload_id: uploaded.upload_id,
+                    caption: None,
+                },
+                reply_to: None,
+            },
+            SendAuthority::Human,
+        )
+        .await
+        .unwrap();
+    let claimed = session.claim_sends(alice, 8).await.unwrap();
+    let OutgoingContent::Media { shape, .. } = &claimed[0].content else {
+        panic!("a media send");
+    };
+    let size = MediaShape {
+        width: Some(64),
+        height: Some(48),
+        duration_seconds: None,
+    };
+    assert_eq!(*shape, size, "the phone gets the size with the message");
+    session
+        .begin_dispatch(alice, progress.id, "3EB0PNG")
+        .await
+        .unwrap();
+    session
+        .record_send_outcome(
+            alice,
+            progress.id,
+            SendOutcome::Accepted {
+                server_at: Utc::now(),
+            },
+        )
+        .await
+        .unwrap();
+    let stored = sqlx::query!(
+        "SELECT width, height, duration_seconds FROM whatsapp_group_attachment WHERE binding_id = $1 AND source_id = '3EB0PNG'",
+        binding.id
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        (stored.width, stored.height, stored.duration_seconds),
+        (Some(64), Some(48), None),
+        "the timeline reserves the space like for a received image"
+    );
 }

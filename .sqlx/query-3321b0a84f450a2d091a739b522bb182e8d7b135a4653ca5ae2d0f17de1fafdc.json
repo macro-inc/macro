@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE whatsapp_send s SET state = 'sending', claimed_epoch = $2, updated_at = now()\n            FROM whatsapp_group b\n            WHERE s.id IN (\n                SELECT id FROM whatsapp_send WHERE account_id = $1 AND generation = $3 AND state = 'pending'\n                ORDER BY binding_id, group_sequence LIMIT $4 FOR UPDATE SKIP LOCKED)\n              AND b.id = s.binding_id\n            RETURNING s.id, s.binding_id, s.group_sequence, s.payload, s.traceparent, b.group_jid",
+  "query": "UPDATE whatsapp_send s SET state = 'sending', claimed_epoch = $2, updated_at = now()\n            FROM whatsapp_group b\n            WHERE s.id IN (\n                SELECT id FROM whatsapp_send WHERE account_id = $1 AND generation = $3 AND state = 'pending'\n                ORDER BY binding_id, group_sequence LIMIT $4 FOR UPDATE SKIP LOCKED)\n              AND b.id = s.binding_id\n            RETURNING s.id, s.binding_id, s.group_sequence, s.payload, s.traceparent, b.group_jid,\n              (SELECT r.metadata FROM whatsapp_group_roster r WHERE r.account_id = s.account_id AND r.group_jid = b.group_jid) AS roster",
   "describe": {
     "columns": [
       {
@@ -32,6 +32,11 @@
         "ordinal": 5,
         "name": "group_jid",
         "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "roster",
+        "type_info": "Jsonb"
       }
     ],
     "parameters": {
@@ -48,8 +53,9 @@
       false,
       false,
       true,
-      false
+      false,
+      null
     ]
   },
-  "hash": "8c66a4b2288aea53da9f9c4f1e04293c689e29bbd24fbc96dbe65268bca920ca"
+  "hash": "3321b0a84f450a2d091a739b522bb182e8d7b135a4653ca5ae2d0f17de1fafdc"
 }

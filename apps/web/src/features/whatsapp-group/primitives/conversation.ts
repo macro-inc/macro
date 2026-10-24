@@ -11,7 +11,7 @@ import {
 } from 'solid-js';
 import { v5 as uuidv5 } from 'uuid';
 import type { WhatsAppGroupCapabilities } from '../context/whatsapp-group-context';
-import { attachmentProblem } from '../core/attachments';
+import { attachmentProblem, type InboundAttachment } from '../core/attachments';
 import { markdownToWhatsApp } from '../core/formatting';
 import {
   canChangeMessage,
@@ -23,11 +23,38 @@ import {
 } from '../core/group';
 import { composerMentions, mentionToken } from '../core/mentions';
 
+/** A file the composer staged, with its local preview when it has one. */
+export type DraftFile = {
+  id: string;
+  name: string;
+  mime?: string;
+  /** The composer's local image or video preview. */
+  previewUrl?: string;
+  width?: number;
+  height?: number;
+};
+
 /** What the composer hands over: its Markdown and the files it staged. */
 export type Draft = {
   markdown: string;
-  attachments: { id: string; name: string }[];
+  attachments: DraftFile[];
 };
+
+/** A sent file as the page already shows it: local preview and size. */
+function sentAttachment(file: DraftFile, ordinal: number): InboundAttachment {
+  const visual = !!file.previewUrl;
+  return {
+    ordinal,
+    // Images and video show their local preview at once, like Chat's.
+    state: visual ? 'ready' : 'loading',
+    fileName: file.name,
+    mime: file.mime ?? '',
+    documentId: undefined,
+    previewUrl: file.previewUrl,
+    width: file.width,
+    height: file.height,
+  };
+}
 
 /** The message a reply quotes or an edit replaces. */
 export type ConversationTarget =
@@ -120,6 +147,20 @@ export function createConversation(
       .map((part) => part.row),
   ];
 
+  // Files this page sent keep their local preview and size on the stored
+  // message, which DSS doesn't size, so the swap neither flashes nor jumps.
+  const [kept, setKept] = createSignal(new Map<string, InboundAttachment[]>());
+  const sentFiles = (messageId: string): InboundAttachment[] | undefined => {
+    const stored = kept().get(messageId);
+    if (stored) return stored;
+    const part = pending().find(
+      (item) =>
+        item.sendId &&
+        progressBySend().get(item.sendId)?.messageId === messageId
+    );
+    return part?.row.attachments.length ? part.row.attachments : undefined;
+  };
+
   const drop = (keys: string[]) =>
     setPending((parts) => parts.filter((part) => !keys.includes(part.key)));
 
@@ -134,8 +175,14 @@ export function createConversation(
           const outcome = recordedOutcome(send);
           if (outcome === 'waiting') continue;
           if (outcome === 'accepted') {
-            if (arrived(part)) drop([part.key]);
-            else source.timeline.refetch();
+            if (arrived(part)) {
+              const messageId = send.messageId;
+              if (messageId && part.row.attachments.length > 0)
+                setKept((map) =>
+                  new Map(map).set(messageId, part.row.attachments)
+                );
+              drop([part.key]);
+            } else source.timeline.refetch();
             continue;
           }
           drop([part.key]);
@@ -241,7 +288,7 @@ export function createConversation(
   const submit = (draft: Draft): Result<Promise<void>, string> => {
     const group = source.group.data;
     const senderId = userId();
-    if (!group || !senderId) return err('This group is still loading.');
+    if (!group || !senderId) return err('This chat is still loading.');
     if (!group.canSend) return err(composerNote(group));
     const mentioned = composerMentions(
       draft.markdown,
@@ -313,13 +360,7 @@ export function createConversation(
                     request.kind === 'media'
                       ? draft.attachments
                           .filter((file) => file.id === request.uploadId)
-                          .map((file, ordinal) => ({
-                            ordinal,
-                            state: 'loading' as const,
-                            fileName: file.name,
-                            mime: '',
-                            documentId: undefined,
-                          }))
+                          .map(sentAttachment)
                       : [],
                   pending: true,
                 },
@@ -355,6 +396,7 @@ export function createConversation(
 
   return {
     rows,
+    sentFiles,
     target,
     initialRead,
     initialUnreadCount,
@@ -379,9 +421,7 @@ export function createConversation(
     ): Promise<Result<{ uploadId: string }, string>> => {
       const group = source.group.data;
       if (!group?.canSend)
-        return err(
-          group ? composerNote(group) : 'This group is still loading.'
-        );
+        return err(group ? composerNote(group) : 'This chat is still loading.');
       const problem = attachmentProblem(file, group.limits);
       if (problem) return err(problem);
       const result = await source.upload(file);

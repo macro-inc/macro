@@ -44,6 +44,9 @@ export class WhatsAppChat extends MacroEntity<LinkedChat> {
   /** Why it can't be added, when it is neither added, shared nor addable. */
   readonly cannotAddReason = this.field('cannot_add_reason');
 
+  /** The WhatsApp community a group belongs to (`{ id, name, announcements }`), if any. */
+  readonly community = this.field('community');
+
   /** The current user's own Macro group for this chat, once added. */
   readonly group = this.mappedField('group', (record) =>
     record ? WhatsAppGroup.byId(this.client, record.id) : undefined,
@@ -55,9 +58,9 @@ export class WhatsAppChat extends MacroEntity<LinkedChat> {
   );
 
   /**
-   * Add a group chat to Macro as the current user's own group; its earlier
-   * messages are imported from the phone. Adding it again returns the same
-   * group. Direct chats can't be added yet.
+   * Add the chat (a group or a direct chat) to Macro as the current user's
+   * own; its earlier messages are imported from the phone. Adding it again
+   * returns the same chat. Only the owner sends in a direct chat.
    */
   async adopt(): Promise<WhatsAppGroup> {
     const result = await this.mutate((client) =>

@@ -3,6 +3,25 @@ export type InMacro =
   | { kind: 'own'; groupId: string }
   | { kind: 'shared'; groupId: string; ownerId: string; ownerName: string };
 
+/** The WhatsApp community a group belongs to. */
+export type ChatCommunity = {
+  name: string;
+  /** The community's announcement group (named after the community). */
+  announcements: boolean;
+};
+
+/**
+ * "Launch · Design", or "Launch · Announcements": WhatsApp names a
+ * community's groups under it.
+ */
+export function communityTitle(
+  name: string,
+  community: ChatCommunity | undefined
+): string {
+  if (!community) return name;
+  return `${community.name} · ${community.announcements ? 'Announcements' : name}`;
+}
+
 /** A conversation in the connected account's WhatsApp chat list. */
 export type WhatsAppChat = {
   jid: string;
@@ -17,6 +36,8 @@ export type WhatsAppChat = {
   canAdd: boolean;
   /** DSS's reason this chat can't be added, when it can't. */
   cannotAddReason: string | undefined;
+  /** Set for a group inside a WhatsApp community. */
+  community?: ChatCommunity;
 };
 
 /**
@@ -46,14 +67,14 @@ const fold = (text: string) =>
 export function matchesChatQuery(chat: WhatsAppChat, query: string): boolean {
   const wanted = fold(query.trim());
   if (!wanted) return true;
-  if (fold(chat.name).includes(wanted)) return true;
+  if (fold(communityTitle(chat.name, chat.community)).includes(wanted))
+    return true;
   const digits = wanted.replace(/[\s()+-]/g, '');
   return /^\d+$/.test(digits) && chat.name.replace(/\D/g, '').includes(digits);
 }
 
 /** DSS's refusal sentence, shortened for direct chats. */
 export function cannotAddLabel(chat: WhatsAppChat): string | undefined {
-  if (chat.kind === 'direct') return "Can't add direct chats yet";
   const reason = chat.cannotAddReason;
   return reason
     ? `${reason.charAt(0).toUpperCase()}${reason.slice(1)}`
@@ -63,7 +84,13 @@ export function cannotAddLabel(chat: WhatsAppChat): string | undefined {
 /** "Group", "Direct chat · Archived"; the row shows last activity apart. */
 export function chatMetadata(chat: WhatsAppChat): string {
   return [
-    chat.kind === 'direct' ? 'Direct chat' : 'Group',
+    chat.kind === 'direct'
+      ? 'Direct chat'
+      : chat.community?.announcements
+        ? 'Announcement group'
+        : chat.community
+          ? 'Community group'
+          : 'Group',
     chat.archived ? 'Archived' : undefined,
   ]
     .filter(Boolean)

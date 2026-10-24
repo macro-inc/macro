@@ -49232,6 +49232,22 @@ export const linkedChatsResponse = zod
               .describe(
                 "Why it can't be added, when it is neither added, shared nor addable."
               ),
+            community: zod
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    announcements: zod
+                      .boolean()
+                      .describe(
+                        "This group is the community's announcement group."
+                      ),
+                    id: zod.string().describe("The community's WhatsApp JID."),
+                    name: zod.string().describe("The community's name."),
+                  })
+                  .describe('The WhatsApp community a group belongs to.'),
+              ])
+              .optional(),
             group: zod
               .union([
                 zod.null(),
@@ -49374,17 +49390,36 @@ export const linkedDisconnectResponse = zod
 /**
  * @summary Groups the caller's account has joined.
  */
+export const linkedGroupsResponseDisappearingSecondsMin = 0;
+
 export const linkedGroupsResponseItem = zod
   .object({
     announce: zod.boolean().describe('Only admins may post.'),
-    community: zod
+    communityAnnouncements: zod
       .boolean()
+      .optional()
       .describe(
-        'Community announcement or parent group, outside the supported surface.'
+        "The community's announcement group (everyone reads, admins post)."
       ),
-    disappearing: zod
+    communityJid: zod
+      .string()
+      .nullish()
+      .describe(
+        'The community a linked subgroup or announcement group belongs to.'
+      ),
+    communityParent: zod
       .boolean()
-      .describe('Disappearing messages are on; content is not retained.'),
+      .optional()
+      .describe(
+        "The community itself: it has no messages of its own and can't be added."
+      ),
+    disappearingSeconds: zod
+      .number()
+      .min(linkedGroupsResponseDisappearingSecondsMin)
+      .nullish()
+      .describe(
+        'Disappearing-messages timer in seconds while it is on. Macro keeps the\nmessages; its sends carry the timer so phones treat them like their own.'
+      ),
     group: zod
       .union([
         zod.null(),
@@ -49461,7 +49496,9 @@ export const linkedAdoptBody = zod
   .object({
     group_jid: zod
       .string()
-      .describe("Group the requester's account has joined."),
+      .describe(
+        "A group the requester's account has joined, or a direct chat from\ntheir chat list (the other person's JID, as the list names it)."
+      ),
   })
   .describe(
     "Explicit adoption request; the account is selected server-side. The\ngroup's name always follows WhatsApp."
@@ -49570,11 +49607,16 @@ export const whatsappGroupsResponseItem = zod
       .boolean()
       .describe('Caller may currently send from their own account.'),
     id: zod.uuid().describe('Entity identifier.'),
+    kind: zod
+      .enum(['group', 'direct'])
+      .describe('Whether a WhatsApp chat is a group or a one-to-one chat.'),
     last_message_at: zod.iso
       .datetime({})
       .nullish()
       .describe('Latest message timestamp.'),
-    name: zod.string().describe('Display name.'),
+    name: zod
+      .string()
+      .describe("Display name: the group's, or a direct chat's other person."),
     send_reason: zod
       .union([
         zod.null(),
@@ -49607,6 +49649,8 @@ export const whatsappGroupParams = zod.object({
 
 export const whatsappGroupResponseBackfillImportedMin = 0;
 
+export const whatsappGroupResponseDisappearingSecondsMin = 0;
+
 export const whatsappGroupResponseLimitsAttachmentLimitBytesMin = 0;
 
 export const whatsappGroupResponseLimitsMaxAttachmentsMin = 0;
@@ -49614,6 +49658,8 @@ export const whatsappGroupResponseLimitsMaxAttachmentsMin = 0;
 export const whatsappGroupResponseLimitsMutationWindowSecondsMin = 0;
 
 export const whatsappGroupResponseLimitsTextLimitBytesMin = 0;
+
+export const whatsappGroupResponseRosterDisappearingSecondsMin = 0;
 
 export const whatsappGroupResponse = zod
   .object({
@@ -49645,11 +49691,16 @@ export const whatsappGroupResponse = zod
       .boolean()
       .describe('Caller may currently send from their own account.'),
     id: zod.uuid().describe('Entity identifier.'),
+    kind: zod
+      .enum(['group', 'direct'])
+      .describe('Whether a WhatsApp chat is a group or a one-to-one chat.'),
     last_message_at: zod.iso
       .datetime({})
       .nullish()
       .describe('Latest message timestamp.'),
-    name: zod.string().describe('Display name.'),
+    name: zod
+      .string()
+      .describe("Display name: the group's, or a direct chat's other person."),
     send_reason: zod
       .union([
         zod.null(),
@@ -49676,6 +49727,27 @@ export const whatsappGroupResponse = zod
       access_level: zod
         .enum(['view', 'comment', 'edit', 'owner'])
         .describe('Ordered from least to most access top -> bottom'),
+      community: zod
+        .union([
+          zod.null(),
+          zod
+            .object({
+              announcements: zod
+                .boolean()
+                .describe("This group is the community's announcement group."),
+              id: zod.string().describe("The community's WhatsApp JID."),
+              name: zod.string().describe("The community's name."),
+            })
+            .describe('The WhatsApp community a group belongs to.'),
+        ])
+        .optional(),
+      disappearing_seconds: zod
+        .number()
+        .min(whatsappGroupResponseDisappearingSecondsMin)
+        .nullish()
+        .describe(
+          "WhatsApp's disappearing-messages timer in seconds while it is on;\nMacro keeps the messages anyway. `null` when off or unknown."
+        ),
       limits: zod
         .object({
           attachment_limit_bytes: zod
@@ -49716,15 +49788,30 @@ export const whatsappGroupResponse = zod
           zod
             .object({
               announce: zod.boolean().describe('Only admins may post.'),
-              community: zod
+              communityAnnouncements: zod
                 .boolean()
+                .optional()
                 .describe(
-                  'Community announcement or parent group, outside the supported surface.'
+                  "The community's announcement group (everyone reads, admins post)."
                 ),
-              disappearing: zod
-                .boolean()
+              communityJid: zod
+                .string()
+                .nullish()
                 .describe(
-                  'Disappearing messages are on; content is not retained.'
+                  'The community a linked subgroup or announcement group belongs to.'
+                ),
+              communityParent: zod
+                .boolean()
+                .optional()
+                .describe(
+                  "The community itself: it has no messages of its own and can't be added."
+                ),
+              disappearingSeconds: zod
+                .number()
+                .min(whatsappGroupResponseRosterDisappearingSecondsMin)
+                .nullish()
+                .describe(
+                  'Disappearing-messages timer in seconds while it is on. Macro keeps the\nmessages; its sends carry the timer so phones treat them like their own.'
                 ),
               group: zod
                 .union([
@@ -50449,6 +50536,11 @@ export const whatsappGroupMessagesResponse = zod
             sent_at: zod.iso
               .datetime({})
               .describe('Timestamp assigned by WhatsApp.'),
+            view_once: zod
+              .boolean()
+              .describe(
+                'Sent as view-once in WhatsApp; Macro shows it like any media.'
+              ),
           })
           .describe('One message in an adopted group.')
       )

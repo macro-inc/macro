@@ -21,7 +21,7 @@ use whatsmeow::proto::wa_history_sync::{Conversation, HistorySync, Pushname};
 use whatsmeow::proto::wa_web::WebMessageInfo;
 use whatsmeow::store::{ContactStore, LidStore};
 use whatsmeow::types::events::GroupInfo;
-use whatsmeow::types::{DEFAULT_USER_SERVER, GROUP_SERVER, HIDDEN_USER_SERVER, Jid};
+use whatsmeow::types::{DEFAULT_USER_SERVER, GROUP_SERVER, HIDDEN_USER_SERVER, Jid, MessageSource};
 
 use crate::domain::ports::SessionEvent;
 
@@ -34,9 +34,6 @@ const EVENT_NAMESPACE: Uuid = Uuid::from_u128(0x6c1e_4f0a_93d2_4b7e_8a55_0f3c_2d
 
 /// Readable stand-in for message shapes Macro does not import.
 const UNSUPPORTED_TEXT: &str = "Sent something Macro can't show yet";
-
-/// Stand-in for view-once media, which WhatsApp shows only on the phone.
-const VIEW_ONCE_TEXT: &str = "View-once message \u{2014} open it on your phone";
 
 /// What a whatsmeow event means for the account.
 #[derive(Debug)]
@@ -163,6 +160,69 @@ fn map_session(event: &Event) -> Option<SessionEvent> {
         Event::LoggedOut(_) => Some(SessionEvent::LoggedOut),
         Event::StreamReplaced(_) => Some(SessionEvent::Replaced),
         _ => None,
+    }
+}
+
+/// A direct chat as the account's phone keys it: by LID when the store knows
+/// the person's LID (phones keep direct chats by LID), else as given.
+pub async fn phone_chat(lids: &dyn LidStore, chat: Jid) -> Jid {
+    if chat.server != DEFAULT_USER_SERVER {
+        return chat;
+    }
+    match lids.get_lid_for_pn(&chat).await {
+        Ok(Some(lid)) => lid.to_non_ad(),
+        Ok(None) => chat,
+        Err(error) => {
+            tracing::debug!(error = %error, "Reading a chat's LID mapping failed");
+            chat
+        }
+    }
+}
+
+/// A direct chat as Macro keys it: by phone number when the store knows it.
+pub async fn macro_chat(lids: &dyn LidStore, chat: &str) -> String {
+    let Ok(jid) = chat.parse::<Jid>() else {
+        return chat.to_owned();
+    };
+    if jid.server != HIDDEN_USER_SERVER {
+        return chat.to_owned();
+    }
+    match lids.get_pn_for_lid(&jid).await {
+        Ok(Some(phone)) => phone.to_non_ad().to_string(),
+        Ok(None) => chat.to_owned(),
+        Err(error) => {
+            tracing::debug!(error = %error, "Reading a chat's LID mapping failed");
+            chat.to_owned()
+        }
+    }
+}
+
+/// Fills in addresses the message didn't carry from the account's LID store:
+/// the sender's other address (see [`complete_sender`]) and a direct chat's
+/// other address, so either addressing reaches the added chat.
+pub async fn complete_addresses(lids: &dyn LidStore, event: &mut InboundEvent) {
+    complete_sender(lids, event).await;
+    if event.chat_alternate_jid.is_some() {
+        return;
+    }
+    let Ok(chat) = event.group_jid.parse::<Jid>() else {
+        return;
+    };
+    let alternate = match chat.server.as_str() {
+        HIDDEN_USER_SERVER => lids.get_pn_for_lid(&chat).await,
+        DEFAULT_USER_SERVER => lids.get_lid_for_pn(&chat).await,
+        _ => return,
+    };
+    match alternate {
+        Ok(Some(alternate)) if alternate.server == DEFAULT_USER_SERVER => {
+            // Direct chats go by phone number when it is known.
+            event.chat_alternate_jid = Some(event.group_jid.clone());
+            event.group_jid = alternate.to_non_ad().to_string();
+        }
+        Ok(alternate) => event.chat_alternate_jid = alternate.as_ref().and_then(person),
+        Err(error) => {
+            tracing::debug!(error = %error, "Reading a chat's LID mapping failed");
+        }
     }
 }
 
@@ -451,9 +511,7 @@ fn map_message(
     history: bool,
 ) -> Option<InboundEvent> {
     let info = &event.info;
-    if info.chat.server != GROUP_SERVER {
-        return None;
-    }
+    chat_of(info)?;
     let author = person(&info.sender)?;
     let source_at = info.timestamp.unwrap_or(now);
     let content = match event.message.as_ref() {
@@ -461,7 +519,7 @@ fn map_message(
             if carries_only_keys(message) || message.poll_update_message.is_some() {
                 return None;
             }
-            message_content(message, event.is_view_once, &author, source_at, seal)?
+            message_content(message, &author, source_at, seal)?
         }
         // A history page keeps what happened in the group as stub messages.
         None => {
@@ -516,9 +574,32 @@ impl Content<'_> {
     }
 }
 
+/// Media WhatsApp shows once on the phone (the port unwraps the view-once
+/// wrappers; the flag can also sit on the media itself). Macro keeps it.
+fn message_view_once(message: Option<&wa_e2e::Message>) -> bool {
+    message.is_some_and(|message| {
+        message
+            .image_message
+            .as_ref()
+            .and_then(|part| part.view_once)
+            .or_else(|| {
+                message
+                    .video_message
+                    .as_ref()
+                    .and_then(|part| part.view_once)
+            })
+            .or_else(|| {
+                message
+                    .audio_message
+                    .as_ref()
+                    .and_then(|part| part.view_once)
+            })
+            .unwrap_or(false)
+    })
+}
+
 fn message_content<'message>(
     message: &'message wa_e2e::Message,
-    view_once: bool,
     author: &str,
     source_at: DateTime<Utc>,
     seal: &dyn Fn(&MediaLocator) -> Option<Vec<u8>>,
@@ -563,10 +644,6 @@ fn message_content<'message>(
             Some(target),
             reaction.sender_timestamp_ms.unwrap_or(0),
         ));
-    }
-    // Shown once on the phone; Macro never keeps it.
-    if view_once {
-        return Some(Content::unsupported(VIEW_ONCE_TEXT));
     }
     if let Some(pin) = message.pin_in_chat_message.as_ref() {
         let line = rich::pin_line(pin)?;
@@ -645,6 +722,8 @@ fn inbound_message(
                 .collect()
         })
         .unwrap_or_default();
+    let (group_jid, chat_alternate_jid) =
+        chat_of(info).unwrap_or_else(|| (info.chat.to_non_ad().to_string(), None));
     InboundEvent {
         event_id: event_id(
             account,
@@ -657,7 +736,8 @@ fn inbound_message(
                 &revision_text,
             ],
         ),
-        group_jid: info.chat.to_non_ad().to_string(),
+        group_jid,
+        chat_alternate_jid,
         source_at: info.timestamp.unwrap_or(now),
         observed_at: now,
         kind: InboundKind::Message(Message {
@@ -674,6 +754,7 @@ fn inbound_message(
             forwarded: content
                 .context
                 .is_some_and(|context| context.is_forwarded.unwrap_or(false)),
+            view_once: event.is_view_once || message_view_once(event.message.as_ref()),
             rich: content.rich,
         }),
     }
@@ -687,9 +768,7 @@ pub fn map_poll_vote(
     now: DateTime<Utc>,
 ) -> Option<InboundEvent> {
     let info = &event.info;
-    if info.chat.server != GROUP_SERVER {
-        return None;
-    }
+    chat_of(info)?;
     let author = person(&info.sender)?;
     let update = event.message.as_ref()?.poll_update_message.as_ref()?;
     let poll = target(update.poll_creation_message_key.as_ref()?, &author)?;
@@ -725,6 +804,10 @@ pub fn history_poll_votes(
     let Some(poll_author) = person(&event.info.sender) else {
         return vec![];
     };
+    let Some((group_jid, chat_alternate_jid)) = chat_of(&event.info) else {
+        return vec![];
+    };
+    let direct = event.info.chat.server != GROUP_SERVER;
     let poll = Target {
         source_id: event.info.id.clone(),
         sender_jid: poll_author,
@@ -735,6 +818,9 @@ pub fn history_poll_votes(
             let key = update.poll_update_message_key.as_ref()?;
             let voter = if key.from_me.unwrap_or(false) {
                 person(&event.info.sender).filter(|_| event.info.is_from_me)?
+            } else if direct {
+                // A direct chat's only other voter is the other person.
+                person_text(key.participant.as_deref().unwrap_or(&group_jid))?
             } else {
                 person_text(key.participant.as_deref()?)?
             };
@@ -754,7 +840,8 @@ pub fn history_poll_votes(
                         &revision.to_string(),
                     ],
                 ),
-                group_jid: event.info.chat.to_non_ad().to_string(),
+                group_jid: group_jid.clone(),
+                chat_alternate_jid: chat_alternate_jid.clone(),
                 source_at,
                 observed_at: now,
                 kind: InboundKind::Message(Message {
@@ -773,6 +860,7 @@ pub fn history_poll_votes(
                     media: vec![],
                     mentions: vec![],
                     forwarded: false,
+                    view_once: false,
                     rich: Some(rich::poll_vote(&vote.selected_options)),
                 }),
             })
@@ -825,9 +913,11 @@ fn system_event(
             media: vec![],
             mentions: vec![],
             forwarded: false,
+            view_once: false,
             rich: Some(RichContent::System(line)),
         }),
         group_jid: group,
+        chat_alternate_jid: None,
     }
 }
 
@@ -875,9 +965,10 @@ fn map_receipt(
     now: DateTime<Utc>,
 ) -> Option<InboundEvent> {
     let source = &receipt.source;
-    if source.chat.server != GROUP_SERVER || receipt.message_ids.is_empty() {
+    if receipt.message_ids.is_empty() {
         return None;
     }
+    let (group_jid, chat_alternate_jid) = chat_of(source)?;
     let participant = person(&source.sender)?;
     let state = match receipt.r#type.as_str() {
         "" => "delivered",
@@ -900,7 +991,8 @@ fn map_receipt(
                 &joined,
             ],
         ),
-        group_jid: source.chat.to_non_ad().to_string(),
+        group_jid,
+        chat_alternate_jid,
         source_at: receipt.timestamp.unwrap_or(now),
         observed_at: now,
         kind: InboundKind::Receipt(Receipt {
@@ -909,6 +1001,32 @@ fn map_receipt(
             state: state.to_owned(),
         }),
     })
+}
+
+/// The chat a message or receipt belongs to: the group, or a direct chat's
+/// other person, by phone number when the addressing carries it, with their
+/// other address. `None` for what isn't a chat (status, broadcasts, channels).
+fn chat_of(source: &MessageSource) -> Option<(String, Option<String>)> {
+    let chat = source.chat.to_non_ad();
+    match chat_kind(&chat)? {
+        ChatKind::Group => Some((chat.to_string(), None)),
+        ChatKind::Direct => {
+            let alternate = if source.is_from_me {
+                &source.recipient_alt
+            } else {
+                &source.sender_alt
+            };
+            let other = (!alternate.is_empty() && alternate.server != chat.server)
+                .then(|| alternate.to_non_ad())
+                .filter(|other| chat_kind(other) == Some(ChatKind::Direct));
+            Some(match other {
+                Some(phone) if phone.server == DEFAULT_USER_SERVER => {
+                    (phone.to_string(), Some(chat.to_string()))
+                }
+                other => (chat.to_string(), other.map(|other| other.to_string())),
+            })
+        }
+    }
 }
 
 /// A chat in the account's list: groups, and direct chats with people.

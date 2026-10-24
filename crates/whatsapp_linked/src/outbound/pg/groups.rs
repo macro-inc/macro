@@ -97,6 +97,24 @@ pub(super) async fn store_groups_in(
             changed_groups
                 .extend(left_selected_in(tx, account, &group, observed_at, Some(&locked)).await?);
         }
+        // The owner's account is always in its own direct chats: keep
+        // observing them at the account's current generation.
+        sqlx::query!(
+            r#"INSERT INTO whatsapp_group_membership (binding_id,account_id,generation,consent_at,remote_member,can_post,reconciled,observed_at)
+            SELECT g.id,$1,$2,clock_timestamp(),true,true,true,$4 FROM whatsapp_group g
+            WHERE g.kind = 'direct' AND g.user_id = $3 AND g.state = 'active'
+            ON CONFLICT (binding_id,account_id) DO UPDATE SET generation = excluded.generation, consent_ended_at = NULL,
+              remote_member = true, can_post = true, reconciled = true, observed_at = excluded.observed_at
+            WHERE whatsapp_group_membership.generation <> excluded.generation
+              OR whatsapp_group_membership.consent_ended_at IS NOT NULL"#,
+            account.id,
+            account.generation,
+            account.user_id,
+            observed_at
+        )
+        .execute(&mut **tx)
+        .await
+        .map_err(failure)?;
     }
     signal_changes_in(tx, account, list_changed, changed_groups).await
 }
@@ -231,16 +249,6 @@ async fn reconcile_in(
     .execute(&mut **tx)
     .await
     .map_err(failure)?;
-    let suspended = group.disappearing || group.community;
-    sqlx::query!(
-        r#"UPDATE whatsapp_group SET state = CASE WHEN $2 THEN 'suspended' ELSE 'active' END
-        WHERE id = ANY($1) AND state = CASE WHEN $2 THEN 'active' ELSE 'suspended' END"#,
-        &permitted,
-        suspended
-    )
-    .execute(&mut **tx)
-    .await
-    .map_err(failure)?;
     Ok(permitted)
 }
 
@@ -361,6 +369,26 @@ impl GroupRepository for PgLinkedRepository {
         .fetch_all(&self.pool)
         .await
         .map_err(failure)
+    }
+
+    async fn binding_community(
+        &self,
+        binding: &Binding,
+        community_jid: &str,
+    ) -> LinkedResult<Option<GroupInfo>> {
+        sqlx::query_scalar!(
+            r#"SELECT r.metadata FROM whatsapp_group_roster r
+            JOIN whatsapp_group_membership m ON m.account_id = r.account_id
+            WHERE m.binding_id = $1 AND m.consent_ended_at IS NULL AND r.group_jid = $2
+            ORDER BY r.observed_at DESC LIMIT 1"#,
+            binding.id,
+            community_jid
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(failure)?
+        .map(decode::<GroupInfo>)
+        .transpose()
     }
 
     async fn binding_roster(&self, binding: &Binding) -> LinkedResult<Option<GroupInfo>> {

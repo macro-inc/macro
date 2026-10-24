@@ -1,6 +1,6 @@
 # Class: WhatsAppGroup
 
-Independently shareable adopted WhatsApp group entity.
+Independently shareable added WhatsApp chat: a group or a direct chat.
 
 ## Extends
 
@@ -12,10 +12,13 @@ Independently shareable adopted WhatsApp group entity.
 | ------ | ------ | ------ | ------ | ------ | ------ |
 | <a id="property-backfill"></a> `backfill` | `readonly` | () => `Promise`\<[`LinkedBackfill`](../../../../../generated/storage/types.gen/type-aliases/LinkedBackfill.md) \| `undefined`\> | Importing earlier messages from the owner's phone after adding, if any. | - | - |
 | <a id="property-cansend"></a> `canSend` | `readonly` | () => `Promise`\<`boolean`\> | Whether the caller can send from their own connected account. | - | - |
+| <a id="property-community"></a> `community` | `readonly` | () => `Promise`\<[`LinkedCommunityReference`](../../../../../generated/storage/types.gen/type-aliases/LinkedCommunityReference.md) \| `undefined`\> | The WhatsApp community this group belongs to (`{ id, name, announcements }`), if any. | - | - |
+| <a id="property-disappearingseconds"></a> `disappearingSeconds` | `readonly` | () => `Promise`\<`number` \| `undefined`\> | WhatsApp's disappearing-messages timer in seconds while on; Macro keeps the messages. | - | - |
 | <a id="property-entitytype"></a> `entityType` | `readonly` | `"whatsapp_group"` | Canonical sharing and favorites kind. | [`FavoritableEntity`](../../../entity/classes/FavoritableEntity.md).[`entityType`](../../../entity/classes/FavoritableEntity.md#property-entitytype) | - |
 | <a id="property-id"></a> `id` | `public readonly` | `string` | - | - | [`FavoritableEntity`](../../../entity/classes/FavoritableEntity.md).[`id`](../../../entity/classes/FavoritableEntity.md#property-id) |
+| <a id="property-kind"></a> `kind` | `readonly` | () => `Promise`\<[`LinkedChatKind`](../../../../../generated/storage/types.gen/type-aliases/LinkedChatKind.md)\> | `group`, or `direct` for a one-to-one chat (only its owner sends). | - | - |
 | <a id="property-limits"></a> `limits` | `readonly` | () => `Promise`\<[`LinkedCapabilities`](../../../../../generated/storage/types.gen/type-aliases/LinkedCapabilities.md)\> | Supported sizes and mutation window. | - | - |
-| <a id="property-name"></a> `name` | `readonly` | () => `Promise`\<`string`\> | Display name. | - | - |
+| <a id="property-name"></a> `name` | `readonly` | () => `Promise`\<`string`\> | Display name: the group's, or a direct chat's other person. | - | - |
 | <a id="property-owner"></a> `owner` | `readonly` | () => `Promise`\<[`User`](../../../users/user/classes/User.md)\> | Actual owner, independent of WhatsApp membership. | - | - |
 | <a id="property-roster"></a> `roster` | `readonly` | () => `Promise`\<[`LinkedGroupInfo`](../../../../../generated/storage/types.gen/type-aliases/LinkedGroupInfo.md) \| `undefined`\> | Current remote roster, when available. | - | - |
 | <a id="property-sendingidentity"></a> `sendingIdentity` | `readonly` | () => `Promise`\<`string` \| `undefined`\> | Caller's own verified sending identity. | - | - |

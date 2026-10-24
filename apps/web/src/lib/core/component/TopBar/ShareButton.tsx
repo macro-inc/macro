@@ -232,7 +232,7 @@ const SHARE_LINK_SUBTEXT =
 // copying skips SHARE_LINK_SUBTEXT.
 const RESTRICTED_SHARE_DESCRIPTIONS: Partial<Record<ShareItemType, string>> = {
   whatsapp_group:
-    'Only the owner can share access to this WhatsApp group. Sending always requires your own connected WhatsApp account.',
+    'Only the owner can share access to this WhatsApp chat. Sending always requires your own connected WhatsApp account.',
   crm_pipeline:
     'Only editors can share this pipeline. You can copy a link for people who already have access.',
   agent_session:

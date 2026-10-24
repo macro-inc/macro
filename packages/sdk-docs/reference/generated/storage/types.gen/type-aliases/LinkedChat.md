@@ -1,6 +1,6 @@
 # Type Alias: LinkedChat
 
-> **LinkedChat** = \{ `archived`: `boolean`; `can_add`: `boolean`; `cannot_add_reason?`: `string` \| `null`; `group?`: `null` \| [`LinkedGroupReference`](LinkedGroupReference.md); `jid`: `string`; `kind`: [`LinkedChatKind`](LinkedChatKind.md); `last_activity_at?`: `string` \| `null`; `name`: `string`; `pinned`: `boolean`; `shared?`: `null` \| [`LinkedSharedGroupReference`](LinkedSharedGroupReference.md); \}
+> **LinkedChat** = \{ `archived`: `boolean`; `can_add`: `boolean`; `cannot_add_reason?`: `string` \| `null`; `community?`: `null` \| [`LinkedCommunityReference`](LinkedCommunityReference.md); `group?`: `null` \| [`LinkedGroupReference`](LinkedGroupReference.md); `jid`: `string`; `kind`: [`LinkedChatKind`](LinkedChatKind.md); `last_activity_at?`: `string` \| `null`; `name`: `string`; `pinned`: `boolean`; `shared?`: `null` \| [`LinkedSharedGroupReference`](LinkedSharedGroupReference.md); \}
 
 One chat of the caller's WhatsApp chat list, as WhatsApp Web lists it.
 
@@ -11,6 +11,7 @@ One chat of the caller's WhatsApp chat list, as WhatsApp Web lists it.
 | <a id="property-archived"></a> `archived` | `boolean` | Archived in WhatsApp. |
 | <a id="property-can_add"></a> `can_add` | `boolean` | "Add to Macro" works now. |
 | <a id="property-cannot_add_reason"></a> `cannot_add_reason?` | `string` \| `null` | Why it can't be added, when it is neither added, shared nor addable. |
+| <a id="property-community"></a> `community?` | `null` \| [`LinkedCommunityReference`](LinkedCommunityReference.md) | - |
 | <a id="property-group"></a> `group?` | `null` \| [`LinkedGroupReference`](LinkedGroupReference.md) | - |
 | <a id="property-jid"></a> `jid` | `string` | WhatsApp chat JID: a group, or the other person's phone-number JID (LID when WhatsApp never told us the number). |
 | <a id="property-kind"></a> `kind` | [`LinkedChatKind`](LinkedChatKind.md) | Group or direct chat. |

@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { LinkedChatCannotAddReason } from './linkedChatCannotAddReason';
+import type { LinkedChatCommunity } from './linkedChatCommunity';
 import type { LinkedChatGroup } from './linkedChatGroup';
 import type { LinkedChatKind } from './linkedChatKind';
 import type { LinkedChatLastActivityAt } from './linkedChatLastActivityAt';
@@ -20,6 +21,7 @@ export interface LinkedChat {
   can_add: boolean;
   /** Why it can't be added, when it is neither added, shared nor addable. */
   cannot_add_reason?: LinkedChatCannotAddReason;
+  community?: LinkedChatCommunity;
   group?: LinkedChatGroup;
   /** WhatsApp chat JID: a group, or the other person's phone-number JID
 (LID when WhatsApp never told us the number). */

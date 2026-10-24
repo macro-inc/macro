@@ -2,7 +2,7 @@ import type { MediaItem } from '@channel/Media/media-items';
 import { MediaPreview } from '@channel/Message/MediaPreview';
 import { constrainImageDimensions } from '@macro-inc/lexical-core/utils/media';
 import MicrophoneIcon from '@phosphor/microphone.svg';
-import { For, Match, Show, Switch } from 'solid-js';
+import { createMemo, For, Match, Show, Switch } from 'solid-js';
 import { formatDuration } from '../core/rich';
 
 /** An imported image, video or voice note with its resolved file URL. */
@@ -12,6 +12,8 @@ export type InboundMediaFile = {
   fileName: string;
   /** Undefined while the URL resolves. */
   url: string | undefined;
+  /** A local preview shown until `url` loads (files this page sent). */
+  previewUrl?: string;
   /** Declared by WhatsApp; reserves the space before the file loads. */
   width?: number;
   height?: number;
@@ -157,21 +159,33 @@ export function InboundMedia(props: { files: InboundMediaFile[] }) {
         file.presentation !== 'sticker' &&
         file.presentation !== 'gif'
     );
-  const visual = (): MediaItem[] =>
-    grid().flatMap((file) =>
-      file.url && file.kind !== 'audio'
-        ? [
-            {
-              id: file.id,
-              src: file.url,
-              fullSrc: file.url,
-              kind: file.kind,
-              width: file.width,
-              height: file.height,
-            },
-          ]
-        : []
-    );
+  // Like Chat's `mapMediaItems`: an unchanged file keeps its item, so the
+  // grid doesn't remount (and reload) it.
+  const visual = createMemo(
+    (previous: MediaItem[]) =>
+      grid().flatMap((file): MediaItem[] => {
+        if (!file.url || file.kind === 'audio') return [];
+        const item: MediaItem = {
+          id: file.id,
+          src: file.url,
+          fullSrc: file.url,
+          previewSrc: file.previewUrl,
+          kind: file.kind,
+          width: file.width,
+          height: file.height,
+        };
+        const kept = previous.find((old) => old.id === item.id);
+        return [
+          kept &&
+          (Object.keys(item) as (keyof MediaItem)[]).every(
+            (key) => kept[key] === item[key]
+          )
+            ? kept
+            : item,
+        ];
+      }),
+    []
+  );
   return (
     <div class="mt-1 flex flex-col gap-2" data-whatsapp-inline-media>
       <Show when={visual().length > 0}>

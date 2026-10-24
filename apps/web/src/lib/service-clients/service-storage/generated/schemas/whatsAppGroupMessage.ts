@@ -46,4 +46,6 @@ export interface WhatsAppGroupMessage {
   sender: WhatsAppGroupSender;
   /** Timestamp assigned by WhatsApp. */
   sent_at: string;
+  /** Sent as view-once in WhatsApp; Macro shows it like any media. */
+  view_once: boolean;
 }

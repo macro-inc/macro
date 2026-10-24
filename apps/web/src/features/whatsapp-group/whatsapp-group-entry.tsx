@@ -10,7 +10,7 @@ const Group = lazy(async () => ({
 export function WhatsAppGroupSkeleton() {
   return (
     <p role="status" class="p-6 text-sm text-ink-muted">
-      Loading WhatsApp group…
+      Loading WhatsApp chat…
     </p>
   );
 }

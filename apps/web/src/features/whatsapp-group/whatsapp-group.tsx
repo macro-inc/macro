@@ -28,7 +28,7 @@ export function WhatsAppGroup(props: {
     () => userId() ?? '',
     () => props.groupId
   );
-  useSplitDisplayName(() => source.group.data?.name ?? 'WhatsApp group');
+  useSplitDisplayName(() => source.group.data?.name ?? 'WhatsApp chat');
   const share = useShareModal(() => {
     const group = source.group.data;
     if (!group) return;

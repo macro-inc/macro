@@ -27,6 +27,10 @@ lists belong to `features/whatsapp-linked` and `features/external-view`.
 
 ## Gotchas
 
+- Despite the name, this is any added WhatsApp chat: `kind` is `group` or
+  `direct`. A direct chat has no roster (header shows the person) and only
+  its owner sends; shared viewers see "Only <owner> can reply in this chat".
+  User-facing copy says "chat"; code, routes and the entity type keep "group".
 - Viewing follows ordinary entity sharing. WhatsApp membership controls sending.
 - Every write uses the viewer's own connected WhatsApp account.
 - A draft keeps one idempotency key until DSS records it; unknown outcomes
@@ -46,6 +50,15 @@ lists belong to `features/whatsapp-linked` and `features/external-view`.
   the document chips. DSS's declared width/height reserve the space (keeps
   the open-at-bottom scroll right); stickers, GIFs and voice notes follow the
   attachment's `presentation`.
+- The timeline and composer use Chat's layout (`macro-message-width` column,
+  `CustomScrollbar`, `ChannelInputContainer` → centered column). The view
+  follows the bottom (a `ResizeObserver` on the content) until the reader
+  scrolls by intent (wheel, touch, keys, scrollbar); layout-driven scroll
+  events never change that. Media URLs keep their first presigned URL and
+  memoized items so refetches don't remount or reload them.
+- Files this page sent keep their local preview and size on the stored
+  message (`conversation.sentFiles`), so the swap from pending neither
+  flashes nor jumps.
 - `kind: 'system'` rows render through Chat's `SystemActivityLine`
   (`components/system-line.tsx`, words in `core/rich.ts`) and enter the list
   meta as `activity` entries; they never count toward the unread divider.

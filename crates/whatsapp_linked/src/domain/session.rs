@@ -276,7 +276,7 @@ impl SessionService {
         scope: SessionScope,
         page: &HistoryPage,
     ) -> LinkedResult<Vec<(Uuid, BackfillState)>> {
-        if !is_group_jid(&page.chat_jid) {
+        if !is_group_jid(&page.chat_jid) && !is_person_jid(&page.chat_jid) {
             return Ok(vec![]);
         }
         self.repository.backfill_page(scope, page).await
@@ -412,8 +412,16 @@ fn is_person_jid(jid: &str) -> bool {
 }
 
 pub(crate) fn validate_event(event: &InboundEvent) -> LinkedResult<()> {
-    if !is_group_jid(&event.group_jid) {
-        return Err(LinkedError::Invalid("invalid group").into());
+    let direct = is_person_jid(&event.group_jid);
+    if !is_group_jid(&event.group_jid) && !direct {
+        return Err(LinkedError::Invalid("invalid chat").into());
+    }
+    if event
+        .chat_alternate_jid
+        .as_deref()
+        .is_some_and(|alternate| !direct || !is_person_jid(alternate))
+    {
+        return Err(LinkedError::Invalid("invalid chat").into());
     }
     match &event.kind {
         InboundKind::Left => Ok(()),

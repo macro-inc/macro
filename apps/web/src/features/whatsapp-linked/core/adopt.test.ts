@@ -12,7 +12,7 @@ describe('adoption refusals', () => {
         )
       )
     ).toBe(
-      "Your WhatsApp isn't allowed to add this group. Check that you're still a member."
+      "Your WhatsApp isn't allowed to add this chat. Check that you're still in it."
     );
     expect(
       adoptFailureMessage(
@@ -26,7 +26,7 @@ describe('adoption refusals', () => {
         )
       )
     ).toBe(
-      "WhatsApp didn't accept this group: groups with disappearing messages cannot be added."
+      "WhatsApp didn't accept this chat: groups with disappearing messages cannot be added."
     );
     expect(
       adoptFailureMessage(

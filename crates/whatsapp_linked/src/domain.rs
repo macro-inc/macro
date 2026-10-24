@@ -20,6 +20,9 @@ pub mod service;
 /// In-process API for the session service.
 #[cfg(feature = "ports")]
 pub mod session;
+/// Pixel size and length of files sent from Macro.
+#[cfg(feature = "ports")]
+pub mod shape;
 
 #[cfg(feature = "ports")]
 pub mod timeline;

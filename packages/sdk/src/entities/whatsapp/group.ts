@@ -29,7 +29,7 @@ export type WhatsAppReply =
       text?: string;
     };
 
-/** Independently shareable adopted WhatsApp group entity. */
+/** Independently shareable added WhatsApp chat: a group or a direct chat. */
 export class WhatsAppGroup extends FavoritableEntity<WhatsAppGroupDetail> {
   /** Canonical sharing and favorites kind. */
   readonly entityType = 'whatsapp_group' as const;
@@ -45,8 +45,10 @@ export class WhatsAppGroup extends FavoritableEntity<WhatsAppGroupDetail> {
     );
   }
 
-  /** Display name. */
+  /** Display name: the group's, or a direct chat's other person. */
   readonly name = this.field('name');
+  /** `group`, or `direct` for a one-to-one chat (only its owner sends). */
+  readonly kind = this.field('kind');
   /** Whether the caller can send from their own connected account. */
   readonly canSend = this.field('can_send');
   /** Reason sending is blocked. */
@@ -61,6 +63,10 @@ export class WhatsAppGroup extends FavoritableEntity<WhatsAppGroupDetail> {
   readonly limits = this.field('limits');
   /** Current remote roster, when available. */
   readonly roster = this.field('roster');
+  /** WhatsApp's disappearing-messages timer in seconds while on; Macro keeps the messages. */
+  readonly disappearingSeconds = this.field('disappearing_seconds');
+  /** The WhatsApp community this group belongs to (`{ id, name, announcements }`), if any. */
+  readonly community = this.field('community');
   /** Actual owner, independent of WhatsApp membership. */
   readonly owner = this.mappedField('user_id', (id) =>
     User.byId(this.client, id),

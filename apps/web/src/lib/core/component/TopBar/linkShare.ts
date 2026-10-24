@@ -30,7 +30,7 @@ export function isTeamShareSupportedForItem(itemType: ShareItemType): boolean {
 
 /** Human noun for share-modal copy such as "Share this chat with the owner's team." */
 export function getShareItemNoun(itemType: ShareItemType): string {
-  if (itemType === 'whatsapp_group') return 'WhatsApp group';
+  if (itemType === 'whatsapp_group') return 'WhatsApp chat';
   switch (itemType) {
     case 'email':
       return 'email thread';

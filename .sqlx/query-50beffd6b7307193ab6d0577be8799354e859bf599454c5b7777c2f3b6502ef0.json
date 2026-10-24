@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, group_jid, user_id, state, ownership_state, adopted_at FROM whatsapp_group WHERE id = $1",
+  "query": "SELECT id, group_jid, kind, user_id, state, ownership_state, adopted_at FROM whatsapp_group WHERE id = $1",
   "describe": {
     "columns": [
       {
@@ -15,21 +15,26 @@
       },
       {
         "ordinal": 2,
-        "name": "user_id",
+        "name": "kind",
         "type_info": "Text"
       },
       {
         "ordinal": 3,
-        "name": "state",
+        "name": "user_id",
         "type_info": "Text"
       },
       {
         "ordinal": 4,
-        "name": "ownership_state",
+        "name": "state",
         "type_info": "Text"
       },
       {
         "ordinal": 5,
+        "name": "ownership_state",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
         "name": "adopted_at",
         "type_info": "Timestamptz"
       }
@@ -45,8 +50,9 @@
       false,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "cd6128d31169c8a91a9b766625605fb5438bab0eaf6b8d4cb902c1a577d5a3d1"
+  "hash": "50beffd6b7307193ab6d0577be8799354e859bf599454c5b7777c2f3b6502ef0"
 }

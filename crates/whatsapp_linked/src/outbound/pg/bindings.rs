@@ -8,6 +8,7 @@ use model_owner::Owner;
 pub(super) struct BindingRow {
     pub id: Uuid,
     pub group_jid: String,
+    pub kind: String,
     pub user_id: String,
     pub state: String,
     pub ownership_state: String,
@@ -18,10 +19,10 @@ pub(super) fn binding(row: BindingRow) -> LinkedResult<Binding> {
     Ok(Binding {
         id: row.id,
         group_jid: row.group_jid,
+        kind: ChatKind::parse(&row.kind).ok_or(LinkedError::Unavailable)?,
         user_id: row.user_id,
         state: match row.state.as_str() {
             "active" => BindingState::Active,
-            "suspended" => BindingState::Suspended,
             "detached" => BindingState::Detached,
             _ => return Err(LinkedError::Unavailable.into()),
         },
@@ -37,17 +38,16 @@ pub(super) fn binding(row: BindingRow) -> LinkedResult<Binding> {
 #[async_trait]
 impl BindingRepository for PgLinkedRepository {
     async fn binding(&self, group: Uuid) -> LinkedResult<Option<Binding>> {
-        sqlx::query_as!(BindingRow, "SELECT id, group_jid, user_id, state, ownership_state, adopted_at FROM whatsapp_group WHERE id = $1", group)
+        sqlx::query_as!(BindingRow, "SELECT id, group_jid, kind, user_id, state, ownership_state, adopted_at FROM whatsapp_group WHERE id = $1", group)
             .fetch_optional(&self.pool).await.map_err(failure)?.map(binding).transpose()
     }
     async fn adopt(&self, record: AdoptionRecord<'_>) -> LinkedResult<Adopted> {
         let AdoptionRecord {
             user,
             account,
-            name,
-            group,
+            adoption,
         } = record;
-        let identity = account
+        account
             .identity_jid
             .as_deref()
             .ok_or(LinkedError::Forbidden)?;
@@ -55,14 +55,14 @@ impl BindingRepository for PgLinkedRepository {
         sqlx::query!(
             "SELECT pg_advisory_xact_lock(hashtextextended('whatsapp-group:' || $1 || ':' || $2, 0))",
             user,
-            group.jid
+            adoption.jid
         )
         .execute(&mut *tx)
         .await
         .map_err(failure)?;
         sqlx::query_scalar!("SELECT id FROM whatsapp_linked_account WHERE id = $1 AND user_id = $2 AND generation = $3 AND state = 'connected' FOR SHARE", account.id,user,account.authorization_generation)
             .fetch_optional(&mut *tx).await.map_err(failure)?.ok_or(LinkedError::Disconnected)?;
-        let existing = sqlx::query_as!(BindingRow,"SELECT id, group_jid, user_id, state, ownership_state, adopted_at FROM whatsapp_group WHERE user_id = $1 AND group_jid = $2 AND state <> 'detached' FOR UPDATE",user,group.jid)
+        let existing = sqlx::query_as!(BindingRow,"SELECT id, group_jid, kind, user_id, state, ownership_state, adopted_at FROM whatsapp_group WHERE user_id = $1 AND group_jid = $2 AND state <> 'detached' FOR UPDATE",user,adoption.jid)
             .fetch_optional(&mut *tx).await.map_err(failure)?;
         let adopted = match existing {
             Some(row) => Adopted {
@@ -75,7 +75,7 @@ impl BindingRepository for PgLinkedRepository {
                 share_permission_db_utils::insert_private_permission(&mut *tx, &permission)
                     .await
                     .map_err(failure)?;
-                let row = sqlx::query_as!(BindingRow,"INSERT INTO whatsapp_group (id, group_jid, name, user_id, state, share_permission_id, backfill_state) VALUES ($1,$2,$3,$4,'active',$5,'pending') RETURNING id, group_jid, user_id, state, ownership_state, adopted_at",id,group.jid,name,user,permission)
+                let row = sqlx::query_as!(BindingRow,"INSERT INTO whatsapp_group (id, group_jid, kind, name, user_id, state, share_permission_id, backfill_state) VALUES ($1,$2,$3,$4,$5,'active',$6,'pending') RETURNING id, group_jid, kind, user_id, state, ownership_state, adopted_at",id,adoption.jid,adoption.kind.as_str(),adoption.name,user,permission)
                     .fetch_one(&mut *tx).await.map_err(failure)?;
                 let owner = Owner::from_principal_str(user).map_err(failure)?;
                 entity_registry_db_utils::insert_entity(
@@ -107,7 +107,7 @@ impl BindingRepository for PgLinkedRepository {
             VALUES ($1,$2,$3,clock_timestamp(),true,$4,$5,true)
             ON CONFLICT (binding_id,account_id) DO UPDATE SET generation = excluded.generation,consent_ended_at = NULL,
             remote_member = true,can_post = excluded.can_post,observed_at = excluded.observed_at,reconciled = true"#,
-            adopted.binding.id,account.id,account.authorization_generation,group.can_post(identity),group.observed_at)
+            adopted.binding.id,account.id,account.authorization_generation,adoption.can_post,adoption.observed_at)
             .execute(&mut *tx).await.map_err(failure)?;
         notify(&mut tx, signals::ACCOUNT_CHANGED, account.id).await?;
         tx.commit().await.map_err(failure)?;

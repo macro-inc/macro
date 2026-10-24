@@ -24,6 +24,7 @@ Message in an independently shared WhatsApp group.
 | <a id="property-rich"></a> `rich` | `readonly` | () => `Promise`\<`NonNullable`\<WhatsAppRichContent \| null \| undefined\> \| `undefined`\> | Poll (with tallies), location, contact cards, event or system line. | - |
 | <a id="property-sender"></a> `sender` | `readonly` | () => `Promise`\<[`WhatsAppGroupSender`](../../../../../generated/storage/types.gen/type-aliases/WhatsAppGroupSender.md)\> | Protocol-verified sender association and display name. | - |
 | <a id="property-sentat"></a> `sentAt` | `readonly` | () => `Promise`\<`string`\> | WhatsApp timestamp. | - |
+| <a id="property-viewonce"></a> `viewOnce` | `readonly` | () => `Promise`\<`boolean`\> | Sent as view-once in WhatsApp; Macro keeps and shows it like any media. | - |
 
 ## Accessors
 

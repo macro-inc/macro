@@ -126,8 +126,10 @@ export function formatDuration(totalSeconds: number): string {
     : `${minutes}:${rest}`;
 }
 
-/** WhatsApp's own disappearing-message timer names. */
-function disappearingLabel(value: string | undefined): string | undefined {
+/** WhatsApp's own disappearing-message timer names: "24 hours", "7 days". */
+export function disappearingLabel(
+  value: string | undefined
+): string | undefined {
   const seconds = Number(value ?? '0');
   if (!Number.isFinite(seconds) || seconds <= 0) return undefined;
   const days = seconds / 86400;

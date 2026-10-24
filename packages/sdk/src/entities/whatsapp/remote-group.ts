@@ -35,14 +35,20 @@ export class WhatsAppRemoteGroup extends MacroEntity<LinkedGroupInfo> {
   /** Current remote roster; membership alone does not grant Macro history access. */
   readonly participants = this.field('participants');
 
-  /** Whether disappearing messages prevent retention of group content. */
-  readonly disappearing = this.field('disappearing');
+  /** WhatsApp's disappearing-messages timer in seconds while on; Macro keeps the messages. */
+  readonly disappearingSeconds = this.field('disappearingSeconds');
 
   /** Whether only remote administrators can post. */
   readonly announce = this.field('announce');
 
-  /** Whether this group is an unsupported community parent or announcement group. */
-  readonly community = this.field('community');
+  /** Whether this is a community itself, which has no messages and can't be added. */
+  readonly communityParent = this.field('communityParent');
+
+  /** The JID of the community this group belongs to, if any. */
+  readonly communityJid = this.field('communityJid');
+
+  /** Whether this is a community's announcement group (only admins post). */
+  readonly communityAnnouncements = this.field('communityAnnouncements');
 
   /** The current user's own Macro group for this remote group, once added. */
   readonly group = this.mappedField('group', (record) =>

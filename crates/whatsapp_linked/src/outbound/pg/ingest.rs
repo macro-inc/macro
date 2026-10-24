@@ -69,7 +69,7 @@ pub(super) async fn observed_bindings_in(
 ) -> LinkedResult<Vec<Binding>> {
     sqlx::query_as!(
         bindings::BindingRow,
-        r#"SELECT b.id, b.group_jid, b.user_id, b.state, b.ownership_state, b.adopted_at
+        r#"SELECT b.id, b.group_jid, b.kind, b.user_id, b.state, b.ownership_state, b.adopted_at
         FROM whatsapp_group b JOIN whatsapp_group_membership m ON m.binding_id = b.id
         WHERE b.group_jid = $1 AND b.state = 'active'
           AND m.account_id = $2 AND m.generation = $3 AND m.consent_ended_at IS NULL
@@ -273,8 +273,8 @@ pub(super) async fn reserve_in(
     // revisions carry none of it and keep what is stored.
     sqlx::query!(
         r#"INSERT INTO whatsapp_group_message (id, binding_id, person_id, source_id, origin, source_at, content_revision, deleted_at, revision_content, revised_at,
-            kind, rich, mentions, forwarded)
-        VALUES ($11, $1, $2, $3, $4, $5, $6, $7, $8, $9, $12, $13, $14, $15)
+            kind, rich, mentions, forwarded, view_once)
+        VALUES ($11, $1, $2, $3, $4, $5, $6, $7, $8, $9, $12, $13, $14, $15, $16)
         ON CONFLICT (binding_id, person_id, source_id) DO UPDATE SET
             deleted_at = COALESCE(whatsapp_group_message.deleted_at, excluded.deleted_at),
             revision_content = CASE WHEN excluded.content_revision > whatsapp_group_message.content_revision
@@ -286,7 +286,8 @@ pub(super) async fn reserve_in(
             kind = CASE WHEN $10 THEN whatsapp_group_message.kind ELSE excluded.kind END,
             rich = CASE WHEN $10 THEN whatsapp_group_message.rich ELSE COALESCE(excluded.rich, whatsapp_group_message.rich) END,
             mentions = CASE WHEN $10 OR cardinality(excluded.mentions) = 0 THEN whatsapp_group_message.mentions ELSE excluded.mentions END,
-            forwarded = whatsapp_group_message.forwarded OR excluded.forwarded"#,
+            forwarded = whatsapp_group_message.forwarded OR excluded.forwarded,
+            view_once = whatsapp_group_message.view_once OR excluded.view_once"#,
         binding.id,
         person,
         source,
@@ -301,7 +302,8 @@ pub(super) async fn reserve_in(
         entry_kind,
         rich,
         &message.mentions,
-        message.forwarded
+        message.forwarded,
+        message.view_once
     )
     .execute(&mut **tx)
     .await

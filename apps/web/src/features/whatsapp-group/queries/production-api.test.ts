@@ -25,6 +25,7 @@ beforeEach(() => vi.clearAllMocks());
 it('decodes shared viewing separately from the callers own sending account and handles an absent roster', async () => {
   const detail = {
     id: '019a061e-0000-7000-8000-000000000001',
+    kind: 'group',
     name: 'Shared group',
     user_id: 'macro|owner@example.test',
     unread_count: 3,
@@ -72,6 +73,7 @@ it('decodes pagination, deleted flags, reaction ownership and attachment states 
         body: '',
         mentions: [],
         forwarded: false,
+        view_once: false,
         rich: null,
         reply_to: null,
         sent_at: '2026-10-21T12:00:00Z',
@@ -122,6 +124,7 @@ it('decodes mentions, forwarding, media presentation and every rich type', async
     kind: 'message',
     mentions: [],
     forwarded: false,
+    view_once: false,
     rich: null,
   };
   const page = {

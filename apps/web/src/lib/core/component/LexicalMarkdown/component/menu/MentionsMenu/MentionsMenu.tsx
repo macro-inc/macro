@@ -483,7 +483,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       },
       {
         id: 'whatsappGroups',
-        label: 'WhatsApp groups',
+        label: 'WhatsApp chats',
         getData: whatsappGroups,
         getFullCount: () => whatsappGroups().length,
       },

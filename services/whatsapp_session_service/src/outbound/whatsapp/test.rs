@@ -12,7 +12,7 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 use whatsapp_fake_server::{FakeWhatsApp, test_signal};
 use whatsapp_linked::domain::events::{
-    AttachmentRef, ClaimedSend, InboundEvent, InboundKind, MediaImport, OutboundMedia,
+    AttachmentRef, ClaimedSend, InboundEvent, InboundKind, MediaImport, MediaShape, OutboundMedia,
     OutgoingContent, SessionScope,
 };
 use whatsapp_linked::domain::models::MediaKind;
@@ -343,7 +343,13 @@ async fn attachments_travel_both_ways_with_a_sealed_locator(pool: PgPool) {
             filename: "reply.jpg".to_owned(),
             caption: Some("from macro".to_owned()),
             quote: None,
+            shape: MediaShape {
+                width: Some(800),
+                height: Some(600),
+                duration_seconds: None,
+            },
         },
+        disappearing_seconds: Some(86_400),
         traceparent: None,
     };
     let message_id = session.new_message_id().await;
@@ -356,5 +362,106 @@ async fn attachments_travel_both_ways_with_a_sealed_locator(pool: PgPool) {
         .await
         .expect("the peer's phone receives the image");
     assert_eq!(peer.download_image(&delivered).await.unwrap(), reply);
+    let image = delivered
+        .message
+        .image_message
+        .as_deref()
+        .expect("an image message");
+    assert_eq!(
+        (image.width, image.height),
+        (Some(800), Some(600)),
+        "the phone can reserve the space"
+    );
+    assert_eq!(
+        image
+            .context_info
+            .as_ref()
+            .and_then(|context| context.expiration),
+        Some(86_400),
+        "the image disappears like the group's own messages"
+    );
     session.disconnect().await;
+}
+
+#[test]
+fn group_metadata_keeps_the_timer_and_tells_a_community_from_its_groups() {
+    use whatsmeow::types::{
+        GroupEphemeral, GroupInfo as WhatsAppGroup, GroupIsDefaultSub, GroupLinkedParent,
+        GroupName, GroupParent,
+    };
+    let community: whatsmeow::types::Jid = "120363000000000010@g.us".parse().unwrap();
+    let group = |jid: &str| WhatsAppGroup {
+        jid: jid.parse().unwrap(),
+        name: GroupName {
+            name: "Neighbours".to_owned(),
+            ..GroupName::default()
+        },
+        ..WhatsAppGroup::default()
+    };
+    let observed_at = chrono::Utc::now();
+
+    let parent = super::group_info(
+        WhatsAppGroup {
+            parent: GroupParent {
+                is_parent: true,
+                ..GroupParent::default()
+            },
+            ..group("120363000000000010@g.us")
+        },
+        observed_at,
+    );
+    assert!(parent.community_parent);
+    assert_eq!(parent.community_jid, None);
+
+    let announcements = super::group_info(
+        WhatsAppGroup {
+            linked_parent: GroupLinkedParent {
+                linked_parent_jid: community.clone(),
+            },
+            is_default_sub: GroupIsDefaultSub {
+                is_default_sub_group: true,
+            },
+            ..group("120363000000000011@g.us")
+        },
+        observed_at,
+    );
+    assert!(!announcements.community_parent);
+    assert_eq!(
+        announcements.community_jid.as_deref(),
+        Some("120363000000000010@g.us")
+    );
+    assert!(announcements.community_announcements);
+
+    let vanishing = super::group_info(
+        WhatsAppGroup {
+            ephemeral: GroupEphemeral {
+                is_ephemeral: true,
+                disappearing_timer: 604_800,
+            },
+            linked_parent: GroupLinkedParent {
+                linked_parent_jid: community,
+            },
+            ..group("120363000000000012@g.us")
+        },
+        observed_at,
+    );
+    assert_eq!(vanishing.disappearing_seconds, Some(604_800));
+    assert!(!vanishing.community_announcements);
+    assert_eq!(
+        super::group_info(group("120363000000000013@g.us"), observed_at).disappearing_seconds,
+        None
+    );
+    // A group that had disappearing messages and turned them off: WhatsApp
+    // still lists `<ephemeral expiration="0"/>`.
+    let turned_off = super::group_info(
+        WhatsAppGroup {
+            ephemeral: GroupEphemeral {
+                is_ephemeral: true,
+                disappearing_timer: 0,
+            },
+            ..group("120363000000000014@g.us")
+        },
+        observed_at,
+    );
+    assert_eq!(turned_off.disappearing_seconds, None);
 }

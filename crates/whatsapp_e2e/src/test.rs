@@ -23,6 +23,8 @@ use whatsmeow::types::Jid;
 
 use super::*;
 
+mod direct_chats;
+mod group_kinds;
 mod message_types;
 
 const TIMEOUT: Duration = Duration::from_secs(60);
@@ -1195,11 +1197,8 @@ async fn the_chat_list_follows_history_sync_and_live_messages(pool: PgPool) {
         .await;
     assert_eq!(direct.kind, ChatKind::Direct);
     assert_eq!(direct.name, "Customer");
-    assert!(!direct.can_add);
-    assert_eq!(
-        direct.cannot_add_reason.as_deref(),
-        Some("direct chats can't be added to Macro yet")
-    );
+    assert!(direct.can_add);
+    assert_eq!(direct.cannot_add_reason, None);
     assert_eq!(group.kind, ChatKind::Group);
     assert_eq!(group.name, "Customer escalations");
     assert!(group.can_add);

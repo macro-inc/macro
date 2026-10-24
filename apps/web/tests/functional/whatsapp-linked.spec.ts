@@ -11,6 +11,8 @@ type Chat = {
   last_activity_at: string | null;
   group: { id: string; name: string } | null;
   shared?: { id: string; name: string; owner_id: string };
+  /** The account's chat with itself. */
+  self?: boolean;
 };
 
 /** Server state the mocked DSS `/meta/linked` routes answer from. */
@@ -41,6 +43,8 @@ type LinkedServer = {
   sendReplies: { status: number; json: unknown }[];
   /** Progress `POST /delivery` reports, by send id. */
   delivery: Record<string, { state: string; message_id: string | null }>;
+  /** What `POST /attachments` says it staged. */
+  upload: { filename: string; kind: string };
 };
 
 function server(): LinkedServer {
@@ -83,6 +87,14 @@ function server(): LinkedServer {
           owner_id: 'macro|owner@example.test',
         },
       },
+      {
+        jid: '14155550142@s.whatsapp.net',
+        kind: 'direct',
+        name: 'You',
+        last_activity_at: null,
+        group: null,
+        self: true,
+      },
     ],
     requests: [],
     adoptions: [],
@@ -95,6 +107,7 @@ function server(): LinkedServer {
     readMessages: [],
     sendReplies: [],
     delivery: {},
+    upload: { filename: 'design.pdf', kind: 'document' },
   };
 }
 
@@ -315,11 +328,7 @@ async function mount(page: Page, state: LinkedServer, query = '') {
         }
         if (suffix === '/attachments')
           return route.fulfill({
-            json: {
-              upload_id: 'upload-1',
-              filename: 'design.pdf',
-              kind: 'document',
-            },
+            json: { upload_id: 'upload-1', ...state.upload },
           });
         if (suffix === '/permissions' && method === 'PATCH') {
           state.permissionUpdates.push(route.request().postDataJSON());
@@ -348,6 +357,7 @@ async function mount(page: Page, state: LinkedServer, query = '') {
             .filter((item) => item.group)
             .map((item) => ({
               id: item.group?.id,
+              kind: item.kind,
               name: item.group?.name,
               user_id: USER_ID,
               unread_count: item.group?.id === GROUP_ID ? 2 : 0,
@@ -402,11 +412,10 @@ async function mount(page: Page, state: LinkedServer, query = '') {
               archived: false,
               pinned: false,
               shared: chat.group ? null : (chat.shared ?? null),
-              can_add: chat.kind === 'group' && !chat.group && !chat.shared,
-              cannot_add_reason:
-                chat.kind === 'direct'
-                  ? "direct chats can't be added to Macro yet"
-                  : null,
+              can_add: !chat.self && !chat.group && !chat.shared,
+              cannot_add_reason: chat.self
+                ? "your chat with yourself can't be added to Macro"
+                : null,
             })),
           },
         });
@@ -471,17 +480,25 @@ test('links WhatsApp by QR, then adds a shareable WhatsApp group', async ({
   await expect(dialog).toBeHidden();
   expect(state.requests).not.toContain('DELETE pairing/pairing-1');
 
-  const groups = page.getByRole('list', { name: 'Groups to add to Macro' });
+  const groups = page.getByRole('list', { name: 'Chats to add to Macro' });
   await expect(groups.getByText('Launch War Room')).toBeVisible();
   await expect(groups.getByText('Design Crit')).toHaveCount(0);
-  // Direct chats are listed by recent activity but can't be added yet.
+  // Direct chats are added like groups; only the chat with yourself isn't.
+  await expect(
+    groups
+      .getByRole('listitem')
+      .filter({ hasText: 'Ana Ruiz' })
+      .getByText('Direct chat')
+  ).toBeVisible();
   await page.getByRole('button', { name: /Can't be added \(1\)/ }).click();
-  const direct = page
+  const self = page
     .getByRole('list', { name: "Can't be added" })
     .getByRole('listitem')
-    .filter({ hasText: 'Ana Ruiz' });
-  await expect(direct.getByText("Can't add direct chats yet")).toBeVisible();
-  await expect(direct.getByRole('button')).toHaveCount(0);
+    .filter({ hasText: 'You' });
+  await expect(
+    self.getByText("Your chat with yourself can't be added to Macro")
+  ).toBeVisible();
+  await expect(self.getByRole('button')).toHaveCount(0);
   const search = page.getByRole('searchbox', { name: 'Search WhatsApp chats' });
   await search.fill('design');
   await expect(
@@ -492,7 +509,7 @@ test('links WhatsApp by QR, then adds a shareable WhatsApp group', async ({
   await search.fill('launch');
   await expect(groups.getByRole('listitem')).toHaveCount(1);
   await search.fill('');
-  await expect(groups.getByRole('listitem')).toHaveCount(2);
+  await expect(groups.getByRole('listitem')).toHaveCount(3);
   await groups
     .getByRole('button', { name: /shared with you by Group Owner/i })
     .click();
@@ -500,7 +517,11 @@ test('links WhatsApp by QR, then adds a shareable WhatsApp group', async ({
     'group-shared-family',
   ]);
 
-  await groups.getByRole('button', { name: 'Add to Macro' }).click();
+  await groups
+    .getByRole('listitem')
+    .filter({ hasText: 'Launch War Room' })
+    .getByRole('button', { name: 'Add to Macro' })
+    .click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(groups.getByText('Launch War Room')).toHaveCount(0);
   expect(state.adoptions).toEqual([{ group_jid: '120363003@g.us' }]);
@@ -528,12 +549,12 @@ test('a refused add says why, on that group', async ({ page }) => {
     })
   );
   const row = page
-    .getByRole('list', { name: 'Groups to add to Macro' })
+    .getByRole('list', { name: 'Chats to add to Macro' })
     .getByRole('listitem')
     .filter({ hasText: 'Launch War Room' });
   await row.getByRole('button', { name: 'Add to Macro' }).click();
   await expect(row.getByRole('alert')).toHaveText(
-    'Your WhatsApp is disconnected. Reconnect it, then add the group.'
+    'Your WhatsApp is disconnected. Reconnect it, then add the chat.'
   );
   expect(unexpected).toEqual([]);
 });
@@ -545,7 +566,7 @@ test('External lists groups in Macro with unread counts and read-only tags', asy
   state.chats[2].group = { id: 'group-shared', name: 'Launch War Room' };
   const unexpected = await mount(page, state, '?view=in-macro');
   const nav = page.getByRole('navigation', {
-    name: 'WhatsApp groups in Macro',
+    name: 'WhatsApp chats in Macro',
   });
   const design = nav.getByRole('button', { name: /design-crit/ });
   await expect(design.getByLabel('2 unread messages')).toBeVisible();
@@ -843,9 +864,9 @@ function everyMessageType() {
     },
     {
       ...base,
-      id: 'type-view-once',
+      id: 'type-unknown',
       sent_at: at(12),
-      body: 'View-once message — open it on your phone',
+      body: "Sent something Macro can't show yet",
     },
   ];
 }
@@ -909,7 +930,7 @@ test('every WhatsApp message type renders with Chat parts and small cards', asyn
     ])
   );
   await expect(
-    timeline.getByText('View-once message — open it on your phone')
+    timeline.getByText("Sent something Macro can't show yet")
   ).toBeVisible();
   // The newest row is in view: the timeline opened at the bottom.
   await expect(
@@ -938,6 +959,73 @@ test('the composer mentions group participants as WhatsApp mentions', async ({
       mentions: ['14155550199@s.whatsapp.net'],
     },
   });
+  expect(unexpected).toEqual([]);
+});
+
+const PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+  'base64'
+);
+
+test('an image sent from Macro shows at once and stays one image once stored', async ({
+  page,
+}) => {
+  const state = server();
+  state.upload = { filename: 'photo.png', kind: 'image' };
+  const unexpected = await mount(page, state, `?group=${GROUP_ID}`);
+  const timeline = page.getByRole('log', { name: 'WhatsApp messages' });
+  await page
+    .locator('[data-input] input[type="file"]')
+    .first()
+    .setInputFiles({ name: 'photo.png', mimeType: 'image/png', buffer: PNG });
+  const send = page.getByRole('button', { name: 'Send message' });
+  await expect(send).toBeEnabled();
+  await send.click();
+  await expect.poll(() => state.outgoing.length).toBe(1);
+  expect(state.outgoing[0]).toMatchObject({
+    message: { type: 'media', upload_id: 'upload-1' },
+  });
+  // The local preview, before WhatsApp has it; no file chip.
+  await expect(timeline.locator('img[src^="blob:"]').first()).toBeAttached();
+  await expect(timeline.getByText(/Loading photo\.png/)).toHaveCount(0);
+  const sendId = Object.keys(state.delivery)[0] ?? '';
+  state.imported = [
+    {
+      ...incomingMessage,
+      id: 'message-sent',
+      body: '',
+      sender: { name: 'Me', user_id: USER_ID },
+      sent_at: new Date(Date.now() + 1000).toISOString(),
+      reactions: [],
+      attachments: [
+        {
+          ordinal: 0,
+          state: 'ready',
+          file_name: 'photo.png',
+          mime: 'image/png',
+          size: PNG.length,
+          document_id: 'document-sent',
+          width: null,
+          height: null,
+          duration_seconds: null,
+          presentation: null,
+        },
+      ],
+    },
+  ];
+  state.delivery[sendId] = { state: 'accepted', message_id: 'message-sent' };
+  await expect(
+    timeline.locator('[data-message-id="message-sent"]')
+  ).toBeVisible();
+  // One image: the pending row gave way to the stored message.
+  await expect(
+    timeline.getByRole('button', { name: 'Open image viewer' })
+  ).toHaveCount(1);
+  await expect(
+    timeline
+      .locator('[data-message-id="message-sent"]')
+      .getByRole('button', { name: 'Open image viewer' })
+  ).toBeVisible();
   expect(unexpected).toEqual([]);
 });
 
@@ -990,7 +1078,7 @@ test('a refused send leaves the conversation, says why and restores the draft', 
   await typeInComposer(page, 'Not allowed here');
   await page.getByRole('button', { name: 'Send message' }).click();
   await expect(
-    page.getByText("Your WhatsApp can't send to this group.")
+    page.getByText("Your WhatsApp can't send to this chat.")
   ).toBeVisible();
   await expect(
     page.locator('[role="log"]').getByText('Not allowed here')
@@ -1103,7 +1191,7 @@ test('opens the standard share dialog for the independent group entity', async (
   await expect(
     page
       .getByRole('dialog')
-      .getByText(/Only the owner can share access to this WhatsApp group/)
+      .getByText(/Only the owner can share access to this WhatsApp chat/)
   ).toBeVisible();
   await expect(
     page.getByRole('dialog').getByRole('button', { name: 'Copy Link' })

@@ -47,7 +47,10 @@ Macro entity. Each person sends from their own account. Behind the `enable-whats
 - The chat list (`GET /meta/linked/chats`) arrives sorted by recent activity;
   keep DSS's order. Sections follow its `group`/`shared`/`can_add`/
   `cannot_add_reason` fields; direct chats are listed but not addable until DSS
-  says `can_add`.
+  says `can_add` (it does now; only the chat with yourself isn't).
+  User-facing copy says "chat", not "group". Community groups show as "Community · Group"
+  (`communityTitle`); disappearing and community groups are addable, a
+  community itself is not.
 - Adoption grants access only to its owner; the generic Share dialog manages
   later access. No special audience lists or WhatsApp membership requirement
   for viewing.

@@ -13,6 +13,7 @@ fn account(state: AccountState) -> Account {
 
 fn binding(state: BindingState, ownership_state: OwnershipState) -> Binding {
     Binding {
+        kind: ChatKind::Group,
         id: Uuid::from_u128(2),
         group_jid: "120363000000000001@g.us".into(),
         user_id: "macro|alice@example.com".into(),
@@ -104,8 +105,10 @@ fn unnamed_groups_are_called_after_their_other_members() {
             person("99@lid", None),
         ],
         announce: false,
-        disappearing: false,
-        community: false,
+        disappearing_seconds: None,
+        community_parent: false,
+        community_jid: None,
+        community_announcements: false,
         observed_at: Utc::now(),
         group: None,
         shared: None,
@@ -227,4 +230,54 @@ fn group_jids_are_validated_by_shape() {
     assert!(!is_group_jid("15551234567@s.whatsapp.net"));
     assert!(!is_group_jid("@g.us"));
     assert!(!is_group_jid("abc@g.us"));
+}
+
+#[test]
+fn communities_name_their_groups_and_only_the_community_itself_is_closed() {
+    let me = "15550000001@s.whatsapp.net";
+    let parent = GroupInfo {
+        jid: "120363000000000010@g.us".into(),
+        name: "Neighbours".into(),
+        participants: vec![Participant {
+            identity: Identity {
+                jid: me.into(),
+                alternate_jid: None,
+                display_name: None,
+            },
+            admin: false,
+        }],
+        announce: false,
+        disappearing_seconds: None,
+        community_parent: true,
+        community_jid: None,
+        community_announcements: false,
+        observed_at: Utc::now(),
+        group: None,
+        shared: None,
+    };
+    assert!(!parent.can_post(me), "a community has no chat of its own");
+    assert_eq!(parent.community(None), None);
+
+    let subgroup = GroupInfo {
+        jid: "120363000000000012@g.us".into(),
+        name: "Garden".into(),
+        community_parent: false,
+        community_jid: Some(parent.jid.clone()),
+        disappearing_seconds: Some(86_400),
+        ..parent.clone()
+    };
+    assert!(subgroup.can_post(me), "disappearing messages don't block");
+    assert_eq!(
+        subgroup.community(Some(&parent)),
+        Some(CommunityReference {
+            id: parent.jid.clone(),
+            name: "Neighbours".into(),
+            announcements: false,
+        })
+    );
+    assert_eq!(
+        subgroup.community(None).map(|community| community.name),
+        Some("WhatsApp community".into()),
+        "a community missing from the list still names itself"
+    );
 }

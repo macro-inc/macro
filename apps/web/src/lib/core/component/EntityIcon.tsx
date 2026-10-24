@@ -150,7 +150,7 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     boldIcon: WhatsappLogoBold,
     foreground: 'text-communication',
     background: 'bg-communication/20',
-    prettyName: 'WhatsApp group',
+    prettyName: 'WhatsApp chat',
   },
   document: {
     icon: File,

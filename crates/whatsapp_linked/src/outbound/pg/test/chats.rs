@@ -95,8 +95,8 @@ async fn the_chat_list_merges_history_activity_and_the_roster(pool: PgPool) {
                 ChatKind::Direct,
                 "Customer",
                 false,
-                false,
-                Some(cannot_add::DIRECT),
+                true,
+                None,
                 None
             ),
             (

@@ -13,6 +13,7 @@ import type {
 
 export const group: GroupDetail = {
   id: '019a061e-0000-7000-8000-000000000001',
+  kind: 'group',
   name: 'Design Crit',
   ownerId: 'macro|me@example.test',
   accessLevel: 'owner',

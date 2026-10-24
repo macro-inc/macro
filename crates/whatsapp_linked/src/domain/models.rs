@@ -178,7 +178,8 @@ pub struct PairState {
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "schema", schema(as = LinkedAdoptGroup))]
 pub struct AdoptGroup {
-    /// Group the requester's account has joined.
+    /// A group the requester's account has joined, or a direct chat from
+    /// their chat list (the other person's JID, as the list names it).
     pub group_jid: String,
 }
 
@@ -190,8 +191,6 @@ pub struct AdoptGroup {
 pub enum BindingState {
     /// Observed and sendable.
     Active,
-    /// The group enabled an unsupported mode; content and sending pause.
-    Suspended,
     /// Locally detached; history stays readable.
     Detached,
 }
@@ -215,8 +214,11 @@ pub enum OwnershipState {
 pub struct Binding {
     /// Stable binding identity, independent of any observing account.
     pub id: Uuid,
-    /// Remote group identity, never its display name.
+    /// Remote chat identity, never its display name: the group, or a direct
+    /// chat's other person.
     pub group_jid: String,
+    /// Group or direct chat.
+    pub kind: ChatKind,
     /// The person who added the group, its owner.
     pub user_id: String,
     /// Lifecycle.
@@ -286,10 +288,19 @@ pub struct GroupInfo {
     pub participants: Vec<Participant>,
     /// Only admins may post.
     pub announce: bool,
-    /// Disappearing messages are on; content is not retained.
-    pub disappearing: bool,
-    /// Community announcement or parent group, outside the supported surface.
-    pub community: bool,
+    /// Disappearing-messages timer in seconds while it is on. Macro keeps the
+    /// messages; its sends carry the timer so phones treat them like their own.
+    #[serde(default)]
+    pub disappearing_seconds: Option<u32>,
+    /// The community itself: it has no messages of its own and can't be added.
+    #[serde(default)]
+    pub community_parent: bool,
+    /// The community a linked subgroup or announcement group belongs to.
+    #[serde(default)]
+    pub community_jid: Option<String>,
+    /// The community's announcement group (everyone reads, admins post).
+    #[serde(default)]
+    pub community_announcements: bool,
     /// When the session service read this metadata.
     pub observed_at: DateTime<Utc>,
     /// The caller's own Macro group for this remote group, once they added
@@ -313,6 +324,22 @@ pub struct GroupReference {
     /// Display name, following WhatsApp.
     pub name: String,
 }
+
+/// The WhatsApp community a group belongs to.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = LinkedCommunityReference))]
+pub struct CommunityReference {
+    /// The community's WhatsApp JID.
+    pub id: String,
+    /// The community's name.
+    pub name: String,
+    /// This group is the community's announcement group.
+    pub announcements: bool,
+}
+
+/// Shown when the community itself is not in the account's group list.
+const UNKNOWN_COMMUNITY_NAME: &str = "WhatsApp community";
 
 /// Another person's group entity the caller can view.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -365,12 +392,27 @@ impl GroupInfo {
         }
     }
 
+    /// The community this group belongs to, named after `parent` (the
+    /// community's own metadata) when known.
+    pub fn community(&self, parent: Option<&GroupInfo>) -> Option<CommunityReference> {
+        let id = self.community_jid.clone()?;
+        let name = parent
+            .map(|parent| parent.name.trim())
+            .filter(|name| !name.is_empty())
+            .unwrap_or(UNKNOWN_COMMUNITY_NAME)
+            .to_owned();
+        Some(CommunityReference {
+            id,
+            name,
+            announcements: self.community_announcements,
+        })
+    }
+
     /// Whether the given identity may post under the group's current settings.
     pub fn can_post(&self, identity: &str) -> bool {
         self.participant(identity)
             .is_some_and(|p| !self.announce || p.admin)
-            && !self.community
-            && !self.disappearing
+            && !self.community_parent
     }
 }
 
@@ -409,12 +451,10 @@ impl ChatKind {
 pub mod cannot_add {
     /// The account's WhatsApp left the group or was removed.
     pub const NOT_IN_GROUP: &str = "your WhatsApp is not in this group any more";
-    /// Community announcement or parent groups.
-    pub const COMMUNITY: &str = "community groups can't be added to Macro";
-    /// Disappearing messages are on.
-    pub const DISAPPEARING: &str = "groups with disappearing messages can't be added to Macro";
-    /// Direct chats are listed but not addable yet.
-    pub const DIRECT: &str = "direct chats can't be added to Macro yet";
+    /// A community itself has no messages; its groups can be added.
+    pub const COMMUNITY: &str = "a community has no messages of its own; add one of its groups";
+    /// The chat with yourself.
+    pub const OWN_CHAT: &str = "your chat with yourself can't be added to Macro";
 }
 
 /// One chat of the caller's WhatsApp chat list, as WhatsApp Web lists it.
@@ -446,6 +486,9 @@ pub struct Chat {
     pub can_add: bool,
     /// Why it can't be added, when it is neither added, shared nor addable.
     pub cannot_add_reason: Option<String>,
+    /// The community a group belongs to (a community's group or its
+    /// announcement group); `null` otherwise.
+    pub community: Option<CommunityReference>,
 }
 
 /// The caller's WhatsApp chat list.
@@ -869,7 +912,7 @@ pub enum ReplyBlock {
     NotObserving,
     /// The viewer is not in the group, or only admins may post.
     NotAllowedInGroup,
-    /// The group is suspended, detached, or needs a new content owner.
+    /// The group is detached, or needs a new content owner.
     GroupUnavailable,
 }
 

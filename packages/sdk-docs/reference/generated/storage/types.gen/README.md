@@ -1357,6 +1357,7 @@
 - [LinkedChatsData](type-aliases/LinkedChatsData.md)
 - [LinkedChatsResponse](type-aliases/LinkedChatsResponse.md)
 - [LinkedChatsResponses](type-aliases/LinkedChatsResponses.md)
+- [LinkedCommunityReference](type-aliases/LinkedCommunityReference.md)
 - [LinkedConfigurationData](type-aliases/LinkedConfigurationData.md)
 - [LinkedConfigurationResponse](type-aliases/LinkedConfigurationResponse.md)
 - [LinkedConfigurationResponses](type-aliases/LinkedConfigurationResponses.md)

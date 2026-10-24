@@ -45,6 +45,12 @@ export function decodeChat(
         : undefined,
     canAdd: chat.can_add,
     cannotAddReason: chat.cannot_add_reason ?? undefined,
+    community: chat.community
+      ? {
+          name: chat.community.name,
+          announcements: chat.community.announcements,
+        }
+      : undefined,
   };
 }
 

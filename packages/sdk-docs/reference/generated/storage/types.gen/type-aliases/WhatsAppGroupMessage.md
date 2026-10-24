@@ -1,6 +1,6 @@
 # Type Alias: WhatsAppGroupMessage
 
-> **WhatsAppGroupMessage** = \{ `attachments`: [`LinkedAttachment`](LinkedAttachment.md)[]; `body`: `string`; `deleted`: `boolean`; `delivery_state?`: `null` \| [`LinkedDeliveryState`](LinkedDeliveryState.md); `edited_at?`: `string` \| `null`; `forwarded`: `boolean`; `id`: `string`; `kind`: [`WhatsAppMessageKind`](WhatsAppMessageKind.md); `mentions`: [`WhatsAppMention`](WhatsAppMention.md)[]; `reactions`: [`WhatsAppGroupReaction`](WhatsAppGroupReaction.md)[]; `received_at`: `string`; `reply_to?`: `string` \| `null`; `rich?`: `null` \| [`WhatsAppRichContent`](WhatsAppRichContent.md); `sender`: [`WhatsAppGroupSender`](WhatsAppGroupSender.md); `sent_at`: `string`; \}
+> **WhatsAppGroupMessage** = \{ `attachments`: [`LinkedAttachment`](LinkedAttachment.md)[]; `body`: `string`; `deleted`: `boolean`; `delivery_state?`: `null` \| [`LinkedDeliveryState`](LinkedDeliveryState.md); `edited_at?`: `string` \| `null`; `forwarded`: `boolean`; `id`: `string`; `kind`: [`WhatsAppMessageKind`](WhatsAppMessageKind.md); `mentions`: [`WhatsAppMention`](WhatsAppMention.md)[]; `reactions`: [`WhatsAppGroupReaction`](WhatsAppGroupReaction.md)[]; `received_at`: `string`; `reply_to?`: `string` \| `null`; `rich?`: `null` \| [`WhatsAppRichContent`](WhatsAppRichContent.md); `sender`: [`WhatsAppGroupSender`](WhatsAppGroupSender.md); `sent_at`: `string`; `view_once`: `boolean`; \}
 
 One message in an adopted group.
 
@@ -23,3 +23,4 @@ One message in an adopted group.
 | <a id="property-rich"></a> `rich?` | `null` \| [`WhatsAppRichContent`](WhatsAppRichContent.md) | - |
 | <a id="property-sender"></a> `sender` | [`WhatsAppGroupSender`](WhatsAppGroupSender.md) | Sender. |
 | <a id="property-sent_at"></a> `sent_at` | `string` | Timestamp assigned by WhatsApp. |
+| <a id="property-view_once"></a> `view_once` | `boolean` | Sent as view-once in WhatsApp; Macro shows it like any media. |

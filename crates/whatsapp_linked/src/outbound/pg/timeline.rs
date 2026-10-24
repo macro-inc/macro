@@ -102,7 +102,7 @@ impl PgLinkedRepository {
 #[async_trait]
 impl TimelineRepository for PgLinkedRepository {
     async fn visible_groups(&self, user: &str) -> LinkedResult<Vec<VisibleGroup>> {
-        let rows = sqlx::query!(r#"SELECT g.id,g.name,g.user_id,g.group_jid,g.state,g.ownership_state,g.adopted_at,g.backfill_state,g.backfill_imported,
+        let rows = sqlx::query!(r#"SELECT g.id,g.name,g.kind,g.user_id,g.group_jid,g.state,g.ownership_state,g.adopted_at,g.backfill_state,g.backfill_imported,
             (SELECT count(*) FROM whatsapp_group_message m WHERE m.binding_id=g.id AND m.message_id IS NOT NULL
               AND m.deleted_at IS NULL AND m.origin<>'history' AND m.kind<>'system'
               AND NOT EXISTS(SELECT 1 FROM whatsapp_external_person p WHERE p.id=m.person_id AND p.user_id=$1)
@@ -126,6 +126,7 @@ impl TimelineRepository for PgLinkedRepository {
                     summary: WhatsAppGroupSummary {
                         id: row.id,
                         name: row.name,
+                        kind: ChatKind::parse(&row.kind).ok_or(LinkedError::Unavailable)?,
                         user_id: row.user_id.clone(),
                         unread_count: row.unread_count,
                         last_message_at: row.last_message_at,
@@ -136,6 +137,7 @@ impl TimelineRepository for PgLinkedRepository {
                     binding: bindings::binding(bindings::BindingRow {
                         id: row.id,
                         group_jid: row.group_jid,
+                        kind: row.kind,
                         user_id: row.user_id,
                         state: row.state,
                         ownership_state: row.ownership_state,
@@ -147,7 +149,7 @@ impl TimelineRepository for PgLinkedRepository {
             .collect()
     }
     async fn summary(&self, group: Uuid, user: &str) -> LinkedResult<WhatsAppGroupSummary> {
-        let row = sqlx::query!(r#"SELECT g.id,g.name,g.user_id,g.backfill_state,g.backfill_imported,
+        let row = sqlx::query!(r#"SELECT g.id,g.name,g.kind,g.user_id,g.backfill_state,g.backfill_imported,
             (SELECT count(*) FROM whatsapp_group_message m WHERE m.binding_id = g.id AND m.message_id IS NOT NULL
               AND m.deleted_at IS NULL AND m.origin <> 'history' AND m.kind <> 'system'
               AND NOT EXISTS (SELECT 1 FROM whatsapp_external_person p WHERE p.id = m.person_id AND p.user_id = $2)
@@ -158,6 +160,7 @@ impl TimelineRepository for PgLinkedRepository {
         Ok(WhatsAppGroupSummary {
             id: row.id,
             name: row.name,
+            kind: ChatKind::parse(&row.kind).ok_or(LinkedError::Unavailable)?,
             user_id: row.user_id,
             unread_count: row.unread_count,
             last_message_at: row.last_message_at,
@@ -174,7 +177,7 @@ impl TimelineRepository for PgLinkedRepository {
         limit: i64,
     ) -> LinkedResult<WhatsAppGroupMessages> {
         let rows = sqlx::query!(r#"SELECT m.id,m.person_id,p.user_id,COALESCE(p.display_name,'WhatsApp participant') AS "name!",
-            m.body,m.reply_to,m.source_at,m.ingested_at,m.revised_at,m.deleted_at,m.kind,m.rich,m.mentions,m.forwarded,
+            m.body,m.reply_to,m.source_at,m.ingested_at,m.revised_at,m.deleted_at,m.kind,m.rich,m.mentions,m.forwarded,m.view_once,
             (SELECT state FROM whatsapp_send s WHERE s.message_id = m.id AND s.user_id = $2 ORDER BY s.created_at DESC LIMIT 1) AS delivery
             FROM whatsapp_group_message m JOIN whatsapp_external_person p ON p.id = m.person_id
             WHERE m.binding_id = $1 AND m.message_id IS NOT NULL
@@ -277,6 +280,7 @@ impl TimelineRepository for PgLinkedRepository {
                     WhatsAppMessageKind::Message
                 },
                 forwarded: row.forwarded,
+                view_once: row.view_once,
                 mentions: if row.deleted_at.is_some() {
                     vec![]
                 } else {

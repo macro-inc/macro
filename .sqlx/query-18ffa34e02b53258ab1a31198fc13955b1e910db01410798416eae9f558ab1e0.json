@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, group_jid, user_id, state, ownership_state, adopted_at FROM whatsapp_group WHERE user_id = $1 AND group_jid = $2 AND state <> 'detached' FOR UPDATE",
+  "query": "SELECT id, group_jid, kind, user_id, state, ownership_state, adopted_at FROM whatsapp_group WHERE user_id = $1 AND group_jid = $2 AND state <> 'detached' FOR UPDATE",
   "describe": {
     "columns": [
       {
@@ -15,21 +15,26 @@
       },
       {
         "ordinal": 2,
-        "name": "user_id",
+        "name": "kind",
         "type_info": "Text"
       },
       {
         "ordinal": 3,
-        "name": "state",
+        "name": "user_id",
         "type_info": "Text"
       },
       {
         "ordinal": 4,
-        "name": "ownership_state",
+        "name": "state",
         "type_info": "Text"
       },
       {
         "ordinal": 5,
+        "name": "ownership_state",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
         "name": "adopted_at",
         "type_info": "Timestamptz"
       }
@@ -46,8 +51,9 @@
       false,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "35ab3f38e930f19109adec2b8bc290107f3b772328aec6b07326c3b906582559"
+  "hash": "18ffa34e02b53258ab1a31198fc13955b1e910db01410798416eae9f558ab1e0"
 }

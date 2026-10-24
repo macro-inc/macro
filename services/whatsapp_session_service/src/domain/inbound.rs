@@ -146,9 +146,25 @@ impl<Store: InboundStore> InboundSink for InboundGate<Store> {
             return false;
         }
         // Undecided (or fenced) leaves the node unacknowledged for redelivery.
-        let Some(observed) = self.observes(&event.group_jid).await else {
+        let Some(mut observed) = self.observes(&event.group_jid).await else {
             return false;
         };
+        // A direct chat added under the person's other address.
+        let mut readdressed = None;
+        if !observed && let Some(alternate) = &event.chat_alternate_jid {
+            let Some(alternate_observed) = self.observes(alternate).await else {
+                return false;
+            };
+            if alternate_observed {
+                observed = true;
+                readdressed = Some(InboundEvent {
+                    group_jid: alternate.clone(),
+                    chat_alternate_jid: Some(event.group_jid.clone()),
+                    ..event.clone()
+                });
+            }
+        }
+        let event = readdressed.as_ref().unwrap_or(event);
         let span = tracing::info_span!(
             "whatsapp.inbound.ingest",
             account_id = %self.scope.account_id,

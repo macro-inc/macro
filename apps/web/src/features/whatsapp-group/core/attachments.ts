@@ -11,13 +11,19 @@ export type InboundAttachment = {
   height?: number;
   durationSeconds?: number;
   presentation?: 'sticker' | 'gif' | 'voice_note';
+  /** The local preview of a file this page sent, before DSS stored it. */
+  previewUrl?: string;
 };
 
 /** How a ready file plays inline, like Chat's media; undefined for a file chip. */
 export function inlineMediaKind(
   attachment: InboundAttachment
 ): 'image' | 'video' | 'audio' | undefined {
-  if (attachment.state !== 'ready' || !attachment.documentId) return undefined;
+  if (
+    attachment.state !== 'ready' ||
+    !(attachment.documentId || attachment.previewUrl)
+  )
+    return undefined;
   const type = attachment.mime.split('/')[0];
   if (type === 'image' || type === 'video' || type === 'audio') return type;
   return undefined;

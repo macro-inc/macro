@@ -15,9 +15,10 @@ impl LinkedService {
         let groups = records
             .into_iter()
             .map(|record| {
-                let facts = account
-                    .as_ref()
-                    .map(|a| sending_facts_from_roster(a, record.roster));
+                let facts = account.as_ref().map(|a| match record.binding.kind {
+                    ChatKind::Group => sending_facts_from_roster(a, record.roster),
+                    ChatKind::Direct => direct_sending_facts(a, &record.binding),
+                });
                 let mut group = record.summary;
                 group.send_reason = reply_block(
                     self.features,
@@ -52,11 +53,24 @@ impl LinkedService {
             EntityPermission::AccessLevel { access_level } => *access_level,
             _ => return Err(LinkedError::Forbidden.into()),
         };
+        let roster = self.groups.binding_roster(&binding).await?;
+        let community = match roster.as_ref().and_then(|r| r.community_jid.as_deref()) {
+            Some(community_jid) => {
+                let parent = self
+                    .groups
+                    .binding_community(&binding, community_jid)
+                    .await?;
+                roster.as_ref().and_then(|r| r.community(parent.as_ref()))
+            }
+            None => None,
+        };
         Ok(WhatsAppGroupDetail {
             group,
             share_permission: self.timeline.permissions(id).await?,
             access_level,
-            roster: self.groups.binding_roster(&binding).await?,
+            disappearing_seconds: roster.as_ref().and_then(|r| r.disappearing_seconds),
+            community,
+            roster,
             sending_identity: account.and_then(|a| a.identity_jid),
             limits: Capabilities::default(),
         })

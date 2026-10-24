@@ -3,9 +3,12 @@
 ## What it is
 
 Personal WhatsApp accounts linked as devices: owner-bound pairing, adopting an
-existing group as the adopter's own, independently shared `WhatsAppGroup`
-entity (one per owner and WhatsApp group, named after WhatsApp), ingesting group traffic, and
-deliberate sends from each person's own account. DSS serves the HTTP API
+existing group or direct chat as the adopter's own, independently shared
+`WhatsAppGroup` entity (one per owner and WhatsApp chat, named after WhatsApp),
+ingesting chat traffic, and deliberate sends from each person's own account.
+"Group" in table, column, type and route names means any added chat;
+`Binding.kind` / `whatsapp_group.kind` says group or direct (only the owner
+sends in a direct chat). DSS serves the HTTP API
 (`/meta/linked/*`); the WhatsApp session service calls
 `domain::session::SessionService` in-process. They share no HTTP: only MacroDB
 rows and `NOTIFY` (the `outbound::pg` notify helper).
@@ -81,7 +84,9 @@ rows and `NOTIFY` (the `outbound::pg` notify helper).
   session service has no document storage; DSS imports and deletes them.
   `events::Media::locator` is sealed by the session service; never read it.
 - `src/domain/media.rs` + `src/outbound/pg/media.rs`: download claims, import
-  queue. Not implemented: participant-receipt UI.
+  queue. `src/domain/shape.rs` reads a staged upload's pixel size and length
+  (stored on `whatsapp_media_blob`, sent with the message). Not implemented:
+  participant-receipt UI.
 
 ## Related
 

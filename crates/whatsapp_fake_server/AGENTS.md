@@ -29,10 +29,13 @@ Lets the session service and its tests run end to end without WhatsApp.
 - `src/lib.rs`: the `FakeWhatsApp` API (users, groups, kick, drop connection,
   delivery counters, waiters).
 - `src/group_change.rs`: `change_group` adds, removes (a user removing
-  themselves left), renames, describes, promotes and demotes, and sends the
+  themselves left), renames, describes, promotes and demotes, turns
+  disappearing messages on or off, and sends the
   `w:gp2` notification (one id and `t` for every device) naming who did it as
   `participant` / `participant_pn`; `rename_group` / `remove_from_group` name
   no one, as changes WhatsApp makes.
+- `FakeWhatsApp::create_community` makes a community and its announcement
+  group (admins-only); `create_community_group` adds a group to it.
 - `src/state.rs`: routing, IQ handlers (encrypt, usync, w:g2, w:m), offline queues.
 - `src/phone.rs`: fake phones: send/receive with real Signal, QR approval.
   Phones remember chat messages and answer their linked devices' peer

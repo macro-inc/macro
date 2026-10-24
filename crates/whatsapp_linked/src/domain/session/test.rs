@@ -6,6 +6,7 @@ fn message(kind: MessageKind, sender: &str, target: Option<&str>) -> InboundEven
     InboundEvent {
         event_id: Uuid::from_u128(1),
         group_jid: "120363000000000001@g.us".into(),
+        chat_alternate_jid: None,
         source_at: Utc::now(),
         observed_at: Utc::now(),
         kind: InboundKind::Message(Message {
@@ -27,6 +28,7 @@ fn message(kind: MessageKind, sender: &str, target: Option<&str>) -> InboundEven
             media: vec![],
             mentions: vec![],
             forwarded: false,
+            view_once: false,
             rich: None,
         }),
     }
@@ -61,9 +63,19 @@ fn malformed_events_are_rejected_before_storage() {
     let author = "15550000001@s.whatsapp.net";
     assert!(validate_event(&message(MessageKind::Reaction, author, None)).is_err());
     assert!(validate_event(&message(MessageKind::Text, "alice", None)).is_err());
-    let mut other_chat = message(MessageKind::Text, author, None);
-    other_chat.group_jid = "15550000002@s.whatsapp.net".into();
-    assert!(validate_event(&other_chat).is_err());
+    let mut broadcast = message(MessageKind::Text, author, None);
+    broadcast.group_jid = "status@broadcast".into();
+    assert!(validate_event(&broadcast).is_err());
+    // A direct chat is a person; only it has another address.
+    let mut direct = message(MessageKind::Text, author, None);
+    direct.group_jid = "15550000002@s.whatsapp.net".into();
+    direct.chat_alternate_jid = Some("99@lid".into());
+    assert!(validate_event(&direct).is_ok());
+    direct.chat_alternate_jid = Some("120363000000000001@g.us".into());
+    assert!(validate_event(&direct).is_err());
+    let mut group_with_alternate = message(MessageKind::Text, author, None);
+    group_with_alternate.chat_alternate_jid = Some("99@lid".into());
+    assert!(validate_event(&group_with_alternate).is_err());
     let mut huge = message(MessageKind::Text, author, None);
     if let InboundKind::Message(m) = &mut huge.kind {
         m.text = "x".repeat(INBOUND_TEXT_LIMIT_BYTES + 1);

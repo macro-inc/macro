@@ -10,7 +10,9 @@ default = []
 ports = [
   "dep:async-trait",
   "dep:entity_access",
+  "dep:image",
   "dep:macro_user_id",
+  "dep:nom",
   "dep:rootcause",
   "entity_access/ports",
 ]
@@ -47,8 +49,10 @@ async-trait = { workspace = true, optional = true }
 axum = { workspace = true, features = ["multipart"], optional = true }
 chrono = { workspace = true }
 entity_access = { path = "../entity_access", default-features = false, optional = true }
+image = { workspace = true, optional = true }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = ["axum"], optional = true }
 macro_user_id = { path = "../macro_user_id", optional = true }
+nom = { workspace = true, optional = true }
 rootcause = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

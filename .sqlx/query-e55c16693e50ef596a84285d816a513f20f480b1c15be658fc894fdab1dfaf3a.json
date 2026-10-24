@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT m.id,m.person_id,p.user_id,COALESCE(p.display_name,'WhatsApp participant') AS \"name!\",\n            m.body,m.reply_to,m.source_at,m.ingested_at,m.revised_at,m.deleted_at,m.kind,m.rich,m.mentions,m.forwarded,\n            (SELECT state FROM whatsapp_send s WHERE s.message_id = m.id AND s.user_id = $2 ORDER BY s.created_at DESC LIMIT 1) AS delivery\n            FROM whatsapp_group_message m JOIN whatsapp_external_person p ON p.id = m.person_id\n            WHERE m.binding_id = $1 AND m.message_id IS NOT NULL\n              AND ($3::uuid IS NULL OR (m.source_at,m.id) < (SELECT source_at,id FROM whatsapp_group_message WHERE id = $3 AND binding_id = $1 AND message_id IS NOT NULL))\n            ORDER BY m.source_at DESC,m.id DESC LIMIT $4",
+  "query": "SELECT m.id,m.person_id,p.user_id,COALESCE(p.display_name,'WhatsApp participant') AS \"name!\",\n            m.body,m.reply_to,m.source_at,m.ingested_at,m.revised_at,m.deleted_at,m.kind,m.rich,m.mentions,m.forwarded,m.view_once,\n            (SELECT state FROM whatsapp_send s WHERE s.message_id = m.id AND s.user_id = $2 ORDER BY s.created_at DESC LIMIT 1) AS delivery\n            FROM whatsapp_group_message m JOIN whatsapp_external_person p ON p.id = m.person_id\n            WHERE m.binding_id = $1 AND m.message_id IS NOT NULL\n              AND ($3::uuid IS NULL OR (m.source_at,m.id) < (SELECT source_at,id FROM whatsapp_group_message WHERE id = $3 AND binding_id = $1 AND message_id IS NOT NULL))\n            ORDER BY m.source_at DESC,m.id DESC LIMIT $4",
   "describe": {
     "columns": [
       {
@@ -75,6 +75,11 @@
       },
       {
         "ordinal": 14,
+        "name": "view_once",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 15,
         "name": "delivery",
         "type_info": "Text"
       }
@@ -102,8 +107,9 @@
       true,
       false,
       false,
+      false,
       null
     ]
   },
-  "hash": "6f2c4bb9d028f5fe23c3358858dfa8524707cbf5e38ebb03e2f8bcbd683fb493"
+  "hash": "e55c16693e50ef596a84285d816a513f20f480b1c15be658fc894fdab1dfaf3a"
 }

@@ -48,12 +48,15 @@ current, ingests standalone `whatsapp_group` traffic through `whatsapp_linked`'s
   No periodic refresh. The domain signals `whatsapp_changed` only when a roster
   write changed something.
 - `outbound/whatsapp.rs` (+ `events.rs`): `whatsapp_store_pg` device store,
-  whatsmeow `Client` (`whatsmeow_signal::libsignal()`), event mapping. Only
-  group events become inbound events; the gate drops groups the account has
-  not adopted. Before storing, `events::complete_sender` fills the other half
-  of a sender's phone-number/LID pair from the account's LID store (pairing,
+  whatsmeow `Client` (`whatsmeow_signal::libsignal()`), event mapping. Group
+  and direct-chat events become inbound events (`events::chat_of`: a direct
+  chat by phone number, its LID alongside); the gate drops chats the account
+  has not adopted, matching a direct chat by either address. Before storing,
+  `events::complete_addresses` fills the other half of a sender's and a
+  direct chat's phone-number/LID pair from the account's LID store (pairing,
   group participant lists, message addressing); `from_me` carries WhatsApp's
-  own-message flag. Adopted groups stay cached until `whatsapp_account_changed`;
+  own-message flag. History requests name a direct chat by LID
+  (`events::phone_chat`), as phones key it. Adopted groups stay cached until `whatsapp_account_changed`;
   a miss always waits for a load that started after the event arrived
   (single-flight), so an adoption that committed just before is seen. Media locators (direct path, media key, hashes) are sealed with
   `PgWhatsAppStore::seal("media-locator", …)` before they leave the process.
@@ -65,7 +68,8 @@ current, ingests standalone `whatsapp_group` traffic through `whatsapp_linked`'s
   system line per change), group icon changes and history stub messages.
   Poll votes are decrypted in `Forwarder::poll_vote` with the poll's stored
   message secret (undecryptable ones are acked and dropped). View-once media
-  is a placeholder.
+  (unwrapped by the port, or flagged on the media) is imported like any media
+  and marked `view_once`.
 - Chat list and history: `outbound/whatsapp.rs` `Forwarder` turns history
   sync bundles, live messages (any chat) and contact/archive/pin events into
   `ChatUpdate`s (`events.rs`: `history_chats`, `message_chat`,

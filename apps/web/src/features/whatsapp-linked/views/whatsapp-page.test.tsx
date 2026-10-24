@@ -67,7 +67,7 @@ const chats = [
     name: 'Ana Ruiz',
     lastActivityAt: '2025-03-07T10:00:00Z',
     canAdd: false,
-    cannotAddReason: "direct chats can't be added to Macro yet",
+    cannotAddReason: "your chat with yourself can't be added to Macro",
   },
   {
     ...chat,
@@ -101,7 +101,8 @@ const chats = [
     name: 'Neighbourhood',
     archived: true,
     canAdd: false,
-    cannotAddReason: "community groups can't be added to Macro",
+    cannotAddReason:
+      'a community has no messages of its own; add one of its groups',
   },
 ];
 
@@ -222,7 +223,7 @@ describe('connected', () => {
     ).toBeNull();
 
     const list = within(
-      screen.getByRole('list', { name: 'Groups to add to Macro' })
+      screen.getByRole('list', { name: 'Chats to add to Macro' })
     );
     expect(list.queryByText('Design Crit')).toBeNull();
     expect(list.getAllByRole('listitem').map((row) => row.textContent)).toEqual(
@@ -248,10 +249,14 @@ describe('connected', () => {
     );
     expect(direct.getByText('Direct chat')).toBeTruthy();
     expect(direct.getByText('Mar 7, 2025')).toBeTruthy();
-    expect(direct.getByText("Can't add direct chats yet")).toBeTruthy();
+    expect(
+      direct.getByText("Your chat with yourself can't be added to Macro")
+    ).toBeTruthy();
     expect(direct.queryByRole('button')).toBeNull();
     expect(
-      unsupported.getByText("Community groups can't be added to Macro")
+      unsupported.getByText(
+        'A community has no messages of its own; add one of its groups'
+      )
     ).toBeTruthy();
     expect(unsupported.getByText('Group · Archived')).toBeTruthy();
 
@@ -305,7 +310,7 @@ describe('connected', () => {
 
     fireEvent.input(search, { target: { value: 'ana' } });
     const list = within(
-      screen.getByRole('list', { name: 'Groups to add to Macro' })
+      screen.getByRole('list', { name: 'Chats to add to Macro' })
     );
     expect(list.getByText('Ana, Ben, +2')).toBeTruthy();
     expect(list.queryByText('Launch War Room')).toBeNull();
@@ -342,6 +347,93 @@ describe('connected', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
+  it('adds a direct chat like a group', async () => {
+    const fake = createFakeWhatsApp({
+      account: { generation: 3, phone: '+14155550142', health: 'connected' },
+      chats: [
+        {
+          ...chat,
+          jid: '15550001111@s.whatsapp.net',
+          kind: 'direct' as const,
+          name: 'Ben Ode',
+        },
+      ],
+    });
+    mount(fake);
+    const row = within(
+      within(screen.getByRole('list', { name: 'Chats to add to Macro' }))
+        .getByText('Ben Ode')
+        .closest('li') as HTMLElement
+    );
+    expect(row.getByText('Direct chat')).toBeTruthy();
+    fireEvent.click(row.getByRole('button', { name: 'Add to Macro' }));
+    await waitFor(() =>
+      expect(fake.capabilities.adopt).toHaveBeenCalledWith(
+        '15550001111@s.whatsapp.net'
+      )
+    );
+  });
+
+  it('offers community and disappearing-message groups like any group', async () => {
+    const fake = createFakeWhatsApp({
+      account: { generation: 3, phone: '+14155550142', health: 'connected' },
+      chats: [
+        {
+          ...chat,
+          jid: '120363010@g.us',
+          name: 'Design',
+          community: { name: 'Launch', announcements: false },
+        },
+        {
+          ...chat,
+          jid: '120363011@g.us',
+          name: 'Launch',
+          community: { name: 'Launch', announcements: true },
+        },
+        // Disappearing messages no longer keep a group out.
+        { ...chat, jid: '120363012@g.us', name: 'Night shift' },
+        {
+          ...chat,
+          jid: '120363013@g.us',
+          name: 'Launch',
+          canAdd: false,
+          cannotAddReason:
+            'a community has no messages of its own; add one of its groups',
+        },
+      ],
+    });
+    mount(fake);
+    const addable = within(
+      screen.getByRole('list', { name: 'Chats to add to Macro' })
+    );
+    const design = within(
+      addable.getByText('Launch · Design').closest('li') as HTMLElement
+    );
+    expect(design.getByText('Community group')).toBeTruthy();
+    expect(addable.getByText('Launch · Announcements')).toBeTruthy();
+    expect(addable.getByText('Announcement group')).toBeTruthy();
+    expect(addable.getByText('Night shift')).toBeTruthy();
+    expect(
+      addable.getAllByRole('button', { name: 'Add to Macro' })
+    ).toHaveLength(3);
+    fireEvent.click(
+      screen.getByRole('button', { name: /Can't be added \(1\)/ })
+    );
+    expect(
+      within(screen.getByRole('list', { name: "Can't be added" })).getByText(
+        'A community has no messages of its own; add one of its groups'
+      )
+    ).toBeTruthy();
+    // Searching the community finds its groups.
+    fireEvent.input(
+      screen.getByRole('searchbox', { name: 'Search WhatsApp chats' }),
+      {
+        target: { value: 'launch' },
+      }
+    );
+    expect(addable.getByText('Launch · Design')).toBeTruthy();
+  });
+
   it('says exactly why adding failed, on the group it failed for', async () => {
     const fake = createFakeWhatsApp({
       account: { generation: 3, phone: '+14155550142', health: 'connected' },
@@ -357,7 +449,7 @@ describe('connected', () => {
       screen.getByText('Launch War Room').closest('li') as HTMLElement
     );
     expect((await row.findByRole('alert')).textContent).toBe(
-      'Your WhatsApp is disconnected. Reconnect it, then add the group.'
+      'Your WhatsApp is disconnected. Reconnect it, then add the chat.'
     );
     expect(row.getByRole('button', { name: 'Add to Macro' })).toBeTruthy();
   });

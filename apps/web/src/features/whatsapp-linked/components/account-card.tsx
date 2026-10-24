@@ -20,8 +20,8 @@ export function ConnectCard(props: {
         <Item.Title>WhatsApp</Item.Title>
         <Item.Description>
           {props.reconnect
-            ? 'WhatsApp signed this device out. Link it again to keep your groups syncing.'
-            : 'Link your personal WhatsApp as a linked device. Only groups you choose come into Macro.'}
+            ? 'WhatsApp signed this device out. Link it again to keep your chats syncing.'
+            : 'Link your personal WhatsApp as a linked device. Only chats you choose come into Macro.'}
         </Item.Description>
         <Item.Metadata>
           Macro connects as an unofficial WhatsApp client, which WhatsApp may

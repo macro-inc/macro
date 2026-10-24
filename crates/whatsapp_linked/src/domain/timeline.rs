@@ -15,8 +15,10 @@ pub mod view;
 pub struct WhatsAppGroupSummary {
     /// Entity identifier.
     pub id: Uuid,
-    /// Display name.
+    /// Display name: the group's, or a direct chat's other person.
     pub name: String,
+    /// A group, or a direct chat with one person (only its owner sends).
+    pub kind: ChatKind,
     /// Actual entity owner.
     pub user_id: String,
     /// Unread live messages for this viewer.
@@ -44,6 +46,11 @@ pub struct WhatsAppGroupDetail {
     pub access_level: models_permissions::share_permission::access_level::AccessLevel,
     /// Latest remote metadata, absent when no observer is connected.
     pub roster: Option<GroupInfo>,
+    /// WhatsApp's disappearing-messages timer in seconds while it is on;
+    /// Macro keeps the messages anyway. `null` when off or unknown.
+    pub disappearing_seconds: Option<u32>,
+    /// The WhatsApp community this group belongs to, if any.
+    pub community: Option<CommunityReference>,
     /// Caller's own phone identity, never another account's identity.
     pub sending_identity: Option<String>,
     /// Size and mutation limits.
@@ -101,6 +108,8 @@ pub struct WhatsAppGroupMessage {
     pub kind: WhatsAppMessageKind,
     /// Forwarded from another chat.
     pub forwarded: bool,
+    /// Sent as view-once in WhatsApp; Macro shows it like any media.
+    pub view_once: bool,
     /// People the body @-mentions.
     pub mentions: Vec<WhatsAppMention>,
     /// Poll, location, contact cards, event or system line.

@@ -21,6 +21,7 @@ const account = {
 const summary = {
   id: 'group',
   name: 'Support',
+  kind: 'group',
   user_id: 'owner',
   unread_count: 1,
   last_message_at: '2026-10-21',
@@ -33,14 +34,18 @@ const remote = {
   observedAt: '2026-10-21',
   participants: [],
   announce: false,
-  disappearing: false,
-  community: false,
+  disappearingSeconds: 604800,
+  communityParent: false,
+  communityJid: '12036399@g.us',
+  communityAnnouncements: false,
   group: null,
   shared: null,
 };
 const detail = {
   ...summary,
   roster: remote,
+  disappearing_seconds: 604800,
+  community: { id: '12036399@g.us', name: 'Neighbours', announcements: false },
   sending_identity: account.identity_jid,
   access_level: 'owner',
   share_permission: {
@@ -111,6 +116,9 @@ test('shared groups can be listed without a WhatsApp connection and handles fetc
   expect(groups[0].entityType).toBe('whatsapp_group');
   expect(await groups[0].name()).toBe('Support');
   expect(await groups[0].canSend()).toBe(true);
+  expect(await groups[0].kind()).toBe('group');
+  expect(await groups[0].disappearingSeconds()).toBe(604800);
+  expect((await groups[0].community())?.name).toBe('Neighbours');
   expect(requests.map((r) => new URL(r.url).pathname)).toEqual([
     '/meta/linked/whatsapp-groups',
     '/meta/linked/whatsapp-groups/group',
@@ -160,8 +168,9 @@ test('the chat list lists groups and direct chats and adds a group by its handle
                 pinned: true,
                 group: null,
                 shared: null,
-                can_add: false,
-                cannot_add_reason: "direct chats can't be added to Macro yet",
+                can_add: true,
+                cannot_add_reason: null,
+                community: null,
               },
               {
                 jid: remote.jid,
@@ -174,6 +183,11 @@ test('the chat list lists groups and direct chats and adds a group by its handle
                 shared: null,
                 can_add: true,
                 cannot_add_reason: null,
+                community: {
+                  id: '12036399@g.us',
+                  name: 'Neighbours',
+                  announcements: false,
+                },
               },
             ],
           },
@@ -181,10 +195,10 @@ test('the chat list lists groups and direct chats and adds a group by its handle
   );
   const [direct, group] = await macro.whatsapp.chats();
   expect(await direct.kind()).toBe('direct');
-  expect(await direct.cannotAddReason()).toBe(
-    "direct chats can't be added to Macro yet",
-  );
+  expect(await direct.canAdd()).toBe(true);
   expect(await group.canAdd()).toBe(true);
+  expect((await group.community())?.name).toBe('Neighbours');
+  expect(await direct.community()).toBeUndefined();
   const adopted = await group.adopt();
   expect(adopted.id).toBe('group');
   expect(requests.map((r) => new URL(r.url).pathname)).toEqual([

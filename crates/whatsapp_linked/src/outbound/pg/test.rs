@@ -148,8 +148,10 @@ fn group(members: &[&str]) -> GroupInfo {
             })
             .collect(),
         announce: false,
-        disappearing: false,
-        community: false,
+        disappearing_seconds: None,
+        community_parent: false,
+        community_jid: None,
+        community_announcements: false,
         observed_at: Utc::now(),
         group: None,
         shared: None,
@@ -160,6 +162,7 @@ fn text(event: u128, sender: &str, source: &str, body: &str) -> InboundEvent {
     InboundEvent {
         event_id: Uuid::from_u128(event),
         group_jid: GROUP.into(),
+        chat_alternate_jid: None,
         source_at: Utc::now(),
         observed_at: Utc::now(),
         kind: InboundKind::Message(Message {
@@ -178,6 +181,7 @@ fn text(event: u128, sender: &str, source: &str, body: &str) -> InboundEvent {
             media: vec![],
             mentions: vec![],
             forwarded: false,
+            view_once: false,
             rich: None,
         }),
     }
@@ -527,6 +531,7 @@ async fn a_reaction_before_its_message_is_deferred_and_replayed(pool: PgPool) {
             media: vec![],
             mentions: vec![],
             forwarded: false,
+            view_once: false,
             rich: None,
         }),
         ..text(1, BOB_JID, "unused", "")
@@ -587,6 +592,7 @@ async fn edits_apply_in_source_order_and_deletes_are_permanent(pool: PgPool) {
             media: vec![],
             mentions: vec![],
             forwarded: false,
+            view_once: false,
             rich: None,
         }),
         ..text(event, CUSTOMER_JID, "unused", "")
@@ -975,7 +981,7 @@ async fn stored_group_facts_authorize_adoption_and_sending_however_old(pool: PgP
         .unwrap();
     let mut community = group(&[ALICE_JID]);
     community.jid = "120363000000000002@g.us".into();
-    community.community = true;
+    community.community_parent = true;
     session
         .update_groups(alice, &[info, community], true)
         .await
@@ -1066,3 +1072,5 @@ async fn rate_limited_send_never_creates_a_dispatchable_intent(pool: PgPool) {
 }
 
 mod chats;
+mod communities;
+mod direct;

@@ -1,7 +1,7 @@
 //! What phones send besides plain text, end to end: media with its shape,
 //! replies to media, mentions and forwards, polls and votes, places,
-//! contact cards, events, pins, calls, view-once media, and group changes
-//! as system lines.
+//! contact cards, events, pins, calls, view-once media (kept like any
+//! media), and group changes as system lines.
 
 use std::sync::Mutex;
 
@@ -254,7 +254,7 @@ async fn media_keeps_its_shape_and_a_media_reply_keeps_its_quote(pool: PgPool) {
         .await
         .unwrap();
 
-    // View-once media is only ever shown on the phone.
+    // View-once media is kept and shown like any media.
     let secret_bytes = b"jpeg seen once".repeat(40);
     let uploaded = world
         .customer
@@ -276,6 +276,7 @@ async fn media_keeps_its_shape_and_a_media_reply_keeps_its_quote(pool: PgPool) {
                             file_sha256: Some(uploaded.file_sha256),
                             file_length: Some(uploaded.file_length),
                             mimetype: Some("image/jpeg".to_owned()),
+                            caption: Some("look once".to_owned()),
                             view_once: Some(true),
                             ..ImageMessage::default()
                         })),
@@ -292,10 +293,7 @@ async fn media_keeps_its_shape_and_a_media_reply_keeps_its_quote(pool: PgPool) {
     for source in [&video, &gif, &sticker, &voice] {
         assert_eq!(world.timeline(&binding, source).await, [""]);
     }
-    assert_eq!(
-        world.timeline(&binding, &view_once).await,
-        ["View-once message \u{2014} open it on your phone"]
-    );
+    assert_eq!(world.timeline(&binding, &view_once).await, ["look once"]);
 
     assert_eq!(
         attachment_shapes(&world.pool, binding.id, &reply).await,
@@ -349,7 +347,26 @@ async fn media_keeps_its_shape_and_a_media_reply_keeps_its_quote(pool: PgPool) {
     );
     assert_eq!(
         attachment_shapes(&world.pool, binding.id, &view_once).await,
-        []
+        [(Some("image/jpeg".to_owned()), None, None, None, None)]
+    );
+    let downloaded = wait_for_rows(&world.pool, TIMEOUT, || async {
+        sqlx::query_scalar!(
+            "SELECT b.bytes FROM whatsapp_group_attachment a
+             JOIN whatsapp_media_blob b ON b.document_id = a.document_id
+             WHERE a.binding_id = $1 AND a.source_id = $2 AND a.state = 'downloaded'",
+            binding.id,
+            &view_once
+        )
+        .fetch_optional(&world.pool)
+        .await
+        .unwrap()
+    })
+    .await;
+    assert_eq!(
+        world
+            .expect(downloaded, "the view-once image is downloaded for import")
+            .await,
+        secret_bytes
     );
 
     // The timeline shows the quote and the shapes.
@@ -381,12 +398,10 @@ async fn media_keeps_its_shape_and_a_media_reply_keeps_its_quote(pool: PgPool) {
         gif_shown.attachments[0].presentation,
         Some(MediaPresentation::Gif)
     );
-    assert!(
-        shown(&world, &binding, &view_once)
-            .await
-            .attachments
-            .is_empty()
-    );
+    let view_once_shown = shown(&world, &binding, &view_once).await;
+    assert!(view_once_shown.view_once);
+    assert_eq!(view_once_shown.attachments.len(), 1);
+    assert!(!reply_shown.view_once);
 
     replica.drain(TIMEOUT).await.unwrap();
 }

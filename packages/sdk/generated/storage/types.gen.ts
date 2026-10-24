@@ -8987,7 +8987,8 @@ export type LinkedAccountView = {
  */
 export type LinkedAdoptGroup = {
     /**
-     * Group the requester's account has joined.
+     * A group the requester's account has joined, or a direct chat from
+     * their chat list (the other person's JID, as the list names it).
      */
     group_jid: string;
 };
@@ -9105,6 +9106,7 @@ export type LinkedChat = {
      * Why it can't be added, when it is neither added, shared nor addable.
      */
     cannot_add_reason?: string | null;
+    community?: null | LinkedCommunityReference;
     group?: null | LinkedGroupReference;
     /**
      * WhatsApp chat JID: a group, or the other person's phone-number JID
@@ -9145,6 +9147,24 @@ export type LinkedChats = {
      * Newest activity first; chats with unknown activity last, by name.
      */
     chats: Array<LinkedChat>;
+};
+
+/**
+ * The WhatsApp community a group belongs to.
+ */
+export type LinkedCommunityReference = {
+    /**
+     * This group is the community's announcement group.
+     */
+    announcements: boolean;
+    /**
+     * The community's WhatsApp JID.
+     */
+    id: string;
+    /**
+     * The community's name.
+     */
+    name: string;
 };
 
 /**
@@ -9211,13 +9231,22 @@ export type LinkedGroupInfo = {
      */
     announce: boolean;
     /**
-     * Community announcement or parent group, outside the supported surface.
+     * The community's announcement group (everyone reads, admins post).
      */
-    community: boolean;
+    communityAnnouncements?: boolean;
     /**
-     * Disappearing messages are on; content is not retained.
+     * The community a linked subgroup or announcement group belongs to.
      */
-    disappearing: boolean;
+    communityJid?: string | null;
+    /**
+     * The community itself: it has no messages of its own and can't be added.
+     */
+    communityParent?: boolean;
+    /**
+     * Disappearing-messages timer in seconds while it is on. Macro keeps the
+     * messages; its sends carry the timer so phones treat them like their own.
+     */
+    disappearingSeconds?: number | null;
     group?: null | LinkedGroupReference;
     /**
      * Remote group JID.
@@ -16174,6 +16203,12 @@ export type WhatsAppGroupDetail = WhatsAppGroupSummary & {
      * Caller's effective permission.
      */
     access_level: AccessLevel;
+    community?: null | LinkedCommunityReference;
+    /**
+     * WhatsApp's disappearing-messages timer in seconds while it is on;
+     * Macro keeps the messages anyway. `null` when off or unknown.
+     */
+    disappearing_seconds?: number | null;
     /**
      * Size and mutation limits.
      */
@@ -16247,6 +16282,10 @@ export type WhatsAppGroupMessage = {
      * Timestamp assigned by WhatsApp.
      */
     sent_at: string;
+    /**
+     * Sent as view-once in WhatsApp; Macro shows it like any media.
+     */
+    view_once: boolean;
 };
 
 /**
@@ -16313,11 +16352,15 @@ export type WhatsAppGroupSummary = {
      */
     id: string;
     /**
+     * A group, or a direct chat with one person (only its owner sends).
+     */
+    kind: LinkedChatKind;
+    /**
      * Latest message timestamp.
      */
     last_message_at?: string | null;
     /**
-     * Display name.
+     * Display name: the group's, or a direct chat's other person.
      */
     name: string;
     send_reason?: null | LinkedReplyBlock;

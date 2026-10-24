@@ -34,20 +34,33 @@ fn progress(row: SendRow) -> LinkedResult<SendProgress> {
     })
 }
 
+/// A shape value as an integer column.
+fn column(value: Option<u32>) -> Option<i32> {
+    value.map(|value| value.min(i32::MAX as u32) as i32)
+}
+
+/// An integer column as a shape value.
+fn unsigned(value: Option<i32>) -> Option<u32> {
+    value.and_then(|value| u32::try_from(value).ok())
+}
+
 #[async_trait]
 impl SendRepository for PgLinkedRepository {
     async fn stage_upload(&self, upload: StagedUpload<'_>) -> LinkedResult<Uuid> {
         let id = Uuid::now_v7();
         sqlx::query!(
-            r#"INSERT INTO whatsapp_media_blob (document_id, group_id, user_id, mime, filename, sha256, bytes)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)"#,
+            r#"INSERT INTO whatsapp_media_blob (document_id, group_id, user_id, mime, filename, sha256, bytes, width, height, duration_seconds)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)"#,
             id,
             upload.group_id,
             upload.user,
             upload.mime,
             upload.filename,
             &upload.sha256[..],
-            upload.bytes
+            upload.bytes,
+            column(upload.shape.width.filter(|width| *width > 0)),
+            column(upload.shape.height.filter(|height| *height > 0)),
+            column(upload.shape.duration_seconds)
         )
         .execute(&self.pool)
         .await
@@ -80,6 +93,9 @@ impl SendRepository for PgLinkedRepository {
         account: &Account,
         binding: &Binding,
     ) -> LinkedResult<SendingFacts> {
+        if binding.kind == ChatKind::Direct {
+            return Ok(crate::domain::ports::direct_sending_facts(account, binding));
+        }
         let group = sqlx::query_scalar!(
             "SELECT metadata FROM whatsapp_group_roster WHERE account_id = $1 AND group_jid = $2",
             account.id,
@@ -182,29 +198,37 @@ impl SendRepository for PgLinkedRepository {
         .await
         .map_err(failure)?
         .is_some();
-        let metadata = sqlx::query_scalar!(
-            "SELECT metadata FROM whatsapp_group_roster WHERE account_id = $1 AND group_jid = $2",
-            account.id,
-            binding.group_jid
-        )
-        .fetch_optional(&mut *tx)
-        .await
-        .map_err(failure)?
-        .map(decode::<GroupInfo>)
-        .transpose()?
-        .ok_or(LinkedError::Forbidden)?;
         let identity = account
             .identity_jid
             .as_deref()
             .ok_or(LinkedError::Forbidden)?;
-        if !metadata.can_post(identity) {
-            return Err(LinkedError::Forbidden.into());
-        }
+        let observed_at = match binding.kind {
+            ChatKind::Group => {
+                let metadata = sqlx::query_scalar!(
+                    "SELECT metadata FROM whatsapp_group_roster WHERE account_id = $1 AND group_jid = $2",
+                    account.id,
+                    binding.group_jid
+                )
+                .fetch_optional(&mut *tx)
+                .await
+                .map_err(failure)?
+                .map(decode::<GroupInfo>)
+                .transpose()?
+                .ok_or(LinkedError::Forbidden)?;
+                if !metadata.can_post(identity) {
+                    return Err(LinkedError::Forbidden.into());
+                }
+                metadata.observed_at
+            }
+            // Only the owner's own account is in a direct chat.
+            ChatKind::Direct if binding.user_id == user => Utc::now(),
+            ChatKind::Direct => return Err(LinkedError::Forbidden.into()),
+        };
         sqlx::query!(r#"INSERT INTO whatsapp_group_membership (binding_id,account_id,generation,consent_at,remote_member,can_post,reconciled,observed_at)
             VALUES ($1,$2,$3,clock_timestamp(),true,true,true,$4)
             ON CONFLICT (binding_id,account_id) DO UPDATE SET generation = excluded.generation,consent_ended_at = NULL,
             remote_member = true,can_post = true,reconciled = true,observed_at = excluded.observed_at"#,
-            binding.id,account.id,account.authorization_generation,metadata.observed_at).execute(&mut *tx).await.map_err(failure)?;
+            binding.id,account.id,account.authorization_generation,observed_at).execute(&mut *tx).await.map_err(failure)?;
         // The group lock also serializes idempotency and sequence allocation.
         let sequence = if replayed {
             None
@@ -358,7 +382,7 @@ async fn content_in(
     Ok(match &request.message {
         ReplyContent::Media { upload_id, caption } => {
             let Some(blob) = sqlx::query!(
-                "SELECT mime, filename FROM whatsapp_media_blob WHERE document_id = $1",
+                "SELECT mime, filename, width, height, duration_seconds FROM whatsapp_media_blob WHERE document_id = $1",
                 upload_id
             )
             .fetch_optional(&mut **tx)
@@ -378,6 +402,11 @@ async fn content_in(
                 quote: match request.reply_to {
                     Some(quoted) => target_in(tx, binding, quoted, identity).await?,
                     None => None,
+                },
+                shape: MediaShape {
+                    width: unsigned(blob.width),
+                    height: unsigned(blob.height),
+                    duration_seconds: unsigned(blob.duration_seconds),
                 },
             })
         }
@@ -437,7 +466,8 @@ impl PgLinkedRepository {
                 SELECT id FROM whatsapp_send WHERE account_id = $1 AND generation = $3 AND state = 'pending'
                 ORDER BY binding_id, group_sequence LIMIT $4 FOR UPDATE SKIP LOCKED)
               AND b.id = s.binding_id
-            RETURNING s.id, s.binding_id, s.group_sequence, s.payload, s.traceparent, b.group_jid"#,
+            RETURNING s.id, s.binding_id, s.group_sequence, s.payload, s.traceparent, b.group_jid,
+              (SELECT r.metadata FROM whatsapp_group_roster r WHERE r.account_id = s.account_id AND r.group_jid = b.group_jid) AS roster"#,
             account.id,
             scope.lease_epoch,
             account.generation,
@@ -462,6 +492,11 @@ impl PgLinkedRepository {
                     group_jid: row.group_jid,
                     group_sequence: row.group_sequence,
                     content,
+                    disappearing_seconds: row
+                        .roster
+                        .map(decode::<GroupInfo>)
+                        .transpose()?
+                        .and_then(|roster| roster.disappearing_seconds),
                     traceparent: row.traceparent,
                 }),
                 None => {
@@ -602,7 +637,7 @@ impl PgLinkedRepository {
                 let request: SendReply = decode(row.payload)?;
                 let binding = sqlx::query_as!(
                     bindings::BindingRow,
-                    "SELECT id, group_jid, user_id, state, ownership_state, adopted_at FROM whatsapp_group WHERE id = $1",
+                    "SELECT id, group_jid, kind, user_id, state, ownership_state, adopted_at FROM whatsapp_group WHERE id = $1",
                     row.binding_id
                 )
                 .fetch_one(&mut *tx)
@@ -614,7 +649,7 @@ impl PgLinkedRepository {
                 let (kind, text, target) = match &request.message {
                     ReplyContent::Media { upload_id, caption } => {
                         let blob = sqlx::query!(
-                            "SELECT mime, filename, sha256, octet_length(bytes) AS \"size!\" FROM whatsapp_media_blob WHERE document_id = $1",
+                            "SELECT mime, filename, sha256, octet_length(bytes) AS \"size!\", width, height, duration_seconds FROM whatsapp_media_blob WHERE document_id = $1",
                             upload_id
                         )
                         .fetch_one(&mut *tx)
@@ -629,9 +664,9 @@ impl PgLinkedRepository {
                                 .try_into()
                                 .map_err(|_| LinkedError::Unavailable)?,
                             locator: vec![],
-                            width: None,
-                            height: None,
-                            duration_seconds: None,
+                            width: unsigned(blob.width),
+                            height: unsigned(blob.height),
+                            duration_seconds: unsigned(blob.duration_seconds),
                             presentation: None,
                         });
                         upload = Some(*upload_id);
@@ -684,6 +719,7 @@ impl PgLinkedRepository {
                 let event = InboundEvent {
                     event_id: send,
                     group_jid: binding.group_jid.clone(),
+                    chat_alternate_jid: None,
                     source_at: *server_at,
                     observed_at: Utc::now(),
                     kind: InboundKind::Message(Message {
@@ -705,6 +741,7 @@ impl PgLinkedRepository {
                             _ => vec![],
                         },
                         forwarded: false,
+                        view_once: false,
                         rich: None,
                     }),
                 };

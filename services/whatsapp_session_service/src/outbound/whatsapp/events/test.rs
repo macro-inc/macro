@@ -202,7 +202,7 @@ fn a_quote_reaction_edit_and_delete_point_at_their_target() {
 }
 
 #[test]
-fn media_becomes_a_placeholder_and_direct_chats_are_ignored() {
+fn media_becomes_a_placeholder_and_status_updates_are_ignored() {
     let media = inbound(map_event(
         ACCOUNT,
         &group_message(
@@ -220,10 +220,10 @@ fn media_becomes_a_placeholder_and_direct_chats_are_ignored() {
     };
     assert_eq!(media.kind, MessageKind::Unsupported);
 
-    let direct = Event::Message(Box::new(Message {
+    let status = Event::Message(Box::new(Message {
         info: MessageInfo {
             source: MessageSource {
-                chat: "15552223333@s.whatsapp.net".parse().unwrap(),
+                chat: "status@broadcast".parse().unwrap(),
                 sender: "15552223333@s.whatsapp.net".parse().unwrap(),
                 ..MessageSource::default()
             },
@@ -231,12 +231,96 @@ fn media_becomes_a_placeholder_and_direct_chats_are_ignored() {
             ..MessageInfo::default()
         },
         message: Some(wa_e2e::Message {
-            conversation: Some("private".to_owned()),
+            conversation: Some("my status".to_owned()),
             ..Default::default()
         }),
         ..Message::default()
     }));
-    assert!(map_event(ACCOUNT, &direct, now(), &plain_locator).is_empty());
+    assert!(map_event(ACCOUNT, &status, now(), &plain_locator).is_empty());
+}
+
+fn direct_message(source: MessageSource, text: &str) -> Event {
+    Event::Message(Box::new(Message {
+        info: MessageInfo {
+            source,
+            id: "3EB0DM".to_owned(),
+            timestamp: Some(Utc.with_ymd_and_hms(2026, 10, 21, 11, 59, 0).unwrap()),
+            ..MessageInfo::default()
+        },
+        message: Some(wa_e2e::Message {
+            conversation: Some(text.to_owned()),
+            ..Default::default()
+        }),
+        ..Message::default()
+    }))
+}
+
+#[test]
+fn a_direct_chat_goes_by_the_persons_number_with_their_lid_alongside() {
+    // WhatsApp addresses the chat by LID and names the number alongside.
+    let by_lid = inbound(map_event(
+        ACCOUNT,
+        &direct_message(
+            MessageSource {
+                chat: "987654321@lid".parse().unwrap(),
+                sender: "987654321@lid".parse().unwrap(),
+                sender_alt: "15552223333@s.whatsapp.net".parse().unwrap(),
+                ..MessageSource::default()
+            },
+            "hi",
+        ),
+        now(),
+        &plain_locator,
+    ));
+    assert_eq!(
+        (
+            by_lid.group_jid.as_str(),
+            by_lid.chat_alternate_jid.as_deref()
+        ),
+        ("15552223333@s.whatsapp.net", Some("987654321@lid"))
+    );
+    // Our own message from the phone names the recipient's other address.
+    let own = inbound(map_event(
+        ACCOUNT,
+        &direct_message(
+            MessageSource {
+                chat: "15552223333@s.whatsapp.net".parse().unwrap(),
+                sender: "15550000001@s.whatsapp.net".parse().unwrap(),
+                recipient_alt: "987654321@lid".parse().unwrap(),
+                is_from_me: true,
+                ..MessageSource::default()
+            },
+            "on it",
+        ),
+        now(),
+        &plain_locator,
+    ));
+    assert_eq!(
+        (own.group_jid.as_str(), own.chat_alternate_jid.as_deref()),
+        ("15552223333@s.whatsapp.net", Some("987654321@lid"))
+    );
+    let InboundKind::Message(message) = own.kind else {
+        panic!("expected a message");
+    };
+    assert!(message.from_me);
+    // Without the other address, the chat stays as addressed.
+    let bare = inbound(map_event(
+        ACCOUNT,
+        &direct_message(
+            MessageSource {
+                chat: "987654321@lid".parse().unwrap(),
+                sender: "987654321@lid".parse().unwrap(),
+                ..MessageSource::default()
+            },
+            "hello",
+        ),
+        now(),
+        &plain_locator,
+    ));
+    assert_eq!(
+        (bare.group_jid.as_str(), bare.chat_alternate_jid),
+        ("987654321@lid", None)
+    );
 }
 
 #[test]
@@ -929,33 +1013,37 @@ fn pins_and_call_logs_become_system_lines() {
 }
 
 #[test]
-fn view_once_media_stays_a_placeholder() {
-    let mut event = group_message(
-        "3EB0ONCE",
-        wa_e2e::Message {
-            image_message: Some(Box::new(wa_e2e::ImageMessage {
-                media_key: Some(vec![1; 32]),
-                file_enc_sha256: Some(vec![2; 32]),
-                file_sha256: Some(vec![3; 32]),
-                file_length: Some(10),
-                mimetype: Some("image/jpeg".to_owned()),
-                ..Default::default()
-            })),
+fn view_once_media_is_kept_like_any_media_and_marked() {
+    let image = |view_once_flag: Option<bool>| wa_e2e::Message {
+        image_message: Some(Box::new(wa_e2e::ImageMessage {
+            direct_path: Some("/v/once".to_owned()),
+            media_key: Some(vec![1; 32]),
+            file_enc_sha256: Some(vec![2; 32]),
+            file_sha256: Some(vec![3; 32]),
+            file_length: Some(10),
+            mimetype: Some("image/jpeg".to_owned()),
+            caption: Some("just once".to_owned()),
+            view_once: view_once_flag,
             ..Default::default()
-        },
-    );
-    if let Event::Message(message) = &mut event {
+        })),
+        ..Default::default()
+    };
+    // Unwrapped from a view-once wrapper by the port.
+    let mut wrapped = group_message("3EB0ONCE", image(None));
+    if let Event::Message(message) = &mut wrapped {
         message.is_view_once = true;
     }
+    // Flagged on the media itself.
+    let flagged = group_message("3EB0ONCE2", image(Some(true)));
 
-    let message = media_message(&event);
-
-    assert_eq!(message.kind, MessageKind::Unsupported);
-    assert_eq!(
-        message.text,
-        "View-once message \u{2014} open it on your phone"
-    );
-    assert!(message.media.is_empty());
+    for event in [wrapped, flagged] {
+        let message = media_message(&event);
+        assert_eq!(message.kind, MessageKind::Text);
+        assert_eq!(message.text, "just once");
+        assert_eq!(message.media.len(), 1, "the image is imported");
+        assert!(message.view_once);
+    }
+    assert!(!media_message(&group_message("3EB0PLAIN", image(None))).view_once);
 }
 
 #[test]

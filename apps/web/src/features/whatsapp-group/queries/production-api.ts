@@ -157,7 +157,7 @@ function writeFailure(
       }))
       .with(P.union('forbidden', 'FORBIDDEN'), () => ({
         kind: 'refused',
-        reason: "Your WhatsApp can't send to this group.",
+        reason: "Your WhatsApp can't send to this chat.",
       }))
       .with(P.union('not_found', 'NOT_FOUND', 'GONE'), () => ({
         kind: 'refused',
@@ -194,6 +194,7 @@ export const whatsappGroupApi: WhatsAppGroupApi = {
   list: async () =>
     (await throwOnErr(client.list)).map((group) => ({
       id: group.id,
+      kind: group.kind,
       name: group.name,
       unreadCount: group.unread_count,
       canSend: group.can_send,
@@ -202,6 +203,7 @@ export const whatsappGroupApi: WhatsAppGroupApi = {
     const view = await throwOnErr(() => client.detail(id));
     return {
       id,
+      kind: view.kind,
       name: view.name,
       ownerId: view.user_id,
       accessLevel: view.access_level,
@@ -221,6 +223,13 @@ export const whatsappGroupApi: WhatsAppGroupApi = {
       })),
       backfill: view.backfill
         ? { state: view.backfill.state, imported: view.backfill.imported }
+        : undefined,
+      disappearingSeconds: view.disappearing_seconds ?? undefined,
+      community: view.community
+        ? {
+            name: view.community.name,
+            announcements: view.community.announcements,
+          }
         : undefined,
       limits: {
         textBytes: view.limits.text_limit_bytes,

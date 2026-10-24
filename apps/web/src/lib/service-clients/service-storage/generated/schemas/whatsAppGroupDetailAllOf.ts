@@ -7,12 +7,21 @@
 import type { AccessLevel } from './accessLevel';
 import type { LinkedCapabilities } from './linkedCapabilities';
 import type { SharePermissionV2 } from './sharePermissionV2';
+import type { WhatsAppGroupDetailAllOfCommunity } from './whatsAppGroupDetailAllOfCommunity';
+import type { WhatsAppGroupDetailAllOfDisappearingSeconds } from './whatsAppGroupDetailAllOfDisappearingSeconds';
 import type { WhatsAppGroupDetailAllOfRoster } from './whatsAppGroupDetailAllOfRoster';
 import type { WhatsAppGroupDetailAllOfSendingIdentity } from './whatsAppGroupDetailAllOfSendingIdentity';
 
 export type WhatsAppGroupDetailAllOf = {
   /** Caller's effective permission. */
   access_level: AccessLevel;
+  community?: WhatsAppGroupDetailAllOfCommunity;
+  /**
+   * WhatsApp's disappearing-messages timer in seconds while it is on;
+Macro keeps the messages anyway. `null` when off or unknown.
+   * @minimum 0
+   */
+  disappearing_seconds?: WhatsAppGroupDetailAllOfDisappearingSeconds;
   /** Size and mutation limits. */
   limits: LinkedCapabilities;
   roster?: WhatsAppGroupDetailAllOfRoster;

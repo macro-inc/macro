@@ -64,6 +64,15 @@ at most once per 30 s. There is no periodic refresh and no freshness rule:
 adoption and can-send read the stored roster, and WhatsApp's own rejection of
 a send is the final check.
 
+Groups with disappearing messages are added like any other: Macro keeps their
+messages permanently, the roster keeps WhatsApp's timer
+(`GroupInfo.disappearing_seconds`, shown on the detail), and Macro's sends
+carry it as `contextInfo.expiration` so members' phones expire them like their
+own. A community's own entry (`community_parent`) has no messages and can't be
+added; its groups and announcement group (`community_jid`, named on the chat
+list and detail as `community`) are ordinary groups, the announcement group
+under the usual admins-only posting rule.
+
 Adoption (`{group_jid}`) makes the group the adopter's own entity: one live
 `whatsapp_group` per (owner, WhatsApp group), so two people adding the same
 WhatsApp group get two Macro groups, and adding it again returns the existing
@@ -82,7 +91,22 @@ it (initial, recent and full bundles; push-name bundles rename direct chats);
 live messages in any chat bump activity and add new chats; contact, push-name,
 archive and pin updates change existing rows. It never holds message content.
 `GET /chats` merges it with the roster (the roster names groups and decides
-what can be added; direct chats are listed but not addable yet), newest first.
+which groups can be added), newest first.
+
+Direct chats are added like groups (`whatsapp_group.kind = 'direct'`, keyed on
+the other person's JID, by phone number when known) and named after the
+person as the chat list names them. The owner's account is the only member: it
+observes the chat from adoption on (renewed on every full roster refresh), and
+only the owner sends; people it is shared with read. Someone else's chat with
+the same person is their own conversation, never "shared with you". WhatsApp
+addresses a direct chat by LID or phone number: each message carries the
+chat's other address (`InboundEvent.chat_alternate_jid`, from the message or
+the LID store) and the session gate files it under whichever the chat was
+added by; history is requested in the chat as the phone keys it (by LID).
+Internal names stay `group` (table, columns, entity type `whatsapp_group`,
+API types such as `WhatsAppGroupDetail`): renaming them across GraphQL,
+notifications and sharing enums would churn deployed contracts; `kind` tells
+them apart.
 An account paired before the list existed only gets groups and chats with new
 messages: WhatsApp sends the full list once, at pairing.
 
@@ -145,8 +169,8 @@ stable synthetic source id), group icon changes, pins, call logs and the stub
 messages of history pages (including group creation). They never notify and
 never count as unread. The timeline resolves the ids in mentions, system lines
 and votes to names (people seen in the group, then the roster, then the phone
-number). View-once media and shapes Macro does not read stay readable
-placeholders. Attachments keep WhatsApp's declared width, height and length,
+number). View-once media is kept and shown like any media (marked
+`view_once`); shapes Macro does not read stay readable placeholders. Attachments keep WhatsApp's declared width, height and length,
 and whether WhatsApp shows them as a sticker, GIF or voice note.
 
 `GET /meta/linked/whatsapp-groups` lists shared groups with viewer-specific unread
@@ -200,6 +224,9 @@ bytes are never rewritten. Failures retry with backoff and then expose an
 Outbound: the attachments route stages one file per send in the blob table;
 `ReplyContent::Media` names it, the replica fetches it with `outbound_media`,
 and on acceptance it becomes the message's document, owned by the sender.
+Staging reads the file's pixel size and length from its headers
+(`domain::shape`: image headers, MP4 `tkhd`/`mvhd`, Ogg/Opus granule); the
+sent WhatsApp message and the stored attachment carry them like received ones.
 A text send may @-mention participants (`ReplyContent::Text.mentions`, their
 WhatsApp ids; the text names each as `@<digits>`); the replica sends them as
 the message's `mentionedJid`.

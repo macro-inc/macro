@@ -11,8 +11,10 @@ An existing group joined by the current user's connected WhatsApp account.
 | Property | Modifier | Type | Description | Inherited from |
 | ------ | ------ | ------ | ------ | ------ |
 | <a id="property-announce"></a> `announce` | `readonly` | () => `Promise`\<`boolean`\> | Whether only remote administrators can post. | - |
-| <a id="property-community"></a> `community` | `readonly` | () => `Promise`\<`boolean`\> | Whether this group is an unsupported community parent or announcement group. | - |
-| <a id="property-disappearing"></a> `disappearing` | `readonly` | () => `Promise`\<`boolean`\> | Whether disappearing messages prevent retention of group content. | - |
+| <a id="property-communityannouncements"></a> `communityAnnouncements` | `readonly` | () => `Promise`\<`NonNullable`\<`boolean` \| `undefined`\> \| `undefined`\> | Whether this is a community's announcement group (only admins post). | - |
+| <a id="property-communityjid"></a> `communityJid` | `readonly` | () => `Promise`\<`string` \| `undefined`\> | The JID of the community this group belongs to, if any. | - |
+| <a id="property-communityparent"></a> `communityParent` | `readonly` | () => `Promise`\<`NonNullable`\<`boolean` \| `undefined`\> \| `undefined`\> | Whether this is a community itself, which has no messages and can't be added. | - |
+| <a id="property-disappearingseconds"></a> `disappearingSeconds` | `readonly` | () => `Promise`\<`number` \| `undefined`\> | WhatsApp's disappearing-messages timer in seconds while on; Macro keeps the messages. | - |
 | <a id="property-group"></a> `group` | `readonly` | () => `Promise`\<[`WhatsAppGroup`](../../group/classes/WhatsAppGroup.md) \| `undefined`\> | The current user's own Macro group for this remote group, once added. | - |
 | <a id="property-id"></a> `id` | `public readonly` | `string` | - | [`MacroEntity`](../../../entity/classes/MacroEntity.md).[`id`](../../../entity/classes/MacroEntity.md#property-id) |
 | <a id="property-name"></a> `name` | `readonly` | () => `Promise`\<`string`\> | The WhatsApp subject, or the other members' names for an unnamed group. | - |

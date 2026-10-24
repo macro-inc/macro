@@ -4,6 +4,8 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+
+import type { LinkedChatKind } from './linkedChatKind';
 import type { WhatsAppGroupSummaryBackfill } from './whatsAppGroupSummaryBackfill';
 import type { WhatsAppGroupSummaryLastMessageAt } from './whatsAppGroupSummaryLastMessageAt';
 import type { WhatsAppGroupSummarySendReason } from './whatsAppGroupSummarySendReason';
@@ -17,9 +19,11 @@ export interface WhatsAppGroupSummary {
   can_send: boolean;
   /** Entity identifier. */
   id: string;
+  /** A group, or a direct chat with one person (only its owner sends). */
+  kind: LinkedChatKind;
   /** Latest message timestamp. */
   last_message_at?: WhatsAppGroupSummaryLastMessageAt;
-  /** Display name. */
+  /** Display name: the group's, or a direct chat's other person. */
   name: string;
   send_reason?: WhatsAppGroupSummarySendReason;
   /** Unread live messages for this viewer. */

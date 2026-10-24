@@ -81,6 +81,25 @@ pub(super) async fn update_chats_in(
         }
         .map_err(failure)?;
         changed |= rows.rows_affected() > 0;
+        // The owner's added direct chat follows the person's name.
+        if chat.kind == ChatKind::Direct
+            && let Some(name) = &name
+        {
+            let renamed = sqlx::query_scalar!(
+                r#"UPDATE whatsapp_group SET name = $3
+                WHERE user_id = $1 AND group_jid = $2 AND kind = 'direct' AND state = 'active' AND name <> $3
+                RETURNING id"#,
+                account.user_id,
+                chat.jid,
+                name
+            )
+            .fetch_all(&mut **tx)
+            .await
+            .map_err(failure)?;
+            for group_id in renamed {
+                notify_change(tx, signals::Change::Group { group_id }).await?;
+            }
+        }
     }
     if changed {
         notify_change(

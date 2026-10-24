@@ -19,7 +19,8 @@ it on locally with `VITE_ENABLE_WHATSAPP_LINKED=true`.
 ## Sidebar
 
 Desktop's External sidebar has **WhatsApp** (the page below) with every
-WhatsApp group the viewer can read (their own and shared ones) nested under it,
+WhatsApp chat the viewer can read (their own and shared ones; a person icon for
+direct chats, a group icon for groups) nested under it,
 each with its unread count and a **Read-only** tag when the viewer's WhatsApp
 can't send there. The caret on WhatsApp folds the groups; folded, WhatsApp shows
 their total unread count. The open group's row is highlighted.
@@ -33,7 +34,7 @@ re-fetches once ~3 s after opening.
 | Not linked | Outlined WhatsApp row, the unofficial-client account-risk note, **Connect** (disabled with a tooltip when the server turns pairing off). A signed-out device reads **Reconnect**. |
 | Passkey | When WhatsApp asks for a passkey, the dialog says **Confirm on your desktop**. In Macro desktop, **Confirm with passkey** runs the native `whatsapp_passkey_authenticate` command (its caBLE QR shows in the dialog) and posts the assertion to `pairing/<id>/passkey`; a returned code then shows to type on the phone. In a browser, **Continue in Macro desktop** opens `macro:///external?whatsappPairing=<id>`, which reopens the same pairing there; closing the browser dialog then doesn't cancel it. |
 | Pairing | Dialog **Link WhatsApp**: a locally encoded QR (`role="img"`, name "Scan this code with WhatsApp on your phone"), **Expires in m:ss**, four numbered steps, **Cancel**. The dialog carries `ph-no-capture`. A code confirmation step shows **The codes match**; expiry or failure shows **Show a new code**. |
-| Linked | A full-width list like Drive's. Its header has **Search chats** (filters every section by name or phone digits) and a slim account strip: the phone number, "Connected" and a **WhatsApp account options** menu with **Disconnect** (asks to confirm). One account at a time: to switch, disconnect and connect again. Below, the account's WhatsApp chat list (`GET chats`), newest activity first, one line per chat: a group or person icon, the name, "Group" / "Direct chat · Archived", and the last activity on the right. Row actions show on hover or keyboard focus (always on touch). While searching, **In Macro** lists matching added groups with **Open** (otherwise they are only in the sidebar). **Add to Macro**: addable groups with a one-click **Add to Macro** (no dialog, no name: the Macro group follows the WhatsApp name; unnamed groups show member names), and groups someone already shared with the viewer as "Shared with you by <owner>" with **Open**. **Can't be added (n)** is collapsed (searching unfolds it) and lists direct chats ("Can't add direct chats yet"), community and disappearing-message groups, and groups the account left, with DSS's reason. A refused add shows DSS's specific reason in that chat's row. An account paired before the chat list existed shows only groups and chats with new messages until it is re-linked. |
+| Linked | A full-width list like Drive's. Its header has **Search chats** (filters every section by name or phone digits) and a slim account strip: the phone number, "Connected" and a **WhatsApp account options** menu with **Disconnect** (asks to confirm). One account at a time: to switch, disconnect and connect again. Below, the account's WhatsApp chat list (`GET chats`), newest activity first, one line per chat: a group, person or (announcement group) megaphone icon, the name ("Community · Group", or "Community · Announcements"), "Group" / "Community group" / "Announcement group" / "Direct chat · Archived", and the last activity on the right. Row actions show on hover or keyboard focus (always on touch). While searching, **In Macro** lists matching added groups with **Open** (otherwise they are only in the sidebar). **Add to Macro**: addable chats (direct chats, community groups and disappearing-message groups included), with a one-click **Add to Macro** (no dialog, no name: the Macro group follows the WhatsApp name; unnamed groups show member names), and groups someone already shared with the viewer as "Shared with you by <owner>" with **Open**. **Can't be added (n)** is collapsed (searching unfolds it) and lists the chat with yourself, communities themselves ("A community has no messages of its own; add one of its groups"), and groups the account left, with DSS's reason. A refused add shows DSS's specific reason in that chat's row. An account paired before the chat list existed shows only groups and chats with new messages until it is re-linked. |
 
 Cancel sends `DELETE /meta/linked/pairing/<id>`; closing after the phone links
 does not. Disconnect that WhatsApp did not confirm tells the person to remove
@@ -49,7 +50,13 @@ answers `configuration`, `account`, `connect`, `pairing/<id>` (poll and
 to `success` to simulate the phone scanning. Never link a real account from an
 automated run.
 
-## Adopted group view
+## Adopted chat view
+
+A group and a direct (one-to-one) chat open in the same view; API routes and
+the `whatsapp_group` entity type keep "group" for both, user-facing copy says
+"chat". A direct chat's header is the person (no **N members** button, no
+roster); only its owner can send, and anyone it's shared with reads "Only
+<owner> can reply in this chat" in place of the composer.
 
 Open the adopted group from External's sidebar or a shared link at
 `/app/external/whatsapp/:id`, in External's main pane. The retired
@@ -58,7 +65,7 @@ The group has its own timeline, data layer and entity sharing; it does not appea
 as a native channel. **Share** uses ordinary people grants, access requests,
 team sharing and link sharing for `whatsapp_group`. Viewers can read the whole
 timeline without connecting WhatsApp or belonging to the remote group.
-In a channel composer, `@` offers **WhatsApp groups** (behind the WhatsApp flag);
+In a channel composer, `@` offers **WhatsApp chats** (behind the WhatsApp flag);
 posting the mention shares the group with the channel's members (View), and the
 chip opens the group in External.
 
@@ -66,6 +73,11 @@ The timeline pages newest-first from
 `GET /meta/linked/whatsapp-groups/<id>/messages`, including verified sender names,
 replies, grouped reactions, edit/delete flags, attachment states, and delivery
 for the caller's own sends. Entering the view marks messages read through `/read`.
+The timeline uses Chat's layout: rows and the composer share Chat's centered
+message column (`macro-message-width`) and custom scrollbar, and the view
+stays at the bottom while media loads unless the reader scrolled up. A sent
+image shows its local preview at once and keeps it, sized, when the stored
+message replaces the pending one.
 Ready images and videos show inline in Chat's media grid (click opens the
 viewer), sized from WhatsApp's declared width/height before they load so the
 timeline opens at the bottom. Stickers show small and unframed, GIFs loop muted
@@ -80,8 +92,11 @@ Maps**, no map tiles), contact cards and WhatsApp events render as small cards
 (`data-whatsapp-card="poll|location|contacts|event"`). Group changes, pins and
 calls (`kind: "system"`) are one-line system rows like Chat's
 (`data-system-activity="<id>"`, e.g. "Ana added Ben", "Missed group video
-call"): no avatar, no actions, never unread. View-once and unknown types keep
-DSS's placeholder text. The header has the group name, a **N members** button that
+call"): no avatar, no actions, never unread. View-once media show like any
+media; unknown types keep DSS's placeholder text. The header has the group name ("Community · Group"
+for a community's group), a timer icon when WhatsApp's disappearing messages
+are on (the timeline's start also says "Disappearing messages are on in
+WhatsApp (7 days). Macro keeps them."), a **N members** button that
 toggles the WhatsApp roster, and **Share**. The layout supports phone-width panes.
 
 The composer placeholder names the caller's own sending phone ("Message Test 11

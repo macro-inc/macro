@@ -22,6 +22,8 @@ pub enum GroupChange<'phone> {
     Promote(&'phone FakePhone),
     /// Removes a member as admin.
     Demote(&'phone FakePhone),
+    /// Turns disappearing messages on with a timer in seconds, or off.
+    Disappearing(Option<u32>),
 }
 
 impl FakeWhatsApp {
@@ -38,6 +40,7 @@ impl FakeWhatsApp {
         let mut admins = stored.admins.clone();
         let mut subject = stored.subject.clone();
         let mut description = stored.description.clone();
+        let mut disappearing = stored.disappearing;
         let actor = by
             .and_then(|phone| state.users.get(phone.phone()))
             .map(|user| {
@@ -90,6 +93,17 @@ impl FakeWhatsApp {
                 admins.retain(|admin| admin != phone.phone());
                 participants_node("demote", &state, phone)
             }
+            GroupChange::Disappearing(timer) => {
+                disappearing = timer.or(disappearing.map(|_| 0));
+                match timer {
+                    Some(seconds) => node(
+                        "ephemeral",
+                        vec![("expiration", text(seconds.to_string()))],
+                        None,
+                    ),
+                    None => node("not_ephemeral", vec![], None),
+                }
+            }
         };
         let mut attrs = vec![
             ("from", jid(group)),
@@ -107,6 +121,7 @@ impl FakeWhatsApp {
             stored.admins = admins;
             stored.subject = subject;
             stored.description = description;
+            stored.disappearing = disappearing;
         }
         let targets: Vec<DeviceAddress> = notified
             .iter()

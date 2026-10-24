@@ -22,17 +22,17 @@ export function adoptFailureMessage(failure: AdoptRefusal): string {
     .with(
       { reason: 'not-allowed' },
       () =>
-        "Your WhatsApp isn't allowed to add this group. Check that you're still a member."
+        "Your WhatsApp isn't allowed to add this chat. Check that you're still in it."
     )
-    .with({ reason: 'gone' }, () => 'This group is no longer on your WhatsApp.')
-    .with({ reason: 'already-added' }, () => 'This group is already in Macro.')
+    .with({ reason: 'gone' }, () => 'This chat is no longer on your WhatsApp.')
+    .with({ reason: 'already-added' }, () => 'This chat is already in Macro.')
     .with(
       { reason: 'disconnected' },
-      () => 'Your WhatsApp is disconnected. Reconnect it, then add the group.'
+      () => 'Your WhatsApp is disconnected. Reconnect it, then add the chat.'
     )
     .with(
       { reason: 'turned-off' },
-      () => 'Adding WhatsApp groups is turned off.'
+      () => 'Adding WhatsApp chats is turned off.'
     )
     .with(
       { reason: 'rate-limited' },
@@ -44,11 +44,11 @@ export function adoptFailureMessage(failure: AdoptRefusal): string {
     )
     .with(
       { reason: 'rejected' },
-      ({ detail }) => `WhatsApp didn't accept this group: ${detail}.`
+      ({ detail }) => `WhatsApp didn't accept this chat: ${detail}.`
     )
     .with(
       { reason: 'signed-out' },
-      () => 'Your Macro session expired. Sign in again to add this group.'
+      () => 'Your Macro session expired. Sign in again to add this chat.'
     )
     .with(
       { reason: 'unreachable' },

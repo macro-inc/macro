@@ -626,7 +626,7 @@ function WhatsAppGroupMention(props: DocumentMentionDecoratorProps) {
             data-block-name="whatsapp_group"
             data-document-name={props.documentName}
           >
-            {props.documentName || 'WhatsApp group'}
+            {props.documentName || 'WhatsApp chat'}
           </span>
         }
       />
