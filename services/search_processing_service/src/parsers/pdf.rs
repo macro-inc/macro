@@ -1,7 +1,9 @@
-use pdfium_render::prelude::Pdfium;
+use pdfium_render::prelude::{Pdfium, PdfiumError, PdfiumInternalError};
 
-/// Parses the pdf into individual pages of content
-pub fn parse_pdf_pages(content: Vec<u8>) -> anyhow::Result<Vec<String>> {
+/// Parses the pdf into individual pages of content, or `None` when pdfium
+/// cannot open it: a password-protected, corrupt, or unsupported file fails
+/// the same way on every attempt.
+pub fn parse_pdf_pages(content: Vec<u8>) -> anyhow::Result<Option<Vec<String>>> {
     tracing::trace!("parsing pdf");
 
     let pdfium = Pdfium::new(
@@ -15,7 +17,18 @@ pub fn parse_pdf_pages(content: Vec<u8>) -> anyhow::Result<Vec<String>> {
     );
     tracing::trace!("initialized pdfium");
 
-    let document = pdfium.load_pdf_from_byte_vec(content, None)?;
+    let document = match pdfium.load_pdf_from_byte_vec(content, None) {
+        Ok(document) => document,
+        Err(PdfiumError::PdfiumLibraryInternalError(
+            error @ (PdfiumInternalError::PasswordError
+            | PdfiumInternalError::FormatError
+            | PdfiumInternalError::SecurityError),
+        )) => {
+            tracing::warn!(error = ?error, "pdfium cannot open the pdf");
+            return Ok(None);
+        }
+        Err(error) => return Err(error.into()),
+    };
 
     tracing::trace!("pdf loaded into pdfium");
 
@@ -31,5 +44,8 @@ pub fn parse_pdf_pages(content: Vec<u8>) -> anyhow::Result<Vec<String>> {
         })
         .collect::<Vec<_>>();
 
-    Ok(content)
+    Ok(Some(content))
 }
+
+#[cfg(test)]
+mod test;
