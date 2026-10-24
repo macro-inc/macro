@@ -198,6 +198,29 @@ impl SessionService {
         self.repository.update_groups(scope, groups, complete).await
     }
 
+    /// Report the current metadata of one group after a live group event (joined,
+    /// renamed, participants changed). Signals pages only when something changed.
+    #[tracing::instrument(name = "whatsapp.session.update_group", skip_all, err, fields(account_id = %scope.account_id))]
+    pub async fn update_group(&self, scope: SessionScope, group: &GroupInfo) -> LinkedResult<()> {
+        self.update_groups(scope, std::slice::from_ref(group), false)
+            .await
+    }
+
+    /// The account is no longer in this group, as a live group event or a
+    /// refused metadata read showed.
+    #[tracing::instrument(name = "whatsapp.session.group_left", skip_all, err, fields(account_id = %scope.account_id))]
+    pub async fn group_left(
+        &self,
+        scope: SessionScope,
+        group: &str,
+        observed_at: chrono::DateTime<chrono::Utc>,
+    ) -> LinkedResult<()> {
+        if !is_group_jid(group) {
+            return Err(LinkedError::Invalid("invalid group").into());
+        }
+        self.repository.group_left(scope, group, observed_at).await
+    }
+
     /// Groups to keep: events from any other group are dropped before storage.
     pub async fn observed_groups(&self, scope: SessionScope) -> LinkedResult<Vec<String>> {
         self.repository.observed_groups(scope).await

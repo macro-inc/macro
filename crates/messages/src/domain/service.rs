@@ -819,6 +819,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                 MessageReferenceKind::Project => EntityType::Project,
                 MessageReferenceKind::CrmCompany => EntityType::CrmCompany,
                 MessageReferenceKind::CrmContact => EntityType::CrmContact,
+                MessageReferenceKind::WhatsAppGroup => EntityType::WhatsAppGroup,
                 _ => return Err(MessageError::Invalid("unsupported message reference")),
             };
             if !self

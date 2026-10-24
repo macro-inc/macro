@@ -34,7 +34,7 @@ async fn shared_viewer_without_whatsapp_reads_history_and_unread_but_cannot_send
         .await
         .unwrap();
     let detail = linked.group_detail(&receipt).await.unwrap();
-    assert_eq!(detail.group.name, "Escalations");
+    assert_eq!(detail.group.name, "Customer escalations");
     assert_eq!(detail.group.unread_count, 1);
     assert_eq!(detail.group.send_reason, Some(ReplyBlock::NoAccount));
     assert!(detail.sending_identity.is_none());
@@ -404,4 +404,55 @@ async fn shared_sender_uses_own_roster_without_adopting_again(pool: PgPool) {
     let claimed = session.claim_sends(bob, 10).await.unwrap();
     assert_eq!(claimed.len(), 1);
     assert_eq!(claimed[0].id, progress.id);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_group_mentioned_in_a_channel_is_readable_by_its_current_members(pool: PgPool) {
+    let (linked, _, _, binding, _, _) = adopted(&pool).await;
+    let channel = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO comms_channels (id, name, channel_type, owner_id, created_at, updated_at) VALUES ($1, 'ops', 'private', $2, now(), now())",
+        channel,
+        ALICE
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO comms_channel_participants (channel_id, user_id, role, joined_at) VALUES ($1, $2, 'member', now())",
+        channel,
+        CAROL
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(linked.adopted_groups(CAROL).await.unwrap().is_empty());
+    // What mentioning the group in the channel writes.
+    let mut tx = pool.begin().await.unwrap();
+    entity_access_db_utils::channel_share::insert_if_absent(
+        &mut tx,
+        &binding.id,
+        EntityType::WhatsAppGroup,
+        &channel,
+        AccessLevel::View,
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+    let listed = linked.adopted_groups(CAROL).await.unwrap();
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0].id, binding.id);
+    assert_eq!(listed[0].send_reason, Some(ReplyBlock::NoAccount));
+    sqlx::query!(
+        "UPDATE comms_channel_participants SET left_at = now() WHERE channel_id = $1 AND user_id = $2",
+        channel,
+        CAROL
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(
+        linked.adopted_groups(CAROL).await.unwrap().is_empty(),
+        "leaving the channel ends access"
+    );
 }

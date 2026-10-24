@@ -262,6 +262,16 @@ fn rejected(error: &ClientError) -> Option<&'static str> {
     }
 }
 
+/// WhatsApp refused a group read because the account is not in the group
+/// or the group is gone.
+fn not_a_member(error: &ClientError) -> bool {
+    match error {
+        ClientError::NotInGroup | ClientError::GroupNotFound => true,
+        ClientError::WrappedIq { human, .. } => not_a_member(human),
+        _ => false,
+    }
+}
+
 fn media_type(kind: MediaKind) -> MediaType {
     match kind {
         MediaKind::Image => MediaType::Image,
@@ -478,6 +488,7 @@ fn group_info(group: whatsmeow::types::GroupInfo, observed_at: DateTime<Utc>) ->
         community: group.parent.is_parent || !group.linked_parent.linked_parent_jid.is_empty(),
         observed_at,
         group: None,
+        shared: None,
     }
 }
 
@@ -614,6 +625,17 @@ impl WhatsAppSession for WhatsmeowSession {
             .into_iter()
             .map(|group| group_info(group, observed_at))
             .collect())
+    }
+
+    async fn group(&self, group_jid: &str) -> Result<Option<GroupInfo>, SessionError> {
+        let jid: Jid = group_jid.parse().map_err(|error| {
+            SessionError::Internal(rootcause::report!("{error:?}").into_dynamic())
+        })?;
+        match self.client.get_group_info(&jid).await {
+            Ok(group) => Ok(Some(group_info(group, Utc::now()))),
+            Err(error) if not_a_member(&error) => Ok(None),
+            Err(error) => Err(internal(error)),
+        }
     }
 
     async fn logout(&self) {

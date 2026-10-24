@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE whatsapp_group SET name = $3 WHERE id = ANY($1) AND user_id = $2 AND name <> $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5d2d3e150243f288dba8f564614e8aaa8936748e472413be0dc1c4ba92a8cce0"
+}

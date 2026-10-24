@@ -19,14 +19,20 @@ Web app ──REST──▶ DSS ──── MacroDB ◀──── whatsapp_se
   socket, and calls `whatsapp_linked::domain::session::SessionService`
   in-process. There is no service-to-service HTTP.
 
-| Signal | Payload | Sent by → read by | Meaning |
+Every payload is JSON `{"id": "<uuid>", "traceparent": "…"}` (`whatsapp_changed`:
+`{"scope": "groups", "account_id"}` or `{"scope": "group", "group_id"}`, plus
+`traceparent`), so the receiver's span joins the sender's trace.
+
+| Signal | Id | Sent by → read by | Meaning |
 | --- | --- | --- | --- |
-| `whatsapp_pairing_requested` | pairing id | DSS → session | start, update or stop (cancelled) pairing |
-| `whatsapp_send_requested` | account id | DSS → session | claim pending sends |
-| `whatsapp_groups_requested` | account id | DSS → session | refresh the account's group metadata |
-| `whatsapp_account_changed` | account id | DSS → session | consent or adopted groups changed; re-read |
-| `whatsapp_account_released` | account id | session ↔ session | lease handed over |
-| `whatsapp_group_effects` | message id | session → DSS | a group notification revision is ready |
+| `whatsapp_pairing_requested` | pairing | DSS → session | start, update or stop (cancelled) pairing |
+| `whatsapp_send_requested` | account | DSS → session | claim pending sends |
+| `whatsapp_groups_requested` | account | DSS → session | refresh the account's group list (at most every 30 s) |
+| `whatsapp_account_changed` | account | DSS → session | consent or adopted groups changed; re-read |
+| `whatsapp_account_released` | account | session ↔ session | lease handed over |
+| `whatsapp_group_effects` | message | session → DSS | a group notification revision is ready |
+| `whatsapp_media_ready` | document | session → DSS | attachment bytes are ready to import |
+| `whatsapp_changed` | scope | session/DSS → DSS | something a page shows changed; DSS pushes it |
 
 ## Ownership and fencing
 
@@ -48,22 +54,47 @@ transaction ends.
 
 ## Groups and adoption
 
-The replica keeps `whatsapp_group_roster` (the account's view of its groups)
-fresh with `update_groups`. Adoption requires metadata observed within two
-minutes; stale facts request a refresh and return `refreshing`. Adoption
-creates `whatsapp_group`, registers it as `EntityType::WhatsAppGroup`, grants the
-adopter Owner through `entity_access`, and records their remote membership facts.
-The caller supplies a name and optionally their team; the server selects their
-team when omitted. A team/group pair has one active adoption. Existing adoption
-requires view access and never grants a new viewer access implicitly.
+`whatsapp_group_roster` is each account's view of its groups. The replica
+rewrites it on connect and reconnect, updates single groups from live WhatsApp
+group events (joined, left or removed, name or participant changes), and
+refreshes the whole list when a page asks: opening the WhatsApp page
+(`GET /groups`) or a group (`GET /whatsapp-groups/{id}`) returns stored data
+and signals `whatsapp_groups_requested`, which each account's runner honours
+at most once per 30 s. There is no periodic refresh and no freshness rule:
+adoption and can-send read the stored roster, and WhatsApp's own rejection of
+a send is the final check.
+
+Adoption (`{group_jid}`) makes the group the adopter's own entity: one live
+`whatsapp_group` per (owner, WhatsApp group), so two people adding the same
+WhatsApp group get two Macro groups, and adding it again returns the existing
+one. No team is involved. It registers `EntityType::WhatsAppGroup`, grants the
+adopter Owner through `entity_access`, and records their remote membership. The
+name always follows WhatsApp: the subject, or for an unnamed group the other
+members' names ("Ana, Ben, +2"), updated when the owner's account sees a
+change. `GET /groups` marks each remote group with the caller's own Macro group
+(`group`) or, when they have none, one shared with them by someone else
+(`shared`, with its owner).
 
 Viewing uses ordinary entity sharing: direct people grants and access requests
-at `/entities/whatsapp_group/{id}/...`, canonical explicit team grants, and link
-sharing. It requires no connected WhatsApp account or remote group membership.
+at `/entities/whatsapp_group/{id}/...`, canonical explicit team grants, link
+sharing, and channel grants: mentioning a group in a channel message shares it
+with the channel's current members (View), through the same reference-sharing
+path as documents (`crates/channels` `ReferencedShareItemType::WhatsAppGroup`).
+It requires no connected WhatsApp account or remote group membership.
 The group detail includes `share_permission` and `access_level`; its `/permissions`
 GET/PATCH pair drives the standard Share dialog. Only the actual owner changes
 team/link policy or detaches the group. Leaving WhatsApp or disconnecting keeps
 established access and history. Roster updates never create sharing grants.
+
+## Live updates
+
+Writes that change what a page shows signal `whatsapp_changed` in the same
+transaction: a roster write that actually changed something (the account's
+list, and each affected group entity), message, revision, reaction and
+attachment changes, send outcomes and expiries, and detaching. DSS coalesces a
+burst and pushes a bare connection-gateway message `whatsapp_changed` with
+`{scope: "groups"}` to the account owner or `{scope: "group", group_id}` to
+everyone who can view the group; the page re-fetches.
 
 ## Inbound, timeline and notifications
 
@@ -83,8 +114,8 @@ endpoint advances `whatsapp_group_read_state` monotonically; history and the
 viewer's own messages do not increase unread counts.
 
 DSS drains a durable notification outbox through the generic notification ingress.
-`whatsapp_group_message` notifications target directly shared users, team members,
-and known link viewers who have read the group, except the verified sender. Link
+`whatsapp_group_message` notifications target directly shared users, team and
+channel members, and known link viewers who have read the group, except the verified sender. Link
 viewers must still have access when recipients are resolved; unknown link visitors cannot be
 enumerated. Notifications use the message id for idempotency and are suppressed
 for history, replays, edits and reactions. They link to the standalone group entity.
@@ -93,8 +124,10 @@ GraphQL notification targets use the canonical entity enum while groups remain o
 ## Sending
 
 DSS records a `whatsapp_send` intent (idempotency key, request digest, group
-sequence) only while the sender's account is connected, observing and allowed
-to post. The replica claims pending sends in group order, calls
+sequence, the request's `traceparent`) only while the sender's account is
+connected, observing and allowed to post. A request repeating an intent key
+returns the stored send, whatever changed since; a different payload with the
+same key conflicts. The dispatch span joins the recording request's trace. The replica claims pending sends in group order, calls
 `begin_dispatch` with the WhatsApp message id it will use (all facts are
 re-checked; this is the point of no return), submits, then calls
 `record_send_outcome`. An acceptance writes the group message with the
@@ -142,8 +175,8 @@ to WhatsApp, then ingests asynchronously with `replay_deferred`.
 
 DSS accepts at most one deliberate WhatsApp send request per second per
 user, shared across groups and DSS replicas through its existing Redis rate
-limiter. The domain consumes the budget before evaluating a send; requests that
-later fail still count. Exhaustion returns `429` with code `rate_limited` and
+limiter. The domain consumes the budget before evaluating a new send (a replayed
+intent key does not); requests that later fail still count. Exhaustion returns `429` with code `rate_limited` and
 `Retry-After: 1`; an unavailable counter fails closed with `503`. This does not
 retry a send or change its idempotency key or unknown-outcome reconciliation.
 

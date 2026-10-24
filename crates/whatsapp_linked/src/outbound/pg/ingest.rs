@@ -62,7 +62,7 @@ pub(super) async fn observed_bindings_in(
 ) -> LinkedResult<Vec<Binding>> {
     sqlx::query_as!(
         bindings::BindingRow,
-        r#"SELECT b.id, b.team_id, b.group_jid, b.user_id, b.state, b.ownership_state, b.adopted_at
+        r#"SELECT b.id, b.group_jid, b.user_id, b.state, b.ownership_state, b.adopted_at
         FROM whatsapp_group b JOIN whatsapp_group_membership m ON m.binding_id = b.id
         WHERE b.group_jid = $1 AND b.state = 'active'
           AND m.account_id = $2 AND m.generation = $3 AND m.consent_ended_at IS NULL
@@ -452,6 +452,15 @@ pub(super) async fn finish_in(
     }
     if changed {
         notify(tx, signals::GROUP_EFFECTS, r.message).await?;
+    }
+    if changed || r.actor.is_some() {
+        notify_change(
+            tx,
+            signals::Change::Group {
+                group_id: r.binding.id,
+            },
+        )
+        .await?;
     }
     Ok(())
 }

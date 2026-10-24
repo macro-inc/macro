@@ -14,6 +14,8 @@ CREATE TRIGGER e2e_changed AFTER INSERT OR UPDATE OR DELETE ON whatsapp_group_ro
     FOR EACH STATEMENT EXECUTE FUNCTION e2e_notify_changed();
 CREATE TRIGGER e2e_changed AFTER INSERT OR UPDATE OR DELETE ON whatsapp_group
     FOR EACH STATEMENT EXECUTE FUNCTION e2e_notify_changed();
+CREATE TRIGGER e2e_changed AFTER INSERT OR UPDATE OR DELETE ON whatsapp_group_membership
+    FOR EACH STATEMENT EXECUTE FUNCTION e2e_notify_changed();
 CREATE TRIGGER e2e_changed AFTER INSERT OR UPDATE OR DELETE ON whatsapp_group_message
     FOR EACH STATEMENT EXECUTE FUNCTION e2e_notify_changed();
 CREATE TRIGGER e2e_changed AFTER INSERT OR UPDATE OR DELETE ON whatsapp_message_observation

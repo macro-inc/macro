@@ -56,23 +56,39 @@ pub trait AccountRepository: Send + Sync {
     async fn disconnect(&self, user: &str, generation: i64) -> LinkedResult<bool>;
 }
 
-/// Group metadata kept fresh by the session service.
+/// A group entity bound to a remote group, as one viewer can see it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VisibleAdoption {
+    /// Remote group.
+    pub group_jid: String,
+    /// Group entity.
+    pub id: Uuid,
+    /// Display name.
+    pub name: String,
+    /// The person who added it.
+    pub owner_id: String,
+}
+
+/// Group metadata kept current by the session service.
 #[async_trait]
 pub trait GroupRepository: Send + Sync {
-    /// Current workspace membership facts for server-selected adoption.
-    async fn user_team(&self, user: &str) -> LinkedResult<Option<Uuid>>;
     /// Groups the account has joined, as last observed.
     async fn account_groups(&self, account: Uuid) -> LinkedResult<Vec<GroupInfo>>;
     /// One joined group, as last observed.
     async fn account_group(&self, account: Uuid, group: &str) -> LinkedResult<Option<GroupInfo>>;
-    /// Ask the account's replica to re-read its groups (`whatsapp_groups_requested`).
-    async fn request_groups_refresh(&self, account: Uuid) -> LinkedResult<()>;
-    /// For each remote group, the adopted entity that the person can see.
+    /// Ask each account's replica to re-read its groups
+    /// (`whatsapp_groups_requested`); the replica rate limits refreshes.
+    async fn request_groups_refresh(&self, accounts: &[Uuid]) -> LinkedResult<()>;
+    /// Accounts whose rosters describe a group entity: its observers, and the
+    /// viewer's own connected account.
+    async fn group_accounts(&self, group_id: Uuid, user: &str) -> LinkedResult<Vec<Uuid>>;
+    /// Group entities bound to these remote groups that the person can see,
+    /// newest first.
     async fn visible_adoptions(
         &self,
         user: &str,
         groups: &[String],
-    ) -> LinkedResult<Vec<(String, GroupReference)>>;
+    ) -> LinkedResult<Vec<VisibleAdoption>>;
     /// Latest metadata for a binding's group from any account consenting to it.
     async fn binding_roster(&self, binding: &Binding) -> LinkedResult<Option<GroupInfo>>;
 }
@@ -83,9 +99,9 @@ pub struct AdoptionRecord<'a> {
     pub user: &'a str,
     /// Their account at the generation that authorized adoption.
     pub account: &'a Account,
-    /// Validated request.
-    pub request: &'a AdoptGroup,
-    /// Fresh metadata that authorized adoption.
+    /// Display name, following WhatsApp.
+    pub name: &'a str,
+    /// Stored metadata that authorized adoption.
     pub group: &'a GroupInfo,
 }
 
@@ -102,9 +118,9 @@ pub struct Adopted {
 pub trait BindingRepository: Send + Sync {
     /// The binding of a group entity.
     async fn binding(&self, group_id: Uuid) -> LinkedResult<Option<Binding>>;
-    /// Adopt atomically, serialized per team and remote group. Existing groups
-    /// require ordinary view access; new groups grant only the caller Owner.
-    /// Records the caller-account's membership and signals its session service.
+    /// Adopt atomically, serialized per person and remote group: one live group
+    /// entity per (owner, remote group), owned by the caller. Records the
+    /// caller-account's membership and signals its session service.
     async fn adopt(&self, record: AdoptionRecord<'_>) -> LinkedResult<Adopted>;
     /// Attachments of these group messages of the binding.
     async fn message_attachments(
@@ -126,8 +142,6 @@ pub struct SendingFacts {
     pub remote_member: bool,
     /// The account may post under current group settings.
     pub can_post: bool,
-    /// When the membership facts were last observed.
-    pub observed_at: Option<DateTime<Utc>>,
 }
 
 /// Membership eligibility derived only from the caller's own protocol metadata.
@@ -149,7 +163,6 @@ pub(crate) fn sending_facts_from_roster(
                 .as_deref()
                 .is_some_and(|i| g.can_post(i))
         }),
-        observed_at: group.map(|g| g.observed_at),
     }
 }
 
@@ -218,6 +231,14 @@ pub trait SendRepository: Send + Sync {
         binding: &Binding,
         message: Uuid,
     ) -> LinkedResult<Option<MutationTarget>>;
+    /// The person's earlier send with this intent key in the group, with the
+    /// SHA-256 of its canonical request.
+    async fn stored_send(
+        &self,
+        group_id: Uuid,
+        user: &str,
+        idempotency_key: Uuid,
+    ) -> LinkedResult<Option<([u8; 32], SendProgress)>>;
     /// Record the intent and assign the group sequence. Replays with the same key
     /// return the stored progress; a different payload is a `Conflict`. Inserts
     /// only while the account is connected at its generation, the binding is
@@ -304,6 +325,14 @@ pub trait SessionRepository: Send + Sync {
         scope: SessionScope,
         groups: &[GroupInfo],
         complete: bool,
+    ) -> LinkedResult<()>;
+    /// The account is no longer in this group (it left, was removed, or the
+    /// group is gone): drop it from the account's list and end its membership.
+    async fn group_left(
+        &self,
+        scope: SessionScope,
+        group: &str,
+        observed_at: DateTime<Utc>,
     ) -> LinkedResult<()>;
     /// Groups this account currently observes for at least one adopted binding.
     async fn observed_groups(&self, scope: SessionScope) -> LinkedResult<Vec<String>>;
@@ -436,8 +465,6 @@ pub trait DocumentStore: Send + Sync {
 /// Native authorization owned by entity access.
 #[async_trait]
 pub trait Authorizer: Send + Sync {
-    /// The person is a member of the workspace.
-    async fn require_team_member(&self, team: Uuid, user: &str) -> LinkedResult<()>;
     /// The person owns the group entity.
     async fn require_group_owner(&self, group_id: Uuid, user: &str) -> LinkedResult<()>;
 }

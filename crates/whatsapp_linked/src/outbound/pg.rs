@@ -17,8 +17,13 @@ mod session;
 mod test;
 mod timeline;
 
-/// Signals the session service listens for, with the id they carry.
+/// Signals between DSS and the session service. Each payload is a JSON
+/// [`signals::Signal`] (or [`signals::ChangeSignal`] for `whatsapp_changed`)
+/// carrying the sender's `traceparent`, so the receiver joins its trace.
 pub mod signals {
+    use serde::{Deserialize, Serialize};
+    use uuid::Uuid;
+
     /// `<pairing_id>`: start, update or stop pairing.
     pub const PAIRING_REQUESTED: &str = "whatsapp_pairing_requested";
     /// `<account_id>`: claim pending sends.
@@ -27,10 +32,67 @@ pub mod signals {
     pub const GROUPS_REQUESTED: &str = "whatsapp_groups_requested";
     /// `<account_id>`: consent or adopted groups changed; re-read the account.
     pub const ACCOUNT_CHANGED: &str = "whatsapp_account_changed";
+    /// `<account_id>`: a replica released the account (session service only).
+    pub const ACCOUNT_RELEASED: &str = "whatsapp_account_released";
     /// `<document_id>`: attachment bytes are ready to import (DSS listens).
     pub const MEDIA_READY: &str = "whatsapp_media_ready";
     /// `<message_id>`: a standalone message notification is ready (DSS listens).
     pub const GROUP_EFFECTS: &str = "whatsapp_group_effects";
+    /// A [`ChangeSignal`]: something a page shows changed (DSS listens and
+    /// pushes `whatsapp_changed` to the people who see it).
+    pub const CHANGED: &str = "whatsapp_changed";
+
+    /// Payload of every signal except [`CHANGED`].
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    pub struct Signal {
+        /// The id the channel documents.
+        pub id: Uuid,
+        /// The sender's W3C trace context.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub traceparent: Option<String>,
+    }
+
+    impl Signal {
+        /// Read a payload; `None` when malformed.
+        pub fn parse(payload: &str) -> Option<Self> {
+            serde_json::from_str(payload).ok()
+        }
+    }
+
+    /// What changed.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+    #[serde(tag = "scope", rename_all = "snake_case")]
+    pub enum Change {
+        /// The account's own group list (roster) changed: its owner's add list.
+        Groups {
+            /// Account whose roster changed.
+            account_id: Uuid,
+        },
+        /// A group entity's details, timeline or sends changed: everyone who
+        /// can view it.
+        Group {
+            /// Group entity.
+            group_id: Uuid,
+        },
+    }
+
+    /// Payload of [`CHANGED`].
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    pub struct ChangeSignal {
+        /// What changed.
+        #[serde(flatten)]
+        pub change: Change,
+        /// The sender's W3C trace context.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub traceparent: Option<String>,
+    }
+
+    impl ChangeSignal {
+        /// Read a payload; `None` when malformed.
+        pub fn parse(payload: &str) -> Option<Self> {
+            serde_json::from_str(payload).ok()
+        }
+    }
 }
 
 /// Repository over MacroDB.
@@ -67,12 +129,35 @@ pub(crate) fn account_state(value: &str) -> LinkedResult<AccountState> {
     AccountState::parse(value).ok_or_else(|| LinkedError::Unavailable.into())
 }
 
+/// Signal `channel` when the transaction commits, carrying the current trace.
 pub(crate) async fn notify(
     tx: &mut Transaction<'_, Postgres>,
     channel: &str,
     id: Uuid,
 ) -> LinkedResult<()> {
-    sqlx::query!("SELECT pg_notify($1, $2)", channel, id.to_string())
+    let payload = serde_json::to_string(&signals::Signal {
+        id,
+        traceparent: super::trace_context::current(),
+    })
+    .map_err(failure)?;
+    sqlx::query!("SELECT pg_notify($1, $2)", channel, payload)
+        .execute(&mut **tx)
+        .await
+        .map_err(failure)?;
+    Ok(())
+}
+
+/// Tell DSS, when the transaction commits, that pages showing this changed.
+pub(crate) async fn notify_change(
+    tx: &mut Transaction<'_, Postgres>,
+    change: signals::Change,
+) -> LinkedResult<()> {
+    let payload = serde_json::to_string(&signals::ChangeSignal {
+        change,
+        traceparent: super::trace_context::current(),
+    })
+    .map_err(failure)?;
+    sqlx::query!("SELECT pg_notify($1, $2)", signals::CHANGED, payload)
         .execute(&mut **tx)
         .await
         .map_err(failure)?;

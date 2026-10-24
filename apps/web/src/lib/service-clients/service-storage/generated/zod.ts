@@ -49307,9 +49307,9 @@ export const linkedGroupsResponseItem = zod
         zod
           .object({
             id: zod.uuid().describe('Group entity id.'),
-            name: zod.string().describe('Channel name.'),
+            name: zod.string().describe('Display name, following WhatsApp.'),
           })
-          .describe('A group entity bound to a group.'),
+          .describe('A group entity bound to a remote group.'),
       ])
       .optional(),
     jid: zod.string().describe('Remote group JID.'),
@@ -49350,6 +49350,20 @@ export const linkedGroupsResponseItem = zod
           )
       )
       .describe('Full roster.'),
+    shared: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            id: zod.uuid().describe('Group entity id.'),
+            name: zod.string().describe('Display name, following WhatsApp.'),
+            owner_id: zod
+              .string()
+              .describe('Macro user who added the group and shared it.'),
+          })
+          .describe("Another person's group entity the caller can view."),
+      ])
+      .optional(),
   })
   .describe(
     'One full metadata read of a group, never an incomplete membership delta.'
@@ -49364,15 +49378,10 @@ export const linkedAdoptBody = zod
     group_jid: zod
       .string()
       .describe("Group the requester's account has joined."),
-    name: zod
-      .string()
-      .nullish()
-      .describe(
-        'Name for a newly created group entity; defaults to the group subject.'
-      ),
-    team_id: zod.uuid().nullish().describe('Destination workspace.'),
   })
-  .describe('Explicit adoption request; the account is selected server-side.');
+  .describe(
+    "Explicit adoption request; the account is selected server-side. The\ngroup's name always follows WhatsApp."
+  );
 
 export const linkedAdoptResponse = zod
   .object({
@@ -49466,7 +49475,6 @@ export const whatsappGroupsResponseItem = zod
             'disconnected',
             'not_observing',
             'not_allowed_in_group',
-            'refreshing',
             'group_unavailable',
           ])
           .describe('Why the viewer cannot send now.'),
@@ -49516,7 +49524,6 @@ export const whatsappGroupResponse = zod
             'disconnected',
             'not_observing',
             'not_allowed_in_group',
-            'refreshing',
             'group_unavailable',
           ])
           .describe('Why the viewer cannot send now.'),
@@ -49589,9 +49596,11 @@ export const whatsappGroupResponse = zod
                   zod
                     .object({
                       id: zod.uuid().describe('Group entity id.'),
-                      name: zod.string().describe('Channel name.'),
+                      name: zod
+                        .string()
+                        .describe('Display name, following WhatsApp.'),
                     })
-                    .describe('A group entity bound to a group.'),
+                    .describe('A group entity bound to a remote group.'),
                 ])
                 .optional(),
               jid: zod.string().describe('Remote group JID.'),
@@ -49634,6 +49643,26 @@ export const whatsappGroupResponse = zod
                     )
                 )
                 .describe('Full roster.'),
+              shared: zod
+                .union([
+                  zod.null(),
+                  zod
+                    .object({
+                      id: zod.uuid().describe('Group entity id.'),
+                      name: zod
+                        .string()
+                        .describe('Display name, following WhatsApp.'),
+                      owner_id: zod
+                        .string()
+                        .describe(
+                          'Macro user who added the group and shared it.'
+                        ),
+                    })
+                    .describe(
+                      "Another person's group entity the caller can view."
+                    ),
+                ])
+                .optional(),
             })
             .describe(
               'One full metadata read of a group, never an incomplete membership delta.'

@@ -6,11 +6,11 @@
  */
 
 /**
- * A group entity bound to a group.
+ * A group entity bound to a remote group.
  */
 export interface LinkedGroupReference {
   /** Group entity id. */
   id: string;
-  /** Channel name. */
+  /** Display name, following WhatsApp. */
   name: string;
 }

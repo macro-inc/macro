@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { LinkedGroupInfoGroup } from './linkedGroupInfoGroup';
+import type { LinkedGroupInfoShared } from './linkedGroupInfoShared';
 import type { LinkedParticipant } from './linkedParticipant';
 
 /**
@@ -26,4 +27,5 @@ export interface LinkedGroupInfo {
   observedAt: string;
   /** Full roster. */
   participants: LinkedParticipant[];
+  shared?: LinkedGroupInfoShared;
 }

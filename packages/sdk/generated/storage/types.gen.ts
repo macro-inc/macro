@@ -8982,21 +8982,14 @@ export type LinkedAccountView = {
 };
 
 /**
- * Explicit adoption request; the account is selected server-side.
+ * Explicit adoption request; the account is selected server-side. The
+ * group's name always follows WhatsApp.
  */
 export type LinkedAdoptGroup = {
     /**
      * Group the requester's account has joined.
      */
     group_jid: string;
-    /**
-     * Name for a newly created group entity; defaults to the group subject.
-     */
-    name?: string | null;
-    /**
-     * Destination workspace.
-     */
-    team_id?: string | null;
 };
 
 /**
@@ -9152,10 +9145,11 @@ export type LinkedGroupInfo = {
      * Full roster.
      */
     participants: Array<LinkedParticipant>;
+    shared?: null | LinkedSharedGroupReference;
 };
 
 /**
- * A group entity bound to a group.
+ * A group entity bound to a remote group.
  */
 export type LinkedGroupReference = {
     /**
@@ -9163,7 +9157,7 @@ export type LinkedGroupReference = {
      */
     id: string;
     /**
-     * Channel name.
+     * Display name, following WhatsApp.
      */
     name: string;
 };
@@ -9284,7 +9278,7 @@ export type LinkedParticipant = LinkedIdentity & {
 /**
  * Why the viewer cannot send now.
  */
-export type LinkedReplyBlock = 'sending_disabled' | 'no_account' | 'disconnected' | 'not_observing' | 'not_allowed_in_group' | 'refreshing' | 'group_unavailable';
+export type LinkedReplyBlock = 'sending_disabled' | 'no_account' | 'disconnected' | 'not_observing' | 'not_allowed_in_group' | 'group_unavailable';
 
 /**
  * Content of a deliberate send.
@@ -9375,6 +9369,24 @@ export type LinkedSendReply = {
      * Group message being quoted, within this group.
      */
     reply_to?: string | null;
+};
+
+/**
+ * Another person's group entity the caller can view.
+ */
+export type LinkedSharedGroupReference = {
+    /**
+     * Group entity id.
+     */
+    id: string;
+    /**
+     * Display name, following WhatsApp.
+     */
+    name: string;
+    /**
+     * Macro user who added the group and shared it.
+     */
+    owner_id: string;
 };
 
 /**

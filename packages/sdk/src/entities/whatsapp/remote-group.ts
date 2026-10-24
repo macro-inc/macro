@@ -2,7 +2,6 @@ import type { LinkedGroupInfo } from '../../../generated/storage/types.gen';
 import { MacroNotFoundError, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { MacroEntity } from '../entity';
-import type { Team } from '../teams/team';
 import { WhatsAppGroup } from './group';
 
 /** An existing group joined by the current user's connected WhatsApp account. */
@@ -27,7 +26,7 @@ export class WhatsAppRemoteGroup extends MacroEntity<LinkedGroupInfo> {
     return group;
   }
 
-  /** Current remote group subject. */
+  /** The WhatsApp subject, or the other members' names for an unnamed group. */
   readonly name = this.field('name');
 
   /** When the session service last observed this metadata. */
@@ -45,23 +44,24 @@ export class WhatsAppRemoteGroup extends MacroEntity<LinkedGroupInfo> {
   /** Whether this group is an unsupported community parent or announcement group. */
   readonly community = this.field('community');
 
-  /** Adopted entity, when this remote group has been added to Macro. */
+  /** The current user's own Macro group for this remote group, once added. */
   readonly group = this.mappedField('group', (record) =>
     record ? WhatsAppGroup.byId(this.client, record.id) : undefined,
   );
 
-  /** Adopt with a name; share through the normal entity sharing endpoints. */
-  async adopt(
-    options: { team?: Team; name?: string } = {},
-  ): Promise<WhatsAppGroup> {
+  /** Someone else's Macro group for this remote group, shared with the current user. */
+  readonly shared = this.mappedField('shared', (record) =>
+    record ? WhatsAppGroup.byId(this.client, record.id) : undefined,
+  );
+
+  /**
+   * Add the group to Macro as the current user's own group, named after
+   * WhatsApp; adding it again returns the same group. Share it through the
+   * normal entity sharing endpoints.
+   */
+  async adopt(): Promise<WhatsAppGroup> {
     const result = await this.mutate((client) =>
-      client.storage.linkedAdopt({
-        body: {
-          group_jid: this.id,
-          team_id: options.team?.id,
-          name: options.name,
-        },
-      }),
+      client.storage.linkedAdopt({ body: { group_jid: this.id } }),
     );
     return WhatsAppGroup.byId(this.client, result.group_id);
   }

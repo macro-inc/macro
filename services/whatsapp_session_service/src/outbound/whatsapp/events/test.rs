@@ -394,3 +394,46 @@ fn passkey_requests_carry_the_challenge_and_handoff_confirmations_their_code() {
         });
     assert!(map_event(ACCOUNT, &automatic, now(), &plain_locator).is_none());
 }
+
+#[test]
+fn joining_carries_the_group_and_info_changes_name_only_the_group() {
+    let group: whatsmeow::types::Jid = "120363000000000001@g.us".parse().unwrap();
+    let joined = Event::JoinedGroup(Box::new(whatsmeow::types::events::JoinedGroup {
+        reason: String::new(),
+        r#type: String::new(),
+        create_key: String::new(),
+        sender: None,
+        sender_pn: None,
+        notify: String::new(),
+        group_info: whatsmeow::types::GroupInfo {
+            jid: group.clone(),
+            name: whatsmeow::types::GroupName {
+                name: "Launch".to_owned(),
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+    }));
+    match map_event(ACCOUNT, &joined, now(), &plain_locator) {
+        Some(Mapped::Session(SessionEvent::GroupChanged {
+            group_jid,
+            info: Some(info),
+        })) => {
+            assert_eq!(group_jid, "120363000000000001@g.us");
+            assert_eq!(info.name, "Launch");
+            assert_eq!(info.observed_at, now());
+        }
+        other => panic!("expected a joined group, got {other:?}"),
+    }
+    let renamed = Event::GroupInfo(Box::new(whatsmeow::types::events::GroupInfo {
+        jid: group,
+        ..Default::default()
+    }));
+    match map_event(ACCOUNT, &renamed, now(), &plain_locator) {
+        Some(Mapped::Session(SessionEvent::GroupChanged {
+            group_jid,
+            info: None,
+        })) => assert_eq!(group_jid, "120363000000000001@g.us"),
+        other => panic!("expected a group change, got {other:?}"),
+    }
+}

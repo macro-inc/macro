@@ -359,19 +359,16 @@ async function mount(page: Page, state: LinkedServer, query = '') {
           })),
         });
       if (path === 'groups/adopt' && method === 'POST') {
-        const body = route.request().postDataJSON() as {
-          group_jid: string;
-          name: string;
-        };
+        const body = route.request().postDataJSON() as { group_jid: string };
         state.adoptions.push(body);
+        // The group's name follows WhatsApp.
         const group = state.groups.find(({ jid }) => jid === body.group_jid);
-        if (group) group.group = { id: 'group-new', name: body.name };
+        if (group) group.group = { id: 'group-new', name: group.name };
         return route.fulfill({
           json: {
             id: 'binding-1',
             group_id: 'group-new',
             group_jid: body.group_jid,
-            team_id: 'team-acme',
             user_id: USER_ID,
             adopted_at: '2026-10-20T12:00:00Z',
             ownership_state: 'active',
@@ -433,12 +430,7 @@ test('links WhatsApp by QR, then adds a shareable WhatsApp group', async ({
   await expect(
     groups.getByRole('button', { name: 'In Macro → Launch War Room' })
   ).toBeVisible();
-  expect(state.adoptions).toEqual([
-    {
-      group_jid: '120363003@g.us',
-      name: 'Launch War Room',
-    },
-  ]);
+  expect(state.adoptions).toEqual([{ group_jid: '120363003@g.us' }]);
   expect(unexpected).toEqual([]);
 });
 

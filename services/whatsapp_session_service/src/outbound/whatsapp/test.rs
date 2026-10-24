@@ -137,6 +137,7 @@ async fn a_phone_scanning_the_qr_links_the_account_through_the_encrypted_store(p
             send_timeout: Duration::from_secs(10),
             send_batch: 16,
             tick_every: Duration::from_secs(600),
+            groups_refresh_interval: crate::domain::account::GROUPS_REFRESH_INTERVAL,
         },
     ));
     let (_signals, signal_receiver) = mpsc::channel(8);
@@ -341,6 +342,7 @@ async fn attachments_travel_both_ways_with_a_sealed_locator(pool: PgPool) {
             caption: Some("from macro".to_owned()),
             quote: None,
         },
+        traceparent: None,
     };
     let message_id = session.new_message_id().await;
     session

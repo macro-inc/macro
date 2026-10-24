@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, team_id, group_jid, user_id, state, ownership_state, adopted_at FROM whatsapp_group WHERE team_id = $1 AND group_jid = $2 AND state <> 'detached' FOR UPDATE",
+  "query": "SELECT id, group_jid, user_id, state, ownership_state, adopted_at FROM whatsapp_group WHERE user_id = $1 AND group_jid = $2 AND state <> 'detached' FOR UPDATE",
   "describe": {
     "columns": [
       {
@@ -10,38 +10,33 @@
       },
       {
         "ordinal": 1,
-        "name": "team_id",
-        "type_info": "Uuid"
-      },
-      {
-        "ordinal": 2,
         "name": "group_jid",
         "type_info": "Text"
       },
       {
-        "ordinal": 3,
+        "ordinal": 2,
         "name": "user_id",
         "type_info": "Text"
       },
       {
-        "ordinal": 4,
+        "ordinal": 3,
         "name": "state",
         "type_info": "Text"
       },
       {
-        "ordinal": 5,
+        "ordinal": 4,
         "name": "ownership_state",
         "type_info": "Text"
       },
       {
-        "ordinal": 6,
+        "ordinal": 5,
         "name": "adopted_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid",
+        "Text",
         "Text"
       ]
     },
@@ -51,9 +46,8 @@
       false,
       false,
       false,
-      false,
       false
     ]
   },
-  "hash": "13d9b29b898dcf4d4d64499c6f0d19c34b4562f62c39bcc8b84ca3f34249eefb"
+  "hash": "35ab3f38e930f19109adec2b8bc290107f3b772328aec6b07326c3b906582559"
 }

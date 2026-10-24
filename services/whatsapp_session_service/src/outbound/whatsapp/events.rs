@@ -92,6 +92,16 @@ pub fn map_event(
             Mapped::Inbound(Box::new(map_message(account, message, now, seal)?))
         }
         Event::Receipt(receipt) => Mapped::Inbound(Box::new(map_receipt(account, receipt, now)?)),
+        Event::JoinedGroup(joined) => Mapped::Session(SessionEvent::GroupChanged {
+            group_jid: joined.group_info.jid.to_non_ad().to_string(),
+            info: Some(Box::new(super::group_info(joined.group_info.clone(), now))),
+        }),
+        Event::GroupInfo(change) if change.jid.server == GROUP_SERVER => {
+            Mapped::Session(SessionEvent::GroupChanged {
+                group_jid: change.jid.to_non_ad().to_string(),
+                info: None,
+            })
+        }
         event => Mapped::Session(map_session(event)?),
     })
 }

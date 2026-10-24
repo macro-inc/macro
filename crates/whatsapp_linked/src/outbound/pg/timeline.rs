@@ -9,7 +9,7 @@ use models_permissions::share_permission::{
 #[async_trait]
 impl TimelineRepository for PgLinkedRepository {
     async fn visible_groups(&self, user: &str) -> LinkedResult<Vec<VisibleGroup>> {
-        let rows = sqlx::query!(r#"SELECT g.id,g.name,g.user_id,g.team_id,g.group_jid,g.state,g.ownership_state,g.adopted_at,
+        let rows = sqlx::query!(r#"SELECT g.id,g.name,g.user_id,g.group_jid,g.state,g.ownership_state,g.adopted_at,
             (SELECT count(*) FROM whatsapp_group_message m WHERE m.binding_id=g.id AND m.message_id IS NOT NULL
               AND m.deleted_at IS NULL AND m.origin<>'history'
               AND NOT EXISTS(SELECT 1 FROM whatsapp_external_person p WHERE p.id=m.person_id AND p.user_id=$1)
@@ -23,7 +23,8 @@ impl TimelineRepository for PgLinkedRepository {
             WHERE whatsapp_group_can_view(g.id,$1)
               AND (r.user_id IS NOT NULL OR EXISTS (SELECT 1 FROM entity_access ea
                 WHERE ea.entity_id=g.id AND ea.entity_type='whatsapp_group'
-                  AND (ea.source_id=$1 OR ea.source_id IN (SELECT team_id::text FROM team_user WHERE user_id=$1))))
+                  AND (ea.source_id=$1 OR ea.source_id IN (SELECT team_id::text FROM team_user WHERE user_id=$1)
+                    OR ea.source_id IN (SELECT channel_id::text FROM comms_channel_participants WHERE user_id=$1 AND left_at IS NULL))))
             ORDER BY g.adopted_at DESC LIMIT 2000"#,user)
             .fetch_all(&self.pool).await.map_err(failure)?;
         rows.into_iter()
@@ -40,7 +41,6 @@ impl TimelineRepository for PgLinkedRepository {
                     },
                     binding: bindings::binding(bindings::BindingRow {
                         id: row.id,
-                        team_id: row.team_id,
                         group_jid: row.group_jid,
                         user_id: row.user_id,
                         state: row.state,

@@ -18,6 +18,5 @@ export const LinkedReplyBlock = {
   disconnected: 'disconnected',
   not_observing: 'not_observing',
   not_allowed_in_group: 'not_allowed_in_group',
-  refreshing: 'refreshing',
   group_unavailable: 'group_unavailable',
 } as const;

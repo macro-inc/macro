@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE whatsapp_group_membership m SET remote_member = false, can_post = false, reconciled = true, observed_at = $4\n        FROM whatsapp_group b\n        WHERE b.id = m.binding_id AND b.group_jid = $1 AND m.account_id = $2 AND m.generation = $3 AND m.observed_at <= $4\n          AND ($5::uuid[] IS NULL OR b.id = ANY($5))\n        RETURNING m.binding_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "binding_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Int8",
+        "Timestamptz",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "6f88a23e3597bcefa54a2e2f5232f2324f2e9cfb7079ecfa266532d2b8302bec"
+}

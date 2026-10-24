@@ -4,17 +4,12 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { LinkedAdoptGroupName } from './linkedAdoptGroupName';
-import type { LinkedAdoptGroupTeamId } from './linkedAdoptGroupTeamId';
 
 /**
- * Explicit adoption request; the account is selected server-side.
+ * Explicit adoption request; the account is selected server-side. The
+group's name always follows WhatsApp.
  */
 export interface LinkedAdoptGroup {
   /** Group the requester's account has joined. */
   group_jid: string;
-  /** Name for a newly created group entity; defaults to the group subject. */
-  name?: LinkedAdoptGroupName;
-  /** Destination workspace. */
-  team_id?: LinkedAdoptGroupTeamId;
 }

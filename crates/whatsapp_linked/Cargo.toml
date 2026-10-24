@@ -17,7 +17,9 @@ ports = [
 # Postgres adapters, shared by DSS and the session service.
 outbound = [
   "dep:entity_access",
+  "dep:opentelemetry",
   "dep:sqlx",
+  "dep:tracing-opentelemetry",
   "entity_access/ports",
   "entity_access/outbound",
   "ports",
@@ -40,6 +42,7 @@ entity_registry_db_utils = { path = "../entity_registry/entity_registry_db_utils
 entity_access_db_utils = { path = "../entity_access_db_utils" }
 model_owner = { path = "../model_owner" }
 model-entity = { path = "../model-entity" }
+opentelemetry = { workspace = true, features = ["trace"], optional = true }
 async-trait = { workspace = true, optional = true }
 axum = { workspace = true, features = ["multipart"], optional = true }
 chrono = { workspace = true }
@@ -53,6 +56,7 @@ sha2 = { workspace = true }
 sqlx = { workspace = true, optional = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+tracing-opentelemetry = { workspace = true, optional = true }
 utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

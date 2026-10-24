@@ -387,6 +387,46 @@ impl FakeWhatsApp {
         group
     }
 
+    /// Renames a group and notifies its members' linked devices.
+    pub fn rename_group(&self, group: &Jid, subject: &str) {
+        let mut state = self.shared.lock();
+        let Some(stored) = state.groups.get_mut(&group.user) else {
+            return;
+        };
+        stored.subject = subject.to_owned();
+        let members = stored.members.clone();
+        let change = node("subject", vec![("subject", text(subject))], None);
+        notify_group(&mut state, group, &members, change);
+        drop(state);
+        self.shared.changed();
+    }
+
+    /// Removes a phone's user from a group and notifies the remaining
+    /// members' and the removed user's linked devices.
+    pub fn remove_from_group(&self, group: &Jid, phone: &FakePhone) {
+        let mut state = self.shared.lock();
+        let Some(stored) = state.groups.get_mut(&group.user) else {
+            return;
+        };
+        let notified = stored.members.clone();
+        stored.members.retain(|member| member != phone.phone());
+        let Some(lid) = state.users.get(phone.phone()).map(|user| user.lid.clone()) else {
+            return;
+        };
+        let change = node(
+            "remove",
+            vec![],
+            children(vec![node(
+                "participant",
+                vec![("jid", jid(&device_jid(&lid, 0, true)))],
+                None,
+            )]),
+        );
+        notify_group(&mut state, group, &notified, change);
+        drop(state);
+        self.shared.changed();
+    }
+
     /// The linked devices of a user, as phone-number device JIDs.
     pub fn linked_devices(&self, phone: &FakePhone) -> Vec<Jid> {
         let state = self.shared.lock();
@@ -578,5 +618,38 @@ impl FakeWhatsApp {
         self.shared.cancel.cancel();
         self.shared.tasks.close();
         self.shared.tasks.wait().await;
+    }
+}
+
+/// Delivers a `w:gp2` change notification about `group` to every device of
+/// the given members.
+fn notify_group(
+    state: &mut State,
+    group: &Jid,
+    members: &[String],
+    change: whatsmeow::binary::Node,
+) {
+    let targets: Vec<DeviceAddress> = members
+        .iter()
+        .filter_map(|member| state.users.get(member))
+        .flat_map(|user| {
+            user.devices.keys().map(|device| DeviceAddress {
+                phone: user.phone.clone(),
+                device: *device,
+            })
+        })
+        .collect();
+    for target in targets {
+        let notification = node(
+            "notification",
+            vec![
+                ("from", jid(group)),
+                ("id", text(random_id())),
+                ("t", now()),
+                ("type", text("w:gp2")),
+            ],
+            children(vec![change.clone()]),
+        );
+        state.deliver(&target, notification);
     }
 }

@@ -64,7 +64,14 @@ async fn bump_in(
     .execute(&mut **tx)
     .await
     .map_err(failure)?;
-    notify(tx, signals::GROUP_EFFECTS, message).await
+    notify(tx, signals::GROUP_EFFECTS, message).await?;
+    notify_change(
+        tx,
+        signals::Change::Group {
+            group_id: attachment.binding_id,
+        },
+    )
+    .await
 }
 
 impl PgLinkedRepository {

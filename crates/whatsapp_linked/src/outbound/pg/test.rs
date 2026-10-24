@@ -17,6 +17,7 @@ use entity_access::domain::models::{
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use std::sync::Arc;
 
+mod changes;
 mod concurrency;
 mod media;
 mod pairing;
@@ -34,9 +35,6 @@ struct Allow;
 
 #[async_trait]
 impl Authorizer for Allow {
-    async fn require_team_member(&self, _: Uuid, _: &str) -> LinkedResult<()> {
-        Ok(())
-    }
     async fn require_group_owner(&self, _: Uuid, _: &str) -> LinkedResult<()> {
         Ok(())
     }
@@ -153,6 +151,7 @@ fn group(members: &[&str]) -> GroupInfo {
         community: false,
         observed_at: Utc::now(),
         group: None,
+        shared: None,
     }
 }
 
@@ -196,7 +195,8 @@ fn receipt<T: entity_access::domain::models::RequiredPermission>(
     .unwrap()
 }
 
-/// Alice and Bob paired and both observing an adopted group with a customer.
+/// Alice and Bob paired and both observing Alice's group, shared with Bob,
+/// with a customer.
 async fn adopted(
     pool: &PgPool,
 ) -> (
@@ -207,7 +207,7 @@ async fn adopted(
     SessionScope,
     SessionScope,
 ) {
-    let team = workspace(pool).await;
+    workspace(pool).await;
     let (linked, session, repository) = services(pool);
     let alice = pair(&linked, &session, ALICE, ALICE_JID).await;
     let bob = pair(&linked, &session, BOB, BOB_JID).await;
@@ -216,14 +216,15 @@ async fn adopted(
         .update_groups(alice, std::slice::from_ref(&info), true)
         .await
         .unwrap();
-    session.update_groups(bob, &[info], true).await.unwrap();
+    session
+        .update_groups(bob, std::slice::from_ref(&info), true)
+        .await
+        .unwrap();
     let binding = linked
         .adopt(
             ALICE,
             &AdoptGroup {
-                team_id: Some(team),
                 group_jid: GROUP.into(),
-                name: Some("Escalations".into()),
             },
             SendAuthority::Human,
         )
@@ -241,31 +242,46 @@ async fn adopted(
     .await
     .unwrap();
     tx.commit().await.unwrap();
-    let joined = linked
-        .adopt(
-            BOB,
-            &AdoptGroup {
-                team_id: Some(team),
-                group_jid: GROUP.into(),
-                name: None,
-            },
-            SendAuthority::Human,
-        )
-        .await
-        .unwrap();
-    assert_eq!(joined.id, binding.id);
+    // Bob's next roster read makes his account an observer of the shared group.
+    session.update_groups(bob, &[info], true).await.unwrap();
     (linked, session, repository, binding, alice, bob)
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn adoption_creates_a_shared_entity_and_leaving_whatsapp_keeps_view_access(pool: PgPool) {
     let (linked, session, _, binding, _, bob) = adopted(&pool).await;
+    assert_eq!(binding.user_id, ALICE);
+    let mine = &linked.groups(ALICE).await.unwrap()[0];
     assert_eq!(
-        linked.groups(BOB).await.unwrap()[0].group,
-        Some(GroupReference {
-            id: binding.id,
-            name: "Escalations".into()
-        })
+        (mine.group.clone(), mine.shared.clone()),
+        (
+            Some(GroupReference {
+                id: binding.id,
+                name: "Customer escalations".into()
+            }),
+            None
+        )
+    );
+    let shared = &linked.groups(BOB).await.unwrap()[0];
+    assert_eq!(
+        (shared.group.clone(), shared.shared.clone()),
+        (
+            None,
+            Some(SharedGroupReference {
+                id: binding.id,
+                name: "Customer escalations".into(),
+                owner_id: ALICE.into()
+            })
+        )
+    );
+    assert!(
+        linked
+            .group_detail(&receipt::<MessageView>(BOB, binding.id))
+            .await
+            .unwrap()
+            .group
+            .can_send,
+        "a viewer whose own account is in the group can send"
     );
     for (viewer, expected) in [(ALICE, true), (BOB, true), (CAROL, false)] {
         assert_eq!(
@@ -292,6 +308,39 @@ async fn adoption_creates_a_shared_entity_and_leaving_whatsapp_keeps_view_access
             .group
             .can_send
     );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn each_person_adds_their_own_group_once(pool: PgPool) {
+    let (linked, _, _, binding, _, _) = adopted(&pool).await;
+    let request = AdoptGroup {
+        group_jid: GROUP.into(),
+    };
+    let again = linked
+        .adopt(ALICE, &request, SendAuthority::Human)
+        .await
+        .unwrap();
+    assert_eq!(again.id, binding.id, "adding twice returns the same group");
+    let bobs = linked
+        .adopt(BOB, &request, SendAuthority::Human)
+        .await
+        .unwrap();
+    assert_ne!(bobs.id, binding.id);
+    assert_eq!(bobs.user_id, BOB);
+    let listed = &linked.groups(BOB).await.unwrap()[0];
+    assert_eq!(
+        (listed.group.as_ref().map(|g| g.id), listed.shared.clone()),
+        (Some(bobs.id), None),
+        "your own group wins over one shared with you"
+    );
+    assert!(matches!(
+        linked
+            .adopt(CAROL, &request, SendAuthority::Human)
+            .await
+            .unwrap_err()
+            .current_context(),
+        LinkedError::Disconnected
+    ));
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -775,35 +824,67 @@ async fn disconnecting_fails_undispatched_sends_and_stops_observation(pool: PgPo
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn stale_group_facts_block_adoption_until_refreshed(pool: PgPool) {
-    let team = workspace(&pool).await;
+async fn stored_group_facts_authorize_adoption_and_sending_however_old(pool: PgPool) {
+    workspace(&pool).await;
     let (linked, session, _) = services(&pool);
     let alice = pair(&linked, &session, ALICE, ALICE_JID).await;
-    let mut info = group(&[ALICE_JID]);
-    info.observed_at = Utc::now() - Duration::minutes(10);
-    session.update_groups(alice, &[info], true).await.unwrap();
+    let mut info = group(&[ALICE_JID, CUSTOMER_JID]);
+    info.name = String::new();
+    info.observed_at = Utc::now() - Duration::days(3);
+    session
+        .update_groups(alice, std::slice::from_ref(&info), true)
+        .await
+        .unwrap();
     let request = AdoptGroup {
-        team_id: Some(team),
         group_jid: GROUP.into(),
-        name: None,
     };
-    assert!(matches!(
-        linked
-            .adopt(ALICE, &request, SendAuthority::Human)
-            .await
-            .unwrap_err()
-            .current_context(),
-        LinkedError::Refreshing
-    ));
+    let binding = linked
+        .adopt(ALICE, &request, SendAuthority::Human)
+        .await
+        .unwrap();
+    let detail = linked
+        .group_detail(&receipt::<MessageView>(ALICE, binding.id))
+        .await
+        .unwrap();
+    assert!(detail.group.can_send);
+    assert_eq!(
+        detail.group.name, "+15558880001",
+        "unnamed groups show members"
+    );
+    let progress = linked
+        .send_reply(
+            &receipt::<MessageWrite>(ALICE, binding.id),
+            &SendReply {
+                idempotency_key: Uuid::now_v7(),
+                message: ReplyContent::Text { text: "hi".into() },
+                reply_to: None,
+            },
+            SendAuthority::Human,
+        )
+        .await
+        .unwrap();
+    let claimed = session.claim_sends(alice, 8).await.unwrap();
+    assert_eq!(claimed[0].id, progress.id);
+    session
+        .begin_dispatch(alice, progress.id, "3EB0OLDFACTS")
+        .await
+        .unwrap();
     let mut community = group(&[ALICE_JID]);
+    community.jid = "120363000000000002@g.us".into();
     community.community = true;
     session
-        .update_groups(alice, &[community], true)
+        .update_groups(alice, &[info, community], true)
         .await
         .unwrap();
     assert!(matches!(
         linked
-            .adopt(ALICE, &request, SendAuthority::Human)
+            .adopt(
+                ALICE,
+                &AdoptGroup {
+                    group_jid: "120363000000000002@g.us".into()
+                },
+                SendAuthority::Human
+            )
             .await
             .unwrap_err()
             .current_context(),

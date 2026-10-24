@@ -6,7 +6,7 @@ use crate::domain::{
 };
 use async_trait::async_trait;
 use entity_access::domain::{
-    models::{AccessError, EntityType, MemberTeamRole, OwnerAccessLevel, RequiredPermission},
+    models::{AccessError, EntityType, OwnerAccessLevel, RequiredPermission},
     ports::EntityAccessService,
 };
 use macro_user_id::user_id::MacroUserIdStr;
@@ -51,11 +51,6 @@ impl<E: EntityAccessService> EntityAccessAuthorizer<E> {
 
 #[async_trait]
 impl<E: EntityAccessService> Authorizer for EntityAccessAuthorizer<E> {
-    async fn require_team_member(&self, team: Uuid, user: &str) -> LinkedResult<()> {
-        self.require::<MemberTeamRole>(user, team, EntityType::Team)
-            .await
-    }
-
     async fn require_group_owner(&self, group_id: Uuid, user: &str) -> LinkedResult<()> {
         self.require::<OwnerAccessLevel>(user, group_id, EntityType::WhatsAppGroup)
             .await

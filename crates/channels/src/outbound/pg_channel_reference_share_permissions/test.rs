@@ -228,6 +228,36 @@ async fn form_references_grant_the_channel_view_and_keep_an_existing_grant(pool:
     }
 }
 
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn whatsapp_group_mentions_let_the_channel_read_the_group(pool: PgPool) {
+    let channel_id = Uuid::now_v7();
+    let group_id = Uuid::now_v7();
+    let item = ReferencedShareItem::from_raw(group_id.to_string(), "whatsapp_group").unwrap();
+    assert_eq!(item.entity_type(), ReferencedShareItemType::WhatsAppGroup);
+    assert_eq!(
+        grant_level(item.entity_type(), None, None),
+        None,
+        "someone who cannot see the group shares nothing"
+    );
+    let level = grant_level(item.entity_type(), None, Some(AccessLevel::Owner)).unwrap();
+    for _ in 0..2 {
+        ensure_referenced_item_visible_to_channel(&pool, channel_id, &item, level)
+            .await
+            .unwrap();
+    }
+    let levels = sqlx::query_scalar!(
+        r#"SELECT access_level AS "access_level: AccessLevel" FROM entity_access
+        WHERE entity_id = $1 AND entity_type = 'whatsapp_group' AND source_id = $2
+            AND source_type = 'channel' AND granted_from_project_id IS NULL"#,
+        group_id,
+        channel_id.to_string(),
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(levels, vec![AccessLevel::View]);
+}
+
 /// Explicit sharing refuses a direct agent conversation's sessions, which are
 /// private to their owner. Posting one's link in another channel must not
 /// share it either, while a session from anywhere else still is.

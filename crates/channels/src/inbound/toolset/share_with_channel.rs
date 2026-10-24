@@ -40,6 +40,8 @@ pub enum ChannelShareEntityType {
     EmailThread,
     /// An agent session.
     AgentSession,
+    /// A WhatsApp group added to Macro.
+    WhatsappGroup,
 }
 
 impl ChannelShareEntityType {
@@ -53,6 +55,7 @@ impl ChannelShareEntityType {
             Self::Call => ReferencedShareItemType::Call,
             Self::EmailThread => ReferencedShareItemType::EmailThread,
             Self::AgentSession => ReferencedShareItemType::AgentSession,
+            Self::WhatsappGroup => ReferencedShareItemType::WhatsAppGroup,
         }
     }
 
@@ -72,7 +75,7 @@ impl ChannelShareEntityType {
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "ShareWithChannel",
-    description = "Share an item with the current members of a channel by writing a channel entity-access grant. Call it only after the user agrees to share that item, or when they already asked you to share it. entityType is the stored type: calendar_event for a calendar chip, document, project, database, form, call, thread, or agent_session. entityId is that item's id. A calendar event can be shared only by someone who holds it on their own calendar, and private or confidential events are refused. Sharing again is safe when a grant already exists."
+    description = "Share an item with the current members of a channel by writing a channel entity-access grant. Call it only after the user agrees to share that item, or when they already asked you to share it. entityType is the stored type: calendar_event for a calendar chip, document, project, database, form, call, thread, agent_session, or whatsapp_group. entityId is that item's id. A calendar event can be shared only by someone who holds it on their own calendar, and private or confidential events are refused. Sharing again is safe when a grant already exists."
 )]
 pub struct ShareWithChannel {
     /// Channel whose current members should receive the grant.
@@ -85,7 +88,7 @@ pub struct ShareWithChannel {
     pub entity_id: String,
     /// Stored entity type of the item.
     #[schemars(
-        description = "Stored entity type: calendar_event, document, project, database, form, call, thread, or agent_session."
+        description = "Stored entity type: calendar_event, document, project, database, form, call, thread, agent_session, or whatsapp_group."
     )]
     pub entity_type: ChannelShareEntityType,
 }

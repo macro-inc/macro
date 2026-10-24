@@ -5,7 +5,7 @@
 WhatsApp linked devices: runs one whatsmeow client per linked personal
 WhatsApp account, on whichever replica holds the account's Postgres advisory
 lock. It pairs devices (QR codes into `whatsapp_pairing`), keeps group rosters
-fresh, ingests standalone `whatsapp_group` traffic through `whatsapp_linked`'s
+current, ingests standalone `whatsapp_group` traffic through `whatsapp_linked`'s
 `SessionService`, and dispatches the sends DSS records. No HTTP API besides
 `GET /health`; DSS talks to it only through rows and `NOTIFY`.
 
@@ -38,6 +38,15 @@ fresh, ingests standalone `whatsapp_group` traffic through `whatsapp_linked`'s
   `SessionService` (`discoverable_accounts`, `fleet_health`).
 - `outbound/signals.rs`: `LISTEN` for `whatsapp_{account_released,
   pairing_requested, send_requested, groups_requested, account_changed}`.
+  Payloads are `whatsapp_linked::outbound::pg::signals::Signal` JSON; each
+  one's `traceparent` parents a `whatsapp.signal.receive` span.
+- Group rosters: the whole list is read on connect, on resync, and on
+  `whatsapp_groups_requested` (pages opening; at most once per
+  `groups_refresh_interval`, 30 s, per account). Live `JoinedGroup` /
+  `GroupInfo` events update that one group (`update_group`), reading its
+  metadata when the event lacks it; a not-in-group answer is `group_left`.
+  No periodic refresh. The domain signals `whatsapp_changed` only when a roster
+  write changed something.
 - `outbound/whatsapp.rs` (+ `events.rs`): `whatsapp_store_pg` device store,
   whatsmeow `Client` (`whatsmeow_signal::libsignal()`), event mapping. Only
   group events become inbound events; the gate drops groups the account has
@@ -70,8 +79,9 @@ fresh, ingests standalone `whatsapp_group` traffic through `whatsapp_linked`'s
 ## Telemetry
 
 Spans: `whatsapp.account.{lease,release,rescan,connect}`,
-`whatsapp.inbound.ingest`, `whatsapp.media.import`, `whatsapp.send.dispatch`,
-`whatsapp.groups.refresh`, `whatsapp.drain`. Log events read by `infra/stacks/monitoring/monitors/
+`whatsapp.inbound.ingest`, `whatsapp.media.import`, `whatsapp.send.dispatch`
+(parented on the trace of the request that recorded the send),
+`whatsapp.groups.{refresh,event}`, `whatsapp.signal.receive`, `whatsapp.drain`. Log events read by `infra/stacks/monitoring/monitors/
 whatsapp-session.ts` (`telemetry_event` = `whatsapp_session_health`,
 `whatsapp_session_reconnect`, `whatsapp_send_outcome`,
 `whatsapp_session_drain`): keep their field names. Opaque ids only; never

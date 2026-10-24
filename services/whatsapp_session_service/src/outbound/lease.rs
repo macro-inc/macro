@@ -20,7 +20,7 @@ use whatsapp_linked::domain::models::LinkedError;
 use whatsapp_linked::domain::session::SessionService;
 
 use crate::domain::ports::{AccountDirectory, AccountLocks, FleetHealth, LeaseError};
-use crate::domain::supervisor::ACCOUNT_RELEASED;
+use whatsapp_linked::outbound::pg::signals::{ACCOUNT_RELEASED, Signal};
 
 #[cfg(test)]
 mod test;
@@ -223,13 +223,14 @@ impl AccountDirectory for PgAccountDirectory {
     }
 
     async fn announce_released(&self, account: Uuid) -> Result<(), LeaseError> {
-        sqlx::query!(
-            "SELECT pg_notify($1, $2)",
-            ACCOUNT_RELEASED,
-            account.to_string()
-        )
-        .execute(&self.pool)
-        .await?;
+        let payload = serde_json::to_string(&Signal {
+            id: account,
+            traceparent: whatsapp_linked::outbound::trace_context::current(),
+        })
+        .map_err(|error| LeaseError::Internal(rootcause::Report::new(error).into_dynamic()))?;
+        sqlx::query!("SELECT pg_notify($1, $2)", ACCOUNT_RELEASED, payload)
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 

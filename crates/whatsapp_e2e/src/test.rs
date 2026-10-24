@@ -48,9 +48,6 @@ struct Allow;
 
 #[async_trait]
 impl Authorizer for Allow {
-    async fn require_team_member(&self, _: Uuid, _: &str) -> LinkedResult<()> {
-        Ok(())
-    }
     async fn require_group_owner(&self, _: Uuid, _: &str) -> LinkedResult<()> {
         Ok(())
     }
@@ -66,7 +63,6 @@ struct World {
     linked: LinkedService,
     whatsapp: FakeWhatsApp,
     kms: SharedKms,
-    team: Uuid,
     alice: FakePhone,
     bob: FakePhone,
     customer: FakePhone,
@@ -79,26 +75,6 @@ impl World {
         watch_tables(&pool).await;
         for id in [ALICE, BOB] {
             user(&pool, id).await;
-        }
-        let team = Uuid::now_v7();
-        sqlx::query!(
-            "INSERT INTO team (id, name, owner_id) VALUES ($1, 'Linked', $2)",
-            team,
-            ALICE
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
-        for (id, role) in [(ALICE, "owner"), (BOB, "member")] {
-            sqlx::query!(
-                "INSERT INTO team_user (team_id, user_id, team_role) VALUES ($1, $2, $3::text::team_role)",
-                team,
-                id,
-                role
-            )
-            .execute(&pool)
-            .await
-            .unwrap();
         }
         let linked = LinkedService::new(
             Features {
@@ -121,7 +97,6 @@ impl World {
             linked,
             whatsapp,
             kms: SharedKms::new(),
-            team,
             alice,
             bob,
             customer,
@@ -178,15 +153,7 @@ impl World {
         .expect("the replica lists the group");
         let binding = self
             .linked
-            .adopt(
-                user,
-                &AdoptGroup {
-                    team_id: Some(self.team),
-                    group_jid: group,
-                    name: Some("Escalations".to_owned()),
-                },
-                SendAuthority::Human,
-            )
+            .adopt(user, &AdoptGroup { group_jid: group }, SendAuthority::Human)
             .await
             .unwrap();
         let mut tx = self.pool.begin().await.unwrap();
@@ -204,6 +171,27 @@ impl World {
         }
         tx.commit().await.unwrap();
         binding
+    }
+
+    /// A viewer opens the WhatsApp page; their account's refreshed roster
+    /// makes it an observer of a group shared with them.
+    async fn observe(&self, user: &str, binding: &Binding) {
+        self.linked.groups(user).await.unwrap();
+        let observing = wait_for_rows(&self.pool, TIMEOUT, || async {
+            sqlx::query_scalar!(
+                r#"SELECT m.account_id FROM whatsapp_group_membership m
+                JOIN whatsapp_linked_account a ON a.id = m.account_id
+                WHERE m.binding_id = $1 AND a.user_id = $2 AND m.consent_ended_at IS NULL AND m.remote_member"#,
+                binding.id,
+                user
+            )
+            .fetch_optional(&self.pool)
+            .await
+            .unwrap()
+        })
+        .await;
+        self.expect(observing, "the viewer's account observes the shared group")
+            .await;
     }
 
     /// Alice paired and observing the adopted group.
@@ -418,8 +406,7 @@ async fn pair_adopt_receive_once_and_send_from_your_own_number(pool: PgPool) {
     world.pair(ALICE, &world.alice).await;
     world.pair(BOB, &world.bob).await;
     let binding = world.adopt(ALICE, &[BOB]).await;
-    let joined = world.adopt(BOB, &[]).await;
-    assert_eq!(joined.id, binding.id, "both accounts observe one binding");
+    world.observe(BOB, &binding).await;
 
     // Two linked accounts see the customer's message; it lands once.
     let source = world
@@ -836,4 +823,55 @@ impl whatsapp_linked::domain::ports::SendRateLimiter for Allow {
     async fn check(&self, _: &str) -> LinkedResult<()> {
         Ok(())
     }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn group_renames_and_removals_in_whatsapp_reach_macro_live(pool: PgPool) {
+    let world = World::new(pool).await;
+    let replica = world.replica().await;
+    let (_, binding) = world.alice_adopted().await;
+
+    world
+        .whatsapp
+        .rename_group(&world.group, "Escalations, renamed");
+    let renamed = wait_for_rows(&world.pool, TIMEOUT, || async {
+        sqlx::query_scalar!(
+            "SELECT name FROM whatsapp_group WHERE id = $1 AND name = 'Escalations, renamed'",
+            binding.id
+        )
+        .fetch_optional(&world.pool)
+        .await
+        .unwrap()
+    })
+    .await;
+    world
+        .expect(renamed, "the Macro group follows the WhatsApp rename")
+        .await;
+
+    world.whatsapp.remove_from_group(&world.group, &world.alice);
+    let left = wait_for_rows(&world.pool, TIMEOUT, || async {
+        let listed = sqlx::query_scalar!(
+            r#"SELECT count(*) AS "count!" FROM whatsapp_group_roster r
+            JOIN whatsapp_linked_account a ON a.id = r.account_id WHERE a.user_id = $1"#,
+            ALICE
+        )
+        .fetch_one(&world.pool)
+        .await
+        .unwrap();
+        (listed == 0).then_some(())
+    })
+    .await;
+    world
+        .expect(left, "removal drops the group from Alice's list")
+        .await;
+    let detail = world
+        .linked
+        .adopted_groups(ALICE)
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|group| group.id == binding.id)
+        .expect("history and access stay");
+    assert!(!detail.can_send, "Alice can no longer send");
+    replica.drain(TIMEOUT).await.unwrap();
 }

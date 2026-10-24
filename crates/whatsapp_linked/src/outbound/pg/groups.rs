@@ -1,11 +1,24 @@
 //! Group metadata observed by accounts, and membership reconciliation.
 
 use super::*;
-use crate::domain::ports::GroupRepository;
+use crate::domain::ports::{GroupRepository, VisibleAdoption};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 
+/// The same facts, ignoring when they were read and listing-only fields.
+fn same_facts(stored: &GroupInfo, observed: &GroupInfo) -> bool {
+    let normalize = |group: &GroupInfo| GroupInfo {
+        observed_at: DateTime::<Utc>::UNIX_EPOCH,
+        group: None,
+        shared: None,
+        ..group.clone()
+    };
+    normalize(stored) == normalize(observed)
+}
+
 /// Store and reconcile full metadata for groups one account has joined.
+/// Signals `whatsapp_changed` only for what actually changed: the account's
+/// list, and each affected group entity.
 pub(super) async fn store_groups_in(
     tx: &mut Transaction<'_, Postgres>,
     account: &Fenced,
@@ -26,7 +39,24 @@ pub(super) async fn store_groups_in(
     .fetch_all(&mut **tx)
     .await
     .map_err(failure)?;
+    let stored: std::collections::HashMap<String, GroupInfo> = sqlx::query!(
+        "SELECT group_jid, metadata FROM whatsapp_group_roster WHERE account_id = $1 AND group_jid = ANY($2)",
+        account.id,
+        &listed
+    )
+    .fetch_all(&mut **tx)
+    .await
+    .map_err(failure)?
+    .into_iter()
+    .map(|row| Ok((row.group_jid, decode::<GroupInfo>(row.metadata)?)))
+    .collect::<LinkedResult<_>>()?;
+    let mut list_changed = false;
+    let mut changed_groups: Vec<Uuid> = vec![];
     for group in groups {
+        let before = stored.get(&group.jid);
+        if before.is_some_and(|before| before.observed_at > group.observed_at) {
+            continue;
+        }
         let metadata = serde_json::to_value(group).map_err(failure)?;
         sqlx::query!(
             r#"INSERT INTO whatsapp_group_roster (account_id, group_jid, observed_at, metadata) VALUES ($1, $2, $3, $4)
@@ -40,7 +70,13 @@ pub(super) async fn store_groups_in(
         .execute(&mut **tx)
         .await
         .map_err(failure)?;
-        reconcile_in(tx, account, group, Some(&locked)).await?;
+        let bindings = reconcile_in(tx, account, group, Some(&locked)).await?;
+        if before.is_some_and(|before| same_facts(before, group)) {
+            continue;
+        }
+        list_changed = true;
+        rename_in(tx, account, group, &bindings).await?;
+        changed_groups.extend(bindings);
     }
     if complete {
         let observed_at = groups
@@ -57,10 +93,78 @@ pub(super) async fn store_groups_in(
         .await
         .map_err(failure)?;
         for group in left {
-            left_selected_in(tx, account, &group, observed_at, Some(&locked)).await?;
+            list_changed = true;
+            changed_groups
+                .extend(left_selected_in(tx, account, &group, observed_at, Some(&locked)).await?);
         }
     }
+    signal_changes_in(tx, account, list_changed, changed_groups).await
+}
+
+async fn signal_changes_in(
+    tx: &mut Transaction<'_, Postgres>,
+    account: &Fenced,
+    list_changed: bool,
+    mut groups: Vec<Uuid>,
+) -> LinkedResult<()> {
+    if list_changed {
+        notify_change(
+            tx,
+            signals::Change::Groups {
+                account_id: account.id,
+            },
+        )
+        .await?;
+    }
+    groups.sort();
+    groups.dedup();
+    for group_id in groups {
+        notify_change(tx, signals::Change::Group { group_id }).await?;
+    }
     Ok(())
+}
+
+/// The account's owner named their own group entities after WhatsApp: keep
+/// following the subject (or member names for an unnamed group).
+async fn rename_in(
+    tx: &mut Transaction<'_, Postgres>,
+    account: &Fenced,
+    group: &GroupInfo,
+    bindings: &[Uuid],
+) -> LinkedResult<()> {
+    let Some(identity) = account.identity_jid.as_deref() else {
+        return Ok(());
+    };
+    sqlx::query!(
+        "UPDATE whatsapp_group SET name = $3 WHERE id = ANY($1) AND user_id = $2 AND name <> $3",
+        bindings,
+        account.user_id,
+        group.display_name(identity)
+    )
+    .execute(&mut **tx)
+    .await
+    .map_err(failure)?;
+    Ok(())
+}
+
+/// The account is no longer in this group (a live group event).
+pub(super) async fn group_left_in(
+    tx: &mut Transaction<'_, Postgres>,
+    account: &Fenced,
+    group: &str,
+    observed_at: DateTime<Utc>,
+) -> LinkedResult<()> {
+    let listed = sqlx::query_scalar!(
+        "SELECT 1 AS listed FROM whatsapp_group_roster WHERE account_id = $1 AND group_jid = $2",
+        account.id,
+        group
+    )
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(failure)?
+    .is_some();
+    let bindings = left_selected_in(tx, account, group, observed_at, None).await?;
+    signal_changes_in(tx, account, listed, bindings).await
 }
 
 /// Bindings of this group the account observes with a current entity view access,
@@ -98,10 +202,10 @@ async fn reconcile_in(
     account: &Fenced,
     group: &GroupInfo,
     locked: Option<&[Uuid]>,
-) -> LinkedResult<()> {
+) -> LinkedResult<Vec<Uuid>> {
     let permitted = permitted_bindings_in(tx, account, &group.jid, locked).await?;
     if permitted.is_empty() {
-        return Ok(());
+        return Ok(permitted);
     }
     let identity = account.identity_jid.as_deref().unwrap_or_default();
     for binding in &permitted {
@@ -137,7 +241,7 @@ async fn reconcile_in(
     .execute(&mut **tx)
     .await
     .map_err(failure)?;
-    Ok(())
+    Ok(permitted)
 }
 
 /// The account left or was removed: a scoped negative fact, even when the full
@@ -148,16 +252,17 @@ pub(super) async fn left_in(
     group: &str,
     observed_at: DateTime<Utc>,
 ) -> LinkedResult<()> {
-    left_selected_in(tx, account, group, observed_at, None).await
+    group_left_in(tx, account, group, observed_at).await
 }
 
+/// Returns the group entities whose membership facts changed.
 async fn left_selected_in(
     tx: &mut Transaction<'_, Postgres>,
     account: &Fenced,
     group: &str,
     observed_at: DateTime<Utc>,
     locked: Option<&[Uuid]>,
-) -> LinkedResult<()> {
+) -> LinkedResult<Vec<Uuid>> {
     sqlx::query!("SELECT id FROM whatsapp_group WHERE group_jid = $1 AND ($2::uuid[] IS NULL OR id = ANY($2)) ORDER BY id FOR UPDATE", group, locked)
         .fetch_all(&mut **tx).await.map_err(failure)?;
     sqlx::query!(
@@ -168,34 +273,25 @@ async fn left_selected_in(
     .execute(&mut **tx)
     .await
     .map_err(failure)?;
-    sqlx::query!(
+    sqlx::query_scalar!(
         r#"UPDATE whatsapp_group_membership m SET remote_member = false, can_post = false, reconciled = true, observed_at = $4
         FROM whatsapp_group b
         WHERE b.id = m.binding_id AND b.group_jid = $1 AND m.account_id = $2 AND m.generation = $3 AND m.observed_at <= $4
-          AND ($5::uuid[] IS NULL OR b.id = ANY($5))"#,
+          AND ($5::uuid[] IS NULL OR b.id = ANY($5))
+        RETURNING m.binding_id"#,
         group,
         account.id,
         account.generation,
         observed_at,
         locked
     )
-    .execute(&mut **tx)
+    .fetch_all(&mut **tx)
     .await
-    .map_err(failure)?;
-    Ok(())
+    .map_err(failure)
 }
 
 #[async_trait]
 impl GroupRepository for PgLinkedRepository {
-    async fn user_team(&self, user: &str) -> LinkedResult<Option<Uuid>> {
-        sqlx::query_scalar!(
-            "SELECT team_id FROM team_user WHERE user_id=$1 ORDER BY team_role DESC LIMIT 1",
-            user
-        )
-        .fetch_optional(&self.pool)
-        .await
-        .map_err(failure)
-    }
     async fn account_groups(&self, account: Uuid) -> LinkedResult<Vec<GroupInfo>> {
         sqlx::query_scalar!(
             "SELECT metadata FROM whatsapp_group_roster WHERE account_id = $1 ORDER BY group_jid LIMIT 2000",
@@ -222,44 +318,49 @@ impl GroupRepository for PgLinkedRepository {
         .transpose()
     }
 
-    async fn request_groups_refresh(&self, account: Uuid) -> LinkedResult<()> {
-        sqlx::query!(
-            "SELECT pg_notify($1, $2)",
-            signals::GROUPS_REQUESTED,
-            account.to_string()
+    async fn request_groups_refresh(&self, accounts: &[Uuid]) -> LinkedResult<()> {
+        if accounts.is_empty() {
+            return Ok(());
+        }
+        let mut tx = self.pool.begin().await.map_err(failure)?;
+        for account in accounts {
+            notify(&mut tx, signals::GROUPS_REQUESTED, *account).await?;
+        }
+        tx.commit().await.map_err(failure)
+    }
+
+    async fn group_accounts(&self, group_id: Uuid, user: &str) -> LinkedResult<Vec<Uuid>> {
+        sqlx::query_scalar!(
+            r#"SELECT m.account_id AS "account_id!" FROM whatsapp_group_membership m
+            JOIN whatsapp_linked_account a ON a.id = m.account_id
+            WHERE m.binding_id = $1 AND m.consent_ended_at IS NULL AND a.state = 'connected'
+            UNION
+            SELECT id FROM whatsapp_linked_account WHERE user_id = $2 AND state = 'connected'"#,
+            group_id,
+            user
         )
-        .execute(&self.pool)
+        .fetch_all(&self.pool)
         .await
-        .map_err(failure)?;
-        Ok(())
+        .map_err(failure)
     }
 
     async fn visible_adoptions(
         &self,
         user: &str,
         groups: &[String],
-    ) -> LinkedResult<Vec<(String, GroupReference)>> {
-        Ok(sqlx::query!(
-            r#"SELECT b.group_jid, b.id, b.name
+    ) -> LinkedResult<Vec<VisibleAdoption>> {
+        sqlx::query_as!(
+            VisibleAdoption,
+            r#"SELECT b.group_jid, b.id, b.name, b.user_id AS owner_id
             FROM whatsapp_group b
-            WHERE b.group_jid = ANY($2) AND b.state <> 'detached' AND whatsapp_group_can_view(b.id, $1)"#,
+            WHERE b.group_jid = ANY($2) AND b.state <> 'detached' AND whatsapp_group_can_view(b.id, $1)
+            ORDER BY b.adopted_at DESC, b.id DESC"#,
             user,
             groups
         )
         .fetch_all(&self.pool)
         .await
-        .map_err(failure)?
-        .into_iter()
-        .map(|row| {
-            (
-                row.group_jid,
-                GroupReference {
-                    id: row.id,
-                    name: row.name,
-                },
-            )
-        })
-        .collect())
+        .map_err(failure)
     }
 
     async fn binding_roster(&self, binding: &Binding) -> LinkedResult<Option<GroupInfo>> {

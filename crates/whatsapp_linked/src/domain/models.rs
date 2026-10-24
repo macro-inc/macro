@@ -172,19 +172,14 @@ pub struct PairState {
     pub expires_at: DateTime<Utc>,
 }
 
-/// Explicit adoption request; the account is selected server-side.
+/// Explicit adoption request; the account is selected server-side. The
+/// group's name always follows WhatsApp.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "schema", schema(as = LinkedAdoptGroup))]
 pub struct AdoptGroup {
-    /// Destination workspace.
-    #[serde(default)]
-    pub team_id: Option<Uuid>,
     /// Group the requester's account has joined.
     pub group_jid: String,
-    /// Name for a newly created group entity; defaults to the group subject.
-    #[serde(default)]
-    pub name: Option<String>,
 }
 
 /// Binding lifecycle.
@@ -213,18 +208,16 @@ pub enum OwnershipState {
     TransferRequired,
 }
 
-/// One remote group bound to a group entity in a workspace.
+/// One remote group bound to a person's group entity.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "schema", schema(as = LinkedBinding))]
 pub struct Binding {
     /// Stable binding identity, independent of any observing account.
     pub id: Uuid,
-    /// Owning workspace.
-    pub team_id: Uuid,
     /// Remote group identity, never its display name.
     pub group_jid: String,
-    /// Native content owner.
+    /// The person who added the group, its owner.
     pub user_id: String,
     /// Lifecycle.
     pub state: BindingState,
@@ -248,6 +241,22 @@ pub struct Identity {
     /// Untrusted display name.
     #[serde(default)]
     pub display_name: Option<String>,
+}
+
+impl Identity {
+    /// What to call this person: their WhatsApp name, else their phone number.
+    pub fn label(&self) -> Option<String> {
+        if let Some(name) = self.display_name.as_deref().map(str::trim)
+            && !name.is_empty()
+        {
+            return Some(name.to_owned());
+        }
+        [Some(self.jid.as_str()), self.alternate_jid.as_deref()]
+            .into_iter()
+            .flatten()
+            .find_map(|jid| jid.strip_suffix("@s.whatsapp.net"))
+            .map(|phone| format!("+{phone}"))
+    }
 }
 
 /// Current remote participant; Macro access is a separate grant.
@@ -283,21 +292,39 @@ pub struct GroupInfo {
     pub community: bool,
     /// When the session service read this metadata.
     pub observed_at: DateTime<Utc>,
-    /// The caller's adopted entity for this remote group, when one is adopted in their
-    /// workspace and they can see it. Only set by the groups listing.
+    /// The caller's own Macro group for this remote group, once they added
+    /// it. Only set by the groups listing.
     #[serde(default)]
     pub group: Option<GroupReference>,
+    /// Someone else's Macro group for this remote group that was shared with
+    /// the caller, when the caller has not added their own. Only set by the
+    /// groups listing.
+    #[serde(default)]
+    pub shared: Option<SharedGroupReference>,
 }
 
-/// A group entity bound to a group.
+/// A group entity bound to a remote group.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "schema", schema(as = LinkedGroupReference))]
 pub struct GroupReference {
     /// Group entity id.
     pub id: Uuid,
-    /// Channel name.
+    /// Display name, following WhatsApp.
     pub name: String,
+}
+
+/// Another person's group entity the caller can view.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = LinkedSharedGroupReference))]
+pub struct SharedGroupReference {
+    /// Group entity id.
+    pub id: Uuid,
+    /// Display name, following WhatsApp.
+    pub name: String,
+    /// Macro user who added the group and shared it.
+    pub owner_id: String,
 }
 
 impl GroupInfo {
@@ -306,6 +333,36 @@ impl GroupInfo {
         self.participants.iter().find(|p| {
             p.identity.jid == identity || p.identity.alternate_jid.as_deref() == Some(identity)
         })
+    }
+
+    /// The WhatsApp subject, or for an unnamed group the names of its other
+    /// members as WhatsApp shows them: "Ana, Ben, +2".
+    pub fn display_name(&self, identity: &str) -> String {
+        let subject = self.name.trim();
+        if !subject.is_empty() {
+            return subject.to_owned();
+        }
+        let others: Vec<&Participant> = self
+            .participants
+            .iter()
+            .filter(|p| {
+                p.identity.jid != identity && p.identity.alternate_jid.as_deref() != Some(identity)
+            })
+            .collect();
+        let names: Vec<String> = others
+            .iter()
+            .filter_map(|p| p.identity.label())
+            .take(2)
+            .collect();
+        if names.is_empty() {
+            return "WhatsApp group".to_owned();
+        }
+        let rest = others.len() - names.len();
+        if rest == 0 {
+            names.join(", ")
+        } else {
+            format!("{}, +{rest}", names.join(", "))
+        }
     }
 
     /// Whether the given identity may post under the group's current settings.
@@ -550,8 +607,6 @@ pub const TEXT_LIMIT_BYTES: usize = 16 * 1024;
 pub const MUTATION_WINDOW_SECONDS: i64 = 10 * 60;
 /// Unattempted intents expire this long after they were created.
 pub const SEND_EXPIRY_SECONDS: i64 = 10 * 60;
-/// Group facts older than this cannot authorize adoption or sending.
-pub const GROUP_FACTS_MAX_AGE_SECONDS: i64 = 2 * 60;
 
 /// Operations implemented for linked groups, independent of current permission.
 #[derive(Debug, Clone, Serialize)]
@@ -615,8 +670,6 @@ pub enum ReplyBlock {
     NotObserving,
     /// The viewer is not in the group, or only admins may post.
     NotAllowedInGroup,
-    /// The group facts are being refreshed.
-    Refreshing,
     /// The group is suspended, detached, or needs a new content owner.
     GroupUnavailable,
 }
@@ -672,9 +725,6 @@ pub enum LinkedError {
     /// The account is not connected.
     #[error("connect your WhatsApp account first")]
     Disconnected,
-    /// Group facts are being refreshed; retry shortly.
-    #[error("refreshing WhatsApp group details; try again shortly")]
-    Refreshing,
     /// A sender identity is ambiguous; the event is quarantined.
     #[error("identity_conflict")]
     IdentityConflict,
@@ -702,7 +752,6 @@ impl LinkedError {
             Self::Forbidden => "forbidden",
             Self::Conflict => "conflict",
             Self::Disconnected => "disconnected",
-            Self::Refreshing => "refreshing",
             Self::IdentityConflict => "identity_conflict",
             Self::SendExpired => "send_expired",
             Self::Fenced => "lease_fenced",

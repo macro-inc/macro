@@ -43,7 +43,7 @@ async fn sends_and_roster_refreshes_share_a_consistent_lock_order(pool: PgPool) 
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn observers_can_refresh_groups_in_opposite_orders(pool: PgPool) {
-    let (linked, session, _, binding, alice, bob) = adopted(&pool).await;
+    let (linked, session, _, _, alice, bob) = adopted(&pool).await;
     let first = group(&[ALICE_JID, BOB_JID, CUSTOMER_JID]);
     let mut second = first.clone();
     second.jid = "120363000000000002@g.us".into();
@@ -55,9 +55,7 @@ async fn observers_can_refresh_groups_in_opposite_orders(pool: PgPool) {
         .adopt(
             ALICE,
             &AdoptGroup {
-                team_id: Some(binding.team_id),
                 group_jid: second.jid.clone(),
-                name: Some("Second group".into()),
             },
             SendAuthority::Human,
         )

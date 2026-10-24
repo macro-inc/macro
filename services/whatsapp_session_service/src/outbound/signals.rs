@@ -5,22 +5,21 @@
 //! The listener runs on its own direct connection (a transaction pooler would
 //! drop `LISTEN`). When it reconnects, notifications sent in between are lost,
 //! so it emits [`Signal::Resync`] and the supervisor re-reads everything.
+//!
+//! Payloads are `whatsapp_linked`'s JSON signals; each one's `traceparent`
+//! parents a `whatsapp.signal.receive` span, so the sender's trace continues
+//! here.
 
 use sqlx::postgres::{PgConnectOptions, PgListener, PgPoolOptions};
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
-use uuid::Uuid;
 
-use crate::domain::supervisor::{ACCOUNT_RELEASED, Signal};
+use whatsapp_linked::outbound::pg::signals::{
+    ACCOUNT_CHANGED, ACCOUNT_RELEASED, GROUPS_REQUESTED, PAIRING_REQUESTED, SEND_REQUESTED,
+};
+use whatsapp_linked::outbound::trace_context;
 
-/// `whatsapp_pairing_requested`, `<pairing_id>`.
-pub const PAIRING_REQUESTED: &str = "whatsapp_pairing_requested";
-/// `whatsapp_send_requested`, `<account_id>`.
-pub const SEND_REQUESTED: &str = "whatsapp_send_requested";
-/// `whatsapp_groups_requested`, `<account_id>`.
-pub const GROUPS_REQUESTED: &str = "whatsapp_groups_requested";
-/// `whatsapp_account_changed`, `<account_id>`.
-pub const ACCOUNT_CHANGED: &str = "whatsapp_account_changed";
+use crate::domain::supervisor::Signal;
 
 const CHANNELS: [&str; 5] = [
     ACCOUNT_RELEASED,
@@ -68,7 +67,16 @@ impl SignalListener {
             let signal = match received {
                 Ok(Some(notification)) => {
                     match parse(notification.channel(), notification.payload()) {
-                        Some(signal) => signal,
+                        Some((signal, traceparent)) => {
+                            let span = tracing::info_span!(
+                                "whatsapp.signal.receive",
+                                channel = notification.channel(),
+                                signal = ?signal,
+                            );
+                            trace_context::adopt(&span, traceparent.as_deref());
+                            span.in_scope(|| tracing::trace!("WhatsApp signal received"));
+                            signal
+                        }
                         None => {
                             tracing::warn!(
                                 channel = notification.channel(),
@@ -92,15 +100,18 @@ impl SignalListener {
     }
 }
 
-/// Maps one notification to a signal; `None` for unknown channels or payloads.
-pub fn parse(channel: &str, payload: &str) -> Option<Signal> {
-    let id = Uuid::parse_str(payload).ok()?;
-    match channel {
+/// Maps one notification to a signal and the sender's trace context; `None`
+/// for unknown channels or payloads.
+pub fn parse(channel: &str, payload: &str) -> Option<(Signal, Option<String>)> {
+    let payload = whatsapp_linked::outbound::pg::signals::Signal::parse(payload)?;
+    let id = payload.id;
+    let signal = match channel {
         ACCOUNT_RELEASED => Some(Signal::AccountReleased(id)),
         PAIRING_REQUESTED => Some(Signal::PairingRequested(id)),
         SEND_REQUESTED => Some(Signal::SendRequested(id)),
         GROUPS_REQUESTED => Some(Signal::GroupsRequested(id)),
         ACCOUNT_CHANGED => Some(Signal::AccountChanged(id)),
         _ => None,
-    }
+    }?;
+    Some((signal, payload.traceparent))
 }

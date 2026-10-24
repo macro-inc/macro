@@ -1399,6 +1399,7 @@
 - [LinkedReplyResponses](type-aliases/LinkedReplyResponses.md)
 - [LinkedSendProgress](type-aliases/LinkedSendProgress.md)
 - [LinkedSendReply](type-aliases/LinkedSendReply.md)
+- [LinkedSharedGroupReference](type-aliases/LinkedSharedGroupReference.md)
 - [LinkedUploadData](type-aliases/LinkedUploadData.md)
 - [LinkedUploadedAttachment](type-aliases/LinkedUploadedAttachment.md)
 - [LinkedUploadRequest](type-aliases/LinkedUploadRequest.md)

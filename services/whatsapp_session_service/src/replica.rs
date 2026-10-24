@@ -16,7 +16,7 @@ use whatsapp_linked::outbound::pg::PgLinkedRepository;
 use whatsapp_store_pg::kms::WhatsAppKms;
 use whatsmeow::{Dialer, Signal};
 
-use crate::domain::account::{AccountConfig, AccountSessions};
+use crate::domain::account::{AccountConfig, AccountSessions, GROUPS_REFRESH_INTERVAL};
 use crate::domain::ports::LeaseError;
 use crate::domain::supervisor::{Supervisor, SupervisorConfig, SupervisorError};
 use crate::outbound::lease::{PgAccountDirectory, PgAccountLocks};
@@ -43,6 +43,8 @@ pub struct Timings {
     pub drain_deadline: Duration,
     /// How often to report fleet health.
     pub health_every: Duration,
+    /// Least time between requested group refreshes of one account.
+    pub groups_refresh_interval: Duration,
 }
 
 impl Timings {
@@ -59,6 +61,7 @@ impl Timings {
             stop_timeout: Duration::from_secs(10),
             drain_deadline: Duration::from_secs(100),
             health_every: Duration::from_secs(60),
+            groups_refresh_interval: GROUPS_REFRESH_INTERVAL,
         }
     }
 }
@@ -155,6 +158,7 @@ pub async fn start<Kms: WhatsAppKms + 'static>(
             send_timeout: timings.send_timeout,
             send_batch: 16,
             tick_every: timings.tick_every,
+            groups_refresh_interval: timings.groups_refresh_interval,
         },
     );
     let supervisor = Supervisor::new(

@@ -237,8 +237,12 @@ async fn an_inbound_photo_is_downloaded_once_and_becomes_a_private_document(pool
     // A bot in team scope inherits the group's explicit team share, without
     // impersonating the adopter or receiving a separate document grant.
     let bot = entity_access::domain::models::BotId::new_from_uuid(Uuid::from_u128(0xb07));
+    let team = sqlx::query_scalar!("SELECT team_id FROM team_user WHERE user_id = $1", ALICE)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
     sqlx::query!("INSERT INTO bots (id,kind,team_id,name,handle) VALUES ($1,'owned',$2,'Group reader','wa-reader')",
-        bot.as_uuid(), binding.team_id).execute(&pool).await.unwrap();
+        bot.as_uuid(), team).execute(&pool).await.unwrap();
     let team_share = models_permissions::share_permission::UpdateSharePermissionRequestV2 {
         link_share: None,
         link_share_access_level: None,
@@ -254,12 +258,7 @@ async fn an_inbound_photo_is_downloaded_once_and_becomes_a_private_document(pool
     let permissions = entity_access::outbound::PgAccessRepository::new(pool.clone());
     assert_eq!(
         permissions
-            .get_team_entity_access(
-                bot,
-                binding.team_id,
-                &stored[0].0.to_string(),
-                EntityType::Document
-            )
+            .get_team_entity_access(bot, team, &stored[0].0.to_string(), EntityType::Document)
             .await
             .unwrap(),
         Some(AccessLevel::View)
@@ -276,12 +275,7 @@ async fn an_inbound_photo_is_downloaded_once_and_becomes_a_private_document(pool
         .unwrap();
     assert_eq!(
         permissions
-            .get_team_entity_access(
-                bot,
-                binding.team_id,
-                &stored[0].0.to_string(),
-                EntityType::Document
-            )
+            .get_team_entity_access(bot, team, &stored[0].0.to_string(), EntityType::Document)
             .await
             .unwrap(),
         None

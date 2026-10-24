@@ -26,7 +26,8 @@ Lets the session service and its tests run end to end without WhatsApp.
 
 ## Start here
 
-- `src/lib.rs`: the `FakeWhatsApp` API (users, groups, kick, drop connection,
+- `src/lib.rs`: the `FakeWhatsApp` API (users, groups and their renames and
+  removals as `w:gp2` notifications, kick, drop connection,
   delivery counters, waiters).
 - `src/state.rs`: routing, IQ handlers (encrypt, usync, w:g2, w:m), offline queues.
 - `src/phone.rs`: fake phones: send/receive with real Signal, QR approval.

@@ -81,7 +81,7 @@ impl IntoResponse for ApiError {
             | LinkedError::IdentityConflict
             | LinkedError::Disconnected
             | LinkedError::SendExpired => StatusCode::CONFLICT,
-            LinkedError::Refreshing | LinkedError::Unavailable => StatusCode::SERVICE_UNAVAILABLE,
+            LinkedError::Unavailable => StatusCode::SERVICE_UNAVAILABLE,
             LinkedError::Fenced => StatusCode::INTERNAL_SERVER_ERROR,
         };
         let mut response = (

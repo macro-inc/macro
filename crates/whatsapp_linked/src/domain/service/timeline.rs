@@ -12,7 +12,6 @@ impl LinkedService {
     pub async fn adopted_groups(&self, user: &str) -> LinkedResult<Vec<WhatsAppGroupSummary>> {
         let records = self.timeline.visible_groups(user).await?;
         let account = self.accounts.owned_account(user).await?;
-        let now = Utc::now();
         let groups = records
             .into_iter()
             .map(|record| {
@@ -25,7 +24,6 @@ impl LinkedService {
                     account.as_ref(),
                     &record.binding,
                     facts.as_ref(),
-                    now,
                 );
                 group.can_send = group.send_reason.is_none();
                 group
@@ -46,6 +44,8 @@ impl LinkedService {
             .ok_or(LinkedError::NotFound)?;
         let account = self.accounts.owned_account(user).await?;
         let mut group = self.timeline.summary(id, user).await?;
+        let observers = self.groups.group_accounts(id, user).await?;
+        self.groups.request_groups_refresh(&observers).await?;
         group.send_reason = self.reply_block(account.as_ref(), &binding).await?;
         group.can_send = group.send_reason.is_none();
         let access_level = match access.entity_permission() {

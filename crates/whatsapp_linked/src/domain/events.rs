@@ -304,6 +304,8 @@ pub struct ClaimedSend {
     pub group_sequence: i64,
     /// Content.
     pub content: OutgoingContent,
+    /// W3C trace context of the request that recorded the send.
+    pub traceparent: Option<String>,
 }
 
 /// Outcome of a dispatched send.

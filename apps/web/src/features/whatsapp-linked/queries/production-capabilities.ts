@@ -130,10 +130,7 @@ export function createWhatsAppLinkedCapabilities(host: {
       ),
     adopt: (request) =>
       ResultAsync.fromPromise(
-        adopt.mutateAsync({
-          group_jid: request.groupJid,
-          name: request.name,
-        }),
+        adopt.mutateAsync({ group_jid: request.groupJid }),
         failure
       ).map((binding) => ({ groupId: binding.group_id })),
     isConnecting: () => connect.isPending,

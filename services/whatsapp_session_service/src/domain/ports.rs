@@ -156,6 +156,14 @@ pub enum SessionEvent {
     LoggedOut,
     /// Another connection with the same keys replaced this one.
     Replaced,
+    /// The account joined a group, or a group's name or participants changed.
+    GroupChanged {
+        /// The group.
+        group_jid: String,
+        /// Its full metadata when the event carried it (joining); otherwise
+        /// the runner reads it.
+        info: Option<Box<GroupInfo>>,
+    },
 }
 
 /// Where the client hands group events before acknowledging them.
@@ -268,6 +276,13 @@ pub trait WhatsAppSession: Send + Sync + 'static {
 
     /// Full metadata for every group the account is in.
     fn joined_groups(&self) -> impl Future<Output = Result<Vec<GroupInfo>, SessionError>> + Send;
+
+    /// Full metadata for one group, or `None` when the account is not in it
+    /// (left, removed, or the group is gone).
+    fn group(
+        &self,
+        group_jid: &str,
+    ) -> impl Future<Output = Result<Option<GroupInfo>, SessionError>> + Send;
 
     /// Unlinks the device at WhatsApp.
     fn logout(&self) -> impl Future<Output = ()> + Send;

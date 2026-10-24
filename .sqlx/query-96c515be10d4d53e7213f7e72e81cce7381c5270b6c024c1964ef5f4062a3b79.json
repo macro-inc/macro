@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT group_jid, metadata FROM whatsapp_group_roster WHERE account_id = $1 AND group_jid = ANY($2)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "group_jid",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "metadata",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "96c515be10d4d53e7213f7e72e81cce7381c5270b6c024c1964ef5f4062a3b79"
+}

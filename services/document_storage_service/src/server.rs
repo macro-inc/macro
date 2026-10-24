@@ -1480,6 +1480,7 @@ pub async fn run() -> anyhow::Result<()> {
             access: entity_access_service.clone(),
             authorization: authorization_state.clone(),
             notifications: notification_ingress_service.clone(),
+            connection_gateway: conn_gateway_client.clone(),
             tracker: consumer_tracker.clone(),
             cancellation: consumer_cancellation_token.clone(),
         });

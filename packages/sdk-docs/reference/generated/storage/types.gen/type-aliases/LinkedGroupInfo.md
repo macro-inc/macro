@@ -1,6 +1,6 @@
 # Type Alias: LinkedGroupInfo
 
-> **LinkedGroupInfo** = \{ `announce`: `boolean`; `community`: `boolean`; `disappearing`: `boolean`; `group?`: `null` \| [`LinkedGroupReference`](LinkedGroupReference.md); `jid`: `string`; `name`: `string`; `observedAt`: `string`; `participants`: [`LinkedParticipant`](LinkedParticipant.md)[]; \}
+> **LinkedGroupInfo** = \{ `announce`: `boolean`; `community`: `boolean`; `disappearing`: `boolean`; `group?`: `null` \| [`LinkedGroupReference`](LinkedGroupReference.md); `jid`: `string`; `name`: `string`; `observedAt`: `string`; `participants`: [`LinkedParticipant`](LinkedParticipant.md)[]; `shared?`: `null` \| [`LinkedSharedGroupReference`](LinkedSharedGroupReference.md); \}
 
 One full metadata read of a group, never an incomplete membership delta.
 
@@ -16,3 +16,4 @@ One full metadata read of a group, never an incomplete membership delta.
 | <a id="property-name"></a> `name` | `string` | Current subject. |
 | <a id="property-observedat"></a> `observedAt` | `string` | When the session service read this metadata. |
 | <a id="property-participants"></a> `participants` | [`LinkedParticipant`](LinkedParticipant.md)[] | Full roster. |
+| <a id="property-shared"></a> `shared?` | `null` \| [`LinkedSharedGroupReference`](LinkedSharedGroupReference.md) | - |

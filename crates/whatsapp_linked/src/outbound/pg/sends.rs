@@ -119,6 +119,44 @@ impl SendRepository for PgLinkedRepository {
         }))
     }
 
+    async fn stored_send(
+        &self,
+        group_id: Uuid,
+        user: &str,
+        idempotency_key: Uuid,
+    ) -> LinkedResult<Option<([u8; 32], SendProgress)>> {
+        let Some(row) = sqlx::query!(
+            r#"SELECT id, user_id, group_id, payload, state, message_id, error_code, created_at, request_sha256
+            FROM whatsapp_send WHERE group_id = $1 AND user_id = $2 AND idempotency_key = $3"#,
+            group_id,
+            user,
+            idempotency_key
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(failure)?
+        else {
+            return Ok(None);
+        };
+        let digest: [u8; 32] = row
+            .request_sha256
+            .try_into()
+            .map_err(|_| LinkedError::Unavailable)?;
+        Ok(Some((
+            digest,
+            progress(SendRow {
+                id: row.id,
+                user_id: row.user_id,
+                group_id: row.group_id,
+                payload: row.payload,
+                state: row.state,
+                message_id: row.message_id,
+                error_code: row.error_code,
+                created_at: row.created_at,
+            })?,
+        )))
+    }
+
     async fn enqueue(&self, intent: SendIntent<'_>) -> LinkedResult<SendProgress> {
         let SendIntent {
             user,
@@ -159,10 +197,7 @@ impl SendRepository for PgLinkedRepository {
             .identity_jid
             .as_deref()
             .ok_or(LinkedError::Forbidden)?;
-        if !metadata.can_post(identity)
-            || Utc::now() - metadata.observed_at
-                > chrono::Duration::seconds(GROUP_FACTS_MAX_AGE_SECONDS)
-        {
+        if !metadata.can_post(identity) {
             return Err(LinkedError::Forbidden.into());
         }
         sqlx::query!(r#"INSERT INTO whatsapp_group_membership (binding_id,account_id,generation,consent_at,remote_member,can_post,reconciled,observed_at)
@@ -197,8 +232,8 @@ impl SendRepository for PgLinkedRepository {
         };
         if let Some(sequence) = sequence {
             sqlx::query!(
-            r#"INSERT INTO whatsapp_send (id, account_id, binding_id, group_id, user_id, idempotency_key, request_sha256, payload, generation, group_sequence, created_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, clock_timestamp())
+            r#"INSERT INTO whatsapp_send (id, account_id, binding_id, group_id, user_id, idempotency_key, request_sha256, payload, generation, group_sequence, traceparent, created_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, clock_timestamp())
             ON CONFLICT (group_id, user_id, idempotency_key) DO NOTHING"#,
             Uuid::now_v7(),
             account.id,
@@ -209,7 +244,8 @@ impl SendRepository for PgLinkedRepository {
             &digest[..],
             payload,
             account.authorization_generation,
-            sequence
+            sequence,
+            crate::outbound::trace_context::current()
         )
         .execute(&mut *tx)
         .await
@@ -383,13 +419,14 @@ impl PgLinkedRepository {
     ) -> LinkedResult<Vec<ClaimedSend>> {
         let mut tx = self.pool.begin().await.map_err(failure)?;
         let account = fence_in(&mut tx, scope).await?;
-        sqlx::query!(
+        let mut failed = sqlx::query_scalar!(
             r#"UPDATE whatsapp_send SET state = 'failed', error_code = 'send_expired', updated_at = now()
-            WHERE account_id = $1 AND state = 'pending' AND created_at <= clock_timestamp() - make_interval(secs => $2)"#,
+            WHERE account_id = $1 AND state = 'pending' AND created_at <= clock_timestamp() - make_interval(secs => $2)
+            RETURNING group_id"#,
             account.id,
             SEND_EXPIRY_SECONDS as f64
         )
-        .execute(&mut *tx)
+        .fetch_all(&mut *tx)
         .await
         .map_err(failure)?;
         let rows = sqlx::query!(
@@ -399,7 +436,7 @@ impl PgLinkedRepository {
                 SELECT id FROM whatsapp_send WHERE account_id = $1 AND generation = $3 AND state = 'pending'
                 ORDER BY binding_id, group_sequence LIMIT $4 FOR UPDATE SKIP LOCKED)
               AND b.id = s.binding_id
-            RETURNING s.id, s.binding_id, s.group_sequence, s.payload, b.group_jid"#,
+            RETURNING s.id, s.binding_id, s.group_sequence, s.payload, s.traceparent, b.group_jid"#,
             account.id,
             scope.lease_epoch,
             account.generation,
@@ -424,6 +461,7 @@ impl PgLinkedRepository {
                     group_jid: row.group_jid,
                     group_sequence: row.group_sequence,
                     content,
+                    traceparent: row.traceparent,
                 }),
                 None => {
                     sqlx::query!(
@@ -433,8 +471,14 @@ impl PgLinkedRepository {
                     .execute(&mut *tx)
                     .await
                     .map_err(failure)?;
+                    failed.push(row.binding_id);
                 }
             }
+        }
+        failed.sort();
+        failed.dedup();
+        for group_id in failed {
+            notify_change(&mut tx, signals::Change::Group { group_id }).await?;
         }
         claimed.sort_by_key(|send| send.group_sequence);
         tx.commit().await.map_err(failure)?;
@@ -449,18 +493,20 @@ impl PgLinkedRepository {
     ) -> LinkedResult<()> {
         let mut tx = self.pool.begin().await.map_err(failure)?;
         let account = fence_in(&mut tx, scope).await?;
-        let expired = sqlx::query!(
+        let expired = sqlx::query_scalar!(
             r#"UPDATE whatsapp_send SET state = 'failed', error_code = 'send_expired', claimed_epoch = NULL, updated_at = now()
             WHERE id = $1 AND account_id = $2 AND state = 'sending' AND dispatch_started_at IS NULL
-              AND created_at <= clock_timestamp() - make_interval(secs => $3)"#,
+              AND created_at <= clock_timestamp() - make_interval(secs => $3)
+            RETURNING group_id"#,
             send,
             account.id,
             SEND_EXPIRY_SECONDS as f64
         )
-        .execute(&mut *tx)
+        .fetch_optional(&mut *tx)
         .await
         .map_err(failure)?;
-        if expired.rows_affected() == 1 {
+        if let Some(group_id) = expired {
+            notify_change(&mut tx, signals::Change::Group { group_id }).await?;
             tx.commit().await.map_err(failure)?;
             return Err(LinkedError::SendExpired.into());
         }
@@ -473,13 +519,11 @@ impl PgLinkedRepository {
               AND b.id = s.binding_id AND b.state = 'active' AND b.ownership_state = 'active'
               AND m.binding_id = s.binding_id AND m.account_id = s.account_id AND m.generation = s.generation
               AND m.consent_ended_at IS NULL AND m.reconciled AND m.remote_member AND m.can_post
-              AND m.observed_at > clock_timestamp() - make_interval(secs => $5)
               AND whatsapp_group_can_view(s.group_id, s.user_id)"#,
             send,
             account.id,
             scope.lease_epoch,
-            source_id,
-            GROUP_FACTS_MAX_AGE_SECONDS as f64
+            source_id
         )
         .execute(&mut *tx)
         .await
@@ -557,7 +601,7 @@ impl PgLinkedRepository {
                 let request: SendReply = decode(row.payload)?;
                 let binding = sqlx::query_as!(
                     bindings::BindingRow,
-                    "SELECT id, team_id, group_jid, user_id, state, ownership_state, adopted_at FROM whatsapp_group WHERE id = $1",
+                    "SELECT id, group_jid, user_id, state, ownership_state, adopted_at FROM whatsapp_group WHERE id = $1",
                     row.binding_id
                 )
                 .fetch_one(&mut *tx)
@@ -696,6 +740,7 @@ impl PgLinkedRepository {
                 }
             }
         }
+        notify_change(&mut tx, signals::Change::Group { group_id: binding }).await?;
         tx.commit().await.map_err(failure)
     }
 

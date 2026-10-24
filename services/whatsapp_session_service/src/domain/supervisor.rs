@@ -19,10 +19,6 @@ use super::ports::{
 #[cfg(test)]
 mod test;
 
-/// `NOTIFY` channel, payload `<account_id>`: the account still needs a session
-/// and is free to take.
-pub const ACCOUNT_RELEASED: &str = "whatsapp_account_released";
-
 /// Signals for this replica, one per `NOTIFY` (see `outbound::signals`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Signal {

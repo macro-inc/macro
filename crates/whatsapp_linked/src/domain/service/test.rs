@@ -14,7 +14,6 @@ fn account(state: AccountState) -> Account {
 fn binding(state: BindingState, ownership_state: OwnershipState) -> Binding {
     Binding {
         id: Uuid::from_u128(2),
-        team_id: Uuid::from_u128(3),
         group_jid: "120363000000000001@g.us".into(),
         user_id: "macro|alice@example.com".into(),
         state,
@@ -23,12 +22,11 @@ fn binding(state: BindingState, ownership_state: OwnershipState) -> Binding {
     }
 }
 
-fn facts(observed_at: DateTime<Utc>) -> SendingFacts {
+fn facts() -> SendingFacts {
     SendingFacts {
         observing: true,
         remote_member: true,
         can_post: true,
-        observed_at: Some(observed_at),
     }
 }
 
@@ -40,11 +38,10 @@ const ON: Features = Features {
 
 #[test]
 fn reply_block_names_the_first_missing_fact() {
-    let now = Utc::now();
     let active = binding(BindingState::Active, OwnershipState::Active);
     let connected = account(AccountState::Connected);
     assert_eq!(
-        reply_block(ON, Some(&connected), &active, Some(&facts(now)), now),
+        reply_block(ON, Some(&connected), &active, Some(&facts())),
         None
     );
     assert_eq!(
@@ -52,23 +49,16 @@ fn reply_block_names_the_first_missing_fact() {
             Features::default(),
             Some(&connected),
             &active,
-            Some(&facts(now)),
-            now
+            Some(&facts())
         ),
         Some(ReplyBlock::SendingDisabled)
     );
     assert_eq!(
-        reply_block(ON, None, &active, None, now),
+        reply_block(ON, None, &active, None),
         Some(ReplyBlock::NoAccount)
     );
     assert_eq!(
-        reply_block(
-            ON,
-            Some(&account(AccountState::LoggedOut)),
-            &active,
-            None,
-            now
-        ),
+        reply_block(ON, Some(&account(AccountState::LoggedOut)), &active, None),
         Some(ReplyBlock::Disconnected)
     );
     assert_eq!(
@@ -76,31 +66,57 @@ fn reply_block_names_the_first_missing_fact() {
             ON,
             Some(&connected),
             &binding(BindingState::Active, OwnershipState::TransferRequired),
-            Some(&facts(now)),
-            now
+            Some(&facts())
         ),
         Some(ReplyBlock::GroupUnavailable)
     );
     assert_eq!(
-        reply_block(ON, Some(&connected), &active, None, now),
+        reply_block(ON, Some(&connected), &active, None),
         Some(ReplyBlock::NotObserving)
     );
-    let mut announce = facts(now);
+    let mut announce = facts();
     announce.can_post = false;
     assert_eq!(
-        reply_block(ON, Some(&connected), &active, Some(&announce), now),
+        reply_block(ON, Some(&connected), &active, Some(&announce)),
         Some(ReplyBlock::NotAllowedInGroup)
     );
-    assert_eq!(
-        reply_block(
-            ON,
-            Some(&connected),
-            &active,
-            Some(&facts(now - Duration::minutes(5))),
-            now
-        ),
-        Some(ReplyBlock::Refreshing)
-    );
+}
+
+#[test]
+fn unnamed_groups_are_called_after_their_other_members() {
+    let me = "15550000001@s.whatsapp.net";
+    let person = |jid: &str, name: Option<&str>| Participant {
+        identity: Identity {
+            jid: jid.into(),
+            alternate_jid: None,
+            display_name: name.map(Into::into),
+        },
+        admin: false,
+    };
+    let mut group = GroupInfo {
+        jid: "120363000000000001@g.us".into(),
+        name: "  ".into(),
+        participants: vec![
+            person(me, Some("Me")),
+            person("15550000002@s.whatsapp.net", Some("Ana")),
+            person("15550000003@s.whatsapp.net", None),
+            person("15550000004@s.whatsapp.net", Some("Cy")),
+            person("99@lid", None),
+        ],
+        announce: false,
+        disappearing: false,
+        community: false,
+        observed_at: Utc::now(),
+        group: None,
+        shared: None,
+    };
+    assert_eq!(group.display_name(me), "Ana, +15550000003, +2");
+    group.participants.truncate(3);
+    assert_eq!(group.display_name(me), "Ana, +15550000003");
+    group.participants.truncate(1);
+    assert_eq!(group.display_name(me), "WhatsApp group");
+    group.name = "Family".into();
+    assert_eq!(group.display_name(me), "Family");
 }
 
 #[test]

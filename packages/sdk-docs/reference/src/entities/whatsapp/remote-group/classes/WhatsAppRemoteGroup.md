@@ -13,27 +13,22 @@ An existing group joined by the current user's connected WhatsApp account.
 | <a id="property-announce"></a> `announce` | `readonly` | () => `Promise`\<`boolean`\> | Whether only remote administrators can post. | - |
 | <a id="property-community"></a> `community` | `readonly` | () => `Promise`\<`boolean`\> | Whether this group is an unsupported community parent or announcement group. | - |
 | <a id="property-disappearing"></a> `disappearing` | `readonly` | () => `Promise`\<`boolean`\> | Whether disappearing messages prevent retention of group content. | - |
-| <a id="property-group"></a> `group` | `readonly` | () => `Promise`\<[`WhatsAppGroup`](../../group/classes/WhatsAppGroup.md) \| `undefined`\> | Adopted entity, when this remote group has been added to Macro. | - |
+| <a id="property-group"></a> `group` | `readonly` | () => `Promise`\<[`WhatsAppGroup`](../../group/classes/WhatsAppGroup.md) \| `undefined`\> | The current user's own Macro group for this remote group, once added. | - |
 | <a id="property-id"></a> `id` | `public readonly` | `string` | - | [`MacroEntity`](../../../entity/classes/MacroEntity.md).[`id`](../../../entity/classes/MacroEntity.md#property-id) |
-| <a id="property-name"></a> `name` | `readonly` | () => `Promise`\<`string`\> | Current remote group subject. | - |
+| <a id="property-name"></a> `name` | `readonly` | () => `Promise`\<`string`\> | The WhatsApp subject, or the other members' names for an unnamed group. | - |
 | <a id="property-observedat"></a> `observedAt` | `readonly` | () => `Promise`\<`string`\> | When the session service last observed this metadata. | - |
 | <a id="property-participants"></a> `participants` | `readonly` | () => `Promise`\<[`LinkedParticipant`](../../../../../generated/storage/types.gen/type-aliases/LinkedParticipant.md)[]\> | Current remote roster; membership alone does not grant Macro history access. | - |
+| <a id="property-shared"></a> `shared` | `readonly` | () => `Promise`\<[`WhatsAppGroup`](../../group/classes/WhatsAppGroup.md) \| `undefined`\> | Someone else's Macro group for this remote group, shared with the current user. | - |
 
 ## Methods
 
 ### adopt()
 
-> **adopt**(`options?`): `Promise`\<[`WhatsAppGroup`](../../group/classes/WhatsAppGroup.md)\>
+> **adopt**(): `Promise`\<[`WhatsAppGroup`](../../group/classes/WhatsAppGroup.md)\>
 
-Adopt with a name; share through the normal entity sharing endpoints.
-
-#### Parameters
-
-| Parameter | Type |
-| ------ | ------ |
-| `options?` | \{ `name?`: `string`; `team?`: [`Team`](../../../teams/team/classes/Team.md); \} |
-| `options.name?` | `string` |
-| `options.team?` | [`Team`](../../../teams/team/classes/Team.md) |
+Add the group to Macro as the current user's own group, named after
+WhatsApp; adding it again returns the same group. Share it through the
+normal entity sharing endpoints.
 
 #### Returns
 

@@ -33336,21 +33336,12 @@
       },
       "LinkedAdoptGroup": {
         "type": "object",
-        "description": "Explicit adoption request; the account is selected server-side.",
+        "description": "Explicit adoption request; the account is selected server-side. The\ngroup's name always follows WhatsApp.",
         "required": ["group_jid"],
         "properties": {
           "group_jid": {
             "type": "string",
             "description": "Group the requester's account has joined."
-          },
-          "name": {
-            "type": ["string", "null"],
-            "description": "Name for a newly created group entity; defaults to the group subject."
-          },
-          "team_id": {
-            "type": ["string", "null"],
-            "format": "uuid",
-            "description": "Destination workspace."
           }
         }
       },
@@ -33544,7 +33535,7 @@
               },
               {
                 "$ref": "#/components/schemas/LinkedGroupReference",
-                "description": "The caller's adopted entity for this remote group, when one is adopted in their\nworkspace and they can see it. Only set by the groups listing."
+                "description": "The caller's own Macro group for this remote group, once they added\nit. Only set by the groups listing."
               }
             ]
           },
@@ -33567,12 +33558,23 @@
               "$ref": "#/components/schemas/LinkedParticipant"
             },
             "description": "Full roster."
+          },
+          "shared": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LinkedSharedGroupReference",
+                "description": "Someone else's Macro group for this remote group that was shared with\nthe caller, when the caller has not added their own. Only set by the\ngroups listing."
+              }
+            ]
           }
         }
       },
       "LinkedGroupReference": {
         "type": "object",
-        "description": "A group entity bound to a group.",
+        "description": "A group entity bound to a remote group.",
         "required": ["id", "name"],
         "properties": {
           "id": {
@@ -33582,7 +33584,7 @@
           },
           "name": {
             "type": "string",
-            "description": "Channel name."
+            "description": "Display name, following WhatsApp."
           }
         }
       },
@@ -33733,7 +33735,6 @@
           "disconnected",
           "not_observing",
           "not_allowed_in_group",
-          "refreshing",
           "group_unavailable"
         ]
       },
@@ -33869,6 +33870,26 @@
             "type": ["string", "null"],
             "format": "uuid",
             "description": "Group message being quoted, within this group."
+          }
+        }
+      },
+      "LinkedSharedGroupReference": {
+        "type": "object",
+        "description": "Another person's group entity the caller can view.",
+        "required": ["id", "name", "owner_id"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Group entity id."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name, following WhatsApp."
+          },
+          "owner_id": {
+            "type": "string",
+            "description": "Macro user who added the group and shared it."
           }
         }
       },

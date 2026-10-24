@@ -1,10 +1,12 @@
 //! Personal WhatsApp linked devices: composition of the `whatsapp_linked` domain
-//! crate with DSS's entity access, notification and document clients,
-//! and the notification outbox worker. The session service runs the WhatsApp
-//! sockets; it reaches DSS only through MacroDB rows and `NOTIFY`.
+//! crate with DSS's entity access, notification and document clients, the
+//! notification outbox worker, and the `whatsapp_changed` pushes to open pages.
+//! The session service runs the WhatsApp sockets; it reaches DSS only through
+//! MacroDB rows and `NOTIFY`.
 
 use crate::api::context::{AuthorizationService, EntityAccessService, NotificationIngressType};
 use async_trait::async_trait;
+use connection_gateway_client::client::ConnectionGatewayClient;
 use documents_hex::domain::{
     models::{InitialLinkShare, NewDocument},
     ports::DocumentService as _,
@@ -19,6 +21,7 @@ use notification::domain::{models::SendNotificationRequestBuilder, service::Noti
 use sqlx::PgPool;
 use std::{collections::HashSet, sync::Arc, time::Duration};
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
+use tracing::Instrument as _;
 use whatsapp_linked::{
     domain::{
         effects::EffectsService,
@@ -33,7 +36,11 @@ use whatsapp_linked::{
     inbound::router::LinkedRouterState,
     outbound::{
         access::EntityAccessAuthorizer,
-        pg::{PgLinkedRepository, signals},
+        pg::{
+            PgLinkedRepository,
+            signals::{self, Change, ChangeSignal},
+        },
+        trace_context,
     },
 };
 
@@ -51,6 +58,7 @@ pub(crate) struct Dependencies {
     pub access: Arc<EntityAccessService>,
     pub authorization: macro_authorization::MacroAuthorizationState<AuthorizationService>,
     pub notifications: Arc<NotificationIngressType>,
+    pub connection_gateway: Arc<ConnectionGatewayClient>,
     pub tracker: TaskTracker,
     pub cancellation: CancellationToken,
 }
@@ -67,6 +75,7 @@ pub(crate) fn build(dependencies: Dependencies) -> State {
         access,
         authorization,
         notifications,
+        connection_gateway,
         tracker,
         cancellation,
     } = dependencies;
@@ -93,6 +102,14 @@ pub(crate) fn build(dependencies: Dependencies) -> State {
             repo: rate_limit::RedisRateLimitAdapter { redis },
         })),
     );
+    tracker.spawn(push_changes(
+        ChangePusher {
+            pool: pool.clone(),
+            access: access.clone(),
+            gateway: connection_gateway,
+        },
+        cancellation.clone(),
+    ));
     tracker.spawn(publish(
         pool,
         EffectsService::new(repository, publisher),
@@ -133,51 +150,205 @@ async fn publish(
     let mut sweep = tokio::time::interval(Duration::from_secs(30));
     sweep.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     loop {
-        tokio::select! {
+        // A signal's trace continues into the drain it wakes.
+        let traceparent = tokio::select! {
             _ = cancellation.cancelled() => break,
-            _ = sweep.tick() => {}
+            _ = sweep.tick() => None,
             notification = async {
                 match listener.as_mut() {
-                    Some(listener) => listener.recv().await.map(|_| ()),
+                    Some(listener) => listener.recv().await,
                     None => std::future::pending().await,
                 }
-            } => {
-                if let Err(error) = notification {
+            } => match notification {
+                Ok(notification) => {
+                    signals::Signal::parse(notification.payload()).and_then(|signal| signal.traceparent)
+                }
+                Err(error) => {
                     tracing::warn!(error = ?error, "WhatsApp notification/import listener reconnecting");
+                    None
+                }
+            }
+        };
+        let span = tracing::info_span!("whatsapp.linked.drain");
+        trace_context::adopt(&span, traceparent.as_deref());
+        drain(&effects, &media).instrument(span).await;
+    }
+}
+
+/// Import ready attachments, expire unsent uploads and publish notifications.
+async fn drain(effects: &EffectsService, media: &MediaService) {
+    loop {
+        match media.import_pending().await {
+            Ok(0) => break,
+            Ok(_) => {}
+            Err(error) => {
+                tracing::warn!(
+                    code = error.current_context().code(),
+                    "WhatsApp attachment import will retry"
+                );
+                break;
+            }
+        }
+    }
+    if let Err(error) = media.expire_uploads().await {
+        tracing::warn!(
+            code = error.current_context().code(),
+            "Expiring WhatsApp uploads will retry"
+        );
+    }
+    loop {
+        match effects.publish_pending().await {
+            Ok(0) => break,
+            Ok(_) => {}
+            Err(error) => {
+                tracing::warn!(
+                    code = error.current_context().code(),
+                    "WhatsApp notification/import will retry"
+                );
+                break;
+            }
+        }
+    }
+}
+
+/// Gateway message type of the bare change pushes; pages re-fetch on receipt.
+const CHANGED_MESSAGE: &str = "whatsapp_changed";
+
+/// Turns `whatsapp_changed` signals into bare gateway pushes: `{scope: "groups"}`
+/// to an account's owner, `{scope: "group", group_id}` to everyone who can
+/// view a group. No data travels; the page re-fetches.
+struct ChangePusher {
+    pool: PgPool,
+    access: Arc<EntityAccessService>,
+    gateway: Arc<ConnectionGatewayClient>,
+}
+
+impl ChangePusher {
+    /// Users who see this change.
+    async fn recipients(&self, change: Change) -> LinkedResult<Vec<String>> {
+        match change {
+            Change::Groups { account_id } => Ok(sqlx::query_scalar!(
+                "SELECT user_id FROM whatsapp_linked_account WHERE id = $1",
+                account_id
+            )
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(unavailable)?
+            .into_iter()
+            .collect()),
+            Change::Group { group_id } => {
+                let mut viewers: Vec<String> = self
+                    .access
+                    .get_users_by_entity(&group_id.to_string(), EntityType::WhatsAppGroup)
+                    .await
+                    .map_err(unavailable)?
+                    .into_iter()
+                    .map(|user| user.to_string())
+                    .collect();
+                // Link viewers become known once they read the group.
+                viewers.extend(
+                    sqlx::query_scalar!(
+                        "SELECT user_id FROM whatsapp_group_read_state WHERE group_id = $1 AND whatsapp_group_can_view(group_id, user_id)",
+                        group_id
+                    )
+                    .fetch_all(&self.pool)
+                    .await
+                    .map_err(unavailable)?,
+                );
+                viewers.sort();
+                viewers.dedup();
+                Ok(viewers)
+            }
+        }
+    }
+
+    #[tracing::instrument(
+        name = "whatsapp.changed.push",
+        skip_all,
+        err,
+        fields(scope, group_id, account_id, recipients)
+    )]
+    async fn push(&self, change: Change) -> LinkedResult<()> {
+        let span = tracing::Span::current();
+        let message = match change {
+            Change::Groups { account_id } => {
+                span.record("scope", "groups");
+                span.record("account_id", tracing::field::display(account_id));
+                serde_json::json!({ "scope": "groups" })
+            }
+            Change::Group { group_id } => {
+                span.record("scope", "group");
+                span.record("group_id", tracing::field::display(group_id));
+                serde_json::json!({ "scope": "group", "group_id": group_id })
+            }
+        };
+        let recipients = self.recipients(change).await?;
+        span.record("recipients", recipients.len());
+        if recipients.is_empty() {
+            return Ok(());
+        }
+        self.gateway
+            .batch_send_message(
+                CHANGED_MESSAGE.to_owned(),
+                message,
+                recipients
+                    .iter()
+                    .map(|user| EntityType::User.with_entity_str(user))
+                    .collect(),
+            )
+            .await
+            .map_err(|error| unavailable(format!("{error:#}")))?;
+        Ok(())
+    }
+}
+
+/// Push every `whatsapp_changed` signal, coalescing a burst into one push per
+/// change. A push that fails is dropped: pages also re-fetch on open.
+async fn push_changes(pusher: ChangePusher, cancellation: CancellationToken) {
+    let mut listener = loop {
+        let listening = async {
+            let mut listener = sqlx::postgres::PgListener::connect_with(&pusher.pool).await?;
+            listener.listen(signals::CHANGED).await?;
+            Ok::<_, sqlx::Error>(listener)
+        };
+        match listening.await {
+            Ok(listener) => break listener,
+            Err(error) => {
+                tracing::warn!(error = ?error, "WhatsApp change pushes will retry listening");
+                tokio::select! {
+                    _ = cancellation.cancelled() => return,
+                    _ = tokio::time::sleep(Duration::from_secs(5)) => {}
                 }
             }
         }
-        loop {
-            match media.import_pending().await {
-                Ok(0) => break,
-                Ok(_) => {}
-                Err(error) => {
-                    tracing::warn!(
-                        code = error.current_context().code(),
-                        "WhatsApp attachment import will retry"
-                    );
-                    break;
-                }
+    };
+    loop {
+        let first = tokio::select! {
+            _ = cancellation.cancelled() => return,
+            received = listener.recv() => received,
+        };
+        let mut batch = match first {
+            Ok(notification) => vec![notification],
+            Err(error) => {
+                tracing::warn!(error = ?error, "WhatsApp change listener reconnecting");
+                continue;
             }
+        };
+        while let Some(notification) = listener.next_buffered() {
+            batch.push(notification);
         }
-        if let Err(error) = media.expire_uploads().await {
-            tracing::warn!(
-                code = error.current_context().code(),
-                "Expiring WhatsApp uploads will retry"
-            );
-        }
-        loop {
-            match effects.publish_pending().await {
-                Ok(0) => break,
-                Ok(_) => {}
-                Err(error) => {
-                    tracing::warn!(
-                        code = error.current_context().code(),
-                        "WhatsApp notification/import will retry"
-                    );
-                    break;
-                }
+        let mut seen = HashSet::new();
+        for notification in batch {
+            let Some(signal) = ChangeSignal::parse(notification.payload()) else {
+                tracing::warn!("Ignoring a malformed WhatsApp change signal");
+                continue;
+            };
+            if !seen.insert(signal.change) {
+                continue;
             }
+            let span = tracing::info_span!("whatsapp.changed.receive");
+            trace_context::adopt(&span, signal.traceparent.as_deref());
+            let _ = pusher.push(signal.change).instrument(span).await;
         }
     }
 }

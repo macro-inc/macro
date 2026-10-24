@@ -40,6 +40,7 @@ enum Call {
     Disconnect,
     PasskeyResponse(serde_json::Value),
     ConfirmPasskey,
+    Group(String),
 }
 
 #[derive(Clone)]
@@ -48,6 +49,8 @@ struct FakeWhatsApp {
     events: Arc<Mutex<Option<mpsc::UnboundedSender<SessionEvent>>>>,
     inbound: Arc<Mutex<Option<Arc<dyn InboundSink>>>>,
     identity: Arc<Mutex<Option<String>>>,
+    /// What reading one group returns.
+    group: Arc<Mutex<Option<GroupInfo>>>,
 }
 
 struct FakeSession {
@@ -145,7 +148,16 @@ impl WhatsAppSession for FakeSession {
             community: false,
             observed_at: Utc::now(),
             group: None,
+            shared: None,
         }])
+    }
+
+    async fn group(&self, group_jid: &str) -> Result<Option<GroupInfo>, SessionError> {
+        self.whatsapp
+            .calls
+            .send(Call::Group(group_jid.to_owned()))
+            .unwrap();
+        Ok(self.whatsapp.group.lock().unwrap().clone())
     }
 
     async fn logout(&self) {
@@ -206,11 +218,23 @@ fn runner(
     FakeWhatsApp,
     mpsc::UnboundedReceiver<Call>,
 ) {
-    runner_ticking(Duration::from_secs(600), pool)
+    runner_with(Duration::from_secs(600), Duration::from_secs(3600), pool)
 }
 
 fn runner_ticking(
     tick_every: Duration,
+    pool: &PgPool,
+) -> (
+    Arc<AccountSessions<FakeWhatsApp>>,
+    FakeWhatsApp,
+    mpsc::UnboundedReceiver<Call>,
+) {
+    runner_with(tick_every, Duration::from_secs(3600), pool)
+}
+
+fn runner_with(
+    tick_every: Duration,
+    groups_refresh_interval: Duration,
     pool: &PgPool,
 ) -> (
     Arc<AccountSessions<FakeWhatsApp>>,
@@ -223,6 +247,7 @@ fn runner_ticking(
         events: Arc::default(),
         inbound: Arc::default(),
         identity: Arc::default(),
+        group: Arc::default(),
     };
     let runner = Arc::new(AccountSessions::new(
         SessionService::new(Arc::new(PgLinkedRepository::new(pool.clone()))),
@@ -231,6 +256,7 @@ fn runner_ticking(
             send_timeout: Duration::from_secs(5),
             send_batch: 16,
             tick_every,
+            groups_refresh_interval,
         },
     ));
     (runner, whatsapp, call_receiver)
@@ -545,6 +571,134 @@ async fn a_passkey_answer_is_forwarded_on_the_tick_without_a_signal(pool: PgPool
         }
     };
     assert_eq!(forwarded, Some(Call::PasskeyResponse(assertion)));
+    started.release.cancel();
+    assert_eq!(started.running.await.unwrap(), AccountExit::Released);
+}
+
+/// A connected account whose runner has connected and read its groups once.
+async fn connected(
+    pool: &PgPool,
+    groups_refresh_interval: Duration,
+) -> (Uuid, FakeWhatsApp, mpsc::UnboundedReceiver<Call>, Started) {
+    let (account, _pairing) = insert_pairing_account(pool).await;
+    sqlx::query!(
+        "UPDATE whatsapp_linked_account SET state = 'connected', identity_jid = $2 WHERE id = $1",
+        account,
+        IDENTITY,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE whatsapp_pairing SET state = 'success', consumed_at = now() WHERE account_id = $1",
+        account
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    let (runner, whatsapp, mut calls) =
+        runner_with(Duration::from_secs(600), groups_refresh_interval, pool);
+    *whatsapp.identity.lock().unwrap() = Some(IDENTITY.to_owned());
+    let started = start(&runner, account);
+    assert_eq!(calls.recv().await, Some(Call::Open(1, false)));
+    assert_eq!(calls.recv().await, Some(Call::Connect));
+    event_sender(&whatsapp)
+        .send(SessionEvent::Connected)
+        .unwrap();
+    assert_eq!(calls.recv().await, Some(Call::JoinedGroups));
+    (account, whatsapp, calls, started)
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn requested_group_refreshes_are_rate_limited_per_account(pool: PgPool) {
+    let (_, _, mut calls, started) = connected(&pool, Duration::from_secs(3600)).await;
+    // Opening the page right after connecting does not read the groups again;
+    // a resync (missed notifications) always does. Signals run in order.
+    started.signals.send(AccountSignal::Groups).await.unwrap();
+    started.signals.send(AccountSignal::Resync).await.unwrap();
+    assert_eq!(calls.recv().await, Some(Call::JoinedGroups));
+    started.release.cancel();
+    assert_eq!(started.running.await.unwrap(), AccountExit::Released);
+    assert_eq!(
+        calls.recv().await,
+        Some(Call::Disconnect),
+        "exactly one read for the two signals"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn requested_group_refreshes_run_once_the_interval_passed(pool: PgPool) {
+    let (_, _, mut calls, started) = connected(&pool, Duration::ZERO).await;
+    started.signals.send(AccountSignal::Groups).await.unwrap();
+    assert_eq!(calls.recv().await, Some(Call::JoinedGroups));
+    started.release.cancel();
+    assert_eq!(started.running.await.unwrap(), AccountExit::Released);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn live_group_events_update_the_one_group(pool: PgPool) {
+    const OTHER: &str = "120363000000000002@g.us";
+    let mut listener = sqlx::postgres::PgListener::connect_with(&pool)
+        .await
+        .unwrap();
+    listener
+        .listen(whatsapp_linked::outbound::pg::signals::CHANGED)
+        .await
+        .unwrap();
+    let (account, whatsapp, mut calls, started) = connected(&pool, Duration::from_secs(3600)).await;
+    // The connect refresh stored the first list.
+    listener.recv().await.unwrap();
+    let joined = GroupInfo {
+        jid: OTHER.to_owned(),
+        name: "Joined".to_owned(),
+        participants: vec![Participant {
+            identity: Identity {
+                jid: IDENTITY.to_owned(),
+                alternate_jid: None,
+                display_name: None,
+            },
+            admin: false,
+        }],
+        announce: false,
+        disappearing: false,
+        community: false,
+        observed_at: Utc::now(),
+        group: None,
+        shared: None,
+    };
+    event_sender(&whatsapp)
+        .send(SessionEvent::GroupChanged {
+            group_jid: OTHER.to_owned(),
+            info: Some(Box::new(joined)),
+        })
+        .unwrap();
+    listener.recv().await.unwrap();
+    let roster = |pool: PgPool| async move {
+        sqlx::query_scalar!(
+            "SELECT group_jid FROM whatsapp_group_roster WHERE account_id = $1 ORDER BY group_jid",
+            account
+        )
+        .fetch_all(&pool)
+        .await
+        .unwrap()
+    };
+    assert_eq!(
+        roster(pool.clone()).await,
+        vec![GROUP.to_owned(), OTHER.to_owned()]
+    );
+
+    // A change notice without metadata is read; a refused read means the
+    // account left.
+    *whatsapp.group.lock().unwrap() = None;
+    event_sender(&whatsapp)
+        .send(SessionEvent::GroupChanged {
+            group_jid: OTHER.to_owned(),
+            info: None,
+        })
+        .unwrap();
+    assert_eq!(calls.recv().await, Some(Call::Group(OTHER.to_owned())));
+    listener.recv().await.unwrap();
+    assert_eq!(roster(pool.clone()).await, vec![GROUP.to_owned()]);
     started.release.cancel();
     assert_eq!(started.running.await.unwrap(), AccountExit::Released);
 }

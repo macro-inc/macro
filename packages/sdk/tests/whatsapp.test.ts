@@ -36,6 +36,7 @@ const remote = {
   disappearing: false,
   community: false,
   group: null,
+  shared: null,
 };
 const detail = {
   ...summary,
@@ -117,19 +118,30 @@ test('shared groups can be listed without a WhatsApp connection and handles fetc
   expect(JSON.stringify(groups[0])).not.toContain('owner-api-token');
 });
 
-test('remote discovery and adoption return a shareable group handle with no audience input', async () => {
+test('remote discovery shows groups shared by others and adoption takes only the group', async () => {
   const { macro, requests } = fixture((request) =>
-    Response.json(request.method === 'POST' ? { group_id: 'group' } : [remote]),
+    Response.json(
+      request.method === 'POST'
+        ? { group_id: 'group' }
+        : [
+            {
+              ...remote,
+              shared: {
+                id: 'theirs',
+                name: 'Remote support',
+                owner_id: 'macro|ana@example.com',
+              },
+            },
+          ],
+    ),
   );
   const [discovered] = await macro.whatsapp.remoteGroups();
   expect(await discovered.group()).toBeUndefined();
-  const adopted = await discovered.adopt({ name: 'Support' });
+  expect((await discovered.shared())?.id).toBe('theirs');
+  const adopted = await discovered.adopt();
   expect(adopted.id).toBe('group');
   expect(new URL(requests[1].url).pathname).toBe('/meta/linked/groups/adopt');
-  expect(await requests[1].json()).toEqual({
-    group_jid: remote.jid,
-    name: 'Support',
-  });
+  expect(await requests[1].json()).toEqual({ group_jid: remote.jid });
 });
 
 test('account access stays owner-scoped and no account normalizes to undefined', async () => {

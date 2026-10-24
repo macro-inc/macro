@@ -390,6 +390,21 @@ impl SessionRepository for PgLinkedRepository {
         tx.commit().await.map_err(failure)
     }
 
+    async fn group_left(
+        &self,
+        scope: SessionScope,
+        group: &str,
+        observed_at: chrono::DateTime<chrono::Utc>,
+    ) -> LinkedResult<()> {
+        let mut tx = self.pool.begin().await.map_err(failure)?;
+        let account = fence_exclusive_in(&mut tx, scope).await?;
+        if account.state != AccountState::Connected {
+            return Ok(());
+        }
+        groups::group_left_in(&mut tx, &account, group, observed_at).await?;
+        tx.commit().await.map_err(failure)
+    }
+
     async fn observed_groups(&self, scope: SessionScope) -> LinkedResult<Vec<String>> {
         let mut tx = self.pool.begin().await.map_err(failure)?;
         let account = fence_in(&mut tx, scope).await?;

@@ -7,7 +7,6 @@ use model_entity::EntityType;
 use model_owner::Owner;
 pub(super) struct BindingRow {
     pub id: Uuid,
-    pub team_id: Uuid,
     pub group_jid: String,
     pub user_id: String,
     pub state: String,
@@ -18,7 +17,6 @@ pub(super) struct BindingRow {
 pub(super) fn binding(row: BindingRow) -> LinkedResult<Binding> {
     Ok(Binding {
         id: row.id,
-        team_id: row.team_id,
         group_jid: row.group_jid,
         user_id: row.user_id,
         state: match row.state.as_str() {
@@ -39,14 +37,14 @@ pub(super) fn binding(row: BindingRow) -> LinkedResult<Binding> {
 #[async_trait]
 impl BindingRepository for PgLinkedRepository {
     async fn binding(&self, group: Uuid) -> LinkedResult<Option<Binding>> {
-        sqlx::query_as!(BindingRow, "SELECT id, team_id, group_jid, user_id, state, ownership_state, adopted_at FROM whatsapp_group WHERE id = $1", group)
+        sqlx::query_as!(BindingRow, "SELECT id, group_jid, user_id, state, ownership_state, adopted_at FROM whatsapp_group WHERE id = $1", group)
             .fetch_optional(&self.pool).await.map_err(failure)?.map(binding).transpose()
     }
     async fn adopt(&self, record: AdoptionRecord<'_>) -> LinkedResult<Adopted> {
         let AdoptionRecord {
             user,
             account,
-            request,
+            name,
             group,
         } = record;
         let identity = account
@@ -54,40 +52,30 @@ impl BindingRepository for PgLinkedRepository {
             .as_deref()
             .ok_or(LinkedError::Forbidden)?;
         let mut tx = self.pool.begin().await.map_err(failure)?;
-        let team = sqlx::query_scalar!("SELECT team_id FROM team_user WHERE user_id = $1 AND ($2::uuid IS NULL OR team_id = $2) ORDER BY team_role DESC LIMIT 1",user,request.team_id)
-            .fetch_optional(&mut *tx).await.map_err(failure)?.ok_or(LinkedError::Forbidden)?;
-        sqlx::query!("SELECT pg_advisory_xact_lock(hashtextextended('whatsapp-group:' || $1 || ':' || $2, 0))",team.to_string(),request.group_jid)
-            .execute(&mut *tx).await.map_err(failure)?;
+        sqlx::query!(
+            "SELECT pg_advisory_xact_lock(hashtextextended('whatsapp-group:' || $1 || ':' || $2, 0))",
+            user,
+            group.jid
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(failure)?;
         sqlx::query_scalar!("SELECT id FROM whatsapp_linked_account WHERE id = $1 AND user_id = $2 AND generation = $3 AND state = 'connected' FOR SHARE", account.id,user,account.authorization_generation)
-            .fetch_optional(&mut *tx).await.map_err(failure)?.ok_or(LinkedError::Forbidden)?;
-        let existing = sqlx::query_as!(BindingRow,"SELECT id, team_id, group_jid, user_id, state, ownership_state, adopted_at FROM whatsapp_group WHERE team_id = $1 AND group_jid = $2 AND state <> 'detached' FOR UPDATE",team,request.group_jid)
+            .fetch_optional(&mut *tx).await.map_err(failure)?.ok_or(LinkedError::Disconnected)?;
+        let existing = sqlx::query_as!(BindingRow,"SELECT id, group_jid, user_id, state, ownership_state, adopted_at FROM whatsapp_group WHERE user_id = $1 AND group_jid = $2 AND state <> 'detached' FOR UPDATE",user,group.jid)
             .fetch_optional(&mut *tx).await.map_err(failure)?;
         let adopted = match existing {
-            Some(row) => {
-                let allowed = sqlx::query_scalar!(
-                    r#"SELECT whatsapp_group_can_view($1, $2) AS "allowed!""#,
-                    row.id,
-                    user
-                )
-                .fetch_one(&mut *tx)
-                .await
-                .map_err(failure)?;
-                if !allowed {
-                    return Err(LinkedError::Forbidden.into());
-                }
-                Adopted {
-                    binding: binding(row)?,
-                    created: false,
-                }
-            }
+            Some(row) => Adopted {
+                binding: binding(row)?,
+                created: false,
+            },
             None => {
                 let id = Uuid::now_v7();
                 let permission = Uuid::now_v7().to_string();
                 share_permission_db_utils::insert_private_permission(&mut *tx, &permission)
                     .await
                     .map_err(failure)?;
-                let name = request.name.as_deref().unwrap_or(&group.name).trim();
-                let row = sqlx::query_as!(BindingRow,"INSERT INTO whatsapp_group (id, team_id, group_jid, name, user_id, state, share_permission_id) VALUES ($1,$2,$3,$4,$5,'active',$6) RETURNING id, team_id, group_jid, user_id, state, ownership_state, adopted_at",id,team,request.group_jid,name,user,permission)
+                let row = sqlx::query_as!(BindingRow,"INSERT INTO whatsapp_group (id, group_jid, name, user_id, state, share_permission_id) VALUES ($1,$2,$3,$4,'active',$5) RETURNING id, group_jid, user_id, state, ownership_state, adopted_at",id,group.jid,name,user,permission)
                     .fetch_one(&mut *tx).await.map_err(failure)?;
                 let owner = Owner::from_principal_str(user).map_err(failure)?;
                 entity_registry_db_utils::insert_entity(
@@ -198,6 +186,13 @@ impl BindingRepository for PgLinkedRepository {
         for account in observers {
             notify(&mut tx, signals::ACCOUNT_CHANGED, account).await?;
         }
+        notify_change(
+            &mut tx,
+            signals::Change::Group {
+                group_id: binding.id,
+            },
+        )
+        .await?;
         tx.commit().await.map_err(failure)
     }
 }
