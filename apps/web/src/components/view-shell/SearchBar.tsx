@@ -114,7 +114,11 @@ export function SearchBar(props: SearchBarProps) {
               class="pointer-events-none absolute inset-0 flex items-center gap-2 overflow-hidden whitespace-nowrap text-sm text-ink-placeholder group-focus-within:hidden"
             >
               <span class="truncate">{inputProps.placeholder}</span>
-              <Hotkey shortcut={local.hotkey} theme="subtle" class="shrink-0" />
+              <Hotkey
+                shortcut={local.hotkey}
+                theme="subtle"
+                class="shrink-0 touch:hidden"
+              />
             </div>
           </Show>
         </div>
@@ -123,7 +127,7 @@ export function SearchBar(props: SearchBarProps) {
             <Hotkey
               shortcut={hotkey()}
               theme="subtle"
-              class="shrink-0 group-focus-within:hidden"
+              class="shrink-0 group-focus-within:hidden touch:hidden"
             />
           )}
         </Show>
