@@ -79,9 +79,10 @@ fn select_message_sync_event(
 }
 
 // upsert a message into the db. could be a new message or an existing one that had changes
-#[tracing::instrument(skip(ctx))]
+#[tracing::instrument(skip(ctx, sqs_message))]
 pub async fn upsert_message(
     ctx: &PubSubContext,
+    sqs_message: &aws_sdk_sqs::types::Message,
     link: &link::Link,
     payload: &UpsertMessagePayload,
 ) -> result::Result<(), ProcessingError> {
@@ -99,6 +100,7 @@ pub async fn upsert_message(
         Err(error) => {
             return Err(handle_operation_error(
                 ctx,
+                sqs_message,
                 link.id,
                 InboxSyncOperation::UpsertMessage(payload.clone()),
                 error,
@@ -223,7 +225,7 @@ pub async fn upsert_message(
         // errors through handle_operation_error (retry queue vs redelivery),
         // and re-wrapping would double-process rate limits and mislabel
         // permanent failures as retryable.
-        fetch_and_insert_thread(ctx, payload, link.id, &provider_thread_id).await?;
+        fetch_and_insert_thread(ctx, sqs_message, payload, link.id, &provider_thread_id).await?;
     }
 
     let (message_db_id, thread_db_id) =
@@ -533,9 +535,10 @@ async fn handle_contacts_sync(
 }
 
 /// Process and insert email threads by handling attachments and images
-#[tracing::instrument(skip(ctx))]
+#[tracing::instrument(skip(ctx, sqs_message))]
 async fn fetch_and_insert_thread(
     ctx: &PubSubContext,
+    sqs_message: &aws_sdk_sqs::types::Message,
     payload: &UpsertMessagePayload,
     link_id: Uuid,
     provider_thread_id: &str,
@@ -545,6 +548,7 @@ async fn fetch_and_insert_thread(
         Err(error) => {
             return Err(handle_operation_error(
                 ctx,
+                sqs_message,
                 link_id,
                 InboxSyncOperation::UpsertMessage(payload.clone()),
                 error,

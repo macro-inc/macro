@@ -1,3 +1,5 @@
+use aws_sdk_sqs::types::MessageSystemAttributeName;
+
 /// Receives messages from the queue.
 #[tracing::instrument(skip(inner))]
 pub async fn receive_messages(
@@ -14,6 +16,7 @@ pub async fn receive_messages(
         .max_number_of_messages(max_messages)
         .set_message_attribute_names(Some(vec!["*".to_string()])) // Needed to get all the message
         // attributes
+        .message_system_attribute_names(MessageSystemAttributeName::ApproximateReceiveCount)
         .send()
         .await?;
 

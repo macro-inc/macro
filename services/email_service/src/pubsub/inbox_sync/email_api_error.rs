@@ -3,6 +3,7 @@ use models_email::gmail::inbox_sync::{InboxSyncOperation, InboxSyncPubsubMessage
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 
 use crate::pubsub::context::PubSubContext;
+use crate::pubsub::rate_limit_backoff::next_retry_delay;
 
 #[cfg(test)]
 mod test;
@@ -23,22 +24,33 @@ fn rate_limit_route(retry_worker: bool) -> RateLimitRoute {
 
 pub(crate) async fn handle_operation_error(
     ctx: &PubSubContext,
+    sqs_message: &aws_sdk_sqs::types::Message,
     link_id: uuid::Uuid,
     operation: InboxSyncOperation,
     error: EmailApiError,
 ) -> ProcessingError {
-    if !matches!(error, EmailApiError::RateLimited { .. }) {
+    let EmailApiError::RateLimited { retry_after, .. } = error else {
         return processing_error(error);
-    }
+    };
+    let delay = next_retry_delay(
+        ctx.retry_worker,
+        sqs_worker::receive_count(sqs_message).unwrap_or(1),
+        retry_after,
+    );
 
     if rate_limit_route(ctx.retry_worker) == RateLimitRoute::RetryAfterVisibilityTimeout {
+        // On failure the queue's own visibility timeout still redelivers it.
+        ctx.sqs_worker
+            .change_message_visibility(sqs_message, delay)
+            .await
+            .ok();
         return processing_error(error);
     }
 
     let message = InboxSyncPubsubMessage { link_id, operation };
     if let Err(enqueue_error) = ctx
         .sqs_client
-        .enqueue_gmail_retry_inbox_sync_notification(message)
+        .enqueue_gmail_retry_inbox_sync_notification(message, delay)
         .await
     {
         return ProcessingError::Retryable(DetailedError {

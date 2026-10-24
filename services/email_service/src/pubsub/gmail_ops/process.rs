@@ -26,7 +26,7 @@ pub async fn process_message(
         }
     };
 
-    let processing_result = inner_process_message(&ctx, &data).await;
+    let processing_result = inner_process_message(&ctx, message, &data).await;
 
     match processing_result {
         Ok(()) => {
@@ -45,9 +45,10 @@ pub async fn process_message(
     }
 }
 
-#[tracing::instrument(skip(ctx, data), err)]
+#[tracing::instrument(skip(ctx, sqs_message, data), err)]
 async fn inner_process_message(
     ctx: &GmailOpsContext,
+    sqs_message: &aws_sdk_sqs::types::Message,
     data: &GmailOpsPubsubMessage,
 ) -> Result<(), ProcessingError> {
     let link = email_db_client::links::get::fetch_link_by_id(&ctx.db, data.link_id)
@@ -86,7 +87,7 @@ async fn inner_process_message(
     };
 
     if let Err(error) = operation_result {
-        let processing_error = handle_email_api_error(ctx, data, error).await;
+        let processing_error = handle_email_api_error(ctx, sqs_message, data, error).await;
         return Err(prefix_error_source(processing_error, operation_name));
     }
 

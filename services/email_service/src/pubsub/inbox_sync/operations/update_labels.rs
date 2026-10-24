@@ -27,9 +27,10 @@ use uuid::Uuid;
 mod test;
 
 /// Compares a db message's labels to the gmail message's labels, adding/removing as necessary
-#[tracing::instrument(skip(ctx))]
+#[tracing::instrument(skip(ctx, sqs_message))]
 pub async fn update_labels(
     ctx: &PubSubContext,
+    sqs_message: &aws_sdk_sqs::types::Message,
     link: &link::Link,
     payload: &UpdateLabelsPayload,
 ) -> result::Result<(), ProcessingError> {
@@ -101,6 +102,7 @@ pub async fn update_labels(
         Err(error) => {
             return Err(handle_operation_error(
                 ctx,
+                sqs_message,
                 link.id,
                 InboxSyncOperation::UpdateLabels(payload.clone()),
                 error,

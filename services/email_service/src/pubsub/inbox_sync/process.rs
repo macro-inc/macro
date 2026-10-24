@@ -32,7 +32,7 @@ pub async fn process_message(
     };
 
     // wrapping logic in function makes error handling cleaner
-    let processing_result = inner_process_message(&ctx, &data).await;
+    let processing_result = inner_process_message(&ctx, message, &data).await;
 
     match processing_result {
         // Processing success. Clean up the message
@@ -56,9 +56,10 @@ pub async fn process_message(
     }
 }
 
-#[tracing::instrument(skip(ctx))]
+#[tracing::instrument(skip(ctx, sqs_message))]
 async fn inner_process_message(
     ctx: &PubSubContext,
+    sqs_message: &aws_sdk_sqs::types::Message,
     data: &InboxSyncPubsubMessage,
 ) -> result::Result<(), ProcessingError> {
     let link = email_db_client::links::get::fetch_link_by_id(&ctx.db, data.link_id)
@@ -88,13 +89,13 @@ async fn inner_process_message(
 
     match &data.operation {
         InboxSyncOperation::GmailMessage(payload) => {
-            gmail_message(ctx, &link, payload)
+            gmail_message(ctx, sqs_message, &link, payload)
                 .await
                 .map_err(|e| prefix_error_source(e, "gmail_message"))?;
             tracing::debug!("Successfully processed gmail message operation");
         }
         InboxSyncOperation::UpsertMessage(payload) => {
-            upsert_message(ctx, &link, payload)
+            upsert_message(ctx, sqs_message, &link, payload)
                 .await
                 .map_err(|e| prefix_error_source(e, "upsert_message"))?;
             tracing::debug!("Successfully processed upsert message operation");
@@ -106,7 +107,7 @@ async fn inner_process_message(
             tracing::debug!("Successfully processed delete message operation");
         }
         InboxSyncOperation::UpdateLabels(payload) => {
-            update_labels(ctx, &link, payload)
+            update_labels(ctx, sqs_message, &link, payload)
                 .await
                 .map_err(|e| prefix_error_source(e, "remove_labels"))?;
             tracing::debug!("Successfully processed update labels operation");

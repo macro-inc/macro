@@ -18,9 +18,10 @@ mod test;
 
 // handle the initial message received from gmail notifying us of inbox changes.
 // ensure the message is valid, then send off pubsub messages for each change.
-#[tracing::instrument(skip(ctx))]
+#[tracing::instrument(skip(ctx, sqs_message))]
 pub async fn gmail_message(
     ctx: &PubSubContext,
+    sqs_message: &aws_sdk_sqs::types::Message,
     link: &Link,
     payload: &GmailMessagePayload,
 ) -> result::Result<(), ProcessingError> {
@@ -65,7 +66,11 @@ pub async fn gmail_message(
     let operation = || InboxSyncOperation::GmailMessage(payload.clone());
     let labels = match ctx.email_api.list_labels(link.id).await {
         Ok(labels) => labels,
-        Err(error) => return Err(handle_operation_error(ctx, link.id, operation(), error).await),
+        Err(error) => {
+            return Err(
+                handle_operation_error(ctx, sqs_message, link.id, operation(), error).await,
+            );
+        }
     };
     sync_labels(&ctx.db, link.id, &labels).await.map_err(|e| {
         ProcessingError::Retryable(DetailedError {
@@ -83,9 +88,15 @@ pub async fn gmail_message(
         Err(EmailApiError::OutdatedCursor) => {
             schedule_stale_cursor_backfill(ctx, link, payload.history_id).await?;
             let error = EmailApiError::OutdatedCursor;
-            return Err(handle_operation_error(ctx, link.id, operation(), error).await);
+            return Err(
+                handle_operation_error(ctx, sqs_message, link.id, operation(), error).await,
+            );
         }
-        Err(error) => return Err(handle_operation_error(ctx, link.id, operation(), error).await),
+        Err(error) => {
+            return Err(
+                handle_operation_error(ctx, sqs_message, link.id, operation(), error).await,
+            );
+        }
     };
 
     ctx.gmail_history
