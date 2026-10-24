@@ -5,7 +5,7 @@ use chrono::Utc;
 use email::domain::{
     models::{
         ContactInfo, CreateDraftInput, CreatedDraft, DeletedUserDraft, EmailErr, Message,
-        SavedUserDraft, UpdateThreadLabelsResult,
+        SavedUserDraft, SetThreadsArchivedResult, UpdateThreadLabelsResult,
     },
     ports::EmailService,
 };
@@ -96,6 +96,14 @@ pub trait EmailMutationService: Send + Sync + 'static {
         archived: bool,
     ) -> impl Future<Output = Result<(), EmailErr>> + Send;
 
+    /// Archive or unarchive owned/delegated threads with one provider write per inbox.
+    fn set_email_threads_archived(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        thread_ids: Vec<Uuid>,
+        archived: bool,
+    ) -> impl Future<Output = Result<SetThreadsArchivedResult, EmailErr>> + Send;
+
     /// Add or remove one label from every message in an accessible email thread.
     fn update_email_thread_label(
         &self,
@@ -177,6 +185,16 @@ where
         archived: bool,
     ) -> Result<(), EmailErr> {
         self.set_thread_archived(user_id, thread_id, archived).await
+    }
+
+    async fn set_email_threads_archived(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        thread_ids: Vec<Uuid>,
+        archived: bool,
+    ) -> Result<SetThreadsArchivedResult, EmailErr> {
+        self.set_threads_archived(user_id, thread_ids, archived)
+            .await
     }
 
     async fn update_email_thread_label(
@@ -290,6 +308,15 @@ pub struct SetEmailThreadStateInput {
 pub struct SetEmailThreadArchivedInput {
     /// Thread whose inbox membership should change.
     pub thread_id: ID,
+    /// True for Done; false for Mark Not Done or Undo.
+    pub archived: bool,
+}
+
+/// Input for archive-based Done and its inverse on many threads at once.
+#[derive(InputObject)]
+pub struct SetEmailThreadsArchivedInput {
+    /// Threads whose inbox membership should change, at most 100.
+    pub thread_ids: Vec<ID>,
     /// True for Done; false for Mark Not Done or Undo.
     pub archived: bool,
 }
@@ -593,6 +620,7 @@ fn mutation_error(error: &EmailErr) -> async_graphql::Error {
             "thread has no received messages and cannot be unarchived"
         }
         EmailErr::Unauthorized => "not authorized to update email thread",
+        EmailErr::TooManyThreads(_) => "too many email threads in one request",
         _ => "email thread mutation failed",
     };
     async_graphql::Error::new(message)
@@ -758,6 +786,43 @@ where
                 mutation_error(&error)
             })?;
         reload_thread::<O>(ctx, user_id, thread_id).await
+    }
+
+    /// Set archive-based Done on many threads with one provider write per
+    /// inbox, returning the primary-backed canonical threads that changed.
+    /// Threads that could not change are omitted.
+    #[tracing::instrument(skip_all, err(Debug), fields(thread_count = input.thread_ids.len()))]
+    async fn set_email_threads_archived(
+        &self,
+        ctx: &Context<'_>,
+        input: SetEmailThreadsArchivedInput,
+    ) -> async_graphql::Result<Vec<O::Thread>> {
+        let user_id = require_authenticated_user(ctx)?;
+        let thread_ids = input
+            .thread_ids
+            .into_iter()
+            .map(|id| parse_id(id, "threadIds"))
+            .collect::<async_graphql::Result<Vec<_>>>()?;
+        let result = ctx
+            .data::<Arc<S>>()?
+            .set_email_threads_archived(user_id.clone(), thread_ids, input.archived)
+            .await
+            .map_err(|error| {
+                tracing::error!(error = ?error, %user_id, "failed to set email threads archive state");
+                mutation_error(&error)
+            })?;
+        if !result.failed_thread_ids.is_empty() {
+            tracing::warn!(failed_thread_ids = ?result.failed_thread_ids, "some email threads kept their archive state");
+        }
+        let threads = futures::future::try_join_all(
+            result
+                .updated_thread_ids
+                .into_iter()
+                .map(|thread_id| O::load_email_thread(ctx, user_id.clone(), thread_id)),
+        )
+        .await
+        .map_err(internal_email_error)?;
+        Ok(threads.into_iter().flatten().collect())
     }
 
     /// Add or remove one label from an accessible email thread and return its authoritative cache record.

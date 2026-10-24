@@ -3,7 +3,10 @@ import {
   type QueryRevalidation,
 } from '@graphql-cache/exchange/optimistic';
 import type { Client } from '@urql/core';
-import { SetEmailThreadArchivedDocument } from './graphql/generated/graphql';
+import {
+  SetEmailThreadArchivedDocument,
+  SetEmailThreadsArchivedDocument,
+} from './graphql/generated/graphql';
 
 /** Archive, unarchive, and Undo share an ordered durable normalized-cache write. */
 export async function setGraphqlEmailThreadArchived(
@@ -27,4 +30,37 @@ export async function setGraphqlEmailThreadArchived(
     throw new Error('Email archive mutation returned no data');
   }
   return 'committed';
+}
+
+export type GraphqlEmailThreadsArchiveResult =
+  | { kind: 'queued' }
+  | { kind: 'committed'; updatedThreadIds: ReadonlySet<string> };
+
+/** One durable write for many threads; the server omits threads it could not change. */
+export async function setGraphqlEmailThreadsArchived(
+  client: Client,
+  threadIds: string[],
+  archived: boolean,
+  revalidations: readonly QueryRevalidation[] = []
+): Promise<GraphqlEmailThreadsArchiveResult> {
+  const result = await client
+    .mutation(
+      SetEmailThreadsArchivedDocument,
+      { input: { threadIds, archived } },
+      { optimisticMutation: { revalidations } }
+    )
+    .toPromise();
+  const disposition = optimisticMutationDispositionOf(result);
+  if (disposition?.kind === 'queued') return { kind: 'queued' };
+  if (disposition?.kind === 'permanently-failed') throw disposition.error;
+  if (result.error) throw result.error;
+  if (!result.data?.setEmailThreadsArchived) {
+    throw new Error('Email archive mutation returned no data');
+  }
+  return {
+    kind: 'committed',
+    updatedThreadIds: new Set(
+      result.data.setEmailThreadsArchived.map(({ id }) => String(id))
+    ),
+  };
 }

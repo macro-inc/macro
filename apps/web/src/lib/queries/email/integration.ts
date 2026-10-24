@@ -6,7 +6,10 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { emailClient } from '@service-email/client';
 import { storageServiceClient } from '@service-storage/client';
-import { setGraphqlEmailThreadArchived } from '@service-storage/graphql-email-archive-state';
+import {
+  setGraphqlEmailThreadArchived,
+  setGraphqlEmailThreadsArchived,
+} from '@service-storage/graphql-email-archive-state';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import { invalidateEmailReminderCollection } from '../reminders/email-collection';
 import {
@@ -47,6 +50,78 @@ export async function archiveEmailThread(
   fireAndForget(invalidateEmailReminderCollection(), 'email-reminders');
   return 'committed';
 }
+
+/** The email service's per-request cap (`MAX_BULK_ARCHIVE_THREADS`). */
+const ARCHIVE_THREADS_PER_REQUEST = 100;
+
+/** Bulk Done and Not Done: one request per 100 threads, so the server sends
+ * Gmail one write per inbox rather than one per thread. Settles each thread as
+ * `archiveEmailThread` would; a thread the server could not change rejects. */
+export async function archiveEmailThreads(
+  ids: string[],
+  value: boolean
+): Promise<PromiseSettledResult<EmailArchiveDisposition>[]> {
+  const requests: Promise<PromiseSettledResult<EmailArchiveDisposition>[]>[] =
+    [];
+  for (let start = 0; start < ids.length; start += ARCHIVE_THREADS_PER_REQUEST)
+    requests.push(
+      archiveThreadsRequest(
+        ids.slice(start, start + ARCHIVE_THREADS_PER_REQUEST),
+        value
+      )
+    );
+  const results = (await Promise.all(requests)).flat();
+  if (
+    results.some(
+      (result) => result.status === 'fulfilled' && result.value === 'committed'
+    )
+  )
+    fireAndForget(invalidateEmailReminderCollection(), 'email-reminders');
+  return results;
+}
+
+async function archiveThreadsRequest(
+  ids: string[],
+  value: boolean
+): Promise<PromiseSettledResult<EmailArchiveDisposition>[]> {
+  const settle = (updated: ReadonlySet<string>) =>
+    ids.map(
+      (id): PromiseSettledResult<EmailArchiveDisposition> =>
+        updated.has(id)
+          ? { status: 'fulfilled', value: 'committed' }
+          : {
+              status: 'rejected',
+              reason: new Error('Email thread archive state did not change'),
+            }
+    );
+  try {
+    if (isFeatureEnabled(enableGraphqlSoup)) {
+      const result = await setGraphqlEmailThreadsArchived(
+        getGraphqlSoupClient(),
+        ids,
+        value,
+        getActiveGraphqlSoupRevalidations()
+      );
+      if (result.kind === 'queued')
+        return ids.map(() => ({ status: 'fulfilled', value: 'queued' }));
+      await Promise.all(
+        [...result.updatedThreadIds].map((threadId) =>
+          refreshActiveGraphqlSoupQueries({
+            target: { kind: 'email-archive', threadId },
+          })
+        )
+      );
+      return settle(result.updatedThreadIds);
+    }
+    const response = await throwOnErr(() =>
+      emailClient.flagArchivedBatch({ thread_ids: ids, value })
+    );
+    return settle(new Set(response.updated_thread_ids));
+  } catch (reason) {
+    return ids.map(() => ({ status: 'rejected', reason }));
+  }
+}
+
 export const unscheduleEmailMessage = (
   ...args: Parameters<typeof emailClient.unscheduleMessage>
 ) => emailClient.unscheduleMessage(...args);

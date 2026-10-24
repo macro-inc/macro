@@ -146,7 +146,11 @@ impl EmailMessageEnqueuer for SQS {
         .await
     }
 
-    #[tracing::instrument(skip(self, messages, labels_to_add, labels_to_remove), err)]
+    #[tracing::instrument(
+        skip(self, messages, labels_to_add, labels_to_remove),
+        fields(message_count = messages.len()),
+        err
+    )]
     async fn enqueue_gmail_ops_modify_labels_batch(
         &self,
         link_id: Uuid,
@@ -155,26 +159,29 @@ impl EmailMessageEnqueuer for SQS {
         labels_to_remove: Vec<String>,
     ) -> Result<(), Self::Err> {
         use models_email::gmail::gmail_ops::{
-            GmailOpsOperation, GmailOpsPubsubMessage, ModifyMessageLabelsPayload,
+            GmailMessageRef, GmailOpsOperation, GmailOpsPubsubMessage,
+            ModifyMessageLabelsBatchPayload,
         };
 
-        let gmail_ops_messages: Vec<GmailOpsPubsubMessage> = messages
+        let messages = messages
             .into_iter()
-            .map(
-                |(db_message_id, provider_message_id)| GmailOpsPubsubMessage {
-                    link_id,
-                    operation: GmailOpsOperation::ModifyMessageLabels(ModifyMessageLabelsPayload {
-                        db_message_id,
-                        provider_message_id,
-                        labels_to_add: labels_to_add.clone(),
-                        labels_to_remove: labels_to_remove.clone(),
-                    }),
-                },
-            )
+            .map(|(db_message_id, provider_message_id)| GmailMessageRef {
+                db_message_id,
+                provider_message_id,
+            })
             .collect();
-
-        self.enqueue_gmail_ops_notifications_batch(gmail_ops_messages)
-            .await
+        // A full batch is ~100 KB, so each goes out alone rather than in an
+        // SQS batch whose 256 KB cap is shared by all its entries.
+        for payload in
+            ModifyMessageLabelsBatchPayload::chunked(messages, labels_to_add, labels_to_remove)
+        {
+            self.enqueue_gmail_ops_notification(GmailOpsPubsubMessage {
+                link_id,
+                operation: GmailOpsOperation::ModifyMessageLabelsBatch(payload),
+            })
+            .await?;
+        }
+        Ok(())
     }
 
     #[tracing::instrument(skip(self, email_address), err)]

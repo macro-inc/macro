@@ -456,6 +456,27 @@ Update provider-neutral read, trash, spam, or star state.
 
 ***
 
+### archiveMany()
+
+> `static` **archiveMany**(`client`, `threads`, `archived?`): `Promise`\<`EmailThread`[]\>
+
+Archive many threads (or unarchive with `false`), sending one request per
+100 threads. Resolves to the threads whose state could not change.
+
+#### Parameters
+
+| Parameter | Type | Default value |
+| ------ | ------ | ------ |
+| `client` | `MacroClient` | `undefined` |
+| `threads` | `EmailThread`[] | `undefined` |
+| `archived?` | `boolean` | `true` |
+
+#### Returns
+
+`Promise`\<`EmailThread`[]\>
+
+***
+
 ### byId()
 
 > `static` **byId**(`client`, `id`): `EmailThread`

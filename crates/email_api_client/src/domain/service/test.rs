@@ -142,7 +142,12 @@ async fn token_failure_releases_admission_without_calling_the_provider() {
     );
 
     let result = service
-        .modify_message_labels(Uuid::nil(), "message-1", &[], &["INBOX".to_string()])
+        .modify_message_labels(
+            Uuid::nil(),
+            &["message-1".to_string()],
+            &[],
+            &["INBOX".to_string()],
+        )
         .await;
 
     assert_eq!(result, Err(EmailApiError::AuthRequired));

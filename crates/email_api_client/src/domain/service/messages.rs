@@ -111,31 +111,56 @@ where
         .await
     }
 
-    /// Applies provider label additions and removals to one message.
-    #[tracing::instrument(skip(self))]
+    /// Applies provider label additions and removals to messages in one
+    /// provider request. A lone message uses the per-message write, which
+    /// costs a tenth of the batch write's quota.
+    #[tracing::instrument(skip(self, provider_message_ids), fields(message_count = provider_message_ids.len()))]
     pub async fn modify_message_labels(
         &self,
         link_id: Uuid,
-        provider_message_id: &str,
+        provider_message_ids: &[String],
         labels_to_add: &[String],
         labels_to_remove: &[String],
     ) -> Result<(), EmailApiError> {
-        self.call_with_token(
-            link_id,
-            ApiOperationKind::ModifyMessageLabels,
-            |token| async move {
-                self.repository
-                    .modify_message_labels(
-                        &token,
-                        provider_message_id,
-                        labels_to_add,
-                        labels_to_remove,
-                    )
-                    .await
-                    .inspect_err(log_operation_error)
-            },
-        )
-        .await
+        match provider_message_ids {
+            [] => Ok(()),
+            [provider_message_id] => {
+                self.call_with_token(
+                    link_id,
+                    ApiOperationKind::ModifyMessageLabels,
+                    |token| async move {
+                        self.repository
+                            .modify_message_labels(
+                                &token,
+                                provider_message_id,
+                                labels_to_add,
+                                labels_to_remove,
+                            )
+                            .await
+                            .inspect_err(log_operation_error)
+                    },
+                )
+                .await
+            }
+            _ => {
+                self.call_with_token(
+                    link_id,
+                    ApiOperationKind::BatchModifyMessageLabels,
+                    |token| async move {
+                        self.repository
+                            .batch_modify_message_labels(
+                                &token,
+                                provider_message_ids,
+                                labels_to_add,
+                                labels_to_remove,
+                            )
+                            .await
+                            .inspect_err(log_operation_error)
+                    },
+                )
+                .await
+            }
+        }
     }
 }
 

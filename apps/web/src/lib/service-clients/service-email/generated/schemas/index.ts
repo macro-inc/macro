@@ -135,6 +135,8 @@ export * from './apiThreadPreviewCursorInnerViewedAt';
 export * from './apiThreadProjectId';
 export * from './apiThreadProviderId';
 export * from './archiveThreadRequest';
+export * from './archiveThreadsRequest';
+export * from './archiveThreadsResponse';
 export * from './attachment';
 export * from './attachmentContentId';
 export * from './attachmentDataUrl';

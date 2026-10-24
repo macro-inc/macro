@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   graphql: true,
   archive: vi.fn(),
+  archiveBatch: vi.fn(),
   mutation: vi.fn(),
   refresh: vi.fn(),
   reminders: vi.fn(),
@@ -15,7 +16,10 @@ vi.mock('@core/constant/featureFlags', () => ({
   isFeatureEnabled: () => mocks.graphql,
 }));
 vi.mock('@service-email/client', () => ({
-  emailClient: { flagArchived: mocks.archive },
+  emailClient: {
+    flagArchived: mocks.archive,
+    flagArchivedBatch: mocks.archiveBatch,
+  },
 }));
 vi.mock('@service-storage/client', () => ({ storageServiceClient: {} }));
 vi.mock('@service-storage/graphql-soup', () => ({
@@ -32,10 +36,11 @@ vi.mock('../soup/graphql/active-queries', () => ({
 import { predictOptimisticMutation } from '@graphql-cache/exchange/optimistic-resolvers';
 import {
   SetEmailThreadArchivedDocument,
+  SetEmailThreadsArchivedDocument,
   SoupDocument,
 } from '@service-storage/graphql/generated/graphql';
 import { soupOptimisticResolvers } from '../optimistic-resolvers';
-import { archiveEmailThread } from './integration';
+import { archiveEmailThread, archiveEmailThreads } from './integration';
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -202,5 +207,109 @@ describe('GraphQL email archive writes', () => {
     await expect(
       archiveEmailThread({ id: 'thread', value: true })
     ).rejects.toThrow();
+  });
+});
+
+describe('bulk email archive writes', () => {
+  it('archives every selected thread with one GraphQL mutation and rejects threads the server skipped', async () => {
+    mocks.mutation.mockReturnValue({
+      toPromise: async () => ({
+        data: {
+          setEmailThreadsArchived: [
+            {
+              __typename: 'GraphqlSoupEmailThread',
+              id: 'archived',
+              inboxVisible: false,
+            },
+          ],
+        },
+      }),
+    });
+    const results = await archiveEmailThreads(['archived', 'skipped'], true);
+    expect(mocks.mutation).toHaveBeenCalledExactlyOnceWith(
+      SetEmailThreadsArchivedDocument,
+      { input: { threadIds: ['archived', 'skipped'], archived: true } },
+      expect.objectContaining({ optimisticMutation: { revalidations: [] } })
+    );
+    expect(
+      predictOptimisticMutation(
+        soupOptimisticResolvers,
+        SetEmailThreadsArchivedDocument,
+        { input: { threadIds: ['archived', 'skipped'], archived: true } }
+      )?.response
+    ).toEqual({
+      setEmailThreadsArchived: [
+        {
+          __typename: 'GraphqlSoupEmailThread',
+          id: 'archived',
+          inboxVisible: false,
+        },
+        {
+          __typename: 'GraphqlSoupEmailThread',
+          id: 'skipped',
+          inboxVisible: false,
+        },
+      ],
+    });
+    expect(results[0]).toEqual({ status: 'fulfilled', value: 'committed' });
+    expect(results[1].status).toBe('rejected');
+    expect(mocks.refresh).toHaveBeenCalledExactlyOnceWith({
+      target: { kind: 'email-archive', threadId: 'archived' },
+    });
+    expect(mocks.reminders).toHaveBeenCalledOnce();
+    expect(mocks.archive).not.toHaveBeenCalled();
+  });
+
+  it('settles every thread as queued when the GraphQL write is queued', async () => {
+    mocks.mutation.mockReturnValue({
+      toPromise: async () => ({
+        extensions: {
+          normalizedCacheMutationDisposition: {
+            kind: 'queued',
+            transactionId: 'tx',
+          },
+        },
+      }),
+    });
+    await expect(archiveEmailThreads(['a', 'b'], false)).resolves.toEqual([
+      { status: 'fulfilled', value: 'queued' },
+      { status: 'fulfilled', value: 'queued' },
+    ]);
+    expect(mocks.refresh).not.toHaveBeenCalled();
+    expect(mocks.reminders).not.toHaveBeenCalled();
+  });
+
+  it('rejects every thread of a failed request without throwing', async () => {
+    const error = new CombinedError({ graphQLErrors: ['not authorized'] });
+    mocks.mutation.mockReturnValue({ toPromise: async () => ({ error }) });
+    const results = await archiveEmailThreads(['a', 'b'], true);
+    expect(results.map((result) => result.status)).toEqual([
+      'rejected',
+      'rejected',
+    ]);
+    expect(mocks.reminders).not.toHaveBeenCalled();
+  });
+
+  it('sends at most 100 threads per REST request when GraphQL is disabled', async () => {
+    mocks.graphql = false;
+    const ids = Array.from({ length: 101 }, (_, index) => `thread-${index}`);
+    mocks.archiveBatch.mockImplementation(
+      async ({ thread_ids }: { thread_ids: string[] }) =>
+        ok({
+          updated_thread_ids: thread_ids.filter((id) => id !== 'thread-0'),
+          failed_thread_ids: thread_ids.filter((id) => id === 'thread-0'),
+        })
+    );
+    const results = await archiveEmailThreads(ids, true);
+    expect(mocks.archiveBatch.mock.calls).toEqual([
+      [{ thread_ids: ids.slice(0, 100), value: true }],
+      [{ thread_ids: ids.slice(100), value: true }],
+    ]);
+    expect(results[0].status).toBe('rejected');
+    expect(results.slice(1)).toEqual(
+      ids.slice(1).map(() => ({ status: 'fulfilled', value: 'committed' }))
+    );
+    expect(mocks.mutation).not.toHaveBeenCalled();
+    expect(mocks.reminders).toHaveBeenCalledOnce();
   });
 });

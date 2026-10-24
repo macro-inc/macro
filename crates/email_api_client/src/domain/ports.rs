@@ -109,6 +109,17 @@ pub trait MailboxMessageClient: Send + Sync + 'static {
         label_ids_to_add: &[String],
         label_ids_to_remove: &[String],
     ) -> impl Future<Output = Result<(), EmailApiError>> + Send;
+
+    /// Adds and removes provider labels from many messages in one request.
+    /// The provider reports no per-message outcome: the request succeeds or
+    /// fails as a whole.
+    fn batch_modify_message_labels(
+        &self,
+        access_token: &AccessToken,
+        provider_message_ids: &[String],
+        label_ids_to_add: &[String],
+        label_ids_to_remove: &[String],
+    ) -> impl Future<Output = Result<(), EmailApiError>> + Send;
 }
 
 /// Message sending capability.
@@ -435,6 +446,16 @@ impl MailboxMessageClient for NoOpMailboxClient {
         &self,
         _: &AccessToken,
         _: &str,
+        _: &[String],
+        _: &[String],
+    ) -> Result<(), EmailApiError> {
+        Err(unavailable())
+    }
+
+    async fn batch_modify_message_labels(
+        &self,
+        _: &AccessToken,
+        _: &[String],
         _: &[String],
         _: &[String],
     ) -> Result<(), EmailApiError> {

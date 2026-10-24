@@ -53,6 +53,10 @@ tools — hexagonal, heavily feature-gated.
 - Durable send admission supports Gmail and Outlook; Outlook delivery stays with its provider coordinator.
 - Carry the captured `draft_generation` through every draft mutation; advance it on send acceptance/cancellation under the message lock and preserve attempt tombstones after message deletion.
 
+- Gmail thread label writes stage each thread's DB change, then enqueue one
+  provider write per inbox holding only the messages whose labels changed
+  (`stage_thread_labels` / `commit_thread_label_write` in
+  `domain/service/thread_labels.rs`); route new label actions through them.
 - Forwarded attachments register through `domain/draft_attachments.rs` and resolve
   bytes through `domain/attachment_access.rs`; scheduled delivery also rechecks
   source inbox access in `domain/forwarded_attachments.rs`, including legacy jobs.

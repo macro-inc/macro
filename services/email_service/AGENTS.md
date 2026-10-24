@@ -72,6 +72,10 @@ the gateway `/email` prefix.
   flight and quota units per window, and pauses after a Gmail 429. It fails
   closed, so a Redis outage surfaces as local rate limits. Consumers must
   requeue or redeliver a rate-limited message, never drop it.
+- `gmail_ops` label writes are `ModifyMessageLabelsBatch` operations of at most
+  1,000 messages, each one Gmail request; a permanent failure reverts the whole
+  batch. Keep decoding the single-message `ModifyMessageLabels` form until no
+  queued or retrying message can still carry it.
 - Header addresses that Gmail accepts can fail `MacroUserIdStr::try_from_email`.
   Skip the bad address with a WARN that omits it (the parse error echoes it)
   instead of failing the step; see `pubsub::util::build_contact_connections`.

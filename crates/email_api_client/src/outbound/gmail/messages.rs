@@ -191,4 +191,22 @@ impl MailboxMessageClient for GmailApiClientRepository {
             .await
             .map_err(map_gmail_error)
     }
+
+    async fn batch_modify_message_labels(
+        &self,
+        access_token: &AccessToken,
+        provider_message_ids: &[String],
+        label_ids_to_add: &[String],
+        label_ids_to_remove: &[String],
+    ) -> Result<(), EmailApiError> {
+        self.client
+            .batch_modify_message_labels(
+                access_token.expose_secret(),
+                provider_message_ids,
+                label_ids_to_add,
+                label_ids_to_remove,
+            )
+            .await
+            .map_err(map_gmail_error)
+    }
 }

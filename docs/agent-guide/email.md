@@ -225,6 +225,11 @@ without refetching over optimism. Callers preserve the queued disposition and
 skip REST/TanStack email invalidations as well, including Done/Undo batches and
 thread archive replay. Committed writes and failed non-queued batches still
 reconcile. Permanent failures roll back the failed intent.
+Mark Done and Mark Not Done on a selection, even of one row, send one
+`setEmailThreadsArchived` per 100 threads (REST: `PATCH /email/threads/archived`).
+The server sends Gmail one label write per inbox, for only the messages whose
+labels change, and omits threads it could not change; those settle as rejected
+while their siblings stay done.
 Check Signal/Noise removal and All's done indicator, then Undo/Redo, including an
 offline action followed by reconnect. Also wait for provider/metadata synchronization
 before Undo, and repeat after reloading: an archived received thread can lose its
@@ -264,7 +269,8 @@ from mutation reply correctness. GraphQL application errors, including a failed
 post-commit reply load, release the queued mutation rather than retrying forever.
 Transport failures retain the existing retry policy. Draft recovery preserves local
 content and offers explicit Retry using the original handle. Deploy
-the backend schema containing `setEmailThreadArchived` before this client.
+the backend schema containing `setEmailThreadArchived` and
+`setEmailThreadsArchived` before this client.
 Browser WASM and native cache builds must include the regenerated schema metadata;
 native offline archive support therefore requires a full app build, not just OTA.
 

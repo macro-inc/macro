@@ -3,6 +3,7 @@ import {
   MarkEmailThreadSeenDocument,
   MarkEmailThreadUnreadDocument,
   SetEmailThreadArchivedDocument,
+  SetEmailThreadsArchivedDocument,
   UpdateNotificationsDocument,
 } from '../service-clients/service-storage/graphql/generated/graphql';
 import { entityOptimisticResolvers } from './entity-optimistic-resolvers';
@@ -25,6 +26,13 @@ export const soupOptimisticResolvers = [
     id: String(input.threadId),
     inboxVisible: !input.archived,
   })),
+  optimisticResolver(SetEmailThreadsArchivedDocument, ({ input }) =>
+    input.threadIds.map((id) => ({
+      __typename: 'GraphqlSoupEmailThread',
+      id: String(id),
+      inboxVisible: !input.archived,
+    }))
+  ),
   optimisticResolver(UpdateNotificationsDocument, ({ input }) =>
     input.notificationIds.map((id) => ({
       __typename: 'GraphqlNotification',

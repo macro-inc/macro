@@ -98,6 +98,7 @@ import { queryClient } from '@queries/client';
 import { updateEmailThreadState } from '@queries/email/cache-cleanup';
 import {
   archiveEmailThread,
+  archiveEmailThreads,
   type EmailArchiveDisposition,
 } from '@queries/email/integration';
 import { emailKeys } from '@queries/email/keys';
@@ -1517,9 +1518,7 @@ export async function executeMarkEntitiesDone(args: {
   };
   const [emailResults, [notificationResult], [entityResult]] =
     await Promise.all([
-      Promise.allSettled(
-        emailIds.map((id) => archiveEmailThread({ value: true, id }))
-      ),
+      archiveEmailThreads(emailIds, true),
       Promise.allSettled([writeNotificationIds()]),
       Promise.allSettled([writeNotificationEntities()]),
     ]);
@@ -1616,9 +1615,7 @@ export async function executeMarkEntitiesUndone(args: {
     return notificationIds;
   };
   const [emailResults, [notificationResult]] = await Promise.all([
-    Promise.allSettled(
-      emailIds.map((id) => archiveEmailThread({ value: false, id }))
-    ),
+    archiveEmailThreads(emailIds, false),
     Promise.allSettled([writeNotificationIds()]),
   ]);
   for (const [index, result] of emailResults.entries()) {

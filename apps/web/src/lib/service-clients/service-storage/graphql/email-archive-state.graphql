@@ -5,3 +5,11 @@ mutation SetEmailThreadArchived($input: SetEmailThreadArchivedInput!) {
 		inboxVisible
 	}
 }
+
+mutation SetEmailThreadsArchived($input: SetEmailThreadsArchivedInput!) {
+	setEmailThreadsArchived(input: $input) {
+		__typename
+		id
+		inboxVisible
+	}
+}

@@ -2811,6 +2811,65 @@
         }
       }
     },
+    "/email/threads/archived": {
+      "patch": {
+        "tags": ["Threads"],
+        "summary": "Change the archived status of up to 100 threads, sending one provider\nwrite per inbox. A thread that can't change is reported, not fatal.",
+        "operationId": "archive_threads",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArchiveThreadsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArchiveThreadsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/email/threads/previews/cursor/{view}": {
       "get": {
         "tags": ["Previews"],
@@ -4621,6 +4680,44 @@
         "properties": {
           "value": {
             "type": "boolean"
+          }
+        }
+      },
+      "ArchiveThreadsRequest": {
+        "type": "object",
+        "required": ["thread_ids", "value"],
+        "properties": {
+          "thread_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "value": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ArchiveThreadsResponse": {
+        "type": "object",
+        "required": ["updated_thread_ids", "failed_thread_ids"],
+        "properties": {
+          "failed_thread_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Threads left unchanged because they could not be updated."
+          },
+          "updated_thread_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Threads whose archived status now matches the request."
           }
         }
       },

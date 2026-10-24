@@ -16,6 +16,7 @@ enum MessageCall {
     Thread(Uuid, String),
     Threads(u32, Option<String>, Vec<String>),
     ModifyLabels(String, Vec<String>, Vec<String>),
+    BatchModifyLabels(Vec<String>, Vec<String>, Vec<String>),
 }
 
 #[derive(Clone, Default)]
@@ -121,6 +122,23 @@ impl MailboxMessageClient for MessageClient {
             access_token,
             MessageCall::ModifyLabels(
                 message_id.to_string(),
+                labels_to_add.to_vec(),
+                labels_to_remove.to_vec(),
+            ),
+        ))
+    }
+
+    async fn batch_modify_message_labels(
+        &self,
+        access_token: &AccessToken,
+        message_ids: &[String],
+        labels_to_add: &[String],
+        labels_to_remove: &[String],
+    ) -> Result<(), EmailApiError> {
+        Err(self.record(
+            access_token,
+            MessageCall::BatchModifyLabels(
+                message_ids.to_vec(),
                 labels_to_add.to_vec(),
                 labels_to_remove.to_vec(),
             ),
@@ -242,9 +260,58 @@ async fn message_reads_use_correct_operation_kinds_and_forward_parameters() {
         },
         async |service, link_id| {
             service
-                .modify_message_labels(link_id, "message", &["starred".into()], &["unread".into()])
+                .modify_message_labels(
+                    link_id,
+                    &["message".into()],
+                    &["starred".into()],
+                    &["unread".into()],
+                )
                 .await
         },
     )
     .await;
+}
+
+#[tokio::test]
+async fn label_writes_on_several_messages_use_one_batch_request() {
+    assert_call(
+        ApiOperationKind::BatchModifyMessageLabels,
+        |_| {
+            MessageCall::BatchModifyLabels(
+                vec!["message-1".into(), "message-2".into()],
+                vec![],
+                vec!["INBOX".into()],
+            )
+        },
+        async |service, link_id| {
+            service
+                .modify_message_labels(
+                    link_id,
+                    &["message-1".into(), "message-2".into()],
+                    &[],
+                    &["INBOX".into()],
+                )
+                .await
+        },
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn label_writes_without_messages_make_no_provider_call() {
+    let calls = call_log();
+    let repository = MessageClient::default();
+    let repository_call = repository.call.clone();
+    let service = EmailApiClientServiceImpl::new(
+        repository,
+        FakeTokenSource::new(calls.clone(), Ok(AccessToken::new("token"))),
+        FakeGate::new(calls.clone(), Ok(())),
+    );
+
+    service
+        .modify_message_labels(Uuid::new_v4(), &[], &[], &["INBOX".into()])
+        .await
+        .unwrap();
+    assert_eq!(*repository_call.lock().unwrap(), None);
+    assert!(calls.lock().unwrap().is_empty());
 }

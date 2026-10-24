@@ -232,6 +232,16 @@ impl MailboxMessageClient for FakeRepository {
     ) -> Result<(), EmailApiError> {
         self.unavailable("modify_message_labels")
     }
+
+    async fn batch_modify_message_labels(
+        &self,
+        _: &AccessToken,
+        _: &[String],
+        _: &[String],
+        _: &[String],
+    ) -> Result<(), EmailApiError> {
+        self.unavailable("batch_modify_message_labels")
+    }
 }
 
 impl MailboxSendClient for FakeRepository {

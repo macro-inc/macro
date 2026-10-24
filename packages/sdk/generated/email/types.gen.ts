@@ -468,6 +468,22 @@ export type ArchiveThreadRequest = {
     value: boolean;
 };
 
+export type ArchiveThreadsRequest = {
+    thread_ids: Array<string>;
+    value: boolean;
+};
+
+export type ArchiveThreadsResponse = {
+    /**
+     * Threads left unchanged because they could not be updated.
+     */
+    failed_thread_ids: Array<string>;
+    /**
+     * Threads whose archived status now matches the request.
+     */
+    updated_thread_ids: Array<string>;
+};
+
 /**
  * Attachments of a message, as sent to us by the provider.
  */
@@ -3005,6 +3021,27 @@ export type DisableSyncResponses = {
 };
 
 export type DisableSyncResponse = DisableSyncResponses[keyof DisableSyncResponses];
+
+export type ArchiveThreadsData = {
+    body: ArchiveThreadsRequest;
+    path?: never;
+    query?: never;
+    url: '/email/threads/archived';
+};
+
+export type ArchiveThreadsErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ArchiveThreadsError = ArchiveThreadsErrors[keyof ArchiveThreadsErrors];
+
+export type ArchiveThreadsResponses = {
+    200: ArchiveThreadsResponse;
+};
+
+export type ArchiveThreadsResponse2 = ArchiveThreadsResponses[keyof ArchiveThreadsResponses];
 
 export type PreviewsInboxCursorData = {
     body?: never;
