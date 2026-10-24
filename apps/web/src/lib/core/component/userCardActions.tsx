@@ -155,7 +155,7 @@ export function useUserCardActions(
     if (canDirectMessage() && userId() !== currentUserId()) {
       actions.push({
         id: 'dm',
-        label: 'DM',
+        label: 'Send message',
         icon: WideChat,
         onSelect: openDirectMessage,
       });
