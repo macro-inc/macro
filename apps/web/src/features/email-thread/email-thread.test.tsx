@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   clearDraft: vi.fn(),
   source: vi.fn(),
+  viewerEmail: vi.fn<(email: () => string | undefined) => void>(),
   composeOptions: vi.fn<(options: EmailComposeContextOptions) => void>(),
   started: [] as Promise<void>[],
 }));
@@ -30,6 +31,16 @@ vi.mock('@core/context/user', () => ({
   useUserContext: () => ({ isLoading: () => false }),
 }));
 vi.mock('@core/user', () => ({ useContacts: () => () => [] }));
+vi.mock('@queries/email/mail-accounts', () => ({
+  useMailAccountsQuery: () => ({
+    data: {
+      links: [
+        { id: 'primary', email_address: 'viewer@example.com' },
+        { id: 'inbox', email_address: 'viewer@outlook.example' },
+      ],
+    },
+  }),
+}));
 vi.mock('../email-compose/compose-adapter', () => ({
   createEmailComposeContext: (options: EmailComposeContextOptions) => {
     mocks.composeOptions(options);
@@ -58,6 +69,7 @@ vi.mock('./views/email-thread-surface', () => ({
   EmailThreadSurface: (props: EmailThreadSurfaceProps) => {
     const source = props.context.thread.source;
     mocks.source(source);
+    mocks.viewerEmail(props.context.thread.viewerEmail);
     return (
       <div>
         <span data-testid="body">
@@ -128,5 +140,20 @@ describe('email thread query ownership', () => {
     view.unmount();
     expect(mocks.clearDraft).toHaveBeenCalledWith('thread');
     await Promise.all(mocks.started);
+  });
+
+  it("treats the thread's inbox address, not the Macro login, as the viewer", () => {
+    const source = createThreadContext({
+      thread: () => thread([message('first')]),
+    }).source;
+    render(() => (
+      <EmailThread
+        title="Subject"
+        threadId={source.id}
+        source={source}
+        threadTransport={() => 'graphql'}
+      />
+    ));
+    expect(mocks.viewerEmail.mock.calls[0][0]()).toBe('viewer@outlook.example');
   });
 });
