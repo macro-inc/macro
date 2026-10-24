@@ -290,7 +290,7 @@ async fn only_someone_who_can_change_the_event_lists_its_requests() {
             .list_join_requests(SHARER, request.event_id)
             .await
             .unwrap(),
-        [request.clone()]
+        std::slice::from_ref(&request)
     );
 
     for (mutation_target, case) in [
