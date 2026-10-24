@@ -2,7 +2,8 @@ use super::*;
 use macro_user_id::email::EmailStr;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_email::gmail::inbox_sync::{
-    DeleteMessagePayload, GmailMessagePayload, UpdateLabelsPayload, UpsertMessagePayload,
+    DeleteMessagePayload, GmailMessagePayload, UpdateLabelsPayload, UploadAttachmentsPayload,
+    UpsertMessagePayload,
 };
 use models_email::service::link::UserProvider;
 use uuid::Uuid;
@@ -37,6 +38,9 @@ fn fanned_out_operations() -> Vec<InboxSyncOperation> {
             provider_message_id: provider_message_id.clone(),
         }),
         InboxSyncOperation::UpdateLabels(UpdateLabelsPayload {
+            provider_message_id: provider_message_id.clone(),
+        }),
+        InboxSyncOperation::UploadAttachments(UploadAttachmentsPayload {
             provider_message_id,
         }),
     ]

@@ -285,11 +285,10 @@ where
             }
             .await;
             if result.is_err() {
-                sqlx::query!(
-                    "UPDATE email_attachments SET upload_claimed_at = NULL WHERE id = $1",
-                    attachment_id
+                email_db_client::attachments::provider::upload::release_upload_claim(
+                    &self.db,
+                    attachment_id,
                 )
-                .execute(&self.db)
                 .await
                 .map_err(failed)?;
                 return result;

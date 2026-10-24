@@ -1218,6 +1218,146 @@ async fn new_email_media_atts_claims_attachments(pool: Pool<Postgres>) -> Result
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("upload_claim_tests"))
 )]
+async fn released_claim_lets_a_retry_claim_the_attachment_again(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+    let link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000c01")?;
+    let deferred_document = Uuid::parse_str("00000000-0000-0000-0000-00000c1a0101")?;
+    let deferred_media = Uuid::parse_str("00000000-0000-0000-0000-00000c2a0201")?;
+    assert_eq!(
+        new_email_document_atts(&pool, link_id, "claim-test-doc-msg")
+            .await?
+            .len(),
+        2
+    );
+    assert_eq!(
+        new_email_media_atts(&pool, link_id, "claim-test-media-msg")
+            .await?
+            .len(),
+        2
+    );
+
+    release_upload_claim(&pool, deferred_document).await?;
+    release_upload_claim(&pool, deferred_media).await?;
+
+    let documents = new_email_document_atts(&pool, link_id, "claim-test-doc-msg").await?;
+    let media = new_email_media_atts(&pool, link_id, "claim-test-media-msg").await?;
+    assert_eq!(
+        documents
+            .iter()
+            .map(|a| a.attachment_db_id)
+            .collect::<Vec<_>>(),
+        vec![deferred_document]
+    );
+    assert_eq!(
+        media.iter().map(|a| a.attachment_db_id).collect::<Vec<_>>(),
+        vec![deferred_media]
+    );
+    assert!(attachment_is_claimed(&pool, deferred_document).await?);
+
+    Ok(())
+}
+
+/// Commits `other_worker` once `waiting` claim queries are parked on the rows it claimed, so
+/// they read those rows as unclaimed before the commit lands.
+async fn commit_after_claims_wait(
+    pool: &Pool<Postgres>,
+    other_worker: sqlx::Transaction<'_, Postgres>,
+    waiting: i64,
+) -> Result<()> {
+    tokio::time::timeout(std::time::Duration::from_secs(10), async {
+        loop {
+            let parked: i64 = sqlx::query_scalar(
+                "SELECT count(*) FROM pg_stat_activity
+                 WHERE datname = current_database() AND wait_event_type = 'Lock'",
+            )
+            .fetch_one(pool)
+            .await?;
+            if parked == waiting {
+                return Ok::<_, sqlx::Error>(());
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        }
+    })
+    .await??;
+    other_worker.commit().await?;
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("upload_claim_tests"))
+)]
+async fn claim_waiting_on_a_concurrent_claim_does_not_claim_the_same_attachments(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+    let link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000c01")?;
+    let mut other_worker = pool.begin().await?;
+    sqlx::query!(
+        "UPDATE email_attachments SET upload_claimed_at = NOW() WHERE message_id = ANY($1)",
+        &[
+            Uuid::parse_str("00000000-0000-0000-0000-0000000ec101")?,
+            Uuid::parse_str("00000000-0000-0000-0000-0000000ec201")?,
+        ][..]
+    )
+    .execute(&mut *other_worker)
+    .await?;
+
+    let (documents, media, committed) = tokio::join!(
+        new_email_document_atts(&pool, link_id, "claim-test-doc-msg"),
+        new_email_media_atts(&pool, link_id, "claim-test-media-msg"),
+        commit_after_claims_wait(&pool, other_worker, 2)
+    );
+    committed?;
+
+    assert_eq!((documents?.len(), media?.len()), (0, 0));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("fetch_insertable_attachments_for_new_email")
+    )
+)]
+async fn contacted_participant_claim_waiting_on_a_concurrent_claim_does_not_claim_it_again(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+    let mut other_worker = pool.begin().await?;
+    sqlx::query!(
+        "UPDATE email_attachments SET upload_claimed_at = NOW() WHERE message_id = $1",
+        Uuid::parse_str("00000000-0000-0000-0000-0000000e0401")?
+    )
+    .execute(&mut *other_worker)
+    .await?;
+
+    let (documents, committed) = tokio::join!(
+        new_email_document_atts(
+            &pool,
+            Uuid::parse_str("00000000-0000-0000-0000-00000000001a")?,
+            "target-msg-401"
+        ),
+        commit_after_claims_wait(&pool, other_worker, 1)
+    );
+    committed?;
+
+    assert!(documents?.is_empty());
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("upload_claim_tests"))
+)]
 async fn new_email_document_atts_excludes_preclaimed_attachments(
     pool: Pool<Postgres>,
 ) -> Result<()> {

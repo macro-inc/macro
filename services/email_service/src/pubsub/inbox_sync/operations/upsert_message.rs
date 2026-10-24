@@ -6,7 +6,9 @@ use crate::pubsub::util::{
 };
 use crate::pubsub::util::{cg_refresh_email, publish_email_event};
 use crate::util::process_pre_insert::{process_message_pre_insert, process_threads_pre_insert};
-use crate::util::upload_attachment::{UploadAttachmentContext, upload_attachment};
+use crate::util::upload_attachment::{
+    UploadAttachmentContext, UploadAttachmentError, upload_attachment,
+};
 use contacts::domain::ports::ContactsIngress;
 use email::domain::events::{
     EmailEventOrigin, EmailMacroEvent, MessageDraftSyncedMetadata, MessageReceivedMetadata,
@@ -15,6 +17,7 @@ use email::domain::events::{
 use email::domain::models::{PreviewCursorQuery, PreviewView, PreviewViewStandardLabel};
 use email::domain::ports::EmailRepo;
 use email::outbound::EmailPgRepo;
+use email_db_client::attachments::provider::upload::release_upload_claim;
 use email_db_client::attachments::provider::upload_filters::{
     attachment_is_document, attachment_is_media,
 };
@@ -29,7 +32,9 @@ use models_email::api::refresh::RefreshEmailEvent;
 use models_email::db::address::EmailRecipientType;
 use models_email::email::service::link;
 use models_email::email::service::message::SimpleMessage;
-use models_email::gmail::inbox_sync::{InboxSyncOperation, UpsertMessagePayload};
+use models_email::gmail::inbox_sync::{
+    InboxSyncOperation, InboxSyncPubsubMessage, UploadAttachmentsPayload, UpsertMessagePayload,
+};
 use models_email::service::attachment::{
     Attachment, AttachmentUploadArgs, AttachmentUploadDestination, AttachmentUploadMetadata,
 };
@@ -369,14 +374,52 @@ async fn handle_attachment_upload(
         return Ok(());
     }
 
-    // upload attachments to Macro
+    if upload_message_attachments(ctx, link, &payload.provider_message_id, &eligibility).await?
+        == AttachmentUploads::RateLimited
+    {
+        // Retry only the attachments: failing the upsert would make its redelivery skip the
+        // new-message notification, because the message would then already exist.
+        let retry = InboxSyncPubsubMessage {
+            link_id: link.id,
+            operation: InboxSyncOperation::UploadAttachments(UploadAttachmentsPayload {
+                provider_message_id: payload.provider_message_id.clone(),
+            }),
+        };
+        let _ = ctx
+            .sqs_client
+            .enqueue_gmail_retry_inbox_sync_notification(retry)
+            .await
+            .inspect_err(|error| {
+                tracing::error!(error = ?error, "Failed to enqueue attachment upload retry");
+            });
+    }
+
+    Ok(())
+}
+
+/// Whether every claimed attachment was handled, or a rate limit deferred some of them.
+#[derive(Debug, PartialEq, Eq)]
+pub(super) enum AttachmentUploads {
+    Finished,
+    RateLimited,
+}
+
+/// Claims a message's unstored attachments and uploads them. A rate-limited upload releases its
+/// claim so a retry can claim it again; any other failure keeps the claim. Only the Gmail fetch,
+/// before anything is stored, reports a rate limit, so a released attachment was never stored.
+pub(super) async fn upload_message_attachments(
+    ctx: &PubSubContext,
+    link: &link::Link,
+    provider_message_id: &str,
+    eligibility: &AttachmentUploadEligibility,
+) -> result::Result<AttachmentUploads, ProcessingError> {
     let (document_atts, media_atts) = tokio::try_join!(
         async {
             if eligibility.documents {
                 email_db_client::attachments::provider::upload::new_email_document_atts(
                     &ctx.db,
                     link.id,
-                    &payload.provider_message_id,
+                    provider_message_id,
                 )
                 .await
             } else {
@@ -388,7 +431,7 @@ async fn handle_attachment_upload(
                 email_db_client::attachments::provider::upload::new_email_media_atts(
                     &ctx.db,
                     link.id,
-                    &payload.provider_message_id,
+                    provider_message_id,
                 )
                 .await
             } else {
@@ -405,6 +448,7 @@ async fn handle_attachment_upload(
 
     let mut attachments = document_atts;
     attachments.extend(media_atts);
+    let mut uploads = AttachmentUploads::Finished;
     if !attachments.is_empty() {
         let message_ids = attachments
             .iter()
@@ -425,6 +469,7 @@ async fn handle_attachment_upload(
                 })?;
 
         for attachment in attachments {
+            let attachment_id = attachment.attachment_db_id;
             // get the email addresses of the recipients of the message
             let recipient_emails: Vec<String> = message_recipients
                 .get(&attachment.message_db_id)
@@ -460,20 +505,27 @@ async fn handle_attachment_upload(
                 link,
             };
 
-            // keep processing if it fails, best effort
-            if let Err(e) = upload_attachment(ctx_upload, &attachment_upload_args).await {
-                tracing::error!("Failed to upload attachment to Macro: {e}");
+            match upload_attachment(ctx_upload, &attachment_upload_args).await {
+                Ok(_) => {}
+                // `release_upload_claim` logs a failed release, which leaves the attachment claimed.
+                Err(UploadAttachmentError::RateLimited) => {
+                    if release_upload_claim(&ctx.db, attachment_id).await.is_ok() {
+                        uploads = AttachmentUploads::RateLimited;
+                    }
+                }
+                // keep processing if it fails, best effort
+                Err(e) => tracing::error!("Failed to upload attachment to Macro: {e}"),
             }
         }
     }
 
-    Ok(())
+    Ok(uploads)
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
-struct AttachmentUploadEligibility {
-    documents: bool,
-    media: bool,
+pub(super) struct AttachmentUploadEligibility {
+    pub(super) documents: bool,
+    pub(super) media: bool,
 }
 
 fn attachment_upload_eligibility(attachments: &[Attachment]) -> AttachmentUploadEligibility {

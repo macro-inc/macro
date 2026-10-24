@@ -55,6 +55,9 @@ Parsed message responses expose the draft generation captured in the same SQL sn
   message; the destination draft inbox is only the query access scope.
 - Quote and alias camelCase columns to Rust field names; check
   `crates/macro_db_client/migrations/` for real column spelling, don't guess.
+- A claiming `UPDATE ... WHERE id IN (subquery)` repeats its claim condition
+  (e.g. `upload_claimed_at IS NULL`) in the outer `WHERE`: after waiting on a
+  concurrent claim, Postgres rechecks only the target row's own conditions.
 
 ## Related
 

@@ -3,6 +3,7 @@ use crate::pubsub::inbox_sync::error_handlers::prefix_error_source;
 use crate::pubsub::inbox_sync::operations::delete_message::delete_message;
 use crate::pubsub::inbox_sync::operations::gmail_message::gmail_message;
 use crate::pubsub::inbox_sync::operations::update_labels::update_labels;
+use crate::pubsub::inbox_sync::operations::upload_attachments::upload_attachments;
 use crate::pubsub::inbox_sync::operations::upsert_message::upsert_message;
 use anyhow::{Context, Result, anyhow};
 use models_email::gmail::inbox_sync::{InboxSyncOperation, InboxSyncPubsubMessage};
@@ -111,6 +112,12 @@ async fn inner_process_message(
                 .map_err(|e| prefix_error_source(e, "remove_labels"))?;
             tracing::debug!("Successfully processed update labels operation");
         }
+        InboxSyncOperation::UploadAttachments(payload) => {
+            upload_attachments(ctx, &link, payload)
+                .await
+                .map_err(|e| prefix_error_source(e, "upload_attachments"))?;
+            tracing::debug!("Successfully processed upload attachments operation");
+        }
     }
 
     Ok(())
@@ -128,7 +135,8 @@ fn should_process(link: &Link, operation: &InboxSyncOperation) -> bool {
         InboxSyncOperation::GmailMessage(_) => link.is_sync_active && !link.needs_reauth,
         InboxSyncOperation::UpsertMessage(_)
         | InboxSyncOperation::DeleteMessage(_)
-        | InboxSyncOperation::UpdateLabels(_) => link.is_sync_active,
+        | InboxSyncOperation::UpdateLabels(_)
+        | InboxSyncOperation::UploadAttachments(_) => link.is_sync_active,
     }
 }
 

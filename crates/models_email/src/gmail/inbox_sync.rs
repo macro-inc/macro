@@ -67,6 +67,8 @@ pub enum InboxSyncOperation {
     DeleteMessage(DeleteMessagePayload),
     // Operation to add/remove labels from a message
     UpdateLabels(UpdateLabelsPayload),
+    // Operation to retry a message's attachment uploads that a rate limit deferred
+    UploadAttachments(UploadAttachmentsPayload),
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
@@ -86,6 +88,11 @@ pub struct DeleteMessagePayload {
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 pub struct UpdateLabelsPayload {
+    pub provider_message_id: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
+pub struct UploadAttachmentsPayload {
     pub provider_message_id: String,
 }
 
