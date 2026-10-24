@@ -100,7 +100,7 @@ function Fixture() {
       >
         <SettingsSection
           title="Accounts"
-          description="Connect Gmail accounts and manage their sync with Macro."
+          description="Connect Gmail or Outlook accounts and manage their sync with Macro."
         >
           <SettingsCard>
             <For each={['alex@example.com', 'alex@gmail.com']}>
@@ -119,7 +119,7 @@ function Fixture() {
             </For>
             <SettingsRow
               label="Add another inbox"
-              description="Connect more Gmail accounts."
+              description="Connect Gmail, Outlook.com, or Microsoft 365."
             >
               <Button variant="outline" size="md">
                 Add account

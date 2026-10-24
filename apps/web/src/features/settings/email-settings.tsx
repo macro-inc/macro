@@ -27,7 +27,7 @@ export function EmailSettings() {
     >
       <SettingsSection
         title="Accounts"
-        description="Connect Gmail accounts and manage their sync with Macro."
+        description="Connect Gmail or Outlook accounts and manage their sync with Macro."
       >
         <Suspense
           fallback={
@@ -77,7 +77,7 @@ export function EmailSettings() {
               <SettingsRow
                 stackOnNarrow
                 label="Calendars"
-                description="Manage the calendars connected to your Google accounts."
+                description="Manage the calendars connected to your email accounts."
               >
                 <Button
                   variant="ghost"

@@ -65,9 +65,9 @@ there is no expand/collapse control. Format the text, add links or images, and
 choose **Save signature**. **Clear signature** removes only the signature, while
 **Remove inbox** in Accounts uses the existing inbox removal confirmation.
 **Add to replies & forwards** saves that preference immediately. On desktop,
-**Import from Gmail** in each inbox's header fetches that account's Gmail
+**Import from Gmail** in each Gmail inbox's header fetches that account's Gmail
 signature and saves it right away, replacing any unsaved draft; a toast reports
-when Gmail has no signature. Unsaved drafts
+when Gmail has no signature. Outlook inboxes have no import. Unsaved drafts
 survive switching settings pages. On phones, signature editing remains desktop-only;
 the replies/forwards toggle and clear action are available.
 Email accounts can also be managed from **Integrations**. Its **Email settings**

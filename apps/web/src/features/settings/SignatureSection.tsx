@@ -167,7 +167,7 @@ export function SignatureSection(props: { link: EmailLink }) {
       }}
       onSave={saveSignature}
       onClear={removeSignature}
-      onImport={importFromGmail}
+      onImport={props.link.provider === 'GMAIL' ? importFromGmail : undefined}
       importing={importGmailSignature.isPending}
       dirty={isDirty()}
       hasContent={hasContent()}

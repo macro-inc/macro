@@ -3,7 +3,6 @@ import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/S
 import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import { toast } from '@core/component/Toast/Toast';
 import { UserTooltip } from '@core/component/UserTooltip';
-import { useEmail } from '@core/context/user';
 import { emailToMacroId, getDisplayName } from '@core/user';
 import {
   highlightTermsInText,
@@ -11,6 +10,7 @@ import {
 } from '@core/util/searchHighlight';
 import { Telemetry } from '@macro-inc/observability';
 import CopyIcon from '@phosphor/copy.svg';
+import { useInboxEmail } from '@queries/email/inbox-email';
 import { Surface } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import type { EmailEntity, EmailThreadParticipants } from '../types/entity';
@@ -187,7 +187,7 @@ function HiddenParticipantsTooltip(props: { hidden: ResolvedParticipant[] }) {
 
 /** Get a nicely formatted list of participants from an email entity. */
 export function EntityEmailParticipants(props: { entity: EmailEntity }) {
-  const userEmail = useEmail();
+  const userEmail = useInboxEmail(() => props.entity.linkId);
   const fetchDisplayName = (email: string) =>
     getDisplayName(emailToMacroId(email));
 

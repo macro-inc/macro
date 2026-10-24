@@ -1,5 +1,5 @@
-import { useEmail } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { useInboxEmail } from '@queries/email/inbox-email';
 import { useNonPrimaryEmailLinkIdHeader } from '@queries/email/link';
 import {
   blockSenderWithToast,
@@ -23,7 +23,7 @@ export function createThreadActionAdapter(
     toHeaderLinkId
   );
   const read = createThreadReadAdapter(threadId, threadSource, toHeaderLinkId);
-  const currentUserEmail = useEmail();
+  const currentUserEmail = useInboxEmail(() => threadSource()?.link_id);
 
   const getSenderEmail = (): string | undefined => {
     const thread = threadSource();
