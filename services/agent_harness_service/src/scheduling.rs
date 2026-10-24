@@ -89,6 +89,10 @@ pub async fn build(
     let secretsmanager_client = secretsmanager_client::SecretsManager::new(
         aws_sdk_secretsmanager::Client::new(&macro_aws_config::get_macro_aws_config().await),
     );
+    let config = config
+        .resolve_remote_secrets(environment, &secretsmanager_client)
+        .await
+        .context("failed to resolve scheduling secrets")?;
     let conn_gateway_client = Arc::new(ConnectionGatewayClient::new(
         config.internal_api_key.to_string(),
         ConnectionGatewayUrl::new()?.to_string(),

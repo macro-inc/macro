@@ -108,6 +108,10 @@ available for feature flags and future analytics; MCP emits no analytics events.
 In deployed configs, `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY`
 is cognition's Secrets Manager reference; AI tools resolve the separate
 `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME` reference.
+`AUTHENTICATION_SERVICE_SECRET_KEY` is the secret name
+`authentication-service-internal-api-key-<env>`; the harness, cognition, and
+scheduling configs each resolve it at startup, so a raw key, an empty value, or
+an unreadable name stops the process.
 
 The shared Postgres pool defaults to 30 connections (`DATABASE_MAX_CONNECTIONS`).
 Routine dispatch waits for the shared HTTP listener and calls its loopback

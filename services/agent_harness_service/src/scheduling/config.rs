@@ -8,7 +8,8 @@
 use anyhow::Context;
 use macro_auth::InternalApiKey;
 pub use macro_env::Environment;
-use macro_env_var::{env_vars, maybe_env_vars};
+use macro_env_var::env_vars;
+use secretsmanager_client::OptionalLocalOrRemoteSecret;
 
 #[cfg(test)]
 #[path = "config/test.rs"]
@@ -17,9 +18,6 @@ mod test;
 env_vars! {
     /// Comma-separated Kafka bootstrap servers for the macro event broker.
     pub struct KafkaBrokers;
-}
-
-maybe_env_vars! {
     /// The authentication service's own internal key, which settlement
     /// requests for counted usage present. Required while
     /// `ENABLE_AI_USAGE_BILLING` is true; otherwise unused.
@@ -38,8 +36,10 @@ pub struct Config {
     /// service's own policy decides whether it does.
     #[macro_config_default(ai_billing::AiUsageBilling::Disabled)]
     pub enable_ai_usage_billing: ai_billing::AiUsageBilling,
-    /// Key settlement requests present to the authentication service.
-    pub authentication_service_secret_key: AuthenticationServiceSecretKey,
+    /// Key settlement requests present to the authentication service (secret
+    /// name or value).
+    pub authentication_service_secret_key:
+        OptionalLocalOrRemoteSecret<AuthenticationServiceSecretKey>,
     /// The free plan's hard monthly AI cap, in cents at provider cost.
     /// Mandatory; set in Doppler.
     pub ai_usage_free_included_allowance_cents: ai_billing::IncludedAllowanceCents,
@@ -91,7 +91,7 @@ impl Config {
     pub fn settlement_route(&self) -> anyhow::Result<ai_billing::composition::SettlementRoute> {
         let client = self
             .authentication_service_secret_key
-            .value()
+            .as_str()
             .filter(|key| !key.trim().is_empty())
             .map(|key| {
                 anyhow::Ok(std::sync::Arc::new(
