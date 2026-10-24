@@ -23,8 +23,8 @@ use entity_access::outbound::PgAccessRepository;
 use entity_registry::OwnerGrantPolicy;
 use entity_registry_db_utils::OwnedEntityRegistrar;
 use macro_authorization::{
-    InternalIdentityClaims, MacroAuthorizationError, MacroAuthorizationService,
-    MacroAuthorizationState,
+    INTERNAL_API_KEY_HEADER, INTERNAL_MACRO_USER_ID_HEADER, InternalIdentityClaims,
+    MacroAuthorizationError, MacroAuthorizationService, MacroAuthorizationState,
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -70,6 +70,8 @@ use tower::ServiceExt;
 
 const USER: &str = "macro|event-run@macro.com";
 const ACTOR: &str = "macro|event-actor@macro.com";
+const STRANGER: &str = "macro|event-stranger@macro.com";
+const INTERNAL_KEY: &str = "internal-key";
 const BOT: &str = "bot|01900000-0000-7000-8000-000000000004";
 const TEST_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -81,20 +83,28 @@ fn page() -> PageSize {
 struct FakeAuth;
 impl MacroAuthorizationService for FakeAuth {
     async fn authorize(&self, jwt: &str) -> Result<UserContext, Report<MacroAuthorizationError>> {
-        if jwt != "owner" {
-            return Err(Report::new(MacroAuthorizationError::InvalidCredentials));
-        }
+        let user_id = match jwt {
+            "owner" => USER,
+            "stranger" => STRANGER,
+            _ => return Err(Report::new(MacroAuthorizationError::InvalidCredentials)),
+        };
         Ok(UserContext {
-            user_id: USER.into(),
+            user_id: user_id.into(),
             ..Default::default()
         })
     }
     async fn authorize_internal(
         &self,
-        _: &str,
-        _: InternalIdentityClaims,
+        key: &str,
+        claims: InternalIdentityClaims,
     ) -> Result<Option<UserContext>, Report<MacroAuthorizationError>> {
-        Err(Report::new(MacroAuthorizationError::InvalidCredentials))
+        if key != INTERNAL_KEY {
+            return Err(Report::new(MacroAuthorizationError::InvalidCredentials));
+        }
+        Ok(claims.user_id.map(|user_id| UserContext {
+            user_id,
+            ..Default::default()
+        }))
     }
 }
 
@@ -387,13 +397,25 @@ impl Harness {
 }
 
 async fn request(app: &Router, method: &str, uri: &str, body: Value) -> (StatusCode, Value) {
+    send(
+        app,
+        Request::builder()
+            .method(method)
+            .uri(uri)
+            .header(header::AUTHORIZATION, "Bearer owner"),
+        body,
+    )
+    .await
+}
+async fn send(
+    app: &Router,
+    request: axum::http::request::Builder,
+    body: Value,
+) -> (StatusCode, Value) {
     let response = app
         .clone()
         .oneshot(
-            Request::builder()
-                .method(method)
-                .uri(uri)
-                .header(header::AUTHORIZATION, "Bearer owner")
+            request
                 .header(header::CONTENT_TYPE, "application/json")
                 .body(Body::from(body.to_string()))
                 .unwrap(),
@@ -404,7 +426,8 @@ async fn request(app: &Router, method: &str, uri: &str, body: Value) -> (StatusC
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     (
         status,
-        serde_json::from_slice(&bytes).unwrap_or(Value::Null),
+        serde_json::from_slice(&bytes)
+            .unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&bytes).into_owned())),
     )
 }
 fn legacy() -> Value {
@@ -506,6 +529,61 @@ async fn legacy_cron_and_canonical_events_share_crud_and_manual_execution(pool: 
     let calls = h.runner.calls.lock().unwrap();
     assert_eq!(calls.len(), 2);
     assert!(calls.iter().all(|(_, context)| context.is_none()));
+}
+
+/// Routine IDs travel in mentions, so holding one must not reveal the routine.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn only_the_owner_reads_a_routine_and_others_cannot_tell_it_exists(pool: PgPool) {
+    let h = Harness::new(pool, FakeRunner::default()).await;
+    let routine = h.create(legacy()).await;
+    let url = format!("/scheduled-actions/{}", action_id(&routine));
+    let missing = format!("/scheduled-actions/{}", generate_uuid_v7());
+    let get_as_user = |token: &str, uri: &str| {
+        Request::builder()
+            .uri(uri)
+            .header(header::AUTHORIZATION, format!("Bearer {token}"))
+    };
+    let get_as_internal = |user: &str, uri: &str| {
+        Request::builder()
+            .uri(uri)
+            .header(INTERNAL_API_KEY_HEADER, INTERNAL_KEY)
+            .header(INTERNAL_MACRO_USER_ID_HEADER, user)
+    };
+
+    let (status, read) = send(&h.app, get_as_user("owner", &url), Value::Null).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(read["id"], routine["id"]);
+    let (status, read) = send(&h.app, get_as_internal(USER, &url), Value::Null).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(read["id"], routine["id"]);
+
+    let refused = send(&h.app, get_as_user("stranger", &url), Value::Null).await;
+    assert_eq!(refused.0, StatusCode::UNAUTHORIZED);
+    let refused_body = refused.1.to_string();
+    let fixture = legacy();
+    for field in [
+        &fixture["name"],
+        &fixture["task"]["prompt"],
+        &fixture["task"]["user_prompt"],
+    ] {
+        assert!(!refused_body.contains(field.as_str().unwrap()));
+    }
+    for request in [
+        get_as_user("stranger", &missing),
+        get_as_user("stranger", &format!("{url}/history")),
+        get_as_internal(STRANGER, &url),
+    ] {
+        assert_eq!(send(&h.app, request, Value::Null).await, refused);
+    }
+
+    assert_eq!(
+        request(&h.app, "DELETE", &url, Value::Null).await.0,
+        StatusCode::NO_CONTENT
+    );
+    assert_eq!(
+        send(&h.app, get_as_user("owner", &url), Value::Null).await,
+        refused
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

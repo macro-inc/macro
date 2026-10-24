@@ -121,8 +121,11 @@ pub trait ScheduledActionReadService: Send + Sync + 'static {
 }
 
 pub trait ScheduledActionService: Send + Sync + 'static {
-    /// Read a routine by its unguessable ID for an authenticated viewer.
-    fn get_action(&self, id: Uuid) -> impl Future<Output = Result<ScheduledAction>> + Send;
+    /// Read a routine only when the caller is its owner.
+    fn get_action(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 
     /// Delete all of a user's actions before account deletion, including disabled
     /// and claimed actions. Repeating a completed cleanup succeeds.

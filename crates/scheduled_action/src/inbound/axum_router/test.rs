@@ -514,7 +514,7 @@ async fn owner_can_read_cron_and_event_routines_but_missing_ids_return_not_found
 }
 
 #[tokio::test]
-async fn foreign_owner_can_read_but_not_manage_and_list_is_empty() {
+async fn foreign_owner_operations_are_unauthorized_and_list_is_empty() {
     let app = router(true);
     let (_, action) = request(
         &app,
@@ -525,11 +525,8 @@ async fn foreign_owner_can_read_but_not_manage_and_list_is_empty() {
     )
     .await;
     let url = format!("/scheduled-actions/{}", action["id"].as_str().unwrap());
-    assert_eq!(
-        request(&app, "GET", &url, "other", Value::Null).await.0,
-        StatusCode::OK
-    );
     for (method, path, body) in [
+        ("GET", url.clone(), Value::Null),
         ("PUT", url.clone(), legacy()),
         ("PUT", format!("{url}/enabled"), json!({"enabled": false})),
         ("DELETE", url.clone(), Value::Null),
@@ -898,11 +895,11 @@ async fn grants_do_not_allow_nonowners_to_manage_routines() {
     );
     assert_eq!(
         request(&app, "GET", &url, "viewer", Value::Null).await.0,
-        StatusCode::OK
+        StatusCode::NOT_FOUND
     );
     assert_eq!(
         request(&app, "GET", &url, "stranger", Value::Null).await.0,
-        StatusCode::OK
+        StatusCode::UNAUTHORIZED
     );
     assert_eq!(
         request(
@@ -953,23 +950,72 @@ async fn executing_a_nonuser_owned_row_returns_not_found() {
 }
 
 #[tokio::test]
+async fn another_users_routine_reads_like_a_missing_one() {
+    let app = router(true);
+    let (_, created) = request(&app, "POST", "/scheduled-actions", "owner", legacy()).await;
+    let url = format!("/scheduled-actions/{}", created["id"].as_str().unwrap());
+    let missing = format!("/scheduled-actions/{}", macro_uuid::generate_uuid_v7());
+    let existing = request(&app, "GET", &url, "stranger", Value::Null).await;
+    assert_eq!(existing.0, StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        existing,
+        request(&app, "GET", &missing, "stranger", Value::Null).await
+    );
+    assert!(existing.1.get("name").is_none());
+    assert_eq!(
+        request(&app, "GET", &url, "owner", Value::Null).await,
+        (StatusCode::OK, created)
+    );
+}
+
+fn internal_request(method: &str, uri: &str, acting_user: Option<&str>) -> Request<Body> {
+    let mut request = Request::builder().method(method).uri(uri).header(
+        macro_authorization::INTERNAL_API_KEY_HEADER,
+        "test-internal-key",
+    );
+    if let Some(user) = acting_user {
+        request = request.header(macro_authorization::INTERNAL_MACRO_USER_ID_HEADER, user);
+    }
+    request.body(Body::empty()).unwrap()
+}
+
+#[tokio::test]
+async fn internal_reads_act_as_the_named_user() {
+    let app = router(false);
+    let (_, created) = request(&app, "POST", "/scheduled-actions", "owner", legacy()).await;
+    let url = format!("/scheduled-actions/{}", created["id"].as_str().unwrap());
+    for (path, acting_user, expected) in [
+        (url.clone(), Some(USER), StatusCode::OK),
+        (format!("{url}/history"), Some(USER), StatusCode::OK),
+        (url.clone(), Some(OTHER), StatusCode::UNAUTHORIZED),
+        (
+            format!("{url}/history"),
+            Some(OTHER),
+            StatusCode::UNAUTHORIZED,
+        ),
+        (url.clone(), None, StatusCode::UNAUTHORIZED),
+    ] {
+        let response = app
+            .clone()
+            .oneshot(internal_request("GET", &path, acting_user))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), expected, "{path} as {acting_user:?}");
+    }
+}
+
+#[tokio::test]
 async fn bare_internal_key_on_an_id_route_is_unauthorized() {
     let app = router(false);
     let response = app
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri(format!(
-                    "/scheduled-actions/{}/execute",
-                    macro_uuid::generate_uuid_v7()
-                ))
-                .header(
-                    macro_authorization::INTERNAL_API_KEY_HEADER,
-                    "test-internal-key",
-                )
-                .body(Body::empty())
-                .unwrap(),
-        )
+        .oneshot(internal_request(
+            "POST",
+            &format!(
+                "/scheduled-actions/{}/execute",
+                macro_uuid::generate_uuid_v7()
+            ),
+            None,
+        ))
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);

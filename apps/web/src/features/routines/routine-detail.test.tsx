@@ -1,4 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
+import { ThrownResultError } from '@core/util/result';
 import type { ScheduledAction } from '@service-scheduled-action/generated/schemas';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal, type JSX, type Setter } from 'solid-js';
@@ -25,6 +26,7 @@ vi.mock('@app/lib/split-router', () => ({
 const mocks = vi.hoisted(() => ({
   readSchedules: (): ScheduledAction[] => [],
   status: (): string => 'success',
+  detailError: (): unknown => null,
   history: (): HistoryRecord[] => [],
   metadataStatus: (): string => 'success',
   chatMetadata: (): { chat?: { name: string } } | undefined => ({
@@ -64,6 +66,9 @@ vi.mock('./queries/routines', () => ({
     },
     get data() {
       return mocks.readSchedules()[0];
+    },
+    get error() {
+      return mocks.detailError();
     },
   }),
 }));
@@ -298,6 +303,7 @@ beforeEach(() => {
   mocks.writeClipboardData.mockReset().mockResolvedValue(true);
   vi.useFakeTimers();
   [mocks.status, setStatus] = createSignal('success');
+  mocks.detailError = () => null;
   [mocks.readSchedules, setSchedules] = createSignal([cron]);
   [mocks.activationPending, setActivationPending] = createSignal(false);
   mocks.metadataStatus = () => 'success';
@@ -852,6 +858,41 @@ describe('routine editor triggers', () => {
     expect(
       screen.getByText('Unable to load routine. Please try again.')
     ).toBeTruthy();
+  });
+
+  it.each(['UNAUTHORIZED', 'NOT_FOUND'])(
+    'says a routine refused with %s is not accessible instead of offering a retry',
+    (code) => {
+      setStatus('error');
+      setSchedules([]);
+      mocks.detailError = () =>
+        new ThrownResultError([{ code, message: code }]);
+      render(() => <Routine />);
+      expect(
+        screen.getByText("You don't have access to this routine")
+      ).toBeTruthy();
+      expect(screen.queryByText(/Unable to load routine/)).toBeNull();
+      expect(
+        screen.queryByRole('textbox', { name: 'Instructions' })
+      ).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Back to routines' }));
+      expect(mocks.openWithSplit).toHaveBeenLastCalledWith(
+        expect.objectContaining({ type: 'component', id: 'routines' }),
+        { activate: true, search: {} }
+      );
+    }
+  );
+
+  it('replaces a cached routine with the refusal when a refetch is refused', () => {
+    render(() => <Routine />);
+    expect(screen.getByRole('textbox', { name: 'Instructions' })).toBeTruthy();
+    mocks.detailError = () =>
+      new ThrownResultError([{ code: 'UNAUTHORIZED', message: 'refused' }]);
+    setStatus('error');
+    expect(
+      screen.getByText("You don't have access to this routine")
+    ).toBeTruthy();
+    expect(screen.queryByRole('textbox', { name: 'Instructions' })).toBeNull();
   });
 
   it('preserves the cron editor and queued save after a background refetch error', async () => {

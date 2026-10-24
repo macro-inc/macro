@@ -837,13 +837,13 @@ but cannot resume until the run ends. Completed one-offs remain visible with
 their history and do not repeat.
 
 An `m-document-mention` with `blockName: "routine"`, the returned routine ID,
-and the saved name renders as a clickable mention in an agent reply. Once the
-routine is deleted the mention reads `Deleted` and clicking it shows a card
-instead of opening the routine. Routines do not appear in the mention menu.
-Anyone signed in with the link can view its settings, instructions, and
-triggers. Only the owner can edit, enable, run,
-duplicate, delete, or view run history; other users do not see those controls.
-Run conversations keep their own permissions.
+and the saved name renders as a clickable mention in an agent reply. Routines
+do not appear in the mention menu. Routines are private to their owner, and
+their read answers a deleted routine the same way as anyone else's: the
+mention reads `No Access` and clicking it shows a card instead of opening the
+routine. Opening such a routine's link, including as a teammate, shows **You
+don't have access to this routine** and nothing of its settings or
+instructions. Run conversations keep their own permissions.
 
 **Run History** shows outcome, duration, and firing time. History loads fifty
 rows at a time; **Load more runs** reveals older records. Accessible run rows

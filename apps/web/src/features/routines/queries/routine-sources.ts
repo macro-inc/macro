@@ -1,4 +1,5 @@
 import { fireAndForget } from '@core/util/fireAndForget';
+import { thrownResultErrorHasCode } from '@core/util/result';
 import type { ScheduledAction } from '@service-scheduled-action/generated/schemas';
 import type { Accessor } from 'solid-js';
 import { createMemo, onMount } from 'solid-js';
@@ -49,6 +50,8 @@ function toRoutine(schedule: ScheduledAction): RoutineSnapshot {
   };
 }
 
+const UNAVAILABLE_CODES = ['UNAUTHORIZED', 'FORBIDDEN', 'NOT_FOUND'];
+
 type DetailCallbacks = {
   onError(title: string, error: unknown): void;
   onDuplicated(id: string): void;
@@ -61,12 +64,19 @@ export function createRoutineDetailSource(
 ): RoutineDetailSource {
   const list = useSchedulesQuery(() => true);
   const detail = useRoutineQuery(id);
-  const raw = createMemo(
-    () =>
-      (detail.isSuccess || detail.isError ? detail.data : undefined) ??
-      (list.isSuccess || list.isError
-        ? list.data?.find((item) => item.id === id())
-        : undefined)
+  // A refusal outranks cached copies; a transient error keeps them on screen.
+  const unavailable = () =>
+    detail.isError &&
+    UNAVAILABLE_CODES.some((code) =>
+      thrownResultErrorHasCode(detail.error, code)
+    );
+  const raw = createMemo(() =>
+    unavailable()
+      ? undefined
+      : ((detail.isSuccess || detail.isError ? detail.data : undefined) ??
+        (list.isSuccess || list.isError
+          ? list.data?.find((item) => item.id === id())
+          : undefined))
   );
   const routine = createMemo(() => {
     const current = raw();
@@ -99,6 +109,7 @@ export function createRoutineDetailSource(
     },
     loading: () => detail.isPending,
     error: () => detail.isError,
+    unavailable,
     async update(draft) {
       const previous = raw();
       const body = previous && draftToUpdateBody(draft, previous);

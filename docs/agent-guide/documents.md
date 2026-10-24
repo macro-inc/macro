@@ -2549,8 +2549,10 @@ references keep their own chip while the item opens, and switch to this `Deleted
 or `No Access` chip and card once it doesn't; a database or form chip that
 loaded keeps its chip through a failed refresh unless the item is gone. Their
 detail reads answer non-owners 401/403 for a missing item too, so a deleted
-database or form reads `No Access` to anyone but its owner. A reference made in
-the last minute whose item hasn't reached the preview yet still opens it.
+database or form reads `No Access` to anyone but its owner. A routine's read
+answers 401 for a missing routine to everyone, so a deleted routine reads
+`No Access` to its former owner too. A reference made in the last minute whose
+item hasn't reached the preview yet still opens it.
 
 With `ENABLE_GRAPHQL_SOUP` enabled, the popup reuses the reference's live `ItemPreviews`
 batch, including task properties and viewer permission, without another fetch.

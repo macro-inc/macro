@@ -9,6 +9,8 @@ export type RoutineDetailSource = {
   entity: Accessor<RoutineEntity | undefined>;
   loading: Accessor<boolean>;
   error: Accessor<boolean>;
+  /** Missing or someone else's; the service answers both the same way. */
+  unavailable: Accessor<boolean>;
   update(draft: ScheduleDraft): Promise<RoutineSnapshot>;
   run(): void;
   runPending: Accessor<boolean>;

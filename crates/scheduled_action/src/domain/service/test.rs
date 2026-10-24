@@ -696,7 +696,7 @@ async fn list_is_cron_only_by_default_but_id_operations_reach_events() {
 }
 
 #[tokio::test]
-async fn nonowners_can_read_but_not_manage_routines() {
+async fn grants_do_not_allow_access_to_another_owners_routine() {
     let svc = service(true);
     for owner in [
         Owner::from_principal_str(FOREIGN_USER).unwrap(),
@@ -711,9 +711,12 @@ async fn nonowners_can_read_but_not_manage_routines() {
             .await
             .unwrap();
         let id = created.id.unwrap();
-        assert_eq!(svc.get_action(id).await.unwrap().id, Some(id));
+        assert_eq!(svc.get_action(view_receipt(id)).await.unwrap().id, Some(id));
         svc.repo.actions.lock().unwrap().last_mut().unwrap().owner = owner;
-        assert_eq!(svc.get_action(id).await.unwrap().id, Some(id));
+        assert_policy(
+            svc.get_action(view_receipt(id)).await,
+            ActionPolicyError::NotFound,
+        );
         assert_policy(
             svc.update_action(edit_receipt(id), update(configuration(true)))
                 .await,
