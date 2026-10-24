@@ -156,3 +156,16 @@ describe('TypeDoc documentation packaging', () => {
     }
   });
 });
+
+it('linked WhatsApp handles share the channels discovery topic without pairing methods', async () => {
+  const docs = JSON.parse(await readFile(artifact, 'utf8')) as Array<{
+    name: string;
+    documentation: string;
+    overview: string;
+  }>;
+  const channels = docs.find((entry) => entry.name === 'channels');
+  expect(channels?.documentation).toContain('WhatsAppNamespace');
+  expect(channels?.documentation).toContain('WhatsAppGroup');
+  expect(channels?.overview).toContain('groups()');
+  expect(channels?.overview).not.toContain('linkedConnect');
+});

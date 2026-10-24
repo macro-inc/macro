@@ -31,6 +31,7 @@ import { UnfurlNamespace } from './entities/unfurls/namespace';
 import { UserNamespace } from './entities/users/namespace';
 import type { User } from './entities/users/user';
 import { WebhooksNamespace } from './entities/webhooks/namespace';
+import { WhatsAppNamespace } from './entities/whatsapp/namespace';
 import { WorkspaceNamespace } from './entities/workspace/namespace';
 import type { MacroEvents } from './events/receiver';
 import { MacroClient } from './utils/client';
@@ -127,6 +128,9 @@ export class Macro<T extends MacroOpts = MacroOpts> {
 
   readonly channels: ChannelNamespace;
 
+  /** Personal WhatsApp groups and shared group operations. */
+  readonly whatsapp: WhatsAppNamespace;
+
   readonly chats: ChatNamespace;
 
   readonly crm: CrmNamespace;
@@ -192,6 +196,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.calendar = new CalendarNamespace(client);
     this.calls = new CallRecordNamespace(client);
     this.channels = new ChannelNamespace(client);
+    this.whatsapp = new WhatsAppNamespace(client);
     this.chats = new ChatNamespace(client);
     this.crm = new CrmNamespace(client);
     this.databases = new DatabaseNamespace(client);
@@ -297,6 +302,15 @@ export {
 } from './entities/routines/routine';
 export { AccessRequest, EntityAccess } from './entities/sharing/access';
 export type { SharePermissionOptions } from './entities/sharing/permissions';
+export { WhatsAppAccount } from './entities/whatsapp/account';
+export {
+  WhatsAppGroup,
+  type WhatsAppReply,
+} from './entities/whatsapp/group';
+export { WhatsAppMessage } from './entities/whatsapp/message';
+export { WhatsAppRemoteGroup } from './entities/whatsapp/remote-group';
+export { WhatsAppSend } from './entities/whatsapp/send';
+export { WhatsAppUpload } from './entities/whatsapp/upload';
 export type {
   WorkspaceFilters,
   WorkspaceItem,

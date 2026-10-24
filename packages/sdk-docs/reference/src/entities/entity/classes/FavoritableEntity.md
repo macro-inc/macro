@@ -13,6 +13,7 @@ An entity the favorites API can address, and so can be (un)favorited.
 - [`Contact`](../../crm/contact/classes/Contact.md)
 - [`PropertiedEntity`](PropertiedEntity.md)
 - [`ForeignEntity`](../../foreign/foreign-entity/classes/ForeignEntity.md)
+- [`WhatsAppGroup`](../../whatsapp/group/classes/WhatsAppGroup.md)
 
 ## Type Parameters
 

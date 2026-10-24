@@ -61,7 +61,9 @@ export function packageEntityDocs(
       // request within its 32-question contract as the public API grows.
       prefixes: (directory === 'agents'
         ? ['agents', 'harnesses']
-        : [directory]
+        : directory === 'channels'
+          ? ['channels', 'whatsapp']
+          : [directory]
       ).map((value) => `src/entities/${value}/`),
     })),
     {

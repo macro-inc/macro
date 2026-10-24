@@ -384,25 +384,8 @@ export const storageExcluded = [
   'upsertUserDocumentViewLocation',
 ] as const satisfies readonly (keyof StorageSdk)[];
 
-export const storageBacklog = [
-  // WhatsApp linked accounts and groups; wrapped by the SDK's `whatsapp`
-  // namespace in the SDK layer of this stack.
-  'linkedAccount',
-  'linkedAdopt',
-  'linkedDelivery',
-  'linkedDetach',
-  'linkedGroups',
-  'linkedMessageAttachments',
-  'linkedReply',
-  'linkedUpload',
-  'whatsappGroup',
-  'whatsappGroupMessages',
-  'whatsappGroupPermissions',
-  'whatsappGroupRead',
-  'whatsappGroupSends',
-  'whatsappGroupUpdatePermissions',
-  'whatsappGroups',
-] as const satisfies readonly (keyof StorageSdk)[];
+export const storageBacklog =
+  [] as const satisfies readonly (keyof StorageSdk)[];
 
 export const unfurlExcluded = [
   'proxyRequestHandler',

@@ -60,6 +60,7 @@
 | <a id="property-users"></a> `users` | `readonly` | [`UserNamespace`](../../entities/users/namespace/classes/UserNamespace.md) | - |
 | <a id="property-webappurl"></a> `webAppUrl` | `readonly` | `string` | Base URL of the Macro web app, used to build entity URLs. |
 | <a id="property-webhooks"></a> `webhooks` | `readonly` | [`WebhooksNamespace`](../../entities/webhooks/namespace/classes/WebhooksNamespace.md) | - |
+| <a id="property-whatsapp"></a> `whatsapp` | `readonly` | [`WhatsAppNamespace`](../../entities/whatsapp/namespace/classes/WhatsAppNamespace.md) | Personal WhatsApp groups and shared group operations. |
 | <a id="property-workspace"></a> `workspace` | `readonly` | [`WorkspaceNamespace`](../../entities/workspace/namespace/classes/WorkspaceNamespace.md) | Browse workspace activity with type, task, time, tag and inbox filters. |
 
 ## Methods

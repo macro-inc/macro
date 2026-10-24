@@ -616,6 +616,48 @@ Re-exports [UserApiKey](../entities/api-keys/api-key/classes/UserApiKey.md)
 
 ***
 
+### WhatsAppAccount
+
+Re-exports [WhatsAppAccount](../entities/whatsapp/account/classes/WhatsAppAccount.md)
+
+***
+
+### WhatsAppGroup
+
+Re-exports [WhatsAppGroup](../entities/whatsapp/group/classes/WhatsAppGroup.md)
+
+***
+
+### WhatsAppMessage
+
+Re-exports [WhatsAppMessage](../entities/whatsapp/message/classes/WhatsAppMessage.md)
+
+***
+
+### WhatsAppRemoteGroup
+
+Re-exports [WhatsAppRemoteGroup](../entities/whatsapp/remote-group/classes/WhatsAppRemoteGroup.md)
+
+***
+
+### WhatsAppReply
+
+Re-exports [WhatsAppReply](../entities/whatsapp/group/type-aliases/WhatsAppReply.md)
+
+***
+
+### WhatsAppSend
+
+Re-exports [WhatsAppSend](../entities/whatsapp/send/classes/WhatsAppSend.md)
+
+***
+
+### WhatsAppUpload
+
+Re-exports [WhatsAppUpload](../entities/whatsapp/upload/classes/WhatsAppUpload.md)
+
+***
+
 ### WorkspaceFilters
 
 Re-exports [WorkspaceFilters](../entities/workspace/types/type-aliases/WorkspaceFilters.md)

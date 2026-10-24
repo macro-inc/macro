@@ -790,3 +790,34 @@ handles with `edit(draft)`, `submit()`, and `dismiss()` methods. `submitAll()` a
 conflict, refresh and inspect the review; never automatically retry a send whose
 outcome is unknown. These SDK methods have the same user authorization as the
 ordinary API: review cards offer a user workflow, not a separate security grant.
+
+### WhatsApp linked groups
+
+Pair your personal account in Macro's External view first. Adopted groups are
+independent `WhatsAppGroup` entities with their own history and ordinary sharing.
+Shared viewers can read without WhatsApp. Sending and media uploads require your
+own connected member account, using your personal session or own API credential;
+bots never send. Adoption and detachment require a personal bearer session.
+Each user is limited to one send request per second across all groups.
+
+```ts
+const personal = new Macro({
+  auth: { type: 'user', token: () => session.accessToken() },
+});
+const remoteGroups = await personal.whatsapp.remoteGroups();
+const group = remoteGroups[0] ? await remoteGroups[0].adopt({ name: 'Support' }) : undefined;
+if (group && await group.canSend()) {
+  const send = await group.reply({ type: 'text', text: 'Hello' }, {
+    idempotencyKey: crypto.randomUUID(),
+  });
+  await send.refresh();
+  console.log(await send.state());
+}
+for (const shared of await personal.whatsapp.groups()) {
+  for await (const message of shared.messages()) console.log(await message.body());
+}
+```
+
+Keep the same idempotency key when retrying the same request. A delivery state of
+`unknown` must be reconciled; never automatically resend it. Uploads, quoted
+messages, mutations, and delivery references must belong to the same group.
