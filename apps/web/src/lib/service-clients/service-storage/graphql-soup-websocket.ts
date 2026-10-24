@@ -9,12 +9,14 @@ import {
   channelNotificationRefresh,
   disposeChannelNotificationRefresh,
 } from '../../queries/channel/notification-refresh';
+import { revalidateCallListsForSoupUpdates } from '../../queries/soup/graphql/call-list-revalidation';
 import {
   ActivityUpdatesDocument,
   type ActivityUpdatesSubscription,
   NotificationUpdatesDocument,
   type NotificationUpdatesSubscription,
   SoupUpdatesDocument,
+  type SoupUpdatesSubscription,
 } from './graphql/generated/graphql';
 import { createActivityUpdatesHandler } from './graphql-activity-updates';
 import { createChannelListUpdatesHandler } from './graphql-channel-list-updates';
@@ -286,6 +288,14 @@ export function createGraphqlSoupSubscriptionsLifecycle(
             if (document === ActivityUpdatesDocument) {
               activityHandler.onResult(
                 result as OperationResult<ActivityUpdatesSubscription>
+              );
+            }
+            if (document === SoupUpdatesDocument && result.data != null) {
+              fireAndForget(
+                revalidateCallListsForSoupUpdates(
+                  (result.data as SoupUpdatesSubscription).soupUpdates
+                ),
+                'graphql-soup-subscriptions'
               );
             }
             if (
