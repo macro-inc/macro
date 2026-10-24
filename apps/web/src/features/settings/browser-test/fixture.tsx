@@ -119,7 +119,7 @@ function Fixture() {
             </For>
             <SettingsRow
               label="Add another inbox"
-              description="Connect more Gmail accounts."
+              description="Connect Gmail, Outlook.com, or Microsoft 365."
             >
               <Button variant="outline" size="md">
                 Add account
