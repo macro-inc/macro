@@ -1131,3 +1131,36 @@ async fn a_manual_run_tells_the_agent_its_owner_started_it() {
         }))
     );
 }
+
+#[tokio::test]
+async fn preparation_carries_the_routine_apps_and_fails_when_one_is_disconnected() {
+    let connected = runner(Sessions::default());
+    let mut action = action();
+    action.task["mcp_servers"] = json!([{"app_slug": "linear", "server_name": "Linear"}]);
+    let mut handle = ExecutionHandle::default();
+    connected.prepare(&action, &mut handle).await.unwrap();
+    assert_eq!(
+        connected.sessions.preparations.lock().unwrap()[0]
+            .selection
+            .mcp_servers,
+        vec![bots::domain::models::AgentMcpServer {
+            app_slug: "linear".into(),
+            server_name: "Linear".into(),
+        }]
+    );
+
+    let disconnected = runner(Sessions {
+        prepare_error: Some(RoutineSessionError::AppNotConnected),
+        ..Default::default()
+    });
+    let mut handle = ExecutionHandle::default();
+    let error = disconnected
+        .prepare(&action, &mut handle)
+        .await
+        .unwrap_err();
+    assert_eq!(
+        error.downcast_ref(),
+        Some(&RoutineSessionError::AppNotConnected)
+    );
+    assert!(handle.resource.is_none());
+}

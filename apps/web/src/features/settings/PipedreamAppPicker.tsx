@@ -20,14 +20,14 @@ import { ConnectAction, StatusDot } from './integration-ui';
 import { IntegrationRow } from './primitives';
 
 /**
- * Picks Pipedream apps for an agent from the whole catalog, connected or
- * not, and shows for each picked app whether the *viewer* has connected it.
+ * Picks Pipedream apps from the whole catalog, connected or not, and shows
+ * for each picked app whether the *viewer* has connected it.
  *
- * Selection is the agent's; connection is personal. A teammate opening the
- * same agent sees their own dots, because a session spends the connections
- * of whoever runs it. So an unconnected pick is never an error here - it is
- * the agent's author saying "this agent uses Linear", and each person
- * connects Linear on their own, from this row or from Settings → Integrations.
+ * For an agent, selection is the agent's and connection is personal: a
+ * teammate opening the same agent sees their own dots, because a session
+ * spends the connections of whoever runs it, so an unconnected pick is not
+ * an error. A routine runs as its owner and requires its apps, so the
+ * routine editor refuses to save until each one is connected.
  */
 export function PipedreamAppPicker(props: {
   selected: readonly AgentMcpServer[];

@@ -43,7 +43,11 @@ export function RoutineDetailView(props: {
     runDisabled,
     activationDisabled,
     runNow,
-  } = createRoutineDetail(props.source, props);
+  } = createRoutineDetail(props.source, {
+    userId: props.userId,
+    connectedApps: props.slots.createConnectedApps(),
+    onRename: (name) => props.onRename(name),
+  });
   const [tab, setTab] = createSignal(props.initialTab ?? 'settings');
   const back = () => props.onBack();
   const copyPrompt = async () => {
@@ -143,6 +147,18 @@ export function RoutineDetailView(props: {
                   target={draft().target}
                   onChange={(target) =>
                     setState((current) => ({ ...current, target }))
+                  }
+                />
+              )}
+            </Show>
+          }
+          apps={
+            <Show when={state()}>
+              {(draft) => (
+                <props.slots.Apps
+                  apps={draft().apps}
+                  onChange={(apps) =>
+                    setState((current) => ({ ...current, apps }))
                   }
                 />
               )}

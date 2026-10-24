@@ -527,7 +527,8 @@ impl IntoResponse for ScheduledActionApiError {
                 TargetValidationError::InvalidTask | TargetValidationError::AgentsDisabled => {
                     StatusCode::BAD_REQUEST
                 }
-                TargetValidationError::ExplicitAgentRequired => StatusCode::CONFLICT,
+                TargetValidationError::ExplicitAgentRequired
+                | TargetValidationError::ExplicitAppsRequired => StatusCode::CONFLICT,
             };
             return (status, validation.to_string()).into_response();
         }
@@ -541,6 +542,9 @@ impl IntoResponse for ScheduledActionApiError {
                     (StatusCode::NOT_FOUND, session.to_string())
                 }
                 RoutineSessionError::Forbidden => (StatusCode::FORBIDDEN, session.to_string()),
+                RoutineSessionError::AppNotConnected | RoutineSessionError::AppsUnsupported => {
+                    (StatusCode::UNPROCESSABLE_ENTITY, session.to_string())
+                }
                 RoutineSessionError::Conflict => (StatusCode::CONFLICT, session.to_string()),
                 RoutineSessionError::RuntimeUnavailable | RoutineSessionError::OperationFailed => (
                     StatusCode::SERVICE_UNAVAILABLE,

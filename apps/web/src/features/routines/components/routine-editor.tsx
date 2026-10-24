@@ -20,6 +20,7 @@ export function RoutineEditor(props: {
   runActions?: JSX.Element;
   instructions: JSX.Element;
   executionPicker: JSX.Element;
+  apps?: JSX.Element;
   triggerContent?: JSX.Element;
   nextRun: string;
   history: JSX.Element;
@@ -147,6 +148,7 @@ export function RoutineEditor(props: {
                     props.onChange((draft) => ({ ...draft, runVisibility }))
                   }
                 />
+                {props.apps}
               </EntityComposer.Properties>
             </fieldset>
             <Layer depth={1}>

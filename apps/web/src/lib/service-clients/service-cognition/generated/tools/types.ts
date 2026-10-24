@@ -8183,6 +8183,25 @@ export interface RoutineConfiguration {
   instructions: string;
   target: RoutineTarget;
   schedule: RoutineSchedule;
+  /**
+   * Apps every run needs, on top of the target's own. The user must already
+   * have each one connected (offer a connect link via DiscoverConnectors if
+   * not). Updates replace the list: restate it to keep the apps.
+   */
+  requiredApps?: RoutineApp[];
+}
+/**
+ * A Pipedream app a routine requires.
+ */
+export interface RoutineApp {
+  /**
+   * Pipedream app slug, e.g. `linear`.
+   */
+  appSlug: string;
+  /**
+   * Display name, e.g. `Linear`.
+   */
+  name: string;
 }
 /**
  * Compact routine details returned to the caller.

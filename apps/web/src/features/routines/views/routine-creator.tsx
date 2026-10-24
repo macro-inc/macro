@@ -10,7 +10,6 @@ import type {
   RoutineDraftStorage,
 } from '../context/routine-sources';
 import { DEFAULT_RUN_VISIBILITY } from '../core/draft';
-import { validateRoutineDraft } from '../core/routine-draft';
 import { createRoutineComposer } from '../primitives/routine-composer';
 
 export function RoutineCreatorView(props: {
@@ -21,12 +20,13 @@ export function RoutineCreatorView(props: {
   onCreated(id: string): void;
   onClose(): void;
 }) {
-  const { draft, change, attempted, submitError, create } =
+  const { draft, change, attempted, formError, submitError, create } =
     createRoutineComposer(
       props.source,
       props.storage,
       props.defaultModel,
-      props.onCreated
+      props.onCreated,
+      props.slots.createConnectedApps()
     );
   return (
     <EntityComposer.Root
@@ -93,9 +93,13 @@ export function RoutineCreatorView(props: {
                 change((draft) => ({ ...draft, runVisibility }))
               }
             />
+            <props.slots.Apps
+              apps={draft().apps}
+              onChange={(apps) => change((draft) => ({ ...draft, apps }))}
+            />
           </EntityComposer.Properties>
         </fieldset>
-        <Show when={attempted() && validateRoutineDraft(draft(), true)}>
+        <Show when={attempted() && formError()}>
           {(message) => (
             <p role="alert" class="mt-3 text-xs text-failure">
               {message()}

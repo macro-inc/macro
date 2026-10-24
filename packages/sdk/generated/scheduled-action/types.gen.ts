@@ -76,8 +76,30 @@ export type ActionTrigger = {
     type: 'multiple';
 };
 
+/**
+ * One Pipedream app an agent lists under [`AgentMcpServers::Selected`].
+ *
+ * Only the catalog identity is stored. Whether a given person has connected
+ * the app is theirs, resolved at call time by the egress proxy, never here.
+ */
+export type AgentMcpServer = {
+    /**
+     * Pipedream app slug, e.g. `linear`.
+     */
+    app_slug: string;
+    /**
+     * Display name, e.g. `Linear`.
+     */
+    server_name: string;
+};
+
 export type AgentTask = {
     agent?: null | AgentTaskAgent;
+    /**
+     * Apps the routine requires on top of the agent's own. The owner must
+     * have each one connected to save the routine and for it to run.
+     */
+    mcp_servers?: Array<AgentMcpServer>;
     model?: null | RoutineModelId;
     prompt: string;
     user_prompt: string;

@@ -1420,6 +1420,7 @@ async fn run() -> anyhow::Result<()> {
         draining_sessions.clone(),
         broker.clone(),
         session_repo.clone(),
+        PgConnectionRepo::new(pool.clone()),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
     let coding_agents = coding_agents::router(
@@ -1441,6 +1442,7 @@ async fn run() -> anyhow::Result<()> {
             ),
             draining_sessions.clone(),
             (*harness).clone(),
+            routine_sessions::PipedreamConnectedApps(PgConnectionRepo::new(pool.clone())),
         ),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );

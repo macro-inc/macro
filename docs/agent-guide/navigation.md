@@ -812,8 +812,8 @@ to remove it. The routine's top bar uses the task breadcrumb layout:
 **Routines → routine name**, followed by the three-dot menu for duplication and
 deletion. Tabs immediately beside that menu switch between **Overview** and
 **Run History**. Overview follows the project home layout: an editable title,
-a model property chip and the **Runs hidden** / **Runs shown** chip, and a plain
-prompt editor. A trigger card sits below the
+a model property chip, an apps chip, and the **Runs hidden** / **Runs shown**
+chip, and a plain prompt editor. A trigger card sits below the
 model: trigger chips at the top left, **Run now** at the top right, and the
 **Enabled** / **Disabled** status with **Next run** along the bottom.
 The **Run options** dropdown contains
@@ -826,6 +826,15 @@ couldn’t be checked**, marked **Skipped**; consecutive skips collapse into one
 **N events skipped by the condition** row that expands on click. Click a row or press Enter to open its session;
 Shift opens it in another split. **Back to routines** returns to the list in the
 same pane.
+
+The apps chip (**Add apps** in the composer and Overview) opens **Required
+apps**: search the Pipedream catalog and pick the apps every run needs, on top
+of the agent's own. Each picked app shows **Connected** or a **Connect** button
+for the routine owner. Until every listed app is connected the composer shows
+**Connect every app this routine requires.** and Overview does not save; the
+server rejects the save too, and a run whose app was disconnected later fails
+before a session opens. Agents whose runtime opens its own sessions (macrod,
+other external runtimes) cannot take routine apps.
 
 **Disable routine** pauses immediately, including with invalid
 unsaved edits. Resuming waits for valid settings to save. Settings autosave in
