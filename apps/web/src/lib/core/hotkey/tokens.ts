@@ -134,6 +134,7 @@ export const TOKENS = {
       channels: 'sidebar.goTo.channels',
       calls: 'sidebar.goTo.calls',
       reviews: 'sidebar.goTo.reviews',
+      external: 'sidebar.goTo.external',
       companies: 'sidebar.goTo.companies',
       folders: 'sidebar.goTo.folders',
     },

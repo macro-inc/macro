@@ -22,6 +22,10 @@ import {
   routineLocation,
 } from '@app/features/routines/routine-navigation';
 import {
+  parseWhatsAppGroupComponentId,
+  whatsappGroupComponentId,
+} from '@app/features/whatsapp-group/core/route';
+import {
   canonicalRoute,
   decodePane,
   decodeSegment,
@@ -291,6 +295,11 @@ export function splitLocationFromContent(
   }
 
   if (content.type === 'component') {
+    const groupId = parseWhatsAppGroupComponentId(content.id);
+    if (groupId)
+      return {
+        route: paneRoute({ id: 'whatsapp-group', params: { groupId } }),
+      };
     const viewId = `view-${content.id}`;
     if (routes.byId.has(viewId)) {
       return { route: paneRoute({ id: viewId, params: {} }) };
@@ -408,6 +417,12 @@ export function splitContentFromLocation(
     throw new Error('Invalid routine detail split route');
   }
 
+  if (root.id === 'whatsapp-group') {
+    const { groupId } = routeParams(location.route);
+    if (typeof groupId === 'string')
+      return { type: 'component', id: whatsappGroupComponentId(groupId) };
+    throw new Error('Invalid WhatsApp group split route');
+  }
   if (root.id.startsWith('view-'))
     return { type: 'component', id: root.id.slice('view-'.length) };
   if (root.id === 'drive') return { type: 'component', id: 'documents' };

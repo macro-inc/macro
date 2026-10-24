@@ -300,7 +300,20 @@
       tauriCargoVendorDir = craneLib.vendorCargoDeps {
         src = ../apps/web/tauri;
         cargoLock = ../apps/web/tauri/Cargo.lock;
+        # The pinned fork lists an absent device-catalog README. Crane inspects
+        # every workspace package while vendoring, including this unused one.
+        overrideVendorGitCheckout = packages: drv:
+          if lib.any (package: package.name == "webauthn-authenticator-rs") packages then
+            drv.overrideAttrs (old: {
+              postPatch = (old.postPatch or "") + ''
+                cp README.md device-catalog/README.md
+              '';
+            })
+          else
+            drv;
         outputHashes = {
+          "git+https://github.com/beeper/webauthn-rs?rev=579f9144d37161bedf25ed1236d73486ce303de6#579f9144d37161bedf25ed1236d73486ce303de6" =
+            "sha256-0s6M8lB4EpY6FiUtRqsDXdrzqsfMxWkTBl/wVYvbV/I=";
           "git+https://github.com/macro-inc/tauri-plugins?rev=6ddd6600e20436388f169e936b610fe93944b7b0#6ddd6600e20436388f169e936b610fe93944b7b0" =
             "sha256-5ErLW2po5ZlTTuJjsCExwC//rHYcQo2tKXiyz3w/0kQ=";
           "git+https://github.com/macro-inc/plugins-workspace?rev=06474e4c446600627cf37a11f0c22c27bcf764ca#06474e4c446600627cf37a11f0c22c27bcf764ca" =

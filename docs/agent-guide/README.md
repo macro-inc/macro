@@ -26,6 +26,7 @@ verified live against a local stack (`just run_local`).
 | [pull-requests.md](pull-requests.md) | Pull request review |
 | [activity.md](activity.md) | Activity |
 | [notifications.md](notifications.md) | Notifications |
+| [external.md](external.md) | External tab: linking WhatsApp by QR, adopting and sharing standalone groups, mocking `/meta/linked` |
 | [settings.md](settings.md) | Settings sections, including Slack import and team membership |
 | [onboarding.md](onboarding.md) | Onboarding bypass and setup plan |
 | [setup-cards.md](setup-cards.md) | Sidebar import and setup cards, the connector import dialog, and permanent dismissal |

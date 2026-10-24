@@ -1,5 +1,9 @@
 import { createRoutedSplitLayout } from '@components/app/split-layout/tests/fixtures';
 import { toast } from '@core/component/Toast/Toast';
+import {
+  enableWhatsappLinked,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import { getNotificationById } from '@queries/notification/user-notifications';
 import { createRoot } from 'solid-js';
@@ -234,3 +238,48 @@ it.each(['split', 'closed'] as const)(
     });
   }
 );
+
+it('opens a WhatsApp notification in its own component without a channel block', async () => {
+  vi.mocked(isFeatureEnabled).mockImplementation(
+    (flag) => flag === enableWhatsappLinked
+  );
+  const { layout, createBlockInstance, navigate } = setup('closed');
+  const open = vi.spyOn(layout, 'openWithSplit');
+  await openNotification(
+    {
+      entity_id: '11111111-1111-4111-8111-111111111111',
+      notification_metadata: {
+        tag: 'whatsapp_group_message',
+        content: { groupName: 'Family', messageId: 'message' },
+      },
+    } as UnifiedNotification,
+    layout
+  );
+  expect(open).toHaveBeenCalledWith(
+    expect.objectContaining({
+      type: 'component',
+      id: 'whatsapp-group:11111111-1111-4111-8111-111111111111',
+    }),
+    expect.anything()
+  );
+  expect(createBlockInstance).not.toHaveBeenCalled();
+  expect(navigate).not.toHaveBeenCalled();
+});
+
+it('keeps WhatsApp notifications behind the existing feature flag', async () => {
+  vi.mocked(isFeatureEnabled).mockReturnValue(false);
+  const { layout, createBlockInstance } = setup('closed');
+  const open = vi.spyOn(layout, 'openWithSplit');
+  await openNotification(
+    {
+      entity_id: '11111111-1111-4111-8111-111111111111',
+      notification_metadata: {
+        tag: 'whatsapp_group_message',
+        content: { groupName: 'Family', messageId: 'message' },
+      },
+    } as UnifiedNotification,
+    layout
+  );
+  expect(open).not.toHaveBeenCalled();
+  expect(createBlockInstance).not.toHaveBeenCalled();
+});

@@ -55,6 +55,7 @@ import Stack from '@phosphor/stack.svg';
 import Table from '@phosphor/table.svg';
 import Users from '@phosphor/users.svg';
 import UsersThree from '@phosphor/users-three.svg';
+import WhatsappLogo from '@phosphor/whatsapp-logo.svg';
 import AddressBookBold from '@phosphor-icons/core/bold/address-book-bold.svg';
 import BellSimpleBold from '@phosphor-icons/core/bold/bell-simple-bold.svg';
 import BlueprintBold from '@phosphor-icons/core/bold/blueprint-bold.svg';
@@ -96,6 +97,7 @@ import StackBold from '@phosphor-icons/core/bold/stack-bold.svg';
 import TableBold from '@phosphor-icons/core/bold/table-bold.svg';
 import UsersBold from '@phosphor-icons/core/bold/users-bold.svg';
 import UsersThreeBold from '@phosphor-icons/core/bold/users-three-bold.svg';
+import WhatsappLogoBold from '@phosphor-icons/core/bold/whatsapp-logo-bold.svg';
 import type { PreviewItem } from '@queries/preview';
 import type { ChannelType } from '@service-cognition/generated/schemas/channelType';
 import { FileTypeMap } from '@service-storage/fileTypeMap';
@@ -133,7 +135,8 @@ export type EntityWithValidIcon =
   | 'crm_company'
   | 'html'
   | 'initiative'
-  | 'reminder';
+  | 'reminder'
+  | 'whatsapp_group';
 
 const ARCHIVE_EXTENSIONS = new Set(
   Object.values(FileTypeMap)
@@ -142,6 +145,13 @@ const ARCHIVE_EXTENSIONS = new Set(
 );
 
 export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
+  whatsapp_group: {
+    icon: WhatsappLogo,
+    boldIcon: WhatsappLogoBold,
+    foreground: 'text-communication',
+    background: 'bg-communication/20',
+    prettyName: 'WhatsApp group',
+  },
   document: {
     icon: File,
     boldIcon: FileBold,

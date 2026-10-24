@@ -381,7 +381,8 @@ export function SplitHeader(props: {
     const content = panel.handle.content();
     return (
       isListViewID(content.id) ||
-      (content.type === 'component' && content.id === 'booking-links')
+      (content.type === 'component' &&
+        (content.id === 'booking-links' || content.id === 'external'))
     );
   };
 

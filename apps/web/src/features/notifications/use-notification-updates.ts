@@ -12,6 +12,7 @@ import {
   refetchSoupEntity,
 } from '@queries/soup/normalized-cache';
 import { teamKeys } from '@queries/team/keys';
+import { invalidateWhatsappGroups } from '@queries/whatsapp-groups';
 import { onCleanup } from 'solid-js';
 import { match, P } from 'ts-pattern';
 import { shareEntity } from '../access-requests/core/types';
@@ -153,6 +154,9 @@ export function handleNotificationUpdate(notification: UnifiedNotification) {
     })
     .with({ tag: 'call_started' }, () => {
       refreshChannel(notification);
+    })
+    .with({ tag: 'whatsapp_group_message' }, () => {
+      fireAndForget(invalidateWhatsappGroups(), 'whatsapp-group.notification');
     })
     .with({ tag: 'new_email' }, () => {
       refreshEmailThread(notification);

@@ -11,6 +11,7 @@ import {
   ShareRequestIcon,
   useShareRequestTrigger,
 } from '@app/features/access-requests/share-request-trigger';
+import { DirectAccessInvite } from '@app/features/access-requests/views/DirectAccessInvite';
 import type { MeetingAccessState } from '@app/features/calendar-notes/core/types';
 import { DocumentMeetingNotes } from '@app/features/calendar-notes/document-meeting-notes';
 import {
@@ -102,6 +103,10 @@ import {
   updateFormSharePermissions,
 } from '@queries/storage/forms';
 import { useCurrentTeamQuery } from '@queries/team/teams';
+import {
+  fetchWhatsappGroupPermissions,
+  updateWhatsappGroupPermissions,
+} from '@queries/whatsapp-groups/share-permissions';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import {
   blockNameToItemType,
@@ -174,9 +179,11 @@ const isLinkSharingDisabledForItem = (itemType: ShareItemType): boolean =>
   itemType === 'crm_pipeline';
 
 /** Blocks, plus native entities that are shared without one. */
-type ShareBlockType = BlockName | BlockAlias | 'initiative';
+type ShareBlockType = BlockName | BlockAlias | 'initiative' | 'whatsapp_group';
 
 function shareUrl(type: ShareBlockType, id: string): string {
+  if (type === 'whatsapp_group')
+    return buildSimpleEntityUrl({ type: 'whatsapp-group', id });
   if (type !== 'initiative') return buildSimpleEntityUrl({ type, id });
   return buildSimpleEntityUrl({
     type: 'component',
@@ -188,10 +195,12 @@ function shareUrl(type: ShareBlockType, id: string): string {
 export function shareLevelsFor(
   itemType: ShareItemType
 ): readonly AccessLevel[] | undefined {
+  if (itemType === 'whatsapp_group') return ['view'];
   return itemType === 'form' ? ['view', 'edit'] : undefined;
 }
 
 async function fetchSharePermissions(id: string, itemType: ShareItemType) {
+  if (itemType === 'whatsapp_group') return fetchWhatsappGroupPermissions(id);
   if (itemType === 'crm_pipeline') return fetchPipelineSharePermissions(id);
   if (itemType === 'agent_session') {
     return fetchAgentSessionSharePermissions(id);
@@ -222,6 +231,8 @@ const SHARE_LINK_SUBTEXT =
 // they may forward. Their links don't grant access to recipients either, so
 // copying skips SHARE_LINK_SUBTEXT.
 const RESTRICTED_SHARE_DESCRIPTIONS: Partial<Record<ShareItemType, string>> = {
+  whatsapp_group:
+    'Only the owner can share access to this WhatsApp group. Sending always requires your own connected WhatsApp account.',
   crm_pipeline:
     'Only editors can share this pipeline. You can copy a link for people who already have access.',
   agent_session:
@@ -260,6 +271,8 @@ function forwardTarget(
         `Could not share this ${blockAlias === 'pipeline' ? 'pipeline' : 'project'}`
       );
   };
+  if (blockAlias === 'whatsapp_group')
+    throw new Error('WhatsApp groups use direct people sharing');
   if (blockAlias === 'pipeline')
     return { blockId: id, blockName: blockAlias, prepareChannel };
   if (blockAlias !== 'initiative')
@@ -414,6 +427,7 @@ function GroupChannelLabel(props: { channelId: string; fallbackName: string }) {
 }
 
 interface LinkSharingControlsProps {
+  allowedAccessLevels?: readonly AccessLevel[];
   editPermissionEnabled?: boolean;
   linkShare: LinkShare | null | undefined;
   linkShareAccessLevel: AccessLevel | null | undefined;
@@ -564,6 +578,7 @@ function LinkSharingControls(props: LinkSharingControlsProps) {
             <span>Access level</span>
             <ShareOptions
               editPermissionEnabled={props.editPermissionEnabled}
+              allowedAccessLevels={props.allowedAccessLevels}
               permissions={props.linkShareAccessLevel ?? 'view'}
               hideNoAccess={true}
               setPermissions={props.setLinkShareAccessLevel}
@@ -724,6 +739,17 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
                 {RESTRICTED_SHARE_DESCRIPTIONS[props.itemType]}
               </p>
             </Show>
+            <Show
+              when={
+                props.itemType === 'whatsapp_group' &&
+                props.userPermissions === Permissions.OWNER
+              }
+            >
+              <DirectAccessInvite
+                source={props.requests}
+                description="Invite someone to read this conversation. Sending requires their own connected WhatsApp account."
+              />
+            </Show>
             <Show when={props.canForward}>
               <ForwardToChannel
                 {...forwardTarget(
@@ -861,6 +887,7 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
               fallback={
                 <LinkSharingControls
                   meetingAccess={props.meetingAccess}
+                  allowedAccessLevels={shareLevelsFor(props.itemType)}
                   editPermissionEnabled={props.editPermissionEnabled}
                   linkShare={props.linkShare}
                   linkShareAccessLevel={props.linkShareAccessLevel}
@@ -940,7 +967,8 @@ export function ShareModal(props: ShareModalProps) {
     isInBlock() &&
     props.itemType !== 'agent_session' &&
     props.itemType !== 'initiative' &&
-    props.itemType !== 'crm_pipeline';
+    props.itemType !== 'crm_pipeline' &&
+    props.itemType !== 'whatsapp_group';
   const [fallbackPermissionsResource, { refetch: refetchFallback }] =
     createResource(
       () => {
@@ -997,10 +1025,12 @@ export function ShareModal(props: ShareModalProps) {
     props.userPermissions === Permissions.OWNER ||
     props.userPermissions === Permissions.CAN_EDIT;
   const canForward = () =>
-    props.itemType === 'crm_pipeline'
-      ? canSharePipeline()
-      : !RESTRICTED_SHARE_DESCRIPTIONS[props.itemType] ||
-        (Boolean(userId()) && props.owner === userId());
+    props.itemType === 'whatsapp_group'
+      ? false
+      : props.itemType === 'crm_pipeline'
+        ? canSharePipeline()
+        : !RESTRICTED_SHARE_DESCRIPTIONS[props.itemType] ||
+          (Boolean(userId()) && props.owner === userId());
   const userPermissions = () =>
     props.itemType === 'agent_session' && !canForward()
       ? Permissions.CAN_VIEW
@@ -1010,6 +1040,9 @@ export function ShareModal(props: ShareModalProps) {
     props.itemType === 'crm_pipeline' && canSharePipeline()
       ? Permissions.OWNER
       : userPermissions();
+  const directSharingOwner = () =>
+    props.itemType === 'whatsapp_group' &&
+    props.userPermissions === Permissions.OWNER;
   const editPermissionEnabled = () =>
     props.itemType === 'agent_session' ? true : undefined;
 
@@ -1094,7 +1127,11 @@ export function ShareModal(props: ShareModalProps) {
   });
 
   const removeChannelAccess = createCallback(async (channelId: string) => {
-    if (recipientPermissions() !== Permissions.OWNER) return;
+    if (
+      recipientPermissions() !== Permissions.OWNER ||
+      props.itemType === 'whatsapp_group'
+    )
+      return;
     if (usesGraphqlSharePolicy(props.itemType)) {
       const result = await updateEntitySharePolicy(props.itemType, props.id, {
         channelSharePermissions: [{ operation: 'remove', channelId }],
@@ -1254,7 +1291,11 @@ export function ShareModal(props: ShareModalProps) {
       accessLevel: AccessLevel,
       hideSuccessToast?: boolean
     ) => {
-      if (recipientPermissions() !== Permissions.OWNER) return;
+      if (
+        recipientPermissions() !== Permissions.OWNER ||
+        props.itemType === 'whatsapp_group'
+      )
+        return;
 
       let result:
         | Result<any, ResultError<any>[]>
@@ -1418,7 +1459,15 @@ export function ShareModal(props: ShareModalProps) {
         getTeamShareScope(sharePermission.teamShareAccessLevel) !== 'NONE';
 
       let result: Result<unknown, ResultError<any>[]>;
-      if (props.itemType !== 'call' && usesGraphqlSharePolicy(props.itemType)) {
+      if (props.itemType === 'whatsapp_group') {
+        result = await updateWhatsappGroupPermissions(
+          props.id,
+          sharePermission
+        );
+      } else if (
+        props.itemType !== 'call' &&
+        usesGraphqlSharePolicy(props.itemType)
+      ) {
         result = await updateEntitySharePolicy(
           props.itemType,
           props.id,
@@ -1520,7 +1569,12 @@ export function ShareModal(props: ShareModalProps) {
       const scope = getLinkShareScope(sharePermission.linkShare);
       let result: Result<any, ResultError<any>[]> | undefined;
 
-      if (usesGraphqlSharePolicy(props.itemType)) {
+      if (props.itemType === 'whatsapp_group') {
+        result = await updateWhatsappGroupPermissions(
+          props.id,
+          sharePermission
+        );
+      } else if (usesGraphqlSharePolicy(props.itemType)) {
         result = await updateEntitySharePolicy(
           props.itemType,
           props.id,
@@ -1679,10 +1733,16 @@ export function ShareModal(props: ShareModalProps) {
                   </Dialog.Title>
                 </Panel.Header>
                 <Panel.Body>
-                  <Show when={!canForward()}>
+                  <Show when={!canForward() && !directSharingOwner()}>
                     <p class="px-4 py-3 text-sm text-ink-muted">
                       {RESTRICTED_SHARE_DESCRIPTIONS[props.itemType]}
                     </p>
+                  </Show>
+                  <Show when={directSharingOwner()}>
+                    <DirectAccessInvite
+                      source={requests}
+                      description="Invite someone to read this conversation. Sending requires their own connected WhatsApp account."
+                    />
                   </Show>
                   <Show when={canForward()}>
                     <ForwardToChannel
@@ -1938,6 +1998,7 @@ export function ShareModal(props: ShareModalProps) {
                       fallback={
                         <LinkSharingControls
                           meetingAccess={meetingAccessForSharing()}
+                          allowedAccessLevels={shareLevelsFor(props.itemType)}
                           editPermissionEnabled={editPermissionEnabled()}
                           linkShare={linkShare()}
                           linkShareAccessLevel={linkShareAccessLevel()}
@@ -2021,13 +2082,15 @@ export function ShareTrigger(props: {
 
   const panel = useSplitPanel();
   const requests = useShareRequestTrigger({
-    entity: () =>
-      shareEntity(
-        blockType() === 'initiative'
-          ? 'initiative'
-          : blockNameToItemType(blockType()),
+    entity: () => {
+      const type = blockType();
+      return shareEntity(
+        type === 'initiative' || type === 'whatsapp_group'
+          ? type
+          : blockNameToItemType(type),
         blockId()
-      ),
+      );
+    },
     active: () => !panel?.isInlinePreview && (panel?.isPanelActive() ?? false),
     open: () => props.onClick(),
   });

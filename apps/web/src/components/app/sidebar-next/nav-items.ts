@@ -1,4 +1,4 @@
-import { LIST_VIEW_PATHS } from '@app/constants/list-views';
+import { EXTERNAL_VIEW_PATH, LIST_VIEW_PATHS } from '@app/constants/list-views';
 import { calendarPath } from '@app/features/calendar-view/calendar-url';
 import type { SidebarItem } from '@components/app/app-sidebar/sidebar';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -12,6 +12,7 @@ import GitPullRequestIcon from '@phosphor/git-pull-request.svg';
 import HouseIcon from '@phosphor/house.svg';
 import ListChecksIcon from '@phosphor/list-checks.svg';
 import PhoneCallIcon from '@phosphor/phone-call.svg';
+import PlugIcon from '@phosphor/plug.svg';
 import PulseIcon from '@phosphor/pulse.svg';
 import AgentIcon from '@phosphor/sparkle.svg';
 import BuildingsFillIcon from '@phosphor-fill/buildings-fill.svg';
@@ -24,6 +25,7 @@ import GitPullRequestFillIcon from '@phosphor-fill/git-pull-request-fill.svg';
 import HouseFillIcon from '@phosphor-fill/house-fill.svg';
 import ListChecksFillIcon from '@phosphor-fill/list-checks-fill.svg';
 import PhoneCallFillIcon from '@phosphor-fill/phone-call-fill.svg';
+import PlugFillIcon from '@phosphor-fill/plug-fill.svg';
 import PulseFillIcon from '@phosphor-fill/pulse-fill.svg';
 import AgentFillIcon from '@phosphor-fill/sparkle-fill.svg';
 import type { NavIcon } from './nav-glyph';
@@ -166,6 +168,15 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
     icon: CalendarCheckIcon,
     iconActive: CalendarCheckFillIcon,
   },
+  {
+    id: 'external',
+    label: 'External',
+    href: EXTERNAL_VIEW_PATH,
+    icon: PlugIcon,
+    iconActive: PlugFillIcon,
+    hotkey: 'x',
+    hotkeyToken: TOKENS.sidebar.goTo.external,
+  },
 ] satisfies SidebarNextNavItem[];
 
 /** Feature flag gates for sidebar destinations. */
@@ -176,6 +187,7 @@ export type NavItemGates = {
   showCalls: boolean;
   showReviews: boolean;
   showActivity: boolean;
+  showExternal: boolean;
   /** User preferences for which items are shown and in what order. */
   prefs: SidebarPrefs;
 };
@@ -191,6 +203,7 @@ export const isNavItemAvailable = (
   if (item.id === 'calls') return gates.showCalls;
   if (item.id === 'reviews') return gates.showReviews;
   if (item.id === 'activity') return gates.showActivity;
+  if (item.id === 'external') return gates.showExternal;
   return true;
 };
 

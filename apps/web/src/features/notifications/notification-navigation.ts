@@ -19,6 +19,7 @@ import { itemToBlockName, resolveBlockAlias } from '@core/constant/allBlocks';
 import {
   enableCalendarUi,
   enableProjects,
+  enableWhatsappLinked,
   isFeatureEnabled,
   USE_MACRO_PR_SUMMARY_BLOCK,
 } from '@core/constant/featureFlags';
@@ -35,6 +36,7 @@ import { errAsync, ResultAsync } from 'neverthrow';
 import { match, P } from 'ts-pattern';
 import { shareEntity } from '../access-requests/core/types';
 import { projectRouteId } from '../projects/core/route';
+import { whatsappGroupComponentId } from '../whatsapp-group/core/route';
 import {
   getDocumentCommentLocation,
   type NotificationEntityOverride,
@@ -225,9 +227,16 @@ function getSupportedHandler(
               onApplied,
             })
       )
-      // Group notifications open the WhatsApp group view, which ships with
-      // the web app layer.
-      .with('whatsapp_group_message', () => null)
+      .with('whatsapp_group_message', () => {
+        if (!isFeatureEnabled(enableWhatsappLinked)) return null;
+        return async (lm: SplitManager, newSplit: boolean = false) =>
+          openSplitIfNotOpen(
+            lm,
+            'component',
+            whatsappGroupComponentId(notification.entity_id),
+            { newSplit, sourceHandle, onApplied }
+          );
+      })
       .with('new_email', () => {
         const meta = notification.notification_metadata;
         if (meta.tag !== 'new_email') return null;
@@ -260,7 +269,12 @@ function getSupportedHandler(
           notification.entity_type,
           notification.entity_id
         );
-        if (!target) return null;
+        if (
+          !target ||
+          (target.entityType === 'whatsapp_group' &&
+            !isFeatureEnabled(enableWhatsappLinked))
+        )
+          return null;
         return async (lm: SplitManager, newSplit = false) =>
           Telemetry.span('access_requests.notification.open', async (span) => {
             span.setAttr('entity.id', target.entityId);
@@ -320,24 +334,26 @@ function getSupportedHandler(
                     )
                   : undefined;
               const block =
-                target.entityType === 'initiative'
-                  ? 'initiative'
-                  : itemToBlockName({
-                      type:
-                        target.entityType === 'email_thread'
-                          ? 'email'
-                          : target.entityType,
-                      fileType:
-                        document?.fileType ??
-                        entity?.fileType ??
-                        meta.content.fileType ??
-                        undefined,
-                      subType:
-                        document?.subType &&
-                        document.subType !== 'initiative_description'
-                          ? { type: document.subType }
-                          : undefined,
-                    });
+                target.entityType === 'whatsapp_group'
+                  ? 'whatsapp_group'
+                  : target.entityType === 'initiative'
+                    ? 'initiative'
+                    : itemToBlockName({
+                        type:
+                          target.entityType === 'email_thread'
+                            ? 'email'
+                            : target.entityType,
+                        fileType:
+                          document?.fileType ??
+                          entity?.fileType ??
+                          meta.content.fileType ??
+                          undefined,
+                        subType:
+                          document?.subType &&
+                          document.subType !== 'initiative_description'
+                            ? { type: document.subType }
+                            : undefined,
+                      });
               const applied = () => {
                 onApplied?.();
                 if (meta.tag === 'entity_access_requested')
@@ -358,10 +374,17 @@ function getSupportedHandler(
               span.setAttr('access_requests.outcome', 'navigation_requested');
               openSplitIfNotOpen(
                 lm,
-                block === 'initiative' ? 'component' : block,
-                block === 'initiative'
-                  ? projectRouteId({ id: target.entityId, section: 'overview' })
-                  : target.entityId,
+                block === 'initiative' || block === 'whatsapp_group'
+                  ? 'component'
+                  : block,
+                block === 'whatsapp_group'
+                  ? whatsappGroupComponentId(target.entityId)
+                  : block === 'initiative'
+                    ? projectRouteId({
+                        id: target.entityId,
+                        section: 'overview',
+                      })
+                    : target.entityId,
                 { newSplit, sourceHandle, onApplied: applied }
               );
             } catch {

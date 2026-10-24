@@ -1,0 +1,10 @@
+import { createQueryKeys } from '@lukemorales/query-key-factory';
+
+// Deliberately absent from persisted query scopes: pairing material lives only
+// in memory while its dialog is open.
+export const whatsappLinkedKeys = createQueryKeys('whatsapp-linked', {
+  configuration: null,
+  account: (userId: string) => [userId],
+  pairing: (userId: string, pairingId: string) => [userId, pairingId],
+  groups: (userId: string) => [userId],
+});

@@ -182,6 +182,7 @@ ownership. Cancel, logout, and the ten-minute timeout retire pending callbacks.
   names; completed step snapshots come from the shared fold of the tool receipt.
   Session `ExecuteCode` activity uses the same Calling N tools peek window as
   ordinary consecutive tool calls.
+- Keep adopted WhatsApp groups on `/whatsapp-group/:id` with their own queries; sharing controls viewing and the viewer's own WhatsApp membership controls sending. Never route them through channel context or services.
 - All API/network calls live in service-clients.
 - Open projects through `openProject` (`features/projects/open-project.ts`): it
   retargets an already-open project split to the section or comment in place.

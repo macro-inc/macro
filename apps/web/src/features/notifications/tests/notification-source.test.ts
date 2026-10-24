@@ -14,7 +14,7 @@ import {
   createNotificationSource,
   setDoneOverride,
 } from '../notification-source';
-import type { UnifiedNotification } from '../types';
+import { type UnifiedNotification, unifiedNotificationSchema } from '../types';
 
 const mocks = vi.hoisted(() => ({
   graphqlCacheEnabled: true,
@@ -1191,4 +1191,23 @@ describe('createNotificationSource', () => {
       dispose();
     }
   });
+});
+
+it('accepts the independent WhatsApp notification through the generated wire schema', () => {
+  const row: UnifiedNotification = {
+    ...notification(
+      '019a061e-0000-7000-8000-000000000003',
+      'whatsapp_group',
+      '019a061e-0000-7000-8000-000000000001'
+    ),
+    notification_event_type: 'whatsapp_group_message',
+    notification_metadata: {
+      tag: 'whatsapp_group_message',
+      content: {
+        groupName: 'Design Crit',
+        messageId: '019a061e-0000-7000-8000-000000000002',
+      },
+    },
+  };
+  expect(unifiedNotificationSchema.safeParse(row).success).toBe(true);
 });

@@ -1,0 +1,47 @@
+# whatsapp-linked
+
+## What it is
+
+Personal WhatsApp accounts linked as devices (External tab → WhatsApp): link an
+account by QR, list its groups, and add a group as its own shareable Macro
+entity. Each person sends from their own account. Behind the `enable-whatsapp-linked` flag.
+
+## Start here
+
+- `whatsapp-linked.tsx`: production wiring (shared queries + split navigation).
+- `context/whatsapp-linked-context.tsx`: the capability contract tests fake.
+- `views/whatsapp-page.tsx`: the three page states and both dialogs.
+
+## Scope
+
+- Owns: the WhatsApp account page, pairing dialog and name-only Add dialog.
+- Group timeline and sending: `features/whatsapp-group`; no channel integration.
+- Not here: the External tab shell and route → `features/external-view`;
+  HTTP → `lib/service-clients/service-storage/whatsapp-linked.ts`; shared
+  queries → `lib/queries/whatsapp-linked`; DSS routes → `crates/whatsapp_linked`.
+
+## Gotchas
+
+- Mutations open `whatsapp.*` operation spans in the shared queries; HTTP
+  trace propagation uses `safeFetch`. Record outcomes without server error bodies
+  or pairing material.
+- Pairing material (QR, codes) stays in the `ph-no-capture` dialog and the
+  never-persisted, `gcTime: 0` pairing query. Never put it in a URL or log.
+- The QR is encoded locally with `uqr`; never send the value to an image service.
+- `core/pairing.ts` matches DSS's pairing states exhaustively; a new state
+  must be handled there, not fall through to "preparing".
+- Wire types come from DSS's generated `@service-storage/generated/schemas`
+  (`Linked*`); change `crates/whatsapp_linked` and regenerate, never hand-type.
+- Adoption grants access only to its owner; the generic Share dialog manages
+  later access. No special audience lists or WhatsApp membership requirement
+  for viewing.
+
+## Checks
+
+- `bunx vitest run --project app src/features/whatsapp-linked`
+- `bun run test:functional -- 'whatsapp-linked.spec.ts$'` (mocked `/meta/linked` routes)
+
+## Related
+
+- Rules: `.agents/rules/web/architecture.md` (FE-33) · Docs:
+  `docs/agent-guide/external.md`

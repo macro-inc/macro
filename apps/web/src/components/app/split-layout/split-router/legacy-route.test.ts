@@ -4,9 +4,14 @@ import {
   homeSplitRoute,
   legacyContentRoute,
   notFoundRoute,
+  whatsappGroupRoute,
 } from '@app/routes/routes';
 import { describe, expect, it, vi } from 'vitest';
-import { resolveContentLocation, upgradeLegacyPath } from './legacy-route';
+import {
+  resolveContentLocation,
+  splitContentFromLocation,
+  upgradeLegacyPath,
+} from './legacy-route';
 
 vi.mock('@components/app/split-layout/componentRegistry', () => ({
   resolveComponent: vi.fn(() => ({ type: 'mock-component' })),
@@ -26,7 +31,12 @@ const routes = createRoutesManifest({
   definitions: [
     {
       ...appRoute,
-      children: [homeSplitRoute, legacyContentRoute, notFoundRoute],
+      children: [
+        homeSplitRoute,
+        whatsappGroupRoute,
+        legacyContentRoute,
+        notFoundRoute,
+      ],
     },
   ],
   defaultRoute: () => ({ matches: [{ id: 'view-home', params: {} }] }),
@@ -58,4 +68,17 @@ describe('resolveContentLocation', () => {
       resolveContentLocation(routes, { type: 'company', id: 'record' }).search
     ).toBeUndefined();
   });
+});
+
+it('round-trips WhatsApp group components through their own route without a block', () => {
+  const content = {
+    type: 'component' as const,
+    id: 'whatsapp-group:019a061e-0000-7000-8000-000000000001',
+  };
+  const location = resolveContentLocation(routes, content);
+  expect(location.route.matches.at(-1)).toEqual({
+    id: 'whatsapp-group',
+    params: { groupId: '019a061e-0000-7000-8000-000000000001' },
+  });
+  expect(splitContentFromLocation(location)).toEqual(content);
 });
