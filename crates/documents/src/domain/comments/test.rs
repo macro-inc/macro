@@ -124,9 +124,72 @@ fn reader(messages: MockMessageReader, marks: Marks) -> DocumentCommentReader<Ma
     DocumentCommentReader::new(Arc::new(messages), marks)
 }
 
+/// A message reader whose authors have no profile names.
+fn unnamed_messages() -> MockMessageReader {
+    let mut messages = MockMessageReader::new();
+    messages
+        .expect_user_display_names()
+        .returning(|_| Ok(HashMap::new()));
+    messages
+}
+
+#[tokio::test]
+async fn names_people_from_one_lookup() {
+    let mut messages = MockMessageReader::new();
+    messages.expect_timeline().returning(|_, _| {
+        Ok(page(
+            vec![item(message(1, None, "first"), None, vec![])],
+            None,
+        ))
+    });
+    messages
+        .expect_user_display_names()
+        .times(1)
+        .withf(|users| users == &[user()])
+        .returning(|users| {
+            Ok(users
+                .into_iter()
+                .map(|user| (user, "Pine Martin".to_owned()))
+                .collect())
+        });
+
+    let discussions = reader(messages, no_marks())
+        .discussions(receipt())
+        .await
+        .unwrap();
+
+    assert_eq!(
+        discussions[0].comments[0].author_name.as_deref(),
+        Some("Pine Martin")
+    );
+}
+
+#[tokio::test]
+async fn reads_without_names_when_the_lookup_fails() {
+    let mut messages = MockMessageReader::new();
+    messages.expect_timeline().returning(|_, _| {
+        Ok(page(
+            vec![item(message(1, None, "first"), None, vec![])],
+            None,
+        ))
+    });
+    messages.expect_user_display_names().returning(|_| {
+        Err(MessageError::Repository(rootcause::report!(
+            "names unavailable"
+        )))
+    });
+
+    let discussions = reader(messages, no_marks())
+        .discussions(receipt())
+        .await
+        .unwrap();
+
+    assert!(discussions[0].comments[0].author_name.is_none());
+}
+
 #[tokio::test]
 async fn reads_inline_and_discussion_threads_oldest_first() {
-    let mut messages = MockMessageReader::new();
+    let mut messages = unnamed_messages();
     messages.expect_timeline().times(1).returning(|access, _| {
         assert_eq!(access.entity().entity_id, DOCUMENT);
         // The timeline is newest first.
@@ -166,8 +229,8 @@ async fn reads_inline_and_discussion_threads_oldest_first() {
                     removed: false,
                 },
                 comments: vec![
-                    comment(message(1, None, "Inline comment")),
-                    comment(message(2, Some(1), "A reply")),
+                    comment(message(1, None, "Inline comment"), &AuthorNames::new()),
+                    comment(message(2, Some(1), "A reply"), &AuthorNames::new()),
                 ],
             },
             DocumentDiscussion {
@@ -175,7 +238,10 @@ async fn reads_inline_and_discussion_threads_oldest_first() {
                 kind: CommentThreadKind::Discussion,
                 resolved: false,
                 anchor: CommentAnchor::Document,
-                comments: vec![comment(message(3, None, "Discussion comment"))],
+                comments: vec![comment(
+                    message(3, None, "Discussion comment"),
+                    &AuthorNames::new()
+                )],
             },
         ]
     );
@@ -183,7 +249,7 @@ async fn reads_inline_and_discussion_threads_oldest_first() {
 
 #[tokio::test]
 async fn unchanged_mark_text_is_not_repeated() {
-    let mut messages = MockMessageReader::new();
+    let mut messages = unnamed_messages();
     messages.expect_timeline().returning(|_, _| {
         Ok(page(
             vec![item(
@@ -214,7 +280,7 @@ async fn unchanged_mark_text_is_not_repeated() {
 
 #[tokio::test]
 async fn removed_or_unreadable_marks_fall_back_to_the_snapshot() {
-    let mut messages = MockMessageReader::new();
+    let mut messages = unnamed_messages();
     messages.expect_timeline().returning(|_, _| {
         Ok(page(
             vec![
@@ -264,7 +330,7 @@ async fn removed_or_unreadable_marks_fall_back_to_the_snapshot() {
 
 #[tokio::test]
 async fn pdf_anchors_are_inline_threads() {
-    let mut messages = MockMessageReader::new();
+    let mut messages = unnamed_messages();
     messages.expect_timeline().returning(|_, _| {
         Ok(page(
             vec![
@@ -329,7 +395,7 @@ async fn pdf_anchors_are_inline_threads() {
 
 #[tokio::test]
 async fn threads_beyond_the_preview_load_every_reply() {
-    let mut messages = MockMessageReader::new();
+    let mut messages = unnamed_messages();
     messages.expect_timeline().returning(|_, _| {
         let replies = (2..5).map(|n| message(n, Some(1), "preview")).collect();
         let mut root = item(message(1, None, "root"), None, replies);
@@ -370,7 +436,7 @@ async fn threads_beyond_the_preview_load_every_reply() {
 
 #[tokio::test]
 async fn deleted_first_comments_are_kept_only_with_replies() {
-    let mut messages = MockMessageReader::new();
+    let mut messages = unnamed_messages();
     messages.expect_timeline().returning(|_, _| {
         let mut lone = message(3, None, "lone");
         lone.deleted_at = Some(at(4));
@@ -398,7 +464,7 @@ async fn deleted_first_comments_are_kept_only_with_replies() {
 
 #[tokio::test]
 async fn follows_the_timeline_to_its_oldest_page() {
-    let mut messages = MockMessageReader::new();
+    let mut messages = unnamed_messages();
     let mut sequence = mockall::Sequence::new();
     messages
         .expect_timeline()
@@ -440,7 +506,7 @@ async fn follows_the_timeline_to_its_oldest_page() {
 
 #[tokio::test]
 async fn message_failures_fail_the_read() {
-    let mut messages = MockMessageReader::new();
+    let mut messages = unnamed_messages();
     messages
         .expect_timeline()
         .returning(|_, _| Err(MessageError::Forbidden));
@@ -470,7 +536,10 @@ fn serializes_ids_kind_and_anchor_for_agents() {
             original_marked_text: None,
             removed: false,
         },
-        comments: vec![comment(message(1, None, "Why?")), comment(bot)],
+        comments: vec![
+            comment(message(1, None, "Why?"), &AuthorNames::new()),
+            comment(bot, &AuthorNames::new()),
+        ],
     };
 
     assert_eq!(
@@ -525,7 +594,7 @@ fn pdf_highlights_serialize_like_text_anchors() {
 
 #[tokio::test]
 async fn deleted_threads_do_not_count_toward_the_cap() {
-    let mut messages = MockMessageReader::new();
+    let mut messages = unnamed_messages();
     let mut sequence = mockall::Sequence::new();
     messages
         .expect_timeline()
@@ -572,7 +641,7 @@ async fn deleted_threads_do_not_count_toward_the_cap() {
 
 #[tokio::test]
 async fn spreadsheet_ranges_are_inline_and_workbook_comments_are_discussions() {
-    let mut messages = MockMessageReader::new();
+    let mut messages = unnamed_messages();
     messages.expect_timeline().returning(|_, _| {
         Ok(page(
             vec![
@@ -609,7 +678,7 @@ async fn spreadsheet_ranges_are_inline_and_workbook_comments_are_discussions() {
 
 #[tokio::test]
 async fn design_pins_are_inline_and_name_their_layer_and_point() {
-    let mut messages = MockMessageReader::new();
+    let mut messages = unnamed_messages();
     messages.expect_timeline().returning(|_, _| {
         Ok(page(
             vec![

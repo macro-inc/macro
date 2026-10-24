@@ -13562,6 +13562,13 @@ export interface ToolReaction {
    * User ids that reacted with this emoji.
    */
   users: string[];
+  /**
+   * The names the app shows for the people in `users`, keyed by their id.
+   * People without a profile name are absent.
+   */
+  userNames?: {
+    [k: string]: string;
+  };
 }
 /**
  * A compact attachment reference on a message.
@@ -13881,7 +13888,9 @@ export interface DocumentComment {
    */
   author: string;
   /**
-   * The author's display name, for bots and comments imported from other documents.
+   * The author's name as the app shows it: the name of a comment imported
+   * from another document, the bot's, or the person's profile name. Absent
+   * when a person has none.
    */
   authorName?: string | null;
   /**
@@ -13980,7 +13989,8 @@ export interface DiscussionComment {
    */
   author: string;
   /**
-   * The author's display name, for bots and imported comments.
+   * The author's name as the app shows it: an imported author's, the
+   * bot's, or the person's profile name. Absent when a person has none.
    */
   authorName?: string | null;
   /**

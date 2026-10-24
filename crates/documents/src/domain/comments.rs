@@ -11,7 +11,7 @@ use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
 use futures::{StreamExt, stream};
 use messages::domain::{
     api::MessageReader,
-    discussions::{live_roots, with_replies},
+    discussions::{AuthorNames, author_name, author_names, live_roots, with_replies},
     models::{Message, MessageThread, ThreadAnchor},
     ports::MessageError,
     service::MessageView,
@@ -109,7 +109,9 @@ pub struct DocumentComment {
     pub id: Uuid,
     /// The user or bot id of the author.
     pub author: String,
-    /// The author's display name, for bots and comments imported from other documents.
+    /// The author's name as the app shows it: the name of a comment imported
+    /// from another document, the bot's, or the person's profile name. Absent
+    /// when a person has none.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub author_name: Option<String>,
     /// The comment body in markdown; absent when the comment was deleted.
@@ -224,15 +226,20 @@ impl<M: CommentMarks> DocumentComments for DocumentCommentReader<M> {
             with_replies(self.messages.as_ref(), &access, roots),
             self.live_marks(&document_id, mark_ids)
         );
+        let threads = threads.map_err(message_error)?;
+        let names = author_names(self.messages.as_ref(), &threads).await;
         Ok(threads
-            .map_err(message_error)?
             .into_iter()
-            .map(|thread| discussion(thread, &marks))
+            .map(|thread| discussion(thread, &marks, &names))
             .collect())
     }
 }
 
-fn discussion(thread: MessageThread, marks: &HashMap<Uuid, Option<String>>) -> DocumentDiscussion {
+fn discussion(
+    thread: MessageThread,
+    marks: &HashMap<Uuid, Option<String>>,
+    names: &AuthorNames,
+) -> DocumentDiscussion {
     let kind = match thread.state.anchor {
         None => CommentThreadKind::Discussion,
         Some(_) => CommentThreadKind::Inline,
@@ -244,7 +251,7 @@ fn discussion(thread: MessageThread, marks: &HashMap<Uuid, Option<String>>) -> D
         anchor: comment_anchor(thread.state.anchor, marks),
         comments: std::iter::once(thread.root)
             .chain(thread.replies)
-            .map(comment)
+            .map(|message| comment(message, names))
             .collect(),
     }
 }
@@ -309,15 +316,12 @@ fn comment_anchor(
     }
 }
 
-fn comment(message: Message) -> DocumentComment {
+fn comment(message: Message, names: &AuthorNames) -> DocumentComment {
     let deleted = message.deleted_at.is_some();
     DocumentComment {
         id: message.id,
         author: message.sender_id.as_ref().to_owned(),
-        author_name: message
-            .imported_author
-            .map(|author| author.name)
-            .or(message.bot_profile.map(|bot| bot.name)),
+        author_name: author_name(&message, names),
         content: (!deleted).then_some(message.content),
         created_at: message.created_at,
         edited_at: message.edited_at,

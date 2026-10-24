@@ -415,10 +415,12 @@ pub(super) async fn load_user_display_names(
 
 fn display_name(first_name: Option<&str>, last_name: Option<&str>) -> Option<String> {
     const NA: &str = "N/A";
-    match (
-        first_name.filter(|value| *value != NA),
-        last_name.filter(|value| *value != NA),
-    ) {
+    fn part(value: Option<&str>) -> Option<&str> {
+        value
+            .map(str::trim)
+            .filter(|value| !value.is_empty() && *value != NA)
+    }
+    match (part(first_name), part(last_name)) {
         (None, None) => None,
         (None, Some(last_name)) => Some(last_name.to_string()),
         (Some(first_name), None) => Some(first_name.to_string()),
@@ -1930,6 +1932,14 @@ impl ChannelAttachmentRepo for PgChannelsRepo {
         })
         .fetch_all(&self.pool)
         .await?)
+    }
+
+    #[tracing::instrument(skip_all, fields(user_count = user_ids.len()), err)]
+    async fn get_user_display_names(
+        &self,
+        user_ids: &[MacroUserIdStr<'static>],
+    ) -> Result<HashMap<MacroUserIdStr<'static>, String>, Self::Err> {
+        Ok(load_user_display_names(&self.pool, user_ids).await?)
     }
 }
 

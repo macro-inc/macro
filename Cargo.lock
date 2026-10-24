@@ -4178,6 +4178,7 @@ dependencies = [
  "filter_ast",
  "frecency",
  "futures",
+ "html-escape",
  "http-body-util",
  "indexmap 2.14.0",
  "item_filters",

@@ -22,7 +22,10 @@ they need.
   exhaustive: a new `MessageParent` variant decides there whether the tools
   address it.
 - `src/domain/discussions.rs`: a parent's live threads with all replies, the
-  read both `ReadDiscussion` and the document comment reader share.
+  read both `ReadDiscussion` and the document comment reader share, and
+  `author_names`/`author_name`, which name comment authors the same way in
+  both: imported author, bot, or the person's profile name from one
+  `user_display_names` lookup per read (a failed lookup omits names).
 - `src/domain/service/guest_chat.rs` + `src/inbound/guest_chat.rs`: live guest
   call discussions; the call domain verifies RTC credentials and membership.
 - `src/outbound/pg_message_repo.rs` + `pg_discussion_context.rs`: Postgres

@@ -2,6 +2,8 @@
 
 use super::{models::*, ports::*, service::*};
 use entity_access::domain::models::EntityAccessReceipt;
+use macro_user_id::user_id::MacroUserIdStr;
+use std::collections::HashMap;
 use uuid::Uuid;
 
 /// Conversation reads under a verified parent capability.
@@ -50,6 +52,12 @@ pub trait MessageReader: Send + Sync + 'static {
     /// The parent a live message belongs to, for adapters addressed only by
     /// message id. Grants nothing: callers mint the parent's receipt before any read.
     async fn parent_of(&self, id: Uuid) -> Result<Option<MessageParent>, MessageError>;
+    /// Profile names (`first last`) for the people who wrote messages the
+    /// caller has read, as the app shows them. People without a name are absent.
+    async fn user_display_names(
+        &self,
+        users: Vec<MacroUserIdStr<'static>>,
+    ) -> Result<HashMap<MacroUserIdStr<'static>, String>, MessageError>;
 }
 
 /// Conversation mutations under a verified actor and parent capability.
@@ -187,6 +195,12 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageReader for MessageSe
     async fn parent_of(&self, id: Uuid) -> Result<Option<MessageParent>, MessageError> {
         MessageService::parent_of(self, id).await
     }
+    async fn user_display_names(
+        &self,
+        users: Vec<MacroUserIdStr<'static>>,
+    ) -> Result<HashMap<MacroUserIdStr<'static>, String>, MessageError> {
+        MessageService::user_display_names(self, users).await
+    }
 }
 
 #[async_trait::async_trait]
@@ -310,6 +324,8 @@ mockall::mock! {
     async fn resolve_legacy(&self, access: EntityAccessReceipt<MessageView>, id: i64, is_thread: bool) -> Result<Message, MessageError>;
     /// The parent a message belongs to, for id-addressed adapters.
     async fn parent_of(&self, id: Uuid) -> Result<Option<MessageParent>, MessageError>;
+    /// Profile names for the people who wrote messages the caller has read.
+    async fn user_display_names(&self, users: Vec<MacroUserIdStr<'static>>) -> Result<HashMap<MacroUserIdStr<'static>, String>, MessageError>;
     }
     #[async_trait::async_trait]
     impl MessageCommands for MessageServiceApi {

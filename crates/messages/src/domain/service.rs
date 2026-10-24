@@ -5,6 +5,8 @@ use entity_access::domain::models::{
     EntityAccessReceipt, EntityPermission, EntityType, MemberParticipantRole, OwnerAccessLevel,
     RequiredPermission, ViewAccessLevel, ViewOnly,
 };
+use macro_user_id::user_id::MacroUserIdStr;
+use std::collections::HashMap;
 use uuid::Uuid;
 
 #[cfg(test)]
@@ -687,6 +689,19 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
     #[tracing::instrument(err, skip(self))]
     pub async fn parent_of(&self, id: Uuid) -> Result<Option<MessageParent>, MessageError> {
         self.repo.parent_of(id).await
+    }
+
+    /// Profile names for the people who wrote messages already read under a
+    /// receipt, so readers can name them as the app does.
+    #[tracing::instrument(err, skip_all, fields(user_count = users.len()))]
+    pub async fn user_display_names(
+        &self,
+        users: Vec<MacroUserIdStr<'static>>,
+    ) -> Result<HashMap<MacroUserIdStr<'static>, String>, MessageError> {
+        if users.is_empty() {
+            return Ok(HashMap::new());
+        }
+        self.repo.user_display_names(&users).await
     }
 
     /// Resolve an old link through the sole message store under current parent access.

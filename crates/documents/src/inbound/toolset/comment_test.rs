@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext};
@@ -86,6 +87,12 @@ impl MessageReader for FakeMessages {
     }
     async fn parent_of(&self, _id: Uuid) -> Result<Option<MessageParent>, MessageError> {
         panic!("unexpected parent_of call")
+    }
+    async fn user_display_names(
+        &self,
+        _users: Vec<MacroUserIdStr<'static>>,
+    ) -> Result<HashMap<MacroUserIdStr<'static>, String>, MessageError> {
+        Ok(HashMap::new())
     }
 }
 

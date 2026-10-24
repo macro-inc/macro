@@ -1747,3 +1747,21 @@ async fn imported_call_discussion_needs_no_native_session(pool: PgPool) {
     assert!(repo.get(&parent, call_id).await.unwrap().is_none());
     assert!(repo.replies(&parent, call_id).await.unwrap().is_empty());
 }
+
+#[test]
+fn display_name_skips_blank_and_unset_parts() {
+    assert_eq!(
+        super::display_name(Some("Pine"), Some("Martin")).as_deref(),
+        Some("Pine Martin")
+    );
+    assert_eq!(
+        super::display_name(Some(" Pine "), Some("N/A")).as_deref(),
+        Some("Pine")
+    );
+    assert_eq!(
+        super::display_name(Some(""), Some("Martin")).as_deref(),
+        Some("Martin")
+    );
+    assert_eq!(super::display_name(Some(""), None), None);
+    assert_eq!(super::display_name(Some("  "), Some("N/A")), None);
+}

@@ -2884,3 +2884,22 @@ async fn channel_picture_round_trips_through_batched_previews(pool: Pool<Postgre
         assert!(previews[0].has_access);
     }
 }
+
+#[test]
+fn display_name_skips_blank_and_unset_parts() {
+    use super::display_name;
+    assert_eq!(
+        display_name(Some("Pine"), Some("Martin")).as_deref(),
+        Some("Pine Martin")
+    );
+    assert_eq!(
+        display_name(Some(" Pine "), Some("N/A")).as_deref(),
+        Some("Pine")
+    );
+    assert_eq!(
+        display_name(Some(""), Some("Martin")).as_deref(),
+        Some("Martin")
+    );
+    assert_eq!(display_name(Some(""), None), None);
+    assert_eq!(display_name(Some("  "), Some("N/A")), None);
+}

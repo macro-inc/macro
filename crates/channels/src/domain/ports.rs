@@ -138,6 +138,13 @@ pub trait ChannelAttachmentRepo: Send + Sync + 'static {
         channel_id: Uuid,
         limit: u32,
     ) -> impl Future<Output = Result<Vec<RecentChannelMessage>, Self::Err>> + Send;
+
+    /// Profile names (`first last`) for the given users, as the app shows
+    /// them. Users without a name are absent from the map.
+    fn get_user_display_names(
+        &self,
+        user_ids: &[MacroUserIdStr<'static>],
+    ) -> impl Future<Output = Result<HashMap<MacroUserIdStr<'static>, String>, Self::Err>> + Send;
 }
 
 /// Reserved channel persistence shared by archive and onboarding imports.

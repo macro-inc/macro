@@ -45,7 +45,7 @@ use messages::domain::{
     service::{MessageView, MessageWrite},
 };
 use std::{collections::HashSet, sync::Arc};
-use types::SenderNames;
+use types::PeopleNames;
 use uuid::Uuid;
 
 pub use create_channel_media_upload::{
@@ -195,20 +195,20 @@ where
             .map_err(channel_access_error)
     }
 
-    /// Profile names for the people among `user_senders`, so the read tools
-    /// name them as the app does. A failed lookup leaves the names out rather
+    /// Profile names for `people`, so the read tools name senders and
+    /// reactors as the app does. A failed lookup leaves the names out rather
     /// than failing the read.
-    pub(crate) async fn sender_names(
+    pub(crate) async fn people_names(
         &self,
-        user_senders: HashSet<MacroUserIdStr<'static>>,
-    ) -> SenderNames {
-        if user_senders.is_empty() {
-            return SenderNames::new();
+        people: HashSet<MacroUserIdStr<'static>>,
+    ) -> PeopleNames {
+        if people.is_empty() {
+            return PeopleNames::new();
         }
         self.service
-            .get_user_display_names(user_senders.into_iter().collect())
+            .get_user_display_names(people.into_iter().collect())
             .await
-            .inspect_err(|error| tracing::warn!(error = ?error, "failed to resolve sender names"))
+            .inspect_err(|error| tracing::warn!(error = ?error, "failed to resolve people names"))
             .unwrap_or_default()
     }
 

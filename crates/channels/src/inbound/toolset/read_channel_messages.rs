@@ -4,7 +4,7 @@ use messages::domain::ports::{MessageDirection, MessageTimelineQuery};
 use super::ChannelToolContext;
 use super::types::{
     PageDirection, ToolChannelMessage, ToolNavigation, ToolOmission, ToolOmissionKind, clamp_limit,
-    clamp_max_chars, content_truncation_omissions, user_senders,
+    clamp_max_chars, content_truncation_omissions, message_people,
 };
 use crate::domain::ports::ChannelService;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
@@ -220,12 +220,12 @@ where
             older_cursor: continuation(page.next_cursor, MessageDirection::Older),
             newer_cursor: continuation(page.previous_cursor, MessageDirection::Newer),
         };
-        let senders = user_senders(
+        let people = message_people(
             page.items
                 .iter()
                 .flat_map(|item| std::iter::once(&item.message).chain(&item.thread.preview)),
         );
-        let names = service_context.sender_names(senders).await;
+        let names = service_context.people_names(people).await;
         let messages: Vec<_> = page
             .items
             .into_iter()

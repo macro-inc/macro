@@ -4,7 +4,7 @@ use messages::domain::ports::MessageTimelineQuery;
 use super::ChannelToolContext;
 use super::types::{
     ToolChannelMessage, ToolOmission, ToolOmissionKind, ToolResolvedMessage, ToolThreadReply,
-    clamp_limit, clamp_max_chars, content_truncation_omissions, user_senders,
+    clamp_limit, clamp_max_chars, content_truncation_omissions, message_people,
 };
 use crate::domain::ports::ChannelService;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
@@ -207,13 +207,13 @@ where
             None
         };
 
-        let senders = user_senders(
+        let people = message_people(
             std::iter::once(&parent.message)
                 .chain(&parent.thread.preview)
                 .chain(&reply_window)
                 .chain(context_items.iter().flatten().map(|item| &item.message)),
         );
-        let names = service_context.sender_names(senders).await;
+        let names = service_context.people_names(people).await;
         let parent = ToolChannelMessage::from_message(
             parent,
             self.channel_id,

@@ -17,6 +17,7 @@ attachment = [
   "dep:attachment",
   "dep:entity_access",
   "dep:futures",
+  "dep:html-escape",
   "dep:model-entity",
   "dep:non_empty",
   "entity_access/ports",
@@ -113,6 +114,7 @@ entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
 filter_ast = { path = "../filter_ast", optional = true }
 frecency = { path = "../frecency", optional = true }
 futures = { workspace = true, optional = true }
+html-escape = { workspace = true, optional = true }
 indexmap = { workspace = true, optional = true }
 item_filters = { path = "../item_filters", default-features = false }
 kafka_util = { path = "../kafka_util", optional = true }

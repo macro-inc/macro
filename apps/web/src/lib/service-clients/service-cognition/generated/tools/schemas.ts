@@ -12206,7 +12206,11 @@ export const ReadChannelMessageContextResponse = z.object({
                     .union([z.string().datetime({ offset: true }), z.null()])
                     .optional(),
                   reactions: z.array(
-                    z.object({ emoji: z.string(), users: z.array(z.string()) })
+                    z.object({
+                      emoji: z.string(),
+                      users: z.array(z.string()),
+                      userNames: z.record(z.string()).optional(),
+                    })
                   ),
                   attachments: z.array(
                     z.object({
@@ -12224,7 +12228,11 @@ export const ReadChannelMessageContextResponse = z.object({
           omittedReplyCount: z.number().int(),
         }),
         reactions: z.array(
-          z.object({ emoji: z.string(), users: z.array(z.string()) })
+          z.object({
+            emoji: z.string(),
+            users: z.array(z.string()),
+            userNames: z.record(z.string()).optional(),
+          })
         ),
         attachments: z.array(
           z.object({
@@ -12273,7 +12281,11 @@ export const ReadChannelMessageContextResponse = z.object({
                   .union([z.string().datetime({ offset: true }), z.null()])
                   .optional(),
                 reactions: z.array(
-                  z.object({ emoji: z.string(), users: z.array(z.string()) })
+                  z.object({
+                    emoji: z.string(),
+                    users: z.array(z.string()),
+                    userNames: z.record(z.string()).optional(),
+                  })
                 ),
                 attachments: z.array(
                   z.object({
@@ -12291,7 +12303,11 @@ export const ReadChannelMessageContextResponse = z.object({
         omittedReplyCount: z.number().int(),
       }),
       reactions: z.array(
-        z.object({ emoji: z.string(), users: z.array(z.string()) })
+        z.object({
+          emoji: z.string(),
+          users: z.array(z.string()),
+          userNames: z.record(z.string()).optional(),
+        })
       ),
       attachments: z.array(
         z.object({
@@ -12340,7 +12356,11 @@ export const ReadChannelMessageContextResponse = z.object({
                     .union([z.string().datetime({ offset: true }), z.null()])
                     .optional(),
                   reactions: z.array(
-                    z.object({ emoji: z.string(), users: z.array(z.string()) })
+                    z.object({
+                      emoji: z.string(),
+                      users: z.array(z.string()),
+                      userNames: z.record(z.string()).optional(),
+                    })
                   ),
                   attachments: z.array(
                     z.object({
@@ -12358,7 +12378,11 @@ export const ReadChannelMessageContextResponse = z.object({
           omittedReplyCount: z.number().int(),
         }),
         reactions: z.array(
-          z.object({ emoji: z.string(), users: z.array(z.string()) })
+          z.object({
+            emoji: z.string(),
+            users: z.array(z.string()),
+            userNames: z.record(z.string()).optional(),
+          })
         ),
         attachments: z.array(
           z.object({
@@ -12415,6 +12439,7 @@ export const ReadChannelMessageContextResponse = z.object({
                       z.object({
                         emoji: z.string(),
                         users: z.array(z.string()),
+                        userNames: z.record(z.string()).optional(),
                       })
                     ),
                     attachments: z.array(
@@ -12433,7 +12458,11 @@ export const ReadChannelMessageContextResponse = z.object({
             omittedReplyCount: z.number().int(),
           }),
           reactions: z.array(
-            z.object({ emoji: z.string(), users: z.array(z.string()) })
+            z.object({
+              emoji: z.string(),
+              users: z.array(z.string()),
+              userNames: z.record(z.string()).optional(),
+            })
           ),
           attachments: z.array(
             z.object({
@@ -12458,7 +12487,11 @@ export const ReadChannelMessageContextResponse = z.object({
               .union([z.string().datetime({ offset: true }), z.null()])
               .optional(),
             reactions: z.array(
-              z.object({ emoji: z.string(), users: z.array(z.string()) })
+              z.object({
+                emoji: z.string(),
+                users: z.array(z.string()),
+                userNames: z.record(z.string()).optional(),
+              })
             ),
             attachments: z.array(
               z.object({
@@ -12485,7 +12518,11 @@ export const ReadChannelMessageContextResponse = z.object({
                 .union([z.string().datetime({ offset: true }), z.null()])
                 .optional(),
               reactions: z.array(
-                z.object({ emoji: z.string(), users: z.array(z.string()) })
+                z.object({
+                  emoji: z.string(),
+                  users: z.array(z.string()),
+                  userNames: z.record(z.string()).optional(),
+                })
               ),
               attachments: z.array(
                 z.object({
@@ -12513,7 +12550,11 @@ export const ReadChannelMessageContextResponse = z.object({
               .union([z.string().datetime({ offset: true }), z.null()])
               .optional(),
             reactions: z.array(
-              z.object({ emoji: z.string(), users: z.array(z.string()) })
+              z.object({
+                emoji: z.string(),
+                users: z.array(z.string()),
+                userNames: z.record(z.string()).optional(),
+              })
             ),
             attachments: z.array(
               z.object({
@@ -12638,7 +12679,11 @@ export const ReadChannelMessagesResponse = z.object({
                   .union([z.string().datetime({ offset: true }), z.null()])
                   .optional(),
                 reactions: z.array(
-                  z.object({ emoji: z.string(), users: z.array(z.string()) })
+                  z.object({
+                    emoji: z.string(),
+                    users: z.array(z.string()),
+                    userNames: z.record(z.string()).optional(),
+                  })
                 ),
                 attachments: z.array(
                   z.object({
@@ -12656,7 +12701,11 @@ export const ReadChannelMessagesResponse = z.object({
         omittedReplyCount: z.number().int(),
       }),
       reactions: z.array(
-        z.object({ emoji: z.string(), users: z.array(z.string()) })
+        z.object({
+          emoji: z.string(),
+          users: z.array(z.string()),
+          userNames: z.record(z.string()).optional(),
+        })
       ),
       attachments: z.array(
         z.object({
@@ -12786,7 +12835,11 @@ export const ReadChannelThreadResponse = z.object({
                   .union([z.string().datetime({ offset: true }), z.null()])
                   .optional(),
                 reactions: z.array(
-                  z.object({ emoji: z.string(), users: z.array(z.string()) })
+                  z.object({
+                    emoji: z.string(),
+                    users: z.array(z.string()),
+                    userNames: z.record(z.string()).optional(),
+                  })
                 ),
                 attachments: z.array(
                   z.object({
@@ -12804,7 +12857,11 @@ export const ReadChannelThreadResponse = z.object({
         omittedReplyCount: z.number().int(),
       }),
       reactions: z.array(
-        z.object({ emoji: z.string(), users: z.array(z.string()) })
+        z.object({
+          emoji: z.string(),
+          users: z.array(z.string()),
+          userNames: z.record(z.string()).optional(),
+        })
       ),
       attachments: z.array(
         z.object({
@@ -12834,7 +12891,11 @@ export const ReadChannelThreadResponse = z.object({
         .union([z.string().datetime({ offset: true }), z.null()])
         .optional(),
       reactions: z.array(
-        z.object({ emoji: z.string(), users: z.array(z.string()) })
+        z.object({
+          emoji: z.string(),
+          users: z.array(z.string()),
+          userNames: z.record(z.string()).optional(),
+        })
       ),
       attachments: z.array(
         z.object({
@@ -12889,6 +12950,7 @@ export const ReadChannelThreadResponse = z.object({
                       z.object({
                         emoji: z.string(),
                         users: z.array(z.string()),
+                        userNames: z.record(z.string()).optional(),
                       })
                     ),
                     attachments: z.array(
@@ -12907,7 +12969,11 @@ export const ReadChannelThreadResponse = z.object({
             omittedReplyCount: z.number().int(),
           }),
           reactions: z.array(
-            z.object({ emoji: z.string(), users: z.array(z.string()) })
+            z.object({
+              emoji: z.string(),
+              users: z.array(z.string()),
+              userNames: z.record(z.string()).optional(),
+            })
           ),
           attachments: z.array(
             z.object({

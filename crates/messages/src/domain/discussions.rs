@@ -1,10 +1,11 @@
 //! A parent's live discussions as a reader of the whole entity sees them:
 //! every thread with all of its replies, oldest thread first.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use entity_access::domain::models::EntityAccessReceipt;
 use futures::{StreamExt, TryStreamExt, stream};
+use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use super::{
@@ -114,4 +115,46 @@ pub async fn with_replies<M: MessageReader + ?Sized>(
             })
         })
         .collect())
+}
+
+/// Profile names of the people who wrote a set of discussions, keyed by user id.
+pub type AuthorNames = HashMap<MacroUserIdStr<'static>, String>;
+
+/// Profile names for the people who wrote `threads`, in one lookup. A failed
+/// lookup leaves the names out rather than failing the read.
+pub async fn author_names<M: MessageReader + ?Sized>(
+    messages: &M,
+    threads: &[MessageThread],
+) -> AuthorNames {
+    let people: HashSet<_> = threads
+        .iter()
+        .flat_map(|thread| std::iter::once(&thread.root).chain(&thread.replies))
+        .filter_map(|message| message.sender_id.as_user().cloned())
+        .collect();
+    if people.is_empty() {
+        return AuthorNames::new();
+    }
+    messages
+        .user_display_names(people.into_iter().collect())
+        .await
+        .inspect_err(
+            |error| tracing::warn!(error = ?error, "failed to resolve comment author names"),
+        )
+        .unwrap_or_default()
+}
+
+/// The name the app shows for a comment's author: an imported author's, the
+/// bot's, or the person's profile name.
+pub fn author_name(message: &Message, names: &AuthorNames) -> Option<String> {
+    message
+        .imported_author
+        .as_ref()
+        .map(|author| author.name.clone())
+        .or_else(|| message.bot_profile.as_ref().map(|bot| bot.name.clone()))
+        .or_else(|| {
+            message
+                .sender_id
+                .as_user()
+                .and_then(|user| names.get(user).cloned())
+        })
 }

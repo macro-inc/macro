@@ -2,7 +2,9 @@ use super::models::*;
 use activity::{ActionTag, domain::timeline::TimelineSelection};
 use channel_sender::ChannelSender;
 use chrono::{DateTime, Utc};
+use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use uuid::Uuid;
 
 #[cfg(test)]
@@ -434,6 +436,15 @@ pub trait MessageRepository: Send + Sync + 'static {
         id: i64,
         is_thread: bool,
     ) -> impl Future<Output = Result<Option<Uuid>, MessageError>> + Send;
+    /// Profile names (`first last`) for the given people, as the app shows
+    /// them. People without a name are absent from the map.
+    fn user_display_names(
+        &self,
+        _users: &[MacroUserIdStr<'static>],
+    ) -> impl Future<Output = Result<HashMap<MacroUserIdStr<'static>, String>, MessageError>> + Send
+    {
+        async { Ok(HashMap::new()) }
+    }
     /// The parent a live message belongs to; `None` once it is deleted. Grants
     /// nothing: it only tells an id-addressed adapter which parent receipt to mint.
     fn parent_of(

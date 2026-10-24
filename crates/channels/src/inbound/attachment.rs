@@ -1,5 +1,7 @@
 //! Attachment inbound adapter for the channels domain.
 
+use std::borrow::Cow;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 use std::sync::Arc;
 
@@ -91,7 +93,8 @@ impl<C: ChannelAttachmentRepo, E: EntityAccessService> ChannelAttachmentService<
         let mut messages = messages.map_err(|e| AttachmentError::Internal(e.into()))?;
         messages.reverse();
 
-        let parts = format_messages(&messages);
+        let names = self.sender_names(&messages).await;
+        let parts = format_messages(&messages, &names);
 
         Ok(AttachmentContent {
             reference: EntityType::Channel.with_entity_string(id.to_string()),
@@ -108,7 +111,32 @@ impl<C: ChannelAttachmentRepo, E: EntityAccessService> ChannelAttachmentService<
     }
 }
 
-fn format_messages(messages: &[RecentChannelMessage]) -> String {
+impl<C: ChannelAttachmentRepo, E> ChannelAttachmentService<C, E> {
+    /// Profile names for the people who sent `messages`, in one lookup. A
+    /// failed lookup leaves the names out rather than failing the attachment.
+    async fn sender_names(&self, messages: &[RecentChannelMessage]) -> SenderNames {
+        let people: HashSet<_> = messages.iter().filter_map(sender).collect();
+        if people.is_empty() {
+            return SenderNames::new();
+        }
+        self.channel_repo
+            .get_user_display_names(&people.into_iter().collect::<Vec<_>>())
+            .await
+            .map_err(Into::<anyhow::Error>::into)
+            .inspect_err(|error| tracing::warn!(error = ?error, "failed to resolve sender names"))
+            .unwrap_or_default()
+    }
+}
+
+/// Profile names of the people who sent a channel's messages, keyed by user id.
+type SenderNames = HashMap<MacroUserIdStr<'static>, String>;
+
+/// A message's sender, when it is a person.
+fn sender(message: &RecentChannelMessage) -> Option<MacroUserIdStr<'static>> {
+    MacroUserIdStr::try_from(message.sender_id.clone()).ok()
+}
+
+fn format_messages(messages: &[RecentChannelMessage], names: &SenderNames) -> String {
     if messages.is_empty() {
         return "(no messages)".to_string();
     }
@@ -116,12 +144,26 @@ fn format_messages(messages: &[RecentChannelMessage]) -> String {
     let mut body = String::new();
     for msg in messages {
         let timestamp = msg.created_at.format("%Y-%m-%d %H:%M").to_string();
+        let mut tag_attrs = attrs(&[("sender", &msg.sender_id)]);
+        if let Some(name) = sender(msg).and_then(|sender| names.get(&sender)) {
+            // Attachment attributes render unquoted; a name can hold spaces,
+            // so it is quoted to keep it apart from the next attribute.
+            let name = html_escape::encode_double_quoted_attribute(name);
+            tag_attrs.push((
+                Cow::Borrowed("sender-name"),
+                Cow::Owned(format!("\"{name}\"")),
+            ));
+        }
+        tag_attrs.push((Cow::Borrowed("timestamp"), Cow::Borrowed(&timestamp)));
         let tag = XmlTag {
             name: "message",
-            attrs: attrs(&[("sender", &msg.sender_id), ("timestamp", &timestamp)]),
+            attrs: tag_attrs,
             body: &msg.content,
         };
         writeln!(&mut body, "{tag}").expect("write to string");
     }
     body
 }
+
+#[cfg(test)]
+mod test;

@@ -10,7 +10,7 @@ use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use uuid::Uuid;
 
 /// Default number of messages/replies returned by channel AI tools.
@@ -22,12 +22,13 @@ pub(crate) const DEFAULT_MAX_CHARS_PER_MESSAGE: usize = 4_000;
 /// Maximum allowed content length per message.
 pub(crate) const MAX_CHARS_PER_MESSAGE: usize = 16_000;
 
-/// Profile names of the people who sent a set of messages, keyed by user id.
-pub(crate) type SenderNames = HashMap<MacroUserIdStr<'static>, String>;
+/// Profile names of the people who sent or reacted to a set of messages,
+/// keyed by user id.
+pub(crate) type PeopleNames = HashMap<MacroUserIdStr<'static>, String>;
 
 /// The name the app shows for a message's sender: an imported author's, the
 /// bot's, a call guest's, or the person's profile name.
-fn sender_name(message: &Message, names: &SenderNames) -> Option<String> {
+fn sender_name(message: &Message, names: &PeopleNames) -> Option<String> {
     message
         .imported_author
         .as_ref()
@@ -42,14 +43,31 @@ fn sender_name(message: &Message, names: &SenderNames) -> Option<String> {
         })
 }
 
-/// The people among the senders of `messages`, for one name lookup.
-pub(crate) fn user_senders<'a>(
+/// The people who sent or reacted to `messages`, for one name lookup.
+pub(crate) fn message_people<'a>(
     messages: impl IntoIterator<Item = &'a Message>,
 ) -> HashSet<MacroUserIdStr<'static>> {
     messages
         .into_iter()
-        .filter_map(|message| message.sender_id.as_user().cloned())
+        .flat_map(|message| {
+            let reactors = message
+                .reactions
+                .iter()
+                .flat_map(|reaction| &reaction.users)
+                .filter_map(|user| reactor(user));
+            message
+                .sender_id
+                .as_user()
+                .cloned()
+                .into_iter()
+                .chain(reactors)
+        })
         .collect()
+}
+
+/// A reacting user's id, when it names a person.
+fn reactor(user: &str) -> Option<MacroUserIdStr<'static>> {
+    MacroUserIdStr::try_from(user.to_owned()).ok()
 }
 
 /// Direction for reading more messages around a cursor.
@@ -139,13 +157,23 @@ pub struct ToolReaction {
     pub emoji: String,
     /// User ids that reacted with this emoji.
     pub users: Vec<String>,
+    /// The names the app shows for the people in `users`, keyed by their id.
+    /// People without a profile name are absent.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub user_names: BTreeMap<String, String>,
 }
 
-impl From<CountedReaction> for ToolReaction {
-    fn from(reaction: CountedReaction) -> Self {
+impl ToolReaction {
+    fn new(reaction: CountedReaction, names: &PeopleNames) -> Self {
+        let user_names = reaction
+            .users
+            .iter()
+            .filter_map(|user| Some((user.clone(), names.get(&reactor(user)?)?.clone())))
+            .collect();
         Self {
             emoji: reaction.emoji,
             users: reaction.users,
+            user_names,
         }
     }
 }
@@ -210,7 +238,7 @@ impl ToolThreadReply {
         reply: Message,
         thread_id: Uuid,
         max_chars_per_message: usize,
-        names: &SenderNames,
+        names: &PeopleNames,
     ) -> Self {
         let sender_name = sender_name(&reply, names);
         let TruncatedContent {
@@ -231,7 +259,7 @@ impl ToolThreadReply {
             reactions: reply
                 .reactions
                 .into_iter()
-                .map(ToolReaction::from)
+                .map(|reaction| ToolReaction::new(reaction, names))
                 .collect(),
             attachments: reply
                 .attachments
@@ -298,7 +326,7 @@ impl ToolChannelMessage {
         channel_id: Uuid,
         include_thread_preview: bool,
         max_chars_per_message: usize,
-        names: &SenderNames,
+        names: &PeopleNames,
     ) -> Self {
         let message = item.message;
         let sender_name = sender_name(&message, names);
@@ -343,7 +371,7 @@ impl ToolChannelMessage {
             reactions: message
                 .reactions
                 .into_iter()
-                .map(ToolReaction::from)
+                .map(|reaction| ToolReaction::new(reaction, names))
                 .collect(),
             attachments: message
                 .attachments

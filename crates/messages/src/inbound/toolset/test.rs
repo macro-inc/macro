@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use ai_toolset::schema::generate_validated_input_schema;
@@ -110,6 +111,11 @@ struct FakeMessages {
     /// Threads the timeline lists, newest first. The preview holds one
     /// reply at most, so longer threads are read in full.
     threads: Vec<MessageThread>,
+    /// Profile names `user_display_names` answers with.
+    names: HashMap<MacroUserIdStr<'static>, String>,
+    /// Fail every name lookup.
+    names_fail: bool,
+    name_lookups: Recorded<Vec<MacroUserIdStr<'static>>>,
     parent_lookups: Recorded<Uuid>,
     posts: Recorded<(EntityAccessReceipt<MessageWrite>, PostMessage)>,
     thread_patches: Recorded<(EntityAccessReceipt<MessageWrite>, Uuid, ThreadPatch)>,
@@ -129,6 +135,9 @@ impl Default for FakeMessages {
             comment_is_reply: false,
             forbid_changes: false,
             threads: vec![],
+            names: HashMap::new(),
+            names_fail: false,
+            name_lookups: Arc::default(),
             parent_lookups: Arc::default(),
             posts: Arc::default(),
             thread_patches: Arc::default(),
@@ -226,6 +235,21 @@ impl MessageReader for FakeMessages {
     async fn parent_of(&self, id: Uuid) -> Result<Option<MessageParent>, MessageError> {
         self.parent_lookups.lock().unwrap().push(id);
         Ok(self.parent.clone())
+    }
+    async fn user_display_names(
+        &self,
+        users: Vec<MacroUserIdStr<'static>>,
+    ) -> Result<HashMap<MacroUserIdStr<'static>, String>, MessageError> {
+        self.name_lookups.lock().unwrap().push(users.clone());
+        if self.names_fail {
+            return Err(MessageError::Repository(rootcause::report!(
+                "names unavailable"
+            )));
+        }
+        Ok(users
+            .into_iter()
+            .filter_map(|user| Some((user.clone(), self.names.get(&user)?.clone())))
+            .collect())
     }
 }
 
@@ -785,6 +809,59 @@ async fn read_discussion_lists_threads_oldest_first_with_every_live_reply() {
         second.comments[1].author,
         bot_id::MACRO_AI_BOT_ID.into_storage_id().to_string()
     );
+}
+
+#[tokio::test]
+async fn read_discussion_names_people_from_one_lookup() {
+    let root = Uuid::from_u128(1);
+    let person = MacroUserIdStr::try_from(USER.to_owned()).unwrap();
+    let messages = FakeMessages {
+        threads: vec![thread(
+            root,
+            vec![
+                message(Uuid::from_u128(11), Some(root), user_sender()),
+                message(Uuid::from_u128(12), Some(root), bot_sender()),
+            ],
+            None,
+        )],
+        names: HashMap::from([(person.clone(), "Pine Martin".to_owned())]),
+        ..FakeMessages::default()
+    };
+    let lookups = messages.name_lookups.clone();
+    let response = ReadDiscussion {
+        entity_type: DiscussionParentType::Initiative,
+        entity_id: INITIATIVE.to_string(),
+    }
+    .call(context(AccessLevel::View, messages), request())
+    .await
+    .unwrap();
+
+    let names: Vec<_> = response.threads[0]
+        .comments
+        .iter()
+        .map(|comment| comment.author_name.as_deref())
+        .collect();
+    assert_eq!(names, [Some("Pine Martin"), Some("Pine Martin"), None]);
+    assert_eq!(*lookups.lock().unwrap(), vec![vec![person]]);
+}
+
+#[tokio::test]
+async fn read_discussion_reads_without_names_when_the_lookup_fails() {
+    let messages = FakeMessages {
+        threads: vec![thread(Uuid::from_u128(1), vec![], None)],
+        names_fail: true,
+        ..FakeMessages::default()
+    };
+    let response = ReadDiscussion {
+        entity_type: DiscussionParentType::Initiative,
+        entity_id: INITIATIVE.to_string(),
+    }
+    .call(context(AccessLevel::View, messages), request())
+    .await
+    .unwrap();
+
+    assert_eq!(response.threads[0].comments.len(), 1);
+    assert!(response.threads[0].comments[0].author_name.is_none());
 }
 
 #[tokio::test]

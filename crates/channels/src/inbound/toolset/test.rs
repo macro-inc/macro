@@ -298,6 +298,13 @@ impl messages::domain::api::MessageReader for RecordingMessages {
     > {
         unimplemented!("read path unused by mutation tools")
     }
+    async fn user_display_names(
+        &self,
+        _: Vec<MacroUserIdStr<'static>>,
+    ) -> Result<HashMap<MacroUserIdStr<'static>, String>, messages::domain::ports::MessageError>
+    {
+        unimplemented!("read path unused by mutation tools")
+    }
 }
 
 fn user_id() -> MacroUserIdStr<'static> {
@@ -1965,4 +1972,51 @@ async fn read_channel_messages_reads_without_names_when_the_lookup_fails() {
 
     assert_eq!(response.messages.len(), 1);
     assert_eq!(response.messages[0].sender_name, None);
+}
+
+#[tokio::test]
+async fn read_channel_messages_names_the_people_who_reacted() {
+    let channel_id = Uuid::now_v7();
+    let mut reacted = channel_message(
+        channel_id,
+        Sender::new_from_bot(bot_id::MACRO_AI_BOT_ID),
+        vec![],
+    );
+    reacted.message.reactions = vec![messages::domain::models::CountedReaction {
+        emoji: "👍".to_string(),
+        users: vec![
+            "macro|gab@macro.com".to_string(),
+            "macro|no-name@macro.com".to_string(),
+        ],
+    }];
+    let messages = RecordingMessages {
+        timeline: vec![reacted],
+        ..Default::default()
+    };
+    let service = ToolTestChannelService {
+        user_names: HashMap::from([(person("gab@macro.com"), "Pine Martin".to_string())]),
+        ..Default::default()
+    };
+    let context = ChannelToolContext::new(
+        Arc::new(messages),
+        service,
+        ToolTestAccessService::default(),
+    );
+
+    let response = read_latest(channel_id)
+        .call(ServiceContext(context), RequestContext::new(user_id()))
+        .await
+        .expect("read");
+
+    let json = serde_json::to_value(&response).expect("serializable");
+    let reaction = &json["messages"][0]["reactions"][0];
+    assert_eq!(
+        reaction["users"],
+        serde_json::json!(["macro|gab@macro.com", "macro|no-name@macro.com"])
+    );
+    assert_eq!(
+        reaction["userNames"],
+        serde_json::json!({ "macro|gab@macro.com": "Pine Martin" }),
+        "a reactor without a profile name is known by the id alone"
+    );
 }

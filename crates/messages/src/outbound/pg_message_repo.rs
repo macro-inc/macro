@@ -1,6 +1,7 @@
 use crate::domain::{mentions::MessageReferenceKind, models::*, ports::*};
 use channel_sender::ChannelSender;
 use chrono::{DateTime, Utc};
+use macro_user_id::user_id::MacroUserIdStr;
 use serde::Deserialize;
 use sqlx::{PgPool, Postgres, Transaction, types::Json};
 use std::collections::HashMap;
@@ -866,6 +867,16 @@ impl MessageRepository for PgMessageRepository {
             .await
     }
 
+    #[tracing::instrument(err, skip_all, fields(user_count = users.len()))]
+    async fn user_display_names(
+        &self,
+        users: &[MacroUserIdStr<'static>],
+    ) -> Result<HashMap<MacroUserIdStr<'static>, String>, MessageError> {
+        load_user_display_names(&self.pool, users)
+            .await
+            .map_err(database_error)
+    }
+
     async fn parent_of(&self, id: Uuid) -> Result<Option<MessageParent>, MessageError> {
         let row = sqlx::query!(
             "SELECT parent_entity_type, parent_entity_id FROM comms_messages
@@ -898,5 +909,59 @@ impl MessageRepository for PgMessageRepository {
             sqlx::query_scalar!("SELECT message_id FROM migrated_comment_id WHERE comment_id = $1 AND document_id = $2", id, parent.entity_id())
                 .fetch_optional(&self.pool).await.map_err(database_error)
         }
+    }
+}
+
+struct UserDisplayNameRow {
+    user_profile_id: String,
+    first_name: Option<String>,
+    last_name: Option<String>,
+}
+
+/// Profile names keyed by user, the same lookup channels make for senders.
+async fn load_user_display_names(
+    pool: &PgPool,
+    users: &[MacroUserIdStr<'static>],
+) -> Result<HashMap<MacroUserIdStr<'static>, String>, sqlx::Error> {
+    let users_by_id: HashMap<&str, &MacroUserIdStr<'static>> =
+        users.iter().map(|user| (user.as_ref(), user)).collect();
+    let user_id_strings: Vec<String> = users.iter().map(|user| user.as_ref().to_string()).collect();
+
+    let rows = sqlx::query_as!(
+        UserDisplayNameRow,
+        r#"
+        SELECT u.id AS user_profile_id, mui.first_name, mui.last_name
+        FROM macro_user_info mui
+        JOIN "User" u ON mui.macro_user_id = u.macro_user_id
+        WHERE u.id = ANY($1)
+        "#,
+        &user_id_strings,
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .filter_map(|row| {
+            let user = users_by_id.get(row.user_profile_id.as_str())?;
+            let name = display_name(row.first_name.as_deref(), row.last_name.as_deref())?;
+            Some(((*user).clone(), name))
+        })
+        .collect())
+}
+
+/// `first last` as the app shows it; "N/A" or a blank marks an unset part.
+fn display_name(first_name: Option<&str>, last_name: Option<&str>) -> Option<String> {
+    const NA: &str = "N/A";
+    fn part(value: Option<&str>) -> Option<&str> {
+        value
+            .map(str::trim)
+            .filter(|value| !value.is_empty() && *value != NA)
+    }
+    match (part(first_name), part(last_name)) {
+        (None, None) => None,
+        (None, Some(last_name)) => Some(last_name.to_string()),
+        (Some(first_name), None) => Some(first_name.to_string()),
+        (Some(first_name), Some(last_name)) => Some(format!("{first_name} {last_name}")),
     }
 }

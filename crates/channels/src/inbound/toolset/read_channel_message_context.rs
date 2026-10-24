@@ -3,8 +3,8 @@ use messages::domain::ports::MessageTimelineQuery;
 
 use super::ChannelToolContext;
 use super::types::{
-    SenderNames, ToolChannelMessage, ToolOmission, ToolOmissionKind, ToolResolvedMessage,
-    ToolThreadReply, clamp_max_chars, content_truncation_omissions, user_senders,
+    PeopleNames, ToolChannelMessage, ToolOmission, ToolOmissionKind, ToolResolvedMessage,
+    ToolThreadReply, clamp_max_chars, content_truncation_omissions, message_people,
 };
 use crate::domain::ports::ChannelService;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
@@ -175,14 +175,29 @@ where
             ),
         };
 
-        let senders = user_senders(
+        let window = thread_replies
+            .as_deref()
+            .map(|replies| {
+                reply_window(
+                    replies,
+                    self.message_id,
+                    self.thread_before,
+                    self.thread_after,
+                )
+            })
+            .transpose()?;
+        let returned_replies = thread_replies
+            .as_deref()
+            .zip(window.as_ref())
+            .map(|(replies, window)| &replies[window.start..window.end]);
+        let people = message_people(
             channel_page
                 .items
                 .iter()
                 .flat_map(|item| std::iter::once(&item.message).chain(&item.thread.preview))
-                .chain(thread_replies.iter().flatten()),
+                .chain(returned_replies.into_iter().flatten()),
         );
-        let names = service_context.sender_names(senders).await;
+        let names = service_context.people_names(people).await;
         let channel_messages: Vec<ToolChannelMessage> = channel_page
             .items
             .into_iter()
@@ -213,21 +228,18 @@ where
             after,
         };
 
-        let thread_context = match thread_replies {
-            None => None,
-            Some(replies) => Some(read_reply_context(
+        let thread_context = thread_replies.zip(window).map(|(replies, window)| {
+            read_reply_context(
                 replies,
+                window,
                 ReplyContextArgs {
-                    reply_id: self.message_id,
                     thread_id: resolved.root_id(),
                     parent: anchor_or_parent,
-                    before: self.thread_before,
-                    after: self.thread_after,
                     max_chars_per_message,
                     names: &names,
                 },
-            )?),
-        };
+            )
+        });
 
         let channel_context_messages = flatten_channel_context(&channel_context);
         let thread_context_replies = thread_context
@@ -267,33 +279,49 @@ where
 }
 
 struct ReplyContextArgs<'a> {
-    reply_id: Uuid,
     thread_id: Uuid,
     parent: ToolChannelMessage,
-    before: Option<u16>,
-    after: Option<u16>,
     max_chars_per_message: usize,
-    names: &'a SenderNames,
+    names: &'a PeopleNames,
 }
 
-fn read_reply_context(
-    replies: Vec<messages::domain::models::Message>,
-    args: ReplyContextArgs<'_>,
-) -> Result<ToolThreadReplyContextWindow, ToolCallError> {
-    let before = usize::from(args.before.unwrap_or(10).min(50));
-    let after = usize::from(args.after.unwrap_or(10).min(50));
-    let total = replies.len();
-    let anchor_index = replies
+/// The replies returned around the requested reply, as indices into the thread.
+struct ReplyWindow {
+    start: usize,
+    anchor: usize,
+    end: usize,
+}
+
+fn reply_window(
+    replies: &[messages::domain::models::Message],
+    reply_id: Uuid,
+    before: Option<u16>,
+    after: Option<u16>,
+) -> Result<ReplyWindow, ToolCallError> {
+    let before = usize::from(before.unwrap_or(10).min(50));
+    let after = usize::from(after.unwrap_or(10).min(50));
+    let anchor = replies
         .iter()
-        .position(|reply| reply.id == args.reply_id)
+        .position(|reply| reply.id == reply_id)
         .ok_or_else(|| ToolCallError {
             description: "message_id was resolved as a reply, but was not found in thread replies"
                 .to_string(),
             internal_error: anyhow::anyhow!("resolved reply not found in thread replies"),
         })?;
-    let start = anchor_index.saturating_sub(before);
-    let end = (anchor_index + after + 1).min(total);
-    let omitted_after = total.saturating_sub(end);
+    Ok(ReplyWindow {
+        start: anchor.saturating_sub(before),
+        anchor,
+        end: (anchor + after + 1).min(replies.len()),
+    })
+}
+
+fn read_reply_context(
+    replies: Vec<messages::domain::models::Message>,
+    window: ReplyWindow,
+    args: ReplyContextArgs<'_>,
+) -> ToolThreadReplyContextWindow {
+    let ReplyWindow { start, anchor, end } = window;
+    let omitted_after = replies.len().saturating_sub(end);
 
     let mut mapped: Vec<ToolThreadReply> = replies
         .into_iter()
@@ -308,12 +336,12 @@ fn read_reply_context(
             )
         })
         .collect();
-    let anchor_offset = anchor_index - start;
+    let anchor_offset = anchor - start;
     let replies_after = mapped.split_off(anchor_offset + 1);
     let anchor_reply = mapped.pop();
     let replies_before = mapped;
 
-    Ok(ToolThreadReplyContextWindow {
+    ToolThreadReplyContextWindow {
         thread_id: args.thread_id,
         parent: args.parent,
         replies_before,
@@ -321,7 +349,7 @@ fn read_reply_context(
         replies_after,
         omitted_before: start,
         omitted_after,
-    })
+    }
 }
 
 fn flatten_channel_context(context: &ToolChannelMessageContextWindow) -> Vec<ToolChannelMessage> {

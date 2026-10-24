@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 use super::{DiscussionParentType, MessageToolContext, comment_error};
 use crate::domain::{
-    discussions::live_threads,
+    discussions::{AuthorNames, author_name, author_names, live_threads},
     models::{Message, MessageThread, ThreadAnchor},
 };
 
@@ -40,7 +40,8 @@ pub struct DiscussionComment {
     pub id: Uuid,
     /// The user or bot id of the author.
     pub author: String,
-    /// The author's display name, for bots and imported comments.
+    /// The author's name as the app shows it: an imported author's, the
+    /// bot's, or the person's profile name. Absent when a person has none.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub author_name: Option<String>,
     /// The comment body in markdown; absent when the comment was deleted.
@@ -112,16 +113,20 @@ impl<ESvc: EntityAccessService> AsyncTool<MessageToolContext<ESvc>> for ReadDisc
         let threads = live_threads(ctx.messages.as_ref(), &access)
             .await
             .map_err(comment_error("unable to read the discussion"))?;
+        let names = author_names(ctx.messages.as_ref(), &threads).await;
 
         Ok(ReadDiscussionResponse {
             entity_type: self.entity_type,
             entity_id: parent.entity_id(),
-            threads: threads.into_iter().map(thread).collect(),
+            threads: threads
+                .into_iter()
+                .map(|discussion| thread(discussion, &names))
+                .collect(),
         })
     }
 }
 
-fn thread(thread: MessageThread) -> DiscussionThread {
+fn thread(thread: MessageThread, names: &AuthorNames) -> DiscussionThread {
     DiscussionThread {
         id: thread.root.id,
         resolved: thread.state.resolved,
@@ -132,20 +137,17 @@ fn thread(thread: MessageThread) -> DiscussionThread {
         },
         comments: std::iter::once(thread.root)
             .chain(thread.replies)
-            .map(comment)
+            .map(|message| comment(message, names))
             .collect(),
     }
 }
 
-fn comment(message: Message) -> DiscussionComment {
+fn comment(message: Message, names: &AuthorNames) -> DiscussionComment {
     let deleted = message.deleted_at.is_some();
     DiscussionComment {
         id: message.id,
         author: message.sender_id.as_ref().to_owned(),
-        author_name: message
-            .imported_author
-            .map(|author| author.name)
-            .or(message.bot_profile.map(|bot| bot.name)),
+        author_name: author_name(&message, names),
         content: (!deleted).then_some(message.content),
         created_at: message.created_at,
         edited_at: message.edited_at,
