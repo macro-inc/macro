@@ -1,4 +1,6 @@
+import type { WithCustomUserInput } from '@core/user';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { createSignal, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RecipientSelector } from './RecipientSelector';
 
@@ -9,6 +11,10 @@ vi.mock('@core/context/user', () => ({
 vi.mock('@core/user/dmActivity', () => ({
   useAugmentUserWithDmActivity: () => (user: unknown) => user,
 }));
+vi.mock('@core/component/HoverCard', () => ({
+  HoverCard: (props: { trigger: JSX.Element }) => <>{props.trigger}</>,
+}));
+vi.mock('@core/component/UserIcon', () => ({ UserIcon: () => null }));
 
 beforeEach(() => {
   vi.stubGlobal(
@@ -19,6 +25,10 @@ beforeEach(() => {
       disconnect() {}
     }
   );
+  Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+    configurable: true,
+    value: vi.fn(),
+  });
 });
 afterEach(() => {
   cleanup();
@@ -26,47 +36,47 @@ afterEach(() => {
 });
 
 function renderSelector() {
-  const setSelectedOptions = vi.fn();
+  const [selected, setSelected] = createSignal<WithCustomUserInput[]>([]);
   render(() => (
     <RecipientSelector
       options={() => []}
-      selectedOptions={[]}
-      setSelectedOptions={setSelectedOptions}
+      selectedOptions={selected()}
+      setSelectedOptions={setSelected}
     />
   ));
-  return { input: screen.getByRole('combobox'), setSelectedOptions };
+  const emails = () =>
+    selected().map((option) =>
+      option.kind === 'custom' ? option.data.email : option.kind
+    );
+  return {
+    input: screen.getByRole<HTMLInputElement>('combobox'),
+    emails,
+  };
 }
 
 describe('RecipientSelector typed addresses', () => {
-  it('adds an address once a comma ends it', () => {
-    const { input, setSelectedOptions } = renderSelector();
-    fireEvent.input(input, { target: { value: 'qa-nobody@example.com,' } });
-    expect(setSelectedOptions).toHaveBeenCalledWith([
-      expect.objectContaining({
-        kind: 'custom',
-        data: expect.objectContaining({ email: 'qa-nobody@example.com' }),
-      }),
-    ]);
+  it('turns an address ended by a comma into a recipient and clears the input', () => {
+    const { input, emails } = renderSelector();
+    fireEvent.input(input, { target: { value: 'qa@example.com,' } });
+    expect(emails()).toEqual(['qa@example.com']);
+    expect(screen.getByText('qa@example.com')).toBeTruthy();
+    expect(input.value).toBe('');
   });
 
-  it('adds every address in a pasted list', () => {
-    const { input, setSelectedOptions } = renderSelector();
+  it('adds every address in a pasted list once', () => {
+    const { input, emails } = renderSelector();
     fireEvent.input(input, {
-      target: { value: 'a@example.com; b@example.com,' },
+      target: { value: 'a@example.com; b@example.com, A@example.com,' },
     });
-    expect(
-      setSelectedOptions.mock.lastCall?.[0].map(
-        (option: { data: { email: string } }) => option.data.email
-      )
-    ).toEqual(['a@example.com', 'b@example.com']);
+    expect(emails()).toEqual(['a@example.com', 'b@example.com']);
   });
 
   it('leaves text until a separator ends a complete address', () => {
-    const { input, setSelectedOptions } = renderSelector();
+    const { input, emails } = renderSelector();
     fireEvent.input(input, {
       target: { value: 'a@example.com, b@example.co' },
     });
     fireEvent.input(input, { target: { value: 'a@example.com, b@exa,' } });
-    expect(setSelectedOptions).not.toHaveBeenCalled();
+    expect(emails()).toEqual([]);
   });
 });

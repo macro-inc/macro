@@ -652,14 +652,16 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
   // changes the selection, and Kobalte clears the input when it does.
   const commitSeparatedEmails = (input: string) => {
     if (!/[,;]\s*$/.test(input)) return false;
-    const emails = [
-      ...new Set(
-        input
-          .split(/[,;]/)
-          .map((part) => part.trim())
-          .filter(Boolean)
-      ),
-    ];
+    const emails = input
+      .split(/[,;]/)
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .filter(
+        (email, index, all) =>
+          all.findIndex(
+            (other) => other.toLowerCase() === email.toLowerCase()
+          ) === index
+      );
     if (emails.length === 0 || !emails.every((e) => EmailValidator.validate(e)))
       return false;
     const known = recipients().raw;
