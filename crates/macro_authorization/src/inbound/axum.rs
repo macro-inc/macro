@@ -143,6 +143,7 @@ pub(super) fn authenticated_user(
         })?;
 
     Ok(MacroUserAuthentication {
+        is_macro_api_token: false,
         agent_id: None,
         macro_user_id,
         user_context,

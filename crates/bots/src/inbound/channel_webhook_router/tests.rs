@@ -815,6 +815,7 @@ fn bot_authentication_with_acting_user(bot_id: BotId) -> BotAuthentication {
         bot_scope: BotScope::User,
         team_id: None,
         acting_user: Some(MacroUserAuthentication {
+            is_macro_api_token: false,
             agent_id: None,
             macro_user_id: MacroUserIdStr::parse_from_str("macro|acting-bot@example.com").unwrap(),
             user_context: Default::default(),

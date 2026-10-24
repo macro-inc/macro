@@ -901,6 +901,7 @@ impl MacroAuthorizationService for FakeAuthorizationService {
             acting_user: acting_user
                 .and_then(|claims| claims.user_id)
                 .map(|user_id| MacroUserAuthentication {
+                    is_macro_api_token: false,
                     agent_id: None,
                     macro_user_id: user(&user_id),
                     user_context: user_context(&user_id),

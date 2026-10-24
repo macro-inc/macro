@@ -128,6 +128,7 @@ impl BotAuthorizer for SelfBotAuthorizer {
                 let macro_user_id = MacroUserIdStr::try_from(user_id.clone())
                     .map_err(|_| Report::new(MacroAuthorizationError::ActingUserNotAuthorized))?;
                 Some(MacroUserAuthentication {
+                    is_macro_api_token: false,
                     agent_id: None,
                     macro_user_id,
                     user_context: model_user::UserContext {
@@ -175,6 +176,7 @@ impl HarnessAuthorizer for SelfHarnessAuthorizer {
                 user_id: user_id.clone(),
             },
             acting_user: MacroUserAuthentication {
+                is_macro_api_token: false,
                 agent_id: None,
                 macro_user_id,
                 user_context: model_user::UserContext {

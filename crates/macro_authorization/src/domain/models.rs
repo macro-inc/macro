@@ -13,6 +13,8 @@ use uuid::Uuid;
 /// A user identity that has been authenticated or verified for a bot.
 #[derive(Clone, Debug)]
 pub struct MacroUserAuthentication {
+    /// Whether authentication used a verified Macro API JWT rather than a user session.
+    pub is_macro_api_token: bool,
     /// Signed agent attribution for user-authorized SDK messages, not a bot credential.
     pub agent_id: Option<BotId>,
     /// The user's parsed Macro identifier.
@@ -265,6 +267,15 @@ pub struct ValidatedIdentity {
     pub organization_id: Option<i32>,
     /// Permissions established while validating or enriching the identity.
     pub permissions: Option<HashSet<String>>,
+}
+
+/// A validated identity together with its cryptographically established origin.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ValidatedCredential {
+    /// Identity established by credential validation.
+    pub identity: ValidatedIdentity,
+    /// Whether the verified credential is a Macro API JWT rather than a session.
+    pub is_macro_api_token: bool,
 }
 
 /// Errors returned when a credential cannot authorize a caller.

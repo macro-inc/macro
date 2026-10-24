@@ -66,6 +66,7 @@ impl HarnessAuthorizer for Credentials {
                 user_id: OWNER.into(),
             },
             acting_user: MacroUserAuthentication {
+                is_macro_api_token: false,
                 agent_id: None,
                 macro_user_id: MacroUserIdStr::try_from(OWNER).unwrap(),
                 user_context: model_user::UserContext {

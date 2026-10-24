@@ -138,12 +138,13 @@ where
     Svc: MacroAuthorizationService,
 {
     let authorization = MacroAuthorizationState::<Svc>::from_ref(state);
-    let identity = authorization
+    let credential = authorization
         .service
         .authorize_identity(token)
         .await
         .map_err(authorization_rejection)?;
 
+    let identity = credential.identity;
     let mut user = authenticated_user(model_user::UserContext {
         user_id: identity.user_id,
         fusion_user_id: identity.fusion_user_id,
@@ -151,6 +152,7 @@ where
         permissions: identity.permissions,
     })?;
     user.agent_id = identity.agent_id;
+    user.is_macro_api_token = credential.is_macro_api_token;
     Ok(user)
 }
 

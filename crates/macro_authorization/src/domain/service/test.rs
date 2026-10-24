@@ -161,6 +161,7 @@ fn bot_authentication() -> BotAuthentication {
         bot_scope: BotScope::Team,
         team_id: Some(TEAM_ID),
         acting_user: Some(MacroUserAuthentication {
+            is_macro_api_token: false,
             agent_id: None,
             macro_user_id: MacroUserIdStr::try_from("macro|acting@example.com".to_string())
                 .expect("valid Macro user id"),
@@ -542,7 +543,9 @@ async fn authorize_identity_keeps_verified_agent_and_owner() {
         NoBotAuthorizer,
         NoUserApiKeyAuthorizer,
     );
-    let identity = service.authorize_identity("signed-token").await.unwrap();
+    let credential = service.authorize_identity("signed-token").await.unwrap();
+    assert!(!credential.is_macro_api_token);
+    let identity = credential.identity;
     assert_eq!(identity.agent_id, Some(bot_id::MACRO_NEW_BOT_ID));
     assert_eq!(identity.user_id, "macro|owner@example.com");
     assert_eq!(

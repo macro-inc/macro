@@ -48,7 +48,13 @@ by policy.
 
 - `cargo test -p macro_authorization` (`SQLX_OFFLINE` unset).
 
-`authorize_identity` retains signed agent attribution on user authentication. It
+`ValidatedIdentity` contains identity facts; `ValidatedCredential` additionally carries
+credential origin. JWT validators that accept API JWTs must override
+`validate_credential` (the default validates personal sessions only). The production
+`MacroAuthJwtValidator` derives origin from the verified token enum in one decode.
+`authorize_identity` retains verified Macro API JWT origin and signed agent
+attribution on user authentication. Personal-session-only capabilities must reject
+Macro API JWTs even when they carry no agent attribution. It
 does not turn a user credential into bot authority or change endpoint policies.
 
 ## Gotchas

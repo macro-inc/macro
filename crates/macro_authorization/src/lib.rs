@@ -66,7 +66,7 @@ pub use domain::{
         BotTokenAuthorization, HarnessAuthentication, HarnessAuthorizationOwner,
         HarnessTokenAuthorization, InternalAuthConfig, InternalIdentityClaims, MacroAuthorization,
         MacroAuthorizationError, MacroUserAuthentication, ResolvedApiKeyUser,
-        ResolvedBotActingUser, ValidatedIdentity,
+        ResolvedBotActingUser, ValidatedCredential, ValidatedIdentity,
     },
     ports::{
         BotAuthorizationRepo, BotAuthorizer, HarnessAuthorizationRepo, HarnessAuthorizer,

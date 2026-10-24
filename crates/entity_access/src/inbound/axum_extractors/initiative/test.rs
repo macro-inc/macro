@@ -85,6 +85,7 @@ async fn response_body(response: axum::response::Response) -> String {
 
 fn user_authentication(user_id: &str) -> MacroUserAuthentication {
     MacroUserAuthentication {
+        is_macro_api_token: false,
         agent_id: None,
         macro_user_id: MacroUserIdStr::try_from(user_id.to_string()).expect("valid user id"),
         user_context: UserContext {

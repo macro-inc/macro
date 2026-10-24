@@ -17,6 +17,7 @@ fn user_id() -> MacroUserIdStr<'static> {
 
 fn user() -> MacroUserAuthentication {
     MacroUserAuthentication {
+        is_macro_api_token: false,
         agent_id: None,
         macro_user_id: user_id(),
         user_context: Default::default(),

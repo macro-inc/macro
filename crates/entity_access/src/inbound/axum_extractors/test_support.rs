@@ -281,6 +281,7 @@ pub(super) fn user_scoped_bot_authentication() -> BotAuthentication {
         bot_scope: BotScope::User,
         team_id: None,
         acting_user: Some(MacroUserAuthentication {
+            is_macro_api_token: false,
             agent_id: None,
             macro_user_id: MacroUserIdStr::try_from(BOT_ACTING_USER_ID.to_string())
                 .expect("valid bot acting user id"),

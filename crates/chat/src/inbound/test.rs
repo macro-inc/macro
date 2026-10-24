@@ -543,6 +543,7 @@ impl MacroAuthorizationService for FakeAuthorizationService {
             acting_user: acting_user
                 .and_then(|claims| claims.user_id)
                 .map(|user_id| MacroUserAuthentication {
+                    is_macro_api_token: false,
                     agent_id: None,
                     macro_user_id: MacroUserIdStr::try_from(user_id.clone())
                         .expect("test user id should be valid"),

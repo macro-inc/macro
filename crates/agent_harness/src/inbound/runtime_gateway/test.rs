@@ -57,6 +57,7 @@ impl HarnessAuthorizer for SelfHarnessAuthorizer {
                 user_id: user_id.clone(),
             },
             acting_user: MacroUserAuthentication {
+                is_macro_api_token: false,
                 agent_id: None,
                 macro_user_id,
                 user_context: model_user::UserContext {

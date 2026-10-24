@@ -63,7 +63,9 @@ fn macro_auth_cause(report: &Report<MacroAuthorizationError>) -> &MacroAuthError
 fn validates_access_token() {
     let token = access_token("", unix_timestamp() + 3_600, None, None);
 
-    let identity = validator().validate(&token).unwrap();
+    let credential = validator().validate_credential(&token).unwrap();
+    assert!(!credential.is_macro_api_token);
+    let identity = credential.identity;
 
     assert_eq!(identity.user_id, MACRO_USER_ID);
     assert_eq!(identity.fusion_user_id, FUSION_USER_ID);
@@ -139,7 +141,7 @@ fn preserves_access_token_organization_id() {
 
 #[test]
 fn maps_macro_api_token_claims() {
-    let identity = identity_from_token(JwtToken::MacroApiToken(MacroApiToken {
+    let credential = identity_from_token(JwtToken::MacroApiToken(MacroApiToken {
         agent_id: None,
         exp: unix_timestamp() + 3_600,
         iss: String::new(),
@@ -148,6 +150,8 @@ fn maps_macro_api_token_claims() {
         macro_organization_id: Some(84),
     }));
 
+    assert!(credential.is_macro_api_token);
+    let identity = credential.identity;
     assert_eq!(identity.user_id, MACRO_USER_ID);
     assert_eq!(identity.fusion_user_id, FUSION_USER_ID);
     assert_eq!(identity.organization_id, Some(84));
@@ -158,7 +162,7 @@ fn maps_macro_api_token_claims() {
 #[test]
 fn maps_signed_agent_without_changing_owner_identity() {
     let agent = bot_id::MACRO_NEW_BOT_ID;
-    let identity = identity_from_token(JwtToken::MacroApiToken(MacroApiToken {
+    let credential = identity_from_token(JwtToken::MacroApiToken(MacroApiToken {
         agent_id: Some(agent.as_uuid()),
         exp: unix_timestamp() + 60,
         iss: String::new(),
@@ -166,6 +170,8 @@ fn maps_signed_agent_without_changing_owner_identity() {
         macro_user_id: MACRO_USER_ID.into(),
         macro_organization_id: Some(42),
     }));
+    assert!(credential.is_macro_api_token);
+    let identity = credential.identity;
     assert_eq!(identity.agent_id, Some(agent));
     assert_eq!(identity.user_id, MACRO_USER_ID);
     assert_eq!(identity.organization_id, Some(42));

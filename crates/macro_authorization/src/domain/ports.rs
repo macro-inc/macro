@@ -6,7 +6,7 @@ use rootcause::Report;
 use super::models::{
     BotActingUserClaims, BotAuthentication, BotScope, BotTokenAuthorization, HarnessAuthentication,
     HarnessTokenAuthorization, InternalIdentityClaims, MacroAuthorizationError, ResolvedApiKeyUser,
-    ResolvedBotActingUser, ValidatedIdentity,
+    ResolvedBotActingUser, ValidatedCredential, ValidatedIdentity,
 };
 use uuid::Uuid;
 
@@ -168,6 +168,19 @@ impl HarnessAuthorizer for NoHarnessAuthorizer {
 pub trait JwtValidator: Clone + Send + Sync + 'static {
     /// Validate a credential and return its transport-independent identity.
     fn validate(&self, jwt: &str) -> Result<ValidatedIdentity, Report<MacroAuthorizationError>>;
+
+    /// Validate a personal-session credential, retaining its origin.
+    /// Validators accepting Macro API JWTs must override this method and derive
+    /// the origin from the cryptographically validated token, not request hints.
+    fn validate_credential(
+        &self,
+        jwt: &str,
+    ) -> Result<ValidatedCredential, Report<MacroAuthorizationError>> {
+        self.validate(jwt).map(|identity| ValidatedCredential {
+            identity,
+            is_macro_api_token: false,
+        })
+    }
 }
 
 /// Authorizes credentials and constructs application user contexts.
@@ -182,20 +195,25 @@ pub trait MacroAuthorizationService: Clone + Send + Sync + 'static {
     ) -> impl Future<Output = Result<UserContext, Report<MacroAuthorizationError>>> + Send;
 
     /// Authorize a user credential while retaining signed agent attribution.
-    /// Context-only authorizers establish no agent identity.
+    /// The default is for personal-session-only authorizers and establishes no
+    /// agent identity. Authorizers accepting API JWTs must override this method
+    /// and retain verified credential origin.
     fn authorize_identity(
         &self,
         jwt: &str,
-    ) -> impl Future<Output = Result<ValidatedIdentity, Report<MacroAuthorizationError>>> + Send
+    ) -> impl Future<Output = Result<ValidatedCredential, Report<MacroAuthorizationError>>> + Send
     {
         async {
             let context = self.authorize(jwt).await?;
-            Ok(ValidatedIdentity {
-                agent_id: None,
-                user_id: context.user_id,
-                fusion_user_id: context.fusion_user_id,
-                organization_id: context.organization_id,
-                permissions: context.permissions,
+            Ok(ValidatedCredential {
+                is_macro_api_token: false,
+                identity: ValidatedIdentity {
+                    agent_id: None,
+                    user_id: context.user_id,
+                    fusion_user_id: context.fusion_user_id,
+                    organization_id: context.organization_id,
+                    permissions: context.permissions,
+                },
             })
         }
     }
