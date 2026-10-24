@@ -9,7 +9,12 @@ fn rate_limits_use_queue_routing_policy() {
         origin: email_api_client::domain::models::RateLimitOrigin::Provider,
     };
 
-    assert_eq!(error_policy(&provider_rate_limit), ErrorPolicy::RateLimited);
+    assert_eq!(
+        error_policy(&provider_rate_limit),
+        ErrorPolicy::RateLimited {
+            retry_after: Some(Duration::from_secs(30))
+        }
+    );
     assert_eq!(rate_limit_route(false), RateLimitRoute::EnqueueRetry);
     assert_eq!(
         rate_limit_route(true),

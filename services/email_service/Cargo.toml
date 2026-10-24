@@ -144,6 +144,7 @@ models_pagination = { path = "../../crates/models_pagination", features = ["axum
 models_permissions = { path = "../../crates/models_permissions" }
 once_cell = { workspace = true }
 models_properties = { path = "../../crates/models_properties" }
+rand = { workspace = true }
 redis = { workspace = true, features = [
   "cluster-async",
   "connection-manager",

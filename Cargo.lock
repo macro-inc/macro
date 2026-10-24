@@ -7367,6 +7367,7 @@ dependencies = [
  "models_properties",
  "notification",
  "once_cell",
+ "rand 0.9.4",
  "redis",
  "regex",
  "reqwest 0.13.4",
