@@ -17,7 +17,7 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   query logic layered onto the core service.
 - `src/outbound/pg_soup_repo.rs`: the Postgres repo, split by entity kind
   (`database_row.rs`, `calendar_event.rs`, `agent_session.rs`, `initiative.rs`,
-  `work_feed.rs`, `notified.rs`, `touched.rs`) and by shape
+  `attention.rs`, `notified.rs`, `touched.rs`) and by shape
   (`expanded/` hydrated, `unexpanded/` id-only).
 - `src/inbound/axum_router.rs` + `src/inbound/toolset/list_entities.rs`: the
   HTTP route and the AI-tool surface over the same service.
@@ -35,8 +35,8 @@ rows, initiatives, ...) and get back a single unified, paginated result.
 - Depends on: `entity_access`, `properties`, `crm`, `item_filters`,
   `filter_ast`, `favorites`, `frecency`, `channels`, `email`, `call`,
   `github_pull_requests`, `foreign_entity`, `activity`, `agent_changes`.
-- Used by: `ai_tools`, `complete_graph`, `databases_sql`, `graphql_initiative`,
-  `graphql_soup`, `graphql_work_feed`, `memory`, `skills`, `work_feed`,
+- Used by: `ai_tools`, `attention_feed`, `complete_graph`, `databases_sql`,
+  `graphql_initiative`, `graphql_soup`, `graphql_work_feed`, `memory`, `skills`,
   `soup_filter_projection`.
 
 ## Recipes
@@ -47,8 +47,11 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   collaborator is needed.
 - Add a filter/sort option: `item_filters`/`filter_ast` (the filter language) →
   `src/domain/models.rs` → the matching `src/outbound/pg_soup_repo/*` query.
-- Change what the work feed/Signal surfaces: `src/domain/service/tests/work_feed.rs`
-  → `src/outbound/pg_soup_repo/work_feed.rs`.
+- Change which candidates attention feeds (Home's work feed) page:
+  `src/domain/service/tests/attention.rs` → `src/outbound/pg_soup_repo/attention.rs`
+  (`attention/query.sql`). Channel-thread keying applies only to
+  `AttentionKeying::ThreadScoped`; keep it in step with `attention_feed`'s
+  `keying.rs`.
 
 ## Tool contracts
 

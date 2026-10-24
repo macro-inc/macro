@@ -1,7 +1,8 @@
 use super::*;
-use crate::domain::models::{NotifiedHydratableTypes, WorkFeedPagePosition};
+use crate::domain::models::{AttentionKeying, AttentionPagePosition, NotifiedHydratableTypes};
 use chrono::Timelike;
 use foreign_entity::domain::models::SourceId;
+use item_filters::ast::EntityFilterAst;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
@@ -22,6 +23,19 @@ const THREAD_M: &str = "99999999-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const THREAD_Z: &str = "44444444-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const THREAD_S: &str = "44444444-5555-5555-5555-555555555555";
 const LINK_1: &str = "55555555-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+const PROJECT_1: &str = "66666666-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+const COMPANY_1: &str = "88888888-0000-0000-0000-000000000001";
+const CONTACT_1: &str = "88888888-1111-0000-0000-000000000001";
+const DISCUSSION_TYPES: &[EntityType] = &[
+    EntityType::Initiative,
+    EntityType::CrmCompany,
+    EntityType::CrmContact,
+];
+
+/// Admit own work, as Home's work feed does.
+const WORK: bool = true;
+/// Attention only.
+const ATTENTION: bool = false;
 
 const EVERYTHING: NotifiedHydratableTypes = NotifiedHydratableTypes {
     channels: true,
@@ -43,32 +57,34 @@ const ALL_TYPES: &[EntityType] = &[
 ];
 
 fn req<'a>(
-    mode: WorkFeedSoupMode,
+    own_work: bool,
     link_ids: &'a [Uuid],
     sources: &'a [SourceId],
-) -> WorkFeedCandidateRequest<'a> {
-    WorkFeedCandidateRequest {
+) -> AttentionCandidateRequest<'a> {
+    AttentionCandidateRequest {
         user_id: MacroUserIdStr::parse_from_str(USER_1).unwrap(),
         limit: 50,
-        mode,
+        own_work,
+        keying: AttentionKeying::ThreadScoped,
         after: None,
         types: ALL_TYPES,
         filter: None,
         link_ids,
         foreign_entity_sources: sources,
         hydratable: EVERYTHING,
+        crm: false,
         only: None,
     }
 }
 
-fn keys(page: &[WorkFeedCandidate]) -> Vec<(EntityType, String)> {
+fn keys(page: &[AttentionCandidate]) -> Vec<(EntityType, String)> {
     page.iter()
         .map(|c| (c.entity.entity_type, c.entity.entity_id.to_string()))
         .collect()
 }
 
 /// `(sort, attention, touched)` minutes past 10:00 per candidate.
-fn minutes(page: &[WorkFeedCandidate]) -> Vec<(u32, Option<u32>, Option<u32>)> {
+fn minutes(page: &[AttentionCandidate]) -> Vec<(u32, Option<u32>, Option<u32>)> {
     page.iter()
         .map(|c| {
             (
@@ -108,7 +124,7 @@ fn work_feed_order() -> Vec<(EntityType, String)> {
 async fn work_mode_merges_attention_and_own_work(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let link_ids = [Uuid::parse_str(LINK_1)?];
     let sources = sources();
-    let page = work_feed_soup_page(&pool, req(WorkFeedSoupMode::Work, &link_ids, &sources)).await?;
+    let page = attention_soup_page(&pool, req(WORK, &link_ids, &sources)).await?;
 
     assert_eq!(keys(&page), work_feed_order());
     assert_eq!(
@@ -148,8 +164,7 @@ async fn work_mode_merges_attention_and_own_work(pool: Pool<Postgres>) -> anyhow
 async fn attention_mode_ignores_own_work(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let link_ids = [Uuid::parse_str(LINK_1)?];
     let sources = sources();
-    let page =
-        work_feed_soup_page(&pool, req(WorkFeedSoupMode::Attention, &link_ids, &sources)).await?;
+    let page = attention_soup_page(&pool, req(ATTENTION, &link_ids, &sources)).await?;
 
     assert_eq!(
         keys(&page),
@@ -182,17 +197,17 @@ async fn keyset_paginates_across_both_streams(pool: Pool<Postgres>) -> anyhow::R
     let mut all = Vec::new();
     let mut after = None;
     loop {
-        let mut request = req(WorkFeedSoupMode::Work, &link_ids, &sources);
+        let mut request = req(WORK, &link_ids, &sources);
         request.limit = 3;
         request.after = after;
-        let page = work_feed_soup_page(&pool, request).await?;
+        let page = attention_soup_page(&pool, request).await?;
         let full = page.len() == 3;
         all.extend(page);
         if !full {
             break;
         }
         let last = all.last().unwrap();
-        after = Some(WorkFeedPagePosition {
+        after = Some(AttentionPagePosition {
             sort_at: last.sort_at,
             entity_id: last.entity.entity_id.to_string(),
         });
@@ -200,8 +215,7 @@ async fn keyset_paginates_across_both_streams(pool: Pool<Postgres>) -> anyhow::R
 
     // Pages of three — including a boundary inside the doc-B/doc-G tie —
     // yield the same feed as one page: nothing repeats and nothing is lost.
-    let one_page =
-        work_feed_soup_page(&pool, req(WorkFeedSoupMode::Work, &link_ids, &sources)).await?;
+    let one_page = attention_soup_page(&pool, req(WORK, &link_ids, &sources)).await?;
     assert_eq!(keys(&all), keys(&one_page));
     assert_eq!(all.len(), 11);
 
@@ -220,9 +234,9 @@ async fn every_page_size_matches_the_whole_feed(pool: Pool<Postgres>) -> anyhow:
     // A full page of own work bounds how far back attention is read; each
     // smaller page must still be the head of the whole feed.
     for limit in 1..=whole.len() {
-        let mut request = req(WorkFeedSoupMode::Work, &link_ids, &sources);
+        let mut request = req(WORK, &link_ids, &sources);
         request.limit = u16::try_from(limit)?;
-        let page = work_feed_soup_page(&pool, request).await?;
+        let page = attention_soup_page(&pool, request).await?;
         assert_eq!(keys(&page), whole[..limit], "limit {limit}");
     }
 
@@ -242,9 +256,9 @@ async fn only_restricts_to_known_items(pool: Pool<Postgres>) -> anyhow::Result<(
         EntityType::Document.with_entity_string(DOC_F.to_string()),
         EntityType::ChannelMessage.with_entity_string(THREAD_M.to_string()),
     ];
-    let mut request = req(WorkFeedSoupMode::Work, &link_ids, &sources);
+    let mut request = req(WORK, &link_ids, &sources);
     request.only = Some(&only);
-    let page = work_feed_soup_page(&pool, request).await?;
+    let page = attention_soup_page(&pool, request).await?;
 
     assert_eq!(
         keys(&page),
@@ -264,9 +278,9 @@ async fn only_restricts_to_known_items(pool: Pool<Postgres>) -> anyhow::Result<(
 async fn types_narrow_both_streams(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let link_ids = [Uuid::parse_str(LINK_1)?];
     let sources = sources();
-    let mut request = req(WorkFeedSoupMode::Work, &link_ids, &sources);
+    let mut request = req(WORK, &link_ids, &sources);
     request.types = &[EntityType::EmailThread, EntityType::Chat];
-    let page = work_feed_soup_page(&pool, request).await?;
+    let page = attention_soup_page(&pool, request).await?;
 
     assert_eq!(
         keys(&page),
@@ -275,6 +289,136 @@ async fn types_narrow_both_streams(pool: Pool<Postgres>) -> anyhow::Result<()> {
             (EntityType::EmailThread, THREAD_Z.to_string()),
             (EntityType::Chat, CHAT_A.to_string()),
         ]
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("work_feed", "attention_discussions")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn discussions_on_visible_projects_and_crm_records_are_candidates(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let link_ids = [Uuid::parse_str(LINK_1)?];
+    let sources = sources();
+    let filter = EntityFilterAst {
+        initiative_filter: Some(std::sync::Arc::new(filter_ast::Expr::val(
+            item_filters::ast::initiative::InitiativeLiteral::Include,
+        ))),
+        ..Default::default()
+    };
+    let mut request = req(ATTENTION, &link_ids, &sources);
+    request.types = DISCUSSION_TYPES;
+    request.filter = Some(&filter);
+    request.crm = true;
+    let page = attention_soup_page(&pool, request).await?;
+
+    // Hidden company-2 and contact-2 and company-3 on another team stay out.
+    assert_eq!(
+        keys(&page),
+        vec![
+            (EntityType::Initiative, PROJECT_1.to_string()),
+            (EntityType::CrmContact, CONTACT_1.to_string()),
+            (EntityType::CrmCompany, COMPANY_1.to_string()),
+        ]
+    );
+
+    // Without a CRM receipt to hydrate them, CRM records are not candidates.
+    let mut request = req(ATTENTION, &link_ids, &sources);
+    request.types = DISCUSSION_TYPES;
+    request.filter = Some(&filter);
+    let page = attention_soup_page(&pool, request).await?;
+    assert_eq!(
+        keys(&page),
+        vec![(EntityType::Initiative, PROJECT_1.to_string())]
+    );
+
+    Ok(())
+}
+
+const CHANNEL_Y: &str = "33333333-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
+const ROOT_R1: &str = "99999999-1111-1111-1111-111111111111";
+const ROOT_R2: &str = "99999999-2222-2222-2222-222222222222";
+const ROOT_R3: &str = "99999999-3333-3333-3333-333333333333";
+const CHANNEL_TYPES: &[EntityType] = &[EntityType::Channel, EntityType::ChannelMessage];
+
+#[sqlx::test(
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("work_feed", "attention_channel_keying")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn thread_scoped_keying_places_channel_notifications_on_their_threads(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let link_ids = [Uuid::parse_str(LINK_1)?];
+    let sources = sources();
+    let mut request = req(ATTENTION, &link_ids, &sources);
+    request.types = CHANNEL_TYPES;
+    let page = attention_soup_page(&pool, request).await?;
+
+    assert_eq!(
+        keys(&page),
+        vec![
+            (EntityType::ChannelMessage, ROOT_R3.to_string()),
+            (EntityType::ChannelMessage, ROOT_R2.to_string()),
+            (EntityType::ChannelMessage, ROOT_R1.to_string()),
+            (EntityType::ChannelMessage, THREAD_M.to_string()),
+        ]
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("work_feed", "attention_channel_keying")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn filed_entity_keying_places_a_channel_and_its_threads_together(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let link_ids = [Uuid::parse_str(LINK_1)?];
+    let sources = sources();
+    let mut request = req(ATTENTION, &link_ids, &sources);
+    request.keying = AttentionKeying::FiledEntity;
+    request.types = CHANNEL_TYPES;
+    let page = attention_soup_page(&pool, request).await?;
+
+    // Channel-Y's three notifications place it once, at the newest (T32);
+    // channel-X carries the thread-M mention (T1).
+    assert_eq!(
+        keys(&page),
+        vec![
+            (EntityType::Channel, CHANNEL_Y.to_string()),
+            (EntityType::Channel, CHANNEL_X.to_string()),
+        ]
+    );
+    assert_eq!(
+        minutes(&page),
+        vec![(32, Some(32), None), (1, Some(1), None)]
+    );
+
+    // Recomputing a thread finds nothing: no notification keys to it.
+    let only: Vec<Entity<'static>> = vec![
+        EntityType::Channel.with_entity_string(CHANNEL_Y.to_string()),
+        EntityType::ChannelMessage.with_entity_string(ROOT_R2.to_string()),
+    ];
+    let mut request = req(ATTENTION, &link_ids, &sources);
+    request.keying = AttentionKeying::FiledEntity;
+    request.only = Some(&only);
+    let page = attention_soup_page(&pool, request).await?;
+    assert_eq!(
+        keys(&page),
+        vec![(EntityType::Channel, CHANNEL_Y.to_string())]
     );
 
     Ok(())

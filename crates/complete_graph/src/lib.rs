@@ -71,10 +71,7 @@ pub use graphql_properties::{
     PropertiesEntityPropertyReader, PropertiesEntityPropertyWriter, PropertiesMutationRoot,
     entity_properties_loader,
 };
-pub use graphql_work_feed::{
-    EntityAccessWorkFeedViewers, WorkFeedGraphqlContext, WorkFeedGraphqlService,
-    WorkFeedViewerResolver,
-};
+pub use graphql_work_feed::{WorkFeedGraphqlContext, WorkFeedGraphqlService};
 pub use realtime::{AgentSessionLogSubscriptions, agent_session_log_subscriptions};
 pub use schema::{
     EmailThreadInput, SchemaOnlySoupSchema, SchemaOnlyState, SharedSoupSchema, SoupQueryRoot,

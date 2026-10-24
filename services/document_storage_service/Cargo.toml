@@ -41,6 +41,7 @@ activity = { path = "../../crates/activity" }
 ai_tools = { path = "../../crates/ai_tools" }
 ai_usage = { path = "../../crates/ai_usage" }
 analytics_client = { path = "../../crates/analytics_client" }
+attention_feed = { path = "../../crates/attention_feed", features = ["inbound", "outbound"] }
 anyhow = { workspace = true }
 async-graphql = { workspace = true }
 async-graphql-axum = "7.0.17"
@@ -292,7 +293,7 @@ webhook = { path = "../../crates/webhook", features = [
   "outbound",
   "worker",
 ] }
-work_feed = { path = "../../crates/work_feed", features = ["outbound"] }
+work_feed = { path = "../../crates/work_feed" }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 zip = { workspace = true }
 

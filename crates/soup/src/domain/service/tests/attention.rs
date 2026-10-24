@@ -1,14 +1,15 @@
 use super::*;
 use crate::domain::models::{
-    WorkFeedCandidate, WorkFeedPagePosition, WorkFeedSoupMode, WorkFeedSoupRequest,
+    AttentionCandidate, AttentionKeying, AttentionPagePosition, AttentionSoupRequest,
 };
 
-fn work_feed_request(limit: u16) -> WorkFeedSoupRequest {
-    WorkFeedSoupRequest {
+fn work_feed_request(limit: u16) -> AttentionSoupRequest {
+    AttentionSoupRequest {
         user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
         link_ids: vec![],
         limit,
-        mode: WorkFeedSoupMode::Work,
+        own_work: true,
+        keying: AttentionKeying::ThreadScoped,
         types: vec![EntityType::Document],
         filter: EntityFilterAst::default(),
         after: None,
@@ -20,8 +21,8 @@ fn candidate(
     id: Uuid,
     attention: Option<DateTime<Utc>>,
     touched: Option<DateTime<Utc>>,
-) -> WorkFeedCandidate {
-    WorkFeedCandidate {
+) -> AttentionCandidate {
+    AttentionCandidate {
         entity: EntityType::Document.with_entity_string(id.to_string()),
         attention_at: attention,
         touched_at: touched,
@@ -52,7 +53,7 @@ fn service(
 }
 
 /// Hydration drops refill the page from the next candidate page, every item
-/// keeps both reason timestamps, and the request's mode and types reach the
+/// keeps both reason timestamps, and the request's own work, keying and types reach the
 /// candidate query.
 #[tokio::test]
 async fn work_feed_refills_after_drops_and_carries_reason_timestamps() {
@@ -63,11 +64,12 @@ async fn work_feed_refills_after_drops_and_carries_reason_timestamps() {
 
     let mut soup_mock = MockSoupRepo::new();
     soup_mock
-        .expect_work_feed_soup_page()
+        .expect_attention_soup_page()
         .times(2)
         .returning(move |req| {
             assert_eq!(req.limit, 2);
-            assert_eq!(req.mode, WorkFeedSoupMode::Work);
+            assert!(req.own_work);
+            assert_eq!(req.keying, AttentionKeying::ThreadScoped);
             assert_eq!(req.types, &[EntityType::Document]);
             assert!(req.only.is_none());
             let rows = match &req.after {
@@ -78,7 +80,7 @@ async fn work_feed_refills_after_drops_and_carries_reason_timestamps() {
                 Some(after) => {
                     assert_eq!(
                         *after,
-                        WorkFeedPagePosition {
+                        AttentionPagePosition {
                             sort_at: base + Days::new(4),
                             entity_id: ghost.to_string(),
                         }
@@ -110,7 +112,7 @@ async fn work_feed_refills_after_drops_and_carries_reason_timestamps() {
         });
 
     let page = service(soup_mock)
-        .get_work_feed_page(work_feed_request(2), None)
+        .get_attention_page(work_feed_request(2), None)
         .await
         .unwrap();
 
@@ -155,7 +157,7 @@ async fn work_feed_full_page_continues_from_the_last_candidate() {
 
     let mut soup_mock = MockSoupRepo::new();
     soup_mock
-        .expect_work_feed_soup_page()
+        .expect_attention_soup_page()
         .times(1)
         .returning(move |_| {
             Box::pin(async move {
@@ -184,14 +186,14 @@ async fn work_feed_full_page_continues_from_the_last_candidate() {
         });
 
     let page = service(soup_mock)
-        .get_work_feed_page(work_feed_request(2), None)
+        .get_attention_page(work_feed_request(2), None)
         .await
         .unwrap();
 
     assert_eq!(page.items.len(), 2);
     assert_eq!(
         page.next,
-        Some(WorkFeedPagePosition {
+        Some(AttentionPagePosition {
             sort_at: base + Days::new(4),
             entity_id: second.to_string(),
         })
@@ -201,14 +203,14 @@ async fn work_feed_full_page_continues_from_the_last_candidate() {
 #[tokio::test]
 async fn work_feed_rejects_calendar_filters_it_cannot_fold() {
     let mut soup_mock = MockSoupRepo::new();
-    soup_mock.expect_work_feed_soup_page().times(0);
+    soup_mock.expect_attention_soup_page().times(0);
     let mut request = work_feed_request(2);
     request.filter.calendar_event_filter = Some(Arc::new(Expr::val(
         item_filters::ast::calendar_event::CalendarEventLiteral::Status("confirmed".into()),
     )));
 
     let error = service(soup_mock)
-        .get_work_feed_page(request, None)
+        .get_attention_page(request, None)
         .await
         .unwrap_err();
     assert_matches!(error, SoupErr::NotifiedUnsupportedFilter("calendar_event"));
@@ -228,9 +230,9 @@ async fn work_feed_rejects_crm_associations() {
 
     for request in [scoped, literal] {
         let mut soup_mock = MockSoupRepo::new();
-        soup_mock.expect_work_feed_soup_page().times(0);
+        soup_mock.expect_attention_soup_page().times(0);
         let error = service(soup_mock)
-            .get_work_feed_page(request, None)
+            .get_attention_page(request, None)
             .await
             .unwrap_err();
         assert_matches!(error, SoupErr::AstErr(_));

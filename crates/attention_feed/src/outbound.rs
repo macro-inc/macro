@@ -1,7 +1,7 @@
-//! Adapters implementing the work feed's ports.
+//! Adapters implementing the shared feed ports.
 
 pub mod mail;
 pub mod notifications;
 pub mod signals;
-pub mod source;
+pub mod soup;
 pub mod triggers;

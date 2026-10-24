@@ -53,7 +53,8 @@ threads, pins, recents, notifications, folders, activity.
 
 - `cargo test -p document_storage_service` (`SQLX_OFFLINE` unset; needs
   MacroDB + Redis — `just run_dbs` from repo root; DynamoDB local via
-  `just ensure::ensure_dynamodb`, see `justfile`).
+  `just ensure::ensure_dynamodb` from `services/document_storage_service`,
+  whose `justfile` declares the `ensure` module).
 - After query changes: `nix develop --command just prepare_db` from the repo root.
 
 ## Gotchas

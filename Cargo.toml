@@ -16,6 +16,7 @@ members = [
   "crates/ai_billing",
   "crates/ai_projections",
   "crates/ai_usage",
+  "crates/attention_feed",
   "crates/bot_id",
   "crates/bot_token",
   "crates/bots",

@@ -1,10 +1,10 @@
 use crate::{
     domain::{
         models::{
-            AdvancedSortParams, CrmPropertyEdge, GroupedSortRequest, NotifiedEntity,
-            NotifiedSoupRequest, SimpleSortQuery, SimpleSortRequest, SoupProjectionHydration,
-            SoupPropertiesField, TouchedEntity, TouchedSoupRequest, WorkFeedCandidate,
-            WorkFeedCandidateRequest, grouping::ItemGroupingInfo,
+            AdvancedSortParams, AttentionCandidate, AttentionCandidateRequest, CrmPropertyEdge,
+            GroupedSortRequest, NotifiedEntity, NotifiedSoupRequest, SimpleSortQuery,
+            SimpleSortRequest, SoupProjectionHydration, SoupPropertiesField, TouchedEntity,
+            TouchedSoupRequest, grouping::ItemGroupingInfo,
         },
         ports::SoupRepo,
     },
@@ -21,6 +21,7 @@ use readonly_pool::ReadOnlyPool;
 use system_properties::SystemPropertyKey;
 
 mod agent_session;
+mod attention;
 mod calendar_event;
 mod candidate_gates;
 mod crm_association;
@@ -31,7 +32,6 @@ mod initiative;
 mod notified;
 mod touched;
 mod unexpanded;
-mod work_feed;
 
 /// PostgreSQL implementation of [`SoupRepo`].
 pub struct PgSoupRepo {
@@ -329,11 +329,11 @@ impl SoupRepo for PgSoupRepo {
         notified::notified_soup_page(&self.pool.0, req).await
     }
 
-    async fn work_feed_soup_page<'a>(
+    async fn attention_soup_page<'a>(
         &self,
-        req: WorkFeedCandidateRequest<'a>,
-    ) -> Result<Vec<WorkFeedCandidate>, Self::Err> {
-        work_feed::work_feed_soup_page(&self.pool.0, req).await
+        req: AttentionCandidateRequest<'a>,
+    ) -> Result<Vec<AttentionCandidate>, Self::Err> {
+        attention::attention_soup_page(&self.pool.0, req).await
     }
 }
 

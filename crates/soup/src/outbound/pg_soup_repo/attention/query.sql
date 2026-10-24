@@ -48,6 +48,8 @@ own_work AS NOT MATERIALIZED (
         WHEN 'calendar_event' THEN {calendar_event_gate}
         WHEN 'foreign_entity' THEN {foreign_entity_gate}
         WHEN 'agent_session' THEN {agent_session_gate}
+        WHEN 'crm_company' THEN {crm_company_gate}
+        WHEN 'crm_contact' THEN {crm_contact_gate}
         ELSE FALSE
     END
 ),
@@ -77,12 +79,10 @@ pending AS MATERIALIZED (
     -- poor, and a hash join would scan every user's notifications instead.
     CROSS JOIN LATERAL (
         SELECT
-            CASE WHEN n.event_item_type = 'channel'
-                    AND n.secondary_event_item_type = 'channel_message'
+            CASE WHEN {thread_keyed}
                 THEN 'channel_message' ELSE n.event_item_type
             END AS entity_type,
-            CASE WHEN n.event_item_type = 'channel'
-                    AND n.secondary_event_item_type = 'channel_message'
+            CASE WHEN {thread_keyed}
                 THEN n.secondary_event_item_id ELSE n.event_item_id
             END AS entity_id
         FROM notification n
@@ -142,6 +142,8 @@ attention_page AS (
         WHEN 'calendar_event' THEN {calendar_event_gate}
         WHEN 'foreign_entity' THEN {foreign_entity_gate}
         WHEN 'agent_session' THEN {agent_session_gate}
+        WHEN 'crm_company' THEN {crm_company_gate}
+        WHEN 'crm_contact' THEN {crm_contact_gate}
         ELSE FALSE
     END
     ORDER BY nc.attention_at DESC, nc.entity_id DESC

@@ -1,0 +1,50 @@
+[package]
+edition = "2024"
+name = "attention_feed"
+publish = false
+version = "0.1.0"
+
+[features]
+default = []
+# Viewer resolution at the entity access boundary, for GraphQL adapters.
+inbound = ["entity_access/inbound"]
+# Adapters over the services that own the feeds' data.
+outbound = [
+  "dep:activity",
+  "dep:cowlike",
+  "dep:email",
+  "dep:models_soup",
+  "dep:soup",
+  "dep:soup_realtime",
+]
+# Notification fixtures and port fakes for the feeds' tests.
+test-utils = []
+
+[dependencies]
+activity = { path = "../activity", default-features = false, features = ["realtime"], optional = true }
+async-stream = { workspace = true }
+base64 = { workspace = true }
+chrono = { workspace = true, features = ["serde"] }
+cowlike = { path = "../cowlike", optional = true }
+email = { path = "../email", default-features = false, features = ["ports"], optional = true }
+entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
+futures = { workspace = true }
+item_filters = { path = "../item_filters" }
+macro_user_id = { path = "../macro_user_id" }
+model-entity = { path = "../model-entity" }
+model_notifications = { path = "../model_notifications" }
+models_soup = { path = "../models_soup", optional = true }
+notification = { path = "../notification" }
+rootcause = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+soup = { path = "../soup", default-features = false, features = ["ports"], optional = true }
+soup_realtime = { path = "../soup_realtime", default-features = false, features = ["ports"], optional = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["sync", "time", "macros", "rt"] }
+tracing = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "test-util"] }

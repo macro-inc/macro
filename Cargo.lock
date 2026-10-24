@@ -2080,6 +2080,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "attention_feed"
+version = "0.1.0"
+dependencies = [
+ "activity",
+ "async-stream",
+ "base64 0.22.1",
+ "chrono",
+ "cowlike",
+ "email",
+ "entity_access",
+ "futures",
+ "item_filters",
+ "macro_user_id",
+ "model-entity",
+ "model_notifications",
+ "models_soup",
+ "notification",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "soup",
+ "soup_realtime",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "authentication_service"
 version = "0.1.0"
 dependencies = [
@@ -4702,6 +4732,7 @@ dependencies = [
  "apollo-compiler",
  "async-graphql",
  "async-stream",
+ "attention_feed",
  "axum",
  "bot_id",
  "bots",
@@ -6405,6 +6436,7 @@ dependencies = [
  "async-graphql",
  "async-graphql-axum",
  "async-trait",
+ "attention_feed",
  "authentication_service_client",
  "aws-sdk-dynamodb",
  "aws-sdk-s3",
@@ -9188,22 +9220,14 @@ version = "0.1.0"
 dependencies = [
  "async-graphql",
  "async-stream",
- "chrono",
- "entity_access",
+ "attention_feed",
  "futures",
  "graphql_common",
  "graphql_notification",
  "graphql_soup",
  "macro_user_id",
- "model-entity",
- "model_notifications",
- "notification",
- "rootcause",
- "serde_json",
  "soup",
- "tokio",
  "tracing",
- "uuid",
  "work_feed",
  "workspace-hack",
 ]
@@ -22142,27 +22166,18 @@ dependencies = [
 name = "work_feed"
 version = "0.1.0"
 dependencies = [
- "activity",
- "base64 0.22.1",
+ "attention_feed",
  "chrono",
- "cowlike",
  "document_sub_type",
- "email",
- "entity_access",
  "filter_ast",
- "futures",
  "item_filters",
  "macro_user_id",
  "model-entity",
  "model_notifications",
- "models_soup",
  "notification",
  "rootcause",
  "serde",
  "serde_json",
- "soup",
- "soup_realtime",
- "thiserror 2.0.18",
  "tokio",
  "tracing",
  "uuid",

@@ -1,4 +1,4 @@
-//! Feed candidates from the Soup service.
+//! Candidates from the Soup service's attention query.
 
 use std::sync::Arc;
 
@@ -8,23 +8,26 @@ use models_soup::item::SoupItem;
 use rootcause::Report;
 use soup::domain::{
     models::{
-        SoupProjectionHydration, WorkFeedPagePosition, WorkFeedSoupMode, WorkFeedSoupRequest,
+        AttentionKeying, AttentionPagePosition, AttentionSoupRequest, SoupProjectionHydration,
     },
     ports::SoupService,
 };
 
 use crate::domain::{
-    models::{WorkFeedMode, WorkFeedPosition},
-    ports::{EntityFacts, MailFacts, SourceItem, SourcePage, SourceRequest, WorkFeedSource},
+    models::{
+        Candidate, CandidateKeying, CandidatePage, CandidateRequest, EntityFacts, FeedPosition,
+        MailFacts,
+    },
+    ports::CandidateSource,
 };
 
-/// Candidates from Soup's work feed query, hydrated as Soup items.
-pub struct SoupWorkFeedSource<S, E> {
+/// Candidates from Soup's attention query, hydrated as Soup items.
+pub struct SoupCandidateSource<S, E> {
     soup: S,
     email: Arc<E>,
 }
 
-impl<S, E> SoupWorkFeedSource<S, E> {
+impl<S, E> SoupCandidateSource<S, E> {
     /// Create a source over the Soup service; the email service resolves the
     /// viewer's readable inboxes.
     pub fn new(soup: S, email: Arc<E>) -> Self {
@@ -50,14 +53,14 @@ fn facts(item: &SoupItem<()>) -> EntityFacts {
     }
 }
 
-impl<S, E> WorkFeedSource for SoupWorkFeedSource<S, E>
+impl<S, E> CandidateSource for SoupCandidateSource<S, E>
 where
     S: SoupService,
     E: EmailService,
 {
     type Entity = SoupProjectionHydration;
 
-    async fn page(&self, request: SourceRequest) -> Result<SourcePage<Self::Entity>, Report> {
+    async fn page(&self, request: CandidateRequest) -> Result<CandidatePage<Self::Entity>, Report> {
         let link_ids = self
             .email
             .get_inboxes_for_macro_id(request.viewer.user.copied())
@@ -68,18 +71,19 @@ where
             .collect();
         let page = self
             .soup
-            .get_work_feed_page(
-                WorkFeedSoupRequest {
+            .get_attention_page(
+                AttentionSoupRequest {
                     user: request.viewer.user.clone(),
                     link_ids,
                     limit: request.limit,
-                    mode: match request.mode {
-                        WorkFeedMode::Work => WorkFeedSoupMode::Work,
-                        WorkFeedMode::Attention => WorkFeedSoupMode::Attention,
+                    own_work: request.own_work,
+                    keying: match request.keying {
+                        CandidateKeying::ThreadScoped => AttentionKeying::ThreadScoped,
+                        CandidateKeying::FiledEntity => AttentionKeying::FiledEntity,
                     },
                     types: request.types,
                     filter: request.filter,
-                    after: request.after.map(|after| WorkFeedPagePosition {
+                    after: request.after.map(|after| AttentionPagePosition {
                         sort_at: after.sort_at,
                         entity_id: after.entity_id,
                     }),
@@ -88,13 +92,13 @@ where
                 request.viewer.team,
             )
             .await
-            .map_err(|error| rootcause::report!("failed to load work feed candidates: {error}"))?;
+            .map_err(|error| rootcause::report!("failed to load feed candidates: {error}"))?;
 
-        Ok(SourcePage {
+        Ok(CandidatePage {
             items: page
                 .items
                 .into_iter()
-                .map(|item| SourceItem {
+                .map(|item| Candidate {
                     key: item.hydration.item.entity(),
                     facts: facts(&item.hydration.item),
                     attention_at: item.attention_at,
@@ -103,7 +107,7 @@ where
                     entity: item.hydration,
                 })
                 .collect(),
-            next: page.next.map(|next| WorkFeedPosition {
+            next: page.next.map(|next| FeedPosition {
                 sort_at: next.sort_at,
                 entity_id: next.entity_id,
             }),

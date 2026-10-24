@@ -31,7 +31,7 @@ tools — hexagonal, heavily feature-gated.
   `crm`, `frecency`, `item_filters`, `lexical_client`, `macro_event_broker`,
   `calendar_events` (optional, feature `calendar_invitations`).
 - Used by: many crates and services, including `ai_tools`, `graphql_email`,
-  `teams`, `databases_sql`, `work_feed`, `calendar_service`, `email_service`,
+  `teams`, `databases_sql`, `attention_feed`, `calendar_service`, `email_service`,
   `email_scheduled_handler`, `search_processing_service`.
 
 ## Recipes
