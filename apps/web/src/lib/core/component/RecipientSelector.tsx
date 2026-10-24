@@ -648,7 +648,49 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
 
   let contentEl: HTMLElement | undefined;
 
+  // A comma or semicolon ends an address, as in other mail clients. Committing
+  // changes the selection, and Kobalte clears the input when it does.
+  const commitSeparatedEmails = (input: string) => {
+    if (!/[,;]\s*$/.test(input)) return false;
+    const emails = [
+      ...new Set(
+        input
+          .split(/[,;]/)
+          .map((part) => part.trim())
+          .filter(Boolean)
+      ),
+    ];
+    if (emails.length === 0 || !emails.every((e) => EmailValidator.validate(e)))
+      return false;
+    const known = recipients().raw;
+    const added = emails
+      .filter((email) => !selectedEmails().has(email.toLowerCase()))
+      .map(
+        (email) =>
+          known.find(
+            (option) =>
+              getRecipientOptionEmail(option)?.toLowerCase() ===
+              email.toLowerCase()
+          ) ??
+          recipientEntityMapper('custom')({
+            id: emailToId(email),
+            email,
+            invalid: false,
+          })
+      );
+    if (added.length === 0) return false;
+    handleChange([
+      ...(props.selectedOptions as CombinedRecipientItem[]),
+      ...added,
+    ]);
+    return true;
+  };
+
   const onInputChange = (next: string) => {
+    if (commitSeparatedEmails(next)) {
+      setInputValue('');
+      return;
+    }
     const previous = inputValue();
     setInputValue(next);
     if (next !== previous) {
