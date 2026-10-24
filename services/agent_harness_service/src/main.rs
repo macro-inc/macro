@@ -781,6 +781,20 @@ async fn run() -> anyhow::Result<()> {
             ),
         ),
     );
+    // Agents' own Anthropic and OpenAI keys, under the Cursor key's CMK this
+    // role already decrypts with. Decrypt-only for the same reason as Cursor
+    // keys: saving them is the authentication service's job. Only agents
+    // whose owner is on a paid plan run on them.
+    let agent_keys: Arc<dyn agent_api_keys::domain::AgentKeys> =
+        Arc::new(agent_api_keys::domain::AgentKeyService::new(
+            agent_api_keys::outbound::PgAgentKeyRepo::new(pool.clone()),
+            agent_api_keys::outbound::KmsAgentKeyCipher::new(AwsKmsCiphertexts::decrypting(
+                aws_sdk_kms::Client::new(&aws_config),
+            )),
+            agent_api_keys::outbound::EntitlementKeyPlans::new(
+                ai_billing::composition::pg_entitlement_source(pool.clone()),
+            ),
+        ));
     let inmem = InMemRuntime {
         manager: InMemAgentManager::new(
             Arc::clone(&inmem_model_engine),
@@ -789,6 +803,7 @@ async fn run() -> anyhow::Result<()> {
             Arc::clone(&inmem_model_access),
         )
         .with_admission(admission.clone())
+        .with_agent_keys(Arc::clone(&agent_keys))
         .with_dev_commands(enable_dev_commands),
     };
     // The sandbox provider serves every bot but the in-memory one, which the
@@ -1200,6 +1215,7 @@ async fn run() -> anyhow::Result<()> {
         ))
         .with_conversation_turns(conversation_turns)
         .with_admission(admission.clone())
+        .with_agent_keys(agent_keys)
         .with_repositories(open_repositories)
         .with_warm_sessions(Arc::new(session_repo.clone()), tool_catalog),
     );

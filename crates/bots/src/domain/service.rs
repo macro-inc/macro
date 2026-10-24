@@ -592,6 +592,19 @@ where
         self.replace_agent(caller, &current, req).await
     }
 
+    async fn manageable_agent(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        bot_id: BotId,
+    ) -> Result<Agent, BotError> {
+        self.ensure_manageable(caller, bot_id).await?;
+        self.repo
+            .get_agent(bot_id)
+            .await
+            .map_err(|err| BotError::Repo(err.into()))?
+            .ok_or_else(|| BotError::NotFound("agent not found".to_string()))
+    }
+
     async fn patch_agent(
         &self,
         caller: MacroUserIdStr<'static>,

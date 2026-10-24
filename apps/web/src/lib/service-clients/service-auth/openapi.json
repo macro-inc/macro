@@ -10,6 +10,199 @@
     "version": "0.1.0"
   },
   "paths": {
+    "/agents/{agent_id}/api-key": {
+      "get": {
+        "tags": ["crate::api::agent_api_keys"],
+        "summary": "The agent's API key, if it has one, and whether its plan allows one.",
+        "operationId": "get_agent_api_key",
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentApiKey"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["crate::api::agent_api_keys"],
+        "summary": "Registers or replaces the agent's API key, for its model's provider.\nOnly in-memory agents on an Anthropic or OpenAI model, on a paid plan.",
+        "operationId": "put_agent_api_key",
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PutAgentApiKeyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentApiKey"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["crate::api::agent_api_keys"],
+        "summary": "Forgets the agent's API key. Does not revoke it at the provider; succeeds\nwhen there was none.",
+        "operationId": "delete_agent_api_key",
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentApiKey"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/ai-billing/auto-reload": {
       "patch": {
         "tags": ["ai_billing"],
@@ -5442,6 +5635,33 @@
         "type": "string",
         "enum": ["A", "B"]
       },
+      "AgentApiKey": {
+        "type": "object",
+        "description": "An agent's API key, and whether its turns can run on it.",
+        "required": ["planAllows"],
+        "properties": {
+          "key": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SavedAgentApiKey",
+                "description": "The saved key, if any."
+              }
+            ]
+          },
+          "planAllows": {
+            "type": "boolean",
+            "description": "Whether the agent owner's plan includes API keys. A key saved before a\ndowngrade is still listed, and removable, but unused."
+          }
+        }
+      },
+      "AgentApiKeyProvider": {
+        "type": "string",
+        "description": "A provider an agent can bring its own key for.",
+        "enum": ["anthropic", "openai"]
+      },
       "AiBillingErrorBody": {
         "type": "object",
         "description": "Error response body.",
@@ -7269,6 +7489,17 @@
           }
         }
       },
+      "PutAgentApiKeyRequest": {
+        "type": "object",
+        "description": "The key someone pasted.",
+        "required": ["apiKey"],
+        "properties": {
+          "apiKey": {
+            "type": "string",
+            "description": "An Anthropic (`sk-ant-…`) or OpenAI (`sk-…`) key, for the provider of\nthe agent's model."
+          }
+        }
+      },
       "PutCursorApiKeyRequest": {
         "type": "object",
         "description": "The key the user pasted.",
@@ -7321,6 +7552,22 @@
           "email": {
             "type": "string",
             "description": "The email address to resend the verification email to"
+          }
+        }
+      },
+      "SavedAgentApiKey": {
+        "type": "object",
+        "description": "The agent's saved key. Never includes the key.",
+        "required": ["provider", "updatedAt"],
+        "properties": {
+          "provider": {
+            "$ref": "#/components/schemas/AgentApiKeyProvider",
+            "description": "The provider the key is for."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the key was last replaced."
           }
         }
       },

@@ -562,7 +562,9 @@ the shimmer.
   The agent editor has Profile, Instructions, **Where it runs** (In Macro, In
   Cursor, In your harness) and **Who can use it** (Private / Team). The selected
   place opens its Model picker inside its card; In your harness adds a Harness
-  picker beside it. An unconnected Cursor or unpaired harness is disabled with
+  picker beside it. In Macro on an Anthropic or OpenAI model also shows an
+  optional **Anthropic API key** / **OpenAI API key** field (see
+  [agent API keys](#agent-api-keys)). An unconnected Cursor or unpaired harness is disabled with
   **Connect** / **Set up**, which open the setup guide in place and return to the
   editor with that option selected. Mention style, permission requests,
   connections, and channels sit in a collapsed **Advanced** section whose
@@ -829,6 +831,29 @@ mutation failures and direct session/edit actions present the shared dialog;
 ordinary HTTP failures and background queries do not. Document AI-edit refusals
 apply no edits and open this dialog instead of the generic `AI edit failed`
 toast. Legacy chat tool errors carrying a recognized quota code also open it.
+
+### Agent API keys
+
+An agent that runs **In Macro** on an Anthropic or OpenAI model can have its own
+API key, set in the agent editor under its model: **Anthropic API key** or
+**OpenAI API key** (the shared `ApiKeyInput`, which shows a saved key only as
+`sk-ant-••••`). Whoever may edit the agent may set or **Remove** its key; a
+saved key is never shown again, and removing it does not revoke it at the
+provider. The key is saved after the agent (`PUT /auth/agents/{id}/api-key`).
+
+- Every turn of an agent with a usable key runs on it: never admitted against
+  or counted toward the person's Macro usage, and recorded against the key
+  (`ai_usage.agent_api_key_id`). Tools, opening lines and summaries still use
+  Macro's keys.
+- The session's model list is the key's provider's models, whatever the
+  person's plan, and another provider's model cannot be picked.
+- Keys are part of the Premium and Max plans (and enterprise teams), checked
+  against the agent's owner: a personal agent's owner, or a team agent's team
+  payer. On Free the field is disabled with a note; a key saved before a
+  downgrade stays (and can be removed) but the agent runs on Macro usage.
+- A key stops counting while the agent no longer fits it (moved to another
+  provider's model or another harness); the editor says the saved key isn't
+  used with this model.
 
 ### Quota manual checks
 

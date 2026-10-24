@@ -32,6 +32,7 @@ return_passwordless_code = []
 
 [dependencies]
 crm = { path = "../../crates/crm", default-features = false, features = ["lookup"] }
+agent_api_keys = { path = "../../crates/agent_api_keys" }
 ai_billing = { path = "../../crates/ai_billing" }
 ai_usage = { path = "../../crates/ai_usage" }
 initiative = { path = "../../crates/initiative", default-features = false, features = ["postgres"] }

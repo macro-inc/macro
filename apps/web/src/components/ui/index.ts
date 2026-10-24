@@ -1,4 +1,6 @@
 export { ActionDialogShell } from './components/ActionDialogShell';
+export type { ApiKeyInputProps } from './components/ApiKeyInput';
+export { ApiKeyInput } from './components/ApiKeyInput';
 export type {
   AvatarGroupProps,
   AvatarGroupSize,

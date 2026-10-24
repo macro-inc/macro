@@ -93,7 +93,14 @@ async fn with_model_access<Engine: TurnEngine, Out>(
     model_access: Arc<dyn InMemModelAccess>,
     scenario: impl AsyncFnOnce(ConnectionTo<Agent>, SessionId, Arc<AgentState>) -> Out,
 ) -> (Vec<SessionNotification>, Vec<SessionConfigOption>, Out) {
-    let (notifications, recorded) = record(engine, admission, model_access, scenario).await;
+    let (notifications, recorded) = record(
+        engine,
+        admission,
+        model_access,
+        Arc::new(agent_api_keys::domain::NoAgentKeys),
+        scenario,
+    )
+    .await;
     let (config_options, out) = recorded.out;
     (notifications, config_options, out)
 }
@@ -108,6 +115,7 @@ async fn with_summaries<Engine: TurnEngine, Out>(
         engine,
         Arc::new(DisabledAiAdmissionService),
         Arc::new(crate::testing::TestModelAccess::paid()),
+        Arc::new(agent_api_keys::domain::NoAgentKeys),
         scenario,
     )
     .await;
@@ -121,6 +129,7 @@ async fn record<Engine: TurnEngine, Out>(
     engine: Arc<Engine>,
     admission: Arc<dyn AiAdmissionService>,
     model_access: Arc<dyn InMemModelAccess>,
+    agent_keys: Arc<dyn agent_api_keys::domain::AgentKeys>,
     scenario: impl AsyncFnOnce(ConnectionTo<Agent>, SessionId, Arc<AgentState>) -> Out,
 ) -> (
     Vec<SessionNotification>,
@@ -139,6 +148,7 @@ async fn record<Engine: TurnEngine, Out>(
         ),
         engine,
         admission,
+        agent_keys,
         model_access,
         store,
         active_cancel: std::sync::Mutex::new(Vec::new()),
@@ -479,6 +489,130 @@ async fn cancel_during_billing_does_not_start_engine_or_write_history() {
     )
     .await;
     assert!(engine.requests().is_empty());
+}
+
+/// An agent with its own key for `provider`, or none.
+struct OneAgentKey(Option<agent_api_keys::domain::ModelProvider>);
+
+#[async_trait::async_trait]
+impl agent_api_keys::domain::AgentKeys for OneAgentKey {
+    async fn usable_provider(
+        &self,
+        _bot_id: macro_uuid::Uuid,
+    ) -> agent_api_keys::domain::Result<Option<agent_api_keys::domain::ModelProvider>> {
+        Ok(self.0)
+    }
+
+    async fn usable_key(
+        &self,
+        bot_id: macro_uuid::Uuid,
+    ) -> agent_api_keys::domain::Result<Option<agent_api_keys::domain::UsableAgentKey>> {
+        Ok(self
+            .0
+            .map(|provider| agent_api_keys::domain::UsableAgentKey {
+                bot_id,
+                key: agent_api_keys::domain::ProviderApiKey::parse(provider, "sk-ant-api03-abc")
+                    .expect("valid key"),
+            }))
+    }
+}
+
+fn be_agent(state: &AgentState, bot: bot_id::BotId) {
+    state
+        .store
+        .get_mut(&state.session_id)
+        .expect("session")
+        .identity = Some(crate::domain::engine::AgentIdentity {
+        bot,
+        name: "Grunk".to_owned(),
+        handle: "grunk".to_owned(),
+    });
+}
+
+#[tokio::test]
+async fn an_agent_with_its_own_key_runs_turns_on_it_without_spending_the_allowance() {
+    let engine = Arc::new(ScriptedEngine::new(vec![StreamPart::Content(
+        "reply".into(),
+    )]));
+    let admission = Arc::new(TestAdmission::new(Err(AiAdmissionError::Denied(
+        DenyReason::AllowanceExhausted,
+    ))));
+    let bot = bot_id::BotId::new_from_uuid(macro_uuid::generate_uuid_v7());
+    record(
+        engine.clone(),
+        admission.clone(),
+        Arc::new(crate::testing::TestModelAccess::paid()),
+        Arc::new(OneAgentKey(Some(
+            agent_api_keys::domain::ModelProvider::Anthropic,
+        ))),
+        async |connection, session, state| {
+            be_agent(&state, bot);
+            connection
+                .send_request(text_prompt(&session, "hello"))
+                .block_task()
+                .await
+                .expect("the turn runs on the agent's key");
+        },
+    )
+    .await;
+
+    assert_eq!(engine.requests()[0].agent_key, Some(bot.as_uuid()));
+    assert!(
+        admission.calls.lock().unwrap().is_empty(),
+        "the owner's allowance is never asked"
+    );
+}
+
+#[tokio::test]
+async fn an_agent_with_a_key_offers_only_its_providers_models() {
+    let engine = Arc::new(ScriptedEngine::new(vec![]));
+    let bot = bot_id::BotId::new_from_uuid(macro_uuid::generate_uuid_v7());
+    let (_, recorded) = record(
+        engine,
+        Arc::new(DisabledAiAdmissionService),
+        // A free plan alone would offer only the free model.
+        Arc::new(crate::testing::TestModelAccess::new(
+            crate::domain::model_access::ModelAccess::Free,
+        )),
+        Arc::new(OneAgentKey(Some(
+            agent_api_keys::domain::ModelProvider::Anthropic,
+        ))),
+        async |connection, session, state| {
+            // Attach seeds the agent and its model before `session/new`; this
+            // harness opens the session first, so put them back.
+            be_agent(&state, bot);
+            use_model(&state, "anthropic/claude-sonnet-5-5");
+            let resumed = connection
+                .send_request(ResumeSessionRequest::new(session.clone(), "/"))
+                .block_task()
+                .await
+                .expect("resumed");
+            let other = connection
+                .send_request(SetSessionConfigOptionRequest::new(
+                    session.clone(),
+                    MODEL_CONFIG_ID,
+                    SessionConfigValueId::new("other-model"),
+                ))
+                .block_task()
+                .await;
+            (resumed.config_options.unwrap_or_default(), other.is_err())
+        },
+    )
+    .await;
+    let (options, other_refused) = recorded.out.1;
+
+    let selection = agent_fold::domain::model_selection::model_selection(&options)
+        .expect("resume should advertise a model select");
+    assert_eq!(selection.current, "anthropic/claude-sonnet-5-5");
+    assert_eq!(
+        selection
+            .options
+            .iter()
+            .map(|model| model.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["anthropic/claude-sonnet-5-5"]
+    );
+    assert!(other_refused, "another provider's model cannot be picked");
 }
 
 #[tokio::test]
@@ -1535,6 +1669,7 @@ async fn serve_with_mcp(
         ),
         engine,
         admission: Arc::new(DisabledAiAdmissionService),
+        agent_keys: Arc::new(agent_api_keys::domain::NoAgentKeys),
         model_access: Arc::new(crate::testing::TestModelAccess::paid()),
         store,
         active_cancel: std::sync::Mutex::new(Vec::new()),
@@ -1591,6 +1726,7 @@ async fn session_new_dials_the_advertised_servers_except_macros_own() {
         ),
         engine: Arc::new(ScriptedEngine::new(Vec::new())),
         admission: Arc::new(DisabledAiAdmissionService),
+        agent_keys: Arc::new(agent_api_keys::domain::NoAgentKeys),
         model_access: Arc::new(crate::testing::TestModelAccess::paid()),
         store,
         active_cancel: std::sync::Mutex::new(Vec::new()),
@@ -1680,6 +1816,7 @@ async fn first_prompt_waits_for_background_mcp_connect() {
         ),
         engine: Arc::clone(&engine) as Arc<dyn TurnEngine>,
         admission: Arc::new(DisabledAiAdmissionService),
+        agent_keys: Arc::new(agent_api_keys::domain::NoAgentKeys),
         model_access: Arc::new(crate::testing::TestModelAccess::paid()),
         store,
         active_cancel: std::sync::Mutex::new(Vec::new()),
@@ -1784,6 +1921,7 @@ where
         ),
         engine,
         admission: Arc::new(DisabledAiAdmissionService),
+        agent_keys: Arc::new(agent_api_keys::domain::NoAgentKeys),
         model_access: Arc::new(crate::testing::TestModelAccess::paid()),
         store,
         active_cancel: std::sync::Mutex::new(Vec::new()),

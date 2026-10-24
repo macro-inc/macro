@@ -451,6 +451,7 @@ async fn drive_turn(
         cancel,
         user_input,
         reviewer,
+        agent_key,
     } = request;
     let started = tokio::time::Instant::now();
 
@@ -473,6 +474,13 @@ async fn drive_turn(
     // reads no memory, offers the model no tools, and is read, not shown, so
     // no opening line races it.
     let summarizing = purpose == crate::domain::engine::TurnPurpose::Summary;
+    if let Some(key) = &agent_key
+        && agent_api_keys::domain::ModelProvider::of_model(&model) != Some(key.key.provider())
+    {
+        return Err(AgentError::Other(anyhow::anyhow!(
+            "the agent's API key does not serve {model}"
+        )));
+    }
 
     // Started before anything else so its line is out before the turn's
     // model has a first token.
@@ -499,7 +507,9 @@ async fn drive_turn(
         )
     };
     // A closed receiver has no verdict, and the turn's own stream follows.
-    let mut opening_line = if summarizing {
+    // The opening line runs on Macro's own fast model, so a turn the agent's
+    // key pays for goes without one.
+    let mut opening_line = if summarizing || agent_key.is_some() {
         mpsc::channel(1).1
     } else {
         opener_span.in_scope(|| {
@@ -585,6 +595,16 @@ async fn drive_turn(
         .with_reasoning_effort(reasoning_effort)
         .with_speed(speed)?
         .with_genai_telemetry(false);
+    // Only the loop's own model calls run on the agent's key, so only they are
+    // recorded against it; tools keep `usage_ctx`, since they call models on
+    // Macro's keys.
+    let loop_usage = match agent_key {
+        Some(key) => {
+            agent_loop = agent_loop.with_provider_api_key(key.key.expose())?;
+            usage_ctx.with_agent_api_key(key.bot_id)
+        }
+        None => usage_ctx,
+    };
     let mut reviewed_tools = Vec::new();
     if let Some(reviewer) = reviewer.filter(|_| !summarizing) {
         reviewed_tools = toolset.user_tools.keys().cloned().collect();
@@ -653,7 +673,7 @@ async fn drive_turn(
         reviewed_tools,
     });
     let session = agent_loop
-        .session(toolset, Arc::new(tool_context), system_prompt, usage_ctx)
+        .session(toolset, Arc::new(tool_context), system_prompt, loop_usage)
         .await;
     let (mut session, loop_cancel) = session.cancellable();
 

@@ -13,10 +13,11 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use crate::domain::model_access::{InMemModelAccess, ModelAccess, ModelAccessError};
+use crate::domain::model_access::{InMemModelAccess, ModelAccessError, SessionModels};
 use agent::types::{AssistantMessagePart, ChatMessage};
 use agent::{ModelSpeed, ReasoningEffort};
 use agent::{StreamAccumulator, StreamPart, ToolResponse};
+use agent_api_keys::domain::{AgentKeys, ModelProvider, UsableAgentKey};
 use agent_client_protocol::schema::v1::{
     AgentCapabilities, AvailableCommand, AvailableCommandInput, AvailableCommandsUpdate,
     BooleanPropertySchema, CancelNotification, ContentBlock, ContentChunk,
@@ -127,6 +128,9 @@ pub struct AgentState {
     pub admission: Arc<dyn AiAdmissionService>,
     /// Current model permissions for the trusted session owner.
     pub model_access: Arc<dyn InMemModelAccess>,
+    /// Agents' own API keys, which the session's agent's turns run on
+    /// instead of the owner's Macro allowance when it has a usable one.
+    pub agent_keys: Arc<dyn AgentKeys>,
     /// Conversation state, shared with the manager so it survives reattach.
     pub store: Arc<SessionStore>,
     /// Every outstanding turn's cancellation token - the running turn and any
@@ -254,7 +258,65 @@ impl AgentState {
 
     /// ACP model configuration backed by the engine's supported-model source
     /// and this session's current selection.
-    fn session_config_options(&self, access: ModelAccess) -> Vec<SessionConfigOption> {
+    /// The models the session may run: the owner's plan access, or the
+    /// models of the agent's key's provider when its agent has a usable key.
+    /// A failed key lookup offers the plan's models: turns then check the
+    /// key again before running.
+    async fn session_models(&self) -> Result<SessionModels, AcpError> {
+        let access = self
+            .model_access
+            .access(&self.owner)
+            .await
+            .map_err(model_access_error)?;
+        let Some(bot) = self.agent_bot() else {
+            return Ok(SessionModels::new(access, None));
+        };
+        let agent_key = self
+            .agent_keys
+            .usable_provider(bot)
+            .await
+            .inspect_err(
+                |error| tracing::error!(error = ?error, "could not read the agent's API key"),
+            )
+            .ok()
+            .flatten();
+        Ok(SessionModels::new(access, agent_key))
+    }
+
+    /// The agent's own key this turn runs on, decrypted for it, if the
+    /// session's agent has a usable one. A key for a provider other than
+    /// `model`'s refuses the turn rather than quietly billing Macro.
+    async fn turn_agent_key(&self, model: &str) -> Result<Option<UsableAgentKey>, AcpError> {
+        let Some(bot) = self.agent_bot() else {
+            return Ok(None);
+        };
+        let key = self.agent_keys.usable_key(bot).await.map_err(|error| {
+            tracing::error!(error = ?error, "could not read the agent's API key");
+            AcpError::new(-32603, "The agent's API key could not be read")
+                .data(serde_json::json!({ "code": "agent_api_key_unavailable", "retryable": true }))
+        })?;
+        match key {
+            Some(key) if ModelProvider::of_model(model) != Some(key.key.provider()) => {
+                let provider = key.key.provider().display_name();
+                Err(AcpError::invalid_params().data(format!(
+                    "This agent runs on its {provider} API key. Choose a {provider} model."
+                )))
+            }
+            key => Ok(key),
+        }
+    }
+
+    /// The bot id of the agent this session belongs to, if any.
+    fn agent_bot(&self) -> Option<macro_uuid::Uuid> {
+        self.store.get(&self.session_id).and_then(|session| {
+            session
+                .identity
+                .as_ref()
+                .map(|identity| identity.bot.as_uuid())
+        })
+    }
+
+    fn session_config_options(&self, access: SessionModels) -> Vec<SessionConfigOption> {
         let Some(session) = self.store.get(&self.session_id) else {
             return Vec::new();
         };
@@ -576,11 +638,9 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                 let state = Arc::clone(&state);
                 async move |request: NewSessionRequest, responder, connection| {
                     let state = Arc::clone(&state);
-                    let access = match state.model_access.access(&state.owner).await {
+                    let access = match state.session_models().await {
                         Ok(access) => access,
-                        Err(error) => {
-                            return responder.respond_with_error(model_access_error(error));
-                        }
+                        Err(error) => return responder.respond_with_error(error),
                     };
                     if let Some(model) = state
                         .store
@@ -607,11 +667,9 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                 let state = Arc::clone(&state);
                 async move |request: ResumeSessionRequest, responder, connection| {
                     let state = Arc::clone(&state);
-                    let access = match state.model_access.access(&state.owner).await {
+                    let access = match state.session_models().await {
                         Ok(access) => access,
-                        Err(error) => {
-                            return responder.respond_with_error(model_access_error(error));
-                        }
+                        Err(error) => return responder.respond_with_error(error),
                     };
                     if let Some(model) = state
                         .store
@@ -652,6 +710,7 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                         agent.turn.ttft_ms = tracing::field::Empty,
                         agent.turn.first_text_ms = tracing::field::Empty,
                         agent.turn.admission_wait_ms = tracing::field::Empty,
+                        agent.turn.agent_key = tracing::field::Empty,
                         agent.turn.lock_wait_ms = tracing::field::Empty,
                         agent.turn.stop_reason = tracing::field::Empty,
                         agent.turn.text_chars = tracing::field::Empty,
@@ -725,11 +784,9 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                     if let Err(error) = state.expect_session(&request.session_id) {
                         return responder.respond_with_error(error);
                     }
-                    let access = match state.model_access.access(&state.owner).await {
+                    let access = match state.session_models().await {
                         Ok(access) => access,
-                        Err(error) => {
-                            return responder.respond_with_error(model_access_error(error));
-                        }
+                        Err(error) => return responder.respond_with_error(error),
                     };
                     let Some(value) = request.value.as_value_id() else {
                         return responder.respond_with_error(
@@ -854,26 +911,36 @@ async fn run_turn(
     let span = tracing::Span::current();
     span.record("agent.turn.lock_wait_ms", elapsed_ms(started));
     let admission_started = Instant::now();
-    // Check at execution time, not enqueue time. Cancellation stays responsive
-    // even if billing is slow, and neither denial nor cancellation adds history.
-    tokio::select! {
-        biased;
-        _ = cancel.cancelled() => return Ok(StopReason::Cancelled),
-        result = admit_turn(state.admission.as_ref(), &state.owner) => result.map_err(|error|
-            AcpError::new(-32603, error.to_string()).data(serde_json::json!({
-                "code": error.code(), "retryable": error.is_retryable(),
-            }))
-        )?,
-    }
-    span.record(
-        "agent.turn.admission_wait_ms",
-        elapsed_ms(admission_started),
-    );
     let session_model = state
         .store
         .get(&state.session_id)
         .map(|session| session.model.clone())
         .unwrap_or_default();
+    // An agent with its own usable key runs every turn on it, never on the
+    // owner's allowance; one without runs on Macro usage.
+    let agent_key = tokio::select! {
+        biased;
+        _ = cancel.cancelled() => return Ok(StopReason::Cancelled),
+        key = state.turn_agent_key(&session_model) => key?,
+    };
+    span.record("agent.turn.agent_key", agent_key.is_some());
+    // Check at execution time, not enqueue time. Cancellation stays responsive
+    // even if billing is slow, and neither denial nor cancellation adds history.
+    if agent_key.is_none() {
+        tokio::select! {
+            biased;
+            _ = cancel.cancelled() => return Ok(StopReason::Cancelled),
+            result = admit_turn(state.admission.as_ref(), &state.owner) => result.map_err(|error|
+                AcpError::new(-32603, error.to_string()).data(serde_json::json!({
+                    "code": error.code(), "retryable": error.is_retryable(),
+                }))
+            )?,
+        }
+    }
+    span.record(
+        "agent.turn.admission_wait_ms",
+        elapsed_ms(admission_started),
+    );
     if compaction::too_long(&prompt, &session_model) {
         return Err(AcpError::invalid_params().data(
             "This message is too long. Split it into smaller messages or attach it as a file.",
@@ -901,7 +968,7 @@ async fn run_turn(
     let access = tokio::select! {
         biased;
         _ = cancel.cancelled() => return Ok(StopReason::Cancelled),
-        result = state.model_access.access(&state.owner) => result.map_err(model_access_error)?,
+        result = state.session_models() => result?,
     };
     if !access.allows(&model) {
         return Err(model_access_error(ModelAccessError::Forbidden));
@@ -944,6 +1011,7 @@ async fn run_turn(
             .clone()
             .map(|requester| requester as SharedUserInputRequester),
         reviewer: requester.map(|requester| requester as Arc<dyn UserToolReviewer>),
+        agent_key,
     });
 
     let mut accumulator = StreamAccumulator::new();

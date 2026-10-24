@@ -7,7 +7,7 @@ import {
   useDisconnectCursorApiKey,
   useSaveCursorApiKey,
 } from '@queries/auth/cursor-api-key';
-import { Button, confirmDialog } from '@ui';
+import { ApiKeyInput, Button, confirmDialog } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import cursorApiKeysScreenshot from './assets/cursor-api-keys.png';
 import { CursorDefaultModel } from './components/cursor-default-model';
@@ -18,7 +18,7 @@ import {
 } from './components/runtime-setup-steps';
 import {
   CURSOR_KEY_FORMAT_ERROR,
-  CURSOR_KEY_PLACEHOLDER,
+  CURSOR_KEY_PREFIX,
   isCursorApiKey,
 } from './core/cursor-api-key';
 import { SettingsPage, SettingsSurface } from './primitives';
@@ -147,23 +147,16 @@ export function CursorConnectPage(props: { onClose: () => void }) {
                         >
                           API key
                         </label>
-                        <SetupField>
-                          <input
-                            ref={focusOnMount}
-                            id="cursor-api-key"
-                            type="password"
-                            autocomplete="off"
-                            spellcheck={false}
-                            aria-describedby="cursor-api-key-help"
-                            class="ph-no-capture min-w-0 flex-1 bg-transparent font-mono text-sm text-ink outline-none"
-                            placeholder={CURSOR_KEY_PLACEHOLDER}
-                            value={apiKey()}
-                            disabled={saveKey.isPending}
-                            onInput={(event) =>
-                              setApiKey(event.currentTarget.value)
-                            }
-                          />
-                        </SetupField>
+                        <ApiKeyInput
+                          ref={focusOnMount}
+                          id="cursor-api-key"
+                          aria-describedby="cursor-api-key-help"
+                          size="lg"
+                          prefix={CURSOR_KEY_PREFIX}
+                          value={apiKey()}
+                          disabled={saveKey.isPending}
+                          onValueChange={setApiKey}
+                        />
                         <p
                           id="cursor-api-key-help"
                           class="text-xs text-ink-extra-muted"

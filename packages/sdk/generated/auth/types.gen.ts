@@ -7,6 +7,23 @@ export type ClientOptions = {
 export type AbGroup = 'A' | 'B';
 
 /**
+ * An agent's API key, and whether its turns can run on it.
+ */
+export type AgentApiKey = {
+    key?: null | SavedAgentApiKey;
+    /**
+     * Whether the agent owner's plan includes API keys. A key saved before a
+     * downgrade is still listed, and removable, but unused.
+     */
+    planAllows: boolean;
+};
+
+/**
+ * A provider an agent can bring its own key for.
+ */
+export type AgentApiKeyProvider = 'anthropic' | 'openai';
+
+/**
  * Error response body.
  */
 export type AiBillingErrorBody = {
@@ -1425,6 +1442,17 @@ export type PublicGtmInviteLink = {
 };
 
 /**
+ * The key someone pasted.
+ */
+export type PutAgentApiKeyRequest = {
+    /**
+     * An Anthropic (`sk-ant-…`) or OpenAI (`sk-…`) key, for the provider of
+     * the agent's model.
+     */
+    apiKey: string;
+};
+
+/**
  * The key the user pasted.
  */
 export type PutCursorApiKeyRequest = {
@@ -1471,6 +1499,20 @@ export type ResendFusionauthVerifyUserEmailRequest = {
      * The email address to resend the verification email to
      */
     email: string;
+};
+
+/**
+ * The agent's saved key. Never includes the key.
+ */
+export type SavedAgentApiKey = {
+    /**
+     * The provider the key is for.
+     */
+    provider: AgentApiKeyProvider;
+    /**
+     * When the key was last replaced.
+     */
+    updatedAt: string;
 };
 
 /**
@@ -1980,6 +2022,76 @@ export type UserTokensResponse = {
      */
     refresh_token: string;
 };
+
+export type DeleteAgentApiKeyData = {
+    body?: never;
+    path: {
+        agent_id: string;
+    };
+    query?: never;
+    url: '/agents/{agent_id}/api-key';
+};
+
+export type DeleteAgentApiKeyErrors = {
+    401: string;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type DeleteAgentApiKeyError = DeleteAgentApiKeyErrors[keyof DeleteAgentApiKeyErrors];
+
+export type DeleteAgentApiKeyResponses = {
+    200: AgentApiKey;
+};
+
+export type DeleteAgentApiKeyResponse = DeleteAgentApiKeyResponses[keyof DeleteAgentApiKeyResponses];
+
+export type GetAgentApiKeyData = {
+    body?: never;
+    path: {
+        agent_id: string;
+    };
+    query?: never;
+    url: '/agents/{agent_id}/api-key';
+};
+
+export type GetAgentApiKeyErrors = {
+    401: string;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type GetAgentApiKeyError = GetAgentApiKeyErrors[keyof GetAgentApiKeyErrors];
+
+export type GetAgentApiKeyResponses = {
+    200: AgentApiKey;
+};
+
+export type GetAgentApiKeyResponse = GetAgentApiKeyResponses[keyof GetAgentApiKeyResponses];
+
+export type PutAgentApiKeyData = {
+    body: PutAgentApiKeyRequest;
+    path: {
+        agent_id: string;
+    };
+    query?: never;
+    url: '/agents/{agent_id}/api-key';
+};
+
+export type PutAgentApiKeyErrors = {
+    400: ErrorResponse;
+    401: string;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type PutAgentApiKeyError = PutAgentApiKeyErrors[keyof PutAgentApiKeyErrors];
+
+export type PutAgentApiKeyResponses = {
+    200: AgentApiKey;
+};
+
+export type PutAgentApiKeyResponse = PutAgentApiKeyResponses[keyof PutAgentApiKeyResponses];
 
 export type UpdateAiBillingAutoReloadData = {
     body: UpdateAutoReloadRequest;
