@@ -302,6 +302,22 @@
     "preview-gateway": {
       "source_paths": [],
       "stack_path": "infra/stacks/preview-gateway/**"
+    },
+    "whatsapp-session-service": {
+      "deploy_enabled": false,
+      "bootstrap_pending": "Needs the whatsapp-session-service Doppler project (dev/prd) with its keys, including WHATSAPP_SESSION_KMS_KEY_ID from the stack's first deploy, and an explicit go-ahead to run personal WhatsApp sessions.",
+      "source_paths": [
+        "services/whatsapp_session_service/**",
+        "crates/whatsapp_linked/**",
+        "crates/whatsapp_store_pg/**",
+        "crates/whatsmeow/**",
+        "crates/whatsmeow_proto/**",
+        "crates/whatsmeow_signal/**"
+      ],
+      "stack_path": "infra/stacks/whatsapp-session-service/**",
+      "deploy_binaries": [
+        "whatsapp_session_service"
+      ]
     }
   }
 }

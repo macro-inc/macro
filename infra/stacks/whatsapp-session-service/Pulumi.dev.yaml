@@ -1,0 +1,9 @@
+config:
+  aws-native:region: us-east-1
+  aws:region: us-east-1
+  # WHATSAPP_SESSION_KMS_KEY_ID is not injected by Pulumi: MacroConfig reads
+  # only APP_SECRETS_JSON in ECS. Set it by hand in the whatsapp-session-service
+  # Doppler `dev` config to alias/whatsapp-session-service-dev (this stack's
+  # `sessionKmsKeyAlias` output).
+  whatsapp-session-service:session_kms_deletion_window_days: 7
+  whatsapp-session-service:desired_count: 2

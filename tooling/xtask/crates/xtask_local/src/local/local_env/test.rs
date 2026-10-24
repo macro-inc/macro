@@ -80,6 +80,10 @@ fn emits_required_keys() {
         "BASE_URL",
         "DATABASE_URL",
         "DATABASE_URL_READONLY",
+        "WHATSAPP_SESSION_LOCK_DATABASE_URL",
+        "WHATSAPP_SESSION_KMS_KEY_ID",
+        "WHATSAPP_SESSION_MAX_ACCOUNTS",
+        "WHATSAPP_SESSION_DRAIN_BATCH",
         "REDIS_URI",
         "OPENSEARCH_URL",
         "LOCAL_AWS_URL",
@@ -434,6 +438,22 @@ fn the_agent_harness_uses_local_containers_and_wipes_daytona() {
         env.get("CODEX_OAUTH_KMS_KEY_ID").map(String::as_str),
         Some(resources::CODEX_OAUTH_KMS_ALIAS)
     );
+}
+
+#[test]
+fn the_whatsapp_session_service_locks_on_the_local_postgres_and_kms() {
+    let env = local_env();
+    assert_eq!(
+        env.get("WHATSAPP_SESSION_LOCK_DATABASE_URL"),
+        env.get("DATABASE_URL")
+    );
+    assert_eq!(
+        env.get("WHATSAPP_SESSION_KMS_KEY_ID").map(String::as_str),
+        Some(resources::WHATSAPP_SESSION_KMS_ALIAS)
+    );
+    // Tests point the client at a fake server; a local stack never does.
+    assert!(!env.contains_key("OVERRIDE_WHATSAPP_WEBSOCKET_URL"));
+    assert!(!env.contains_key("OVERRIDE_WHATSAPP_MEDIA_HOST"));
 }
 
 /// Sandboxes and the harness are both containers, so they reach each other on a

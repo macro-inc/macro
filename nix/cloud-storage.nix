@@ -428,6 +428,11 @@
           packageName = "unfurl_service";
           binaries = [ "unfurl_service" ];
         }
+        {
+          serviceName = "whatsapp-session-service";
+          packageName = "whatsapp_session_service";
+          binaries = [ "whatsapp_session_service" ];
+        }
       ];
 
       localStackBinaryDefinitions = [
@@ -558,6 +563,7 @@
         "notification-service"
         "static-file-service"
         "unfurl-service"
+        "whatsapp-session-service"
       ];
 
       localStackBinaries = pkgs.buildEnv {

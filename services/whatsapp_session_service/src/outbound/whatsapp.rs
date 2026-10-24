@@ -1,0 +1,629 @@
+//! The account's WhatsApp connection: the encrypted Postgres device store,
+//! a whatsmeow [`Client`], and the mapping between whatsmeow and the domain.
+
+use std::sync::Arc;
+use std::time::Duration;
+
+use async_trait::async_trait;
+use chrono::{DateTime, Utc};
+use sqlx::PgPool;
+use tokio::sync::mpsc;
+use tokio_util::sync::CancellationToken;
+use uuid::Uuid;
+use whatsapp_linked::domain::events::{
+    ClaimedSend, MediaImport, OutboundMedia, OutgoingContent, SessionScope, Target,
+};
+use whatsapp_linked::domain::models::{GroupInfo, Identity, MediaKind, Participant};
+use whatsapp_store_pg::kms::WhatsAppKms;
+use whatsapp_store_pg::{PgWhatsAppStore, WhatsAppStoreError};
+use whatsmeow::download::{DownloadError, MediaType};
+use whatsmeow::proto::wa_e2e;
+use whatsmeow::send::{SendRequestExtra, build_edit};
+use whatsmeow::signal::CurveSignatures;
+use whatsmeow::store::Device;
+use whatsmeow::types::{Jid, WebAuthnResponse};
+use whatsmeow::{
+    Client, ClientConfig, ClientError, Dialer, Event, EventHandler, QrChannelItem, Signal,
+};
+
+use crate::domain::ports::{
+    DownloadFailure, InboundSink, SendFailure, SessionConnector, SessionError, SessionEvent,
+    UploadedMedia, WhatsAppSession,
+};
+use events::{Mapped, MediaLocator};
+
+pub mod events;
+#[cfg(test)]
+mod test;
+
+/// Purpose of sealed media locators (see `PgWhatsAppStore::seal`).
+const LOCATOR_PURPOSE: &str = "media-locator";
+
+fn internal(error: impl std::error::Error + Send + Sync + 'static) -> SessionError {
+    SessionError::Internal(rootcause::Report::new(error).into_dynamic())
+}
+
+/// Opens accounts' devices and clients.
+pub struct WhatsmeowConnector<Kms> {
+    pool: PgPool,
+    kms: Kms,
+    signal: Arc<dyn Signal>,
+    dialer: Arc<dyn Dialer>,
+    media_base_url: Option<String>,
+    send_timeout: Duration,
+}
+
+impl<Kms: WhatsAppKms + 'static> WhatsmeowConnector<Kms> {
+    /// `signal` is `whatsmeow_signal::libsignal()` in production; `dialer`
+    /// and `media_base_url` point at WhatsApp, or at a fake server in tests.
+    pub fn new(
+        pool: PgPool,
+        kms: Kms,
+        signal: Arc<dyn Signal>,
+        dialer: Arc<dyn Dialer>,
+        media_base_url: Option<String>,
+        send_timeout: Duration,
+    ) -> Self {
+        WhatsmeowConnector {
+            pool,
+            kms,
+            signal,
+            dialer,
+            media_base_url,
+            send_timeout,
+        }
+    }
+
+    async fn open_store(&self, scope: SessionScope) -> Result<Arc<PgWhatsAppStore>, SessionError> {
+        Ok(Arc::new(
+            PgWhatsAppStore::open(
+                self.pool.clone(),
+                scope.account_id,
+                scope.lease_epoch,
+                &self.kms,
+            )
+            .await
+            .map_err(store_error)?,
+        ))
+    }
+
+    async fn load_device(&self, store: &Arc<PgWhatsAppStore>) -> Result<Device, SessionError> {
+        store
+            .load_device(&Signatures(self.signal.as_ref()))
+            .await
+            .map_err(store_error)
+    }
+}
+
+fn store_error(error: WhatsAppStoreError) -> SessionError {
+    match error {
+        WhatsAppStoreError::Fenced => SessionError::Fenced,
+        WhatsAppStoreError::Kms(_) => SessionError::Kms,
+        error => internal(error),
+    }
+}
+
+/// `load_device` takes a sized signer; the client's Signal is a trait object.
+struct Signatures<'signal>(&'signal dyn Signal);
+
+impl CurveSignatures for Signatures<'_> {
+    fn calculate_signature(&self, private_key: &[u8; 32], message: &[u8]) -> [u8; 64] {
+        self.0.calculate_signature(private_key, message)
+    }
+
+    fn verify_signature(
+        &self,
+        public_key: &[u8; 32],
+        message: &[u8],
+        signature: &[u8; 64],
+    ) -> bool {
+        self.0.verify_signature(public_key, message, signature)
+    }
+}
+
+impl<Kms: WhatsAppKms + 'static> SessionConnector for WhatsmeowConnector<Kms> {
+    type Session = WhatsmeowSession;
+
+    async fn open(
+        &self,
+        scope: SessionScope,
+        fresh_device: bool,
+        inbound: Arc<dyn InboundSink>,
+    ) -> Result<(WhatsmeowSession, mpsc::UnboundedReceiver<SessionEvent>), SessionError> {
+        let store = self.open_store(scope).await?;
+        let mut device = self.load_device(&store).await?;
+        if fresh_device && device.id.is_some() {
+            // Deleting the device row drops its data key and every stored
+            // value; reopening generates both anew.
+            device.delete().await.map_err(internal)?;
+            let store = self.open_store(scope).await?;
+            device = self.load_device(&store).await?;
+            return self.start(scope, store, device, inbound);
+        }
+        self.start(scope, store, device, inbound)
+    }
+}
+
+impl<Kms: WhatsAppKms + 'static> WhatsmeowConnector<Kms> {
+    fn start(
+        &self,
+        scope: SessionScope,
+        store: Arc<PgWhatsAppStore>,
+        device: Device,
+        inbound: Arc<dyn InboundSink>,
+    ) -> Result<(WhatsmeowSession, mpsc::UnboundedReceiver<SessionEvent>), SessionError> {
+        let client = Client::new(
+            device,
+            Arc::clone(&self.signal),
+            ClientConfig {
+                dialer: Arc::clone(&self.dialer),
+                initial_auto_reconnect: true,
+                // Group events are stored before their node is acknowledged.
+                synchronous_ack: true,
+                media_base_url: self.media_base_url.clone(),
+                ..ClientConfig::default()
+            },
+        );
+        let (sender, receiver) = mpsc::unbounded_channel();
+        client.add_event_handler(Arc::new(Forwarder {
+            account: scope.account_id,
+            store: Arc::clone(&store),
+            events: sender.clone(),
+            inbound,
+        }));
+        Ok((
+            WhatsmeowSession {
+                client,
+                store,
+                events: sender,
+                pairing: CancellationToken::new(),
+                send_timeout: self.send_timeout,
+            },
+            receiver,
+        ))
+    }
+}
+
+/// Stores group events through the inbound sink before the client acks
+/// them; passes everything else on without waiting. It never waits on the
+/// runner, which may itself be waiting for a send's acknowledgement.
+struct Forwarder {
+    account: Uuid,
+    store: Arc<PgWhatsAppStore>,
+    events: mpsc::UnboundedSender<SessionEvent>,
+    inbound: Arc<dyn InboundSink>,
+}
+
+// Object safe (`Arc<dyn EventHandler>`), hence `async_trait`.
+#[async_trait]
+impl EventHandler for Forwarder {
+    async fn handle(&self, event: &Event) -> bool {
+        let seal = |locator: &MediaLocator| {
+            let plaintext = serde_json::to_vec(locator).ok()?;
+            self.store
+                .seal(LOCATOR_PURPOSE, &plaintext)
+                .inspect_err(
+                    |error| tracing::warn!(error = ?error, "Sealing a media locator failed"),
+                )
+                .ok()
+        };
+        match events::map_event(self.account, event, Utc::now(), &seal) {
+            Some(Mapped::Inbound(event)) => self.inbound.accept(&event).await,
+            Some(Mapped::Session(event)) => {
+                let _ = self.events.send(event);
+                true
+            }
+            None => {
+                if matches!(event, Event::Message(_)) {
+                    tracing::debug!(
+                        name: "whatsapp.inbound.skipped",
+                        account_id = %self.account,
+                        reason = "not_group_content",
+                        "Acknowledged a WhatsApp message without storing it"
+                    );
+                }
+                true
+            }
+        }
+    }
+}
+
+/// One account's whatsmeow client.
+pub struct WhatsmeowSession {
+    client: Arc<Client>,
+    store: Arc<PgWhatsAppStore>,
+    events: mpsc::UnboundedSender<SessionEvent>,
+    pairing: CancellationToken,
+    send_timeout: Duration,
+}
+
+impl Drop for WhatsmeowSession {
+    fn drop(&mut self) {
+        self.pairing.cancel();
+    }
+}
+
+fn parse_jid(jid: &str) -> Result<Jid, SendFailure> {
+    jid.parse()
+        .map_err(|_| SendFailure::Rejected("invalid_jid"))
+}
+
+fn rejected(error: &ClientError) -> Option<&'static str> {
+    // Only errors raised before the message could reach WhatsApp are safe to
+    // call rejected; anything else may have been delivered.
+    match error {
+        ClientError::NotConnected | ClientError::NotLoggedIn => Some("not_connected"),
+        ClientError::NotInGroup | ClientError::GroupNotFound => Some("not_in_group"),
+        ClientError::NoPermissionInGroup => Some("no_permission"),
+        ClientError::RecipientAdJid
+        | ClientError::BroadcastListUnsupported
+        | ClientError::UnknownServer => Some("invalid_recipient"),
+        _ => None,
+    }
+}
+
+fn media_type(kind: MediaKind) -> MediaType {
+    match kind {
+        MediaKind::Image => MediaType::Image,
+        MediaKind::Audio => MediaType::Audio,
+        MediaKind::Video => MediaType::Video,
+        MediaKind::Document => MediaType::Document,
+    }
+}
+
+/// Whether a download can ever succeed after this error.
+fn download_failure(error: &ClientError) -> DownloadFailure {
+    let ClientError::Download(error) = error else {
+        return DownloadFailure::Retryable;
+    };
+    match error.as_ref() {
+        DownloadError::Http {
+            status_code: 403 | 404 | 410,
+            ..
+        } => DownloadFailure::Permanent,
+        DownloadError::Http { .. } => DownloadFailure::Retryable,
+        _ => DownloadFailure::Permanent,
+    }
+}
+
+fn quote_context(quote: Option<&Target>) -> Option<Box<wa_e2e::ContextInfo>> {
+    quote.map(
+        |Target {
+             source_id,
+             sender_jid,
+         }| {
+            Box::new(wa_e2e::ContextInfo {
+                stanza_id: Some(source_id.clone()),
+                participant: Some(sender_jid.clone()),
+                ..Default::default()
+            })
+        },
+    )
+}
+
+/// The message part carrying an uploaded attachment.
+fn media_message(
+    kind: MediaKind,
+    mime: &str,
+    filename: &str,
+    caption: Option<&str>,
+    quote: Option<&Target>,
+    uploaded: &UploadedMedia,
+) -> wa_e2e::Message {
+    let caption = caption.map(str::to_owned);
+    let context_info = quote_context(quote);
+    let url = Some(uploaded.url.clone());
+    let direct_path = Some(uploaded.direct_path.clone());
+    let media_key = Some(uploaded.media_key.clone());
+    let file_enc_sha256 = Some(uploaded.file_enc_sha256.clone());
+    let file_sha256 = Some(uploaded.file_sha256.clone());
+    let file_length = Some(uploaded.file_length);
+    let mimetype = Some(mime.to_owned());
+    match kind {
+        MediaKind::Image => wa_e2e::Message {
+            image_message: Some(Box::new(wa_e2e::ImageMessage {
+                url,
+                direct_path,
+                media_key,
+                file_enc_sha256,
+                file_sha256,
+                file_length,
+                mimetype,
+                caption,
+                context_info,
+                ..Default::default()
+            })),
+            ..Default::default()
+        },
+        MediaKind::Video => wa_e2e::Message {
+            video_message: Some(Box::new(wa_e2e::VideoMessage {
+                url,
+                direct_path,
+                media_key,
+                file_enc_sha256,
+                file_sha256,
+                file_length,
+                mimetype,
+                caption,
+                context_info,
+                ..Default::default()
+            })),
+            ..Default::default()
+        },
+        // Audio has no caption.
+        MediaKind::Audio => wa_e2e::Message {
+            audio_message: Some(Box::new(wa_e2e::AudioMessage {
+                url,
+                direct_path,
+                media_key,
+                file_enc_sha256,
+                file_sha256,
+                file_length,
+                mimetype,
+                context_info,
+                ..Default::default()
+            })),
+            ..Default::default()
+        },
+        MediaKind::Document => wa_e2e::Message {
+            document_message: Some(Box::new(wa_e2e::DocumentMessage {
+                url,
+                direct_path,
+                media_key,
+                file_enc_sha256,
+                file_sha256,
+                file_length,
+                mimetype,
+                file_name: Some(filename.to_owned()),
+                title: Some(filename.to_owned()),
+                caption,
+                context_info,
+                ..Default::default()
+            })),
+            ..Default::default()
+        },
+    }
+}
+
+impl WhatsmeowSession {
+    async fn outgoing(
+        &self,
+        chat: &Jid,
+        content: &OutgoingContent,
+        media: Option<&UploadedMedia>,
+    ) -> Result<wa_e2e::Message, SendFailure> {
+        Ok(match content {
+            OutgoingContent::Text { text, quote: None } => wa_e2e::Message {
+                conversation: Some(text.clone()),
+                ..Default::default()
+            },
+            OutgoingContent::Text {
+                text,
+                quote: Some(quote),
+            } => wa_e2e::Message {
+                extended_text_message: Some(Box::new(wa_e2e::ExtendedTextMessage {
+                    text: Some(text.clone()),
+                    context_info: quote_context(Some(quote)),
+                    ..Default::default()
+                })),
+                ..Default::default()
+            },
+            OutgoingContent::Media {
+                kind,
+                mime,
+                filename,
+                caption,
+                quote,
+            } => {
+                let uploaded = media.ok_or(SendFailure::Rejected("media_not_uploaded"))?;
+                media_message(
+                    *kind,
+                    mime,
+                    filename,
+                    caption.as_deref(),
+                    quote.as_ref(),
+                    uploaded,
+                )
+            }
+            OutgoingContent::Reaction { target, emoji } => {
+                let sender = parse_jid(&target.sender_jid)?;
+                self.client
+                    .build_reaction(chat, &sender, &target.source_id, emoji)
+                    .await
+            }
+            OutgoingContent::Edit { target, text } => build_edit(
+                chat,
+                &target.source_id,
+                wa_e2e::Message {
+                    conversation: Some(text.clone()),
+                    ..Default::default()
+                },
+            ),
+            OutgoingContent::Delete { target } => {
+                self.client
+                    .build_revoke(chat, &Jid::default(), &target.source_id)
+                    .await
+            }
+        })
+    }
+}
+
+fn group_info(group: whatsmeow::types::GroupInfo, observed_at: DateTime<Utc>) -> GroupInfo {
+    GroupInfo {
+        jid: group.jid.to_string(),
+        name: group.name.name,
+        participants: group
+            .participants
+            .iter()
+            .map(|participant| {
+                let (jid, alternate) = if participant.phone_number.is_empty() {
+                    (&participant.jid, &participant.lid)
+                } else {
+                    (&participant.phone_number, &participant.lid)
+                };
+                Participant {
+                    identity: Identity {
+                        jid: jid.to_non_ad().to_string(),
+                        alternate_jid: (!alternate.is_empty() && alternate != jid)
+                            .then(|| alternate.to_non_ad().to_string()),
+                        display_name: (!participant.display_name.is_empty())
+                            .then(|| participant.display_name.clone()),
+                    },
+                    admin: participant.is_admin || participant.is_super_admin,
+                }
+            })
+            .collect(),
+        announce: group.announce.is_announce,
+        disappearing: group.ephemeral.is_ephemeral,
+        community: group.parent.is_parent || !group.linked_parent.linked_parent_jid.is_empty(),
+        observed_at,
+        group: None,
+    }
+}
+
+impl WhatsAppSession for WhatsmeowSession {
+    async fn identity_jid(&self) -> Option<String> {
+        let own = self.client.get_own_id().await;
+        (!own.is_empty()).then(|| own.to_non_ad().to_string())
+    }
+
+    async fn start_pairing(&self) -> Result<(), SessionError> {
+        let mut codes = self
+            .client
+            .get_qr_channel(self.pairing.clone())
+            .await
+            .map_err(internal)?;
+        let events = self.events.clone();
+        tokio::spawn(async move {
+            while let Some(item) = codes.recv().await {
+                let event = match item {
+                    QrChannelItem::Code { code, .. } => SessionEvent::Qr(code),
+                    QrChannelItem::Error(_)
+                    | QrChannelItem::Timeout
+                    | QrChannelItem::ErrUnexpectedEvent
+                    | QrChannelItem::ClientOutdated
+                    | QrChannelItem::ScannedWithoutMultidevice => SessionEvent::PairFailed,
+                    // Success and passkey steps arrive as client events.
+                    _ => continue,
+                };
+                if events.send(event).is_err() {
+                    return;
+                }
+            }
+        });
+        Ok(())
+    }
+
+    async fn send_passkey_response(&self, response: serde_json::Value) -> Result<(), SessionError> {
+        let response: WebAuthnResponse = serde_json::from_value(response).map_err(internal)?;
+        self.client
+            .send_passkey_response(&response)
+            .await
+            .map_err(internal)
+    }
+
+    async fn confirm_passkey(&self) -> Result<(), SessionError> {
+        self.client
+            .send_passkey_confirmation()
+            .await
+            .map_err(internal)
+    }
+
+    async fn connect(&self) -> Result<(), SessionError> {
+        self.client.connect().await.map_err(internal)
+    }
+
+    async fn new_message_id(&self) -> String {
+        self.client.generate_message_id().await
+    }
+
+    async fn upload_media(&self, media: &OutboundMedia) -> Result<UploadedMedia, SendFailure> {
+        // Boxed: the client's media futures are large enough to overflow a
+        // 2 MiB stack when nested in the runner's future.
+        let uploaded = Box::pin(self.client.upload(&media.bytes, media_type(media.kind)))
+            .await
+            .map_err(|error| {
+                tracing::warn!(error = ?error, "Uploading a WhatsApp attachment failed");
+                SendFailure::Rejected("media_upload_failed")
+            })?;
+        Ok(UploadedMedia {
+            url: uploaded.url,
+            direct_path: uploaded.direct_path,
+            media_key: uploaded.media_key,
+            file_enc_sha256: uploaded.file_enc_sha256,
+            file_sha256: uploaded.file_sha256,
+            file_length: uploaded.file_length,
+        })
+    }
+
+    async fn send(
+        &self,
+        send: &ClaimedSend,
+        message_id: &str,
+        media: Option<&UploadedMedia>,
+    ) -> Result<DateTime<Utc>, SendFailure> {
+        let chat = parse_jid(&send.group_jid)?;
+        let message = self.outgoing(&chat, &send.content, media).await?;
+        let response = Box::pin(self.client.send_message(
+            &chat,
+            message,
+            SendRequestExtra {
+                id: message_id.to_owned(),
+                timeout: Some(self.send_timeout),
+                // A send cut off by a disconnect is unknown, never resent.
+                no_disconnect_retry: true,
+                ..SendRequestExtra::default()
+            },
+        ))
+        .await
+        .map_err(|error| match rejected(&error) {
+            Some(code) => SendFailure::Rejected(code),
+            None => SendFailure::Unknown,
+        })?;
+        Ok(response.timestamp.unwrap_or_else(Utc::now))
+    }
+
+    async fn download_media(&self, import: &MediaImport) -> Result<Vec<u8>, DownloadFailure> {
+        let plaintext = self
+            .store
+            .unseal(LOCATOR_PURPOSE, &import.locator)
+            .map_err(|_| DownloadFailure::Permanent)?;
+        let locator: MediaLocator =
+            serde_json::from_slice(&plaintext).map_err(|_| DownloadFailure::Permanent)?;
+        Box::pin(self.client.download_media_with_path(
+            &locator.direct_path,
+            Some(&locator.file_enc_sha256),
+            Some(&locator.file_sha256),
+            Some(&locator.media_key),
+            Some(locator.media_type.media_type()),
+            "",
+            false,
+        ))
+        .await
+            .map_err(|error| {
+                let failure = download_failure(&error);
+                tracing::warn!(error = ?error, failure = ?failure, "Downloading a WhatsApp attachment failed");
+                failure
+            })
+    }
+
+    async fn joined_groups(&self) -> Result<Vec<GroupInfo>, SessionError> {
+        let observed_at = Utc::now();
+        let groups = self.client.get_joined_groups().await.map_err(internal)?;
+        Ok(groups
+            .into_iter()
+            .map(|group| group_info(group, observed_at))
+            .collect())
+    }
+
+    async fn logout(&self) {
+        if let Err(error) = self.client.logout().await {
+            tracing::warn!(error = ?error, "Logging the WhatsApp device out failed");
+        }
+    }
+
+    async fn disconnect(&self) {
+        self.pairing.cancel();
+        self.client.disconnect().await;
+    }
+}

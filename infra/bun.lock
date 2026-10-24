@@ -254,6 +254,10 @@
         "@pulumi/pulumi": "^3.181.0",
       },
     },
+    "stacks/whatsapp-session-service": {
+      "name": "whatsapp-session-service-stack",
+      "version": "0.0.0",
+    },
   },
   "overrides": {
     "ts-node": "10.8.0",
@@ -910,6 +914,8 @@
     "vpc": ["vpc@workspace:packages/vpc"],
 
     "walk-up-path": ["walk-up-path@4.0.0", "", {}, "sha512-3hu+tD8YzSLGuFYtPRb48vdhKMi0KQV5sn+uWr8+7dMEq/2G/dtLrdDinkLjqq5TIbIBjYJ4Ax/n3YiaW7QM8A=="],
+
+    "whatsapp-session-service-stack": ["whatsapp-session-service-stack@workspace:stacks/whatsapp-session-service"],
 
     "which": ["which@2.0.2", "", { "dependencies": { "isexe": "^2.0.0" }, "bin": { "node-which": "./bin/node-which" } }, "sha512-BLI3Tl1TW3Pvl70l3yq3Y64i+awpwXqsGBYWkkqMtnbXgrMD+yj7rhW0kuEDxzJaYXGjEW5ogapKNMEKNMjibA=="],
 
