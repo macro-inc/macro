@@ -1,12 +1,16 @@
-/** DisplayResults is message content, rendered directly from the call's view. */
+/** A `Show` call is message content, rendered directly from the call's view. */
 
 import { DashboardToolView } from '@app/features/dynamic-ui/DashboardToolView.lazy';
 import { Telemetry } from '@macro-inc/observability';
 import { ErrorBoundary, Show, Suspense } from 'solid-js';
-import { isToolActive, ToolCard } from '../../ui';
+import { isToolActive } from '../../ui';
 import type { ToolCallCommon } from './shared';
 
-export function DisplayResultsToolCall(props: {
+/**
+ * The view an agent showed. A call the tool turned back showed nothing, so it
+ * renders nothing: the agent is told what to fix and shows the view again.
+ */
+export function ShowToolCall(props: {
   input: unknown;
   error?: string | null;
   common: ToolCallCommon;
@@ -29,17 +33,7 @@ export function DisplayResultsToolCall(props: {
   );
 
   return (
-    <Show
-      when={!failed()}
-      fallback={
-        <ToolCard
-          title={props.common.label}
-          status="failed"
-          muted
-          trailing="Failed"
-        />
-      }
-    >
+    <Show when={!failed()}>
       <ErrorBoundary
         fallback={(err) => {
           Telemetry.error(err, { surface: 'display-results' });

@@ -70,6 +70,34 @@ function setup() {
   };
 }
 
+describe('kept answers', () => {
+  it('keeps what was typed into a request until it is answered', async () => {
+    const { controller, setSessionId, dispose } = setup();
+    const typed = { colour: { kind: 'text', text: 'te' } } as const;
+    controller.keepDraft(question, { form: typed });
+    expect(controller.draft(question)).toEqual({ form: typed });
+    expect(controller.draft(permission)).toBeUndefined();
+    // The same request id in another session is another request.
+    setSessionId('session-b');
+    expect(controller.draft(question)).toBeUndefined();
+    setSessionId('session-a');
+    expect(await controller.respond(answer)).toBe(true);
+    expect(controller.draft(question)).toBeUndefined();
+    dispose();
+  });
+
+  it('keeps the draft when the answer does not go through', async () => {
+    const { controller, issue, dispose } = setup();
+    issue.mockResolvedValueOnce(
+      err([{ code: 'NETWORK_ERROR', message: 'down' }])
+    );
+    controller.keepDraft(question, { tool: { subject: 'Hi' } });
+    expect(await controller.respond(answer)).toBe(false);
+    expect(controller.draft(question)).toEqual({ tool: { subject: 'Hi' } });
+    dispose();
+  });
+});
+
 describe('interaction responses', () => {
   it('preserves each response type and numeric versus string request ids', async () => {
     const { controller, issue, dispose } = setup();

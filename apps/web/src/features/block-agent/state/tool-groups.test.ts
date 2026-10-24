@@ -18,13 +18,13 @@ const tool = (overrides?: Partial<ToolUsePart>): ToolUsePart => ({
 });
 const thought = (): MessagePart => ({ kind: 'thought', text: 'thinking...' });
 /**
- * `displayResults`: the model composes a dynamic-UI view and the call renders
- * it. The answer itself, not a card about one.
+ * `Show`: the model composes a dynamic-UI view and the call renders it. The
+ * answer itself, not a card about one.
  */
-const displayResults = (): Extract<MessagePart, { kind: 'tool_use' }> => ({
+const shown = (): Extract<MessagePart, { kind: 'tool_use' }> => ({
   kind: 'tool_use',
   id: 'view',
-  name: { kind: 'native', name: 'DisplayResults' },
+  name: { kind: 'native', name: 'Show' },
   status: 'completed',
   detail: {
     kind: 'macro',
@@ -90,17 +90,17 @@ describe('segmentParts', () => {
   describe.each([
     {
       label: 'native',
-      name: { kind: 'native', name: 'DisplayResults' } satisfies ToolName,
+      name: { kind: 'native', name: 'Show' } satisfies ToolName,
     },
     {
       label: 'MCP',
       name: {
         kind: 'mcp',
         server: 'macro',
-        tool: 'DisplayResults',
+        tool: 'Show',
       } satisfies ToolName,
     },
-  ])('DisplayResults called through $label', ({ name }) => {
+  ])('Show called through $label', ({ name }) => {
     it.each(['pending', 'running', 'completed'] as const)(
       'breaks tool groups before and after a %s call',
       (status) => {
@@ -132,7 +132,7 @@ describe('segmentParts', () => {
 
   it('keeps adjacent thoughts in their own runs around inline results', () => {
     expect(
-      segmentParts([tool(), thought(), displayResults(), thought(), tool()])
+      segmentParts([tool(), thought(), shown(), thought(), tool()])
     ).toEqual([
       { kind: 'tools', start: 0, end: 2 },
       { kind: 'part', start: 2, end: 3 },
@@ -236,9 +236,7 @@ describe('segmentParts', () => {
   // indented in a row of muted chips — the one part of the turn the reader
   // actually came for.
   it('keeps a view-rendering call out of the run it interrupts', () => {
-    expect(
-      segmentParts([tool(), tool(), displayResults(), tool(), tool()])
-    ).toEqual([
+    expect(segmentParts([tool(), tool(), shown(), tool(), tool()])).toEqual([
       { kind: 'tools', start: 0, end: 2 },
       { kind: 'part', start: 2, end: 3 },
       { kind: 'tools', start: 3, end: 5 },
@@ -246,7 +244,7 @@ describe('segmentParts', () => {
   });
 
   it('keeps a view-rendering call alone even between single calls', () => {
-    expect(segmentParts([tool(), displayResults(), tool()])).toEqual([
+    expect(segmentParts([tool(), shown(), tool()])).toEqual([
       { kind: 'tools', start: 0, end: 1 },
       { kind: 'part', start: 1, end: 2 },
       { kind: 'tools', start: 2, end: 3 },
@@ -254,16 +252,14 @@ describe('segmentParts', () => {
   });
 
   it('does not fold two view-rendering calls into each other', () => {
-    expect(segmentParts([displayResults(), displayResults()])).toEqual([
+    expect(segmentParts([shown(), shown()])).toEqual([
       { kind: 'part', start: 0, end: 1 },
       { kind: 'part', start: 1, end: 2 },
     ]);
   });
 
   it('keeps a thought before the dashboard in the preceding tool group', () => {
-    expect(
-      segmentParts([thought(), tool(), thought(), displayResults()])
-    ).toEqual([
+    expect(segmentParts([thought(), tool(), thought(), shown()])).toEqual([
       { kind: 'tools', start: 0, end: 3 },
       { kind: 'part', start: 3, end: 4 },
     ]);
@@ -320,7 +316,7 @@ describe('segmentParts', () => {
 describe('rendersOwnView', () => {
   it('does not treat a same-named external MCP tool as a dashboard', () => {
     const part = tool({
-      name: { kind: 'mcp', server: 'external', tool: 'DisplayResults' },
+      name: { kind: 'mcp', server: 'external', tool: 'Show' },
       detail: {
         kind: 'other',
         acpKind: 'other',
@@ -336,15 +332,24 @@ describe('rendersOwnView', () => {
     ]);
   });
 
-  it('is true for a Macro displayResults call', () => {
-    expect(rendersOwnView(displayResults())).toBe(true);
+  it('is true for a Macro Show call', () => {
+    expect(rendersOwnView(shown())).toBe(true);
   });
 
-  it('recognizes a Macro displayResults call with an MCP namespace', () => {
-    const part = displayResults();
+  it('recognizes a Macro Show call with an MCP namespace', () => {
+    const part = shown();
     expect(
       rendersOwnView({
         ...part,
+        name: { kind: 'mcp', server: 'macro', tool: 'Show' },
+      })
+    ).toBe(true);
+  });
+
+  it('is true for a call saved under the old name, DisplayResults', () => {
+    expect(
+      rendersOwnView({
+        ...shown(),
         name: { kind: 'mcp', server: 'macro', tool: 'DisplayResults' },
       })
     ).toBe(true);
@@ -364,7 +369,7 @@ describe('rendersOwnView', () => {
       rendersOwnView({
         kind: 'tool_use',
         id: 'other',
-        name: { kind: 'native', name: 'DisplayResults' },
+        name: { kind: 'native', name: 'Show' },
         status: 'completed',
         detail: {
           kind: 'other',

@@ -159,6 +159,70 @@ describe('composeAgentChatReply with segments', () => {
     );
   });
 
+  it('keeps each step’s card through the message and back', () => {
+    const carded = [
+      {
+        id: 't1',
+        label: 'Create document',
+        detail: 'Launch FAQ',
+        status: 'completed' as const,
+        card: {
+          kind: 'item' as const,
+          itemType: 'document' as const,
+          itemId: 'doc-1',
+          fileType: 'md',
+          action: 'created' as const,
+          title: 'Launch FAQ',
+        },
+      },
+      {
+        id: 't2',
+        label: 'Display results',
+        status: 'completed' as const,
+        card: {
+          kind: 'view' as const,
+          view: { title: 'Your week', widgets: [] },
+        },
+      },
+    ];
+    const markdown = composeAgentChatReply({
+      sessionId: SESSION,
+      link: false,
+      body: {
+        kind: 'segments',
+        segments: [
+          { kind: 'activity', turn: 3, segment: 0, rows: carded, sealed: true },
+        ],
+      },
+    });
+    const state = markdownToSerializedEditorStateWithIds(markdown);
+    expect(state.root.children[0]).toMatchObject({
+      type: 'agent-activity',
+      rows: carded,
+    });
+    expect(markdownToPlainText(markdown)).toBe('');
+  });
+
+  it('keeps the steps when a card is one this version cannot read', () => {
+    const state = markdownToSerializedEditorStateWithIds(
+      `<m-agent-activity>${JSON.stringify({
+        agentSessionId: SESSION,
+        turn: 1,
+        segment: 0,
+        sealed: true,
+        rows: [
+          {
+            id: 't1',
+            label: 'Ran',
+            status: 'completed',
+            card: { kind: 'hologram', shape: 'cube' },
+          },
+        ],
+      })}</m-agent-activity>`
+    );
+    expect(state.root.children[0]?.type).toBe('agent-activity');
+  });
+
   it('an invalid activity payload falls back instead of breaking the message', () => {
     const state = markdownToSerializedEditorStateWithIds(
       '<m-agent-activity>{"agentSessionId":"x"}</m-agent-activity>'

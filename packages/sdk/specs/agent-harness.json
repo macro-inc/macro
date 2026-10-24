@@ -2605,6 +2605,57 @@
         "description": "Ordered from least to most access top -> bottom",
         "enum": ["view", "comment", "edit", "owner"]
       },
+      "ActivityItem": {
+        "type": "object",
+        "description": "A workspace item a completed SDK operation created or changed, as the\nprogram's SDK reported it. Advisory like the activity it came with: the\nconversation names it on the operation's step, and a card the agent\nshows for it says what was done to it. Readers open the item with their\nown access.",
+        "required": ["type", "id", "action"],
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/ActivityItemAction",
+            "description": "What the operation did to it."
+          },
+          "id": {
+            "type": "string",
+            "description": "The item's id."
+          },
+          "title": {
+            "type": ["string", "null"],
+            "description": "The item's name, when the operation carried one."
+          },
+          "type": {
+            "$ref": "#/components/schemas/ActivityItemType",
+            "description": "What kind of item it is."
+          }
+        },
+        "additionalProperties": false
+      },
+      "ActivityItemAction": {
+        "type": "string",
+        "description": "What an operation did to its item; named as the agent fold reads them.",
+        "enum": [
+          "created",
+          "edited",
+          "sent",
+          "updated",
+          "moved",
+          "renamed",
+          "commented",
+          "deleted"
+        ]
+      },
+      "ActivityItemType": {
+        "type": "string",
+        "description": "The kinds of item the SDK reports; named as the agent fold reads them.",
+        "enum": [
+          "document",
+          "email_thread",
+          "calendar_event",
+          "project",
+          "channel",
+          "form",
+          "initiative"
+        ]
+      },
       "AgentAction": {
         "oneOf": [
           {
@@ -4087,6 +4138,17 @@
             "format": "int64",
             "description": "Request identity within the execution.",
             "minimum": 0
+          },
+          "item": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ActivityItem",
+                "description": "The item the operation created or changed, once it completed: what\nits card in the conversation opens."
+              }
+            ]
           },
           "label": {
             "type": "string",

@@ -3,6 +3,9 @@
 ## Type Aliases
 
 - [AccessLevel](type-aliases/AccessLevel.md)
+- [ActivityItem](type-aliases/ActivityItem.md)
+- [ActivityItemAction](type-aliases/ActivityItemAction.md)
+- [ActivityItemType](type-aliases/ActivityItemType.md)
 - [AgentAction](type-aliases/AgentAction.md)
 - [AgentActionId](type-aliases/AgentActionId.md)
 - [AgentConfigKindDto](type-aliases/AgentConfigKindDto.md)

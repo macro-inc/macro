@@ -61,6 +61,14 @@ async fn owner_approval_is_required_before_credentials_and_cancel_skips_gate() {
     );
 }
 
+#[test]
+fn a_programs_view_is_checked_like_a_shown_view() {
+    let md = serde_json::json!({"widgets": [{"type": "md", "markdown": "Two found"}]});
+    assert!(ShowViewCheck.problems(&md).is_empty());
+    let unknown = serde_json::json!({"widgets": [{"type": "spreadsheet"}]});
+    assert!(!ShowViewCheck.problems(&unknown).is_empty());
+}
+
 #[tokio::test]
 async fn execution_credentials_use_the_gate_resolved_requester() {
     let session = test_agent_session(AgentSessionId::new());

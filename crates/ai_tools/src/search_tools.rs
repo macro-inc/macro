@@ -55,6 +55,23 @@ pub struct SearchToolsResponse {
     /// Matches past the auto-load cap, ranked. Not callable yet — pass a name
     /// to `LoadTools` if one of these is the tool you need.
     pub additional_matches: Vec<ToolMatch>,
+    /// In code mode, where operations the SDK supports have no tool to find.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+}
+
+/// Said with every search in code mode. The direct tools the SDK covers are
+/// gone from the catalog there, so a search for one finds nothing, or a
+/// tool whose description points at it.
+const CODE_MODE_NOTE: &str = "This session is in code mode: Macro operations the SDK supports - reading, searching, creating, renaming, moving, updating and deleting documents, tasks, projects, channels, email, events, comments and properties - are not tools to search for. Do them with ExecuteCode, which you already have; DescribeCodeTools documents the SDK.";
+
+/// Whether `catalog` is code mode's: it lists none of the direct tools the
+/// SDK covers, several of which every other mode defers to search.
+fn in_code_mode(catalog: &[SearchableTool]) -> bool {
+    !catalog.is_empty()
+        && !catalog
+            .iter()
+            .any(|tool| agent_code_mode::domain::covered_by_code_sdk(&tool.name, false))
 }
 
 /// `SearchTools` discovers tools from connected integrations (MCP servers such
@@ -204,6 +221,7 @@ fn search_and_stage(
     SearchToolsResponse {
         results: loaded.iter().copied().map(ToolMatch::of).collect(),
         additional_matches: additional.iter().copied().map(ToolMatch::of).collect(),
+        note: in_code_mode(catalog).then(|| CODE_MODE_NOTE.to_owned()),
     }
 }
 

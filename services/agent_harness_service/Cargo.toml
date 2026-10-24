@@ -25,6 +25,7 @@ name = "scheduled_action_openapi"
 path = "src/scheduling_openapi.rs"
 
 [dependencies]
+feature_flags = { path = "../../crates/feature_flags" }
 models_ai_projection = { path = "../../crates/models_ai_projection" }
 activity = { path = "../../crates/activity", default-features = false }
 agent = { path = "../../crates/agent", features = ["debug-messages"] }
@@ -93,7 +94,6 @@ entity_access_db_utils = { path = "../../crates/entity_access_db_utils" }
 entity_access_management = { path = "../../crates/entity_access_management" }
 entity_registry = { path = "../../crates/entity_registry/entity_registry", features = ["axum"] }
 entity_registry_db_utils = { path = "../../crates/entity_registry/entity_registry_db_utils" }
-feature_flags = { path = "../../crates/feature_flags" }
 foreign_entity = { path = "../../crates/foreign_entity" }
 frecency = { path = "../../crates/frecency", features = ["outbound", "postgres"] }
 fusionauth = { path = "../../crates/fusionauth" }

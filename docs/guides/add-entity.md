@@ -73,7 +73,7 @@ until the backend is complete.
   connection, notification, properties, search): `cd apps/web && bun run gen-api`,
   then `cd packages/sdk && just update-generated`. Run
   `cd apps/web && bun run gen-dynamic-ui-schema` too; it regenerates
-  `crates/ai_tools/src/display_results/schema.generated.json`, which embeds
+  `crates/ai_tools/src/show/schema.generated.json`, which embeds
   `EntityType`.
 
 ## 2. Schema and migrations

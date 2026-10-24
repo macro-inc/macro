@@ -41,7 +41,7 @@ use tracing::Instrument as _;
 use crate::domain::auto_model::{AutoModelSelector, DefaultAutoModel, JevAutoModel};
 use crate::domain::engine::{AgentIdentity, TurnEngine, TurnRequest};
 use crate::domain::tool_gate::{NativeToolGate, NativeToolVerdict, UngatedNativeTools};
-use crate::domain::tool_mode::{StandardTools, ToolMode, ToolModeSelector};
+use crate::domain::tool_mode::ToolMode;
 use crate::inbound::ask_user::{AskUser, AskUserContext};
 
 #[path = "outbound/rig_engine/opener.rs"]
@@ -77,7 +77,6 @@ pub struct RigTurnEngine {
     memory: Arc<MemoryServiceImpl<PgMemoryRepo>>,
     native_tools: Arc<NativeTools>,
     code_mode_tools: Arc<NativeTools>,
-    tool_mode: Arc<dyn ToolModeSelector>,
     auto_model: Arc<dyn AutoModelSelector>,
     tool_context: ToolServiceContext,
     gate: Arc<dyn NativeToolGate>,
@@ -100,7 +99,6 @@ impl RigTurnEngine {
                 ai_tools::tools_for_agent_code_mode,
                 true,
             )),
-            tool_mode: Arc::new(StandardTools),
             auto_model: match &tool_context.cognition_tool_context.service {
                 Some(cognition) => Arc::new(JevAutoModel::new(Arc::clone(cognition))),
                 None => Arc::new(DefaultAutoModel),
@@ -114,13 +112,6 @@ impl RigTurnEngine {
     #[must_use]
     pub fn with_gate(mut self, gate: Arc<dyn NativeToolGate>) -> Self {
         self.gate = gate;
-        self
-    }
-
-    /// Select the owner's tool presentation once per conversational turn.
-    #[must_use]
-    pub fn with_tool_mode(mut self, selector: Arc<dyn ToolModeSelector>) -> Self {
-        self.tool_mode = selector;
         self
     }
 }
@@ -318,7 +309,6 @@ impl TurnEngine for RigTurnEngine {
         let memory = Arc::clone(&self.memory);
         let native_tools = Arc::clone(&self.native_tools);
         let code_mode_tools = Arc::clone(&self.code_mode_tools);
-        let tool_mode = Arc::clone(&self.tool_mode);
         let auto_model = Arc::clone(&self.auto_model);
         let tool_context = self.tool_context.clone();
         let gate = Arc::clone(&self.gate);
@@ -330,9 +320,7 @@ impl TurnEngine for RigTurnEngine {
                     return;
                 };
                 request.model = model;
-                let Some(selected) = select_tool_mode(tool_mode.as_ref(), &request).await else {
-                    return;
-                };
+                let selected = select_tool_mode(&request);
                 let native_tools = match selected {
                     ToolMode::Standard => native_tools,
                     ToolMode::Code => code_mode_tools,
@@ -402,29 +390,25 @@ async fn select_auto_model(
     }
 }
 
-// A failed/missing code-mode MCP connection must never leave a turn with only the
-// small direct set. Summaries neither evaluate flags nor advertise tools.
-async fn select_tool_mode(
-    selector: &dyn ToolModeSelector,
-    request: &TurnRequest,
-) -> Option<ToolMode> {
+/// A person's conversation runs in code mode whenever its session has the
+/// code tools. A failed or missing code-mode MCP connection must never leave
+/// a turn with only the small direct set, so it keeps the standard tools, as
+/// do summaries, which advertise none, and sessions no person owns.
+fn select_tool_mode(request: &TurnRequest) -> ToolMode {
     if request.purpose != crate::domain::engine::TurnPurpose::Conversation {
-        return Some(ToolMode::Standard);
+        return ToolMode::Standard;
     }
-    let (Owner::User(owner), Some(mcp)) = (&request.owner, &request.mcp_tools) else {
-        return Some(ToolMode::Standard);
+    let (Owner::User(_), Some(mcp)) = (&request.owner, &request.mcp_tools) else {
+        return ToolMode::Standard;
     };
     let catalog = mcp.searchable_catalog();
-    if !CODE_MODE_MCP_TOOLS
+    if CODE_MODE_MCP_TOOLS
         .iter()
         .all(|name| catalog.iter().any(|tool| tool.name == *name))
     {
-        return Some(ToolMode::Standard);
-    }
-    tokio::select! {
-        biased;
-        _ = request.cancel.cancelled() => None,
-        mode = selector.select(owner) => Some(mode),
+        ToolMode::Code
+    } else {
+        ToolMode::Standard
     }
 }
 

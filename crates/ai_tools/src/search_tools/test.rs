@@ -207,3 +207,34 @@ fn load_without_loader_still_reports() {
     );
     assert!(result.not_found.is_empty());
 }
+
+#[test]
+fn a_code_mode_search_says_sdk_operations_are_done_with_execute_code() {
+    // Code mode hides the direct tools the SDK covers, and ExecuteCode is
+    // sent with every request rather than searched for. A search for an
+    // operation like a rename must still lead the agent to ExecuteCode.
+    let code_mode = crate::tools_for_agent_code_mode().deferred.to_vec();
+    for query in ["rename document", "RenameDocument", "ExecuteCode"] {
+        let note = search_and_stage(&code_mode, query, None).note;
+        assert!(
+            note.as_deref()
+                .is_some_and(|note| note.contains("ExecuteCode")),
+            "{query}"
+        );
+    }
+    // Every other mode still lists the tools the SDK covers.
+    let standard = crate::tools_for(crate::AiHost::AgentSession)
+        .deferred
+        .to_vec();
+    assert_eq!(
+        search_and_stage(&standard, "rename document", None).note,
+        None
+    );
+    let channel_bot = crate::tools_for(crate::AiHost::ChannelBot)
+        .deferred
+        .to_vec();
+    assert_eq!(
+        search_and_stage(&channel_bot, "rename document", None).note,
+        None
+    );
+}

@@ -189,4 +189,70 @@ pub struct ExecutionActivity {
     pub label: String,
     /// Observed request state; unfinished operations have unknown outcomes.
     pub status: RecordedCallStatus,
+    /// The item the operation created or changed, once it completed: what
+    /// its card in the conversation opens.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub item: Option<ActivityItem>,
+}
+
+/// A workspace item a completed SDK operation created or changed, as the
+/// program's SDK reported it. Advisory like the activity it came with: the
+/// conversation names it on the operation's step, and a card the agent
+/// shows for it says what was done to it. Readers open the item with their
+/// own access.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ActivityItem {
+    /// What kind of item it is.
+    #[serde(rename = "type")]
+    pub item_type: ActivityItemType,
+    /// The item's id.
+    pub id: String,
+    /// What the operation did to it.
+    pub action: ActivityItemAction,
+    /// The item's name, when the operation carried one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+}
+
+/// The kinds of item the SDK reports; named as the agent fold reads them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ActivityItemType {
+    /// A document, including a task, a snippet or a skill.
+    Document,
+    /// An email thread.
+    EmailThread,
+    /// A calendar event.
+    CalendarEvent,
+    /// A project folder.
+    Project,
+    /// A channel.
+    Channel,
+    /// A form.
+    Form,
+    /// An initiative.
+    Initiative,
+}
+
+/// What an operation did to its item; named as the agent fold reads them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ActivityItemAction {
+    /// Made it.
+    Created,
+    /// Changed its content.
+    Edited,
+    /// Sent it, or sent a message to it.
+    Sent,
+    /// Changed its settings or properties.
+    Updated,
+    /// Moved it into or out of a project.
+    Moved,
+    /// Renamed it.
+    Renamed,
+    /// Commented on it.
+    Commented,
+    /// Deleted or canceled it.
+    Deleted,
 }

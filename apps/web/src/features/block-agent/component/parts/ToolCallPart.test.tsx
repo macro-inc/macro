@@ -755,7 +755,7 @@ describe('ToolCallPart user tools', () => {
 
 describe('ToolCallPart inline results', () => {
   it.each(['native', 'mcp'] as const)(
-    'does not route an unrelated %s tool named DisplayResults to the dashboard',
+    'does not route an unrelated %s tool named Show to the dashboard',
     (kind) => {
       const part = toolUse({
         kind: 'other',
@@ -767,8 +767,8 @@ describe('ToolCallPart inline results', () => {
       });
       part.name =
         kind === 'mcp'
-          ? { kind, server: 'external', tool: 'DisplayResults' }
-          : { kind, name: 'DisplayResults' };
+          ? { kind, server: 'external', tool: 'Show' }
+          : { kind, name: 'Show' };
       const rendered = render(() => (
         <ToolCallPart part={part} context={context(false)} />
       ));
@@ -780,7 +780,7 @@ describe('ToolCallPart inline results', () => {
   );
 
   it.each(['macro', 'other'] as const)(
-    'renders %s DisplayResults from call arguments before any response',
+    'renders %s Show from call arguments before any response',
     (kind) => {
       const input = { view: { kind: 'text', text: 'Launch checklist' } };
       const part = toolUse(
@@ -794,10 +794,10 @@ describe('ToolCallPart inline results', () => {
               error: null,
               acpKind: 'other',
             },
-        { name: 'DisplayResults', status: 'running' }
+        { name: 'Show', status: 'running' }
       );
       if (kind === 'other')
-        part.name = { kind: 'mcp', server: 'macro', tool: 'DisplayResults' };
+        part.name = { kind: 'mcp', server: 'macro', tool: 'Show' };
       const rendered = render(() => (
         <ToolCallPart part={part} context={context(true)} />
       ));
@@ -818,7 +818,7 @@ describe('ToolCallPart inline results', () => {
           output: null,
           error: null,
         },
-        { name: 'DisplayResults', status: 'running' }
+        { name: 'Show', status: 'running' }
       )
     );
     const rendered = render(() => (
@@ -833,7 +833,7 @@ describe('ToolCallPart inline results', () => {
           output: null,
           error: null,
         },
-        { name: 'DisplayResults', status: 'running' }
+        { name: 'Show', status: 'running' }
       )
     );
     expect(rendered.getByTestId('dashboard-view')).toBe(dashboard);
@@ -845,7 +845,7 @@ describe('ToolCallPart inline results', () => {
       <ToolCallPart
         part={toolUse(
           { kind: 'macro', input: null, output: null, error: null },
-          { name: 'DisplayResults' }
+          { name: 'Show' }
         )}
         context={context(false)}
       />
@@ -854,6 +854,22 @@ describe('ToolCallPart inline results', () => {
       'false'
     );
     expect(rendered.queryByTestId('tool-card')).toBeNull();
+  });
+
+  it('renders the view of a reply saved under the old name, DisplayResults', () => {
+    const input = { view: { text: 'Saved' } };
+    const rendered = render(() => (
+      <ToolCallPart
+        part={toolUse(
+          { kind: 'macro', input, output: null, error: null },
+          { name: 'DisplayResults' }
+        )}
+        context={context(false)}
+      />
+    ));
+    expect(rendered.getByTestId('dashboard-view').textContent).toBe(
+      JSON.stringify(input.view)
+    );
   });
 });
 
@@ -1462,7 +1478,7 @@ describe('code execution results', () => {
         },
         {
           id: 'call-2',
-          name: 'DisplayResults',
+          name: 'Show',
           input: { view: { widgets: [] } },
           output: { message: 'done' },
           error: null,
@@ -1626,6 +1642,83 @@ describe('code execution results', () => {
     expect(rendered.getAllByTestId('tool-card')[0].textContent).toContain(
       'Failed'
     );
+  });
+
+  it('shows the view a run returned under its steps', () => {
+    const view = { title: 'Found', widgets: [] };
+    codeQuery.record = {
+      ...codeQuery.record!,
+      status: 'succeeded',
+      error: null,
+      calls: [],
+      activity: [{ id: 1, label: 'Search documents', status: 'completed' }],
+      result: { data: 1, reviews: [], view },
+    };
+    const rendered = render(() => (
+      <ToolCallPart
+        part={codePart('macro_internal')}
+        context={context(false)}
+      />
+    ));
+    rendered.getByRole('button', { name: /Called 1 tool/ }).click();
+    expect(rendered.getByTestId('tool-card').textContent).toContain(
+      'Search documents'
+    );
+    expect(
+      JSON.parse(rendered.getByTestId('dashboard-view').textContent ?? '')
+    ).toEqual(view);
+  });
+
+  it('names the item a completed write changed on its row, and none for a failed one', () => {
+    const document = '0199f3a2-1b2c-7d4e-8f90-a1b2c3d4e5f6';
+    const created = {
+      type: 'document',
+      id: document,
+      action: 'created',
+      title: 'Q3 plan',
+    } as const;
+    codeQuery.record = {
+      ...codeQuery.record!,
+      status: 'succeeded',
+      error: null,
+      calls: [],
+      activity: [
+        { id: 1, label: 'Create Markdown', status: 'completed', item: created },
+        { id: 2, label: 'Create Markdown', status: 'failed' },
+      ],
+    };
+    const rendered = render(() => (
+      <ToolCallPart
+        part={codePart('macro_internal')}
+        context={context(false)}
+      />
+    ));
+    rendered.getByRole('button', { name: /Called 2 tools/ }).click();
+    const rows = rendered
+      .getAllByTestId('tool-card')
+      .filter((row) => row.textContent?.includes('Create Markdown'));
+    expect(rows).toHaveLength(2);
+    expect(
+      rows[0]
+        .querySelector('[data-testid="item-preview"]')
+        ?.getAttribute('data-id')
+    ).toBe(document);
+    expect(rows[1].querySelector('[data-testid="item-preview"]')).toBeNull();
+  });
+
+  it('shows no view from a run code mode failed', () => {
+    codeQuery.record = {
+      ...codeQuery.record!,
+      calls: [],
+      result: { data: 1, reviews: [], view: { title: 'Found' } },
+    };
+    const rendered = render(() => (
+      <ToolCallPart
+        part={codePart('macro_internal')}
+        context={context(false)}
+      />
+    ));
+    expect(rendered.queryByTestId('dashboard-view')).toBeNull();
   });
 
   it('does not let an external MCP server select the code-mode record view', () => {

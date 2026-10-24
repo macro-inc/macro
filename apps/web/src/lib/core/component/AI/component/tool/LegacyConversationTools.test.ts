@@ -84,4 +84,22 @@ describe('saved legacy conversation tool records', () => {
       }).isOk()
     ).toBe(true);
   });
+
+  it('keeps views shown before Show was renamed from DisplayResults', () => {
+    const call = deserializeToolCall({
+      id,
+      name: 'DisplayResults',
+      json: { view: { title: 'Your week', widgets: [] } },
+    });
+    expect(call.isOk() && call.value.data).toEqual({
+      view: { title: 'Your week', widgets: [] },
+    });
+    expect(
+      deserializeToolResponse({
+        id,
+        name: 'DisplayResults',
+        json: { message: 'The results have been displayed to the user.' },
+      }).isOk()
+    ).toBe(true);
+  });
 });

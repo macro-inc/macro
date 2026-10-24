@@ -450,10 +450,10 @@ function ToolReplayDemo() {
 }
 
 /** A generated view stays visible between collapsed runs, even before a result. */
-function DisplayResultsDemo() {
+function ShowDemo() {
   const [pending, setPending] = createSignal(false);
   const message = (): FoldedMessage => ({
-    agentSessionId: 'display-results-demo',
+    agentSessionId: 'show-demo',
     requestId: null,
     pending: false,
     segments: [],
@@ -466,8 +466,8 @@ function DisplayResultsDemo() {
       ...TOOL_REPLAY_PARTS.slice(0, 2),
       {
         kind: 'tool_use',
-        id: 'display-results-demo',
-        name: { kind: 'mcp', server: 'macro', tool: 'DisplayResults' },
+        id: 'show-demo',
+        name: { kind: 'mcp', server: 'macro', tool: 'Show' },
         status: pending() ? 'running' : 'completed',
         detail: {
           kind: 'macro',
@@ -508,14 +508,14 @@ function DisplayResultsDemo() {
     ],
   });
   return (
-    <div class="flex flex-col gap-3" data-testid="display-results-demo">
+    <div class="flex flex-col gap-3" data-testid="show-demo">
       <label class="flex items-center gap-2 text-xs text-ink-muted">
         <input
           type="checkbox"
           checked={pending()}
           onChange={(event) => setPending(event.currentTarget.checked)}
         />
-        DisplayResults in progress
+        Show in progress
       </label>
       <Message message={message()} inFlight={pending()} />
     </div>
@@ -1077,8 +1077,8 @@ export default function AgentUiGallery() {
             <ToolReplayDemo />
           </Item>
 
-          <Item label="DisplayResults (inline between groups)">
-            <DisplayResultsDemo />
+          <Item label="Show (inline between groups)">
+            <ShowDemo />
           </Item>
           <Item label="ElicitationForm (live validation)">
             <ElicitationFormDemo />

@@ -458,3 +458,68 @@ async fn redacts_run_token_from_results_keys_console_stderr_and_errors() {
     }
     service.shutdown().await;
 }
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn a_completed_write_reports_the_item_it_changed() {
+    let (_root, service) = setup(Limits::default()).await;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.unwrap();
+        let request = read_request(&mut stream).await;
+        assert!(request.starts_with("POST /channels "), "{request}");
+        respond(
+            &mut stream,
+            r#"{"id":"0199f3a2-1b2c-7d4e-8f90-0000000c4a77"}"#,
+        )
+        .await;
+    });
+    let environment = RunEnvironment {
+        token: "fixture-run-token".into(),
+        hosts: BTreeMap::from([("storage".into(), format!("http://{address}"))]),
+        ..RunEnvironment::default()
+    };
+    let source = r#"
+export async function main({macro}) {
+  const channel = await macro.channels.create({type: 'public', name: ' launch '});
+  return {data: channel.id, reviews: []};
+}
+"#;
+    let (events, outcome) = collect(
+        service
+            .execute(
+                ExecuteRequest {
+                    source: source.into(),
+                    timeout_ms: 5000,
+                },
+                environment,
+            )
+            .unwrap(),
+    )
+    .await;
+    assert!(matches!(outcome, Outcome::Succeeded { .. }), "{outcome:?}");
+    let completed: Vec<_> = events
+        .iter()
+        .filter_map(|event| match &event.kind {
+            EventKind::Progress { value } if value["status"] == "completed" => Some(value),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(completed.len(), 1);
+    assert_eq!(completed[0]["operation"], "createChannel");
+    assert_eq!(
+        completed[0]["item"],
+        serde_json::json!({
+            "type": "channel",
+            "id": "0199f3a2-1b2c-7d4e-8f90-0000000c4a77",
+            "action": "created",
+            "title": "launch",
+        })
+    );
+    tokio::time::timeout(Duration::from_secs(5), server)
+        .await
+        .unwrap()
+        .unwrap();
+    service.shutdown().await;
+}

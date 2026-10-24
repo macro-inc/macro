@@ -303,6 +303,20 @@ mod tests {
     }
 
     #[test]
+    fn prompts_leave_an_item_a_shown_view_shows_unmentioned() {
+        // The rule to cite every relevant result would otherwise have the
+        // agent name again, in its reply, what its view already shows.
+        for prompt in [
+            &TOOL_USE_PROMPT,
+            &SESSION_TOOL_USE_PROMPT,
+            &CODE_MODE_SESSION_TOOL_USE_PROMPT,
+        ] {
+            let prompt = prompt.to_string();
+            assert!(prompt.contains("an item a view you showed already shows"));
+        }
+    }
+
+    #[test]
     fn mentions_and_document_content_links_share_an_identical_document_mention_tag() {
         // document_content_links deliberately repeats this tag literal (rather
         // than importing it) so it stays self-contained for MCP composition,

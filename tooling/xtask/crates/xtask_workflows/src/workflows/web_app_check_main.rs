@@ -289,7 +289,7 @@ fn paths_filter() -> Step<Use> {
         .add_with((
             "filters",
             format!(
-                "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - 'packages/sdk/**'\n  - 'packages/sdk-docs/**'\n  - 'services/ai-editing-worker/**'\n  - 'packages/code-mode-sdk/**'\n  - 'crates/code_execution/src/outbound/deno/*.mjs'\n  - 'crates/agent_code_mode/src/domain/documentation.json'\n  - 'crates/agent_code_mode/SKILL.md'\n  - 'crates/ai_tools/src/display_results/schema.generated.json'\n  - '.github/actions/setup-reqs-web/**'\ncodegen_changed:\n  - 'crates/**/*.rs'\n  - 'services/**/*.rs'\n  - 'Cargo.toml'\n  - 'Cargo.lock'\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - 'packages/sdk/**'\n  - 'apps/docs/**'\n  - '.github/actions/setup-reqs-web/**'\n"
+                "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - 'packages/sdk/**'\n  - 'packages/sdk-docs/**'\n  - 'services/ai-editing-worker/**'\n  - 'packages/code-mode-sdk/**'\n  - 'crates/code_execution/src/outbound/deno/*.mjs'\n  - 'crates/agent_code_mode/src/domain/documentation.json'\n  - 'crates/agent_code_mode/SKILL.md'\n  - 'crates/ai_tools/src/show/schema.generated.json'\n  - '.github/actions/setup-reqs-web/**'\ncodegen_changed:\n  - 'crates/**/*.rs'\n  - 'services/**/*.rs'\n  - 'Cargo.toml'\n  - 'Cargo.lock'\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - 'packages/sdk/**'\n  - 'apps/docs/**'\n  - '.github/actions/setup-reqs-web/**'\n"
             ),
         ))
 }

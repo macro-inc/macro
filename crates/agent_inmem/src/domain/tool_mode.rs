@@ -1,4 +1,7 @@
-//! Per-owner tool presentation policy. Flags never grant permission to tools.
+//! Per-user tool presentation policy for the public MCP, which rolls code
+//! mode out behind a flag. An agent session's turns use code mode whenever
+//! the session has the code tools (see `rig_engine`). Flags never grant
+//! permission to tools.
 
 use feature_flags::FeatureFlags;
 use macro_user_id::user_id::MacroUserIdStr;

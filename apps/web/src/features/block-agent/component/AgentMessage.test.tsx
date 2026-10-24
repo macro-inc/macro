@@ -61,28 +61,39 @@ vi.mock('./parts/TextPart', () => ({
     );
   },
 }));
-vi.mock('./parts/ToolCallPart', () => ({
-  ToolCallPart: (props: {
-    part: { id: string; status: string };
-    context: {
-      partIndex: number;
-      inFlight: boolean;
-      followedBy: (name: string) => boolean;
-    };
-  }) => (
-    <div
-      data-index={props.context.partIndex}
-      data-followed-by-save={String(
-        props.context.followedBy('SaveDatabaseQuery')
-      )}
-      data-status={props.part.status}
-      data-live={String(props.context.inFlight)}
-      data-testid="tool"
-    >
-      {props.part.id}
-    </div>
-  ),
-}));
+vi.mock('./parts/ToolCallPart', async () => {
+  const { useItemFacts } = await import(
+    '@app/features/agent-cards/core/item-facts'
+  );
+  return {
+    ToolCallPart: (props: {
+      part: { id: string; status: string };
+      context: {
+        partIndex: number;
+        inFlight: boolean;
+        followedBy: (name: string) => boolean;
+      };
+    }) => {
+      const facts = useItemFacts();
+      return (
+        <div
+          data-index={props.context.partIndex}
+          data-followed-by-save={String(
+            props.context.followedBy('SaveDatabaseQuery')
+          )}
+          data-status={props.part.status}
+          data-live={String(props.context.inFlight)}
+          data-facts={[...facts().values()]
+            .map((fact) => `${fact.action}:${fact.item.id}`)
+            .join(',')}
+          data-testid="tool"
+        >
+          {props.part.id}
+        </div>
+      );
+    },
+  };
+});
 vi.mock('./parts/PermissionPart', () => ({
   PermissionPart: () => <div data-testid="permission" />,
 }));
@@ -302,14 +313,50 @@ describe('Message tool grouping', () => {
     expect(view.getByTestId('permission')).toBeTruthy();
   });
 
-  it('keeps DisplayResults outside the tool groups before and after it', () => {
+  it('tells what the reply shows what the reply did to each item, and puts no card under a run', () => {
+    const reply = message([tool('a'), tool('display'), text('Made the plan.')]);
+    reply.segments = [
+      {
+        index: 0,
+        kind: 'activity',
+        start: 0,
+        end: 2,
+        sealed: true,
+        rows: [
+          {
+            id: 'a',
+            label: 'Create document',
+            detail: null,
+            status: 'completed',
+            card: {
+              kind: 'item',
+              itemType: 'document',
+              itemId: 'doc-1',
+              fileType: 'md',
+              action: 'created',
+              title: 'Plan',
+              summary: null,
+            },
+          },
+        ],
+      },
+    ];
+    const view = render(() => <Message message={reply} inFlight={false} />);
+    expect(
+      view.getAllByTestId('tool').map((tool) => tool.dataset.facts)
+    ).toEqual(['created:doc-1', 'created:doc-1']);
+    const group = view.getByTestId('group');
+    expect(group.nextElementSibling?.textContent).toBe('Made the plan.');
+  });
+
+  it('keeps Show outside the tool groups before and after it', () => {
     const [reply, setReply] = createSignal(
       message(
         [
           tool('a'),
           tool('b'),
           tool('display', {
-            name: { kind: 'mcp', server: 'macro', tool: 'DisplayResults' },
+            name: { kind: 'mcp', server: 'macro', tool: 'Show' },
             status: 'pending',
             detail: { kind: 'macro', input: null, output: null, error: null },
           }),

@@ -3,6 +3,8 @@ use ai_toolset::schema::{FrontendToolEntry, ToolSchemaGenerator};
 use schemars::{JsonSchema, SchemaGenerator};
 use serde_json::json;
 
+use crate::show::{Show, ShowResponse};
+
 pub(super) struct LegacyConversationSchemas;
 
 impl ToolSchemaGenerator for LegacyConversationSchemas {
@@ -59,6 +61,13 @@ impl ToolSchemaGenerator for LegacyConversationSchemas {
                 },
                 "required":["type","id","name"]
             }));
-        Vec::new()
+        // `Show` was called `DisplayResults`; saved chats name it so.
+        generator.subschema_for::<Show>();
+        generator.subschema_for::<ShowResponse>();
+        vec![FrontendToolEntry {
+            name: "DisplayResults".to_owned(),
+            input: Show::schema_name().into_owned(),
+            output: ShowResponse::schema_name().into_owned(),
+        }]
     }
 }

@@ -33,7 +33,11 @@ import {
   serviceError,
   thrownServiceError,
 } from '../core/query';
-import { createLiveQuerySource, type LiveQuerySource } from './query-source';
+import {
+  createLiveQuerySource,
+  type LiveQuerySource,
+  type SavedStatement,
+} from './query-source';
 import { createQuestionCapabilities } from './question-capabilities';
 
 const databasesFailure = (thrown: unknown): QueryFailure => ({
@@ -127,6 +131,29 @@ export function createSavedQuestionSource(
           kind: 'question',
           error: thrownServiceError(definition.error),
         };
+      const failed = viewer.error();
+      return failed === undefined || failed === null
+        ? undefined
+        : databasesFailure(failed);
+    },
+    subscribe: (onChange) =>
+      useDatabaseTableChanges((change) => onChange(change.tableId)),
+  });
+}
+
+/**
+ * A statement someone else ran - an agent's - answered live in the browser
+ * over the databases this viewer can reach, so the numbers are current and
+ * never include rows the viewer could not query.
+ */
+export function createStatementSource(
+  statement: Accessor<SavedStatement>
+): LiveQuerySource {
+  const viewer = useViewerDatabases();
+  return createLiveQuerySource({
+    statement,
+    databases: viewer.databases,
+    loadError: () => {
       const failed = viewer.error();
       return failed === undefined || failed === null
         ? undefined

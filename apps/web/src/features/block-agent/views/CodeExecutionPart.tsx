@@ -7,7 +7,11 @@ import type {
   ToolCallContext,
   ToolUsePart,
 } from '../component/parts/shared';
-import { codeExecutionInput, isExecutionId } from '../state/code-execution';
+import {
+  codeExecutionInput,
+  isExecutionId,
+  returnedView,
+} from '../state/code-execution';
 
 /** Production wiring; the result components receive only data and context. */
 export function CodeExecutionPart(props: {
@@ -73,6 +77,8 @@ export function CodeExecutionPart(props: {
   const record = () =>
     query.isSuccess && query.data.source === source() ? query.data : undefined;
   const status = () => record()?.status ?? receipt()?.status;
+  const view = () =>
+    returnedView(status(), record() ? record()?.result : receipt()?.result);
   const common = (): ToolCallCommon => {
     const outcome = status();
     if (!outcome || outcome === 'succeeded' || outcome === 'running')
@@ -100,6 +106,7 @@ export function CodeExecutionPart(props: {
         common={common()}
         context={props.context}
         record={record()}
+        view={view()}
         error={
           record()?.error ??
           receipt()?.error ??

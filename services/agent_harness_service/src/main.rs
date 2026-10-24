@@ -598,8 +598,9 @@ async fn run() -> anyhow::Result<()> {
         }
         None => None,
     };
-    // `ai-code-mode` decides, per user, whether agent sessions and the public
-    // MCP present the SDK in place of the tools it covers.
+    // `ai-code-mode` decides, per user, whether the public MCP presents the SDK
+    // in place of the tools it covers. Agent sessions always do whenever code
+    // execution is configured.
     let code_mode_selector: Option<Arc<dyn agent_inmem::domain::tool_mode::ToolModeSelector>> =
         match (&code_runner, config.posthog_api_key.value()) {
             (Some(_), Some(key)) => {
@@ -686,6 +687,7 @@ async fn run() -> anyhow::Result<()> {
             Arc::new(agent_code_mode::outbound::turns::SessionTurns(
                 session_repo.clone(),
             )),
+            Arc::new(code_mode::ShowViewCheck),
         ));
     let session_metadata_realtime = ConnectionGatewayAgentSessionRealtime::new(
         connection_gateway.clone(),
@@ -743,11 +745,10 @@ async fn run() -> anyhow::Result<()> {
         Arc::new(McpToolCatalog::new(Arc::clone(&mcp_connector)));
     let sessions = sessions.with_tool_catalog(Arc::clone(&tool_catalog));
 
-    let mut inmem_engine =
+    // Conversations use code mode whenever code execution is configured: the
+    // internal MCP server offers the code tools only then.
+    let inmem_engine =
         RigTurnEngine::new(pool.clone(), tool_context.clone()).with_gate(owner_tool_gate);
-    if let Some(selector) = &code_mode_selector {
-        inmem_engine = inmem_engine.with_tool_mode(Arc::clone(selector));
-    }
     let inmem_model_engine: Arc<dyn TurnEngine> = Arc::new(inmem_engine);
     // Normalize uploaded images before any provider sees them. In addition to
     // making local URLs reachable, this supplies the MIME type Gemini requires

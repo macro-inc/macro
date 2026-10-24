@@ -1,3 +1,6 @@
+import { ItemChip } from '@app/features/agent-cards/components/item-chip';
+import type { ItemFact } from '@app/features/agent-cards/core/run-cards';
+import { isShowTool } from '@app/features/dynamic-ui/core/show-tool';
 import CodeIcon from '@phosphor/code.svg';
 import type {
   ExecutionActivity,
@@ -7,15 +10,21 @@ import type {
 import { For, Show } from 'solid-js';
 import { isToolActive, ToolCard, type ToolStatus } from '../../ui';
 import { LiveToolGroup } from '../../views/LiveToolGroup';
-import { DisplayResultsToolCall } from './DisplayResultsToolCall';
 import { MacroToolCall } from './MacroToolCall';
+import { ShowToolCall } from './ShowToolCall';
 import type { ToolCallCommon, ToolCallContext } from './shared';
 
-/** Observed inner calls keep their registered Macro result components. */
+/**
+ * A code run's SDK operations, one row each, a completed write naming the
+ * item it created or changed. Observed inner calls keep their registered
+ * Macro result components. The view the run returned shows under
+ * its steps, the way the view of a `Show` call after the run would.
+ */
 export function CodeExecutionToolCall(props: {
   common: ToolCallCommon;
   context: ToolCallContext;
   record?: ExecutionRecord;
+  view?: object;
   error?: string | null;
   loading: boolean;
   unavailable: boolean;
@@ -112,6 +121,11 @@ export function CodeExecutionToolCall(props: {
           />
         )}
       </For>
+      <Show when={props.view}>
+        {(view) => (
+          <ShowToolCall input={{ view: view() }} common={props.common} />
+        )}
+      </Show>
     </div>
   );
 }
@@ -127,9 +141,31 @@ function ActivityRow(props: { item: ExecutionActivity; turnActive: boolean }) {
   const uncertain = () =>
     props.item.status === 'unknown' ||
     (props.item.status === 'running' && !props.turnActive);
+  const changed = (): ItemFact | undefined => {
+    const item =
+      props.item.status === 'completed' ? props.item.item : undefined;
+    return item
+      ? {
+          item: { type: item.type, id: item.id },
+          action: item.action,
+          title: item.title,
+        }
+      : undefined;
+  };
+  const title = () => {
+    const fact = changed();
+    return fact ? (
+      <span class="flex min-w-0 items-center gap-2">
+        <span class="shrink-0">{props.item.label}</span>
+        <ItemChip fact={fact} />
+      </span>
+    ) : (
+      props.item.label
+    );
+  };
   return (
     <ToolCard
-      title={props.item.label}
+      title={title()}
       status={status()}
       muted={uncertain()}
       trailing={uncertain() ? 'Outcome unknown' : undefined}
@@ -156,10 +192,7 @@ function RecordedCall(props: {
   });
   return (
     <Show
-      when={
-        props.call.name === 'DisplayResults' &&
-        props.call.status === 'completed'
-      }
+      when={isShowTool(props.call.name) && props.call.status === 'completed'}
       fallback={
         <MacroToolCall
           detail={{
@@ -174,7 +207,7 @@ function RecordedCall(props: {
         />
       }
     >
-      <DisplayResultsToolCall
+      <ShowToolCall
         input={props.call.input}
         error={props.call.error}
         common={common()}

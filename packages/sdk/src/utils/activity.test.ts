@@ -1,5 +1,10 @@
 import { describe, expect, test } from 'bun:test';
-import { observeSdk, type RequestActivity } from './activity';
+import {
+  observeSdk,
+  type RequestActivity,
+  type RequestCall,
+  setDefaultRequestObserver,
+} from './activity';
 
 describe('SDK activity', () => {
   test('correlates concurrent requests and preserves results and errors', async () => {
@@ -62,6 +67,43 @@ describe('SDK activity', () => {
     );
     expect(await sdk.call()).toBe(42);
     await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  test('only the runtime observer sees what a call was given and returned', async () => {
+    const runtime: [string, RequestCall][] = [];
+    const client: RequestActivity[] = [];
+    setDefaultRequestObserver((event, call) => {
+      runtime.push([event.status, call]);
+    });
+    try {
+      const sdk = observeSdk(
+        {
+          async create(options: { body: { name: string } }) {
+            return { data: { id: 'doc-1', name: options.body.name } };
+          },
+        },
+        'storage',
+        (event) => {
+          client.push(event);
+        },
+      );
+      await sdk.create({ body: { name: 'Plan' } });
+    } finally {
+      setDefaultRequestObserver(() => {});
+    }
+    expect(runtime).toEqual([
+      ['started', { args: [{ body: { name: 'Plan' } }] }],
+      [
+        'completed',
+        {
+          args: [{ body: { name: 'Plan' } }],
+          result: { data: { id: 'doc-1', name: 'Plan' } },
+        },
+      ],
+    ]);
+    expect(client.map((event) => Object.keys(event).sort())).toEqual([
+      ['id', 'operation', 'service', 'status'],
+      ['id', 'operation', 'service', 'status'],
+    ]);
   });
   test('observer failures never change operation outcomes', async () => {
     const sdk = observeSdk(

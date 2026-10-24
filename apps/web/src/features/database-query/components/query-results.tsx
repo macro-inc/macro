@@ -20,6 +20,8 @@ export function QueryResults(props: {
   compact?: boolean;
   /** An enclosing viewport owns scrolling and height. */
   unbounded?: boolean;
+  /** The enclosing card is the frame: no border of the results' own. */
+  bare?: boolean;
   displayMode: DatabaseQueryDisplayMode;
   chart?: DatabaseQueryChart;
   /** The names the answer references. */
@@ -61,13 +63,20 @@ export function QueryResults(props: {
             fallback={
               <QueryResultTable
                 unbounded={props.unbounded}
+                bare={props.bare}
                 answer={props.answer}
                 names={props.names}
                 display={props.display}
               />
             }
           >
-            <div class="rounded-lg border border-edge-muted bg-hover/40 px-4 py-4">
+            <div
+              class="rounded-lg px-4 py-4"
+              classList={{
+                'border border-edge-muted bg-hover/40': !props.bare,
+                'bg-surface': props.bare,
+              }}
+            >
               <div
                 class="text-3xl font-medium tracking-tight tabular-nums text-ink"
                 classList={{ 'text-xl': props.compact }}
@@ -87,7 +96,7 @@ export function QueryResults(props: {
       >
         {(data) => (
           <>
-            <QueryChart data={data()} />
+            <QueryChart data={data()} bare={props.bare} />
             <details class="mt-3 text-xs text-ink-muted">
               <summary class="rounded outline-none focus-visible:ring-2 focus-visible:ring-ink/25">
                 View data
@@ -95,6 +104,7 @@ export function QueryResults(props: {
               <div class="mt-2">
                 <QueryResultTable
                   unbounded={props.unbounded}
+                  bare={props.bare}
                   answer={props.answer}
                   names={props.names}
                   display={props.display}
@@ -130,14 +140,18 @@ export function ScalarValue(props: {
 function QueryResultTable(props: {
   answer: QueryAnswer;
   unbounded?: boolean;
+  bare?: boolean;
   names: ReferenceNames;
   display: AnswerRenderers;
 }) {
   const rows = () => props.answer.rows;
   return (
     <div
-      class="overflow-auto rounded-lg border border-edge-muted"
-      classList={{ 'max-h-80': !props.unbounded }}
+      class="overflow-auto"
+      classList={{
+        'max-h-80': !props.unbounded,
+        'rounded-lg border border-edge-muted': !props.bare,
+      }}
     >
       <table class="w-full border-collapse text-left text-xs">
         <thead class="sticky top-0 bg-hover">

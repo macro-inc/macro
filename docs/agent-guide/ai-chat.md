@@ -873,11 +873,11 @@ and settlement tests still require the isolated backend fixtures above.
 When the harness has its local Deno runtime configured, the session's `macro_internal`
 server exposes `DescribeCodeTools` and `ExecuteCode`. The in-process agent sees
 both schemas on its first model call, without `SearchTools` or `LoadTools`.
-For Macro's in-process agent, the backend evaluates the session owner's
-`ai-code-mode` flag once per conversational turn. Enabled users get a smaller
-direct toolset: SDK-supported searches, reads, listing, and data operations run
+Macro's in-process agent runs every conversational turn in code mode when the
+harness has a Deno runner configured, as every deployed harness does. It gets a
+smaller direct toolset: SDK-supported searches, reads, listing, and data operations run
 through the SDK. Document editing keeps the direct `EditDocument` tool, and
-`DisplayResults` remains available for rendering results. Workspace feeds and
+`Show` remains available for showing the user a view. Workspace feeds and
 mixed-entity name searches keep the direct `ListEntities` and `NameSearch` tools,
 including agent sessions. `ContentSearch` supports session history. The legacy
 chat and workspace SDK namespaces are excluded from agent documentation. Methods
@@ -887,11 +887,11 @@ tools, `AskUser`, connector discovery, tool loading for connected apps, subagent
 and explicit provider code execution retain their direct lifecycle. Connected
 third-party MCP tools remain available.
 
-Disabled/missing flags, failed flag evaluation, unconfigured PostHog, or missing
-code-mode MCP tools retain the standard toolset. Summary/compaction calls do not
-load flags or advertise tools. Flag changes apply on the next conversational
-turn, without changing an in-flight turn's tools. The flag controls presentation,
-not authorization; SDK requests retain normal user permissions, and issuing the run credential requires execution approval.
+Missing code-mode MCP tools, as on a harness without a Deno runner, and sessions
+no person owns retain the standard toolset. Summary/compaction calls do not
+advertise tools. Code mode controls presentation, not authorization; SDK
+requests retain normal user permissions, and issuing the run credential requires
+execution approval.
 External coding harnesses keep their own tool selection. A runner that fails
 after its tools were advertised still produces an execution failure, not an
 automatic retry through a direct tool.
@@ -973,7 +973,19 @@ account the review uses answers yes, it submits the review with
 **DecideReview**, and the card then reads “Started by the agent at your
 request”. SDK operation
 activity reports request outcomes, without storing request arguments or response
-bodies. The execution journal retains source, status and final JSON/error;
+bodies. An SDK write that creates or changes a document, project, channel,
+form, calendar event, email thread or initiative records that item on its
+operation, at most 32 per run. The session names the item under its group of
+operations in **Run code**, and a channel reply names it on that operation's
+step as soon as the write completes; a card the agent shows for it says what
+was done to it. Document content edits and routines are not in the SDK, so code
+records no item for them. A program can return `view`, the object `Show`
+takes, built from what it found: once the run succeeds the session shows it
+under **Run code** and a channel reply shows it as the run's last step. Code
+mode checks it against the `Show` schema; a view the renderer would not draw
+fails the run with the problems, and the agent shows the corrected view through
+`Show` instead of running the program again.
+The execution journal retains source, status and final JSON/error;
 completed API writes are not rolled back after failure or cancellation.
 If a reused execution ID refers to different source, the card reports that tool
 results are unavailable and does not display the other program's saved results.
@@ -987,8 +999,8 @@ once the full call input arrives. Reopening a session may log historical code
 again. Production builds do not print these console entries. Never log or return
 the execution's token.
 
-For local verification, enable backend `ai-code-mode` for the test owner with a
-configured Deno runner. Compare enabled and disabled owners' tools. Supported
+For local verification, configure the harness's Deno runner (`DENO_BINARY`);
+without one, turns keep the standard direct tools. Supported
 operations should move to code while unsupported creation, skill discovery,
 editing and interactive tools remain direct. Ask for a document lookup without
 mentioning tools; inspect its source and result, reload, and verify persistence.
@@ -1006,13 +1018,13 @@ provider usage and completed writes may remain after cancellation.
 
 ## Code mode on the public MCP
 
-The public workspace MCP (`mcp-server[-dev].macro.com`) evaluates the same
-`ai-code-mode` flag for the OAuth user on `initialize`, `tools/list` and
+The public workspace MCP (`mcp-server[-dev].macro.com`) evaluates the
+`ai-code-mode` flag (agent sessions use code mode without it) for the OAuth user on `initialize`, `tools/list` and
 `tools/call`, cached per user for a minute. Enabled users see `ExecuteCode` and
 `DescribeCodeTools` in place of the SDK-covered native tools, and the server
 instructions tell the client to call `DescribeCodeTools` with a `task` before
 writing a program. Programs export `async function main({macro})` and return
-exactly `{data}` (an empty `reviews: []` is dropped). There is no session,
+exactly `{data}` (an empty `reviews: []` is dropped; a `view` fails the run). There is no session,
 execution journal, review stack or `execution_id`; the receipt carries status,
 observed SDK activity, result and error. Runs act as the user with no agent
 attribution and no owner approval card: the MCP client asks before each tool
@@ -1142,7 +1154,7 @@ The chat auto-titles itself after the first exchange (route stays stable, title 
 
 The agent has workspace tools (it can list your documents, read channels, create tasks,
 list, create, and update projects (initiatives in the API) and move tasks in or out of them,
-render `displayResults` views). Requests go to `POST /cognition/stream/chat/message`; results
+show views with `Show`). Requests go to `POST /cognition/stream/chat/message`; results
 stream over the app's websocket, not the HTTP response.
 
 When explicitly asked, the agent uses `Comment` to start a Discussion comment on an
@@ -1181,16 +1193,23 @@ where the text is an ordinary prompt; the model's `AskUser` tool and user-tool
 review remain independent of this development setting.
 
 An agent session (the `/app/channel/<channel>/agent/<session>` pane) can pause its turn to
-ask you something. A card titled `<bot> is asking` with trailing text `Waiting for you`
-appears in the transcript, and the notice `The agent is waiting for your answer above` sits
-over the composer. Forms have one control per field (radios for a choice, an `Other` text
-box when the agent allows a custom answer, checkboxes for multi-select, text/number inputs)
-plus `Submit` / `Decline` / `Cancel`; a link request shows the target host and URL with an
-`Open` button that only opens a new tab after you click it. Once answered the card collapses
-to `Question · <text>` with `Answered` / `Declined` / `Cancelled` on the right and the agent
-continues. Messages typed while a question is open queue behind it; the composer's `Stop`
-square cancels the question and the turn. Anyone with edit access to the session may
-answer; viewers see the form locked with `Waiting for an editor`. The owner and everyone
+ask you something. The question appears in the transcript as the same card an agent DM
+asks with, titled by the question, and the notice `The agent is waiting for your answer
+above` sits over the composer. Two or three short answers are buttons; a longer choice or
+a form has one control per field (radios for a choice, an `Other` text box when the agent
+allows a custom answer, checkboxes for multi-select, text/number inputs) with `Skip` and
+`Submit`; a link request shows the target host and URL with an `Open` button that only
+opens a new tab after you click it. A drafted email or event the agent waits on is its
+composer for the session's owner, whose name it goes out under: the email composer's Send
+sends it and **Discard** under it declines; the calendar's composer creates it or cancels
+it. Another editor sees the draft as the agent wrote it, with **Send** (or **Create
+event**) and **Discard**. What you type or edit stays if the card scrolls away and comes
+back. Once answered the card collapses to `Question · <text>` with
+`Answered` / `Declined` / `Cancelled` on the right and the agent continues; a sent email or
+created event is named on its row. Messages typed while a question is
+open queue behind it; the composer's `Stop` square cancels the question and the turn.
+Anyone with edit access to the session may answer; viewers see the card with `Only someone
+who can edit this session can answer.` and nothing to press. The owner and everyone
 who has prompted or answered the session also receive an `agent_session_waiting_for_input`
 notification (inbox, browser, and iOS push) when the question is asked; it stays until
 marked done.
@@ -1398,19 +1417,36 @@ and tools requiring user input remain outside these groups so they stay visible
 during other tool bursts. Nested agent activity and code-mode SDK operations each
 use the same peek window.
 
+No cards sit under a run of tool calls. A call that created, changed or sent an
+item names it on its own row, and the agent shows what the reply is about with
+`Show`. In that view, a card for an item the reply created or changed
+carries what was done to it (`Created`, `Sent`), the same as in a channel reply;
+its summary shows only to a reader who can open the item.
+
 The group caret sits immediately after its label and appears on hover or keyboard
 focus. Expand an edit row to view its diffs. Result bodies load only when their
 row opens; syntax highlighting may appear after the diff text. Opening a session
 or expanding a group should leave the app responsive, even when the session
 contains many file edits.
 
-`DisplayResults` renders its dynamic view directly in the reply and stays visible
-without opening a tool row. It breaks tool groups before and after itself,
-including while pending; later calls start a separate group.
-Its dashboard supports markdown, timelines, entity lists, and channel messages,
-using the same full-width view as AI chat. Incomplete arguments stay hidden while
-streaming; a valid view updates as arguments arrive. Malformed completed views
-show **Couldn't render dashboard**; failed calls show a **Failed** summary row
+`Show` renders its dynamic view directly in the reply and stays visible without
+opening a tool row. It breaks tool groups before and after itself, including
+while pending; later calls start a separate group. A call whose view the tool
+turned back renders nothing; the agent shows the view again. Replies saved
+before the tool was renamed call it `DisplayResults` and render the same.
+Its dashboard supports markdown, timelines, entity lists, calendar agendas, item
+cards, tags, and channel messages, using the same full-width view as AI chat.
+Item cards cover documents, email threads, events, projects, channels, routines,
+forms and initiatives, with the same controls as anywhere else (a routine's card
+pauses or runs it).
+Tags nest to any depth, each with its colour and what it is for; a tag that exists
+shows its current name and opens the items tagged with it. A card of more than
+eight tags holds its height and offers **Show all**. Incomplete arguments stay hidden while
+streaming; a valid view updates as arguments arrive. A completed view renders
+every widget that matches the schema and says how many it left out, and one with
+no matching widget shows **Couldn't render dashboard**. The tool turns back a view
+that does not match the schema, naming what to fix, so the agent sends it again;
+failed calls show a **Failed** summary row
 without a disclosure. Macro's built-in agents receive the complete view schema
 with the tool definition. External coding agents connected through Macro's MCP
 server do not currently receive this tool.
@@ -1420,7 +1456,7 @@ calls** and **Replay fast batch**, both using the message renderer. Check that
 ongoing rows accumulate in the five-row window, completed calls stop shimmering,
 fast batches stay compact, and the group collapses smoothly after completion.
 Its carets should still expand the results, and reduced motion disables animation.
-Check that rich result controls still work and `DisplayResults` stays visible
+Check that rich result controls still work and `Show` stays visible
 between surrounding groups. In **AgentMessage (end-to-end)**, expand the group
 and confirm unknown tools have no individual disclosure or JSON payload. Repeat
 at a narrow viewport width.
@@ -1753,16 +1789,18 @@ must stay hidden; subsequent live messages must still appear.
   entries, then stop.
 - **Permission prompts.** Everyone with **Edit** access to a session may approve or
   reject its ACP permission requests, even when they did not create the session.
-  A pending request shows one `Approval needed` card above the composer, with
-  the command or affected file separate from the actions. The transcript does
-  not repeat the pending request.
+  A pending request shows one approval card above the composer, the same card
+  an agent DM asks with: the action as the run words it (`Run a command`,
+  `Create document`) over `Approval needed`, the command or affected item
+  separate from the actions, and **Show input** for the tool's raw input. The
+  transcript does not repeat the pending request.
   `Allow once` and `Deny` answer immediately; `More options` contains remembered
   choices with the agent's full rule text. Channel Magic Chips expose the same
   approval card in place of their loading state, alongside existing questions.
   Only authenticated users with **Edit** or **Owner** session access may answer;
   bot, harness, and internal-service credentials cannot approve on their behalf.
-  Viewers and commenters see a waiting notice without
-  action buttons. Stopping a turn cancels open requests; answered requests show
+  Viewers and commenters see `Waiting for someone who can edit this session to
+  approve` without action buttons. Stopping a turn cancels open requests; answered requests show
   a compact outcome such as `Allowed once` or `Denied` in the transcript.
   Permission requests and questions both put the agent in a waiting state.
   Several permissions may be pending alongside one question; answering one leaves
@@ -2036,7 +2074,7 @@ not wait for a response. Code and native tools use the same presentation path. T
 chat composer. Their status is read from the session's review API, not reconstructed
 from text claimed by the model.
 
-With `ai-code-mode` enabled, the blocking `SendEmail` and `CreateCalendarEvent`
+In code mode, the blocking `SendEmail` and `CreateCalendarEvent`
 tools are not advertised or available through lazy discovery. Email and calendar
 drafts use these saved reviews instead. Presenting a draft must not produce an
 `elicitation/create` request or leave the session blocked waiting for approval.

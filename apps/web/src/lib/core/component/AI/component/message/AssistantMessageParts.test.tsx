@@ -474,13 +474,13 @@ describe('AssistantMessageParts streaming identity', () => {
             widgets: [{ events: [], type: 'timeline' }],
           },
         },
-        name: 'DisplayResults',
+        name: 'Show',
         type: 'toolCall',
       },
       {
         id: 'dashboard-tool',
         json: { message: 'View displayed' },
-        name: 'DisplayResults',
+        name: 'Show',
         type: 'toolCallResponseJson',
       },
       {

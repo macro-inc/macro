@@ -148,10 +148,7 @@ type ToolParserMap = {
     call: types.DispatchCodingAgent;
     response: types.DispatchedCodingAgent;
   };
-  DisplayResults: {
-    call: types.DisplayResults;
-    response: types.DisplayResultsResponse;
-  };
+  DisplayResults: { call: types.Show; response: types.ShowResponse };
   DuplicateItem: {
     call: types.DuplicateItem;
     response: types.DuplicateItemResponse;
@@ -482,6 +479,7 @@ type ToolParserMap = {
     call: types.ShareWithChannel;
     response: types.ShareWithChannelResponse;
   };
+  Show: { call: types.Show; response: types.ShowResponse };
   Subagent: { call: types.Subagent; response: types.SubagentResponse };
   TextEditorCodeExecution: {
     call: types.TextEditorCodeExecution;
@@ -675,10 +673,7 @@ const toolParserMap = {
     call: schemas.DispatchCodingAgent,
     response: schemas.DispatchedCodingAgent,
   },
-  DisplayResults: {
-    call: schemas.DisplayResults,
-    response: schemas.DisplayResultsResponse,
-  },
+  DisplayResults: { call: schemas.Show, response: schemas.ShowResponse },
   DuplicateItem: {
     call: schemas.DuplicateItem,
     response: schemas.DuplicateItemResponse,
@@ -1060,6 +1055,7 @@ const toolParserMap = {
     call: schemas.ShareWithChannel,
     response: schemas.ShareWithChannelResponse,
   },
+  Show: { call: schemas.Show, response: schemas.ShowResponse },
   Subagent: { call: schemas.Subagent, response: schemas.SubagentResponse },
   TextEditorCodeExecution: {
     call: schemas.TextEditorCodeExecution,
@@ -1258,10 +1254,7 @@ type ToolDataMap = {
     call: types.DispatchCodingAgent;
     response: types.DispatchedCodingAgent;
   };
-  DisplayResults: {
-    call: types.DisplayResults;
-    response: types.DisplayResultsResponse;
-  };
+  DisplayResults: { call: types.Show; response: types.ShowResponse };
   DuplicateItem: {
     call: types.DuplicateItem;
     response: types.DuplicateItemResponse;
@@ -1592,6 +1585,7 @@ type ToolDataMap = {
     call: types.ShareWithChannel;
     response: types.ShareWithChannelResponse;
   };
+  Show: { call: types.Show; response: types.ShowResponse };
   Subagent: { call: types.Subagent; response: types.SubagentResponse };
   TextEditorCodeExecution: {
     call: types.TextEditorCodeExecution;

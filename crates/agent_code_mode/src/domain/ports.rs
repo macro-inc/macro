@@ -50,3 +50,10 @@ pub trait ExecutionStore: Send + Sync + 'static {
         execution: ExecutionId,
     ) -> Result<ExecutionRecord, CodeModeError>;
 }
+
+/// What the renderer would reject in a view a program returned for the user:
+/// the same check the `Show` tool puts its views through.
+pub trait ViewCheck: Send + Sync + 'static {
+    /// Each problem with its place in the view; empty for a view it draws.
+    fn problems(&self, view: &serde_json::Value) -> Vec<String>;
+}

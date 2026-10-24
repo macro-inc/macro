@@ -9,6 +9,11 @@
  * transcript that let each message decide showed every one of them working.
  */
 
+import {
+  ItemFacts,
+  refreshChangedItems,
+} from '@app/features/agent-cards/core/item-facts';
+import { itemFacts } from '@app/features/agent-cards/core/run-cards';
 import { useUserId } from '@core/context/user';
 import { idToDisplayName } from '@core/user/util';
 import { messageSendMotion } from '@core/util/message-send-motion';
@@ -145,7 +150,8 @@ function AgentMessagePart(props: {
 /**
  * A run of consecutive tool calls and their accompanying thoughts (see
  * `segmentParts`), folded to one row that opens to those parts, each at
- * its original index.
+ * its original index. What the agent showed stands outside the run: a view
+ * breaks it, and an item a call touched is named on the call's own row.
  */
 function ToolGroupPart(props: {
   message: FoldedMessage;
@@ -336,6 +342,13 @@ export function Message(props: {
   const inFlight = () => props.inFlight;
   const failure = () =>
     props.message.stop?.kind === 'failed' ? props.message.stop : undefined;
+  // What the reply did to each item it touched: a view it composed says so
+  // on the cards for those items.
+  const rows = createMemo(() =>
+    props.message.segments.flatMap((segment) => segment.rows)
+  );
+  const facts = createMemo(() => itemFacts(rows()));
+  refreshChangedItems(rows);
 
   return (
     // A control and an event notification are both user-authored by the
@@ -348,69 +361,71 @@ export function Message(props: {
         !isNotificationMessage(props.message)
       }
       fallback={
-        <div class="flex flex-col gap-1 min-w-0">
-          {/* Segments are positional, and a run at the tail grows as calls
+        <ItemFacts.Provider value={facts}>
+          <div class="flex flex-col gap-1 min-w-0">
+            {/* Segments are positional, and a run at the tail grows as calls
               stream in — so rows are keyed by index, not by segment value,
               and a group keeps its open state while it fills. */}
-          <Index each={segmentParts(props.message.parts)}>
-            {(segment) => (
-              <Show
-                when={segment().kind === 'tools'}
-                fallback={
-                  <Show when={props.message.parts[segment().start]}>
-                    {(part) => (
-                      <AgentMessagePart
-                        part={part()}
-                        message={props.message}
-                        index={segment().start}
-                        inFlight={inFlight()}
-                      />
-                    )}
-                  </Show>
-                }
-              >
-                <ToolGroupPart
-                  message={props.message}
-                  start={segment().start}
-                  end={segment().end}
-                  inFlight={inFlight()}
-                />
-              </Show>
-            )}
-          </Index>
-          {/* The turn is open with nothing to read yet — a ripple and a label
+            <Index each={segmentParts(props.message.parts)}>
+              {(segment) => (
+                <Show
+                  when={segment().kind === 'tools'}
+                  fallback={
+                    <Show when={props.message.parts[segment().start]}>
+                      {(part) => (
+                        <AgentMessagePart
+                          part={part()}
+                          message={props.message}
+                          index={segment().start}
+                          inFlight={inFlight()}
+                        />
+                      )}
+                    </Show>
+                  }
+                >
+                  <ToolGroupPart
+                    message={props.message}
+                    start={segment().start}
+                    end={segment().end}
+                    inFlight={inFlight()}
+                  />
+                </Show>
+              )}
+            </Index>
+            {/* The turn is open with nothing to read yet — a ripple and a label
               naming the work, so the wait reads as work rather than a stall. */}
-          <Show when={inFlight() && showsWorkingLine(props.message)}>
-            <WorkingLine label={workingLabel(props.message)} />
-          </Show>
-          {/* A turn the runtime errored is something that happened to the
+            <Show when={inFlight() && showsWorkingLine(props.message)}>
+              <WorkingLine label={workingLabel(props.message)} />
+            </Show>
+            {/* A turn the runtime errored is something that happened to the
               session, like a model change or a stop — so it reads as one,
               at the foot of whatever the agent managed to say first. The
               line says what to do about it; the runtime's own account of
               what happened is the detail. A failure the runtime wrote in the
               person's terms is theirs to act on, so it gets a card instead. */}
-          <Show when={failure()}>
-            {(failed) => (
-              <Show
-                when={failed().notice}
-                fallback={
-                  <ActionLine
-                    label={TURN_FAILED_LABEL}
-                    detail={failed().message}
-                    failed
-                  />
-                }
-              >
-                {(notice) => (
-                  <FailureNoticeCard
-                    notice={notice()}
-                    onOpenLink={openExternalUrl}
-                  />
-                )}
-              </Show>
-            )}
-          </Show>
-        </div>
+            <Show when={failure()}>
+              {(failed) => (
+                <Show
+                  when={failed().notice}
+                  fallback={
+                    <ActionLine
+                      label={TURN_FAILED_LABEL}
+                      detail={failed().message}
+                      failed
+                    />
+                  }
+                >
+                  {(notice) => (
+                    <FailureNoticeCard
+                      notice={notice()}
+                      onOpenLink={openExternalUrl}
+                    />
+                  )}
+                </Show>
+              )}
+            </Show>
+          </div>
+        </ItemFacts.Provider>
       }
     >
       <UserMessage message={props.message} />

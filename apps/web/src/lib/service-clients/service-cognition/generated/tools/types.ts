@@ -4812,6 +4812,29 @@ export type ExecutionStatus =
  * A dispatch result; unfinished work is never reported as success.
  */
 export type RecordedCallStatus = 'running' | 'completed' | 'failed' | 'unknown';
+/**
+ * The kinds of item the SDK reports; named as the agent fold reads them.
+ */
+export type ActivityItemType =
+  | 'document'
+  | 'email_thread'
+  | 'calendar_event'
+  | 'project'
+  | 'channel'
+  | 'form'
+  | 'initiative';
+/**
+ * What an operation did to its item; named as the agent fold reads them.
+ */
+export type ActivityItemAction =
+  | 'created'
+  | 'edited'
+  | 'sent'
+  | 'updated'
+  | 'moved'
+  | 'renamed'
+  | 'commented'
+  | 'deleted';
 export type ContentType =
   | 'channel'
   | 'channel-message'
@@ -8713,20 +8736,6 @@ export interface DispatchCodingAgent {
    * Self-contained coding task, including the repository, relevant context, requirements, and desired outcome
    */
   prompt: string;
-}
-/**
- * Present results to the user as a rich view. The `view` argument is a dynamic-UI view object (a title plus an ordered list of widgets) following the dynamic-UI schema provided to you. The view is rendered immediately in the chat; this tool returns as soon as it is dispatched.
- */
-export interface DisplayResults {
-  /**
-   * The dynamic-UI view to render: an object with an optional `title` and a `widgets` array, per the provided dynamic-UI schema.
-   */
-  view: {
-    [k: string]: unknown;
-  };
-}
-export interface DisplayResultsResponse {
-  message: string;
 }
 /**
  * Make a copy of a document (including a task), owned by the user, as the Duplicate action in the app does. Requires view access to the original. Returns the copy's id.
@@ -14561,6 +14570,10 @@ export interface SearchToolsResponse {
    * to `LoadTools` if one of these is the tool you need.
    */
   additional_matches: ToolMatch[];
+  /**
+   * In code mode, where operations the SDK supports have no tool to find.
+   */
+  note?: string | null;
 }
 /**
  * Learn what Macro is and how it works. Call this whenever the user asks an open-ended question about Macro itself — what it is, what it's for, what it can do, or how to do something in Macro — instead of answering from memory (your training data may be stale). Takes no arguments. Returns an overview of Macro and a map of links into the official docs at docs.macro.com; every docs page is readable as Markdown (append `.md` to its URL), so follow up with WebFetch on the relevant page for details and cite it.
@@ -14987,6 +15000,20 @@ export interface ShareWithChannelResponse {
    * Human-readable result.
    */
   summary: string;
+}
+/**
+ * Show the user a rich view. The `view` argument is a dynamic-UI view object (a title plus an ordered list of widgets) following the dynamic-UI schema provided to you. The view is rendered immediately in the chat; this tool returns as soon as it is dispatched.
+ */
+export interface Show {
+  /**
+   * The dynamic-UI view to render: an object with an optional `title` and a `widgets` array, per the provided dynamic-UI schema.
+   */
+  view: {
+    [k: string]: unknown;
+  };
+}
+export interface ShowResponse {
+  message: string;
 }
 /**
  * Delegate a task to a subagent that can independently use tools to research and complete it. The subagent has access to search, documents, properties, calls, and channel tools. Use this for tasks that require multiple tool calls or independent research.
@@ -15668,9 +15695,11 @@ export interface CodeGuide {
   markdown: string;
 }
 /**
- * Copy turn_id from the current prompt’s hidden invocation context; never substitute another turn’s ID for a stale call. Run a JavaScript ES module in Deno. Export async function main({macro, session, execution}); return {data: <JSON>}. Optional reviews: [{kind: "email" | "calendar", id: "..."}] defaults to an empty list when omitted. The host supplies real public Macro SDK handles authenticated as the explicitly selected acting_as account. Optional imports: import {Macro} from "@macro-inc/sdk"; import Handlebars from "handlebars". main also receives token, hosts, sessionId and executionId for explicit SDK construction. Never print, return or persist token. No TypeScript syntax or package installation.
+ * Copy turn_id from the current prompt’s hidden invocation context; never substitute another turn’s ID for a stale call. Run a JavaScript ES module in Deno. Export async function main({macro, session, execution}); return {data: <JSON>}. Optional reviews: [{kind: "email" | "calendar", id: "..."}] defaults to an empty list when omitted. Optional view: a Show view, the object Show takes as `view`, shown to the user under the run when it finishes. The host supplies real public Macro SDK handles authenticated as the explicitly selected acting_as account. Optional imports: import {Macro} from "@macro-inc/sdk"; import Handlebars from "handlebars". main also receives token, hosts, sessionId and executionId for explicit SDK construction. Never print, return or persist token. No TypeScript syntax or package installation.
  *
- * Prefer ExecuteCode for supported Macro work, including a single precise call. SDK API reference sections expanded in context are already your documentation. Execute directly when they cover the task; do not call DescribeCodeTools merely to confirm them. The compact entity index alone is not a method reference. Use DescribeCodeTools only for missing methods, options, enum values or workflow guides, requesting the missing entities together rather than guessing. Request up to five entity names together (e.g. workspace, documents, email, ai, core).
+ * Prefer ExecuteCode for supported Macro work, including a single precise call. The SDK reads, searches, lists, creates, renames, moves, updates and deletes documents, tasks, projects, channels, email, calendar events, comments, properties, forms, CRM records and databases. In code mode these have no direct tools - RenameDocument, RenameChannel, MoveToProject, MoveToTrash, CreateProject, SetEntityProperty, ReadContent and the like are SDK methods here - so do them with ExecuteCode instead of searching for a tool. SDK API reference sections expanded in context are already your documentation. Execute directly when they cover the task; do not call DescribeCodeTools merely to confirm them. The compact entity index alone is not a method reference. Use DescribeCodeTools only for missing methods, options, enum values or workflow guides, requesting the missing entities together rather than guessing. Request up to five entity names together (e.g. workspace, documents, email, ai, core).
+ *
+ * Return view, without being asked, to show the user what the run made, changed or found that they will want to open, instead of calling Show afterwards: build its widgets from the IDs the SDK returned, so the results do not pass through you again. What the program creates or changes is not shown to the user as a card unless the view shows it; a card for such an item says what was done to it. Show the smallest set that does the job, usually a cards widget with the one to four items that matter, or a list for a longer set; leave out what the program only read along the way, and return no view when nothing is worth opening. data still needs what you will say about them, but do not mention in your reply an item the view shows: its card already opens it. The view shows before you see the results, so return one only when the program got what the user asked for: when a read failed, leave view out, report the failure in data and decide what to show next. A view the renderer would not draw fails the run with its problems; everything else the program did stands, so fix the view with Show rather than running the program again.
  *
  * For editable email/calendar drafts, persist them with execution.reviews.create({kind, title, drafts}), then return reviews: [await review.reference()]. This does not send emails or create calendar events. Creation immediately presents a completed PresentReview ACP tool call, even while main continues. "Presented to the user" means saved in the conversation, not approved or sent. The saved cards remain usable after this execution and chat continues. User decisions arrive as typed system events referring to the same review ID. Use GetReview to read final drafts and confirmed outcomes; notifications never authorize repeating an action. Use the direct EditDocument tool for AI document edits. Direct human-interactive tools, subagents and unsupported SDK operations remain available.
  *
@@ -15690,7 +15719,7 @@ export interface ExecuteCode {
    */
   turn_id: string;
   /**
-   * JavaScript module, at most 64 KiB. Import { Macro } from '@macro-inc/sdk' and Handlebars from 'handlebars'. Export async function main({token, hosts}) { const macro = new Macro({token, hosts}); return {data: ...}; }. The optional reviews array defaults to empty. Dependencies are preinstalled; no TypeScript syntax or package downloads. The token and hosts are supplied by the runner; never return or log the token.
+   * JavaScript module, at most 64 KiB. Import { Macro } from '@macro-inc/sdk' and Handlebars from 'handlebars'. Export async function main({token, hosts}) { const macro = new Macro({token, hosts}); return {data: ...}; }. The optional reviews array defaults to empty; an optional view, a Show view, is shown to the user when the run finishes. Dependencies are preinstalled; no TypeScript syntax or package downloads. The token and hosts are supplied by the runner; never return or log the token.
    */
   source: string;
   /**
@@ -15732,6 +15761,30 @@ export interface ExecutionActivity {
    */
   label: string;
   status: RecordedCallStatus;
+  /**
+   * The item the operation created or changed, once it completed: what
+   * its card in the conversation opens.
+   */
+  item?: ActivityItem | null;
+}
+/**
+ * A workspace item a completed SDK operation created or changed, as the
+ * program's SDK reported it. Advisory like the activity it came with: the
+ * conversation names it on the operation's step, and a card the agent
+ * shows for it says what was done to it. Readers open the item with their
+ * own access.
+ */
+export interface ActivityItem {
+  type: ActivityItemType;
+  /**
+   * The item's id.
+   */
+  id: string;
+  action: ActivityItemAction;
+  /**
+   * The item's name, when the operation carried one.
+   */
+  title?: string | null;
 }
 /**
  * Retrieve a chat thread's message history by its ID. Returns the conversation title and messages with their roles, content, and attachment references.

@@ -112,11 +112,13 @@ function segmentMarkdown(
         agentSessionId: sessionId,
         turn: segment.turn,
         segment: segment.segment,
-        rows: segment.rows.map((row) =>
-          row.detail
-            ? row
-            : { id: row.id, label: row.label, status: row.status }
-        ),
+        rows: segment.rows.map((row) => ({
+          id: row.id,
+          label: row.label,
+          status: row.status,
+          ...(row.detail ? { detail: row.detail } : {}),
+          ...(row.card ? { card: row.card } : {}),
+        })),
         sealed: segment.sealed,
       })
     );

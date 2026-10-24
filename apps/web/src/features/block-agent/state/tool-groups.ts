@@ -29,9 +29,10 @@ export type PartSegment = {
 
 /**
  * Macro tools whose call renders the answer itself rather than a card about
- * it: `DisplayResults` renders the dynamic-UI view the model composed, the
- * same full-width dashboard the chat shows. `GenerateImage` shows the generated
- * image document. `DispatchCodingAgent` shows the dispatched session's Magic Chip.
+ * it: `Show` (`DisplayResults` in saved replies) renders the dynamic-UI view
+ * the model composed, the same full-width dashboard the chat shows.
+ * `GenerateImage` shows the generated image document. `DispatchCodingAgent`
+ * shows the dispatched session's Magic Chip.
  *
  * Folding one of these into a group would put the answer behind a closed
  * caret, indented inside a row of muted tool chips — so they break the run
@@ -41,6 +42,7 @@ const SELF_RENDERING_TOOLS: ReadonlySet<string> = new Set([
   'DispatchCodingAgent',
   'DisplayResults',
   'GenerateImage',
+  'Show',
 ]);
 
 /**

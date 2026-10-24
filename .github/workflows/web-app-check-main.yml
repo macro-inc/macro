@@ -50,7 +50,7 @@ jobs:
             - 'crates/code_execution/src/outbound/deno/*.mjs'
             - 'crates/agent_code_mode/src/domain/documentation.json'
             - 'crates/agent_code_mode/SKILL.md'
-            - 'crates/ai_tools/src/display_results/schema.generated.json'
+            - 'crates/ai_tools/src/show/schema.generated.json'
             - '.github/actions/setup-reqs-web/**'
           codegen_changed:
             - 'crates/**/*.rs'

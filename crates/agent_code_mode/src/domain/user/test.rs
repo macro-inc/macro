@@ -107,6 +107,28 @@ async fn review_references_fail_outside_a_session() {
 }
 
 #[tokio::test]
+async fn a_view_fails_outside_a_session() {
+    // Only a session has a conversation to show a view in.
+    let service = UserCodeModeService::new(
+        Arc::new(Returns(json!({"data": 1, "view": {"widgets": []}}))),
+        Arc::new(Credentials::default()),
+    );
+
+    let receipt = service
+        .execute(&user(), request(), CancellationToken::new())
+        .await
+        .unwrap();
+
+    assert_eq!(receipt.status, ExecutionStatus::Failed);
+    assert!(
+        receipt
+            .error
+            .unwrap()
+            .contains("views and reviews are unavailable")
+    );
+}
+
+#[tokio::test]
 async fn invalid_requests_are_rejected_before_minting_a_credential() {
     let credentials = Arc::new(Credentials::default());
     let service =

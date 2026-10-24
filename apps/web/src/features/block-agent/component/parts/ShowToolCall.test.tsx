@@ -5,7 +5,7 @@ import { cleanup, render } from '@solidjs/testing-library';
 import type { JSX } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DisplayResultsToolCall } from './DisplayResultsToolCall';
+import { ShowToolCall } from './ShowToolCall';
 import type { ToolCallCommon } from './shared';
 
 // Keep the real dashboard schema validation and streaming behavior; replace
@@ -42,7 +42,6 @@ vi.mock('@core/component/LexicalMarkdown/theme', () => ({ aiChatTheme: {} }));
 
 vi.mock('../../ui', async () => ({
   isToolActive: (await import('../../ui/types')).isToolActive,
-  ToolCard: (await import('../../ui/ToolCard')).ToolCard,
 }));
 
 afterEach(cleanup);
@@ -51,22 +50,22 @@ function common(
   status: ToolCallCommon['status'] = 'completed'
 ): ToolCallCommon {
   return {
-    id: 'display-results',
-    label: 'DisplayResults',
+    id: 'show',
+    label: 'Show',
     status,
     muted: status === 'failed',
     trailing: status === 'failed' ? 'Failed' : undefined,
   };
 }
 
-describe('DisplayResultsToolCall', () => {
+describe('ShowToolCall', () => {
   it('renders completed results inline without a tool row', () => {
     const view = {
       title: 'This week',
       widgets: [{ type: 'md', markdown: 'hi' }],
     };
     const rendered = render(() => (
-      <DisplayResultsToolCall input={{ view }} common={common()} />
+      <ShowToolCall input={{ view }} common={common()} />
     ));
 
     expect(rendered.getByTestId('dashboard').textContent).toBe(
@@ -80,7 +79,7 @@ describe('DisplayResultsToolCall', () => {
       input: unknown;
       common: ToolCallCommon;
     }>({ input: null, common: common('running') });
-    const rendered = render(() => <DisplayResultsToolCall {...props} />);
+    const rendered = render(() => <ShowToolCall {...props} />);
 
     for (const status of ['pending', 'running'] as const) {
       for (const input of [null, {}, { view: null }, { view: {} }]) {
@@ -113,7 +112,7 @@ describe('DisplayResultsToolCall', () => {
     'reports malformed completed input without exposing its payload: %j',
     (input) => {
       const rendered = render(() => (
-        <DisplayResultsToolCall input={input} common={common()} />
+        <ShowToolCall input={input} common={common()} />
       ));
 
       expect(rendered.container.textContent).toContain(
@@ -129,32 +128,76 @@ describe('DisplayResultsToolCall', () => {
     { status: 'failed', error: null },
     { status: 'completed', error: 'private-error-details' },
     { status: 'running', error: 'private-error-details' },
-  ] as const)('shows only a failed summary for %j', ({ status, error }) => {
+  ] as const)(
+    'shows nothing for a view turned back: %j',
+    ({ status, error }) => {
+      const rendered = render(() => (
+        <ShowToolCall
+          input={{
+            view: { widgets: [{ type: 'md', markdown: 'Hidden result' }] },
+          }}
+          error={error}
+          common={common(status)}
+        />
+      ));
+
+      expect(rendered.container.innerHTML).toBe('');
+    }
+  );
+
+  it('renders the widgets that match and counts the ones that do not', () => {
+    const cards = {
+      type: 'cards',
+      title: 'Onboarding Summary',
+      items: [{ type: 'document', id: 'doc-1' }],
+    };
+    const view = {
+      title: 'Workspace Setup',
+      widgets: [
+        { type: 'tags', title: 'Created Tags' },
+        { type: 'markdown', markdown: 'private-markdown' },
+        cards,
+      ],
+    };
     const rendered = render(() => (
-      <DisplayResultsToolCall
-        input={{
-          view: { widgets: [{ type: 'md', markdown: 'Hidden result' }] },
-        }}
-        error={error}
-        common={common(status)}
-      />
+      <ShowToolCall input={{ view }} common={common()} />
     ));
 
-    expect(rendered.getByText('Failed')).toBeTruthy();
-    const row = rendered.container.querySelector('[data-tool-row]');
-    expect(row?.getAttribute('data-tool-status')).toBe('failed');
-    expect(row?.classList.contains('opacity-75')).toBe(true);
-    expect(rendered.queryByTestId('dashboard')).toBeNull();
-    expect(rendered.queryByRole('button')).toBeNull();
-    expect(rendered.container.textContent).not.toContain(
-      'private-error-details'
+    expect(rendered.getByTestId('dashboard').textContent).toBe(
+      JSON.stringify({ title: 'Workspace Setup', widgets: [cards] })
     );
-    expect(rendered.container.querySelector('.magic-chip-shimmer')).toBeNull();
+    expect(rendered.container.textContent).toContain(
+      "Couldn't render 2 widgets — they didn't match the schema."
+    );
+    expect(rendered.container.textContent).not.toContain('private-markdown');
+  });
+
+  it('counts an unmatched widget only once the call ends', () => {
+    const md = { type: 'md', markdown: 'Done so far' };
+    const view = { widgets: [md, { type: 'md' }] };
+    const [props, setProps] = createStore<{
+      input: unknown;
+      common: ToolCallCommon;
+    }>({ input: { view }, common: common('running') });
+    const rendered = render(() => <ShowToolCall {...props} />);
+
+    expect(rendered.getByTestId('dashboard').textContent).toBe(
+      JSON.stringify({ widgets: [md] })
+    );
+    expect(rendered.container.textContent).not.toContain("Couldn't render");
+
+    setProps('common', common());
+    expect(rendered.getByTestId('dashboard').textContent).toBe(
+      JSON.stringify({ widgets: [md] })
+    );
+    expect(rendered.container.textContent).toContain(
+      "Couldn't render one widget — it didn't match the schema."
+    );
   });
 
   it('reports a render error before showing the fallback', () => {
     const rendered = render(() => (
-      <DisplayResultsToolCall
+      <ShowToolCall
         input={{ view: { title: 'throws', widgets: [] } }}
         common={common()}
       />

@@ -1,3 +1,4 @@
+import { isShowTool } from '@app/features/dynamic-ui/core/show-tool';
 import { AssistantActivityGroup } from '@core/component/AI/component/message/AssistantActivityGroup';
 import { ChatMessageMarkdown } from '@core/component/AI/component/message/ChatMessageMarkdown';
 import { ThinkingBlock } from '@core/component/AI/component/message/ThinkingBlock';
@@ -78,6 +79,7 @@ const STANDALONE_TOOLS: ReadonlySet<string> = new Set([
   'QueryDatabase',
   'SaveDatabaseView',
   'SendEmail',
+  'Show',
 ]);
 
 function asObject(value: unknown): Record<string, unknown> | undefined {
@@ -108,7 +110,7 @@ function isActivityPresentationWidget(value: unknown): boolean {
 }
 
 function isRedundantActivityDashboard(part: AssistantMessagePart): boolean {
-  if (part.type !== 'toolCall' || part.name !== 'DisplayResults') return false;
+  if (part.type !== 'toolCall' || !isShowTool(part.name)) return false;
   const view = asObject(asObject(part.json)?.view);
   const widgets = view?.widgets;
   return (

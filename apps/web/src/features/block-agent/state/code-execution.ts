@@ -21,3 +21,22 @@ export function codeExecutionInput(part: MessagePart) {
     return;
   return { executionId: input.execution_id, source: input.source };
 }
+
+/**
+ * The view a code run returned for the user. Code mode fails a run whose view
+ * the renderer would not draw, so only a run that succeeded shows one.
+ */
+export function returnedView(
+  status: string | undefined,
+  result: unknown
+): object | undefined {
+  if (
+    status !== 'succeeded' ||
+    !result ||
+    typeof result !== 'object' ||
+    !('view' in result)
+  )
+    return;
+  const view = result.view;
+  return view && typeof view === 'object' ? view : undefined;
+}

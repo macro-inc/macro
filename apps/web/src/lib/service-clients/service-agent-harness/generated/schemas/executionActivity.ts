@@ -4,6 +4,7 @@
  * agent_harness_service
  * OpenAPI spec version: 0.1.0
  */
+import type { ExecutionActivityItem } from './executionActivityItem';
 import type { RecordedCallStatus } from './recordedCallStatus';
 
 /**
@@ -15,6 +16,7 @@ export interface ExecutionActivity {
    * @minimum 0
    */
   id: number;
+  item?: ExecutionActivityItem;
   /** Server-selected label from the generated operation catalog. */
   label: string;
   /** Observed request state; unfinished operations have unknown outcomes. */

@@ -54,6 +54,7 @@ const MACRO_TOOLS: Record<MacroToolName, Wording | null> = {
   DiscoverConnectors: null,
   DescribeCodeTools: null,
   DispatchCodingAgent: (whose) => `start a coding agent with ${whose} access`,
+  // `Show`, as saved sessions name it.
   DisplayResults: (whose) => `show results from ${whose} workspace`,
   DuplicateItem: (whose) => `duplicate items in ${whose} workspace`,
   EditBookingLink: (whose) => `edit ${whose} booking links`,
@@ -171,6 +172,7 @@ const MACRO_TOOLS: Record<MacroToolName, Wording | null> = {
   SetSenderPolicy: (whose) => `change ${whose} email sender rules`,
   ShareWithChannel: (whose) =>
     `share an item from ${whose} account with a channel`,
+  Show: (whose) => `show results from ${whose} workspace`,
   Subagent: (whose) => `start a helper agent with ${whose} access`,
   TextEditorCodeExecution: (whose) => `edit files with ${whose} access`,
   UpdateBookingSettings: (whose) => `change ${whose} booking settings`,

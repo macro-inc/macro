@@ -25,6 +25,9 @@ export type PermissionOptionsProps = {
   /** An answer is on the wire: nothing here can be clicked again. */
   disabled?: boolean;
   onSelect: (optionId: string) => void;
+  /** How Allow once reads: the card's one call to action, or just strong. */
+  allowVariant?: 'strong' | 'cta';
+  size?: 'sm' | 'md';
 };
 
 export function PermissionOptions(props: PermissionOptionsProps) {
@@ -45,23 +48,26 @@ export function PermissionOptions(props: PermissionOptionsProps) {
     <div class="flex min-w-0 flex-wrap items-center justify-end gap-2">
       <Show when={deny()}>
         {(option) => (
-          <Button
-            type="button"
-            size="md"
-            variant="ghost"
-            class="mr-auto"
-            tooltip={option().name}
-            disabled={props.disabled}
-            onClick={() => props.onSelect(option().id)}
-          >
-            Deny
-          </Button>
+          // The tooltip wraps the button, so the wrapper takes the margin
+          // that keeps Deny apart from the choices that allow.
+          <span class="mr-auto flex">
+            <Button
+              type="button"
+              size={props.size ?? 'md'}
+              variant="ghost"
+              tooltip={option().name}
+              disabled={props.disabled}
+              onClick={() => props.onSelect(option().id)}
+            >
+              Deny
+            </Button>
+          </span>
         )}
       </Show>
       <Show when={more().length > 0}>
         <Dropdown placement="top-end">
           <Dropdown.Trigger
-            size="md"
+            size={props.size ?? 'md'}
             variant="outline"
             disabled={props.disabled}
           >
@@ -95,8 +101,8 @@ export function PermissionOptions(props: PermissionOptionsProps) {
         {(option) => (
           <Button
             type="button"
-            size="md"
-            variant="strong"
+            size={props.size ?? 'md'}
+            variant={props.allowVariant ?? 'strong'}
             tooltip={option().name}
             disabled={props.disabled}
             onClick={() => props.onSelect(option().id)}

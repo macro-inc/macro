@@ -587,6 +587,11 @@ if (LOCAL_ONLY) {
   );
 
   registerComponent(
+    'agent-cards',
+    lazy(() => import('@app/features/agent-cards/debug/Gallery'))
+  );
+
+  registerComponent(
     'agent-replay',
     lazy(() => import('@app/features/block-agent/debug/replay/Replay'))
   );

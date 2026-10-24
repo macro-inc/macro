@@ -36,6 +36,7 @@ struct Inner {
     credentials: Arc<dyn ExecutionCredentials>,
     store: Arc<dyn ExecutionStore>,
     turns: Arc<dyn ExecutionTurns>,
+    views: Arc<dyn ViewCheck>,
     admission: Arc<Semaphore>,
 }
 
@@ -50,6 +51,7 @@ impl CodeModeService {
         credentials: Arc<dyn ExecutionCredentials>,
         store: Arc<dyn ExecutionStore>,
         turns: Arc<dyn ExecutionTurns>,
+        views: Arc<dyn ViewCheck>,
     ) -> Self {
         let limits = Limits::default();
         Self(Arc::new(Inner {
@@ -57,6 +59,7 @@ impl CodeModeService {
             credentials,
             store,
             turns,
+            views,
             admission: Arc::new(Semaphore::new(limits.max_running + limits.max_queued)),
         }))
     }
@@ -186,7 +189,15 @@ impl CodeModeService {
             super::activity::observe(&mut record.activity, &mut record.activity_truncated, value);
         }
         super::activity::finish(&mut record.activity);
-        let (status, result, error) = settle(outcome, Reviews::Allowed);
+        let (status, result, error) = match settle(outcome, Reviews::Allowed) {
+            (ExecutionStatus::Succeeded, Some(value), None) => {
+                match check_view(&value, self.0.views.as_ref()) {
+                    Ok(()) => (ExecutionStatus::Succeeded, Some(value), None),
+                    Err(error) => (ExecutionStatus::Failed, Some(value), Some(error)),
+                }
+            }
+            settled => settled,
+        };
         record.status = status;
         record.result = result;
         record.error = error;
@@ -343,7 +354,7 @@ pub(super) enum Reviews {
     Rejected,
 }
 
-/// Interpret a finished program against the `{data, reviews?}` contract.
+/// Interpret a finished program against the `{data, reviews?, view?}` contract.
 pub(super) fn settle(
     outcome: Outcome,
     reviews: Reviews,
@@ -367,21 +378,27 @@ pub(super) fn settle(
                         ExecutionStatus::Failed,
                         Some(value),
                         Some(
-                            "main must return exactly {data: JSON}; reviews are unavailable here."
+                            "main must return exactly {data: JSON}; views and reviews are unavailable here."
                                 .into(),
                         ),
                     )
                 };
             }
+            // Reviews default to none on an otherwise valid result; a result
+            // that fails is kept as the program returned it.
             if let Some(object) = value.as_object_mut()
-                && object.len() == 1
                 && object.contains_key("data")
+                && object
+                    .keys()
+                    .all(|key| matches!(key.as_str(), "data" | "view"))
             {
                 object.insert("reviews".into(), serde_json::json!([]));
             }
             let valid = value.as_object().is_some_and(|object| {
-                object.len() == 2
-                    && object.contains_key("data")
+                object.contains_key("data")
+                    && object
+                        .keys()
+                        .all(|key| matches!(key.as_str(), "data" | "reviews" | "view"))
                     && object.get("reviews").is_some_and(|references| {
                         serde_json::from_value::<Vec<reviews::ReviewReference>>(references.clone())
                             .is_ok()
@@ -390,7 +407,7 @@ pub(super) fn settle(
             if valid {
                 (ExecutionStatus::Succeeded, Some(value), None)
             } else {
-                (ExecutionStatus::Failed, Some(value), Some("main must return {data: JSON}; optional reviews must be an array of {kind, id} references.".into()))
+                (ExecutionStatus::Failed, Some(value), Some("main must return {data: JSON}; optional reviews must be an array of {kind, id} references, and an optional view a Show view.".into()))
             }
         }
         Outcome::Failed { error } => (ExecutionStatus::Failed, None, Some(error.message)),
@@ -405,6 +422,37 @@ pub(super) fn settle(
             Some("Execution timed out. Unfinished calls may have taken effect.".into()),
         ),
     }
+}
+
+/// How many of a returned view's problems the model is told at once.
+const VIEW_PROBLEMS_LISTED: usize = 10;
+
+/// A returned view the renderer would not draw fails the run. The error says
+/// what to change: a program's writes have already happened, so the view is
+/// fixed through `Show`, not by running the program again.
+fn check_view(value: &serde_json::Value, views: &dyn ViewCheck) -> Result<(), String> {
+    let Some(view) = value.get("view").filter(|view| !view.is_null()) else {
+        return Ok(());
+    };
+    let problems = views.problems(view);
+    if problems.is_empty() {
+        return Ok(());
+    }
+    let mut lines: Vec<String> = problems
+        .iter()
+        .take(VIEW_PROBLEMS_LISTED)
+        .map(|problem| format!("- {problem}"))
+        .collect();
+    if problems.len() > VIEW_PROBLEMS_LISTED {
+        lines.push(format!(
+            "- and {} more",
+            problems.len() - VIEW_PROBLEMS_LISTED
+        ));
+    }
+    Err(format!(
+        "The view was not shown: it does not match the Show schema.\n{}\nEverything else the program did stands, so do not run it again: call Show with the corrected view.",
+        lines.join("\n")
+    ))
 }
 
 /// Reject requests the runner would refuse, before minting a credential.

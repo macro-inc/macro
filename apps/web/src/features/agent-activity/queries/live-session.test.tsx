@@ -81,6 +81,64 @@ describe('live agent session', () => {
     expect(second.release).toHaveBeenCalledOnce();
   });
 
+  it('keeps a step that did not change the same object from paint to paint', async () => {
+    vi.useFakeTimers();
+    const live = session();
+    fake.acquire.mockReturnValue(live);
+    const scope = createRoot((dispose) => ({
+      live: createLiveSession(() => 'session'),
+      dispose,
+    }));
+    await vi.runAllTimersAsync();
+    const working = (second: 'running' | 'completed'): FoldedMessage => ({
+      ...message('working'),
+      segments: [
+        {
+          index: 0,
+          kind: 'activity',
+          start: 0,
+          end: 2,
+          sealed: false,
+          rows: [
+            {
+              id: 't1',
+              label: 'Ran',
+              detail: null,
+              status: 'completed',
+              card: null,
+            },
+            {
+              id: 't2',
+              label: 'Reading',
+              detail: null,
+              status: second,
+              card: null,
+            },
+          ],
+        },
+      ],
+    });
+    live.emit([{ kind: 'new', message: working('running') }]);
+    await vi.advanceTimersByTimeAsync(250);
+    const [first, second] = scope.live.messages()[0]!.segments[0]!.rows;
+    // The fold sends new objects for the whole reply when one step changes.
+    live.emit([{ kind: 'update', message: working('completed') }]);
+    await vi.advanceTimersByTimeAsync(250);
+    const rows = scope.live.messages()[0]!.segments[0]!.rows;
+    expect(rows[0]).toBe(first);
+    expect(rows[1]).toBe(second);
+    expect(rows[1]!.status).toBe('completed');
+    // A load puts earlier turns ahead of it: each message is still matched
+    // to itself, never merged into whichever message held its place.
+    const earlier = { ...message('earlier'), turn: -1 };
+    live.emit([{ kind: 'replace', messages: [earlier, working('completed')] }]);
+    await vi.advanceTimersByTimeAsync(250);
+    const [before, after] = scope.live.messages();
+    expect(before!.turn).toBe(-1);
+    expect(after!.segments[0]!.rows[0]).toBe(first);
+    scope.dispose();
+  });
+
   it('does not hide a stream failure and lets the user reconnect', async () => {
     const broken = session();
     broken.load.mockRejectedValueOnce(new Error('disconnected'));

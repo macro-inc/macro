@@ -24,6 +24,8 @@ These apply to your own conversational replies only — not to Markdown you auth
 - IMPORTANT After finding relavent results with any tool cite the most relavent findings
   using XML mention tags (e.g. `<m-document-mention>`). Always use a mention if the tool
   returns anything relavent. IMPORTANT
+  The one exception is an item a view you showed already shows, through `Show` or a code
+  run's `view`: its card opens it, so do not mention it again in your reply.
 
 - The provider tools `bash_code_execution` and `text_editor_code_execution` require an explicit request to execute code. This restriction does not apply to Macro's `ExecuteCode` SDK tool.
 
@@ -75,7 +77,8 @@ users workspace. If the user asks you to create a document, write a code file, o
 "##;
 
 static INTENT: &str = "The model proactively uses tools with precise filters instead of \
-claiming it lacks context, cites relevant tool results with mention tags, prefers ExecuteCode \
+claiming it lacks context, cites relevant tool results with mention tags except items a view \
+it showed already shows, prefers ExecuteCode \
 for supported Macro work while reserving provider bash/editor tools for explicit requests, \
 uses CreateDocument for files in the user's workspace, and \
 keeps its casual reply tone (short paragraphs, no formal formatting) scoped to its own \
@@ -84,11 +87,11 @@ conversational replies rather than to Markdown it authors via tools.";
 /// The tool-use prompt.
 pub static PROMPT: StaticPrompt<'static> = StaticPrompt::borrowed(TITLE, INSTRUCTIONS, INTENT);
 
-/// Routing overrides for sessions that selected the code-mode feature flag.
+/// Routing overrides for an agent turn in code mode.
 pub static CODE_MODE_ROUTING: StaticPrompt<'static> = StaticPrompt::borrowed(
     "Code Mode Routing",
-    r#"Use ExecuteCode for SDK-supported listing, search, and retrieval, including a single precise call. This takes precedence over general references to direct tools elsewhere in these instructions. Consult DescribeCodeTools for the relevant SDK entity before falling back.
+    r#"Use ExecuteCode for everything the SDK supports: listing, search and retrieval, and changes such as creating, renaming, moving, updating and deleting items, including a single precise call. This takes precedence over general references to direct tools elsewhere in these instructions. Consult DescribeCodeTools for the relevant SDK entity before falling back. SearchTools and LoadTools never list SDK operations: when no direct tool does what you need, do it with ExecuteCode instead of searching for a tool again.
 
 For workspace activity, unified inbox, tasks, and mixed-entity feeds, use the direct ListEntities tool with the requested type, time, tag, property, and mailbox filters. Use NameSearch for mixed-entity name searches. These tools include agent sessions. ContentSearch remains available for session-history search or query scopes the SDK does not support. Preserve the user's source scope in either path. Keep ReadCanvas, RenderCanvas, ApplyCanvasEdits, EditCanvas, EditDocument and other interactive or unsupported operations as direct tools; the public SDK does not expose these live editing workflows."#,
-    "SDK-supported retrieval uses code by default while unsupported scopes retain direct fallbacks.",
+    "SDK-supported reads and changes use code by default, and a missing direct tool sends the model to code rather than to tool search, while unsupported scopes retain direct fallbacks.",
 );

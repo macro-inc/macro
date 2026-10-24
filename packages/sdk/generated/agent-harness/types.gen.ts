@@ -10,6 +10,42 @@ export type ClientOptions = {
 export type AccessLevel = 'view' | 'comment' | 'edit' | 'owner';
 
 /**
+ * A workspace item a completed SDK operation created or changed, as the
+ * program's SDK reported it. Advisory like the activity it came with: the
+ * conversation names it on the operation's step, and a card the agent
+ * shows for it says what was done to it. Readers open the item with their
+ * own access.
+ */
+export type ActivityItem = {
+    /**
+     * What the operation did to it.
+     */
+    action: ActivityItemAction;
+    /**
+     * The item's id.
+     */
+    id: string;
+    /**
+     * The item's name, when the operation carried one.
+     */
+    title?: string | null;
+    /**
+     * What kind of item it is.
+     */
+    type: ActivityItemType;
+};
+
+/**
+ * What an operation did to its item; named as the agent fold reads them.
+ */
+export type ActivityItemAction = 'created' | 'edited' | 'sent' | 'updated' | 'moved' | 'renamed' | 'commented' | 'deleted';
+
+/**
+ * The kinds of item the SDK reports; named as the agent fold reads them.
+ */
+export type ActivityItemType = 'document' | 'email_thread' | 'calendar_event' | 'project' | 'channel' | 'form' | 'initiative';
+
+/**
  * One thing a caller wants an agent to do.
  */
 export type AgentAction = (AgentPromptAction & {
@@ -1120,6 +1156,7 @@ export type ExecutionActivity = {
      * Request identity within the execution.
      */
     id: number;
+    item?: null | ActivityItem;
     /**
      * Server-selected label from the generated operation catalog.
      */

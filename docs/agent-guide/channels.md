@@ -90,6 +90,47 @@ does not invoke the agent again. A reply inside a thread is not part of the
 conversation: the agent answers it only when mentioned there, in the thread,
 as in any channel.
 
+A step that made, changed, or sent an item names it on its line, where the
+step's detail would be, and clicking the name opens the item. Cards appear only
+for what the agent chose to show, unasked: the few items it made, changed or
+found that you will want to open. A view it showed with `Show` replaces its
+step, and a database answer it asked to show sits under its step. A view `Show`
+turned back as one it could not draw is no step at all, so it neither shows nor
+keeps the run from folding; the agent shows the view again. The reply's text
+does not mention an item its view shows. In a view, a card for an
+item the reply created or changed carries what was done to it (`Created`,
+`Sent`). An agent working in code mode works the same way: each SDK operation
+its program ran is a step, and a write that created or changed an item names
+that item on its step. A view its program returned shows as the run's last
+step once the run finishes, as a `Show` view would. What the steps
+folded behind `N earlier steps` showed appears above that control, and a
+finished run that folds into `Worked for … · N steps` keeps what the agent
+showed. A card's short summary (`3 changes`, `to Ana Ruiz`) shows only while
+its run is live, to a reader of the session who can open the item. Once the run
+is over, the card shows the item's kind and when it last changed instead; the
+session keeps the summary.
+A drafted email or event the agent waits on is its composer for the person
+the agent works for, as in the agent's session: the email composer's Send
+sends it and **Discard** under it declines; the calendar's composer creates
+it or cancels it. Anyone else who can answer sees the draft as the agent
+wrote it, with **Send** (or **Create event**) and **Discard**. Text typed into a
+question, or an edit to a drafted email or event, stays through scrolling
+away, a follow-up, or a backgrounded phone until it is sent.
+
+When the agent saves drafts for you to review without waiting on you
+(`PresentReview`, in any mode), its reply carries the saved review in place
+of the step: the drafts in their composers, `1 of N` with a draft picker and
+**Send all** (**Create all** for events) for several, each sent or dismissed
+on its own. The drafts are decided by the account they go out under: whoever
+asked, when the agent acted as them, or else the session owner. Anyone else in
+the thread sees `Email drafts to review · Waiting for <that person>` and nothing
+of the drafts. As in the session, the deciding card refreshes in place when the review
+is decided anywhere or a send settles, with **Responding** below it until the
+agent answers the decision; a silent answer clears it. When the agent needs an app, its reply ends with a
+**Connect** card. Connecting from the agent's latest reply, while nothing else
+runs or waits once the sign-in finishes, tells the agent to continue; from an
+older reply, or while the agent works, it only connects, and a toast says so.
+
 Each failed, stopped, or interrupted source message has its own **Retry message**
 action in the current context. Retry is explicit because an interrupted attempt
 may already have performed an external action. Refreshing or reopening the

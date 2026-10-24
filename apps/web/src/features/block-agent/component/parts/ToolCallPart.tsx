@@ -9,6 +9,7 @@
  * validates the payload. External servers never select Macro UI by name alone.
  */
 
+import { isShowTool } from '@app/features/dynamic-ui/core/show-tool';
 import { hasToolRenderer } from '@core/component/AI/component/tool/handler';
 import { type JSX, Match, Show, Switch } from 'solid-js';
 import {
@@ -19,13 +20,13 @@ import {
 import { settledToolStatus } from '../../ui';
 import { CodeExecutionPart } from '../../views/CodeExecutionPart';
 import { PresentedReviewPart } from '../../views/PresentedReviewPart';
-import { DisplayResultsToolCall } from './DisplayResultsToolCall';
 import { EditToolCall } from './EditToolCall';
 import { ExchangeToolCall } from './ExchangeToolCall';
 import { MacroToolCall } from './MacroToolCall';
 import { OutputToolCall } from './OutputToolCall';
 import { PathsToolCall } from './PathsToolCall';
 import { SearchToolCall } from './SearchToolCall';
+import { ShowToolCall } from './ShowToolCall';
 import { SubagentToolCall } from './SubagentToolCall';
 import {
   type ToolCallCommon,
@@ -82,11 +83,10 @@ export function ToolCallPart(props: {
       </Match>
       <Match
         when={
-          rendersOwnView(props.part) &&
-          toolLabel(props.part.name) === 'DisplayResults'
+          rendersOwnView(props.part) && isShowTool(toolLabel(props.part.name))
         }
       >
-        <DisplayResultsToolCall
+        <ShowToolCall
           input={
             'input' in props.part.detail ? props.part.detail.input : undefined
           }

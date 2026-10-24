@@ -5,17 +5,25 @@ import { PieChart } from './pie-chart';
 import { PlotChart } from './plot-chart';
 
 /** Presentation only; SQL, permission checks and validation live upstream. */
-export function QueryChart(props: { data: QueryChartData }) {
+export function QueryChart(props: {
+  data: QueryChartData;
+  /** The enclosing card is the frame: no border of the chart's own. */
+  bare?: boolean;
+}) {
   const [element, setElement] = createSignal<HTMLElement>();
   const size = createElementSize(element);
   // The figure's padding and border; the chart draws inside them.
-  const width = () => Math.max(180, (size.width || 346) - 26);
+  const width = () =>
+    Math.max(180, (size.width || 346) - (props.bare ? 0 : 26));
   const label = () =>
     `${props.data.title}. ${chartModeLabel(props.data.mark)}.`;
   return (
     <figure
       ref={setElement}
-      class="min-w-0 space-y-3 rounded-lg border border-edge-muted bg-panel p-3"
+      class="min-w-0 space-y-3"
+      classList={{
+        'rounded-lg border border-edge-muted bg-panel p-3': !props.bare,
+      }}
     >
       <figcaption class="text-sm font-medium text-ink">
         {props.data.title}

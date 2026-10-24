@@ -3,17 +3,17 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { ViewSchema } from './schema';
-import { displayResultsToolSchema } from './toolSchema';
+import { showToolSchema } from './toolSchema';
 
 const GENERATED = resolve(
   import.meta.dirname,
-  '../../../../../crates/ai_tools/src/display_results/schema.generated.json'
+  '../../../../../crates/ai_tools/src/show/schema.generated.json'
 );
 
-describe('DisplayResults tool contract', () => {
+describe('Show tool contract', () => {
   it('matches the complete schema included by the Rust tool', () => {
     expect(readFileSync(GENERATED, 'utf8')).toBe(
-      `${JSON.stringify(displayResultsToolSchema(), null, 2)}\n`
+      `${JSON.stringify(showToolSchema(), null, 2)}\n`
     );
   });
 
@@ -56,6 +56,29 @@ describe('DisplayResults tool contract', () => {
               channelId: 'channel-1',
               messageId: 'message-1',
             },
+            {
+              type: 'tags',
+              title: 'Company tags',
+              tags: [
+                {
+                  label: 'Area',
+                  children: [
+                    {
+                      label: 'Platform',
+                      color: 'teal',
+                      children: [
+                        {
+                          label: 'infra',
+                          color: '#FFB224',
+                          description: 'Cloud and CI/CD',
+                          tagId: 'tag-1',
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
           ],
         },
       ],
@@ -82,16 +105,37 @@ describe('DisplayResults tool contract', () => {
         ],
       },
     },
+    { view: { widgets: [{ type: 'tags', tags: [{ color: 'red' }] }] } },
+    {
+      view: {
+        widgets: [
+          {
+            type: 'tags',
+            tags: [{ label: 'Area', children: [{ description: 'No name' }] }],
+          },
+        ],
+      },
+    },
   ])('rejects malformed tool arguments: %j', (args) => {
-    const contract = z.fromJSONSchema(displayResultsToolSchema());
+    const contract = z.fromJSONSchema(showToolSchema());
     expect(contract.safeParse(args).success).toBe(false);
   });
 
   it('advertises rendering guidance on the tool itself', () => {
-    const schema = displayResultsToolSchema();
-    expect(schema.title).toBe('DisplayResults');
-    expect(schema.description).toContain('ReadActivity');
+    const schema = showToolSchema();
+    expect(schema.title).toBe('Show');
+    expect(schema.description).toContain(
+      'What ReadActivity returns is not shown to the user by itself'
+    );
     expect(schema.description).toContain('never invent ids');
+    expect(schema.description).toContain(
+      'Never mention, link or name in your reply an item the view shows'
+    );
+    // The agent shows what matters without being asked, and only that.
+    expect(schema.description).toContain('the user will not ask');
+    expect(schema.description).toContain(
+      'Show the smallest set that does the job'
+    );
     expect(schema.required).toEqual(['view']);
   });
 });

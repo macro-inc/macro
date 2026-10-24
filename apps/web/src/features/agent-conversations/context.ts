@@ -9,7 +9,8 @@ import { type Accessor, createContext, useContext } from 'solid-js';
  */
 export type AgentConversationsContextValue = {
   conversations: Accessor<AgentConversation[] | undefined>;
-  refresh: () => void;
+  /** Reads the conversations again; whether that read succeeded. */
+  refresh: () => Promise<boolean>;
 };
 
 export const AgentConversationsContext =

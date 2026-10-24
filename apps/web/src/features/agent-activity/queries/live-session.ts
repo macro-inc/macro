@@ -13,6 +13,7 @@ import {
   createSignal,
   onCleanup,
 } from 'solid-js';
+import { createStore, reconcile } from 'solid-js/store';
 
 /**
  * How long a session's shared fold outlives the last surface showing it. The
@@ -29,9 +30,19 @@ export const RELEASE_DELAY_MS = 5_000;
  *
  * A viewer who cannot read the session is `denied`, which is not a failure:
  * the conversation still shows the bot typing and the steps it posted.
+ *
+ * The fold hands over new objects on every event. Each paint reconciles them
+ * into the messages already shown, matching messages by turn and author and
+ * steps and tool calls by id, so a step or card that did not change stays the
+ * same object and nothing drawn from it is torn down and built again.
  */
 export function createLiveSession(sessionId: Accessor<string | undefined>) {
-  const [messages, setMessages] = createSignal<FoldedMessage[]>([]);
+  // Reconciling writes into the objects already shown, and every surface on
+  // the session is handed the same event objects: a message may only ever
+  // be merged into the same message, so each one carries its key as `id`.
+  const [shown, setShown] = createStore<
+    { id: string; message: FoldedMessage }[]
+  >([]);
   const [metadata, setMetadata] = createSignal<SessionMetadata>();
   const [loaded, setLoaded] = createSignal(false);
   const [failed, setFailed] = createSignal(false);
@@ -44,7 +55,7 @@ export function createLiveSession(sessionId: Accessor<string | undefined>) {
     retry();
     const id = currentId();
     batch(() => {
-      setMessages([]);
+      setShown(reconcile([]));
       setMetadata(undefined);
       setLoaded(false);
       setFailed(false);
@@ -58,7 +69,13 @@ export function createLiveSession(sessionId: Accessor<string | undefined>) {
     const key = (row: FoldedMessage) => `${row.turn}:${row.author.kind}`;
     const flush = () => {
       timer = undefined;
-      if (!disposed) setMessages([...rows.values()]);
+      if (disposed) return;
+      setShown(
+        reconcile(
+          [...rows].map(([id, message]) => ({ id, message })),
+          { key: 'id' }
+        )
+      );
     };
     const apply = (events: FoldedStreamEvent[]) => {
       for (const event of events) {
@@ -105,7 +122,8 @@ export function createLiveSession(sessionId: Accessor<string | undefined>) {
     return session;
   });
   return {
-    messages,
+    messages: (): readonly FoldedMessage[] =>
+      shown.map((entry) => entry.message),
     metadata,
     loaded,
     failed,
