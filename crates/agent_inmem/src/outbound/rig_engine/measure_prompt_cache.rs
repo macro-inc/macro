@@ -98,6 +98,7 @@ async fn turn(
     let system_prompt = system_prompt(
         &native.prompt,
         agent_session::domain::model::AgentSessionId::new(),
+        ReplyDelivery::Streamed,
         Some(&identity),
         Some(instructions),
         None,

@@ -190,7 +190,15 @@ async fn shared_definitions_keep_the_callers_context_and_check_each_sessions_gat
 #[test]
 fn instructions_are_a_delimited_section_after_the_standing_prompt() {
     let session = AgentSessionId::new();
-    let prompt = system_prompt(&TOOLS, session, None, Some("be terse"), None).to_string();
+    let prompt = system_prompt(
+        &TOOLS,
+        session,
+        ReplyDelivery::Streamed,
+        None,
+        Some("be terse"),
+        None,
+    )
+    .to_string();
 
     assert!(
         prompt.starts_with(&prompt::agent_session::PROMPT.to_string()),
@@ -221,7 +229,15 @@ fn identity_precedes_the_standing_prompt_and_does_not_need_instructions() {
         name: "Grunk".to_owned(),
         handle: "grunk".to_owned(),
     };
-    let prompt = system_prompt(&TOOLS, session, Some(&identity), None, None).to_string();
+    let prompt = system_prompt(
+        &TOOLS,
+        session,
+        ReplyDelivery::Streamed,
+        Some(&identity),
+        None,
+        None,
+    )
+    .to_string();
     let identity_section = prompt::agent_identity::render("Grunk", "grunk");
 
     assert!(
@@ -241,6 +257,7 @@ fn memory_follows_instructions_rather_than_preceding_them() {
     let prompt = system_prompt(
         &TOOLS,
         session,
+        ReplyDelivery::Streamed,
         None,
         Some("be terse"),
         Some("prefers Rust"),
@@ -269,11 +286,19 @@ fn sessions_of_an_agent_share_everything_before_their_instructions() {
     let first = system_prompt(
         &TOOLS,
         session,
+        ReplyDelivery::Streamed,
         Some(&identity),
         Some("task A"),
         Some("prefers Rust"),
     );
-    let second = system_prompt(&TOOLS, session, Some(&identity), Some("task B"), None);
+    let second = system_prompt(
+        &TOOLS,
+        session,
+        ReplyDelivery::Streamed,
+        Some(&identity),
+        Some("task B"),
+        None,
+    );
 
     let shared = format!(
         "{}\n{}\n{}\n{TOOLS}",
@@ -306,7 +331,15 @@ fn sessions_of_an_agent_share_everything_before_their_instructions() {
 #[test]
 fn no_instructions_means_no_section() {
     let session = AgentSessionId::new();
-    let prompt = system_prompt(&TOOLS, session, None, None, Some("prefers Rust")).to_string();
+    let prompt = system_prompt(
+        &TOOLS,
+        session,
+        ReplyDelivery::Streamed,
+        None,
+        None,
+        Some("prefers Rust"),
+    )
+    .to_string();
 
     assert!(!prompt.contains("session_instructions"));
     assert!(prompt.contains("<user_memory>\nprefers Rust\n</user_memory>"));
@@ -317,9 +350,30 @@ fn no_instructions_means_no_section() {
 #[test]
 fn empty_instructions_add_no_section() {
     let session = AgentSessionId::new();
-    let prompt = system_prompt(&TOOLS, session, None, Some(""), None).to_string();
+    let prompt = system_prompt(
+        &TOOLS,
+        session,
+        ReplyDelivery::Streamed,
+        None,
+        Some(""),
+        None,
+    )
+    .to_string();
 
     assert!(!prompt.contains("session_instructions"));
+}
+
+/// A reply read only once finished gets no opening line, so the turn's model
+/// must not be told one may already be out and skip its own.
+#[test]
+fn a_whole_reply_is_not_told_an_opening_line_was_shown() {
+    let session = AgentSessionId::new();
+    let streamed =
+        system_prompt(&TOOLS, session, ReplyDelivery::Streamed, None, None, None).to_string();
+    let whole = system_prompt(&TOOLS, session, ReplyDelivery::Whole, None, None, None).to_string();
+
+    assert!(streamed.contains(opener::ALREADY_OPENED));
+    assert!(!whole.contains(opener::ALREADY_OPENED));
 }
 
 #[tokio::test]

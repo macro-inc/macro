@@ -39,7 +39,7 @@ use tokio::sync::mpsc;
 use tracing::Instrument as _;
 
 use crate::domain::auto_model::{AutoModelSelector, DefaultAutoModel, JevAutoModel};
-use crate::domain::engine::{AgentIdentity, TurnEngine, TurnRequest};
+use crate::domain::engine::{AgentIdentity, ReplyDelivery, TurnEngine, TurnRequest};
 use crate::domain::tool_gate::{NativeToolGate, NativeToolVerdict, UngatedNativeTools};
 use crate::domain::tool_mode::{StandardTools, ToolMode, ToolModeSelector};
 use crate::inbound::ask_user::{AskUser, AskUserContext};
@@ -438,6 +438,7 @@ async fn drive_turn(
 ) -> Result<(), AgentError> {
     let TurnRequest {
         purpose,
+        delivery,
         session_id,
         awaiting,
         owner,
@@ -473,6 +474,8 @@ async fn drive_turn(
     // reads no memory, offers the model no tools, and is read, not shown, so
     // no opening line races it.
     let summarizing = purpose == crate::domain::engine::TurnPurpose::Summary;
+    // A reply read only once it is finished gains nothing from an opening line.
+    let opening = !summarizing && delivery == ReplyDelivery::Streamed;
 
     // Started before anything else so its line is out before the turn's
     // model has a first token.
@@ -486,7 +489,7 @@ async fn drive_turn(
     // reply), `silent` (no line fit this follow-up), `turn_first` (the
     // turn's model spoke first), `no_verdict` (the
     // fast model failed or answered without one) or `timeout`.
-    let opener_span = if summarizing {
+    let opener_span = if !opening {
         tracing::Span::none()
     } else {
         tracing::info_span!(
@@ -499,7 +502,7 @@ async fn drive_turn(
         )
     };
     // A closed receiver has no verdict, and the turn's own stream follows.
-    let mut opening_line = if summarizing {
+    let mut opening_line = if !opening {
         mpsc::channel(1).1
     } else {
         opener_span.in_scope(|| {
@@ -549,6 +552,7 @@ async fn drive_turn(
         let prompt = system_prompt(
             &tools_prompt,
             session_id,
+            delivery,
             identity.as_ref(),
             instructions.as_deref(),
             user_memory.as_deref(),
@@ -801,7 +805,8 @@ fn elapsed_ms(since: tokio::time::Instant) -> u64 {
 }
 
 /// The turn's system prompt: the agent's identity, the agent-session
-/// preamble, the note that an opening line is already out (see [`opener`]),
+/// preamble, the note that an opening line may already be out when the reply
+/// is streamed (see [`opener`]),
 /// the static Macro prompt (how to use the product: mentions,
 /// tools, terminology), then the session's own instructions when there are
 /// any, which session this is, and the owner's memory when there is any.
@@ -819,6 +824,7 @@ fn elapsed_ms(since: tokio::time::Instant) -> u64 {
 fn system_prompt(
     tools_prompt: &impl std::fmt::Display,
     session_id: agent_session::domain::model::AgentSessionId,
+    delivery: ReplyDelivery,
     identity: Option<&AgentIdentity>,
     instructions: Option<&str>,
     user_memory: Option<&str>,
@@ -833,8 +839,10 @@ fn system_prompt(
     }
     shared.push_str(&prompt::agent_session::PROMPT.to_string());
     shared.push('\n');
-    shared.push_str(opener::ALREADY_OPENED);
-    shared.push('\n');
+    if delivery == ReplyDelivery::Streamed {
+        shared.push_str(opener::ALREADY_OPENED);
+        shared.push('\n');
+    }
     shared.push_str(&tools_prompt.to_string());
     let mut rest = String::new();
     // Blank instructions are "none" stated clumsily. A delimited section with

@@ -65,6 +65,10 @@ words, never the prompt's hidden context. The sent prompt is fully opaque from
 the first paint, and its `Context` chip is already in place, so nothing shifts
 when the server confirms it.
 
+A session started by mentioning the agent in a thread (for example `@macro` in a
+channel) gets no opener: its thread reply appears all at once, so the line would
+add nothing. Its reply starts with the chosen model's answer.
+
 Repeat from a fresh tab using Home, Agents, and a document's Chat action.
 Focusing an agent composer prepares its transcript renderer locally; focus alone
 must not send a prompt. Record navigation and focus time separately from typing

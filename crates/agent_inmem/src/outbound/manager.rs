@@ -18,7 +18,7 @@ use dashmap::DashMap;
 use model_owner::Owner;
 
 use crate::domain::agent::{AgentState, serve};
-use crate::domain::engine::{AgentIdentity, TurnEngine};
+use crate::domain::engine::{AgentIdentity, ReplyDelivery, TurnEngine};
 use crate::domain::mcp::DynMcpToolConnector;
 use crate::domain::replay::{FrameSource, replay_history, replay_reasoning_effort, replay_speed};
 use crate::domain::session::{SessionState, SessionStore, Summarizing};
@@ -33,6 +33,8 @@ pub struct SessionFacts {
     pub id: AgentSessionId,
     /// The session's owner; turns act on their behalf.
     pub owner: Owner,
+    /// How the session's replies reach their reader.
+    pub delivery: ReplyDelivery,
     /// Model id stamped on the session row.
     pub model: String,
     /// The bot's display name and `@` handle, folded into every turn's
@@ -188,6 +190,7 @@ impl InMemAgentManager {
         let state = Arc::new(AgentState {
             session_id: facts.id,
             owner: facts.owner,
+            delivery: facts.delivery,
             engine: Arc::clone(&self.engine),
             admission: Arc::clone(&self.admission),
             model_access: Arc::clone(&self.model_access),

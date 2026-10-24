@@ -36,6 +36,8 @@ pub struct AgentIdentity {
 pub struct TurnRequest {
     /// Whether the turn answers the user or condenses their conversation.
     pub purpose: TurnPurpose,
+    /// How the session's reader receives the reply.
+    pub delivery: ReplyDelivery,
     /// The session the turn belongs to.
     pub session_id: agent_session::domain::model::AgentSessionId,
     /// Counts what the turn is waiting on a person for - a question, or a
@@ -88,6 +90,18 @@ pub enum TurnPurpose {
     /// summary, or an image read for it. No tools, no memory, no opening
     /// line, and `instructions` as its whole system prompt.
     Summary,
+}
+
+/// How the session's reader receives a reply.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReplyDelivery {
+    /// Live, as the model writes it, so a fast model's opening line shows
+    /// long before the turn's own first token.
+    Streamed,
+    /// Only once the turn has finished, as one message (a reply posted to the
+    /// thread of the message that mentioned the agent). An opening line would
+    /// arrive with the rest, so none is written.
+    Whole,
 }
 
 /// How many things a turn currently waits on a person for. Shared between
