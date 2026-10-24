@@ -99,6 +99,7 @@ export function CommandMenu() {
     : () => true; // assume list mode
 
   let suppressCloseAutoFocus = false;
+  let wasOpen = false;
 
   createEffect(() => {
     const open = CommandState.isOpen();
@@ -107,16 +108,27 @@ export function CommandMenu() {
     }
     if (open) {
       CommandState.onMenuOpen();
-      suppressCloseAutoFocus = false;
+      if (!wasOpen) {
+        suppressCloseAutoFocus = false;
+        CommandState.setFocusDestinationOnClose(false);
+      }
     } else {
       CommandState.onMenuClose();
     }
+    wasOpen = open;
   });
 
   const handleSelect = (item: CommandMenuItem) => {
+    CommandState.setFocusDestinationOnClose(
+      (isEntityItem(item) &&
+        item.data.type !== 'foreign' &&
+        (!isGithubPrEntity(item.data) || USE_MACRO_PR_SUMMARY_BLOCK)) ||
+        item.kind === 'initiative'
+    );
     if (
       isSearchItem(item) ||
       isAskAiItem(item) ||
+      isUserItem(item) ||
       item.kind === 'new-project' ||
       (isCommandItem(item) &&
         item.data.hotkeyToken === TOKENS.global.createCommand)
@@ -128,9 +140,13 @@ export function CommandMenu() {
     <Dialog
       onOpenChange={CommandState.setIsOpen}
       onCloseAutoFocus={(e) => {
-        if (suppressCloseAutoFocus) {
+        if (suppressCloseAutoFocus || CommandState.focusDestinationOnClose()) {
           e.preventDefault();
           suppressCloseAutoFocus = false;
+        }
+        if (CommandState.focusDestinationOnClose()) {
+          globalSplitManager()?.returnFocus();
+          CommandState.setFocusDestinationOnClose(false);
         }
       }}
       open={CommandState.isOpen()}
@@ -302,6 +318,7 @@ export function CommandMenuInner(props: {
           reopen: 'latest',
         }
       );
+      globalSplitManager()?.returnFocus();
     } catch {
       toast.failure('Unable to open conversation. Please try again.');
     }
@@ -384,7 +401,7 @@ export function CommandMenuInner(props: {
           type: 'component',
           id: projectRouteId({ id: item.id, section: 'overview' }),
         },
-        { preferNewSplit: openInNewSplit }
+        { referredFrom: 'kommand-menu', preferNewSplit: openInNewSplit }
       );
       CommandState.close();
       CommandState.setQuery('');

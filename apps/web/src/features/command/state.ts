@@ -27,6 +27,9 @@ interface ICommandState {
   toggle: () => void;
   open: () => void;
   close: () => void;
+  /** Let a selected destination claim focus when the menu closes. */
+  focusDestinationOnClose: Accessor<boolean>;
+  setFocusDestinationOnClose: Setter<boolean>;
 
   /** query */
   query: Accessor<string>;
@@ -80,6 +83,8 @@ function createCommandState(): ICommandState {
     id: 'command',
   });
   const [query, setQuery] = createSignal('');
+  const [focusDestinationOnClose, setFocusDestinationOnClose] =
+    createSignal(false);
   const [selectedIndex, setSelectedIndex] = createSignal(0);
   const [categoryFilter, setCategoryFilter] =
     createSignal<CategoryFilter>('all');
@@ -194,6 +199,8 @@ function createCommandState(): ICommandState {
     toggle,
     open,
     close,
+    focusDestinationOnClose,
+    setFocusDestinationOnClose,
 
     query,
     setQuery,

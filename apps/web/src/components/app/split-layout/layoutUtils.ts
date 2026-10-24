@@ -17,6 +17,7 @@ import type {
   SplitHandle,
   SplitManager,
 } from './layoutManager';
+import { shouldAutofocusNavigation } from './should-autofocus-navigation';
 import type {
   CollapsibleItemInput,
   PriorityCollapser,
@@ -137,9 +138,16 @@ export function closeSplitOrReturnToList(
   });
 }
 
-/** Inline previews stay passive until the user focuses them. */
+/** Inline previews and passive navigation do not claim editor focus. */
 export function useCanAutofocusSplitContent() {
-  return !useSplitPanel()?.isInlinePreview;
+  const panel = useSplitPanel();
+  if (panel?.isInlinePreview) return false;
+  return panel
+    ? shouldAutofocusNavigation(
+        panel.handle.lastNavigationSource(),
+        panel.handle.lastNavigationCause()
+      )
+    : true;
 }
 
 /**

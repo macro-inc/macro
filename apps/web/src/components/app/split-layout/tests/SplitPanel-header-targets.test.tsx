@@ -115,6 +115,7 @@ it('mounts header contributions when chrome appears and follows its replacement 
     id,
     content,
     referredFrom: null,
+    lastNavigationSource: null,
     lastNavigationCause: 'fresh',
     mount: {
       kind: 'component',
@@ -178,6 +179,7 @@ it('mounts header contributions when chrome appears and follows its replacement 
       split.mount.kind === 'component' ? split.mount.meta : undefined,
     updateMeta: () => {},
     referredFrom: () => null,
+    lastNavigationSource: () => null,
     lastNavigationCause: () => 'fresh',
     registerEntryStateCaptor: () => () => {},
     captureEntryState: () => {},

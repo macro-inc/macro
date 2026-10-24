@@ -188,6 +188,8 @@ export type SplitState = {
   content: SplitContent; // mirror of the pane's current router entry
   mount: SplitMount; // contains pinned element
   referredFrom: ReferredFrom;
+  /** Source of this arrival, cleared when the next navigation omits one. */
+  lastNavigationSource: ReferredFrom;
   lastNavigationCause: NavigationCause;
 };
 
@@ -258,6 +260,7 @@ export type SplitEventPayload = {
     newContent: SplitContent;
     previousContent: SplitContent;
     cause: NavigationCause;
+    referredFrom?: ReferredFrom;
   };
   [SplitEvent.ReturnFocus]: void;
 };
@@ -488,6 +491,7 @@ export type SplitHandle<TMeta extends ComponentMeta = ComponentMeta> = {
   /** Update component metadata (only available for component splits) */
   updateMeta: ((data: Omit<TMeta, 'kind'>) => void) | undefined;
   referredFrom: () => ReferredFrom;
+  lastNavigationSource: () => ReferredFrom;
   /**
    * Cause of the most recent navigation event for this split. `'fresh'` on
    * initial mount, then updated by back/forward/replace/push.
@@ -770,6 +774,7 @@ export function createSplitLayout(
       content,
       mount: createPinnedMount(orchestrator, content),
       referredFrom: referredFrom ?? null,
+      lastNavigationSource: referredFrom ?? null,
       lastNavigationCause: 'fresh',
     };
   }
@@ -799,6 +804,7 @@ export function createSplitLayout(
         newContent: content,
         previousContent: split.content,
         cause,
+        referredFrom,
       };
 
       dispatchEvent(SplitEvent.ContentChange, payload);
@@ -821,6 +827,7 @@ export function createSplitLayout(
             ...s[i],
             content: content,
             referredFrom,
+            lastNavigationSource: referredFrom,
             lastNavigationCause: cause,
           };
           return s.with(i, target);
@@ -832,6 +839,7 @@ export function createSplitLayout(
         const target = {
           ...s[i],
           content: content,
+          lastNavigationSource: null,
           lastNavigationCause: cause,
         };
         return s.with(i, target);
@@ -847,6 +855,7 @@ export function createSplitLayout(
         ...s[i],
         content,
         mount: newMount,
+        lastNavigationSource: referredFrom ?? null,
         lastNavigationCause: cause,
         ...(referredFrom !== undefined && { referredFrom }),
       };
@@ -1269,6 +1278,7 @@ export function createSplitLayout(
         return mount?.kind === 'component' ? mount.updateMeta : undefined;
       },
       referredFrom: () => s()?.referredFrom ?? null,
+      lastNavigationSource: () => s()?.lastNavigationSource ?? null,
       lastNavigationCause: () => s()?.lastNavigationCause ?? 'fresh',
       registerEntryStateCaptor: (key: string, getter: () => unknown) => {
         let perSplit = entryStateCaptors.get(currentSplit.id);

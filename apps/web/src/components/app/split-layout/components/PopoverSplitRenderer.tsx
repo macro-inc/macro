@@ -103,6 +103,7 @@ function PopoverSplitModal(props: {
         ? props.popover.mount.updateMeta
         : undefined,
     referredFrom: () => null,
+    lastNavigationSource: () => null,
     lastNavigationCause: () => 'fresh',
     registerEntryStateCaptor: () => () => {},
     captureEntryState: () => {},

@@ -2346,6 +2346,12 @@ keeps the default behavior.
 4. The document auto-saves continuously (collaborative CRDT; no save button). The tab title
    and header update to the typed title.
 
+On desktop, opening a document through Cmd/Ctrl+K focuses its body editor after
+the content and title have loaded. Creating a document focuses its empty title;
+if the new document already has a title, it focuses the body. Ordinary clicks
+and Back/Forward do not move focus into the editor. A control the user focused
+while the document loaded keeps focus.
+
 The a11y snapshot exposes the entire body as the contenteditable's `value` and as paragraph
 nodes — use the snapshot itself to verify content. For formatting checks, run
 `evaluate_script` over `[contenteditable] strong` etc.
