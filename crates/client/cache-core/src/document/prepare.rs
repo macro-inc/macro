@@ -29,7 +29,7 @@ pub(super) fn conditions(
                 .text()
                 .to_string();
             match name.as_str() {
-                "cacheOnly" => {}
+                "cacheOnly" | "fromCache" => {}
                 "include" | "skip" => {
                     let value = directive
                         .arguments()

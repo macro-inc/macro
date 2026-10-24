@@ -4,3 +4,11 @@ to the caller. This directive is stripped before sending the operation to the
 GraphQL server.
 """
 directive @cacheOnly on FIELD
+
+"""
+Read this field only from the device cache. It is removed from the operation
+before it reaches the GraphQL server, so another query must fetch and cache the
+same field with the same arguments. Reads return null until it is cached, and
+watched queries update when it is. Only nullable fields may use it.
+"""
+directive @fromCache on FIELD

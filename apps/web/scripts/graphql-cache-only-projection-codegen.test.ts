@@ -4,8 +4,9 @@ import { plugin } from './graphql-cache-only-projection-codegen';
 
 const schema = buildSchema(`
   directive @cacheOnly on FIELD
+  directive @fromCache on FIELD
   type Query { page: Page!, node: Node!, property: Property! }
-  type Page { items: [Item!]!, nextCursor: String, related: Page }
+  type Page { items: [Item!]!, nextCursor: String, related: Page, summary: String }
   interface Node { id: ID! }
   type Item implements Node { id: ID!, label: String! }
   type Other implements Node { id: ID!, count: Int! }
@@ -92,6 +93,40 @@ describe('@cacheOnly result codegen', () => {
       'export type CursorHydrationResult = { "page": { "nextCursor": string | null } };'
     );
     expect(output).toContain('export type VoidHydrationResult = void;');
+  });
+
+  it('omits @fromCache fields, which the server never returns', async () => {
+    const document = parse(`
+      query SummaryHydration {
+        page {
+          items @cacheOnly { id }
+          summary @fromCache
+          nextCursor
+        }
+      }
+    `);
+
+    expect(
+      await plugin(
+        schema,
+        [{ document, location: 'test.graphql' }],
+        { cacheOnlyResultOperations: ['SummaryHydration'] },
+        {} as never
+      )
+    ).toBe(
+      'export type SummaryHydrationResult = { "page": { "nextCursor": string | null } };'
+    );
+  });
+
+  it('rejects @fromCache on a non-null field, which reads as null until cached', async () => {
+    const document = parse(`
+      query Labels { page { ...ItemLabels } }
+      fragment ItemLabels on Page { items { label @fromCache } }
+    `);
+
+    await expect(async () =>
+      plugin(schema, [{ document, location: 'test.graphql' }], {}, {} as never)
+    ).rejects.toThrow('@fromCache field Item.label must be nullable');
   });
 
   it('only projects opted-in operations, even when they share cache-only fragments', async () => {

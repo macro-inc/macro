@@ -886,6 +886,45 @@ describe('GraphQL Soup browser cache session gate', () => {
     );
   });
 
+  it('never sends @fromCache fields and passes other requests through unchanged', async () => {
+    mocks.platformFetch.mockImplementation(
+      async () =>
+        new Response(JSON.stringify({ data: { user: { id: 'user-1' } } }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+    );
+    const soup = await import('./graphql-soup');
+    const query = `query Page {
+      user {
+        id
+        messages {
+          id @cacheOnly
+          preparedBody(version: 1) @fromCache { html }
+        }
+      }
+    }`;
+    await soup.dssGraphqlFetch('http://dss.test/graphql', {
+      method: 'POST',
+      body: JSON.stringify({ query }),
+    });
+    const unrelated: RequestInit = {
+      method: 'POST',
+      body: JSON.stringify({ query: 'query Viewer { user { id } }' }),
+    };
+    await soup.dssGraphqlFetch('http://dss.test/graphql', unrelated);
+
+    const [transport, passthrough] = mocks.platformFetch.mock.calls.map(
+      (call) => call[1] as RequestInit
+    );
+    const sent = (JSON.parse(transport?.body as string) as { query: string })
+      .query;
+    expect(sent).not.toContain('preparedBody');
+    expect(sent).not.toContain('@');
+    expect(sent).toMatch(/messages\s*{\s*id\s*}/);
+    expect(passthrough?.body).toBe(unrelated.body);
+  });
+
   it.each([
     'Cannot query field "cacheProjection" on type "GraphqlSoupEntity".',
     'Unknown field "cacheProjection" on type "GraphqlSoupEntity".',

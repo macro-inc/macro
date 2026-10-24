@@ -53,6 +53,9 @@ pub struct FieldNode {
     pub name: String,
     /// The field is persisted but omitted from hydration results.
     pub cache_only: bool,
+    /// The field is never sent to the server (`@fromCache`): reads take it
+    /// from the cache, as null when no other query has stored it.
+    pub from_cache: bool,
     /// Conditional directives evaluated once against operation variables.
     pub conditions: Vec<(String, ArgValue)>,
     pub arguments: Vec<(String, ArgValue)>,
@@ -292,13 +295,8 @@ fn convert_selection_set(
                         arguments.push((arg_name, convert_value(value)?));
                     }
                 }
-                let cache_only = f.directives().is_some_and(|directives| {
-                    directives.directives().any(|directive| {
-                        directive
-                            .name()
-                            .is_some_and(|name| name.text() == "cacheOnly")
-                    })
-                });
+                let cache_only = has_directive(f.directives(), "cacheOnly");
+                let from_cache = has_directive(f.directives(), "fromCache");
                 let selection_set = match f.selection_set() {
                     Some(s) => convert_selection_set(s, fragments, depth + 1)?,
                     None => Vec::new(),
@@ -307,6 +305,7 @@ fn convert_selection_set(
                     response_key,
                     name,
                     cache_only,
+                    from_cache,
                     conditions: prepare::conditions(f.directives())?,
                     arguments,
                     selection_set,
@@ -362,6 +361,14 @@ fn convert_selection_set(
         }
     }
     Ok(out)
+}
+
+fn has_directive(directives: Option<cst::Directives>, name: &str) -> bool {
+    directives.is_some_and(|directives| {
+        directives
+            .directives()
+            .any(|directive| directive.name().is_some_and(|n| n.text() == name))
+    })
 }
 
 fn convert_value(value: cst::Value) -> Result<ArgValue, DocumentError> {
@@ -567,6 +574,30 @@ mod tests {
         // Shorthand operations are queries.
         let doc = Document::parse("{ user { id } }").unwrap();
         assert_eq!(doc.operation(None).unwrap().kind, OperationKind::Query);
+    }
+
+    #[test]
+    fn from_cache_marks_only_its_field_and_unknown_directives_still_fail() {
+        let doc = Document::parse(
+            "query Q { user { id body: preparedBody(version: 1) @fromCache { html } } }",
+        )
+        .unwrap();
+        let Selection::Field(user) = &doc.operation(None).unwrap().selection_set[0] else {
+            panic!("expected field");
+        };
+        let flags: Vec<_> = user
+            .selection_set
+            .iter()
+            .map(|selection| match selection {
+                Selection::Field(field) => (field.response_key.as_str(), field.from_cache),
+                Selection::Fragment { .. } => panic!("expected field"),
+            })
+            .collect();
+        assert_eq!(flags, [("id", false), ("body", true)]);
+        assert!(!user.from_cache);
+
+        let err = Document::parse("query Q { user { id @client } }").unwrap_err();
+        assert!(matches!(err, DocumentError::UnsupportedDirective(name) if name == "client"));
     }
 
     #[test]

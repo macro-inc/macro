@@ -23,6 +23,11 @@ import {
   normalizedCacheExchange,
 } from '@graphql-cache/exchange/normalized-cache-exchange';
 import { optimisticResolversExchange } from '@graphql-cache/exchange/optimistic-resolvers';
+import {
+  hasClientDirectives,
+  transportDocument,
+} from '@graphql-cache/exchange/transport-document';
+import { withFromCacheFallback } from '@graphql-cache/host/from-cache-fallback';
 import { CacheNavigationError } from '@graphql-cache/host/navigation-error';
 import { createRetirableCacheHost } from '@graphql-cache/host/retirable-host';
 import { NativeCacheUpgradeRequiredError } from '@graphql-cache/host/tauri-host';
@@ -65,13 +70,7 @@ import {
   type RequestPolicy,
   subscriptionExchange,
 } from '@urql/core';
-import {
-  type DocumentNode,
-  getOperationAST,
-  parse,
-  print,
-  visit,
-} from 'graphql';
+import { getOperationAST, parse, print, visit } from 'graphql';
 import {
   createClient as createGraphqlWsClient,
   type Client as GraphqlWsClient,
@@ -159,19 +158,9 @@ export function graphqlSoupProjectionSupported(): boolean {
   return soupProjectionServerSupported;
 }
 
-function stripGraphqlSoupClientDirectives(
-  document: DocumentNode
-): DocumentNode {
-  return visit(document, {
-    Directive(node) {
-      return node.name.value === 'cacheOnly' ? null : undefined;
-    },
-  });
-}
-
-/** Removes client-only directives from a document before network transport. */
+/** The document text the server receives; see {@link transportDocument}. */
 export function graphqlSoupTransportDocument(query: string): string {
-  return print(stripGraphqlSoupClientDirectives(parse(query)));
+  return print(transportDocument(parse(query)));
 }
 
 function graphqlSoupTransportRequest(
@@ -185,7 +174,7 @@ function graphqlSoupTransportRequest(
       typeof payload !== 'object' ||
       !('query' in payload) ||
       typeof payload.query !== 'string' ||
-      !payload.query.includes('@cacheOnly')
+      !hasClientDirectives(payload.query)
     ) {
       return init;
     }
@@ -438,7 +427,7 @@ function graphqlSoupSubscriptionExchange(websocketClient: GraphqlWsClient) {
   return subscriptionExchange({
     forwardSubscription(payload, request) {
       const graphqlWsPayload = {
-        query: print(stripGraphqlSoupClientDirectives(request.query)),
+        query: print(transportDocument(request.query)),
         operationName: payload.operationName,
         variables: payload.variables,
         extensions: payload.extensions,
@@ -752,15 +741,18 @@ export function getGraphqlSoupClient(): Client {
     try {
       const scope = getOrCreateCacheScope();
       host = createRetirableCacheHost(
-        native
-          ? createTauriCacheHost({ scope, onInitializationError })
-          : createWorkerCacheHost({
-              scope,
-              onInitializationError,
-              rolloutCohort: rollout.cohort,
-              // A newer deploy took the local cache over: move to it.
-              onSuperseded: () => reloadForNewerBuild(),
-            })
+        // A native engine ships with its app, so it can predate `@fromCache`.
+        withFromCacheFallback(
+          native
+            ? createTauriCacheHost({ scope, onInitializationError })
+            : createWorkerCacheHost({
+                scope,
+                onInitializationError,
+                rolloutCohort: rollout.cohort,
+                // A newer deploy took the local cache over: move to it.
+                onSuperseded: () => reloadForNewerBuild(),
+              })
+        )
       );
       let websocketState: MutationQueueEnvironment['websocket'] = 'none';
       const graphqlWsClient = createGraphqlSoupWebSocketClient(

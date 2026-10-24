@@ -16,6 +16,7 @@ fn concrete_union_member_outside_selected_fragment_is_absent() {
             response_key: "properties".to_string(),
             name: "properties".to_string(),
             cache_only: false,
+            from_cache: false,
             arguments: Vec::new(),
             selection_set: Vec::new(),
         })],

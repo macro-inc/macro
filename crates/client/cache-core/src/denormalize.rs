@@ -425,15 +425,19 @@ impl<'document, S: RecordSource, D: DependencyTracker> Walk<'_, 'document, S, D>
         concrete: &str,
         field: &Field<'document>,
     ) -> Result<Option<Json>, DenormalizeError> {
+        // A `@fromCache` field never makes the read miss: the network cannot
+        // supply it, so a value that is absent or incomplete reads as null.
+        let from_cache = field.node.from_cache;
         match &field.source {
             FieldSource::Typename => Ok(Some(Json::String(concrete.to_owned()))),
+            FieldSource::MissingArguments if from_cache => Ok(Some(Json::Null)),
             FieldSource::MissingArguments => {
                 self.mark_miss(owner, field.node.name.clone());
                 Ok(None)
             }
             FieldSource::Missing(key) => {
                 self.deps.field(owner, concrete, key);
-                if matches!(fields.get(key.as_ref()), Some(CacheValue::Null)) {
+                if from_cache || matches!(fields.get(key.as_ref()), Some(CacheValue::Null)) {
                     return Ok(Some(Json::Null));
                 }
                 self.mark_miss(owner, key.to_string());
@@ -455,10 +459,20 @@ impl<'document, S: RecordSource, D: DependencyTracker> Walk<'_, 'document, S, D>
             FieldSource::Stored { key, ty } => {
                 self.deps.field(owner, concrete, key);
                 let Some(value) = fields.get(key.as_ref()) else {
+                    if from_cache {
+                        return Ok(Some(Json::Null));
+                    }
                     self.mark_miss(owner, key.to_string());
                     return Ok(None);
                 };
-                self.read_value(owner, field.node, ty, value).map(Some)
+                if !field.null_when_incomplete {
+                    return self.read_value(owner, field.node, ty, value).map(Some);
+                }
+                // The value has no links, so every miss inside it is found now.
+                let outer_miss = self.miss.take();
+                let data = self.read_value(owner, field.node, ty, value)?;
+                let incomplete = std::mem::replace(self.miss, outer_miss).is_some();
+                Ok(Some(if incomplete { Json::Null } else { data }))
             }
         }
     }

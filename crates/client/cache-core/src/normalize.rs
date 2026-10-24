@@ -192,7 +192,7 @@ fn project_object_fields(
     collect_fields(schema, selections, concrete, &mut fields);
     let mut projected = serde_json::Map::new();
     for field in fields {
-        if field.cache_only {
+        if field.cache_only || field.from_cache {
             continue;
         }
         let Some(value) = data.get(&field.response_key) else {
@@ -270,11 +270,49 @@ fn project_value(
 
 fn selection_returns_data(selection: &Selection) -> bool {
     match selection {
-        Selection::Field(field) => !field.cache_only,
+        Selection::Field(field) => !field.cache_only && !field.from_cache,
         Selection::Fragment { selection_set, .. } => {
             selection_set.iter().any(selection_returns_data)
         }
     }
+}
+
+/// Whether a stored value of `field` on `type_name` can link to other records.
+pub(crate) fn links_records(
+    schema: &crate::meta::Schema,
+    entity_resolvers: &EntityResolverLookup,
+    type_name: &str,
+    field: &FieldNode,
+) -> bool {
+    if entity_resolvers.get(type_name, &field.name).is_some() {
+        return true;
+    }
+    let Some(field_meta) = schema.field_meta(type_name, &field.name) else {
+        return false;
+    };
+    if field_meta.ty.kind != FieldKind::Composite {
+        return false;
+    }
+    let Some(named) = schema.type_meta(field_meta.ty.name) else {
+        return true;
+    };
+    let concrete_types = match named.kind {
+        TypeKind::Object => std::slice::from_ref(&named.name),
+        TypeKind::Interface | TypeKind::Union => named.possible_types.as_slice(),
+    };
+    concrete_types.iter().any(|concrete| {
+        if schema
+            .type_meta(concrete)
+            .is_none_or(|meta| meta.key_fields.is_some())
+        {
+            return true;
+        }
+        let mut fields = Vec::new();
+        collect_fields(schema, &field.selection_set, concrete, &mut fields);
+        fields
+            .into_iter()
+            .any(|nested| links_records(schema, entity_resolvers, concrete, nested))
+    })
 }
 
 fn merge_into(records: &mut RecordUpdates, key: EntityKey<'static>, record: Record) {
@@ -358,6 +396,15 @@ fn write_object_fields(
                 .dependencies
                 .keys
                 .field(owner, concrete, &storage_key);
+        }
+        // The server never sees a `@fromCache` field; only queries that fetch
+        // it write it. Its dependency is exact while its value stays inside
+        // this record, but the response cannot name records the value links to.
+        if f.from_cache {
+            if links_records(schema, context.dependencies.entity_resolvers, concrete, f) {
+                context.dependencies.mark_broad();
+            }
+            continue;
         }
 
         // GraphQL guarantees selected fields are present in data. Missing

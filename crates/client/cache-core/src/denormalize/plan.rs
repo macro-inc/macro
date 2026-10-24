@@ -8,6 +8,10 @@ use std::sync::Arc;
 pub(super) struct Field<'a> {
     pub node: &'a FieldNode,
     pub source: FieldSource<'a>,
+    /// A `@fromCache` value stored inside its record reads as null when it
+    /// lacks a selected subfield. A value that can link to other records may
+    /// need storage loads, so it reads like any other present value.
+    pub null_when_incomplete: bool,
 }
 
 pub(super) enum FieldSource<'a> {
@@ -74,6 +78,7 @@ fn compile_field<'a>(
         return Ok(Field {
             node,
             source: FieldSource::Typename,
+            null_when_incomplete: false,
         });
     }
     let metadata =
@@ -90,6 +95,7 @@ fn compile_field<'a>(
             return Ok(Field {
                 node,
                 source: FieldSource::MissingArguments,
+                null_when_incomplete: false,
             });
         }
         Err(error) => return Err(error.into()),
@@ -119,5 +125,10 @@ fn compile_field<'a>(
             ty: metadata.ty,
         },
     };
-    Ok(Field { node, source })
+    Ok(Field {
+        node,
+        source,
+        null_when_incomplete: node.from_cache
+            && !crate::normalize::links_records(schema, entity_resolvers, concrete, node),
+    })
 }

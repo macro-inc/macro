@@ -45,12 +45,7 @@ import {
   type OperationResult,
   stringifyDocument,
 } from '@urql/core';
-import {
-  type DocumentNode,
-  Kind,
-  type OperationDefinitionNode,
-  visit,
-} from 'graphql';
+import { type DocumentNode, Kind, type OperationDefinitionNode } from 'graphql';
 import { batch } from 'solid-js';
 import {
   empty,
@@ -108,6 +103,7 @@ import {
   withOptimisticMutationDisposition,
 } from './optimistic';
 import { queryShape } from './query-shape';
+import { transportDocument } from './transport-document';
 
 /** Server writes acknowledged since this query left for the network. */
 const QUERY_MUTATION_VERSION_CONTEXT_KEY =
@@ -232,11 +228,7 @@ const transportDocumentCache = new WeakMap<object, DocumentNode>();
 function hydrationTransportOperation(op: Operation): Operation {
   let document = transportDocumentCache.get(op.query);
   if (!document) {
-    document = visit(op.query, {
-      Directive(node) {
-        return node.name.value === 'cacheOnly' ? null : undefined;
-      },
-    });
+    document = transportDocument(op.query);
     transportDocumentCache.set(op.query, document);
   }
   return makeOperation(

@@ -1,6 +1,7 @@
 import type { PluginFunction } from '@graphql-codegen/plugin-helpers';
 import {
   type DefinitionNode,
+  type DocumentNode,
   type FieldNode,
   type FragmentDefinitionNode,
   type GraphQLCompositeType,
@@ -17,19 +18,43 @@ import {
   isScalarType,
   type OperationDefinitionNode,
   type SelectionSetNode,
+  TypeInfo,
+  visit,
+  visitWithTypeInfo,
 } from 'graphql';
 import { match } from 'ts-pattern';
 
-const CACHE_ONLY_DIRECTIVE = 'cacheOnly';
-
-function isCacheOnly(
-  directives: readonly { name: { value: string } }[] | undefined
+function hasDirective(
+  directives: readonly { name: { value: string } }[] | undefined,
+  name: 'cacheOnly' | 'fromCache'
 ): boolean {
   return (
-    directives?.some(
-      (directive) => directive.name.value === CACHE_ONLY_DIRECTIVE
-    ) ?? false
+    directives?.some((directive) => directive.name.value === name) ?? false
   );
+}
+
+/** A cache read returns null for a `@fromCache` field until it is cached. */
+function assertFromCacheFieldsNullable(
+  schema: GraphQLSchema,
+  documents: readonly { document?: DocumentNode }[]
+): void {
+  const typeInfo = new TypeInfo(schema);
+  for (const { document } of documents) {
+    if (!document) continue;
+    visit(
+      document,
+      visitWithTypeInfo(typeInfo, {
+        Field(field) {
+          if (!hasDirective(field.directives, 'fromCache')) return;
+          const type = typeInfo.getType();
+          if (!type || !isNonNullType(type)) return;
+          throw new Error(
+            `@fromCache field ${typeInfo.getParentType()?.name}.${field.name.value} must be nullable`
+          );
+        },
+      })
+    );
+  }
 }
 
 function selectionSetHasCacheOnly(
@@ -40,7 +65,7 @@ function selectionSetHasCacheOnly(
   return selectionSet.selections.some((selection) => {
     if (selection.kind === 'Field') {
       return (
-        isCacheOnly(selection.directives) ||
+        hasDirective(selection.directives, 'cacheOnly') ||
         (selection.selectionSet !== undefined &&
           selectionSetHasCacheOnly(
             selection.selectionSet,
@@ -164,7 +189,12 @@ function renderSelectionSetForObject(
     for (const selection of selections.selections) {
       match(selection)
         .with({ kind: 'Field' }, (field) => {
-          if (isCacheOnly(field.directives)) return;
+          // The server never returns `@fromCache` fields either.
+          if (
+            hasDirective(field.directives, 'cacheOnly') ||
+            hasDirective(field.directives, 'fromCache')
+          )
+            return;
           const responseKey = field.alias?.value ?? field.name.value;
           const fields = fieldsByResponseKey.get(responseKey) ?? [];
           fields.push({
@@ -291,12 +321,16 @@ export type CacheOnlyProjectionConfig = {
   cacheOnlyResultOperations?: readonly string[];
 };
 
-/** Generates opted-in result types containing only fields not marked `@cacheOnly`. */
+/**
+ * Generates opted-in result types containing only fields not marked
+ * `@cacheOnly` or `@fromCache`, and rejects `@fromCache` on non-null fields.
+ */
 export const plugin: PluginFunction<CacheOnlyProjectionConfig> = (
   schema,
   documents,
   config
 ) => {
+  assertFromCacheFieldsNullable(schema, documents);
   // A nested @cacheOnly field does not imply that callers need a projection.
   // Expanding every such operation duplicates large fragment/union structures.
   const requestedOperations = new Set(config.cacheOnlyResultOperations ?? []);
