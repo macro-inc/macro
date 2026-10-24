@@ -1,7 +1,9 @@
 # desktop-cef
 
 Status: shipped macOS desktop app. The desktop release workflow builds it,
-packages it as a signed DMG, and publishes the release.
+packages it as a signed DMG, and publishes the release. The same workflow runs
+on pull requests that change desktop build inputs (ad-hoc signed, not
+notarized or uploaded) and nightly on main.
 
 ## What it is
 
@@ -27,6 +29,9 @@ thin binary over `../src-tauri` (`app_lib::run_with`) that selects
   branch of `macro-inc/tauri`:
   `RUSTUP_TOOLCHAIN=1.95.0 cargo-tauri build --bundles app -c '{"build":{"beforeBuildCommand":""}}'`.
   The stock `cargo-tauri` does not ship the Chromium framework or helper apps.
+- CI: `Build Desktop on Tag` must pass on the pull request. Its
+  `Check release secrets` job fails until every secret the release jobs read
+  is configured, so add a new secret before merging the change that reads it.
 
 ## Gotchas
 

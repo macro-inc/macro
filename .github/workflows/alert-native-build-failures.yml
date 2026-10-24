@@ -18,7 +18,10 @@ permissions:
 
 jobs:
   alert:
-    if: contains(fromJSON('["failure", "timed_out"]'), github.event.workflow_run.conclusion)
+    # A desktop build on a pull request reports to its author through the PR checks.
+    if: >-
+      contains(fromJSON('["failure", "timed_out"]'), github.event.workflow_run.conclusion) &&
+      !(github.event.workflow_run.name == 'Build Desktop on Tag' && github.event.workflow_run.event == 'pull_request')
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -40,7 +43,7 @@ jobs:
                 | select(.conclusion == "failure" or .conclusion == "timed_out")
                 | select(
                     if $workflow == "Build Desktop on Tag" then
-                      .name == "Build AppImage" or .name == "Build macOS DMG"
+                      .name == "Build AppImage" or .name == "Build macOS DMG" or .name == "Check release secrets"
                     elif $workflow == "iOS Preview" then
                       .name == "Build iOS simulator app and publish to Appetize"
                     elif $workflow == "Release Android App Bundle" then

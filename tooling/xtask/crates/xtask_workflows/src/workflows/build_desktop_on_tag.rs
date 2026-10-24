@@ -1,26 +1,45 @@
 //! `Build Desktop on Tag` — orchestrator workflow that triggers AppImage and DMG
-//! builds in parallel when a release tag is pushed. Also supports manual
-//! dispatch. Generated into `build_desktop_on_tag.yml`.
+//! builds in parallel when a release tag is pushed. Pull requests that change
+//! the desktop build run the same jobs without signing or publishing, and main
+//! builds nightly so failures from outside the repository (runner images,
+//! Apple services, credentials) surface before a release does. Also supports
+//! manual dispatch. Generated into `build_desktop_on_tag.yml`.
 //!
 //! The reusable job definitions live in [`super::build_appimage_on_tag`] and
 //! [`super::build_dmg_on_tag`].
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 
 use gh_workflow::{
-    Concurrency, Event, Expression, Job, Level, Permissions, Push, Run, Step, Workflow,
-    WorkflowDispatch, WorkflowDispatchInput,
+    Concurrency, Event, Expression, Job, Level, Permissions, PullRequest, Push, Run, Step,
+    Workflow, WorkflowDispatch, WorkflowDispatchInput,
 };
 
-use crate::workflows::{build_appimage_on_tag, build_dmg_on_tag, steps, vars};
+use crate::workflows::build_appimage_on_tag::{self, DESKTOP_HOSTED_RUNNER, NOT_PULL_REQUEST};
+use crate::workflows::{build_dmg_on_tag, runners, steps, vars};
 
 #[cfg(test)]
 mod test;
 
 const RESOLVED_REF: &str = "${{ needs.resolve-ref.outputs.ref }}";
 
-/// Build the workflow.
-pub fn build_desktop_on_tag() -> Workflow {
+/// 09:17 UTC, ahead of the US workday's first release.
+const NIGHTLY_CRON: &str = "17 9 * * *";
+
+/// Render the workflow plus a job that checks every secret its jobs read.
+pub fn render() -> anyhow::Result<String> {
+    let workflow = build_desktop_on_tag();
+    let yaml = workflow.to_string().map_err(|e| anyhow::anyhow!("{e:?}"))?;
+    workflow
+        .add_job(
+            "check-release-secrets",
+            check_release_secrets(&secrets_read_by(&yaml)),
+        )
+        .to_string()
+        .map_err(|e| anyhow::anyhow!("{e:?}"))
+}
+
+fn build_desktop_on_tag() -> Workflow {
     Workflow::new("Build Desktop on Tag")
         .on(desktop_events())
         .concurrency(
@@ -46,6 +65,7 @@ pub fn build_desktop_on_tag() -> Workflow {
                 xtask_paths::runtime_path!("release-artifacts/*"),
             )
             .name("Publish desktop installers")
+            .cond(Expression::new(NOT_PULL_REQUEST))
             .add_needs("resolve-ref")
             .add_needs("build-appimage")
             .add_needs("build-dmg"),
@@ -58,10 +78,46 @@ pub fn build_desktop_on_tag() -> Workflow {
         )
 }
 
+/// Every `secrets.NAME` the rendered jobs read.
+fn secrets_read_by(yaml: &str) -> BTreeSet<&str> {
+    yaml.split("secrets.")
+        .skip(1)
+        .map(|rest| {
+            let end = rest
+                .find(|c: char| !(c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_'))
+                .unwrap_or(rest.len());
+            &rest[..end]
+        })
+        .filter(|name| !name.is_empty())
+        .collect()
+}
+
+/// A secret is configured in the repository settings, outside any diff, so a
+/// change that starts reading a new one can merge green and fail the next
+/// release. Running this on pull requests fails that change instead.
+fn check_release_secrets(names: &BTreeSet<&str>) -> Job {
+    let step = names.iter().fold(
+        Step::new("Check release secrets are configured")
+            .run(include_str!("scripts/check_release_secrets.sh"))
+            .shell("bash")
+            .add_env((
+                "RELEASE_SECRETS",
+                names.iter().copied().collect::<Vec<_>>().join(" "),
+            )),
+        |step, name| step.add_env((*name, format!("${{{{ secrets.{name} }}}}"))),
+    );
+    Job::default()
+        .name("Check release secrets")
+        .runs_on(runners::Runner::TinyNoCache.to_string())
+        .timeout_minutes(5u32)
+        .add_needs("resolve-ref")
+        .add_step(step)
+}
+
 fn publish_desktop_job() -> Job {
     Job::default()
         .name("Sign and publish desktop updates")
-        .runs_on("ubuntu-latest")
+        .runs_on(DESKTOP_HOSTED_RUNNER)
         // Serialize channel promotion across tags; an older build cannot win a race.
         .concurrency(
             Concurrency::new(Expression::new("desktop-stable-publish")).cancel_in_progress(false),
@@ -108,7 +164,34 @@ fn publish_desktop_job() -> Job {
 fn desktop_events() -> Event {
     Event::default()
         .push(Push::default().add_tag(build_appimage_on_tag::DESKTOP_TAG_PATTERN))
+        .pull_request(desktop_pull_request())
+        .add_cron_schedule(NIGHTLY_CRON)
         .workflow_dispatch(workflow_dispatch())
+}
+
+/// Desktop-specific build inputs that no other pull request check builds. The
+/// desktop app also bundles the frontend and the root workspace's `macrod`;
+/// those are covered by the web and Rust checks, and the nightly build catches
+/// what only breaks in the desktop packaging of them.
+fn desktop_pull_request() -> PullRequest {
+    PullRequest::default()
+        .add_branch("main")
+        .add_path(xtask_paths::repo_glob!("apps/web/tauri/**"))
+        .add_path(xtask_paths::repo_glob!(
+            "apps/web/scripts/desktop-release.mjs"
+        ))
+        .add_path(xtask_paths::repo_glob!("nix/tauri-desktop.nix"))
+        .add_path(xtask_paths::repo_glob!("nix/dmg-layout.py"))
+        .add_path(xtask_paths::repo_glob!("nix/appimage/**"))
+        .add_path(xtask_paths::repo_glob!("nix-support/**"))
+        .add_path(xtask_paths::repo_glob!("flake.nix"))
+        .add_path(xtask_paths::repo_glob!("flake.lock"))
+        .add_path(xtask_paths::repo_glob!("rust-toolchain.toml"))
+        .add_path(xtask_paths::repo_glob!(".github/actions/setup-nix/**"))
+        .add_path(xtask_paths::repo_glob!(".github/actions/teardown-nix/**"))
+        .add_path(xtask_paths::repo_glob!(
+            ".github/workflows/build_desktop_on_tag.yml"
+        ))
 }
 
 fn workflow_dispatch() -> WorkflowDispatch {
@@ -128,11 +211,13 @@ fn workflow_dispatch() -> WorkflowDispatch {
 
 fn resolve_ref() -> Job {
     Job::default()
+        // Fork and Dependabot pull requests get no secrets, so they could not
+        // build the bundle.
         .cond(Expression::new(
-            "github.event_name == 'workflow_dispatch' || github.event_name == 'push' || (github.event_name == 'create' && github.event.ref_type == 'tag')",
+            "github.event_name == 'workflow_dispatch' || github.event_name == 'push' || github.event_name == 'schedule' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]') || (github.event_name == 'create' && github.event.ref_type == 'tag')",
         ))
         .name("Resolve build ref")
-        .runs_on("ubuntu-latest")
+        .runs_on(DESKTOP_HOSTED_RUNNER)
         .add_output("ref", "${{ steps.resolve.outputs.ref }}")
         .add_step(resolve_ref_step())
 }

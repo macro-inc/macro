@@ -4,8 +4,8 @@
 use std::collections::HashMap;
 
 use gh_workflow::{
-    Event, Job, Level, Permissions, Run, Step, Workflow, WorkflowCall, WorkflowCallInput,
-    WorkflowCallSecret,
+    Event, Expression, Job, Level, Permissions, Run, Step, Workflow, WorkflowCall,
+    WorkflowCallInput, WorkflowCallSecret,
 };
 
 use crate::workflows::{runners, steps, vars};
@@ -13,6 +13,15 @@ use crate::workflows::{runners, steps, vars};
 /// Tag pattern for desktop release builds (CalVer: `v2026.6.23.1`).
 /// Shared with the DMG workflow and the parent orchestrator.
 pub const DESKTOP_TAG_PATTERN: &str = "v[0-9]*";
+
+/// Pull requests run the release build to prove it still compiles and packages,
+/// but never sign with the Developer ID, notarize, write the shared caches, or
+/// upload anything.
+pub const NOT_PULL_REQUEST: &str = "github.event_name != 'pull_request'";
+
+/// GitHub-hosted image for the desktop resolve and publish jobs. Pinned so the
+/// `ubuntu-latest` move to Ubuntu 26 cannot change a release job underneath it.
+pub const DESKTOP_HOSTED_RUNNER: &str = "ubuntu-24.04";
 
 /// Secrets a caller must forward to the reusable desktop build workflows. A
 /// called workflow cannot read repository secrets on its own, and the desktop
@@ -60,10 +69,13 @@ pub fn build_appimage_job(ref_expr: &str) -> Job {
         .add_step(prepare_desktop_release(ref_expr))
         .add_step(nix_build_appimage())
         .add_step(collect_appimage())
-        .add_step(steps::upload_artifact(
-            "macro-appimage-${{ steps.metadata.outputs.safe_tag }}",
-            xtask_paths::runtime_path!("artifacts/*"),
-        ))
+        .add_step(
+            steps::upload_artifact(
+                "macro-appimage-${{ steps.metadata.outputs.safe_tag }}",
+                xtask_paths::runtime_path!("artifacts/*"),
+            )
+            .if_condition(Expression::new(NOT_PULL_REQUEST)),
+        )
         .add_step(steps::teardown_nix())
 }
 
@@ -79,7 +91,7 @@ pub fn prepare_desktop_release(ref_expr: &str) -> Step<Run> {
 pub fn publish_job(ref_expr: &str, artifacts_path: xtask_paths::RuntimePath<'_>) -> Job {
     Job::default()
         .name("Upload Release Artifacts")
-        .runs_on("ubuntu-latest")
+        .runs_on(DESKTOP_HOSTED_RUNNER)
         .permissions(Permissions {
             contents: Some(Level::Write),
             ..Default::default()

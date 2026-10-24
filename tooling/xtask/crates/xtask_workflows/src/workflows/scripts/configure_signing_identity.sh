@@ -1,8 +1,7 @@
 set -euo pipefail
 if [ -z "${MACOS_DEVELOPER_ID_CERTIFICATE_BASE64}" ] || [ -z "${MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD}" ]; then
-  echo "Developer ID certificate secrets are not configured; using ad-hoc signing for build validation."
-  echo "APPLE_SIGNING_IDENTITY=-" >> "$GITHUB_ENV"
-  exit 0
+  echo "MACOS_DEVELOPER_ID_CERTIFICATE_BASE64 and MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD must be set to sign a release build" >&2
+  exit 1
 fi
 
 certificate_path="$RUNNER_TEMP/developer-id-application.p12"

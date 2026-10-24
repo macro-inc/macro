@@ -3,7 +3,8 @@
 
 use gh_workflow::{Event, Expression, Job, Run, Step, Workflow, WorkflowCall, WorkflowCallInput};
 
-use crate::workflows::{build_appimage_on_tag, runners, steps, vars};
+use crate::workflows::build_appimage_on_tag::{self, NOT_PULL_REQUEST};
+use crate::workflows::{runners, steps, vars};
 
 #[cfg(test)]
 mod test;
@@ -48,6 +49,9 @@ pub fn patch(root: &mut serde_yaml::Value) -> anyhow::Result<()> {
             MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD:
               description: Password for the Developer ID certificate
               required: true
+            MACOS_DEVELOPER_ID_PROVISIONING_PROFILE_BASE64:
+              description: Developer ID provisioning profile granting the app's restricted entitlements
+              required: true
             MACOS_RELEASE_DOPPLER_TOKEN:
               description: Doppler token for notarizing the macOS DMG
               required: true
@@ -72,6 +76,7 @@ pub fn build_dmg_job(ref_expr: &str) -> Job {
         .add_step(steps::install_nix_macos())
         .add_step(configure_nix_cache())
         .add_step(configure_signing_identity())
+        .add_step(use_ad_hoc_signing())
         .add_step(steps::derive_artifact_metadata(ref_expr))
         .add_step(build_appimage_on_tag::prepare_desktop_release(ref_expr))
         .add_step(nix_build_dmg())
@@ -80,10 +85,13 @@ pub fn build_dmg_job(ref_expr: &str) -> Job {
         .add_step(validate_signed_dmg())
         .add_step(prepare_cloudkit_tcp())
         .add_step(notarize_dmg())
-        .add_step(steps::upload_artifact(
-            "macro-dmg-${{ steps.metadata.outputs.safe_tag }}",
-            xtask_paths::runtime_path!("artifacts/*"),
-        ))
+        .add_step(
+            steps::upload_artifact(
+                "macro-dmg-${{ steps.metadata.outputs.safe_tag }}",
+                xtask_paths::runtime_path!("artifacts/*"),
+            )
+            .if_condition(Expression::new(NOT_PULL_REQUEST)),
+        )
 }
 
 pub(super) fn assert_arm64() -> Step<Run> {
@@ -101,6 +109,7 @@ pub(super) fn assert_arm64() -> Step<Run> {
 fn configure_signing_identity() -> Step<Run> {
     Step::new("Configure signing identity")
         .run(include_str!("scripts/configure_signing_identity.sh"))
+        .if_condition(Expression::new(NOT_PULL_REQUEST))
         .shell("bash")
         .add_env((
             "MACOS_DEVELOPER_ID_CERTIFICATE_BASE64",
@@ -114,6 +123,14 @@ fn configure_signing_identity() -> Step<Run> {
             "MACOS_DEVELOPER_ID_PROVISIONING_PROFILE_BASE64",
             vars::MACOS_DEVELOPER_ID_PROVISIONING_PROFILE_BASE64,
         ))
+}
+
+/// The Developer ID certificate stays out of unreviewed pull request code.
+fn use_ad_hoc_signing() -> Step<Run> {
+    Step::new("Use ad-hoc signing for pull requests")
+        .run("echo \"APPLE_SIGNING_IDENTITY=-\" >> \"$GITHUB_ENV\"")
+        .if_condition(Expression::new("github.event_name == 'pull_request'"))
+        .shell("bash")
 }
 
 fn nix_build_dmg() -> Step<Run> {
@@ -135,9 +152,11 @@ pub(super) fn save_nix_cache() -> Step<Run> {
     Step::new("Prune and save macOS Nix build dependencies")
         .run(include_str!("scripts/save_macos_nix_cache.sh"))
         .shell("bash")
-        .if_condition(Expression::new(
-            "!cancelled() && steps.nix-cache.outcome == 'success'",
-        ))
+        // Saving prunes the shared cache to this build's closure; a pull request
+        // must not evict what main's releases restore.
+        .if_condition(Expression::new(format!(
+            "!cancelled() && steps.nix-cache.outcome == 'success' && {NOT_PULL_REQUEST}"
+        )))
         .continue_on_error(true)
 }
 
@@ -156,6 +175,7 @@ fn validate_signed_dmg() -> Step<Run> {
 fn notarize_dmg() -> Step<Run> {
     Step::new("Notarize and staple DMG")
         .run(include_str!("scripts/notarize_dmg.sh"))
+        .if_condition(Expression::new(NOT_PULL_REQUEST))
         .shell("bash")
         .add_env(("DOPPLER_TOKEN", vars::MACOS_RELEASE_DOPPLER_TOKEN))
 }
@@ -166,5 +186,6 @@ fn prepare_cloudkit_tcp() -> Step<Run> {
             "set -euo pipefail\ncat > \"$RUNNER_TEMP/macro-cloudkit-tcp.sh\" <<'MACRO_CLOUDKIT_TCP'\n{}\nMACRO_CLOUDKIT_TCP\n",
             include_str!("scripts/cloudkit_tcp.sh")
         ))
+        .if_condition(Expression::new(NOT_PULL_REQUEST))
         .shell("bash")
 }

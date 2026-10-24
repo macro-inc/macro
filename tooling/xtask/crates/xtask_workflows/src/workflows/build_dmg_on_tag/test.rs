@@ -366,9 +366,7 @@ fn missing_build_roots_leave_cache_contents_untouched() {
 fn cloudkit_tcp_guard_is_wired_into_both_desktop_workflows() {
     let workflows = [
         super::build_dmg().to_string().expect("DMG workflow YAML"),
-        crate::workflows::build_desktop_on_tag::build_desktop_on_tag()
-            .to_string()
-            .expect("desktop workflow YAML"),
+        crate::workflows::build_desktop_on_tag::render().expect("desktop workflow YAML"),
     ];
     for yaml in workflows {
         let prepare = yaml

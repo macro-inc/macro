@@ -433,7 +433,11 @@ or rebuild an already published tag; publish a higher version for fixes/reverts.
 
 The combined desktop workflow is the only publisher. It exports the final
 relocated/signed macOS app, notarizes and staples it, and archives it as
-`.app.tar.gz`. The Linux AppImage and macOS archive receive updater signatures
+`.app.tar.gz`. Pull requests that change desktop build inputs run the same
+builds with ad-hoc signing and skip notarization, caching, and uploads; main
+also builds nightly with full signing and notarization but publishes nothing.
+Its `Check release secrets` job requires every repository secret the desktop
+jobs read, so a new secret must be configured before its change merges. The Linux AppImage and macOS archive receive updater signatures
 outside Nix. `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
 live in Doppler `macos-release/prd`, read using the existing
 `MACOS_RELEASE_DOPPLER_TOKEN` CI secret. Only the corresponding public key is

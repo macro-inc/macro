@@ -1,4 +1,5 @@
 use super::*;
+use serde_yaml::Value;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
@@ -164,9 +165,29 @@ fn called(calls: &str, prefix: &str) -> bool {
 }
 
 fn rendered_yaml() -> String {
-    build_desktop_on_tag()
-        .to_string()
-        .expect("desktop workflow should serialize")
+    render().expect("desktop workflow should serialize")
+}
+
+fn rendered_jobs() -> serde_yaml::Mapping {
+    let root: Value = serde_yaml::from_str(&rendered_yaml()).expect("desktop workflow YAML");
+    root.get("jobs")
+        .and_then(Value::as_mapping)
+        .expect("desktop workflow jobs")
+        .clone()
+}
+
+fn job<'a>(jobs: &'a serde_yaml::Mapping, id: &str) -> &'a Value {
+    jobs.get(id).unwrap_or_else(|| panic!("job {id}"))
+}
+
+fn condition(value: &Value) -> &str {
+    value.get("if").and_then(Value::as_str).unwrap_or("")
+}
+
+fn script_path(name: &str) -> std::path::PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("src/workflows/scripts")
+        .join(name)
 }
 
 #[test]
@@ -285,4 +306,150 @@ fn older_release_cannot_replace_update_feed_or_latest_release() {
         !called(&calls, &format!("release edit {RELEASE_TAG} ")),
         "{calls}"
     );
+}
+
+#[test]
+fn pull_request_builds_never_sign_notarize_cache_or_upload() {
+    let jobs = rendered_jobs();
+    for build in ["build-appimage", "build-dmg"] {
+        let steps = job(&jobs, build)
+            .get("steps")
+            .and_then(Value::as_sequence)
+            .expect("build steps");
+        for step in steps {
+            let rendered = serde_yaml::to_string(step).expect("step YAML");
+            // The bundle inlines the public PostHog key; every other secret signs,
+            // notarizes, or publishes.
+            let release_only = rendered.contains("MACOS_")
+                || rendered.contains("DOPPLER_TOKEN")
+                || rendered.contains("upload-artifact")
+                || rendered.contains("save_macos_nix_cache")
+                || rendered.contains("Prune and save macOS Nix");
+            if release_only {
+                assert!(
+                    condition(step).contains("github.event_name != 'pull_request'"),
+                    "{build} step must not run on pull requests:\n{rendered}"
+                );
+            }
+        }
+    }
+    assert!(
+        condition(job(&jobs, "publish-installers")).contains("github.event_name != 'pull_request'")
+    );
+    assert!(
+        condition(job(&jobs, "publish-release"))
+            .contains("startsWith(needs.resolve-ref.outputs.ref, 'refs/tags/v')")
+    );
+}
+
+#[test]
+fn release_secret_check_covers_every_secret_the_other_jobs_read() {
+    let jobs = rendered_jobs();
+    let mut read = BTreeSet::new();
+    for (id, job) in &jobs {
+        if id.as_str() == Some("check-release-secrets") {
+            continue;
+        }
+        let rendered = serde_yaml::to_string(job).expect("job YAML");
+        read.extend(secrets_read_by(&rendered).into_iter().map(str::to_owned));
+    }
+    // The secret whose absence failed v2026.10.22.3 after its PR merged green.
+    assert!(read.contains("MACOS_DEVELOPER_ID_PROVISIONING_PROFILE_BASE64"));
+
+    let env = job(&jobs, "check-release-secrets")["steps"][0]["env"].clone();
+    let checked: BTreeSet<String> = env["RELEASE_SECRETS"]
+        .as_str()
+        .expect("RELEASE_SECRETS")
+        .split(' ')
+        .map(str::to_owned)
+        .collect();
+    assert_eq!(checked, read);
+    for name in &checked {
+        assert_eq!(
+            env[name.as_str()].as_str(),
+            Some(format!("${{{{ secrets.{name} }}}}").as_str()),
+            "{name} must reach the check"
+        );
+    }
+}
+
+fn run_secret_check(configured: &[(&str, &str)]) -> Output {
+    let mut command = Command::new("bash");
+    command
+        .arg(script_path("check_release_secrets.sh"))
+        .env_clear()
+        .env("PATH", std::env::var("PATH").expect("PATH"))
+        .env(
+            "RELEASE_SECRETS",
+            "POSTHOG_API_KEY MACOS_RELEASE_DOPPLER_TOKEN",
+        );
+    for (name, value) in configured {
+        command.env(name, value);
+    }
+    command.output().expect("run release secret check")
+}
+
+#[test]
+fn secret_check_names_each_unconfigured_secret() {
+    let output = run_secret_check(&[
+        ("POSTHOG_API_KEY", "phc_test"),
+        ("MACOS_RELEASE_DOPPLER_TOKEN", ""),
+    ]);
+    assert!(!output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("::error::Repository secret MACOS_RELEASE_DOPPLER_TOKEN is not configured"),
+        "{stdout}"
+    );
+    assert!(!stdout.contains("secret POSTHOG_API_KEY"), "{stdout}");
+}
+
+#[test]
+fn secret_check_passes_when_every_secret_is_configured() {
+    let output = run_secret_check(&[
+        ("POSTHOG_API_KEY", "phc_test"),
+        ("MACOS_RELEASE_DOPPLER_TOKEN", "dp.st.test"),
+    ]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+}
+
+fn resolve_ref(event: &str, selected_ref: &str, input_ref: &str) -> (Output, String) {
+    let temp = tempfile::tempdir().expect("resolve fixture directory");
+    let github_output = temp.path().join("github-output");
+    let output = Command::new("bash")
+        .arg(script_path("resolve_desktop_ref.sh"))
+        .env("EVENT_NAME", event)
+        .env("SELECTED_REF", selected_ref)
+        .env("INPUT_REF", input_ref)
+        .env("GITHUB_EVENT_REF", "")
+        .env("GITHUB_EVENT_REF_TYPE", "")
+        .env("GITHUB_OUTPUT", &github_output)
+        .output()
+        .expect("run desktop ref resolution");
+    (
+        output,
+        fs::read_to_string(github_output).unwrap_or_default(),
+    )
+}
+
+#[test]
+fn pull_requests_and_the_nightly_build_their_own_ref() {
+    let (output, resolved) = resolve_ref("pull_request", "refs/pull/8600/merge", "");
+    assert!(output.status.success());
+    assert_eq!(resolved, "ref=refs/pull/8600/merge\n");
+
+    let (output, resolved) = resolve_ref("schedule", "refs/heads/main", "");
+    assert!(output.status.success());
+    assert_eq!(resolved, "ref=refs/heads/main\n");
+}
+
+#[test]
+fn manual_overrides_still_only_accept_release_tags() {
+    let (output, resolved) = resolve_ref("workflow_dispatch", "refs/heads/main", "main");
+    assert!(!output.status.success());
+    assert_eq!(resolved, "");
 }

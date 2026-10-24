@@ -24,11 +24,13 @@ jobs:
 
         # Resolve the git ref for desktop builds from any trigger type:
         #   push (tag)          → github.ref
+        #   pull_request        → github.ref (the PR's merge ref)
+        #   schedule            → github.ref (the default branch)
         #   create (tag)        → github.event.ref
         #   workflow_dispatch   → inputs.ref (release tag) or the selected workflow ref
 
         case "$EVENT_NAME" in
-          push)
+          push | pull_request | schedule)
             echo "ref=$SELECTED_REF" >> "$GITHUB_OUTPUT"
             ;;
           create)
@@ -1031,7 +1033,7 @@ jobs:
     - build-daemon-windows-x86-64
     if: '!cancelled() && needs.resolve-ref.result == ''success'' && (needs.build-daemon-linux-x86-64.result == ''success'' || needs.build-daemon-linux-aarch64.result == ''success'' || needs.build-daemon-macos-aarch64.result == ''success'' || needs.build-daemon-macos-x86-64.result == ''success'' || needs.build-daemon-windows-x86-64.result == ''success'')'
     name: Upload Release Artifacts
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:

@@ -2,9 +2,27 @@
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/build_desktop_on_tag.rs
 name: Build Desktop on Tag
 'on':
+  pull_request:
+    branches:
+    - main
+    paths:
+    - apps/web/tauri/**
+    - apps/web/scripts/desktop-release.mjs
+    - nix/tauri-desktop.nix
+    - nix/dmg-layout.py
+    - nix/appimage/**
+    - nix-support/**
+    - flake.nix
+    - flake.lock
+    - rust-toolchain.toml
+    - '.github/actions/setup-nix/**'
+    - '.github/actions/teardown-nix/**'
+    - '.github/workflows/build_desktop_on_tag.yml'
   push:
     tags:
     - v[0-9]*
+  schedule:
+  - cron: '17 9 * * *'
   workflow_dispatch:
     inputs:
       ref:
@@ -12,9 +30,9 @@ name: Build Desktop on Tag
         type: string
 jobs:
   resolve-ref:
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push' || (github.event_name == 'create' && github.event.ref_type == 'tag')
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push' || github.event_name == 'schedule' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]') || (github.event_name == 'create' && github.event.ref_type == 'tag')
     name: Resolve build ref
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       ref: ${{ steps.resolve.outputs.ref }}
     steps:
@@ -25,11 +43,13 @@ jobs:
 
         # Resolve the git ref for desktop builds from any trigger type:
         #   push (tag)          → github.ref
+        #   pull_request        → github.ref (the PR's merge ref)
+        #   schedule            → github.ref (the default branch)
         #   create (tag)        → github.event.ref
         #   workflow_dispatch   → inputs.ref (release tag) or the selected workflow ref
 
         case "$EVENT_NAME" in
-          push)
+          push | pull_request | schedule)
             echo "ref=$SELECTED_REF" >> "$GITHUB_OUTPUT"
             ;;
           create)
@@ -189,6 +209,7 @@ jobs:
         (cd artifacts && sha256sum -- *.AppImage > macro-appimage-SHA256SUMS)
       shell: bash
     - name: Upload macro-appimage-${{ steps.metadata.outputs.safe_tag }} artifact
+      if: github.event_name != 'pull_request'
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: macro-appimage-${{ steps.metadata.outputs.safe_tag }}
@@ -279,12 +300,12 @@ jobs:
       shell: bash
       continue-on-error: true
     - name: Configure signing identity
+      if: github.event_name != 'pull_request'
       run: |
         set -euo pipefail
         if [ -z "${MACOS_DEVELOPER_ID_CERTIFICATE_BASE64}" ] || [ -z "${MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD}" ]; then
-          echo "Developer ID certificate secrets are not configured; using ad-hoc signing for build validation."
-          echo "APPLE_SIGNING_IDENTITY=-" >> "$GITHUB_ENV"
-          exit 0
+          echo "MACOS_DEVELOPER_ID_CERTIFICATE_BASE64 and MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD must be set to sign a release build" >&2
+          exit 1
         fi
 
         certificate_path="$RUNNER_TEMP/developer-id-application.p12"
@@ -333,6 +354,10 @@ jobs:
         MACOS_DEVELOPER_ID_CERTIFICATE_BASE64: ${{ secrets.MACOS_DEVELOPER_ID_CERTIFICATE_BASE64 }}
         MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD }}
         MACOS_DEVELOPER_ID_PROVISIONING_PROFILE_BASE64: ${{ secrets.MACOS_DEVELOPER_ID_PROVISIONING_PROFILE_BASE64 }}
+    - name: Use ad-hoc signing for pull requests
+      if: github.event_name == 'pull_request'
+      run: echo "APPLE_SIGNING_IDENTITY=-" >> "$GITHUB_ENV"
+      shell: bash
     - id: metadata
       name: Derive artifact metadata
       run: |
@@ -378,7 +403,7 @@ jobs:
       env:
         VITE_POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
     - name: Prune and save macOS Nix build dependencies
-      if: '!cancelled() && steps.nix-cache.outcome == ''success'''
+      if: '!cancelled() && steps.nix-cache.outcome == ''success'' && github.event_name != ''pull_request'''
       run: |
         set -euo pipefail
         export LC_ALL=C
@@ -607,6 +632,7 @@ jobs:
         fi
       shell: bash
     - name: Prepare CloudKit TCP fallback
+      if: github.event_name != 'pull_request'
       run: |
         set -euo pipefail
         cat > "$RUNNER_TEMP/macro-cloudkit-tcp.sh" <<'MACRO_CLOUDKIT_TCP'
@@ -750,6 +776,7 @@ jobs:
         MACRO_CLOUDKIT_TCP
       shell: bash
     - name: Notarize and staple DMG
+      if: github.event_name != 'pull_request'
       run: |
         set -euo pipefail
 
@@ -845,6 +872,7 @@ jobs:
       env:
         DOPPLER_TOKEN: ${{ secrets.MACOS_RELEASE_DOPPLER_TOKEN }}
     - name: Upload macro-dmg-${{ steps.metadata.outputs.safe_tag }} artifact
+      if: github.event_name != 'pull_request'
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: macro-dmg-${{ steps.metadata.outputs.safe_tag }}
@@ -856,8 +884,9 @@ jobs:
     - resolve-ref
     - build-appimage
     - build-dmg
+    if: github.event_name != 'pull_request'
     name: Publish desktop installers
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
@@ -893,7 +922,7 @@ jobs:
     - publish-installers
     if: startsWith(needs.resolve-ref.outputs.ref, 'refs/tags/v')
     name: Sign and publish desktop updates
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     concurrency:
@@ -1062,6 +1091,41 @@ jobs:
         GH_TOKEN: ${{ github.token }}
         RELEASE_TAG: ${{ steps.metadata.outputs.tag }}
         RELEASE_REPOSITORY: ${{ github.repository }}
+  check-release-secrets:
+    needs:
+    - resolve-ref
+    name: Check release secrets
+    runs-on: namespace-profile-linux-tiny-no-cache
+    timeout-minutes: 5
+    steps:
+    - name: Check release secrets are configured
+      run: |
+        set -euo pipefail
+
+        # RELEASE_SECRETS is generated from every secret the desktop jobs read, so a
+        # change that starts reading a new secret fails here until it is configured.
+        missing=()
+        for name in $RELEASE_SECRETS; do
+          if [ -z "${!name:-}" ]; then
+            missing+=("$name")
+          fi
+        done
+
+        if [ "${#missing[@]}" -ne 0 ]; then
+          for name in "${missing[@]}"; do
+            echo "::error::Repository secret $name is not configured. Desktop releases read it, so add it before merging the change that needs it."
+          done
+          exit 1
+        fi
+        echo "Desktop release secrets are configured: $RELEASE_SECRETS"
+      shell: bash
+      env:
+        RELEASE_SECRETS: MACOS_DEVELOPER_ID_CERTIFICATE_BASE64 MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD MACOS_DEVELOPER_ID_PROVISIONING_PROFILE_BASE64 MACOS_RELEASE_DOPPLER_TOKEN POSTHOG_API_KEY
+        MACOS_DEVELOPER_ID_CERTIFICATE_BASE64: ${{ secrets.MACOS_DEVELOPER_ID_CERTIFICATE_BASE64 }}
+        MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+        MACOS_DEVELOPER_ID_PROVISIONING_PROFILE_BASE64: ${{ secrets.MACOS_DEVELOPER_ID_PROVISIONING_PROFILE_BASE64 }}
+        MACOS_RELEASE_DOPPLER_TOKEN: ${{ secrets.MACOS_RELEASE_DOPPLER_TOKEN }}
+        POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
 concurrency:
   group: desktop-${{ inputs.ref || (github.event.ref_type == 'tag' && github.event.ref || github.ref_name) }}
   cancel-in-progress: true

@@ -18,6 +18,9 @@ on:
       MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD:
         description: Password for the Developer ID certificate
         required: true
+      MACOS_DEVELOPER_ID_PROVISIONING_PROFILE_BASE64:
+        description: Developer ID provisioning profile granting the app's restricted entitlements
+        required: true
       MACOS_RELEASE_DOPPLER_TOKEN:
         description: Doppler token for notarizing the macOS DMG
         required: true
@@ -101,12 +104,12 @@ jobs:
       shell: bash
       continue-on-error: true
     - name: Configure signing identity
+      if: github.event_name != 'pull_request'
       run: |
         set -euo pipefail
         if [ -z "${MACOS_DEVELOPER_ID_CERTIFICATE_BASE64}" ] || [ -z "${MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD}" ]; then
-          echo "Developer ID certificate secrets are not configured; using ad-hoc signing for build validation."
-          echo "APPLE_SIGNING_IDENTITY=-" >> "$GITHUB_ENV"
-          exit 0
+          echo "MACOS_DEVELOPER_ID_CERTIFICATE_BASE64 and MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD must be set to sign a release build" >&2
+          exit 1
         fi
 
         certificate_path="$RUNNER_TEMP/developer-id-application.p12"
@@ -155,6 +158,10 @@ jobs:
         MACOS_DEVELOPER_ID_CERTIFICATE_BASE64: ${{ secrets.MACOS_DEVELOPER_ID_CERTIFICATE_BASE64 }}
         MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD }}
         MACOS_DEVELOPER_ID_PROVISIONING_PROFILE_BASE64: ${{ secrets.MACOS_DEVELOPER_ID_PROVISIONING_PROFILE_BASE64 }}
+    - name: Use ad-hoc signing for pull requests
+      if: github.event_name == 'pull_request'
+      run: echo "APPLE_SIGNING_IDENTITY=-" >> "$GITHUB_ENV"
+      shell: bash
     - id: metadata
       name: Derive artifact metadata
       run: |
@@ -200,7 +207,7 @@ jobs:
       env:
         VITE_POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
     - name: Prune and save macOS Nix build dependencies
-      if: '!cancelled() && steps.nix-cache.outcome == ''success'''
+      if: '!cancelled() && steps.nix-cache.outcome == ''success'' && github.event_name != ''pull_request'''
       run: |
         set -euo pipefail
         export LC_ALL=C
@@ -429,6 +436,7 @@ jobs:
         fi
       shell: bash
     - name: Prepare CloudKit TCP fallback
+      if: github.event_name != 'pull_request'
       run: |
         set -euo pipefail
         cat > "$RUNNER_TEMP/macro-cloudkit-tcp.sh" <<'MACRO_CLOUDKIT_TCP'
@@ -572,6 +580,7 @@ jobs:
         MACRO_CLOUDKIT_TCP
       shell: bash
     - name: Notarize and staple DMG
+      if: github.event_name != 'pull_request'
       run: |
         set -euo pipefail
 
@@ -667,6 +676,7 @@ jobs:
       env:
         DOPPLER_TOKEN: ${{ secrets.MACOS_RELEASE_DOPPLER_TOKEN }}
     - name: Upload macro-dmg-${{ steps.metadata.outputs.safe_tag }} artifact
+      if: github.event_name != 'pull_request'
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: macro-dmg-${{ steps.metadata.outputs.safe_tag }}

@@ -2,11 +2,13 @@ set -euo pipefail
 
 # Resolve the git ref for desktop builds from any trigger type:
 #   push (tag)          → github.ref
+#   pull_request        → github.ref (the PR's merge ref)
+#   schedule            → github.ref (the default branch)
 #   create (tag)        → github.event.ref
 #   workflow_dispatch   → inputs.ref (release tag) or the selected workflow ref
 
 case "$EVENT_NAME" in
-  push)
+  push | pull_request | schedule)
     echo "ref=$SELECTED_REF" >> "$GITHUB_OUTPUT"
     ;;
   create)

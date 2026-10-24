@@ -130,6 +130,7 @@ jobs:
         (cd artifacts && sha256sum -- *.AppImage > macro-appimage-SHA256SUMS)
       shell: bash
     - name: Upload macro-appimage-${{ steps.metadata.outputs.safe_tag }} artifact
+      if: github.event_name != 'pull_request'
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: macro-appimage-${{ steps.metadata.outputs.safe_tag }}
