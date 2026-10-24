@@ -25,6 +25,7 @@ export function createTasksViewSearch(options: {
   const entryTab = state.tab;
   const entryGroupBy = state.groupBy;
   const entryLayout = state.layout;
+  const entryDueDate = state.dueDate ? { ...state.dueDate } : undefined;
 
   createEffect(
     on(
@@ -35,9 +36,22 @@ export function createTasksViewSearch(options: {
           search.sort,
           search.sortReversed,
           search.groupBy,
+          search.dueDate,
+          search.dueStart,
+          search.dueEnd,
           options.nonListLayoutsEnabled?.() ?? true,
         ] as const,
-      ([tab, layout, sort, sortReversed, groupBy, nonListLayoutsEnabled]) => {
+      ([
+        tab,
+        layout,
+        sort,
+        sortReversed,
+        groupBy,
+        dueDate,
+        dueStart,
+        dueEnd,
+        nonListLayoutsEnabled,
+      ]) => {
         if (!options.enabled) return;
         const requestedLayout = layout ?? entryLayout;
 
@@ -49,6 +63,7 @@ export function createTasksViewSearch(options: {
                 DEFAULT_TASK_FACET_SELECTION
               );
               draft.collapsedGroupIds = [];
+              draft.dueDate = undefined;
             }
 
             draft.layout = nonListLayoutsEnabled ? requestedLayout : 'list';
@@ -56,8 +71,27 @@ export function createTasksViewSearch(options: {
               groupBy ??
               (tab === entryTab ? entryGroupBy : TASK_DEFAULT_GROUP_BY[tab]);
             draft.sort = sort
-              ? [{ id: sort, reversed: sortReversed === 'true' }]
+              ? [
+                  {
+                    id: sort,
+                    reversed:
+                      !sort.startsWith('due_date_') && sortReversed === 'true',
+                  },
+                ]
               : entrySort.map((item) => ({ ...item }));
+            draft.dueDate =
+              dueDate === 'range'
+                ? (dueStart || dueEnd) &&
+                  (!dueStart || !dueEnd || dueStart <= dueEnd)
+                  ? { type: 'range', start: dueStart, end: dueEnd }
+                  : undefined
+                : dueDate === 'any'
+                  ? undefined
+                  : dueDate
+                    ? { type: dueDate }
+                    : tab === entryTab && entryDueDate
+                      ? { ...entryDueDate }
+                      : undefined;
           })
         );
 
@@ -83,12 +117,24 @@ export function createTasksViewSearch(options: {
       if (args[0] === 'groupBy') {
         options.setSearch({ groupBy: state.groupBy });
       }
+
+      if (args[0] === 'dueDate') {
+        const filter = state.dueDate;
+        options.setSearch({
+          dueDate: filter?.type ?? 'any',
+          dueStart: filter?.type === 'range' ? filter.start : undefined,
+          dueEnd: filter?.type === 'range' ? filter.end : undefined,
+        });
+      }
     },
   });
 
   const setPrimarySort = (id: TaskSortId) => {
     const current = state.sort[0];
-    const reversed = current?.id === id ? !current.reversed : false;
+    const reversed =
+      !id.startsWith('due_date_') && current?.id === id
+        ? !current.reversed
+        : false;
 
     options.setState('sort', [{ id, reversed }]);
     if (!options.enabled) return;

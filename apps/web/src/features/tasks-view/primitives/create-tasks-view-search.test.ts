@@ -206,3 +206,56 @@ it('falls back from restored board entries and from desktop boards when mobile a
   desktop.setState('layout', 'board');
   expect(desktop.state.layout).toBe('board');
 });
+
+it('restores the original date filter when URL controls disappear', () => {
+  const view = setup({
+    state: {
+      dueDate: { type: 'range', start: '2026-10-21', end: '2026-10-28' },
+    },
+  });
+  view.setState('dueDate', { type: 'overdue' });
+  view.setSearch({
+    dueDate: undefined,
+    dueStart: undefined,
+    dueEnd: undefined,
+  });
+  expect(view.state.dueDate).toEqual({
+    type: 'range',
+    start: '2026-10-21',
+    end: '2026-10-28',
+  });
+});
+
+it('round-trips custom date ranges and due sorts without reversed null placement', () => {
+  const view = setup({
+    search: {
+      dueDate: 'range',
+      dueStart: '2026-10-21',
+      dueEnd: '2026-10-28',
+      sort: 'due_date_earliest',
+      sortReversed: 'true',
+    },
+  });
+  expect(view.state.dueDate).toEqual({
+    type: 'range',
+    start: '2026-10-21',
+    end: '2026-10-28',
+  });
+  expect(view.state.sort).toEqual([
+    { id: 'due_date_earliest', reversed: false },
+  ]);
+  view.setState('dueDate', { type: 'overdue' });
+  expect(view.search.dueDate).toBe('overdue');
+  expect(view.search.dueStart).toBeUndefined();
+  view.setState('dueDate', undefined);
+  expect(view.search.dueDate).toBe('any');
+  view.setPrimarySort('due_date_latest');
+  view.setPrimarySort('due_date_latest');
+  expect(view.state.sort).toEqual([{ id: 'due_date_latest', reversed: false }]);
+  view.setSearch({
+    dueDate: 'range',
+    dueStart: '2026-10-28',
+    dueEnd: '2026-10-21',
+  });
+  expect(view.state.dueDate).toBeUndefined();
+});

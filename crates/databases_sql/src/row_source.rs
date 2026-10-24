@@ -207,6 +207,7 @@ where
                 field: GroupByField::Property {
                     property_definition_id: *group_by,
                     entity_type: Some(PropertyEntityType::DatabaseRow.to_string()),
+                    bucketing: None,
                 },
                 group_key: None,
                 per_group_limit: Some(1),

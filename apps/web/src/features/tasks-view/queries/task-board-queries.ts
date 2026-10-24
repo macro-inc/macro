@@ -1,8 +1,8 @@
 import { createProjectIdentityQuery } from '@app/features/projects/queries/project-identity';
 import type { FacetSelection, SortSelection } from '@app/features/soup';
-import { sortItems } from '@app/features/soup/collection/transforms';
 import { soupPropertyToProperty } from '@entity/extractors-property/property-helpers';
 import type { TaskEntityWithProperties } from '@entity/types/entity';
+import { Telemetry } from '@macro-inc/observability';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { Property, PropertyApiValues } from '@property/types';
 import { toPropertyDefinitionDomain } from '@property/utils/transforms';
@@ -10,9 +10,20 @@ import { useListPropertiesQuery } from '@queries/properties/definitions';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import { type Accessor, createMemo, createSignal, mapArray } from 'solid-js';
-import { TASK_SORT_DEFINITIONS } from '../constants';
+import { sortTasks } from '../constants';
 import type { TaskBoardActions } from '../context/task-board';
-import type { TaskBoardColumn, TaskBoardGrouping } from '../core/task-board';
+import type {
+  TaskBoardColumn,
+  TaskBoardGrouping,
+  TaskBoardTask,
+} from '../core/task-board';
+import {
+  compareTaskDueDates,
+  isTaskDueDateBucket,
+  type TaskCalendar,
+  type TaskDatePredicate,
+  taskDueDateBucket,
+} from '../core/task-due-date';
 import type { TaskSortId } from '../types';
 import {
   filterTaskBoardColumns,
@@ -32,6 +43,8 @@ export function createTaskBoardQueries(options: {
   projectsEnabled: Accessor<boolean>;
   facets?: Accessor<FacetSelection>;
   sort?: Accessor<SortSelection<TaskSortId>[]>;
+  calendar?: Accessor<TaskCalendar>;
+  dueDate?: Accessor<TaskDatePredicate | undefined>;
 }) {
   const [propertySaving, setPropertySaving] = createSignal<string[]>([]);
 
@@ -53,11 +66,7 @@ export function createTaskBoardQueries(options: {
     const values = [...entities().values()];
     const ordered = options.searching()
       ? values
-      : sortItems(
-          values,
-          options.sort?.() ?? [{ id: 'updated_at' }],
-          TASK_SORT_DEFINITIONS
-        );
+      : sortTasks(values, options.sort?.() ?? [{ id: 'updated_at' }]);
 
     return new Map(ordered.map((entity, index) => [entity.id, index]));
   });
@@ -85,13 +94,20 @@ export function createTaskBoardQueries(options: {
   });
 
   const allColumns = createMemo(() =>
-    taskBoardColumns(options.rows(), options.grouping(), options.searching())
+    taskBoardColumns(
+      options.rows(),
+      options.grouping(),
+      options.searching(),
+      options.calendar?.()
+    )
   );
   const rawColumns = createMemo(() =>
     filterTaskBoardColumns(
       allColumns(),
       options.grouping(),
-      options.facets?.() ?? {}
+      options.facets?.() ?? {},
+      options.dueDate?.(),
+      options.calendar?.()
     )
   );
 
@@ -157,6 +173,7 @@ export function createTaskBoardQueries(options: {
         return !id || !!property.options?.some((option) => option.id === id);
       }
 
+      if (grouping === 'due_date') return isTaskDueDateBucket(id);
       return grouping !== 'project' || options.projectsEnabled();
     },
     async save(move, grouping) {
@@ -173,16 +190,30 @@ export function createTaskBoardQueries(options: {
       if (!canMove) {
         throw new Error('Task or destination is no longer editable');
       }
+      if (grouping === 'due_date') {
+        const calendar = options.calendar?.();
+        if (
+          !calendar ||
+          move.dueDate === undefined ||
+          taskDueDateBucket(move.dueDate ?? undefined, calendar) !== move.toLane
+        )
+          throw new Error('Date is outside the destination bucket');
+      }
 
-      await save.mutateAsync({
-        properties: [
-          {
-            entityId: entity.id,
-            entityType: 'TASK',
-            property,
-            apiValues: taskBoardMoveValue(entity, grouping, move),
-          },
-        ],
+      await Telemetry.span('task.board.move', async (span) => {
+        span.setAttr('task.id', entity.id);
+        span.setAttr('task.grouping', grouping);
+        span.setAttr('task.destination', move.toLane);
+        await save.mutateAsync({
+          properties: [
+            {
+              entityId: entity.id,
+              entityType: 'TASK',
+              property,
+              apiValues: taskBoardMoveValue(entity, grouping, move),
+            },
+          ],
+        });
       });
     },
   };
@@ -264,13 +295,22 @@ export function createTaskBoardQueries(options: {
   return {
     actions,
     columns,
-    compareTasks: (left: string, right: string) =>
-      (ranks().get(left) ?? Infinity) - (ranks().get(right) ?? Infinity),
+    compareTasks: (left: TaskBoardTask, right: TaskBoardTask) => {
+      const sort = options.sort?.()[0]?.id;
+      if (
+        !options.searching() &&
+        (sort === 'due_date_earliest' || sort === 'due_date_latest')
+      )
+        return compareTaskDueDates(left, right, sort === 'due_date_latest');
+      return (
+        (ranks().get(left.id) ?? Infinity) - (ranks().get(right.id) ?? Infinity)
+      );
+    },
     hiddenColumnCount: () => allColumns().length - rawColumns().length,
     task: (id: string) => {
       const entity = entities().get(id);
 
-      return entity ? toBoardTask(entity) : undefined;
+      return entity ? toBoardTask(entity, options.calendar?.()) : undefined;
     },
     entity: (id: string) => entities().get(id),
     property,

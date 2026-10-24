@@ -555,3 +555,38 @@ fn crm_associations_use_server_membership() {
         );
     }
 }
+
+#[test]
+fn date_property_filters_use_server_queries_instead_of_partial_local_matches() {
+    use item_filters::ast::properties::DateRange;
+    for value in [
+        PropertyMatchValue::DatePresent,
+        PropertyMatchValue::DateRange(DateRange {
+            start: Some("2026-03-08T05:00:00Z".parse().unwrap()),
+            end: None,
+        }),
+    ] {
+        for negated in [false, true] {
+            let literal = Expr::val(PropertiesLiteral {
+                property_definition_id: Uuid::from_u128(4),
+                entity_type: None,
+                value: value.clone(),
+            });
+            let mut ast = excluded_deferred_partitions();
+            ast.properties_filter = Some(Arc::new(if negated {
+                Expr::is_not(literal)
+            } else {
+                literal
+            }));
+            assert_eq!(
+                properties::compile_soup(&ast, request()).unwrap(),
+                LocalCompileOutcome::Unsupported(UnsupportedReason::GlobalProperties),
+            );
+            assert_eq!(
+                properties::compile_mail(&ast, request(), "inbox", &[], "macro|viewer@example.com")
+                    .unwrap(),
+                LocalCompileOutcome::Unsupported(UnsupportedReason::GlobalProperties),
+            );
+        }
+    }
+}

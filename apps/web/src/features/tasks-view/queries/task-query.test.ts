@@ -1,4 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
+import {
+  createTaskCalendar,
+  taskDueDatePredicate,
+} from '../core/task-due-date';
 import { type BuildTaskQueryOptions, buildTaskQuery } from './task-query';
 import { buildTaskSearchRequest } from './task-search';
 
@@ -105,4 +109,51 @@ it('uses the initiative Project property for board columns without changing lega
     sort_method: 'updated_at',
     sort_direction: 'asc',
   });
+});
+
+const calendar = createTaskCalendar(
+  new Date('2026-11-01T18:00:00Z'),
+  'America/New_York'
+);
+
+it('combines an exclusive overdue bound with status independently and freezes deadline grouping', () => {
+  const dueDate = taskDueDatePredicate({ type: 'overdue' }, calendar);
+  const query = buildTaskQuery({
+    ...options,
+    groupBy: 'due_date',
+    sort: [{ id: 'due_date_earliest' }],
+    dueDate,
+    calendar,
+  });
+  expect(query.params.sort_method).toBe('due_date_earliest');
+  expect(query.groupBy).toEqual({
+    type: 'deadline',
+    boundaries: calendar.boundaries,
+  });
+  expect(JSON.stringify(query.body.propf)).toContain(
+    '2026-11-01T04:00:00.000Z'
+  );
+  expect(JSON.stringify(query.body.propf)).toContain(
+    '00000001-0000-0000-0002-000000000002'
+  );
+  expect(JSON.stringify(query.body.propf)).toContain('"end"');
+  expect(JSON.stringify(query.body.propf)).toContain('"et":"TASK"');
+  expect(JSON.stringify(query.body.propf)).not.toContain('"start"');
+});
+
+it('negates date presence and keeps due sorting out of scoped text search', () => {
+  const query = buildTaskQuery({
+    ...options,
+    facets: {},
+    dueDate: { hasDate: false },
+    sort: [{ id: 'due_date_latest' }],
+    searching: true,
+    nameContains: 'renewal',
+  });
+  expect(query.body.propf).toEqual({
+    '!': {
+      l: { pd: '00000001-0000-0000-0000-000000000004', et: 'TASK', v: 'dp' },
+    },
+  });
+  expect(query.params.sort_method).toBe('updated_at');
 });

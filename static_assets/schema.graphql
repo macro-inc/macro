@@ -3603,6 +3603,28 @@ type GraphqlDatePropertyValue {
 }
 
 """
+Frozen starts of the viewer's local calendar days, expressed in UTC.
+"""
+input GraphqlDeadlineBoundaries {
+	"""
+	UTC start of the viewer's current local day.
+	"""
+	today: String!
+	"""
+	UTC start of the viewer's next local day.
+	"""
+	tomorrow: String!
+	"""
+	UTC start of the viewer's local day two days ahead.
+	"""
+	dayTwo: String!
+	"""
+	UTC start of the viewer's local day eight days ahead.
+	"""
+	dayEight: String!
+}
+
+"""
 The two operands of a recursive `DocumentFilterExpr` binary expression.
 """
 input GraphqlDocumentBinaryExpr {
@@ -3701,8 +3723,8 @@ input GraphqlDocumentLiteral @oneOf {
 	emailAttachmentParticipant: GraphqlEmailValue
 	"""
 	Associated with a CRM record through its Companies or Contacts
-	property or a reference to the record. Requires an expanded,
-	timestamp-sorted query.
+	property or a reference to the record. Requires an expanded query
+	sorted by a timestamp or task due date.
 	"""
 	crmAssociated: GraphqlCrmAssociation
 	"""
@@ -4201,7 +4223,7 @@ input GraphqlEntityFilterAst {
 	favoritesOnly: Boolean
 	"""
 	Restrict every entity type to items associated with this CRM record.
-	Requires an expanded, timestamp-sorted query.
+	Requires an expanded query sorted by a timestamp or task due date.
 	"""
 	crmAssociation: GraphqlCrmAssociation
 	"""
@@ -4592,6 +4614,14 @@ input GraphqlFilterPropertyMatchValue @oneOf {
 	Entity reference id to match.
 	"""
 	entityRef: ID
+	"""
+	Match a DATE property in a UTC range.
+	"""
+	dateRange: GraphqlPropertyDateRange
+	"""
+	Match a non-null DATE property (false matches absent, null or cleared).
+	"""
+	hasDate: Boolean
 }
 
 """
@@ -5299,6 +5329,10 @@ enum GraphqlGroupByField {
 	"""
 	DATE
 	"""
+	Group task deadlines using frozen viewer-local calendar boundaries.
+	"""
+	DEADLINE
+	"""
 	Group by Soup entity type.
 	"""
 	ENTITY_TYPE
@@ -5328,6 +5362,10 @@ input GraphqlGroupByInput {
 	Optional property entity type restriction.
 	"""
 	entityType: GraphqlPropertyEntityType
+	"""
+	Frozen viewer-local UTC boundaries required when `field` is `DEADLINE`.
+	"""
+	deadlineBoundaries: GraphqlDeadlineBoundaries
 }
 
 """
@@ -6073,6 +6111,20 @@ enum GraphqlPropertyDataType {
 	URL values.
 	"""
 	LINK
+}
+
+"""
+Explicit UTC bounds for a DATE property.
+"""
+input GraphqlPropertyDateRange {
+	"""
+	Inclusive UTC start, or no lower bound.
+	"""
+	start: String
+	"""
+	Exclusive UTC end, or no upper bound.
+	"""
+	end: String
 }
 
 """
@@ -6827,7 +6879,7 @@ enum GraphqlSharedEmailFilter {
 }
 
 """
-GraphQL representation of supported Soup sorts.
+GraphQL representation of supported Soup timestamp, notification, and task due-date sorts.
 """
 enum GraphqlSimpleSortMethod {
 	"""
@@ -6851,6 +6903,14 @@ enum GraphqlSimpleSortMethod {
 	notified first. Descending `soup` only; not supported by `groupSoup`.
 	"""
 	NOTIFIED_AT
+	"""
+	Earliest task due date first, with undated tasks last.
+	"""
+	DUE_DATE_EARLIEST
+	"""
+	Latest task due date first, with undated tasks last.
+	"""
+	DUE_DATE_LATEST
 }
 
 """
@@ -10202,8 +10262,8 @@ input SoupInitialInput {
 	"""
 	expand: Boolean
 	"""
-	Simple timestamp sort. Defaults to VIEWED_AT. Frecency is intentionally
-	not supported by this initial GraphQL adapter.
+	Timestamp or task due-date sort. Defaults to VIEWED_AT.
+	Frecency is not supported by this GraphQL adapter.
 	"""
 	sortMethod: GraphqlSimpleSortMethod
 	"""

@@ -20,7 +20,7 @@ export type TaskBoardData = {
   task(id: string): TaskBoardTask | undefined;
   /** Instantiate under the mounted column label's owner. */
   createAssigneeName(id: Accessor<string>): Accessor<string | undefined>;
-  compareTasks?: (left: string, right: string) => number;
+  compareTasks?: (left: TaskBoardTask, right: TaskBoardTask) => number;
   actions: TaskBoardActions;
   property(taskId: string, propertyId: string): Property | undefined;
   canEditProperty(taskId: string, propertyId: string): boolean;

@@ -869,25 +869,19 @@ export function createSoupLiveQuery(
         return;
       }
       if (!local.mail.nextCursor || fetchingMailPage()) return;
-      const initial =
-        'initial' in local.input ? local.input.initial : undefined;
+      const definition = localSource();
       const host = getGraphqlSoupCacheHost();
-      if (
-        !initial ||
-        !host ||
-        !isCachedMailView(initial.emailView) ||
-        initial.sortMethod === 'NOTIFIED_AT'
-      )
+      if (!definition?.mailView || !host || definition.input !== local.input)
         return;
-      const mailView = initial.emailView;
+      const { source, mailView } = definition;
       setFetchingMailPage(true);
       try {
         const result = await host.entityFilter({
-          filters: initial.filters ?? {},
-          sortMethod: initial.sortMethod ?? 'UPDATED_AT',
-          sortDirection: initial.sortDirection ?? 'DESC',
-          limit: initial.limit ?? 20,
-          mail: { view: initial.emailView, cursor: local.mail.nextCursor },
+          filters: source.filters,
+          sortMethod: source.sortMethod,
+          sortDirection: source.sortDirection,
+          limit: source.limit,
+          mail: { view: mailView, cursor: local.mail.nextCursor },
         });
         if (displayLocalProjection() !== local) return;
         if (result.kind === 'stale-cursor') {

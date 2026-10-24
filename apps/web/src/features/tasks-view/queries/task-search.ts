@@ -9,6 +9,7 @@ import type {
   EntityFilters,
   PropertyFilter as SearchPropertyFilter,
 } from '@service-search/generated/models';
+import type { TaskDatePredicate } from '../core/task-due-date';
 import {
   EMPTY_TASK_FACET_CONTEXT,
   getTaskFacetOption,
@@ -85,9 +86,20 @@ export function buildTaskSearchRequest(options: {
   facets: FacetSelection;
   facetContext?: TaskFacetContext;
   reference?: TaskReferenceScope;
+  dueDate?: TaskDatePredicate;
 }): SearchSoupQueryArgs {
   const facetContext = options.facetContext ?? EMPTY_TASK_FACET_CONTEXT;
   const propertyFilters = selectedPropertyFilters(options.facets, facetContext);
+  if (options.dueDate) {
+    const value = options.dueDate;
+    propertyFilters.push({
+      property_definition_id: SYSTEM_PROPERTY_IDS.DUE_DATE,
+      entity_type: 'TASK',
+      ...('dateRange' in value
+        ? { date_range: value.dateRange }
+        : { has_date: value.hasDate }),
+    });
+  }
 
   if (options.tab === 'my-tasks') {
     propertyFilters.push({

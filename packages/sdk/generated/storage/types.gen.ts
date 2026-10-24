@@ -898,6 +898,28 @@ export type ApiChannelWithLatest = {
 };
 
 /**
+ * Frozen viewer-local day boundaries used to group task deadlines.
+ */
+export type ApiDeadlineBoundaries = {
+    /**
+     * UTC start of the viewer's local day eight days ahead.
+     */
+    day_eight: string;
+    /**
+     * UTC start of the viewer's local day two days ahead.
+     */
+    day_two: string;
+    /**
+     * UTC start of the viewer's current local day.
+     */
+    today: string;
+    /**
+     * UTC start of the viewer's next local day.
+     */
+    tomorrow: string;
+};
+
+/**
  * Wire-format entity filter AST accepted by soup AST endpoints.
  */
 export type ApiEntityFilterAst = {
@@ -998,6 +1020,11 @@ export type ApiGroupByField = 'date' | 'entity_type' | 'project' | {
          */
         property_definition_id: string;
     };
+} | {
+    /**
+     * Group task deadlines using frozen viewer-local calendar boundaries.
+     */
+    deadline: ApiDeadlineBoundaries;
 };
 
 /**
@@ -5267,6 +5294,20 @@ export type DatabaseWebhookResponse = {
 export type DateOperator = 'before' | 'after' | 'onOrBefore' | 'onOrAfter';
 
 /**
+ * UTC timestamp interval. Lower bounds are inclusive; upper bounds are exclusive.
+ */
+export type DateRange = {
+    /**
+     * Exclusive UTC upper bound, omitted for an open end.
+     */
+    end?: string | null;
+    /**
+     * Inclusive UTC lower bound, omitted for an open start.
+     */
+    start?: string | null;
+};
+
+/**
  * Response body for `DELETE /channels/mentions/{mention_id}`.
  */
 export type DeleteEntityMentionResponse = {
@@ -8148,7 +8189,7 @@ export type GroupedSoupPage = (GroupedSoupInitialPage & {
 /**
  * Sort method for grouped queries (frecency not supported).
  */
-export type GroupedSoupSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated';
+export type GroupedSoupSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated' | 'due_date_earliest' | 'due_date_latest';
 
 /**
  * Guest-safe message projection: no account identities, attachments, or entity grants.
@@ -10778,6 +10819,7 @@ export type PropertyDefinitionWithOptions = {
  * Multiple filters are AND'd together.
  */
 export type PropertyFilter = {
+    date_range?: null | DateRange;
     /**
      * Entity reference IDs to match. Multiple values are OR'd together.
      */
@@ -10787,6 +10829,10 @@ export type PropertyFilter = {
      * When None, matches across all entity types.
      */
     entity_type?: string | null;
+    /**
+     * True matches non-null dates; false matches missing or cleared dates.
+     */
+    has_date?: boolean | null;
     /**
      * Select option UUIDs to match. Multiple values are OR'd together.
      */
@@ -12119,7 +12165,7 @@ export type SoupApiItem = SoupItem & {
 /**
  * Sort options accepted by non-grouped soup API endpoints.
  */
-export type SoupApiSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated' | 'frecency' | 'touched_by_me' | 'notified_at';
+export type SoupApiSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated' | 'frecency' | 'touched_by_me' | 'notified_at' | 'due_date_earliest' | 'due_date_latest';
 
 /**
  * Sort direction accepted by non-grouped soup API endpoints.
@@ -21769,9 +21815,8 @@ export type GetItemsSoupData = {
          */
         limit?: number;
         /**
-         * Sort method. Options are viewed_at, created_at, updated_at,
-         * viewed_updated, frecency, touched_by_me, notified_at. Defaults to
-         * viewed_at.
+         * Sort method. Includes timestamp sorts, relevance sorts, and
+         * due_date_earliest/due_date_latest for tasks. Defaults to viewed_at.
          */
         sort_method?: SoupApiSort;
         /**

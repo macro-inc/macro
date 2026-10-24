@@ -36,3 +36,70 @@ fn touched_and_notified_cursor_values_do_not_cross_decode() {
     assert!(serde_json::from_str::<CursorVal<NotifiedAt>>(&notified).is_ok());
     assert!(serde_json::from_str::<CursorVal<TouchedByMe>>(&notified).is_err());
 }
+
+#[test]
+fn due_date_markers_are_distinct_from_each_other_and_legacy_sorts() {
+    let earliest = serde_json::to_string(&CursorVal {
+        sort_type: DueDateSort::Earliest,
+        last_val: Some(DateTime::<Utc>::UNIX_EPOCH),
+    })
+    .unwrap();
+    let latest = serde_json::to_string(&CursorVal {
+        sort_type: DueDateSort::Latest,
+        last_val: None,
+    })
+    .unwrap();
+    assert_eq!(
+        serde_json::from_str::<CursorVal<DueDateSort>>(&earliest)
+            .unwrap()
+            .sort_type,
+        DueDateSort::Earliest
+    );
+    assert_eq!(
+        serde_json::from_str::<CursorVal<DueDateSort>>(&latest)
+            .unwrap()
+            .sort_type,
+        DueDateSort::Latest
+    );
+    let legacy = serde_json::to_string(&CursorVal {
+        sort_type: SimpleSortMethod::CreatedAt,
+        last_val: DateTime::<Utc>::UNIX_EPOCH,
+    })
+    .unwrap();
+    assert!(serde_json::from_str::<CursorVal<DueDateSort>>(&legacy).is_err());
+    assert!(serde_json::from_str::<CursorVal<SimpleSortMethod>>(&legacy).is_ok());
+}
+
+#[test]
+fn nullable_due_date_cursor_keeps_missing_distinct_from_initial_page() {
+    use crate::CursorWithValAndFilter;
+    let dated = CursorWithValAndFilter {
+        id: "task-1".to_string(),
+        limit: 20,
+        val: CursorVal {
+            sort_type: DueDateSort::Earliest,
+            last_val: Some(DateTime::<Utc>::UNIX_EPOCH),
+        },
+        filter: (),
+    };
+    let undated = CursorWithValAndFilter {
+        id: "task-2".to_string(),
+        limit: 20,
+        val: CursorVal {
+            sort_type: DueDateSort::Earliest,
+            last_val: None,
+        },
+        filter: (),
+    };
+    let dated = serde_json::to_string(&dated).unwrap();
+    let undated = serde_json::to_string(&undated).unwrap();
+    assert_ne!(dated, undated);
+    assert!(dated.contains("due_date_earliest"));
+    assert!(undated.contains("\"last_val\":null"));
+    assert!(
+        serde_json::from_str::<CursorWithValAndFilter<String, DueDateSort, ()>>(&dated).is_ok()
+    );
+    assert!(
+        serde_json::from_str::<CursorWithValAndFilter<String, DueDateSort, ()>>(&undated).is_ok()
+    );
+}

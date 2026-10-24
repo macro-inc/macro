@@ -43,6 +43,7 @@ fn grouped_candidate_sort_shape() {
                 field: GroupByField::Property {
                     property_definition_id: SystemPropertyKey::ASSIGNEES_UUID,
                     entity_type: Some("TASK".to_string()),
+                    bucketing: None,
                 },
                 group_key,
                 per_group_limit: None,
@@ -157,6 +158,7 @@ async fn grouped_query_explain_local(pool: PgPool) -> anyhow::Result<()> {
                 GroupByField::Property {
                     property_definition_id: SystemPropertyKey::ASSIGNEES_UUID,
                     entity_type: None,
+                    bucketing: None,
                 },
                 None,
             ),

@@ -7,6 +7,7 @@ mod test;
 mod database_row;
 mod document_ids;
 mod initiative;
+pub(in crate::outbound::pg_soup_repo) mod property_candidates;
 mod property_filter;
 
 use database_row::{build_database_row_filter, database_row_opted_in, database_row_top_clause};
@@ -1147,6 +1148,26 @@ fn property_literal_predicate(literal: &PropertiesLiteral, entity_id_sql: &str) 
                 "ep_prop.values->'value' @> jsonb_build_array(jsonb_build_object('entity_id', '{entity_id}'))"
             )
         }
+        PropertyMatchValue::DatePresent => {
+            "ep_prop.values->>'type' = 'Date' AND ep_prop.values->>'value' IS NOT NULL".to_owned()
+        }
+        PropertyMatchValue::DateRange(range) => {
+            let date_value = "CASE WHEN ep_prop.values->>'type' = 'Date' THEN (ep_prop.values->>'value')::timestamptz END";
+            let mut predicates = vec![format!("{date_value} IS NOT NULL")];
+            if let Some(start) = range.start {
+                predicates.push(format!(
+                    "{date_value} >= '{}'::timestamptz",
+                    start.to_rfc3339()
+                ));
+            }
+            if let Some(end) = range.end {
+                predicates.push(format!(
+                    "{date_value} < '{}'::timestamptz",
+                    end.to_rfc3339()
+                ));
+            }
+            predicates.join(" AND ")
+        }
     };
     let entity_type_clause = match entity_type {
         Some(et) => format!("AND ep_prop.entity_type = '{et}'"),
@@ -2078,8 +2099,7 @@ struct GroupedSoupRow {
     group: GroupFields,
 }
 
-/// Per-group limit for initial grouped queries.
-/// Each group will return at most this many items initially.
+/// Legacy initial grouped queries return ten items per group.
 const PER_GROUP_LIMIT: i32 = 10;
 
 /// Build the GroupedItems CTE based on the grouping configuration.
@@ -2110,20 +2130,34 @@ fn build_grouped_items_cte(
         None
     };
 
+    if matches!(grouping.field, GroupByField::Deadline { .. }) {
+        // Deadline bins contain tasks only, not ordinary documents or other entities.
+        builder.push("WHERE t.property_entity_type = 'TASK' ");
+    }
     if grouping.group_key.is_some() {
         // Single group mode: fetch items for a specific group (for "load more")
-        // Uses $9 parameter for group_key to prevent SQL injection
-        builder.push("WHERE (");
+        // Uses $9 parameter for group_key to prevent SQL injection.
+        if matches!(grouping.field, GroupByField::Deadline { .. }) {
+            builder.push("AND (");
+        } else {
+            builder.push("WHERE (");
+        }
         builder.push(&select_expr);
         builder.push(") = $9 ");
     }
 
     builder.push("), ");
 
-    // FilteredGroupedItems: apply per-group limit when not fetching a specific group
-    if grouping.group_key.is_none() {
+    // Deadline continuations filter after ranking so counts and positions stay absolute.
+    if matches!(grouping.field, GroupByField::Deadline { .. }) && grouping.group_key.is_some() {
+        builder.push("FilteredGroupedItems AS (SELECT * FROM GroupedItems WHERE ($4::timestamptz IS NULL) OR (sort_ts, id::text) < ($4, $5)), ");
+    } else if grouping.group_key.is_none() {
         builder.push("FilteredGroupedItems AS (SELECT * FROM GroupedItems WHERE row_in_group <= ");
-        builder.push(PER_GROUP_LIMIT.to_string());
+        builder.push(if matches!(grouping.field, GroupByField::Deadline { .. }) {
+            grouping.effective_limit().to_string()
+        } else {
+            PER_GROUP_LIMIT.to_string()
+        });
         builder.push("), ");
     }
 
@@ -2283,12 +2317,17 @@ fn build_grouped_query<'a>(
         builder.push("WHERE ");
     }
 
-    // Cursor condition
-    builder.push(
-        r#"($4::timestamptz IS NULL)
+    // Legacy grouping applies the cursor before ranking. Deadline grouping ranks
+    // the full group first and applies its cursor in FilteredGroupedItems.
+    if !matches!(grouping.field, GroupByField::Deadline { .. }) {
+        builder.push(
+            r#"($4::timestamptz IS NULL)
             OR
             (all_items.sort_ts, all_items.id::text) < ($4, $5)"#,
-    );
+        );
+    } else {
+        builder.push("TRUE");
+    }
 
     if exclude_frecency {
         builder.push(")");
@@ -2302,7 +2341,9 @@ fn build_grouped_query<'a>(
 
     // Combined CTE: full detail joins from GroupedItems (or FilteredGroupedItems)
     // When fetching a specific group, use GroupedItems directly; otherwise use FilteredGroupedItems
-    let source_table = if grouping.group_key.is_some() {
+    let source_table = if grouping.group_key.is_some()
+        && !matches!(grouping.field, GroupByField::Deadline { .. })
+    {
         "GroupedItems"
     } else {
         "FilteredGroupedItems"

@@ -545,6 +545,15 @@ where
     B: MacroEventBroker,
     anyhow::Error: From<R::Err> + From<P::Err> + From<N::Err>,
 {
+    #[tracing::instrument(err, skip_all)]
+    async fn authorize_property_query(
+        &self,
+        viewer: MacroUserIdStr<'static>,
+        team: Option<&TeamReceipt>,
+        query: models_grouping::CandidateQuery,
+    ) -> Result<super::query::AuthorizedPropertyQuery, PropertiesErr> {
+        super::query::authorize(self, viewer, team, query).await
+    }
     #[tracing::instrument(skip(self, access), fields(entity_id = %access.entity_id(), entity_type = ?access.entity_type()), err)]
     async fn get_entity_properties(
         &self,

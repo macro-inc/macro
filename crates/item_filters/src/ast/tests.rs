@@ -599,6 +599,7 @@ fn it_expands_single_property_select_option() {
             entity_type: Some("TASK".to_string()),
             option_ids: vec![option_id.to_string()],
             entity_ids: vec![],
+            ..Default::default()
         }],
         ..Default::default()
     };
@@ -618,6 +619,7 @@ fn it_expands_multiple_option_ids_as_or() {
             entity_type: Some("TASK".to_string()),
             option_ids: vec![option_a.to_string(), option_b.to_string()],
             entity_ids: vec![],
+            ..Default::default()
         }],
         ..Default::default()
     };
@@ -643,6 +645,7 @@ fn it_expands_entity_ref_filter() {
             entity_type: Some("TASK".to_string()),
             option_ids: vec![],
             entity_ids: vec![entity_id.clone()],
+            ..Default::default()
         }],
         ..Default::default()
     };
@@ -675,12 +678,14 @@ fn it_ands_multiple_property_filters() {
                 entity_type: Some("TASK".to_string()),
                 option_ids: vec![option_a.to_string()],
                 entity_ids: vec![],
+                ..Default::default()
             },
             PropertyFilter {
                 property_definition_id: priority_id.to_string(),
                 entity_type: Some("TASK".to_string()),
                 option_ids: vec![option_b.to_string()],
                 entity_ids: vec![],
+                ..Default::default()
             },
         ],
         ..Default::default()
@@ -708,6 +713,7 @@ fn it_ors_mixed_option_and_entity_ref_within_single_filter() {
             entity_type: Some("TASK".to_string()),
             option_ids: vec![option_id.to_string()],
             entity_ids: vec![entity_id],
+            ..Default::default()
         }],
         ..Default::default()
     };
@@ -745,6 +751,7 @@ fn property_filter_with_empty_values_produce_no_ast() {
             entity_type: Some("TASK".to_string()),
             option_ids: vec![],
             entity_ids: vec![],
+            ..Default::default()
         }],
         ..Default::default()
     };
@@ -765,6 +772,7 @@ fn it_expands_property_filter_without_entity_type() {
             entity_type: None,
             option_ids: vec![option_id.to_string()],
             entity_ids: vec![],
+            ..Default::default()
         }],
         ..Default::default()
     };
@@ -794,6 +802,7 @@ fn it_expands_property_filter_with_entity_type() {
             entity_type: Some("TASK".to_string()),
             option_ids: vec![option_id.to_string()],
             entity_ids: vec![],
+            ..Default::default()
         }],
         ..Default::default()
     };
@@ -916,6 +925,7 @@ fn invalid_entity_type_returns_error() {
             entity_type: Some("TASK'; DROP TABLE documents; --".to_string()),
             option_ids: vec![option_id.to_string()],
             entity_ids: vec![],
+            ..Default::default()
         }],
         ..Default::default()
     };
@@ -935,6 +945,7 @@ fn entity_ref_with_single_quote_returns_error() {
             entity_type: Some("TASK".to_string()),
             option_ids: vec![],
             entity_ids: vec!["x'); DROP TABLE documents; --".to_string()],
+            ..Default::default()
         }],
         ..Default::default()
     };
@@ -1796,6 +1807,70 @@ fn crm_associations_deduplicate_repeated_records() {
 
     assert_eq!(ast.crm_associations(), vec![company]);
     assert!(EntityFilterAst::default().crm_associations().is_empty());
+}
+
+#[test]
+fn date_property_expansion_preserves_utc_boundaries_and_negates_missing() {
+    use properties::{DateRange, PropertyMatchValue};
+    let definition = Uuid::from_u128(0x00000001_0000_0000_0000_000000000004);
+    let start = chrono::DateTime::parse_from_rfc3339("2025-12-31T23:59:59Z")
+        .unwrap()
+        .with_timezone(&chrono::Utc);
+    let end = chrono::DateTime::parse_from_rfc3339("2026-01-01T00:00:00Z")
+        .unwrap()
+        .with_timezone(&chrono::Utc);
+    let make = |range, has_date| {
+        EntityFilterAst::new_from_filters(EntityFilters {
+            property_filters: vec![PropertyFilter {
+                property_definition_id: definition.to_string(),
+                entity_type: Some("TASK".into()),
+                date_range: range,
+                has_date,
+                ..Default::default()
+            }],
+            ..Default::default()
+        })
+        .unwrap()
+        .unwrap()
+    };
+    let range = make(
+        Some(DateRange {
+            start: Some(start),
+            end: Some(end),
+        }),
+        None,
+    );
+    assert_matches!(range.properties_filter.as_deref().unwrap(), Expr::Literal(properties::PropertiesLiteral {
+        value: PropertyMatchValue::DateRange(DateRange { start: lower, end: upper }), ..
+    }) if *lower == Some(start) && *upper == Some(end));
+    let missing = make(None, Some(false));
+    assert_matches!(missing.properties_filter.as_deref().unwrap(), Expr::Not(inner)
+        if matches!(inner.as_ref(), Expr::Literal(properties::PropertiesLiteral { value: PropertyMatchValue::DatePresent, .. })));
+    let present = make(None, Some(true));
+    assert_matches!(
+        present.properties_filter.as_deref().unwrap(),
+        Expr::Literal(properties::PropertiesLiteral {
+            value: PropertyMatchValue::DatePresent,
+            ..
+        })
+    );
+    assert!(make(None, Some(false)).properties_filter.is_some());
+    let open_end = make(
+        Some(DateRange {
+            start: Some(start),
+            end: None,
+        }),
+        None,
+    );
+    assert_matches!(open_end.properties_filter.as_deref().unwrap(), Expr::Literal(properties::PropertiesLiteral { value: PropertyMatchValue::DateRange(DateRange { start: lower, end: None }), .. }) if *lower == Some(start));
+    let open_start = make(
+        Some(DateRange {
+            start: None,
+            end: Some(end),
+        }),
+        None,
+    );
+    assert_matches!(open_start.properties_filter.as_deref().unwrap(), Expr::Literal(properties::PropertiesLiteral { value: PropertyMatchValue::DateRange(DateRange { start: None, end: upper }), .. }) if *upper == Some(end));
 }
 
 #[test]

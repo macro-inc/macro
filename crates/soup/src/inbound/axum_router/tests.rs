@@ -32,9 +32,9 @@ use item_filters::ast::EntityFilterAst;
 use crate::{
     domain::{
         models::{
-            EnrichedSoupItem, FrecencyQueryInner, GroupedSortRequest, IntoSoupReqAst,
-            NotifiedQueryInner, SimpleQueryInner, SoupErr, SoupPropertiesField, SoupQuery,
-            SoupRequest, SoupSortDirection, SoupType, TouchedQueryInner,
+            DueDateQueryInner, EnrichedSoupItem, FrecencyQueryInner, GroupedSortRequest,
+            IntoSoupReqAst, NotifiedQueryInner, SimpleQueryInner, SoupErr, SoupPropertiesField,
+            SoupQuery, SoupRequest, SoupSortDirection, SoupType, TouchedQueryInner,
             grouping::ItemGroupingInfo,
         },
         ports::{SoupOutput, SoupService},
@@ -42,6 +42,9 @@ use crate::{
     inbound::axum_router::ApiEntityFilterAst,
     inbound::axum_router::{SoupRouterState, soup_router},
 };
+
+/// Due-date sort routing and nullable continuation coverage.
+mod deadline;
 
 static CURSOR: &str = "eyJpZCI6ImUzNmM5MTJlLTU2M2MtNDIxZS1iMTAzLWE0YjAwY2ZmMzBlZSIsImxpbWl0IjoxMDAsInZhbCI6eyJzb3J0X3R5cGUiOiJ1cGRhdGVkX2F0IiwibGFzdF92YWwiOiIyMDI1LTExLTA3VDE5OjEyOjU5Ljc4MFoifSwiZmlsdGVyIjp7fX0=";
 const USER_ID: &str = "macro|test@example.com";
@@ -58,6 +61,8 @@ enum MockCursorKind {
     TouchedCursor,
     NotifiedSort,
     NotifiedCursor,
+    DueDateSort,
+    DueDateCursor,
 }
 
 #[derive(Debug)]
@@ -74,6 +79,14 @@ struct MockSoupCall {
 #[derive(Clone)]
 struct MockSoup {
     called: Arc<std::sync::Mutex<Vec<MockSoupCall>>>,
+    grouped_calls: Arc<
+        std::sync::Mutex<
+            Vec<(
+                models_grouping::GroupingConfig,
+                crate::domain::models::GroupedSortMethod,
+            )>,
+        >,
+    >,
     succeeds: bool,
 }
 
@@ -81,6 +94,7 @@ impl MockSoup {
     fn new() -> Self {
         Self {
             called: Arc::new(std::sync::Mutex::new(Vec::new())),
+            grouped_calls: Arc::new(std::sync::Mutex::new(Vec::new())),
             succeeds: false,
         }
     }
@@ -174,6 +188,10 @@ impl SoupService for MockSoup {
             SoupQuery::Notified(NotifiedQueryInner(Query::Cursor(..))) => {
                 MockCursorKind::NotifiedCursor
             }
+            SoupQuery::DueDate(DueDateQueryInner(Query::Sort(..))) => MockCursorKind::DueDateSort,
+            SoupQuery::DueDate(DueDateQueryInner(Query::Cursor(..))) => {
+                MockCursorKind::DueDateCursor
+            }
         };
         let user_id = req.user.to_string();
         let soup_type = req.soup_type;
@@ -204,11 +222,34 @@ impl SoupService for MockSoup {
 
     async fn get_user_soup_grouped(
         &self,
-        _req: GroupedSortRequest<'_>,
+        req: GroupedSortRequest<'_>,
     ) -> Result<impl Iterator<Item = ItemGroupingInfo<SoupPropertiesField>> + Send, SoupErr> {
-        Err::<std::vec::IntoIter<ItemGroupingInfo<SoupPropertiesField>>, _>(SoupErr::SoupDbErr(
-            anyhow::anyhow!("Not implemented"),
-        ))
+        let sort = crate::domain::models::GroupedSortMethod::Timestamp(*req.cursor.sort_method());
+        self.grouped_calls
+            .lock()
+            .unwrap()
+            .push((req.grouping, sort));
+        if self.succeeds {
+            Ok(Vec::<ItemGroupingInfo<SoupPropertiesField>>::new().into_iter())
+        } else {
+            Err(SoupErr::SoupDbErr(anyhow::anyhow!("Not implemented")))
+        }
+    }
+
+    async fn get_user_soup_grouped_due_date(
+        &self,
+        req: crate::domain::models::due_date::GroupedDueDateRequest<'_>,
+    ) -> Result<Vec<crate::domain::models::grouping::DueDateGroupedItem>, SoupErr> {
+        let sort = crate::domain::models::GroupedSortMethod::DueDate(*req.cursor.sort_method());
+        self.grouped_calls
+            .lock()
+            .unwrap()
+            .push((req.grouping, sort));
+        if self.succeeds {
+            Ok(Vec::new())
+        } else {
+            Err(SoupErr::SoupDbErr(anyhow::anyhow!("Not implemented")))
+        }
     }
 
     async fn caller_tag_sets<'a>(

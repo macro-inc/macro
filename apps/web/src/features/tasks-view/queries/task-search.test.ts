@@ -1,6 +1,12 @@
 import { createTagFacetContext } from '@app/features/soup';
 import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
 import { describe, expect, it, vi } from 'vitest';
+import {
+  createTaskCalendar,
+  taskDueDatePredicate,
+} from '../core/task-due-date';
+import { taskMatchesView } from '../filters/task-predicates';
+import { boardEntity, boardProperty } from '../tests/task-board-fixture';
 import { buildTaskSearchRequest } from './task-search';
 
 vi.mock('@app/features/soup', async () => ({
@@ -73,4 +79,80 @@ describe('buildTaskSearchRequest', () => {
     expect(unresolved.tag_option_ids).toBeUndefined();
     expect(unresolved.tag_filter_mode).toBeUndefined();
   });
+});
+
+it('compiles the same DST range for remote and local search without changing text ordering', () => {
+  const calendar = createTaskCalendar(
+    new Date('2026-03-08T17:00:00Z'),
+    'America/New_York'
+  );
+  const dueDate = taskDueDatePredicate({ type: 'today' }, calendar);
+  const request = buildTaskSearchRequest({
+    query: 'launch',
+    matchType: 'partial',
+    tab: 'team-tasks',
+    userId: 'user',
+    facets: {},
+    dueDate,
+  });
+  expect(request.body.filters?.property_filters).toEqual([
+    {
+      property_definition_id: '00000001-0000-0000-0000-000000000004',
+      entity_type: 'TASK',
+      date_range: {
+        start: '2026-03-08T05:00:00.000Z',
+        end: '2026-03-09T04:00:00.000Z',
+      },
+    },
+  ]);
+  expect(request.body).not.toHaveProperty('sort');
+  const context = {
+    tab: 'team-tasks' as const,
+    userId: 'user',
+    facets: {},
+    dueDate,
+  };
+  expect(taskMatchesView(boardEntity('missing'), context)).toBe(false);
+  expect(
+    taskMatchesView(
+      boardEntity('today', [
+        boardProperty(
+          '00000001-0000-0000-0000-000000000004',
+          { type: 'Date', value: '2026-03-09T03:59:59Z' },
+          'DATE'
+        ),
+      ]),
+      context
+    )
+  ).toBe(true);
+  expect(
+    taskMatchesView(
+      boardEntity('tomorrow', [
+        boardProperty(
+          '00000001-0000-0000-0000-000000000004',
+          { type: 'Date', value: '2026-03-09T04:00:00Z' },
+          'DATE'
+        ),
+      ]),
+      context
+    )
+  ).toBe(false);
+});
+
+it('sends explicit false presence rather than omitting the no-date filter', () => {
+  const request = buildTaskSearchRequest({
+    query: 'launch',
+    matchType: 'partial',
+    tab: 'team-tasks',
+    userId: 'user',
+    facets: {},
+    dueDate: { hasDate: false },
+  });
+  expect(request.body.filters?.property_filters).toEqual([
+    {
+      property_definition_id: '00000001-0000-0000-0000-000000000004',
+      entity_type: 'TASK',
+      has_date: false,
+    },
+  ]);
 });

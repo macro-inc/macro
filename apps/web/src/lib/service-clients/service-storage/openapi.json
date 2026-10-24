@@ -15175,7 +15175,7 @@
           {
             "name": "sort_method",
             "in": "query",
-            "description": "Sort method. Options are viewed_at, created_at, updated_at,\nviewed_updated, frecency, touched_by_me, notified_at. Defaults to\nviewed_at.",
+            "description": "Sort method. Includes timestamp sorts, relevance sorts, and\ndue_date_earliest/due_date_latest for tasks. Defaults to viewed_at.",
             "required": false,
             "schema": {
               "$ref": "#/components/schemas/SoupApiSort"
@@ -20249,6 +20249,33 @@
           }
         }
       },
+      "ApiDeadlineBoundaries": {
+        "type": "object",
+        "description": "Frozen viewer-local day boundaries used to group task deadlines.",
+        "required": ["today", "tomorrow", "day_two", "day_eight"],
+        "properties": {
+          "day_eight": {
+            "type": "string",
+            "format": "date-time",
+            "description": "UTC start of the viewer's local day eight days ahead."
+          },
+          "day_two": {
+            "type": "string",
+            "format": "date-time",
+            "description": "UTC start of the viewer's local day two days ahead."
+          },
+          "today": {
+            "type": "string",
+            "format": "date-time",
+            "description": "UTC start of the viewer's current local day."
+          },
+          "tomorrow": {
+            "type": "string",
+            "format": "date-time",
+            "description": "UTC start of the viewer's next local day."
+          }
+        }
+      },
       "ApiEntityFilterAst": {
         "type": "object",
         "description": "Wire-format entity filter AST accepted by soup AST endpoints.",
@@ -20278,7 +20305,7 @@
               },
               {
                 "$ref": "#/components/schemas/CrmAssociation",
-                "description": "Restrict every entity type to items associated with this CRM record\n(wire key `crma`): its Companies or Contacts property names the\nrecord, or it references the record. A company also matches through\nits contacts. Unknown or inaccessible records answer 404; requests\nthat are not expanded or not timestamp-sorted answer 400."
+                "description": "Restrict every entity type to items associated with this CRM record\n(wire key `crma`): its Companies or Contacts property names the\nrecord, or it references the record. A company also matches through\nits contacts. Unknown or inaccessible records answer 404; requests\nrequire expanded queries sorted by a timestamp or task due date."
               }
             ]
           },
@@ -20370,6 +20397,17 @@
                     "description": "The property definition UUID to group by"
                   }
                 }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Group task deadlines using frozen viewer-local calendar boundaries.",
+            "required": ["deadline"],
+            "properties": {
+              "deadline": {
+                "$ref": "#/components/schemas/ApiDeadlineBoundaries",
+                "description": "Group task deadlines using frozen viewer-local calendar boundaries."
               }
             }
           }
@@ -26418,6 +26456,22 @@
         "description": "How a date cell compares to a date-time.",
         "enum": ["before", "after", "onOrBefore", "onOrAfter"]
       },
+      "DateRange": {
+        "type": "object",
+        "description": "UTC timestamp interval. Lower bounds are inclusive; upper bounds are exclusive.",
+        "properties": {
+          "end": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Exclusive UTC upper bound, omitted for an open end."
+          },
+          "start": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Inclusive UTC lower bound, omitted for an open start."
+          }
+        }
+      },
       "DeleteEntityMentionResponse": {
         "type": "object",
         "description": "Response body for `DELETE /channels/mentions/{mention_id}`.",
@@ -31400,7 +31454,14 @@
       "GroupedSoupSort": {
         "type": "string",
         "description": "Sort method for grouped queries (frecency not supported).",
-        "enum": ["viewed_at", "created_at", "updated_at", "viewed_updated"]
+        "enum": [
+          "viewed_at",
+          "created_at",
+          "updated_at",
+          "viewed_updated",
+          "due_date_earliest",
+          "due_date_latest"
+        ]
       },
       "GuestChatMessage": {
         "type": "object",
@@ -34622,7 +34683,7 @@
               },
               {
                 "$ref": "#/components/schemas/SoupApiSort",
-                "description": "Sort method. Options are viewed_at, created_at, updated_at,\nviewed_updated, frecency, touched_by_me, notified_at. Defaults to\nviewed_at."
+                "description": "Sort method. Includes timestamp sorts, relevance sorts, and\ndue_date_earliest/due_date_latest for tasks. Defaults to viewed_at."
               }
             ]
           }
@@ -35742,6 +35803,17 @@
         "description": "A single property-based filter condition.\n\nEach filter targets a specific property definition on entities of a given type,\nmatching against select option UUIDs or entity reference IDs.\nMultiple values within a single filter are OR'd together.\nMultiple filters are AND'd together.",
         "required": ["property_definition_id"],
         "properties": {
+          "date_range": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DateRange",
+                "description": "UTC range with inclusive start and exclusive end."
+              }
+            ]
+          },
           "entity_ids": {
             "type": "array",
             "items": {
@@ -35752,6 +35824,10 @@
           "entity_type": {
             "type": ["string", "null"],
             "description": "The entity type for the property lookup (e.g., \"TASK\", \"DOCUMENT\", \"PROJECT\").\nWhen None, matches across all entity types."
+          },
+          "has_date": {
+            "type": ["boolean", "null"],
+            "description": "True matches non-null dates; false matches missing or cleared dates."
           },
           "option_ids": {
             "type": "array",
@@ -37902,7 +37978,9 @@
           "viewed_updated",
           "frecency",
           "touched_by_me",
-          "notified_at"
+          "notified_at",
+          "due_date_earliest",
+          "due_date_latest"
         ]
       },
       "SoupApiSortDirection": {

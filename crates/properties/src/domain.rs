@@ -5,6 +5,8 @@ pub mod events;
 pub mod metadata;
 pub mod model;
 pub mod ports;
+/// Request-local authorization for selected-property queries.
+pub mod query;
 pub mod service;
 pub mod service_impl;
 #[cfg(test)]

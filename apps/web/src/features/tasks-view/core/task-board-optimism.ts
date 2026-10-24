@@ -6,6 +6,7 @@ import {
   type TaskBoardTask,
   taskBoardGroupKeys,
 } from './task-board';
+import { isTaskDueDateBucket } from './task-due-date';
 
 export type TaskBoardPlacement = {
   task: TaskBoardTask;
@@ -22,6 +23,14 @@ export function movedTask(
   move: TaskBoardMove
 ): TaskBoardTask {
   switch (grouping) {
+    case 'due_date':
+      return {
+        ...task,
+        dueDate: move.dueDate ?? undefined,
+        deadline: isTaskDueDateBucket(move.toLane)
+          ? move.toLane
+          : task.deadline,
+      };
     case 'status':
       return { ...task, statusId: move.toLane || undefined };
     case 'priority':
@@ -57,7 +66,7 @@ export function placementMatches(
 export function projectTaskBoardPlacements(
   columns: readonly TaskBoardColumn[],
   placements: readonly TaskBoardPlacement[],
-  compare?: (left: string, right: string) => number
+  compare?: (left: TaskBoardTask, right: TaskBoardTask) => number
 ): readonly TaskBoardColumn[] {
   if (placements.length === 0) {
     return columns;
@@ -76,6 +85,7 @@ export function projectTaskBoardPlacements(
 
       if (index >= 0 && belongs) {
         tasks[index] = task;
+        if (compare) tasks.sort(compare);
         continue;
       }
 
@@ -90,7 +100,7 @@ export function projectTaskBoardPlacements(
       }
 
       const before = compare
-        ? tasks.findIndex((item) => compare(task.id, item.id) < 0)
+        ? tasks.findIndex((item) => compare(task, item) < 0)
         : -1;
       tasks.splice(before < 0 ? tasks.length : before, 0, task);
       if (!placement.previousGroupKeys.includes(column.id)) {

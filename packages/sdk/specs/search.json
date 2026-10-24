@@ -1504,6 +1504,22 @@
           "LINK"
         ]
       },
+      "DateRange": {
+        "type": "object",
+        "description": "UTC timestamp interval. Lower bounds are inclusive; upper bounds are exclusive.",
+        "properties": {
+          "end": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Exclusive UTC upper bound, omitted for an open end."
+          },
+          "start": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Inclusive UTC lower bound, omitted for an open start."
+          }
+        }
+      },
       "DocumentFilters": {
         "type": "object",
         "description": "The document filters used to filter down what documents you search over.",
@@ -3076,6 +3092,17 @@
         "description": "A single property-based filter condition.\n\nEach filter targets a specific property definition on entities of a given type,\nmatching against select option UUIDs or entity reference IDs.\nMultiple values within a single filter are OR'd together.\nMultiple filters are AND'd together.",
         "required": ["property_definition_id"],
         "properties": {
+          "date_range": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DateRange",
+                "description": "UTC range with inclusive start and exclusive end."
+              }
+            ]
+          },
           "entity_ids": {
             "type": "array",
             "items": {
@@ -3086,6 +3113,10 @@
           "entity_type": {
             "type": ["string", "null"],
             "description": "The entity type for the property lookup (e.g., \"TASK\", \"DOCUMENT\", \"PROJECT\").\nWhen None, matches across all entity types."
+          },
+          "has_date": {
+            "type": ["boolean", "null"],
+            "description": "True matches non-null dates; false matches missing or cleared dates."
           },
           "option_ids": {
             "type": "array",

@@ -56,6 +56,7 @@ logically-combinable query form.
   false` by default, and asking for specific ids/owners also implicitly opts
   in — don't assume an empty `include` flag means "show everything".
 - `#![deny(missing_docs)]`: every new public field needs a doc comment.
+- DATE property ranges use optional UTC bounds: inclusive `start`, exclusive `end`; negate `DatePresent` for missing, null, or cleared dates.
 
 ## Related
 

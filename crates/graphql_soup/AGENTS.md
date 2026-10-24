@@ -16,6 +16,11 @@ viewer pattern), which apply to every type defined here.
   serves lists. A thread shared through a team's CRM, a project, or a share
   therefore opens through `emailThread` even though it lives in a teammate's
   inbox.
+- Deadline grouping accepts viewer-local UTC boundaries in
+  `groupBy.deadlineBoundaries` (`today`, `tomorrow`, `dayTwo`, `dayEight`);
+  retain those exact boundaries when continuing a bin instead of recomputing them.
+- Keep nullable task due-date cursors distinct from legacy timestamp cursors;
+  `GraphqlSimpleSortMethod` retains its deployed name and includes due-date sorts.
 - `NOTIFIED_AT` maps to Soup's notified request, not a simple sort: `soup`
   accepts it descending only and `groupSoup` rejects it. Its continuation
-  cursors carry a different sort tag, so `inputs.rs` decodes both cursor shapes.
+  cursors carry their own sort tag and string identifiers, separate from timestamp and due-date cursors.

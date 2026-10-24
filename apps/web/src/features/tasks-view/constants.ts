@@ -1,6 +1,12 @@
 import type { SortDefinition } from '@app/features/soup';
+import {
+  type SortSelection,
+  sortItems,
+} from '@app/features/soup/collection/transforms';
 import { compareDateDesc } from '@core/util/date';
 import type { TaskEntityWithProperties } from '@entity';
+import { getTaskDueDate } from '@entity/utils/task-properties';
+import { compareTaskDueDates } from './core/task-due-date';
 import type { TaskGroupBy, TaskSortId, TasksTab } from './types';
 
 export type TaskTabItem = {
@@ -40,6 +46,7 @@ export const TASK_GROUP_OPTIONS: {
   { id: 'assignee', label: 'Assignee' },
   { id: 'project', label: 'Project' },
   { id: 'date', label: 'Date' },
+  { id: 'due_date', label: 'Due date' },
 ];
 
 export const TASK_SORT_DEFINITIONS: SortDefinition<
@@ -70,6 +77,23 @@ export const TASK_SORT_DEFINITIONS: SortDefinition<
         right.sortTs ?? right.viewedAt
       ),
   },
+  {
+    id: 'due_date_earliest',
+    compare: (left, right) =>
+      compareTaskDueDates(
+        { id: left.id, dueDate: getTaskDueDate(left) },
+        { id: right.id, dueDate: getTaskDueDate(right) }
+      ),
+  },
+  {
+    id: 'due_date_latest',
+    compare: (left, right) =>
+      compareTaskDueDates(
+        { id: left.id, dueDate: getTaskDueDate(left) },
+        { id: right.id, dueDate: getTaskDueDate(right) },
+        true
+      ),
+  },
 ];
 
 export const TASK_SORT_OPTIONS: {
@@ -79,4 +103,22 @@ export const TASK_SORT_OPTIONS: {
   { id: 'viewed_at', label: 'Viewed' },
   { id: 'updated_at', label: 'Updated' },
   { id: 'created_at', label: 'Created' },
+  { id: 'due_date_earliest', label: 'Due date: earliest' },
+  { id: 'due_date_latest', label: 'Due date: latest' },
 ];
+
+/** Due-date directions are separate options; reversal never moves nulls first. */
+export function sortTasks(
+  items: TaskEntityWithProperties[],
+  selections: SortSelection<TaskSortId>[]
+): TaskEntityWithProperties[] {
+  return sortItems(
+    items,
+    selections.map((selection) =>
+      selection.id.startsWith('due_date_')
+        ? { ...selection, reversed: false }
+        : selection
+    ),
+    TASK_SORT_DEFINITIONS
+  );
+}

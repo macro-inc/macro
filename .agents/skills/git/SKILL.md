@@ -79,9 +79,9 @@ machines, pipelines). Drop it for small or mechanical changes.
 ```
 
 No test plan or testing section in PR descriptions or commit messages: CI shows
-the checks, and what you ran goes in your report to the user. Attach proof for
-user-visible changes: screenshots or a recording (see the `record-proof` skill
-when it is available).
+the checks, and what you ran goes in your report to the user. Attach screenshots
+or recordings to the PR for user-visible changes (see the `record-proof` skill
+when available). Do not commit verification captures unless explicitly requested.
 
 ## Handing off a PR
 

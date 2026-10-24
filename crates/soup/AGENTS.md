@@ -13,6 +13,9 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   its repository/collaborator traits.
 - `src/domain/models.rs` (+ `grouping.rs`, `exclusions.rs`, `contact_listing.rs`):
   the unified `SoupItem`/grouping/exclusion shapes.
+- `src/domain/models/property_candidates.rs`: bounded cross-source candidate
+  merging; reject overlapping pre-pagination entity-family summaries before
+  summing totals, including statistics from exhausted sources.
 - `src/domain/service/favorites.rs`, `agent_metadata.rs`: entity-kind-specific
   query logic layered onto the core service.
 - `src/outbound/pg_soup_repo.rs`: the Postgres repo, split by entity kind
@@ -65,6 +68,13 @@ rows, initiatives, ...) and get back a single unified, paginated result.
 - `expanded/` vs `unexpanded/` queries exist because hydrating full entities
   is expensive — don't widen `unexpanded` to return hydrated data; add a new
   `expanded` path instead.
+- Keep due-date sorting task-only: `domain/service/due_date.rs` validates
+  filters, and `outbound/pg_soup_repo/due_date.rs` selects canonical dates before pagination.
+- Freeze deadline grouping boundaries and group keys in timestamp and due-date
+  cursors through `domain/models/grouping/query.rs`; reject conflicting continuations.
+- Preserve deployed non-deadline timestamp cursor encodings.
+- Mint `AuthorizedPropertyQuery` through the properties service before candidate
+  fanout; sources derive the viewer from the capability, not a second user ID.
 - `candidate_gates.rs` encodes access-gate SQL shared across repo queries;
   changing it changes what every entity kind can return.
 - Queries over a known id list (`*/by_ids.rs`, hydration) and the initiative

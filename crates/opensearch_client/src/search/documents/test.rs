@@ -240,10 +240,14 @@ fn test_build_bool_query_property_filters_emit_nested() -> anyhow::Result<()> {
                     "00000001-0000-0000-0002-000000000001".to_string(),
                     "00000001-0000-0000-0002-000000000004".to_string(),
                 ],
+                date_range: None,
+                has_date: None,
             },
             PropertyFilterArg {
                 definition_id: "00000001-0000-0000-0000-000000000001".to_string(),
                 values: vec!["macro|alice@example.com".to_string()],
+                date_range: None,
+                has_date: None,
             },
         ]);
 
@@ -283,6 +287,8 @@ fn test_build_bool_query_property_filter_empty_values_skipped() -> anyhow::Resul
         .property_filters(vec![PropertyFilterArg {
             definition_id: "00000001-0000-0000-0000-000000000002".to_string(),
             values: vec![],
+            date_range: None,
+            has_date: None,
         }]);
 
     let json = builder.build_bool_query()?.build().to_json();
@@ -409,4 +415,90 @@ fn document_index_deserializes_parent_shape() {
         serde_json::from_value(parent).expect("parent _source should deserialize");
     assert_eq!(doc.document_name, "Q3 Planning");
     assert_eq!(doc.owner_id, "macro|alice@example.com");
+}
+
+#[test]
+fn date_property_filters_constrain_candidates_before_search_pagination() -> anyhow::Result<()> {
+    let start =
+        chrono::DateTime::parse_from_rfc3339("2025-12-31T23:59:59Z")?.with_timezone(&chrono::Utc);
+    let end =
+        chrono::DateTime::parse_from_rfc3339("2026-01-01T00:00:00Z")?.with_timezone(&chrono::Utc);
+    let arg = PropertyFilterArg {
+        definition_id: "00000001-0000-0000-0000-000000000004".into(),
+        values: vec![],
+        date_range: Some(PropertyDateRange {
+            start: Some(start),
+            end: Some(end),
+        }),
+        has_date: Some(true),
+    };
+    let query = DocumentQueryBuilder::new(vec!["foo".into()])
+        .user_id("alice")
+        .property_filters(vec![arg.clone()])
+        .build_bool_query()?
+        .build()
+        .to_json();
+    let filter = query["bool"]["filter"].as_array().unwrap();
+    let range = filter.iter().find(|v| v["bool"].is_object()).unwrap();
+    let nested = &range["bool"]["filter"][0]["nested"]["query"]["bool"]["filter"];
+    assert_eq!(
+        nested[0]["term"]["properties.definition_id"],
+        arg.definition_id
+    );
+    assert_eq!(
+        nested[1]["range"]["properties.date_value"]["gte"],
+        start.timestamp_millis()
+    );
+    assert_eq!(
+        nested[1]["range"]["properties.date_value"]["lt"],
+        end.timestamp_millis()
+    );
+    assert_eq!(
+        range["bool"]["filter"][1]["nested"]["query"]["bool"]["filter"][1]["exists"]["field"],
+        "properties.date_value"
+    );
+    let missing = DocumentQueryBuilder::new(vec!["foo".into()])
+        .user_id("alice")
+        .property_filters(vec![PropertyFilterArg {
+            date_range: None,
+            has_date: Some(false),
+            ..arg
+        }])
+        .build_bool_query()?
+        .build()
+        .to_json();
+    let missing_clause = missing["bool"]["filter"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|v| v["bool"].is_object())
+        .unwrap();
+    assert_eq!(
+        missing_clause["bool"]["must_not"][0]["nested"]["query"]["bool"]["filter"][1]["exists"]["field"],
+        "properties.date_value"
+    );
+    Ok(())
+}
+
+#[test]
+fn open_date_ranges_only_emit_supplied_search_bounds() -> anyhow::Result<()> {
+    let boundary =
+        chrono::DateTime::parse_from_rfc3339("2026-10-21T00:00:00Z")?.with_timezone(&chrono::Utc);
+    for (start, end, expected, absent) in [
+        (Some(boundary), None, "gte", "lt"),
+        (None, Some(boundary), "lt", "gte"),
+    ] {
+        let query = build_property_filter(&PropertyFilterArg {
+            definition_id: "00000001-0000-0000-0000-000000000004".to_owned(),
+            values: vec![],
+            date_range: Some(PropertyDateRange { start, end }),
+            has_date: None,
+        })
+        .unwrap()
+        .to_json();
+        let range = &query["bool"]["filter"][0]["nested"]["query"]["bool"]["filter"][1]["range"]["properties.date_value"];
+        assert_eq!(range[expected], boundary.timestamp_millis());
+        assert!(range.get(absent).is_none());
+    }
+    Ok(())
 }

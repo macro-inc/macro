@@ -861,6 +861,20 @@ export type CrmCompanySearchResponseItem = {
 export type DataType = 'BOOLEAN' | 'DATE' | 'NUMBER' | 'STRING' | 'SELECT_NUMBER' | 'SELECT_STRING' | 'TAG' | 'ENTITY' | 'LINK';
 
 /**
+ * UTC timestamp interval. Lower bounds are inclusive; upper bounds are exclusive.
+ */
+export type DateRange = {
+    /**
+     * Exclusive UTC upper bound, omitted for an open end.
+     */
+    end?: string | null;
+    /**
+     * Inclusive UTC lower bound, omitted for an open start.
+     */
+    start?: string | null;
+};
+
+/**
  * The document filters used to filter down what documents you search over.
  */
 export type DocumentFilters = {
@@ -1642,6 +1656,7 @@ export type PropertyDefinition = {
  * Multiple filters are AND'd together.
  */
 export type PropertyFilter = {
+    date_range?: null | DateRange;
     /**
      * Entity reference IDs to match. Multiple values are OR'd together.
      */
@@ -1651,6 +1666,10 @@ export type PropertyFilter = {
      * When None, matches across all entity types.
      */
     entity_type?: string | null;
+    /**
+     * True matches non-null dates; false matches missing or cleared dates.
+     */
+    has_date?: boolean | null;
     /**
      * Select option UUIDs to match. Multiple values are OR'd together.
      */

@@ -45,7 +45,7 @@ threads, pins, recents, notifications, folders, activity.
 - Add a Soup GraphQL field: resolver/loader in `crates/graphql_soup` →
   `src/api/graphql_soup.rs` if wiring changes.
 - Add a REST route: `src/api/<area>.rs` → `src/api.rs` (router) →
-  `src/openapi.rs`.
+  `src/api/swagger.rs`.
 - Add a config value or feature-gated behavior: `src/config.rs` → the
   `[features]` table in `Cargo.toml` if it should be independently toggleable.
 

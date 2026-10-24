@@ -18,7 +18,13 @@ use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use models_pagination::TypeEraseCursor;
-use soup::domain::{models::grouping::NestedSoupGroups, ports::SoupService};
+use soup::domain::{
+    models::{
+        GroupedSortQuery,
+        grouping::{build_due_date_grouped_response, build_timestamp_grouped_response},
+    },
+    ports::SoupService,
+};
 use soup_realtime::domain::{models::Patch, ports::SoupRealtimeSubscriptionService};
 
 use crate::{
@@ -92,13 +98,23 @@ where
 {
     let macro_user_id = require_authorized_user::<Auth, St>(ctx).await?;
     let request = input.into_request(macro_user_id)?;
-    let sort_method = *request.cursor.sort_method();
-    let filters = request.cursor.filter().clone();
-    let items = service.get_user_soup_grouped(request).await?;
-    let groups: NestedSoupGroups<_, _> = items.collect();
-    Ok(GroupedSoup::new(
-        groups.with_next_cursors(sort_method, filters),
-    ))
+    let response = match request {
+        GroupedSortQuery::Timestamp(request) => {
+            let sort = *request.cursor.sort_method();
+            let filters = request.cursor.filter().clone();
+            let grouping = request.grouping.clone();
+            let items = service.get_user_soup_grouped(request).await?;
+            build_timestamp_grouped_response(items, &grouping, sort, filters)
+        }
+        GroupedSortQuery::DueDate(request) => {
+            let sort = *request.cursor.sort_method();
+            let filters = request.cursor.filter().clone();
+            let grouping = request.grouping.clone();
+            let items = service.get_user_soup_grouped_due_date(request).await?;
+            build_due_date_grouped_response(items, &grouping, sort, filters)
+        }
+    };
+    Ok(GroupedSoup::from_response(response))
 }
 
 /// Resolve one email thread through the Soup item loader, whose email

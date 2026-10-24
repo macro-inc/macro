@@ -29,6 +29,9 @@ export function TaskBoardColumnIcon(props: {
       <Match when={hasOptionIcon()}>
         <PropertyValueIcon optionId={props.id} class="size-4" />
       </Match>
+      <Match when={props.grouping === 'due_date'}>
+        <CalendarIcon class="size-4 text-ink-muted" />
+      </Match>
       <Match when={props.grouping === 'project'}>
         <ProjectIcon class="size-4 text-ink-muted" />
       </Match>

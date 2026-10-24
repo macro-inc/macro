@@ -13,5 +13,5 @@
 | `query.expand?` | `boolean` | Whether to expand projects. Defaults to true. |
 | `query.limit?` | `number` | Limit the number of items returned. Defaults to 20. Max 500. |
 | `query.sort_direction?` | [`SoupApiSortDirection`](SoupApiSortDirection.md) | Sort direction. Options are asc, desc. Defaults to desc. Re-send this with every page: it is not carried in the cursor. Applies to the timestamp sort methods only. `asc` combined with `frecency` is rejected rather than ignored: frecency pages are ordered by relevance score and the cursor comparison assumes descending, so there is no ascending frecency order to give. |
-| `query.sort_method?` | [`SoupApiSort`](SoupApiSort.md) | Sort method. Options are viewed_at, created_at, updated_at, viewed_updated, frecency, touched_by_me, notified_at. Defaults to viewed_at. |
+| `query.sort_method?` | [`SoupApiSort`](SoupApiSort.md) | Sort method. Includes timestamp sorts, relevance sorts, and due_date_earliest/due_date_latest for tasks. Defaults to viewed_at. |
 | <a id="property-url"></a> `url` | `"/items/soup"` | - |

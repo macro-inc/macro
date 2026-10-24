@@ -278,6 +278,27 @@ fn sort_sql(sort: SimpleSortMethod) -> &'static str {
     }
 }
 
+/// Add the opt-in agent-session source to an already-authorized candidate query.
+/// The surrounding source binds the requesting viewer at `$1`.
+pub(in crate::outbound::pg_soup_repo) fn push_property_candidates(
+    query: &mut QueryBuilder<'_, Postgres>,
+    sort: SimpleSortMethod,
+    filter: &Expr<AgentSessionLiteral>,
+) {
+    query.push("SELECT s.id::text AS id, 'AGENT_SESSION'::text AS entity_type, ");
+    query.push(sort_sql(sort));
+    query.push(" AS activity_at, NULL::text AS project_id FROM agent_session s LEFT JOIN \"UserHistory\" uh ON uh.\"itemId\" = s.id::text AND uh.\"itemType\" = 'agent_session' AND uh.\"userId\" = $1 WHERE ");
+    query.push(super::expanded::dynamic::access_semi_join(
+        "s.id::text",
+        "agent_session",
+    ));
+    query.push(" AND (");
+    push_filter(query, filter);
+    query.push(") AND (s.list_hidden = FALSE OR s.id = ANY(");
+    query.push_bind(explicitly_named_ids(filter));
+    query.push("))");
+}
+
 /// Session ids the query asked for by name, ignoring ids under `NOT`.
 /// Those stay visible even when the session is hidden from broad lists.
 pub(super) fn explicitly_named_ids(expression: &Expr<AgentSessionLiteral>) -> Vec<Uuid> {

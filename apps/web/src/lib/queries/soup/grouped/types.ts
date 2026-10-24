@@ -1,4 +1,5 @@
 import type { SoupApiItem } from '@service-storage/generated/schemas';
+import type { ApiDeadlineBoundaries } from '@service-storage/generated/schemas/apiDeadlineBoundaries';
 
 /**
  * Empty group key emitted by the backend
@@ -9,6 +10,7 @@ export const NOT_SET_GROUP_KEY = '';
 
 export type GroupByField =
   | { type: 'date' }
+  | { type: 'deadline'; boundaries: ApiDeadlineBoundaries }
   | { type: 'entity_type' }
   | { type: 'project' }
   | {
@@ -19,6 +21,7 @@ export type GroupByField =
 
 export const GROUP_BY_TYPES: readonly GroupByField['type'][] = [
   'date',
+  'deadline',
   'entity_type',
   'project',
   'property',

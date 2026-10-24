@@ -4869,6 +4869,7 @@ async fn test_property_filter_by_select_option(db: Pool<Postgres>) -> anyhow::Re
             entity_type: Some("DOCUMENT".to_string()),
             option_ids: vec!["00000001-0000-0000-0003-000000000001".to_string()], // Low
             entity_ids: vec![],
+            ..Default::default()
         }],
         ..Default::default()
     };
@@ -4923,6 +4924,7 @@ async fn test_property_filter_by_status_completed(db: Pool<Postgres>) -> anyhow:
             entity_type: Some("DOCUMENT".to_string()),
             option_ids: vec!["00000001-0000-0000-0002-000000000004".to_string()], // Completed
             entity_ids: vec![],
+            ..Default::default()
         }],
         ..Default::default()
     };
@@ -4978,12 +4980,14 @@ async fn test_property_filter_multiple_and(db: Pool<Postgres>) -> anyhow::Result
                 entity_type: Some("DOCUMENT".to_string()),
                 option_ids: vec!["00000001-0000-0000-0003-000000000001".to_string()], // Low
                 entity_ids: vec![],
+                ..Default::default()
             },
             PropertyFilter {
                 property_definition_id: "00000001-0000-0000-0000-000000000002".to_string(), // Status
                 entity_type: Some("DOCUMENT".to_string()),
                 option_ids: vec!["00000001-0000-0000-0002-000000000004".to_string()], // Completed
                 entity_ids: vec![],
+                ..Default::default()
             },
         ],
         ..Default::default()
@@ -5038,6 +5042,7 @@ async fn test_property_filter_no_match(db: Pool<Postgres>) -> anyhow::Result<()>
             entity_type: Some("DOCUMENT".to_string()),
             option_ids: vec!["00000001-0000-0000-0003-000000000004".to_string()], // Urgent
             entity_ids: vec![],
+            ..Default::default()
         }],
         ..Default::default()
     };
@@ -5085,6 +5090,7 @@ async fn test_property_filter_multiple_options_or(db: Pool<Postgres>) -> anyhow:
                 "00000001-0000-0000-0003-000000000002".to_string(), // Medium
             ],
             entity_ids: vec![],
+            ..Default::default()
         }],
         ..Default::default()
     };
@@ -5143,6 +5149,7 @@ async fn test_property_filter_without_entity_type(db: Pool<Postgres>) -> anyhow:
                 "00000001-0000-0000-0003-000000000002".to_string(), // Medium
             ],
             entity_ids: vec![],
+            ..Default::default()
         }],
         ..Default::default()
     };
@@ -5197,6 +5204,7 @@ async fn test_property_filter_scoped_entity_type(db: Pool<Postgres>) -> anyhow::
             entity_type: Some("PROJECT".to_string()),
             option_ids: vec!["00000001-0000-0000-0003-000000000002".to_string()], // Medium
             entity_ids: vec![],
+            ..Default::default()
         }],
         ..Default::default()
     };
@@ -7063,5 +7071,150 @@ async fn crm_document_literals_match_attachments_and_associations(
     .await;
     assert!(!not_acme.contains(DOC_A));
     assert!(not_acme.contains(DOC_B) && not_acme.contains(DOC_D));
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("soup_items_with_properties")
+    )
+)]
+async fn date_property_boundaries_presence_and_clearing(db: Pool<Postgres>) -> anyhow::Result<()> {
+    use item_filters::ast::properties::DateRange;
+    let at =
+        chrono::DateTime::parse_from_rfc3339("2025-12-31T23:59:59Z")?.with_timezone(&chrono::Utc);
+    let after = at + chrono::Duration::seconds(1);
+    let before = at - chrono::Duration::seconds(1);
+    let doc_a = Uuid::parse_str("11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let doc_b = Uuid::parse_str("11111111-bbbb-bbbb-bbbb-bbbbbbbbbbbb")?;
+    sqlx::query!(
+        r#"INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)
+           VALUES ($1, $2, 'DOCUMENT', '00000001-0000-0000-0000-000000000004',
+                   '{"type":"String","value":"not a timestamp"}'::jsonb)"#,
+        Uuid::now_v7(),
+        doc_a.to_string(),
+    )
+    .execute(&db)
+    .await?;
+    for (range, has_date, expected) in [
+        (
+            Some(DateRange {
+                start: Some(at),
+                end: Some(after),
+            }),
+            None,
+            Some(doc_b),
+        ),
+        (
+            Some(DateRange {
+                start: Some(before),
+                end: Some(at),
+            }),
+            None,
+            None,
+        ),
+        (
+            Some(DateRange {
+                start: None,
+                end: Some(after),
+            }),
+            None,
+            Some(doc_b),
+        ),
+        (
+            Some(DateRange {
+                start: None,
+                end: Some(at),
+            }),
+            None,
+            None,
+        ),
+        (
+            Some(DateRange {
+                start: Some(at),
+                end: None,
+            }),
+            None,
+            Some(doc_b),
+        ),
+        (
+            Some(DateRange {
+                start: Some(after),
+                end: None,
+            }),
+            None,
+            None,
+        ),
+        (
+            Some(DateRange {
+                start: None,
+                end: None,
+            }),
+            None,
+            Some(doc_b),
+        ),
+        (None, Some(true), Some(doc_b)),
+        (None, Some(false), Some(doc_a)),
+    ] {
+        let ast = EntityFilterAst::new_from_filters(item_filters::EntityFilters {
+            property_filters: vec![PropertyFilter {
+                property_definition_id: "00000001-0000-0000-0000-000000000004".into(),
+                entity_type: Some("DOCUMENT".into()),
+                date_range: range,
+                has_date,
+                ..Default::default()
+            }],
+            ..Default::default()
+        })?
+        .unwrap();
+        let items = dyn_fetch(
+            &db,
+            "macro|user-1@test.com",
+            1,
+            SimpleSortMethod::UpdatedAt,
+            ast,
+            false,
+        )
+        .await?;
+        let ids: Vec<_> = items
+            .iter()
+            .filter_map(|item| match item {
+                SoupItem::Document(doc) => Some(doc.id),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(ids.first().copied(), expected);
+    }
+    sqlx::query!("UPDATE entity_properties SET values = NULL WHERE entity_id = '11111111-bbbb-bbbb-bbbb-bbbbbbbbbbbb' AND property_definition_id = '00000001-0000-0000-0000-000000000004'")
+        .execute(&db).await?;
+    let ast = EntityFilterAst::new_from_filters(item_filters::EntityFilters {
+        property_filters: vec![PropertyFilter {
+            property_definition_id: "00000001-0000-0000-0000-000000000004".into(),
+            entity_type: Some("DOCUMENT".into()),
+            has_date: Some(false),
+            ..Default::default()
+        }],
+        ..Default::default()
+    })?
+    .unwrap();
+    let items = dyn_fetch(
+        &db,
+        "macro|user-1@test.com",
+        100,
+        SimpleSortMethod::UpdatedAt,
+        ast,
+        false,
+    )
+    .await?;
+    let ids: HashSet<_> = items
+        .iter()
+        .filter_map(|item| match item {
+            SoupItem::Document(doc) => Some(doc.id),
+            _ => None,
+        })
+        .collect();
+    assert!(ids.contains(&doc_a) && ids.contains(&doc_b));
     Ok(())
 }

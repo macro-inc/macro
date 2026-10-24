@@ -37,7 +37,8 @@ pub struct GraphqlPropertiesLiteral {
 
 impl IntoFilterExpr<PropertiesLiteral> for GraphqlPropertiesLiteral {
     fn into_expr(self) -> async_graphql::Result<Expr<PropertiesLiteral>> {
-        Ok(Expr::val(PropertiesLiteral {
+        let missing_date = matches!(self.value, GraphqlPropertyMatchValue::HasDate(false));
+        let literal = PropertiesLiteral {
             property_definition_id: parse_id(self.property_definition_id, "propertyDefinitionId")?,
             entity_type: self
                 .entity_type
@@ -50,7 +51,13 @@ impl IntoFilterExpr<PropertiesLiteral> for GraphqlPropertiesLiteral {
                 })
                 .transpose()?,
             value: self.value.into_ast()?,
-        }))
+        };
+        let expr = Expr::val(literal);
+        Ok(if missing_date {
+            Expr::is_not(expr)
+        } else {
+            expr
+        })
     }
 }
 
@@ -61,6 +68,19 @@ pub enum GraphqlPropertyMatchValue {
     SelectOption(ID),
     /// Entity reference id to match.
     EntityRef(String),
+    /// Match a DATE property in a UTC interval.
+    DateRange(GraphqlPropertyDateRange),
+    /// Match a non-null DATE property; false matches missing dates.
+    HasDate(bool),
+}
+
+/// UTC interval for a DATE property.
+#[derive(async_graphql::InputObject)]
+pub struct GraphqlPropertyDateRange {
+    /// Inclusive start, or no lower bound.
+    start: Option<String>,
+    /// Exclusive end, or no upper bound.
+    end: Option<String>,
 }
 
 impl GraphqlPropertyMatchValue {
@@ -75,6 +95,29 @@ impl GraphqlPropertyMatchValue {
                     async_graphql::Error::new(format!("invalid entityRef: {err}"))
                 })?)
             }
+            Self::DateRange(range) => {
+                PropertyMatchValue::DateRange(item_filters::ast::properties::DateRange {
+                    start: range
+                        .start
+                        .as_deref()
+                        .map(chrono::DateTime::parse_from_rfc3339)
+                        .transpose()
+                        .map_err(|err| {
+                            async_graphql::Error::new(format!("invalid dateRange.start: {err}"))
+                        })?
+                        .map(|value| value.with_timezone(&chrono::Utc)),
+                    end: range
+                        .end
+                        .as_deref()
+                        .map(chrono::DateTime::parse_from_rfc3339)
+                        .transpose()
+                        .map_err(|err| {
+                            async_graphql::Error::new(format!("invalid dateRange.end: {err}"))
+                        })?
+                        .map(|value| value.with_timezone(&chrono::Utc)),
+                })
+            }
+            Self::HasDate(_) => PropertyMatchValue::DatePresent,
         })
     }
 }

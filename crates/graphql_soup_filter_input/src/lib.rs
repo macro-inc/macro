@@ -269,7 +269,15 @@ impl GraphqlFilterPropertiesLiteral {
 
 impl IntoFilterExpr<PropertiesLiteral> for GraphqlFilterPropertiesLiteral {
     fn into_expr(self) -> InputResult<Expr<PropertiesLiteral>> {
-        self.into_literal().map(Expr::val)
+        let missing_date = matches!(self.value, GraphqlFilterPropertyMatchValue::HasDate(false));
+        self.into_literal().map(|literal| {
+            let expr = Expr::val(literal);
+            if missing_date {
+                Expr::is_not(expr)
+            } else {
+                expr
+            }
+        })
     }
 }
 
@@ -282,6 +290,21 @@ enum GraphqlFilterPropertyMatchValue {
     SelectOption(ID),
     /// Entity reference id to match.
     EntityRef(ID),
+    /// Match a DATE property in a UTC range.
+    DateRange(GraphqlPropertyDateRange),
+    /// Match a non-null DATE property (false matches absent, null or cleared).
+    HasDate(bool),
+}
+
+/// Explicit UTC bounds for a DATE property.
+#[cfg_attr(feature = "server", derive(async_graphql::InputObject))]
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GraphqlPropertyDateRange {
+    /// Inclusive UTC start, or no lower bound.
+    start: Option<String>,
+    /// Exclusive UTC end, or no upper bound.
+    end: Option<String>,
 }
 
 impl GraphqlFilterPropertyMatchValue {
@@ -295,6 +318,25 @@ impl GraphqlFilterPropertyMatchValue {
                 EntityRefId::new(value.to_string())
                     .map_err(|err| InputError::new(format!("invalid entityRef: {err}")))?,
             ),
+            Self::DateRange(range) => {
+                PropertyMatchValue::DateRange(item_filters::ast::properties::DateRange {
+                    start: range
+                        .start
+                        .as_deref()
+                        .map(chrono::DateTime::parse_from_rfc3339)
+                        .transpose()
+                        .map_err(|err| InputError::new(format!("invalid dateRange.start: {err}")))?
+                        .map(|value| value.with_timezone(&Utc)),
+                    end: range
+                        .end
+                        .as_deref()
+                        .map(chrono::DateTime::parse_from_rfc3339)
+                        .transpose()
+                        .map_err(|err| InputError::new(format!("invalid dateRange.end: {err}")))?
+                        .map(|value| value.with_timezone(&Utc)),
+                })
+            }
+            Self::HasDate(_) => PropertyMatchValue::DatePresent,
         })
     }
 }
@@ -365,7 +407,7 @@ pub struct GraphqlEntityFilterAst {
     /// Restrict results to the authenticated viewer's favorites when true.
     favorites_only: Option<bool>,
     /// Restrict every entity type to items associated with this CRM record.
-    /// Requires an expanded, timestamp-sorted query.
+    /// Requires an expanded query sorted by a timestamp or task due date.
     crm_association: Option<GraphqlCrmAssociation>,
     /// The calendar event filter to apply.
     calendar_event_filter: Option<GraphqlCalendarEventExpr>,
@@ -702,8 +744,8 @@ enum GraphqlDocumentLiteral {
     /// Uploaded from an email attachment sent by, or to, a matching address.
     EmailAttachmentParticipant(GraphqlEmailValue),
     /// Associated with a CRM record through its Companies or Contacts
-    /// property or a reference to the record. Requires an expanded,
-    /// timestamp-sorted query.
+    /// property or a reference to the record. Requires an expanded query
+    /// sorted by a timestamp or task due date.
     CrmAssociated(GraphqlCrmAssociation),
     /// Case-insensitive substring of the document name.
     NameContains(String),

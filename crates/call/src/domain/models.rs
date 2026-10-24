@@ -645,6 +645,15 @@ pub struct GetCallRecordsRequest {
     pub query: Query<Uuid, SimpleSortMethod, LiteralTree<CallLiteral>>,
 }
 
+/// Bounded candidates for a selected DATE property, before call hydration.
+#[derive(Debug)]
+pub struct CallCandidateRequest {
+    /// Complete boolean filter evaluated before counts and pagination.
+    pub filter: LiteralTree<CallLiteral>,
+    /// Viewer-bound selection validated by the properties service.
+    pub selection: properties::AuthorizedPropertyQuery,
+}
+
 /// The order and keyset position of one page of a user's call records.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CallRecordPage {

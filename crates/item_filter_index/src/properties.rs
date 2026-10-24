@@ -35,6 +35,10 @@ fn supported(ast: &EntityFilterAst) -> bool {
         // Current view selections are untyped. Typed property-row lookups need
         // association evidence not present in the GraphQL property snapshot.
         literal.entity_type.is_none()
+            && matches!(
+                &literal.value,
+                PropertyMatchValue::SelectOption(_) | PropertyMatchValue::EntityRef(_)
+            )
     })
 }
 
@@ -56,6 +60,9 @@ fn property_predicate(
                 entity_attribute(literal.property_definition_id),
                 id.to_string(),
             )?,
+            PropertyMatchValue::DatePresent | PropertyMatchValue::DateRange(_) => {
+                unreachable!("date property literals are ineligible for the local index");
+            }
         })
     })
 }

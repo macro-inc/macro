@@ -6,6 +6,27 @@ use serde_json::{Value, json};
 
 use super::*;
 
+#[test]
+fn open_date_ranges_materialize_without_invented_boundaries() {
+    let ast = materialize_graphql_filter(json!({"propertiesFilter": {"literal": {
+        "propertyDefinitionId": "00000001-0000-0000-0000-000000000004",
+        "value": {"dateRange": {"end": "2026-10-21T00:00:00+05:30"}}
+    }}}))
+    .unwrap();
+    assert!(
+        matches!(ast.properties_filter.as_deref(), Some(Expr::Literal(PropertiesLiteral {
+        value: PropertyMatchValue::DateRange(range), ..
+    })) if range.start.is_none() && range.end.unwrap().to_rfc3339() == "2026-10-20T18:30:00+00:00")
+    );
+    assert!(
+        materialize_graphql_filter(json!({"propertiesFilter": {"literal": {
+            "propertyDefinitionId": "00000001-0000-0000-0000-000000000004",
+            "value": {"dateRange": {"start": "invalid"}}
+        }}}))
+        .is_err()
+    );
+}
+
 fn generated_filter_fixture() -> Value {
     serde_json::from_str(include_str!("../fixtures/generated-soup-filter.json")).unwrap()
 }

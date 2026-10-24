@@ -27,16 +27,48 @@ const taskGroupBySchema = z.enum([
   'assignee',
   'project',
   'date',
+  'due_date',
 ]);
 
 const taskSortSchema = z.array(
   z.object({
-    id: z.enum(['updated_at', 'created_at', 'viewed_at']),
+    id: z.enum([
+      'updated_at',
+      'created_at',
+      'viewed_at',
+      'due_date_earliest',
+      'due_date_latest',
+    ]),
     reversed: z.boolean().optional(),
   })
 );
 
 const taskFacetsSchema = z.record(z.string(), z.array(z.string()));
+
+const taskDueDateFilterSchema = z.union([
+  z.object({
+    type: z.enum([
+      'overdue',
+      'today',
+      'tomorrow',
+      'next_7_days',
+      'later',
+      'has_due_date',
+      'no_due_date',
+    ]),
+  }),
+  z
+    .object({
+      type: z.literal('range'),
+      start: z.iso.date().optional(),
+      end: z.iso.date().optional(),
+    })
+    .refine(
+      (range) =>
+        Boolean(range.start || range.end) &&
+        (!range.start || !range.end || range.start <= range.end)
+    ),
+]);
 
 const tasksEntryStateSchemaWithDefaults = z.object({
   version: z.literal(1).default(1),
@@ -48,6 +80,7 @@ const tasksEntryStateSchemaWithDefaults = z.object({
   facets: taskFacetsSchema.default(
     normalizeFacetSelection(DEFAULT_TASK_FACET_SELECTION)
   ),
+  dueDate: taskDueDateFilterSchema.optional().catch(undefined),
   collapsedGroupIds: z.array(z.string()).default([]),
 });
 
@@ -62,6 +95,7 @@ const DEFAULT_TASKS_ENTRY_STATE = {
   sort: [{ id: 'updated_at' }],
   facets: normalizeFacetSelection(DEFAULT_TASK_FACET_SELECTION),
   collapsedGroupIds: [],
+  dueDate: undefined,
 } satisfies TasksEntryState;
 
 const tasksListStateSchemaWithDefaults = z.object({
@@ -92,6 +126,7 @@ function selectEntryState(state: TasksViewState): TasksEntryState {
     sort: state.sort.map((item) => ({ ...item })),
     facets: normalizeFacetSelection(state.facets),
     collapsedGroupIds: [...state.collapsedGroupIds],
+    dueDate: state.dueDate ? { ...state.dueDate } : undefined,
   };
 }
 
@@ -118,6 +153,7 @@ function createTasksEntryStorage(options: {
         groupBy: restored.groupBy,
         sort: restored.sort.map((item) => ({ ...item })),
         facets: normalizeFacetSelection(restored.facets),
+        dueDate: restored.dueDate,
         collapsedGroupIds: [...restored.collapsedGroupIds],
       };
     },

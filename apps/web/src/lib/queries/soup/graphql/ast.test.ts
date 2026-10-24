@@ -509,3 +509,60 @@ describe('makeGraphqlSoupInput', () => {
     ).toThrow('Unsupported GraphQL Soup AST');
   });
 });
+
+it('maps open-ended property date ranges and explicit no-date negation', () => {
+  const propertyDefinitionId = '00000001-0000-0000-0000-000000000004';
+  const range = makeGraphqlSoupInput({
+    params: { sort_method: 'due_date_earliest' },
+    body: {
+      propf: {
+        l: {
+          pd: propertyDefinitionId,
+          et: 'TASK',
+          v: { dr: { end: UPDATED_AT } },
+        },
+      },
+    },
+  });
+  expect(range).toMatchObject({
+    initial: {
+      sortMethod: 'DUE_DATE_EARLIEST',
+      filters: {
+        propertiesFilter: {
+          literal: {
+            propertyDefinitionId,
+            entityType: 'TASK',
+            value: { dateRange: { end: UPDATED_AT } },
+          },
+        },
+      },
+    },
+  });
+  const missing = makeGraphqlSoupInput({
+    params: {},
+    body: {
+      propf: { '!': { l: { pd: propertyDefinitionId, et: 'TASK', v: 'dp' } } },
+    },
+  });
+  expect(missing).toMatchObject({
+    initial: {
+      filters: {
+        propertiesFilter: {
+          not: {
+            literal: {
+              propertyDefinitionId,
+              entityType: 'TASK',
+              value: { hasDate: true },
+            },
+          },
+        },
+      },
+    },
+  });
+  expect(() =>
+    makeGraphqlSoupInput({
+      params: {},
+      body: { propf: { l: { pd: propertyDefinitionId, v: { dr: {} } } } },
+    })
+  ).toThrow('date range requires at least one bound');
+});

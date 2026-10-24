@@ -1,16 +1,20 @@
 use std::sync::Arc;
 
+use super::models::due_date::{
+    DueDateCandidate, DueDateGroupCandidate, DueDateRequest, GroupedDueDateRequest,
+};
 use crate::domain::models::{
     AdvancedSortParams, CrmPropertyEdge, EnrichedSoupItem, GroupedSortRequest, IntoSoupReqAst,
     NotifiedEntity, NotifiedSoupRequest, SimpleSortRequest, SoupErr, SoupProjectionHydration,
     SoupPropertiesField, SoupRequest, TouchedEntity, TouchedSoupRequest, WorkFeedCandidate,
-    WorkFeedCandidateRequest, WorkFeedSoupPage, WorkFeedSoupRequest, grouping::ItemGroupingInfo,
+    WorkFeedCandidateRequest, WorkFeedSoupPage, WorkFeedSoupRequest,
+    grouping::{DueDateGroupedItem, ItemGroupingInfo},
 };
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{
-    Frecency, NotifiedAt, PaginatedCursor, PaginatedOpaqueCursor, SimpleSortMethod, TouchedByMe,
-    TypeEraseCursor,
+    DueDateSort, Frecency, NotifiedAt, PaginatedCursor, PaginatedOpaqueCursor, SimpleSortMethod,
+    TouchedByMe, TypeEraseCursor,
 };
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use models_soup::item::SoupItem;
@@ -29,6 +33,24 @@ pub trait SoupRepo: Send + Sync + 'static {
     type Err;
     /// Iterator returned by grouped Soup queries.
     type GroupedItems: Iterator<Item = ItemGroupingInfo> + Send;
+
+    /// Select authorized candidates before DATE ordering, grouping, or pagination.
+    fn property_candidate_page(
+        &self,
+        request: super::models::property_candidates::PropertyCandidateRequest,
+    ) -> impl Future<Output = Result<models_grouping::CandidatePage, Self::Err>> + Send;
+    /// Select authorized task candidates with canonical deadlines before hydration.
+    fn due_date_soup_page<'a>(
+        &self,
+        req: DueDateRequest<'a>,
+    ) -> impl Future<Output = Result<Vec<DueDateCandidate>, Self::Err>> + Send;
+
+    /// Select grouped task memberships and totals before the cursor gate.
+    fn due_date_group_page<'a>(
+        &self,
+        req: GroupedDueDateRequest<'a>,
+    ) -> impl Future<Output = Result<Vec<DueDateGroupCandidate>, Self::Err>> + Send;
+
     /// Fetch expanded soup items for a simple sorted cursor query.
     fn expanded_generic_cursor_soup<'a>(
         &self,
@@ -135,6 +157,8 @@ pub trait SoupRepo: Send + Sync + 'static {
 pub enum SoupOutput<T, Item = SoupItem<()>> {
     /// Page of a timestamp-sorted query.
     Simple(PaginatedCursor<Item, String, SimpleSortMethod, T>),
+    /// Task page sorted by the canonical Due Date property.
+    DueDate(PaginatedCursor<Item, String, DueDateSort, T>),
     /// Page of a frecency-sorted query.
     Frecency(PaginatedCursor<Item, String, Frecency, T>),
     /// Page of a touched-by-me query.
@@ -151,6 +175,7 @@ impl<T, Item> SoupOutput<T, Item> {
     {
         match self {
             SoupOutput::Simple(page) => SoupOutput::Simple(page.map(f)),
+            SoupOutput::DueDate(page) => SoupOutput::DueDate(page.map(f)),
             SoupOutput::Frecency(page) => SoupOutput::Frecency(page.map(f)),
             SoupOutput::Touched(page) => SoupOutput::Touched(page.map(f)),
             SoupOutput::Notified(page) => SoupOutput::Notified(page.map(f)),
@@ -161,6 +186,7 @@ impl<T, Item> SoupOutput<T, Item> {
     pub fn into_items(self) -> Vec<Item> {
         match self {
             SoupOutput::Simple(page) => page.items,
+            SoupOutput::DueDate(page) => page.items,
             SoupOutput::Frecency(page) => page.items,
             SoupOutput::Touched(page) => page.items,
             SoupOutput::Notified(page) => page.items,
@@ -171,7 +197,10 @@ impl<T, Item> SoupOutput<T, Item> {
     pub fn into_simple(self) -> Option<PaginatedCursor<Item, String, SimpleSortMethod, T>> {
         match self {
             SoupOutput::Simple(page) => Some(page),
-            SoupOutput::Frecency(_) | SoupOutput::Touched(_) | SoupOutput::Notified(_) => None,
+            SoupOutput::Frecency(_)
+            | SoupOutput::Touched(_)
+            | SoupOutput::Notified(_)
+            | SoupOutput::DueDate(_) => None,
         }
     }
 
@@ -179,7 +208,10 @@ impl<T, Item> SoupOutput<T, Item> {
     pub fn into_frecency(self) -> Option<PaginatedCursor<Item, String, Frecency, T>> {
         match self {
             SoupOutput::Frecency(page) => Some(page),
-            SoupOutput::Simple(_) | SoupOutput::Touched(_) | SoupOutput::Notified(_) => None,
+            SoupOutput::Simple(_)
+            | SoupOutput::Touched(_)
+            | SoupOutput::Notified(_)
+            | SoupOutput::DueDate(_) => None,
         }
     }
 
@@ -187,7 +219,10 @@ impl<T, Item> SoupOutput<T, Item> {
     pub fn into_touched(self) -> Option<PaginatedCursor<Item, String, TouchedByMe, T>> {
         match self {
             SoupOutput::Touched(page) => Some(page),
-            SoupOutput::Simple(_) | SoupOutput::Frecency(_) | SoupOutput::Notified(_) => None,
+            SoupOutput::Simple(_)
+            | SoupOutput::Frecency(_)
+            | SoupOutput::Notified(_)
+            | SoupOutput::DueDate(_) => None,
         }
     }
 
@@ -195,7 +230,10 @@ impl<T, Item> SoupOutput<T, Item> {
     pub fn into_notified(self) -> Option<PaginatedCursor<Item, String, NotifiedAt, T>> {
         match self {
             SoupOutput::Notified(page) => Some(page),
-            SoupOutput::Simple(_) | SoupOutput::Frecency(_) | SoupOutput::Touched(_) => None,
+            SoupOutput::Simple(_)
+            | SoupOutput::Frecency(_)
+            | SoupOutput::Touched(_)
+            | SoupOutput::DueDate(_) => None,
         }
     }
 }
@@ -204,6 +242,7 @@ impl<T, Item> TypeEraseCursor<Item> for SoupOutput<T, Item> {
     fn type_erase(self) -> PaginatedOpaqueCursor<Item> {
         match self {
             SoupOutput::Simple(page) => page.type_erase(),
+            SoupOutput::DueDate(page) => page.type_erase(),
             SoupOutput::Frecency(page) => page.type_erase(),
             SoupOutput::Touched(page) => page.type_erase(),
             SoupOutput::Notified(page) => page.type_erase(),
@@ -320,6 +359,20 @@ pub trait SoupService: Send + Sync + 'static {
             SoupErr,
         >,
     > + Send;
+
+    /// Run a grouped task query ordered by canonical due dates.
+    /// Services without this capability reject the request explicitly.
+    fn get_user_soup_grouped_due_date(
+        &self,
+        req: GroupedDueDateRequest<'_>,
+    ) -> impl Future<Output = Result<Vec<DueDateGroupedItem>, SoupErr>> + Send {
+        let _ = req;
+        async {
+            Err(SoupErr::SoupDbErr(anyhow::anyhow!(
+                "this soup service does not serve due-date grouped tasks"
+            )))
+        }
+    }
 
     /// Fetch the tag definitions visible to a user — their own plus their
     /// teams' — with options attached.
@@ -439,6 +492,13 @@ where
         req: GroupedSortRequest<'_>,
     ) -> Result<impl Iterator<Item = ItemGroupingInfo<SoupPropertiesField>> + Send, SoupErr> {
         (**self).get_user_soup_grouped(req).await
+    }
+
+    async fn get_user_soup_grouped_due_date(
+        &self,
+        req: GroupedDueDateRequest<'_>,
+    ) -> Result<Vec<DueDateGroupedItem>, SoupErr> {
+        (**self).get_user_soup_grouped_due_date(req).await
     }
 
     async fn caller_tag_sets<'a>(

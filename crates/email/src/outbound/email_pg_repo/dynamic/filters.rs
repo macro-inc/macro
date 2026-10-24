@@ -9,6 +9,9 @@ use item_filters::ast::properties::{PropertiesLiteral, PropertyEntityType, Prope
 use recursion::CollapsibleExt;
 use uuid::Uuid;
 
+#[cfg(test)]
+mod test;
+
 fn date_predicate(col: &str, lit: &DateLiteral) -> SqlFragment {
     let sql = match lit {
         DateLiteral::GreaterThan(dt) => {
@@ -895,6 +898,25 @@ fn build_thread_property_predicate(lit: &PropertiesLiteral, thread_alias: &str) 
             f.push_raw(" AND ep_prop.values->'value' @> jsonb_build_array(jsonb_build_object('entity_id', ");
             f.extend(SqlFragment::bind_string(entity_id.to_string()));
             f.push_raw("::text))");
+        }
+        PropertyMatchValue::DatePresent => {
+            f.push_raw(
+                " AND ep_prop.values->>'type' = 'Date' AND ep_prop.values->>'value' IS NOT NULL",
+            );
+        }
+        PropertyMatchValue::DateRange(range) => {
+            f.push_raw(" AND CASE WHEN ep_prop.values->>'type' = 'Date' AND ep_prop.values->>'value' IS NOT NULL THEN TRUE");
+            if let Some(start) = range.start {
+                f.push_raw(" AND (ep_prop.values->>'value')::timestamptz >= ");
+                f.extend(SqlFragment::bind_string(start.to_rfc3339()));
+                f.push_raw("::timestamptz");
+            }
+            if let Some(end) = range.end {
+                f.push_raw(" AND (ep_prop.values->>'value')::timestamptz < ");
+                f.extend(SqlFragment::bind_string(end.to_rfc3339()));
+                f.push_raw("::timestamptz");
+            }
+            f.push_raw(" ELSE FALSE END");
         }
     }
     f.push_raw(

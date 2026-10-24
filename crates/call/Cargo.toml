@@ -33,6 +33,7 @@ outbound = [
   "dep:share_permission_db_utils",
   "dep:sqlx",
   "dep:urlencoding",
+  "properties/outbound",
   "ports",
 ]
 ports = ["dep:entity_access", "dep:tokio", "dep:async-trait", "dep:messages"]
@@ -79,10 +80,12 @@ messages = { path = "../messages", default-features = false, features = ["ports"
 model-entity = { path = "../model-entity" }
 model-error-response = { path = "../model-error-response", optional = true }
 models_pagination = { path = "../models_pagination" }
+models_grouping = { path = "../models_grouping" }
 models_permissions = { path = "../models_permissions" }
 notification = { path = "../notification" }
 rootcause = { workspace = true }
 pgvector = { workspace = true, optional = true }
+properties = { path = "../properties", default-features = false }
 schemars = { workspace = true, optional = true }
 serde = { workspace = true }
 share_permission_db_utils = { path = "../share_permission_db_utils", optional = true }

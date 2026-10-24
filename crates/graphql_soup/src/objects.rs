@@ -31,7 +31,8 @@ use models_soup::{
 use predicate_index::RecordKey;
 use serde_json::Value;
 use soup::domain::models::{
-    EnrichedSoupItem, SoupProjectionHydration, SoupPropertiesField, grouping::NestedSoupGroups,
+    EnrichedSoupItem, SoupProjectionHydration, SoupPropertiesField,
+    grouping::{GroupedResponse, NestedSoupGroups},
 };
 use soup_filter_projection::{encode_cache_projection_supplement, project_soup_cache_supplement};
 use uuid::Uuid;
@@ -230,6 +231,27 @@ impl<E: SoupEntityEdges> GroupedSoup<E> {
                     items: bin
                         .into_items()
                         .map(|item| GraphqlSoupEntity::new(item.map_extra(|_| ())))
+                        .collect(),
+                })
+                .collect(),
+        }
+    }
+
+    /// Construct GraphQL bins from the shared grouped response and cursor policy.
+    pub fn from_response(response: GroupedResponse) -> Self {
+        Self {
+            bins: response
+                .groups
+                .into_iter()
+                .map(|group| GraphqlSoupBin {
+                    key: group.key,
+                    total_count: group.total_count as usize,
+                    next_cursor: group.next_cursor,
+                    items: group
+                        .item_ids
+                        .iter()
+                        .filter_map(|id| response.items.get(id))
+                        .map(|item| GraphqlSoupEntity::new(item.item.clone().map_extra(|_| ())))
                         .collect(),
                 })
                 .collect(),

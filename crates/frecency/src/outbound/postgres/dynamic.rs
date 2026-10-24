@@ -19,6 +19,9 @@ use std::collections::VecDeque;
 
 use super::FrecencyStorageErr;
 
+#[cfg(test)]
+mod test;
+
 static DOCUMENT_CLAUSE: &str = r#"
     SELECT
         fa.entity_id,
@@ -252,6 +255,26 @@ fn property_literal_predicate(literal: &PropertiesLiteral) -> String {
         PropertyMatchValue::EntityRef(entity_id) => format!(
             "ep_prop.values->'value' @> jsonb_build_array(jsonb_build_object('entity_id', '{entity_id}'))"
         ),
+        PropertyMatchValue::DatePresent => {
+            "ep_prop.values->>'type' = 'Date' AND ep_prop.values->>'value' IS NOT NULL".to_owned()
+        }
+        PropertyMatchValue::DateRange(range) => {
+            let mut predicate = "CASE WHEN ep_prop.values->>'type' = 'Date' AND ep_prop.values->>'value' IS NOT NULL THEN TRUE".to_owned();
+            if let Some(start) = range.start {
+                predicate.push_str(&format!(
+                    " AND (ep_prop.values->>'value')::timestamptz >= '{}'::timestamptz",
+                    start.to_rfc3339()
+                ));
+            }
+            if let Some(end) = range.end {
+                predicate.push_str(&format!(
+                    " AND (ep_prop.values->>'value')::timestamptz < '{}'::timestamptz",
+                    end.to_rfc3339()
+                ));
+            }
+            predicate.push_str(" ELSE FALSE END");
+            predicate
+        }
     };
     let entity_type_clause = match entity_type {
         Some(et) => format!("AND ep_prop.entity_type = '{et}'"),

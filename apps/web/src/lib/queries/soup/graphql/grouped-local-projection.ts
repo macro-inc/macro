@@ -21,6 +21,7 @@ export function localSoupGroupKeys(
     match(input.groupBy.field)
       // Entity type cannot change for a normalized identity. Retain its server key.
       .with('ENTITY_TYPE', () => undefined)
+      .with('DEADLINE', () => undefined)
       .with('PROJECT', () => {
         if ('projectId' in item) return [item.projectId ?? ''];
         if (item.__typename === 'GraphqlSoupProject')

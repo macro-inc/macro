@@ -51,8 +51,10 @@ import {
 } from 'solid-js/store';
 import { TASK_DEFAULT_GROUP_BY } from './constants';
 import { toTaskBoardGrouping } from './core/task-board';
+import type { TaskCalendar } from './core/task-due-date';
 import { DEFAULT_TASK_FACET_SELECTION } from './filters/task-facets';
 import { createTasksViewPersistence } from './persistence';
+import { createTaskCalendarSignal } from './primitives/create-task-calendar';
 import { createTasksViewSearch } from './primitives/create-tasks-view-search';
 import {
   type TasksDataSource,
@@ -102,6 +104,7 @@ type TasksListController = ListController<
 export type TasksViewContext = {
   scopeKey?: string;
   state: Store<TasksViewState>;
+  calendar: Accessor<TaskCalendar>;
   createTask?: TasksViewProviderProps['onCreateTask'];
   projectsEnabled: Accessor<boolean>;
   ganttEnabled: Accessor<boolean>;
@@ -160,6 +163,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
   const projectsEnabled = () => projectsFlag().enabled;
   const ganttFlag = useFeatureFlag(enableGantt);
   const ganttEnabled = () => ganttFlag().enabled;
+  const calendar = createTaskCalendarSignal();
 
   const initial = props.initialState ?? {};
   const initialTab = initial.tab ?? 'my-tasks';
@@ -179,6 +183,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
         facets: normalizeFacetSelection(
           initial.facets ?? DEFAULT_TASK_FACET_SELECTION
         ),
+        dueDate: initial.dueDate,
         collapsedGroupIds: [...(initial.collapsedGroupIds ?? [])],
         collapsedSidebarSectionIds: [
           ...(initial.collapsedSidebarSectionIds ?? []),
@@ -251,6 +256,10 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
         : undefined,
       // Layout and rollout fallbacks must not overwrite the selected grouping.
       groupBy: persistedState.groupBy,
+      dueDate: state.dueDate?.type ?? 'any',
+      dueStart:
+        state.dueDate?.type === 'range' ? state.dueDate.start : undefined,
+      dueEnd: state.dueDate?.type === 'range' ? state.dueDate.end : undefined,
     });
   const isGroupExpanded = (groupId: string) =>
     !state.collapsedGroupIds.includes(groupId);
@@ -262,6 +271,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
       tagSetsReady,
       isGroupExpanded,
       board: () => state.layout === 'board',
+      calendar,
     })
   );
   type ActivationHandler = (
@@ -405,6 +415,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
         draft.tab = tab;
         draft.groupBy = TASK_DEFAULT_GROUP_BY[tab];
         draft.facets = normalizeFacetSelection(DEFAULT_TASK_FACET_SELECTION);
+        draft.dueDate = undefined;
         draft.collapsedGroupIds = [];
       })
     );
@@ -441,6 +452,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
       return props.onCreateTask;
     },
     state,
+    calendar,
     projectsEnabled,
     ganttEnabled,
     setState: setStateWithSearch,

@@ -20,7 +20,9 @@ use models_search::{MatchType, SearchOn, SimpleSearchResponse, unified::UnifiedS
 use models_search_cursor::{SearchCursor, SearchCursorOption, SearchMethodCursor};
 use opensearch_client::search::agent_sessions::{AgentSessionSearchArgs, AgentSessionSearchMode};
 use opensearch_client::search::call_records::CallRecordSearchMode;
-use opensearch_client::search::documents::{DocumentSearchMode, PropertyFilterArg};
+use opensearch_client::search::documents::{
+    DocumentSearchMode, PropertyDateRange, PropertyFilterArg,
+};
 use opensearch_client::search::model::SearchHit;
 use opensearch_client::search::unified::UnifiedSearchArgs;
 
@@ -173,12 +175,17 @@ fn to_property_filter_args(filters: &[item_filters::PropertyFilter]) -> Vec<Prop
                 .chain(f.entity_ids.iter())
                 .cloned()
                 .collect();
-            if values.is_empty() {
+            if values.is_empty() && f.date_range.is_none() && f.has_date.is_none() {
                 return None;
             }
             Some(PropertyFilterArg {
                 definition_id: f.property_definition_id.clone(),
                 values,
+                date_range: f.date_range.as_ref().map(|range| PropertyDateRange {
+                    start: range.start,
+                    end: range.end,
+                }),
+                has_date: f.has_date,
             })
         })
         .collect()

@@ -7,7 +7,7 @@ import { taskBoardPropertyId } from './queries/task-board';
 
 /** Keep host presets while selecting the originating board column. */
 export function taskBoardComposerContext(options: {
-  grouping: TaskBoardGrouping;
+  grouping: Exclude<TaskBoardGrouping, 'due_date'>;
   columnId: string;
   scopeKey?: string;
   context?: TaskComposerContext;

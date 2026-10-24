@@ -4,7 +4,9 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { PropertyFilterDateRange } from './propertyFilterDateRange';
 import type { PropertyFilterEntityType } from './propertyFilterEntityType';
+import type { PropertyFilterHasDate } from './propertyFilterHasDate';
 
 /**
  * A single property-based filter condition.
@@ -15,11 +17,14 @@ Multiple values within a single filter are OR'd together.
 Multiple filters are AND'd together.
  */
 export interface PropertyFilter {
+  date_range?: PropertyFilterDateRange;
   /** Entity reference IDs to match. Multiple values are OR'd together. */
   entity_ids?: string[];
   /** The entity type for the property lookup (e.g., "TASK", "DOCUMENT", "PROJECT").
 When None, matches across all entity types. */
   entity_type?: PropertyFilterEntityType;
+  /** True matches non-null dates; false matches missing or cleared dates. */
+  has_date?: PropertyFilterHasDate;
   /** Select option UUIDs to match. Multiple values are OR'd together. */
   option_ids?: string[];
   /** The UUID of the property definition to filter on. */

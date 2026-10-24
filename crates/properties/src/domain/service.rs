@@ -43,6 +43,15 @@ pub fn team_id_from_receipt(team: Option<&TeamReceipt>) -> Option<Uuid> {
 
 /// Service trait for property operations.
 pub trait PropertiesService: Send + Sync + 'static {
+    /// Validate selected definition visibility and scalar DATE requirements once
+    /// before source fanout. The returned capability binds the immutable query
+    /// to this viewer and must not be cached across requests.
+    fn authorize_property_query(
+        &self,
+        viewer: MacroUserIdStr<'static>,
+        team: Option<&TeamReceipt>,
+        query: models_grouping::CandidateQuery,
+    ) -> impl Future<Output = Result<super::query::AuthorizedPropertyQuery, PropertiesErr>> + Send;
     /// Get all properties attached to an entity, with definitions, values, and
     /// options. Tag properties are restricted to the viewer's own and their
     /// teams' definitions (the viewer being the receipt's authenticated user).

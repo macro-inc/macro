@@ -211,6 +211,7 @@ async fn initiatives_grouping_and_property_enrichment(pool: PgPool) -> anyhow::R
                 field: GroupByField::Property {
                     property_definition_id: system_properties::SystemPropertyKey::STATUS_UUID,
                     entity_type: Some("INITIATIVE".into()),
+                    bucketing: None,
                 },
                 group_key: None,
                 per_group_limit: None,

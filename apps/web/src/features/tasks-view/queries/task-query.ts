@@ -10,6 +10,7 @@ import {
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { GroupByField } from '@queries/soup/grouped/types';
 import type { SoupAstBody, SoupAstItemsQueryArgs } from '@queries/soup/items';
+import type { TaskCalendar, TaskDatePredicate } from '../core/task-due-date';
 import {
   EMPTY_TASK_FACET_CONTEXT,
   TASK_FACETS,
@@ -48,10 +49,23 @@ const propertyScope = (
   tab: TaskTab,
   userId: string | undefined,
   compiledFacets: TaskAst | undefined,
-  reference: TaskReferenceScope | undefined
+  reference: TaskReferenceScope | undefined,
+  dueDate?: TaskDatePredicate
 ): TaskAst | undefined => {
   const groups: TaskAst[] = [];
   if (compiledFacets) groups.push(compiledFacets);
+  if (dueDate) {
+    const value: TaskAst = {
+      l: {
+        pd: SYSTEM_PROPERTY_IDS.DUE_DATE,
+        et: 'TASK',
+        v: 'dateRange' in dueDate ? { dr: dueDate.dateRange } : 'dp',
+      },
+    };
+    groups.push(
+      'hasDate' in dueDate && !dueDate.hasDate ? { '!': value } : value
+    );
+  }
 
   if (tab === 'my-tasks' && userId) {
     groups.push(entityPropertyLiteral(SYSTEM_PROPERTY_IDS.ASSIGNEES, userId));
@@ -78,13 +92,18 @@ const nonTaskTargets = {
 };
 
 export const taskGroupByField = (
-  groupBy: TaskGroupBy
+  groupBy: TaskGroupBy,
+  calendar?: TaskCalendar
 ): GroupByField | undefined => {
   switch (groupBy) {
     case 'none':
       return undefined;
     case 'date':
       return { type: 'date' };
+    case 'due_date':
+      if (!calendar)
+        throw new Error('Due-date grouping requires a calendar snapshot');
+      return { type: 'deadline', boundaries: calendar.boundaries };
     case 'project':
       return { type: 'project' };
     case 'status':
@@ -112,6 +131,9 @@ export type BuildTaskQueryOptions = {
   facetContext?: TaskFacetContext;
   groupBy: TaskGroupBy;
   sort: SortSelection<TaskSortId>[];
+  dueDate?: TaskDatePredicate;
+  calendar?: TaskCalendar;
+  searching?: boolean;
   /** Only tasks whose property references this entity. */
   reference?: TaskReferenceScope;
   /** Only tasks associated with this CRM record, resolved by the server. */
@@ -131,11 +153,17 @@ export function buildTaskQuery(
   options: BuildTaskQueryOptions
 ): SoupAstItemsQueryArgs {
   const primarySort = options.sort[0];
-  const serverSort = primarySort?.id ?? 'updated_at';
+  const requestedSort = primarySort?.id ?? 'updated_at';
+  const serverSort =
+    (options.searching || options.nameContains) &&
+    requestedSort.startsWith('due_date_')
+      ? 'updated_at'
+      : requestedSort;
 
   let sortDirection: 'asc' | 'desc' = 'desc';
 
-  if (primarySort?.reversed) sortDirection = 'asc';
+  if (primarySort?.reversed && !serverSort.startsWith('due_date_'))
+    sortDirection = 'asc';
 
   const compiledFacets = compileFacets(
     options.facets,
@@ -147,7 +175,8 @@ export function buildTaskQuery(
     options.tab,
     options.userId,
     compiledFacets.propf,
-    options.reference
+    options.reference,
+    options.dueDate
   );
 
   const taskDocuments = documentScope(options.tab, options.userId);
@@ -175,7 +204,9 @@ export function buildTaskQuery(
       expand: true,
       limit: 100,
       sort_method: serverSort,
-      sort_direction: sortDirection,
+      sort_direction: serverSort.startsWith('due_date_')
+        ? undefined
+        : sortDirection,
     },
     body,
     groupBy:
@@ -184,6 +215,6 @@ export function buildTaskQuery(
             type: 'property',
             propertyDefinitionId: SYSTEM_PROPERTY_IDS.PROJECT,
           }
-        : taskGroupByField(options.groupBy),
+        : taskGroupByField(options.groupBy, options.calendar),
   };
 }

@@ -1,7 +1,13 @@
 import { match } from 'ts-pattern';
 import type { TaskGroupBy } from '../types';
+import type { TaskDueDateBucket } from './task-due-date';
 
-export type TaskBoardGrouping = 'status' | 'priority' | 'assignee' | 'project';
+export type TaskBoardGrouping =
+  | 'status'
+  | 'priority'
+  | 'assignee'
+  | 'project'
+  | 'due_date';
 
 export const TASK_BOARD_GROUP_OPTIONS: {
   id: TaskBoardGrouping;
@@ -11,13 +17,21 @@ export const TASK_BOARD_GROUP_OPTIONS: {
   { id: 'priority', label: 'Priority' },
   { id: 'assignee', label: 'Assignee' },
   { id: 'project', label: 'Project' },
+  { id: 'due_date', label: 'Due date' },
 ];
 
 /** List-only groupings display Status columns in the board layout. */
 export function toTaskBoardGrouping(groupBy: TaskGroupBy): TaskBoardGrouping {
   return match(groupBy)
     .with('none', 'date', () => 'status' as const)
-    .with('status', 'priority', 'assignee', 'project', (grouping) => grouping)
+    .with(
+      'status',
+      'priority',
+      'assignee',
+      'project',
+      'due_date',
+      (grouping) => grouping
+    )
     .exhaustive();
 }
 
@@ -28,6 +42,8 @@ export type TaskBoardTask = {
   priorityId?: string;
   assigneeIds: readonly string[];
   projectIds: readonly string[];
+  dueDate?: string;
+  deadline?: TaskDueDateBucket;
 };
 
 export type TaskBoardColumn = {
@@ -44,6 +60,8 @@ export type TaskBoardMove = {
   id: string;
   fromLane: string;
   toLane: string;
+  /** Resolved UTC instant, or null to clear; supplied before a deadline move saves. */
+  dueDate?: string | null;
 };
 
 export function taskBoardGroupKeys(
@@ -55,6 +73,7 @@ export function taskBoardGroupKeys(
     .with('priority', () => (task.priorityId ? [task.priorityId] : []))
     .with('assignee', () => task.assigneeIds)
     .with('project', () => task.projectIds)
+    .with('due_date', () => [task.deadline ?? 'no_due_date'])
     .exhaustive();
 
   return values.length ? values : [''];

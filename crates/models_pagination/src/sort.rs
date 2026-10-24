@@ -32,6 +32,22 @@ impl Sortable for SimpleSortMethod {
     type Value = DateTime<Utc>;
 }
 
+/// Direction for task due-date sorting, with undated tasks last.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DueDateSort {
+    /// Earliest due date first.
+    #[serde(rename = "due_date_earliest")]
+    Earliest,
+    /// Latest due date first.
+    #[serde(rename = "due_date_latest")]
+    Latest,
+}
+
+impl Sortable for DueDateSort {
+    type Value = Option<DateTime<Utc>>;
+}
+
 /// advanced sort methods draw from multiple data sources
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

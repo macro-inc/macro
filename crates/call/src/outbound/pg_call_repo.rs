@@ -5,6 +5,7 @@ mod imported;
 mod lifecycle;
 mod meetings;
 mod preparations;
+mod property_candidates;
 mod property_clauses;
 mod team_share;
 
@@ -254,6 +255,13 @@ impl PgCallRepo {
 }
 
 impl CallRepository for PgCallRepo {
+    #[tracing::instrument(err, skip_all)]
+    async fn get_call_candidates(
+        &self,
+        request: crate::domain::models::CallCandidateRequest,
+    ) -> Result<models_grouping::CandidatePage, Self::Err> {
+        property_candidates::select(&self.pool, request).await
+    }
     type Err = sqlx::Error;
 
     async fn insert_meeting_preparation(
@@ -1609,7 +1617,7 @@ impl CallRepository for PgCallRepo {
             .map(call_status_sql_value)
             .map(str::to_string)
             .collect();
-        let property = clause_params(&property_clauses(filter));
+        let property = clause_params(&property_clauses(filter)?);
 
         let rows = sqlx::query!(
             r#"
@@ -1670,27 +1678,36 @@ impl CallRepository for PgCallRepo {
                 -- Property conditions in conjunctive normal form: every
                 -- clause needs a term the call satisfies. Tags (no
                 -- definition) match any property value; entity references
-                -- match their definition's value.
+                -- and Date terms match their definition's value.
                 AND NOT EXISTS (
                     SELECT 1
                     FROM generate_series(0, $9::int - 1) AS clause(idx)
                     WHERE NOT EXISTS (
                         SELECT 1
-                        FROM UNNEST($10::int[], $11::bool[], $12::uuid[], $13::text[])
-                            AS term(clause_idx, negated, definition_id, value)
+                        FROM UNNEST($10::int[], $11::bool[], $12::uuid[], $13::text[],
+                                    $17::bool[], $18::timestamptz[], $19::timestamptz[])
+                            AS term(clause_idx, negated, definition_id, value, is_date, date_start, date_end)
                         WHERE term.clause_idx = clause.idx
                           AND term.negated <> EXISTS (
                               SELECT 1 FROM entity_properties ep
                               WHERE ep.entity_id = c.id::text
                                 AND ep.entity_type = 'CALL_RECORD'
-                                AND jsonb_typeof(ep.values -> 'value') = 'array'
-                                AND CASE
-                                    WHEN term.definition_id IS NULL
+                                AND CASE WHEN term.is_date THEN
+                                    ep.property_definition_id = term.definition_id
+                                    AND CASE WHEN ep.values ->> 'type' = 'Date'
+                                                  AND ep.values ->> 'value' IS NOT NULL THEN
+                                        (term.date_start IS NULL OR (ep.values ->> 'value')::timestamptz >= term.date_start)
+                                        AND (term.date_end IS NULL OR (ep.values ->> 'value')::timestamptz < term.date_end)
+                                    ELSE FALSE END
+                                ELSE
+                                    jsonb_typeof(ep.values -> 'value') = 'array'
+                                    AND CASE WHEN term.definition_id IS NULL
                                         THEN jsonb_exists(ep.values -> 'value', term.value)
-                                    ELSE ep.property_definition_id = term.definition_id
-                                        AND ep.values -> 'value' @> jsonb_build_array(
-                                            jsonb_build_object('entity_id', term.value)
-                                        )
+                                        ELSE ep.property_definition_id = term.definition_id
+                                            AND ep.values -> 'value' @> jsonb_build_array(
+                                                jsonb_build_object('entity_id', term.value)
+                                            )
+                                    END
                                 END
                           )
                     )
@@ -1741,27 +1758,36 @@ impl CallRepository for PgCallRepo {
                 -- Property conditions in conjunctive normal form: every
                 -- clause needs a term the call satisfies. Tags (no
                 -- definition) match any property value; entity references
-                -- match their definition's value.
+                -- and Date terms match their definition's value.
                 AND NOT EXISTS (
                     SELECT 1
                     FROM generate_series(0, $9::int - 1) AS clause(idx)
                     WHERE NOT EXISTS (
                         SELECT 1
-                        FROM UNNEST($10::int[], $11::bool[], $12::uuid[], $13::text[])
-                            AS term(clause_idx, negated, definition_id, value)
+                        FROM UNNEST($10::int[], $11::bool[], $12::uuid[], $13::text[],
+                                    $17::bool[], $18::timestamptz[], $19::timestamptz[])
+                            AS term(clause_idx, negated, definition_id, value, is_date, date_start, date_end)
                         WHERE term.clause_idx = clause.idx
                           AND term.negated <> EXISTS (
                               SELECT 1 FROM entity_properties ep
                               WHERE ep.entity_id = cr.id::text
                                 AND ep.entity_type = 'CALL_RECORD'
-                                AND jsonb_typeof(ep.values -> 'value') = 'array'
-                                AND CASE
-                                    WHEN term.definition_id IS NULL
+                                AND CASE WHEN term.is_date THEN
+                                    ep.property_definition_id = term.definition_id
+                                    AND CASE WHEN ep.values ->> 'type' = 'Date'
+                                                  AND ep.values ->> 'value' IS NOT NULL THEN
+                                        (term.date_start IS NULL OR (ep.values ->> 'value')::timestamptz >= term.date_start)
+                                        AND (term.date_end IS NULL OR (ep.values ->> 'value')::timestamptz < term.date_end)
+                                    ELSE FALSE END
+                                ELSE
+                                    jsonb_typeof(ep.values -> 'value') = 'array'
+                                    AND CASE WHEN term.definition_id IS NULL
                                         THEN jsonb_exists(ep.values -> 'value', term.value)
-                                    ELSE ep.property_definition_id = term.definition_id
-                                        AND ep.values -> 'value' @> jsonb_build_array(
-                                            jsonb_build_object('entity_id', term.value)
-                                        )
+                                        ELSE ep.property_definition_id = term.definition_id
+                                            AND ep.values -> 'value' @> jsonb_build_array(
+                                                jsonb_build_object('entity_id', term.value)
+                                            )
+                                    END
                                 END
                           )
                     )
@@ -1812,21 +1838,30 @@ impl CallRepository for PgCallRepo {
                     FROM generate_series(0, $9::int - 1) AS clause(idx)
                     WHERE NOT EXISTS (
                         SELECT 1
-                        FROM UNNEST($10::int[], $11::bool[], $12::uuid[], $13::text[])
-                            AS term(clause_idx, negated, definition_id, value)
+                        FROM UNNEST($10::int[], $11::bool[], $12::uuid[], $13::text[],
+                                    $17::bool[], $18::timestamptz[], $19::timestamptz[])
+                            AS term(clause_idx, negated, definition_id, value, is_date, date_start, date_end)
                         WHERE term.clause_idx = clause.idx
                           AND term.negated <> EXISTS (
                               SELECT 1 FROM entity_properties ep
                               WHERE ep.entity_id = ce.id::text
                                 AND ep.entity_type = 'CALL_RECORD'
-                                AND jsonb_typeof(ep.values -> 'value') = 'array'
-                                AND CASE
-                                    WHEN term.definition_id IS NULL
+                                AND CASE WHEN term.is_date THEN
+                                    ep.property_definition_id = term.definition_id
+                                    AND CASE WHEN ep.values ->> 'type' = 'Date'
+                                                  AND ep.values ->> 'value' IS NOT NULL THEN
+                                        (term.date_start IS NULL OR (ep.values ->> 'value')::timestamptz >= term.date_start)
+                                        AND (term.date_end IS NULL OR (ep.values ->> 'value')::timestamptz < term.date_end)
+                                    ELSE FALSE END
+                                ELSE
+                                    jsonb_typeof(ep.values -> 'value') = 'array'
+                                    AND CASE WHEN term.definition_id IS NULL
                                         THEN jsonb_exists(ep.values -> 'value', term.value)
-                                    ELSE ep.property_definition_id = term.definition_id
-                                        AND ep.values -> 'value' @> jsonb_build_array(
-                                            jsonb_build_object('entity_id', term.value)
-                                        )
+                                        ELSE ep.property_definition_id = term.definition_id
+                                            AND ep.values -> 'value' @> jsonb_build_array(
+                                                jsonb_build_object('entity_id', term.value)
+                                            )
+                                    END
                                 END
                           )
                     )
@@ -1878,10 +1913,13 @@ impl CallRepository for PgCallRepo {
             &property.clause_indices,
             &property.negated,
             &property.definition_ids as &[Option<Uuid>],
-            &property.values,
+            &property.values as &[Option<String>],
             page.by_start,
             page.after.map(|(sort_ts, _)| sort_ts),
             page.after.map(|(_, call_id)| call_id.to_string()),
+            &property.date_terms,
+            &property.date_starts as &[Option<DateTime<Utc>>],
+            &property.date_ends as &[Option<DateTime<Utc>>],
         )
         .fetch_all(&self.pool)
         .await?;

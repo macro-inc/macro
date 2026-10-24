@@ -3,6 +3,7 @@ import { PROPERTY_OPTION_IDS } from '@property/constants';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { createRoot } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { createTaskCalendar } from '../core/task-due-date';
 import { boardEntity, boardProperty } from '../tests/task-board-fixture';
 import { createTaskBoardQueries } from './task-board-queries';
 
@@ -187,4 +188,65 @@ it('releases the property lock after a server rejects a project write', async ()
 
   await source.saveProperty('one', property, values);
   expect(fixture.save).toHaveBeenCalledTimes(2);
+});
+
+it('saves deadline moves through the shared DATE mutation and rejects mismatched buckets', async () => {
+  fixture.definitions = {
+    isSuccess: true,
+    data: [
+      boardProperty(SYSTEM_PROPERTY_IDS.DUE_DATE, null, 'DATE').definition,
+    ],
+  };
+  const calendar = createTaskCalendar(
+    new Date('2026-10-21T18:00:00Z'),
+    'America/New_York'
+  );
+  const source = setup({
+    grouping: () => 'due_date',
+    calendar: () => calendar,
+  });
+  await expect(
+    source.actions.save(
+      {
+        id: 'one',
+        fromLane: 'no_due_date',
+        toLane: 'tomorrow',
+        dueDate: calendar.boundaries.today,
+      },
+      'due_date'
+    )
+  ).rejects.toThrow('outside the destination bucket');
+  expect(fixture.save).not.toHaveBeenCalled();
+  await source.actions.save(
+    {
+      id: 'one',
+      fromLane: 'no_due_date',
+      toLane: 'tomorrow',
+      dueDate: calendar.boundaries.tomorrow,
+    },
+    'due_date'
+  );
+  expect(fixture.save).toHaveBeenLastCalledWith({
+    properties: [
+      expect.objectContaining({
+        entityId: 'one',
+        entityType: 'TASK',
+        apiValues: {
+          valueType: 'DATE',
+          value: new Date('2026-10-22T04:00:00.000Z'),
+        },
+      }),
+    ],
+  });
+  await source.actions.save(
+    { id: 'one', fromLane: 'today', toLane: 'no_due_date', dueDate: null },
+    'due_date'
+  );
+  expect(fixture.save).toHaveBeenLastCalledWith({
+    properties: [
+      expect.objectContaining({
+        apiValues: { valueType: 'DATE', value: null },
+      }),
+    ],
+  });
 });

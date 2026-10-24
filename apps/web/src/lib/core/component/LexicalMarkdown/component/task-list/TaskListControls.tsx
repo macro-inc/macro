@@ -17,6 +17,7 @@ import { combine, literal, NIL_UUID } from '@app/features/soup';
 import { UserIcon } from '@core/component/UserIcon';
 import {
   getTaskAssigneeIds,
+  getTaskDueDate,
   getTaskPriorityOptionId,
   getTaskStatusOptionId,
   isTaskEntity,
@@ -25,7 +26,6 @@ import {
 import CalendarBlank from '@phosphor/calendar-blank.svg';
 import Flag from '@phosphor/flag.svg';
 import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
-import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { useContacts } from '@queries/contacts/contacts';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
 import { cn } from '@ui';
@@ -131,7 +131,7 @@ export function TaskListControlsRenderer(props: {
         statusOptionId: getTaskStatusOptionId(task) ?? null,
         priorityOptionId: getTaskPriorityOptionId(task) ?? null,
         assigneeIds: getTaskAssigneeIds(task),
-        due: getTaskDueDate(task),
+        due: getTaskDueDate(task) ?? null,
       };
     }
     return map;
@@ -156,15 +156,6 @@ export function TaskListControlsRenderer(props: {
       )}
     </For>
   );
-}
-
-function getTaskDueDate(task: TaskEntityWithProperties): string | null {
-  const property = task.properties?.find(
-    (p) => p.definition.id === SYSTEM_PROPERTY_IDS.DUE_DATE
-  );
-  const value = property?.value;
-  if (!value || value.type !== 'Date') return null;
-  return typeof value.value === 'string' ? value.value : null;
 }
 
 function TaskListEntryControls(props: {

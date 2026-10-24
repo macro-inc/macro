@@ -678,11 +678,20 @@ pub struct PropertyFilter {
     /// Entity reference IDs to match. Multiple values are OR'd together.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub entity_ids: Vec<String>,
+    /// UTC range with inclusive start and exclusive end.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub date_range: Option<ast::properties::DateRange>,
+    /// True matches non-null dates; false matches missing or cleared dates.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub has_date: Option<bool>,
 }
 
 impl IsEmpty for PropertyFilter {
     fn is_empty(&self) -> bool {
-        self.option_ids.is_empty() && self.entity_ids.is_empty()
+        self.option_ids.is_empty()
+            && self.entity_ids.is_empty()
+            && self.date_range.is_none()
+            && self.has_date.is_none()
     }
 }
 

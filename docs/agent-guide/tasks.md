@@ -121,6 +121,33 @@ should appear immediately and stay visible through both responses in the list,
 task header, side panel, and a reopened picker. A rejected save should remove only
 the optimistic tag. Repeat with an existing assignment and with removal.
 
+## Due dates
+
+Tasks lists and boards offer **Due date: earliest** and **Due date: latest** sorting.
+Undated tasks stay last in either direction, with stable task-ID ordering for ties.
+Text search retains its existing ordering and flat list results; clear search to sort.
+Boards group the loaded search results as before, without complete counts or grouped-search requests.
+
+**Filter → Due date** offers Overdue, Today, Tomorrow, Next 7 days, Later,
+Has due date, No due date, and Custom range. **Any due date** removes only the date
+filter. Custom range includes both selected calendar dates; either endpoint can be
+empty. Cancel leaves the previous filter unchanged. Status remains independent:
+select Completed or Canceled explicitly to include closed tasks in a date filter.
+The mobile controls use the same options and date-range dialog in the sliders drawer.
+
+**Group → Due date** uses non-overlapping viewer-local calendar buckets:
+Overdue is before today's midnight; Today and Tomorrow cover those entire days;
+Next 7 days covers D+2 through D+7; Later starts at D+8; No due date includes
+missing and cleared dates. Relative filters and groups refresh at local midnight,
+timezone changes, and app resume. Continuation pages keep their original boundaries.
+Date selections persist with the navigation entry and round-trip through
+`tasks.dueDate`, `tasks.dueStart`, and `tasks.dueEnd` URL parameters.
+
+Verify dates around midnight and a daylight-saving transition. Check both sort
+directions with tied and undated tasks. Filter during local and service search,
+then edit or clear a due date: membership and grouped totals must refresh even
+when the task was previously absent. Gantt's saved-date semantics do not change.
+
 ## Gantt layout
 
 Choose **Gantt** in the **Task layout** group to see task timelines.
@@ -263,13 +290,15 @@ Gantt persists in `tasks.layout` or `projectTasks.layout`, just like List and Bo
 
 Choose **Board** in the **Task layout** group in the toolbar
 (or **List** to switch back). One icon is selected at a time; hover or focus shows
-its label. **Group by**
-offers Status, Priority, Assignee, and (when Projects is enabled) Project.
+its label. **Group by** offers Status, Priority, Assignee, Due date,
+and (when Projects is enabled) Project.
 Both layouts share one grouping, which restores with the Tasks navigation entry.
 List-only None and Date groupings display Status columns in Board; switching
 back to List retains those selections and collapsed groups until grouping changes.
 
-Each column header has an icon-only **Add task** plus button. It opens the task
+Status, Priority, Assignee, and Project column headers have an icon-only
+**Add task** plus button. Due-date buckets keep their existing drag-to-reschedule
+behavior without a column creation shortcut. The button opens the task
 composer with that column's Status, Priority, Assignee, or Project preselected,
 while preserving the originating pane's other creation presets. **Unassigned**
 and **No priority** start with that property empty. **No project** starts empty
@@ -283,9 +312,9 @@ mouse button held to start dragging to another column; holding still does not
 start a drag. Property pills remain interactive and do not start a drag.
 A new destination column highlights once movement slows
 or pauses for about 100 ms. Fast travel suppresses activation of new columns.
-A valid hover shows **Board sorted by Updated**, **Created**, or **Viewed**
-using the active sort label. The drop does not choose a pointer insertion slot:
-its card takes its place in the current sort (or search relevance order).
+A valid hover shows **Board sorted by Updated**, **Created**, **Viewed**, or the
+active due-date sort label. The drop does not choose a pointer insertion slot:
+its card takes its place in the current sort (or existing text-search order).
 Same-column moves and column reordering remain disabled.
 Layout, primary sort, sort direction, and grouping are reflected in `tasks.layout`,
 `tasks.sort`, `tasks.sortReversed`, and `tasks.groupBy` search parameters.
@@ -325,9 +354,10 @@ a drop target.
 
 An icon-only status pill appears before the task title, and an icon-only assignee
 pill appears to its right in every grouping. The lower row omits status, assignee,
-and the grouping property. The remaining properties use standard pill controls
-and icons. Priority uses a compact icon-only pill; due date and project appear
-when set. Metadata properties stay read-only, and pending writes disable editing.
+and the grouping property, except that the exact due-date pill stays visible in
+Due date grouping. The remaining properties use standard pill controls and icons.
+Priority uses a compact icon-only pill; due date and project appear when set.
+Metadata properties stay read-only, and pending writes disable editing.
 A task assigned to multiple people appears in each person's column. Moving it
 from Alice to Bob replaces Alice while keeping the other assignees. Moving to
 **Unassigned** clears all assignees. Project moves change the task's Project
@@ -356,7 +386,15 @@ Filters remain active: completing a task or removing yourself as assignee can
 hide the card from the current view. Click its title to open the task; modified
 clicks can open a separate split.
 
-Due-date columns and priority/due-date sorting are not in this version.
+Due-date drops reschedule the task: Today and Tomorrow assign those dates;
+No due date clears the value. Overdue, Next 7 days, and Later open a date picker
+restricted to that bucket, with explicit Apply and Cancel. The source placement
+stays unchanged until Apply; Cancel, Escape, dismissal, or a scope change makes no
+write. A failed save restores the prior placement and counts. Existing property
+permissions and pending states apply, and the destination uses the active sort.
+A due-date filter also hides buckets that cannot contain a matching date;
+**Reveal hidden columns** removes only that date filter.
+Priority sorting is not in this version.
 The shared board primitives remain independent of Tasks queries and mutations.
 
 ## Cached grouped lists

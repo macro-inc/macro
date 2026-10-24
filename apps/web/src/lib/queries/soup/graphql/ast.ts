@@ -623,17 +623,52 @@ function mapGithubPullRequestLiteral(
 function mapPropertiesLiteral(literal: unknown): GraphqlPropertiesLiteralInput {
   if (!isRecord(literal)) unsupported('expected property literal object');
   const propertyDefinitionId = mapString(literal.pd, 'propertyDefinitionId');
+  const propertyEntityTypes = [
+    'CALENDAR_EVENT',
+    'CHANNEL',
+    'CHAT',
+    'COMPANY',
+    'DATABASE_ROW',
+    'DOCUMENT',
+    'INITIATIVE',
+    'PROJECT',
+    'TASK',
+    'THREAD',
+    'USER',
+  ] as const satisfies readonly NonNullable<
+    GraphqlPropertiesLiteralInput['entityType']
+  >[];
+  const entityType =
+    literal.et === undefined
+      ? undefined
+      : propertyEntityTypes.find((type) => type === literal.et);
+  if (literal.et !== undefined && !entityType)
+    unsupported(`property entity type ${literal.et}`);
+  const property = { propertyDefinitionId, ...(entityType && { entityType }) };
   const value = literal.v;
+  if (value === 'dp') return { ...property, value: { hasDate: true } };
   if (!isRecord(value)) unsupported('expected property value matcher object');
 
   if (typeof value.so === 'string') {
-    return { propertyDefinitionId, value: { selectOption: value.so } };
+    return { ...property, value: { selectOption: value.so } };
   }
   if (typeof value.er === 'string') {
-    return { propertyDefinitionId, value: { entityRef: value.er } };
+    return { ...property, value: { entityRef: value.er } };
+  }
+  if (isRecord(value.dr)) {
+    const start =
+      value.dr.start == null
+        ? undefined
+        : mapString(value.dr.start, 'dateRange.start');
+    const end =
+      value.dr.end == null
+        ? undefined
+        : mapString(value.dr.end, 'dateRange.end');
+    if (!start && !end) unsupported('date range requires at least one bound');
+    return { ...property, value: { dateRange: { start, end } } };
   }
 
-  unsupported('expected property value so or er');
+  unsupported('expected property value so, er, dr, or dp');
 }
 
 function mapSortDirection(
@@ -667,6 +702,10 @@ function mapSortMethod(
       return unsupported('sort_method touched_by_me');
     case 'notified_at':
       return unsupported('sort_method notified_at');
+    case 'due_date_earliest':
+      return 'DUE_DATE_EARLIEST';
+    case 'due_date_latest':
+      return 'DUE_DATE_LATEST';
     case undefined:
       return undefined;
   }
@@ -818,6 +857,15 @@ export function makeGraphqlSoupInput(args: {
 function makeGraphqlGroupByInput(groupBy: GroupByField): GraphqlGroupByInput {
   return match(groupBy)
     .with({ type: 'date' }, () => ({ field: 'DATE' as const }))
+    .with({ type: 'deadline' }, ({ boundaries }) => ({
+      field: 'DEADLINE' as const,
+      deadlineBoundaries: {
+        today: boundaries.today,
+        tomorrow: boundaries.tomorrow,
+        dayTwo: boundaries.day_two,
+        dayEight: boundaries.day_eight,
+      },
+    }))
     .with({ type: 'entity_type' }, () => ({
       field: 'ENTITY_TYPE' as const,
     }))

@@ -28,6 +28,12 @@ struct FakeCalls {
 }
 
 impl CallRecordQueryService for FakeCalls {
+    async fn get_user_call_candidates(
+        &self,
+        _request: call::domain::models::CallCandidateRequest,
+    ) -> Result<models_grouping::CandidatePage, CallError> {
+        unreachable!("archive handling only reads call participants")
+    }
     async fn get_user_call_records(
         &self,
         _req: GetCallRecordsRequest,

@@ -18,9 +18,8 @@ export type GetItemsSoupParams = {
    */
   limit?: number;
   /**
- * Sort method. Options are viewed_at, created_at, updated_at,
-viewed_updated, frecency, touched_by_me, notified_at. Defaults to
-viewed_at.
+ * Sort method. Includes timestamp sorts, relevance sorts, and
+due_date_earliest/due_date_latest for tasks. Defaults to viewed_at.
  */
   sort_method?: SoupApiSort;
   /**

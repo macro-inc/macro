@@ -285,6 +285,10 @@ fn property_filter_input(expr: &Expr<PropertiesLiteral>) -> Json {
             let value = match &literal.value {
                 PropertyMatchValue::SelectOption(id) => json!({ "selectOption": id }),
                 PropertyMatchValue::EntityRef(id) => json!({ "entityRef": id.to_string() }),
+                PropertyMatchValue::DatePresent => json!({ "hasDate": true }),
+                PropertyMatchValue::DateRange(range) => {
+                    json!({ "dateRange": { "start": range.start, "end": range.end } })
+                }
             };
             json!({ "literal": { "propertyDefinitionId": literal.property_definition_id, "value": value } })
         }

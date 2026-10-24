@@ -446,6 +446,12 @@ pub trait CallRepository: Send + Sync + 'static {
         page: CallRecordPage,
     ) -> impl Future<Output = Result<Vec<CallRecord>, Self::Err>> + Send;
 
+    /// Select visible native and imported call candidates before grouping or limits.
+    fn get_call_candidates(
+        &self,
+        request: super::models::CallCandidateRequest,
+    ) -> impl Future<Output = Result<models_grouping::CandidatePage, Self::Err>> + Send;
+
     /// Resolve the display name for a single channel.
     fn resolve_channel_name<'a>(
         &self,
@@ -1065,6 +1071,13 @@ pub trait CallRecordQueryService: Send + Sync + 'static {
         req: GetCallRecordsRequest,
     ) -> impl Future<Output = Result<Vec<CallRecord>, CallError>> + Send;
 
+    /// Select bounded call candidates after the caller validates DATE definitions.
+    /// Preserve the full filter tree and ordinary native/imported call visibility.
+    fn get_user_call_candidates(
+        &self,
+        request: super::models::CallCandidateRequest,
+    ) -> impl Future<Output = Result<models_grouping::CandidatePage, CallError>> + Send;
+
     /// The people on an archived call record: its Macro participants, the
     /// owner of its meeting link, and the invitees of the calendar event
     /// carrying that link. Empty when the record does not exist.
@@ -1092,6 +1105,12 @@ pub trait CallRecordReader: Send + Sync + 'static {
 pub struct NoOpCallRecordQueryService;
 
 impl CallRecordQueryService for NoOpCallRecordQueryService {
+    async fn get_user_call_candidates(
+        &self,
+        _request: super::models::CallCandidateRequest,
+    ) -> Result<models_grouping::CandidatePage, CallError> {
+        Ok(models_grouping::CandidatePage::default())
+    }
     /// Always returns an empty list.
     async fn get_user_call_records(
         &self,

@@ -87,6 +87,7 @@ fn status(entity_type: Option<&str>) -> GroupByField {
     GroupByField::Property {
         property_definition_id: SystemPropertyKey::STATUS_UUID,
         entity_type: entity_type.map(str::to_owned),
+        bucketing: None,
     }
 }
 

@@ -72,6 +72,8 @@ export function serializeGroupByField(
   switch (field.type) {
     case 'date':
       return 'date';
+    case 'deadline':
+      return { deadline: field.boundaries };
     case 'entity_type':
       return 'entity_type';
     case 'project':
@@ -159,6 +161,22 @@ export function resolveGroupMetaForKey(
       return;
     })
     .with({ type: 'date' }, () => undefined)
+    .with({ type: 'deadline' }, () => {
+      const order = [
+        'overdue',
+        'today',
+        'tomorrow',
+        'next_7_days',
+        'later',
+        'no_due_date',
+      ];
+      const label = key.replaceAll('_', ' ');
+      return {
+        key,
+        label: label.charAt(0).toUpperCase() + label.slice(1),
+        displayOrder: order.indexOf(key),
+      };
+    })
     .exhaustive(() => undefined);
 }
 
@@ -297,5 +315,6 @@ export function computeGroupKeysForItem(
       return;
     })
     .with({ type: 'date' }, () => undefined)
+    .with({ type: 'deadline' }, () => undefined)
     .exhaustive(() => undefined);
 }

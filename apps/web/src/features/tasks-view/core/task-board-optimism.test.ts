@@ -87,7 +87,7 @@ describe('optimistic task placements', () => {
     const result = projectTaskBoardPlacements(
       [column('todo', [task]), column('done', [earlier, later])],
       [placement],
-      (left, right) => rank.indexOf(left) - rank.indexOf(right)
+      (left, right) => rank.indexOf(left.id) - rank.indexOf(right.id)
     );
     expect(result[1].tasks.map((task) => task.id)).toEqual(rank);
     const hidden = projectTaskBoardPlacements(

@@ -21,7 +21,10 @@ alwaysApply: false
   Tests compile against the live database, so they don't need the cache.
 - Across domain crates, depend on the owning domain service or port; only a
   composition root may construct that crate's outbound adapters. Never import
-  another crate's `outbound` module from an outbound adapter.
+  another crate's `outbound` module from an outbound adapter. The narrow exception
+  is `properties::query_support`: source repositories may use its DATE-query
+  composition helpers over an already-authorized candidate CTE, while retaining
+  source authorization, filtering, execution, and hydration.
 - Read the [Rust development guide](../../../docs/development/rust.md) before
   building or testing, and the hexagonal architecture skill before changing
   inbound, domain, or outbound code.

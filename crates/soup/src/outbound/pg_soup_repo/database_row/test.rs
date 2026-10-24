@@ -213,6 +213,7 @@ async fn deals_grouped_by_stage_count_each_option(pool: PgPool) {
                 field: GroupByField::Property {
                     property_definition_id: STAGE,
                     entity_type: Some("DATABASE_ROW".into()),
+                    bucketing: None,
                 },
                 group_key: None,
                 per_group_limit: None,

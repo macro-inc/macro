@@ -25,6 +25,7 @@ mod calendar_event;
 mod candidate_gates;
 mod crm_association;
 mod database_row;
+mod due_date;
 mod expanded;
 pub mod grouping;
 mod initiative;
@@ -48,6 +49,36 @@ impl PgSoupRepo {
 impl SoupRepo for PgSoupRepo {
     type Err = sqlx::Error;
     type GroupedItems = std::vec::IntoIter<ItemGroupingInfo>;
+
+    async fn property_candidate_page(
+        &self,
+        request: crate::domain::models::property_candidates::PropertyCandidateRequest,
+    ) -> Result<models_grouping::CandidatePage, Self::Err> {
+        expanded::dynamic::property_candidates::select(&self.pool.0, request).await
+    }
+
+    async fn due_date_soup_page<'a>(
+        &self,
+        req: crate::domain::models::due_date::DueDateRequest<'a>,
+    ) -> Result<Vec<crate::domain::models::due_date::DueDateCandidate>, Self::Err> {
+        due_date::task_page(&self.pool.0, req.user_id, req.limit, &req.cursor)
+            .await
+            .map(|rows| {
+                rows.into_iter()
+                    .map(|row| crate::domain::models::due_date::DueDateCandidate {
+                        id: row.id,
+                        due_at: row.due_at,
+                    })
+                    .collect()
+            })
+    }
+
+    async fn due_date_group_page<'a>(
+        &self,
+        req: crate::domain::models::due_date::GroupedDueDateRequest<'a>,
+    ) -> Result<Vec<crate::domain::models::due_date::DueDateGroupCandidate>, Self::Err> {
+        due_date::grouped_task_page(&self.pool.0, req).await
+    }
 
     async fn expanded_generic_cursor_soup<'a>(
         &self,

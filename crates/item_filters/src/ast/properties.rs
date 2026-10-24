@@ -1,6 +1,7 @@
 use std::fmt;
 use std::str::FromStr;
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -129,6 +130,18 @@ impl<'de> Deserialize<'de> for EntityRefId {
     }
 }
 
+/// UTC timestamp interval. Lower bounds are inclusive; upper bounds are exclusive.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
+pub struct DateRange {
+    /// Inclusive UTC lower bound, omitted for an open start.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start: Option<DateTime<Utc>>,
+    /// Exclusive UTC upper bound, omitted for an open end.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub end: Option<DateTime<Utc>>,
+}
+
 /// Describes how to match against a property value in the entity_properties table.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub enum PropertyMatchValue {
@@ -138,6 +151,12 @@ pub enum PropertyMatchValue {
     /// Match an entity reference by entity_id. Uses the `@>` jsonb operator on `values->'value'`.
     #[serde(rename = "er")]
     EntityRef(EntityRefId),
+    /// Match a DATE property within a UTC interval.
+    #[serde(rename = "dr")]
+    DateRange(DateRange),
+    /// Match a non-null DATE property. Negate this literal for missing dates.
+    #[serde(rename = "dp")]
+    DatePresent,
 }
 
 /// A single property-based filter condition for the AST.
@@ -202,9 +221,34 @@ impl ExpandFrame<PropertiesLiteral> for Vec<PropertyFilter> {
                         Expr::or,
                     )?;
 
-                Ok([option_nodes, entity_ref_nodes]
-                    .into_iter()
-                    .fold_with(Expr::or))
+                let date_range_node = pf.date_range.map(|range| {
+                    Expr::val(PropertiesLiteral {
+                        property_definition_id: prop_def_id,
+                        entity_type,
+                        value: PropertyMatchValue::DateRange(range),
+                    })
+                });
+                let date_present_node = pf.has_date.map(|has_date| {
+                    let literal = Expr::val(PropertiesLiteral {
+                        property_definition_id: prop_def_id,
+                        entity_type,
+                        value: PropertyMatchValue::DatePresent,
+                    });
+                    if has_date {
+                        literal
+                    } else {
+                        Expr::is_not(literal)
+                    }
+                });
+                Ok([
+                    [option_nodes, entity_ref_nodes]
+                        .into_iter()
+                        .fold_with(Expr::or),
+                    date_range_node,
+                    date_present_node,
+                ]
+                .into_iter()
+                .fold_with(Expr::and))
             })
             .collect::<Result<_, ExpandErr>>()?;
 

@@ -43,6 +43,7 @@
 - [CrmCompanySearchDomain](type-aliases/CrmCompanySearchDomain.md)
 - [CrmCompanySearchResponseItem](type-aliases/CrmCompanySearchResponseItem.md)
 - [DataType](type-aliases/DataType.md)
+- [DateRange](type-aliases/DateRange.md)
 - [DocumentFilters](type-aliases/DocumentFilters.md)
 - [DocumentMetadata](type-aliases/DocumentMetadata.md)
 - [DocumentSearchRequest](type-aliases/DocumentSearchRequest.md)

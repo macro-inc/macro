@@ -248,6 +248,8 @@ ownership. Cancel, logout, and the ten-minute timeout retire pending callbacks.
   [choosing a reactive read](docs/graphql-normalized-cache-plan.md#choosing-a-reactive-read).
 - When adding or changing a feature flag, follow the `feature-flags` skill.
 - When adding or changing a view's feature tour, follow the `add-tour` skill.
+- Keep Tasks due-date ranges and deadline buckets on the view-owned calendar snapshot in `features/tasks-view/core/task-due-date.ts`; reuse its UTC boundaries across continuation pages, refresh them after midnight/timezone changes/resume, and retain existing text-search ordering.
+- Revalidate due-date-dependent Soup and search membership after DATE edits, including empty queries and unloaded grouped counts; entity-only cache invalidation cannot admit previously excluded tasks.
 
 ## Rules
 
