@@ -118,8 +118,8 @@ data unless authorized.
 Avatar and user-mention cards open on hover on pointer devices and as a bottom
 sheet on touch devices. With a keyboard on a touch device, Tab to the trigger and
 press Enter or Space; verify focus enters the sheet and returns to the opener
-after dismissal or copying, including after reopening. DM, Open contact, and
-Assign task should leave focus in their destination when the sheet closes.
+after dismissal or copying, including after reopening. DM, Open contact, Assign
+task, and Settings should leave focus in their destination when the sheet closes.
 On pointer devices, avatars should stay out of the Tab order while still opening
 their cards on hover. Copy email/name confirms only after the clipboard
 write succeeds: the hover card shows a checkmark, while the sheet closes. A failed

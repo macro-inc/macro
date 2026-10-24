@@ -1,6 +1,7 @@
 import { useSearchParams } from '@solidjs/router';
-import { createSignal, Match, Switch } from 'solid-js';
+import { createEffect, createSignal, Match, on, Switch } from 'solid-js';
 import { Agents } from './Agents';
+import { agentSettingsRequest } from './agentSettingsState';
 import { CursorConnectPage } from './CursorConnectPage';
 import { Harness } from './Harness';
 import { RuntimePairingPage } from './RuntimePairingPage';
@@ -18,6 +19,13 @@ export function AgentSettings(props: {
     searchParams.pair ? 'runtimes' : (props.initialSection ?? 'agents')
   );
   const showAgents = () => setPage('agents');
+  // An agent opened from elsewhere lands in its editor, which lives on the
+  // agents page; `Agents` consumes the request.
+  createEffect(
+    on(agentSettingsRequest, (request) => {
+      if (request) showAgents();
+    })
+  );
 
   return (
     <Switch>

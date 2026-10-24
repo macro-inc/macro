@@ -53,17 +53,23 @@ import { useSearchParams } from '@solidjs/router';
 import { Avatar, Button, Dialog, Panel } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import {
+  createEffect,
   createMemo,
   createSignal,
   For,
   type JSX,
   Match,
+  on,
   Show,
   Switch,
 } from 'solid-js';
 import { botAssignableChannelOptions } from '../channel/Bots/botChannelOptions';
 import { canDeleteBot, canManageAgent } from '../channel/Bots/botPermissions';
 import { ChannelMultiSelect } from '../channel/Bots/ChannelMultiSelect';
+import {
+  agentSettingsRequest,
+  consumeAgentSettingsRequest,
+} from './agentSettingsState';
 import { CursorConnectPage } from './CursorConnectPage';
 import { AgentSetupStrips } from './components/agent-setup-strips';
 import { CodingPreferencesSetting } from './components/coding-preferences-setting';
@@ -227,6 +233,22 @@ export function Agents(props: {
   ]);
   const privateAgents = createMemo(() =>
     agents().filter((agent) => agent.share === 'Private')
+  );
+
+  // Opened from an agent's user card: wait for the list, then show that
+  // agent's editor if it is one the viewer manages.
+  createEffect(
+    on([agentSettingsRequest, () => agentsQuery.isPending], ([request]) => {
+      if (!request || agentsQuery.isPending) return;
+      const agent = agents().find(
+        (candidate) => candidate.id === request.agentId
+      );
+      if (agent?.editable && agent.persistedAgent) {
+        setCreating(false);
+        setEditingAgent(agent.persistedAgent);
+      }
+      consumeAgentSettingsRequest(request.id);
+    })
   );
 
   const createAgent = async (agent: CreateAgentParams) => {
