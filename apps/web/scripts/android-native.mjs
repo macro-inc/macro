@@ -7,7 +7,9 @@
 // It is every tracked file under apps/web/tauri except what never reaches
 // the Android binary — iOS, macOS, Linux, Windows and desktop-only paths by
 // naming convention (a path component or extension naming the platform, the
-// generated Xcode project under gen/apple, the desktop updater manifest,
+// generated Xcode project under gen/apple; for desktop only `desktop`,
+// `desktop.*` and `desktop-*`, since desktop_update compiles into Android;
+// the desktop updater manifest,
 // editor config, Markdown docs) — plus one thing outside that tree: the
 // version of the client cache wasm package. The app compiles the cache crates natively, and
 // the team bumps that version when a cache change must ship, so the bump
@@ -22,7 +24,7 @@ import { pathToFileURL } from 'node:url';
 export const tauriPath = 'apps/web/tauri';
 export const cacheWasmManifest = 'crates/client/cache-wasm/Cargo.toml';
 export const androidExclude =
-  /(^|\/)(ios|macos|linux|windows|apple|desktop)([_./-]|$)|\.(ios|macos|linux|windows)\.|\.md$|^desktop-release\.json$|^\.helix\//;
+  /(^|\/)(ios|macos|linux|windows|apple)([_./-]|$)|(^|\/)desktop([./-]|$)|\.(ios|macos|linux|windows)\.|\.md$|^desktop-release\.json$|^\.helix\//;
 
 /// A `git` runner bound to a working directory.
 export function gitIn(cwd) {

@@ -153,12 +153,29 @@ describe('PR Android version enforcement', () => {
     'apps/web/tauri/src-tauri/src/linux_notification.rs',
     'apps/web/tauri/src-tauri/README.md',
     'apps/web/tauri/desktop-release.json',
+    'apps/web/tauri/src-tauri/src/desktop/macrod.rs',
+    'apps/web/tauri/src-tauri/src/desktop_update/desktop.rs',
+    'apps/web/tauri/desktop-cef/src/main.rs',
   ])('ignores the iOS/desktop-only path %s', (path) => {
     const base = git('rev-parse', 'HEAD');
     write(path, 'changed');
     commit();
     expect(checkAndroidVersion({ cwd, base })).toContain(
       'No Android native changes'
+    );
+  });
+
+  // desktop_update itself is not cfg(desktop): its commands and Status type
+  // compile into the Android binary, so a `desktop_` prefix is not exempt.
+  it.each([
+    'apps/web/tauri/src-tauri/src/desktop_update.rs',
+    'apps/web/tauri/src-tauri/src/desktop_update/state.rs',
+  ])('requires a bump for the mobile-compiled path %s', (path) => {
+    const base = git('rev-parse', 'HEAD');
+    write(path, 'changed');
+    commit();
+    expect(() => checkAndroidVersion({ cwd, base })).toThrow(
+      /just android-bump/
     );
   });
 
