@@ -31,8 +31,9 @@ vi.mock('@core/context/user', () => ({
   useUserContext: () => ({ isLoading: () => false }),
 }));
 vi.mock('@core/user', () => ({ useContacts: () => () => [] }));
-vi.mock('@queries/email/mail-accounts', () => ({
-  useMailAccountsQuery: () => ({
+vi.mock('@queries/email/link', () => ({
+  useEmailLinksQuery: () => ({
+    isPending: false,
     data: {
       links: [
         { id: 'primary', email_address: 'viewer@example.com' },

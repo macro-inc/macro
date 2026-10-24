@@ -6,6 +6,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { createEffectOnEntityTypeNotification } from '@notifications';
 import { InlineFetchedEntityTagsPill } from '@property/tags';
 import { clearSavedDraftThreadCache } from '@queries/email/draft-cache';
+import { useInboxEmail } from '@queries/email/inbox-email';
 import type { ThreadQueryTransport } from '@queries/email/thread';
 import {
   type Accessor,
@@ -44,7 +45,6 @@ import type { EmailThreadOrganizationStatus } from './context/email-thread-view-
 import { EmailThreadOperations } from './email-thread-operations';
 import { createOptimisticThreadSend } from './primitives/optimistic-send';
 import { createThreadActionAdapter } from './thread-action-adapter';
-import { useThreadMailboxEmail } from './thread-mailbox-adapter';
 import {
   EmailThreadSurface,
   type EmailThreadSurfaceProps,
@@ -70,7 +70,7 @@ export function EmailThread(props: EmailThreadProps) {
     threadTransport: props.threadTransport,
   });
   const source = createOptimisticThreadSend(props.source, compose);
-  const viewerEmail = useThreadMailboxEmail(() => source.thread()?.link_id);
+  const viewerEmail = useInboxEmail(() => source.thread()?.link_id);
   const threadContext: EmailThreadContext = {
     source,
     viewerEmail,

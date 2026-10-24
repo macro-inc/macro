@@ -1,4 +1,5 @@
 import { fireAndForget } from '@core/util/fireAndForget';
+import { useInboxEmail } from '@queries/email/inbox-email';
 import { useNonPrimaryEmailLinkIdHeader } from '@queries/email/link';
 import {
   blockSenderWithToast,
@@ -10,7 +11,6 @@ import type { EmailThreadCommands } from './context/email-thread-context';
 import type { EmailThread } from './core/email-thread';
 import { selectThreadSender } from './core/thread-messages';
 import { createThreadCompletionAdapter } from './thread-completion-adapter';
-import { useThreadMailboxEmail } from './thread-mailbox-adapter';
 import { createThreadReadAdapter } from './thread-read-adapter';
 
 export function createThreadActionAdapter(
@@ -23,7 +23,7 @@ export function createThreadActionAdapter(
     toHeaderLinkId
   );
   const read = createThreadReadAdapter(threadId, threadSource, toHeaderLinkId);
-  const currentUserEmail = useThreadMailboxEmail(() => threadSource()?.link_id);
+  const currentUserEmail = useInboxEmail(() => threadSource()?.link_id);
 
   const getSenderEmail = (): string | undefined => {
     const thread = threadSource();
