@@ -249,6 +249,7 @@ deny = [
     "tracing-tree",
     "tracing-web",               # External WASM tracing layer
     "turso_core",                # External Turso crate requires tracing-subscriber directly
+    "whatsmeow",                 # Span hierarchy and JID-redaction tests only
     "worker-rs-otel",             # Cloudflare/WASM OpenTelemetry integration
     "workspace-hack",             # cargo-hakari generated crate
   ], reason = "Use macro_entrypoint for tracing setup in workspace crates" },
