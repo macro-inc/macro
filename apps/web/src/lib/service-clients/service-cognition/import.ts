@@ -40,18 +40,9 @@ function importFetch<T extends ObjectLike = never>(
   return fetchWithToken<T>(`${dcsHost}${url}`, init);
 }
 
-export type ImportSource = 'linear' | 'notion' | 'slack';
+import type { ImportKind, ImportSource } from './generated/schemas';
 
-/** What an imported item is in its source system. */
-export type ImportKind =
-  | 'issue'
-  | 'project'
-  | 'document'
-  | 'page'
-  | 'database'
-  | 'data_source'
-  | 'row'
-  | 'channel';
+export type { ImportKind, ImportSource } from './generated/schemas';
 
 export type ImportEntityStatus =
   | 'staged'
@@ -147,6 +138,20 @@ export type RunImportOutcome = {
 };
 
 export const importClient = {
+  /** Report on the selected reviewed workspace source. */
+  async getWorkspaceReport(source: 'notion' | 'linear' | 'jira') {
+    return await importFetch<NotionImportReport>(
+      `/import/workspaces/${source}`,
+      { method: 'GET' }
+    );
+  },
+  /** Stop this source only, preserving completed entities. */
+  async cancelWorkspace(source: 'notion' | 'linear' | 'jira') {
+    return await importFetch<NotionImportReport>(
+      `/import/workspaces/${source}/cancel`,
+      { method: 'POST' }
+    );
+  },
   /** Discovery runs plus visible ledger rows for the authenticated user. */
   async getState() {
     return await importFetch<ImportState>('/import/state', { method: 'GET' });

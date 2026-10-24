@@ -174,6 +174,36 @@ const TABLE: Uuid = Uuid::from_u128(501);
 const TITLE_COLUMN: Uuid = Uuid::from_u128(502);
 
 impl WorkspaceWriter for FakeWriter {
+    async fn create_tracker_project(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: Uuid,
+        _: &str,
+        _: &str,
+        _: bool,
+    ) -> anyhow::Result<Uuid> {
+        unreachable!("Notion-only test writer")
+    }
+    async fn create_tracker_task(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: Uuid,
+        _: &str,
+        _: &str,
+        _: &ImportedTaskProperties,
+        _: bool,
+    ) -> anyhow::Result<String> {
+        unreachable!("Notion-only test writer")
+    }
+    async fn link_tracker_task(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: Uuid,
+        _: &crate::domain::ports::TrackerTaskRelations,
+    ) -> anyhow::Result<()> {
+        unreachable!("Notion-only test writer")
+    }
+
     async fn create_folder(
         &self,
         _user: &MacroUserIdStr<'static>,

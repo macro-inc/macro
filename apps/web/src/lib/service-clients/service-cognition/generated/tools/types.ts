@@ -959,7 +959,7 @@ export type Code =
 /**
  * External systems items can be imported from.
  */
-export type ImportSource = 'linear' | 'notion' | 'slack';
+export type ImportSource = 'linear' | 'jira' | 'notion' | 'slack';
 /**
  * Status values accepted by [`CreateImportEntity`].
  */
@@ -3628,6 +3628,9 @@ export type ImportKind =
   | 'database'
   | 'data_source'
   | 'row'
+  | 'jira_issue'
+  | 'jira_project'
+  | 'jira_epic'
   | 'channel';
 /**
  * Provider selected from the persisted calendar account and email binding.
@@ -10773,31 +10776,22 @@ export interface ToolAddedOptions {
   labels: string[];
 }
 /**
- * Import the user's Notion workspace (or part of it) into Macro: pages become documents in folders mirroring Notion's page tree, databases become Macro databases with their rows and relations, and task-tracker databases become Macro tasks. `plan` reads the workspace through the user's Notion connection, decides per page and database what to do (and, with `sharing` "ai", who sees it), links anything a teammate already imported and shared, and stages a plan without writing anything. Who sees the import: unless the user already said, call `plan` without `sharing` first. A user who is not on a team gets a personal import straight away; tell them so and do not offer team sharing. For a user on a team it answers that `sharing` is required: then ask them in one short question with three options (shared with their team, only them, or let AI decide per page), do not guess, and plan again with their answer. `plan` answers within seconds while planning goes on in the background: present the plan right away with PresentReview (kind "import", drafts [{"source":"notion"}]). The review fills in as Notion is read and each object is decided, and the user approves it there once it is ready; do not wait for planning or check `status` in a loop. Approving that review writes the plan; never import plan items with other tools. End your message after presenting it by asking "Should I kick it off?"; if the user says yes, approve it yourself with DecideReview, submitting the reviewId PresentReview returned. `status` reports progress; `cancel` stops planning or importing. Use this for anything bigger than a single page instead of ImportNotionPage.
+ * Import Jira Cloud into Macro: issues become tasks, and projects and epics become Macro projects. Plan reads all sites visible through the user's connected Jira account; no source writes are possible. First plan without sharing unless the user already chose. If sharing is required, ask team, personal, or AI; users without a team get a personal import. Present the plan immediately with PresentReview kind import, drafts [{source: jira}], even while it is running. Do not poll status or recreate plan items with other tools. Nothing is written until approval. Ask Should I kick it off? If the user says yes, approve it with DecideReview (a submit decision) using the review id. Status reports progress; cancel stops this import and keeps completed copies.
  */
-export interface ImportFromNotion {
+export interface ImportFromJira {
   action: NotionImportAction;
   /**
-   * For `plan`: Notion page or database URLs (or ids) to import, each
-   * with everything under it. Leave empty to plan everything the
-   * connection can see.
-   */
-  roots?: string[];
-  /**
-   * For `plan`: who sees what the import writes, as the user answered
-   * when asked: `team` shares everything with their team, `personal`
-   * keeps everything visible only to them, `ai` lets the decision model
-   * choose per page. Leave it out for a user who is not on a team.
+   * The user's visibility choice: team, personal or AI. Ask if required.
    */
   sharing?: NotionSharing | null;
 }
 /**
- * The tool's answer.
+ * Where a reviewed tracker import stands and what the agent should do next.
  */
-export interface ImportFromNotionResponse {
+export interface TrackerImportResponse {
   report: NotionImportReport;
   /**
-   * What happened and what to do next.
+   * Guidance on presenting or approving the current plan.
    */
   message: string;
 }
@@ -10805,6 +10799,18 @@ export interface ImportFromNotionResponse {
  * Where a Notion workspace import stands.
  */
 export interface NotionImportReport {
+  /**
+   * Provider items skipped because they were unreadable, or optional features unavailable.
+   */
+  warnings?: string[];
+  /**
+   * Tracker issues in the plan.
+   */
+  issues?: number;
+  /**
+   * Tracker groups written as Macro projects.
+   */
+  projects?: number;
   /**
    * The run's state: `running` while planning, `ready` once a plan is
    * staged, `importing` while writing, `completed`, `failed`, or
@@ -10959,6 +10965,45 @@ export interface NotionReportItem {
    * Why it is called out: the decision model's reason, or the failure.
    */
   reason?: string | null;
+}
+/**
+ * Import a Linear workspace into Macro: issues become tasks, and teams, projects and initiatives become Macro projects. Plan reads only through the user's connected Linear account; no source writes are possible. First plan without sharing unless the user already chose. If sharing is required, ask team, personal, or AI; users without a team get a personal import. Present the plan immediately with PresentReview kind import, drafts [{source: linear}], even while it is running. Do not poll status or recreate plan items with other tools. Nothing is written until approval. Ask Should I kick it off? If the user says yes, approve it with DecideReview (a submit decision) using the review id. Status reports progress; cancel stops this import and keeps completed copies.
+ */
+export interface ImportFromLinear {
+  action: NotionImportAction;
+  /**
+   * The user's visibility choice: team, personal or AI. Ask if required.
+   */
+  sharing?: NotionSharing | null;
+}
+/**
+ * Import the user's Notion workspace (or part of it) into Macro: pages become documents in folders mirroring Notion's page tree, databases become Macro databases with their rows and relations, and task-tracker databases become Macro tasks. `plan` reads the workspace through the user's Notion connection, decides per page and database what to do (and, with `sharing` "ai", who sees it), links anything a teammate already imported and shared, and stages a plan without writing anything. Who sees the import: unless the user already said, call `plan` without `sharing` first. A user who is not on a team gets a personal import straight away; tell them so and do not offer team sharing. For a user on a team it answers that `sharing` is required: then ask them in one short question with three options (shared with their team, only them, or let AI decide per page), do not guess, and plan again with their answer. `plan` answers within seconds while planning goes on in the background: present the plan right away with PresentReview (kind "import", drafts [{"source":"notion"}]). The review fills in as Notion is read and each object is decided, and the user approves it there once it is ready; do not wait for planning or check `status` in a loop. Approving that review writes the plan; never import plan items with other tools. End your message after presenting it by asking "Should I kick it off?"; if the user says yes, approve it yourself with DecideReview, submitting the reviewId PresentReview returned. `status` reports progress; `cancel` stops planning or importing. Use this for anything bigger than a single page instead of ImportNotionPage.
+ */
+export interface ImportFromNotion {
+  action: NotionImportAction;
+  /**
+   * For `plan`: Notion page or database URLs (or ids) to import, each
+   * with everything under it. Leave empty to plan everything the
+   * connection can see.
+   */
+  roots?: string[];
+  /**
+   * For `plan`: who sees what the import writes, as the user answered
+   * when asked: `team` shares everything with their team, `personal`
+   * keeps everything visible only to them, `ai` lets the decision model
+   * choose per page. Leave it out for a user who is not on a team.
+   */
+  sharing?: NotionSharing | null;
+}
+/**
+ * The tool's answer.
+ */
+export interface ImportFromNotionResponse {
+  report: NotionImportReport;
+  /**
+   * What happened and what to do next.
+   */
+  message: string;
 }
 /**
  * Import one specific Notion page through Macro's canonical Notion importer. Use this when the user explicitly asks to import a page URL or id. The tool performs deduplication, fetches through the user's connected Notion MCP, normalizes the page, creates the Macro markdown document, and returns its entity id. Do not fetch and recreate the page manually with generic document tools. Notion databases and database-first pages are intentionally not imported.

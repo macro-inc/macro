@@ -26,6 +26,7 @@ import {
   useMutation,
   useQuery,
 } from '@tanstack/solid-query';
+import type { Accessor } from 'solid-js';
 import { importKeys } from './import/keys';
 
 export type {
@@ -170,6 +171,46 @@ export function useCancelNotionImportMutation() {
     mutationFn: () => throwOnErr(() => importClient.cancelNotion()),
     onSuccess: (report: NotionImportReport) => {
       queryClient.setQueryData(importKeys.notion.queryKey, report);
+      fireAndForget(invalidateImportState(), 'import-state');
+    },
+  }));
+}
+
+/** A reviewed workspace report, isolated by source and refreshed on pushes. */
+export function useWorkspaceImportReportQuery(
+  source: Accessor<'notion' | 'linear' | 'jira'>
+) {
+  createConnectionWebsocketEffect((message) => {
+    if (message.type !== IMPORT_UPDATED_MESSAGE_TYPE) return;
+    fireAndForget(
+      queryClient.invalidateQueries({
+        queryKey: importKeys.workspace(source()).queryKey,
+      }),
+      'workspace-import'
+    );
+  });
+  return useQuery(() => ({
+    queryKey: importKeys.workspace(source()).queryKey,
+    queryFn: () => throwOnErr(() => importClient.getWorkspaceReport(source())),
+    refetchInterval: (query) =>
+      notionImportInFlight(query.state.data) ? 2_000 : false,
+  }));
+}
+
+/** Cancel only the workspace source displayed by this review. */
+export function useCancelWorkspaceImportMutation(
+  source: Accessor<'notion' | 'linear' | 'jira'>
+) {
+  return useMutation(() => ({
+    mutationFn: async () => {
+      const selected = source();
+      const report = await throwOnErr(() =>
+        importClient.cancelWorkspace(selected)
+      );
+      return { source: selected, report };
+    },
+    onSuccess: ({ source, report }) => {
+      queryClient.setQueryData(importKeys.workspace(source).queryKey, report);
       fireAndForget(invalidateImportState(), 'import-state');
     },
   }));

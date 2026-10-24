@@ -7,6 +7,7 @@ import Plug from '@phosphor/plug.svg';
 import type {
   ImportPlan,
   ImportSettlement,
+  ImportWorkspace,
   ReviewOutcome,
   SessionNotification,
 } from '@service-agent-fold/generated/types';
@@ -53,21 +54,44 @@ function countLabel(count: number, one: string, many: string) {
   return `${count} ${count === 1 ? one : many}`;
 }
 
+/** Events stored before Linear and Jira imports carry no source: Notion's. */
+function importLabel(source: ImportWorkspace = 'notion') {
+  return match(source)
+    .with('notion', () => 'Import')
+    .with('linear', () => 'Linear import')
+    .with('jira', () => 'Jira import')
+    .exhaustive();
+}
+
 function importPlanSummary(plan: ImportPlan) {
-  let summary = `Import plan ready · ${plan.copy} to copy`;
-  if (plan.taskLists)
-    summary += ` · ${countLabel(plan.taskLists, 'task list', 'task lists')}`;
+  // Tracker plans copy projects and turn issues into tasks.
+  const counts = match(plan.source ?? 'notion')
+    .with('notion', () => {
+      let notion = `${plan.copy} to copy`;
+      if (plan.taskLists)
+        notion += ` · ${countLabel(plan.taskLists, 'task list', 'task lists')}`;
+      return notion;
+    })
+    .with('linear', 'jira', () =>
+      [
+        countLabel(plan.taskLists, 'task', 'tasks'),
+        ...(plan.copy ? [countLabel(plan.copy, 'project', 'projects')] : []),
+      ].join(' · ')
+    )
+    .exhaustive();
+  let summary = `${importLabel(plan.source)} plan ready · ${counts}`;
   if (plan.byHand) summary += ` · ${plan.byHand} by hand`;
   return { summary, failed: false };
 }
 
 /** Counts only: an import report's error text can quote source content. */
 function importSettlementSummary(report: ImportSettlement) {
-  const heading = match(report.outcome)
-    .with('completed', () => 'Import finished')
-    .with('failed', () => 'Import failed')
-    .with('cancelled', () => 'Import cancelled')
+  const ending = match(report.outcome)
+    .with('completed', () => 'finished')
+    .with('failed', () => 'failed')
+    .with('cancelled', () => 'cancelled')
     .exhaustive();
+  const heading = `${importLabel(report.source)} ${ending}`;
   let summary = `${heading} · ${report.imported} of ${report.planned} imported`;
   if (report.failures.length) summary += ` · ${report.failures.length} failed`;
   if (report.handItems.length)

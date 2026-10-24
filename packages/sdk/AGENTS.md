@@ -84,3 +84,6 @@ the existing gateway prefixes.
   draft read and explicit reapproval; never refresh the generation to replay an
   old edit.
 - SQL result schemas are dynamic typed-cell unions; inspect `truncatedTables` before interpreting aggregates. Queries can write and are never retried automatically.
+
+- Workspace-import report/cancel endpoints remain app-only review plumbing,
+  explicitly classified alongside the existing Notion routes in coverage skips.

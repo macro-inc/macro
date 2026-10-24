@@ -560,6 +560,8 @@ dependencies = [
  "http 1.4.0",
  "http-body-util",
  "import",
+ "import_jira",
+ "import_linear",
  "import_notion",
  "initiative",
  "jev",
@@ -1128,6 +1130,8 @@ dependencies = [
  "github_pull_requests",
  "image_generation",
  "import",
+ "import_jira",
+ "import_linear",
  "import_notion",
  "initiative",
  "initiative_description",
@@ -10424,6 +10428,7 @@ dependencies = [
  "dateparser",
  "futures",
  "import_notion",
+ "import_tracker",
  "macro_authorization",
  "macro_db_migrator",
  "macro_user_id",
@@ -10451,6 +10456,41 @@ dependencies = [
 ]
 
 [[package]]
+name = "import_jira"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "http 1.4.0",
+ "import_tracker",
+ "macro_user_id",
+ "pipedream_mcp",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
+name = "import_linear"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "http 1.4.0",
+ "import_tracker",
+ "macro_user_id",
+ "pipedream_mcp",
+ "serde",
+ "serde_json",
+ "strum 0.27.2",
+ "tokio",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
 name = "import_notion"
 version = "0.1.0"
 dependencies = [
@@ -10463,6 +10503,24 @@ dependencies = [
  "macro_user_id",
  "pipedream_mcp",
  "rand 0.9.4",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
+name = "import_tracker"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "http 1.4.0",
+ "macro_user_id",
+ "pipedream_mcp",
  "rootcause",
  "serde",
  "serde_json",

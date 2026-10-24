@@ -556,11 +556,13 @@ Provider Back returns to the combined integrations overview; navigation
 is local to each mounted Integrations page.
 
 Macro agents and external AI clients using Macro's MCP server can run
-`ImportNotionPage` and the shared import ledger tools against the user's
+`ImportNotionPage`, `ImportFromNotion`, `ImportFromLinear`, `ImportFromJira`
+and the shared import ledger tools against the user's
 connections saved in Macro.
 Verify a Notion import returns a document and a repeated import returns the
-existing document; Linear imports recorded with `CreateImportEntity` should
-appear in `ListImportEntities`. These calls must not report that import tracking
+existing document. For Linear/Jira workspace imports, verify planning writes no
+Macro tasks before approval, source-specific reviews show task/project totals,
+and an approved import preserves task fields, comments, labels and relationships. These calls must not report that import tracking
 is unavailable.
 On hosts without Pipedream credentials, saved Pipedream accounts must not hide
 native Notion, Linear, or Slack connections when selecting import tools.

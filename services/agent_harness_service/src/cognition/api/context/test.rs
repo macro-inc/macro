@@ -610,6 +610,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
                     properties_service.clone(),
                 ),
             team_repository: ai_tools::build_team_repository(pool.clone()),
+            initiative_service: tool_service_context.initiative_tool_context.service.clone(),
             project_service: tool_service_context.project_tool_context.service.clone(),
             databases_service: tool_service_context.databases_tool_context.service.clone(),
             document_service: document_tool_context.service.clone(),

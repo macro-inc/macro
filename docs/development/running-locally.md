@@ -459,6 +459,10 @@ All the `run_local` flags apply to `stack` too. This includes `--instance`, `--n
 
 The app is served at `<proxy>/app/`. The bundle resolves its backend from the origin it is served on. The same stack works on localhost or behind any hostname without a rebuild.
 
+For Pipedream Connect on a machine hostname, include that HTTPS origin in
+`PIPEDREAM_ALLOWED_ORIGINS` through `--env-file`; the headless default names only
+localhost. Reuse that override file on subsequent stack invocations.
+
 ### Init Snapshots
 
 `just run_local` and `stack up` both cache the expensive infrastructure initialization. The first cold run:

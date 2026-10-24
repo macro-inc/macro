@@ -1,3 +1,6 @@
+import IconJira from '@icon/import/jira.svg';
+import IconNotion from '@icon/import/notion.svg';
+import IconLinear from '@icon/mcp-linear.svg';
 import CaretDown from '@phosphor/caret-down.svg';
 import { ActionDialogShell } from '@ui/components/ActionDialogShell';
 import { Button } from '@ui/components/Button';
@@ -7,6 +10,7 @@ import { cn } from '@ui/utils/classname';
 import { createMemo, createSignal, For, type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import {
+  type ImportDraft,
   type ImportedCopy,
   type ImportPlanEntry,
   type ImportPlanNode,
@@ -183,6 +187,7 @@ function AlreadyInMacro(props: {
 }
 
 type ImportPlanCardProps = {
+  source?: ImportDraft['source'];
   title: string;
   summary: string;
   /** e.g. "12 shared with your team · 3 only you". */
@@ -262,6 +267,13 @@ function PlanContents(
   return (
     <>
       <header class="flex min-w-0 flex-col gap-0.5">
+        <span class="text-ink-muted" aria-hidden="true">
+          {match(props.source ?? 'notion')
+            .with('notion', () => <IconNotion class="size-4" />)
+            .with('linear', () => <IconLinear class="size-4" />)
+            .with('jira', () => <IconJira class="size-4" />)
+            .exhaustive()}
+        </span>
         <Show
           when={props.full}
           fallback={
@@ -278,6 +290,13 @@ function PlanContents(
         </Show>
       </header>
       <PlanTotals totals={props.totals} />
+      <Show when={props.progress?.warnings?.length}>
+        <ul aria-label="Import warnings" class="text-xs text-ink-muted">
+          <For each={props.progress?.warnings}>
+            {(warning) => <li>{warning}</li>}
+          </For>
+        </ul>
+      </Show>
       <Show when={props.alert}>
         <div class="flex flex-wrap items-center gap-2">
           <p role="alert" class="text-sm text-failure">
@@ -318,7 +337,7 @@ function PlanContents(
           <Show when={!planning()}>
             <p class="text-xs text-ink-muted">
               {props.alreadyInMacro.length > 0
-                ? 'Everything Notion shared is already in Macro.'
+                ? 'Everything shared by this source is already in Macro.'
                 : 'The plan has no objects to show.'}
             </p>
           </Show>

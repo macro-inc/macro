@@ -57,10 +57,11 @@ Pulumi stacks; they do not host extra agent processes.
 ## Tool contracts
 
 - Internal session tools require explicit `acting_as`, resolved by the shared gate, plus existing owner/edit authorization. SDK executions choose one account for the whole program; review decisions use the saved acting account. Keep their restricted prompt/stop route separate from human approval controls.
-- An import review's draft is `{source, excluded, shared, personal}`: the rows the owner left out and the rows whose sharing they flipped, passed to `start_notion_write` as `NotionWriteChoices`.
-- One `ai_tools::ImportJobs` serves the whole process: session tools, public MCP, and `cognition::build` (the `/import/*` routes and the only stalled-Notion-import sweeper) share it, and `main.rs` hands running imports over on shutdown (`ImportJobs::hand_over`).
+- An import review's draft is `{source, excluded, shared, personal}` (`source` is `notion`, `linear`, or `jira`): the rows the owner left out and the rows whose sharing they flipped, passed to `start_workspace_write` as `NotionWriteChoices`.
+- One `ai_tools::ImportJobs` serves the whole process: session tools, public MCP, and `cognition::build` (the `/import/*` routes and the only stalled workspace-import sweeper, which adopts Notion, Linear and Jira runs) share it, and `main.rs` hands running imports over on shutdown (`ImportJobs::hand_over`).
+- The import service registers read-only Notion, Linear and Jira Pipedream readers wherever it is built (`cognition/server.rs` and `ai_tools::build_context`, which public MCP reuses). Authenticated `/import/workspaces/{source}` report and `/cancel` routes serve the shared review card; `/import/notion` remains for existing clients. Workspace tools stage reviewed plans; they never write upstream.
 - The agent approves a presented review after its account holder says yes in chat by submitting it with `DecideReview`: `Actions::session` reports the turn's prompter from `agent_session.turn_prompter`, and `approvable` refuses an import whose plan is not `ready` for that review.
-- Presenting an import review ties its plan to the review and the session (`attach_notion_review`); the import then produces `import.planned` and `review.settled` for that session itself, in the run's transaction (`crates/import`).
+- Presenting an import review ties its plan to the review and the session (`attach_workspace_review`); the import then produces `import.planned` and `review.settled` for that session itself, in the run's transaction (`crates/import`).
 - The owner connecting an app a session asked for produces an `app.connected` event (`agent_harness::domain::app_connections`).
 
 The composition root wires `PgExternalReplyStore` into the harness and recovers

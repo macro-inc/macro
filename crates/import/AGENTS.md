@@ -3,7 +3,7 @@
 ## What it is
 
 Belongs to AI chat and Settings: the import pipeline tracking external items
-(Linear issues, Notion pages, Slack channels) as they're discovered,
+(Linear and Jira issues, Notion pages, Slack channels) as they're discovered,
 accepted, and copied into Macro entities. Host-agnostic — chat tools,
 Settings → Slack discovery, and the Slack archive import drive the same
 primitives, distinguished only by the `initiator` recorded on each row.
@@ -13,7 +13,8 @@ the external system; an `ImportEntity` here is a ledger row for an item being
 copied in, moving `staged` → `importing` → `imported` (or `discarded`). Rows
 carry their source `kind`, an optional `parent_id` (the row they were imported
 under), and an optional `review_id`; a team keeps one `importing`/`imported`
-row per Notion or Linear object (`import_entity_team_object_key`).
+row per Notion or Linear object (`import_entity_team_object_key`), with a
+separate equivalent Jira index.
 
 Notion workspace imports go through a reviewed plan: `ImportFromNotion`
 (`plan`) reads the workspace over Notion's REST API (`import_notion`, through
@@ -59,6 +60,10 @@ from this import's other databases into it are not linked.
   discovery, staging, and acceptance logic.
 - `src/outbound/mcp_slack_source.rs`: Slack discovery via MCP tool calls, with
   `fixtures/*.json` backing its tests.
+- `src/domain/service/workspace.rs` (+ `run`, `events`, `scan`): shared source-scoped
+  leases, adoption, reviews, notifications and the `Importer` plan/write contract.
+- `src/domain/service/tracker_workspace.rs` (+ `plan`, `values`): Linear/Jira
+  group decisions, frozen source snapshots, task/project writes and relationships.
 - `src/domain/service/notion_workspace.rs` (+ `plan`, `triage`, `sharing`,
   `object`, `write`, `values`, `report`): the Notion workspace import —
   planning, the decision model, who sees what, writing one object (claim,
@@ -79,7 +84,7 @@ from this import's other databases into it are not linked.
 
 - Depends on: `agent_session` (system events for the session presenting a
   review), `ai_toolset`, `ai_usage`, `ai_billing`, `connection_gateway_client`,
-  `mcp_select`, `properties`, `import_notion` (Notion REST), `models_databases`
+  `mcp_select`, `properties`, `import_notion` (Notion REST), `import_tracker` (tracker snapshots), `models_databases`
   (database ops the workspace import writes).
 - Used by: `ai_tools`, `slack_integration`, `services/agent_harness_service`
   (cognition `/import/*` routes, the Notion sweeper, import reviews).
@@ -110,7 +115,7 @@ from this import's other databases into it are not linked.
   (`check_notion_markdown`: tool-result wrappers, database-only pages) stay in
   Rust.
 - Planning and writing run detached on the host's `TaskTracker`
-  (`with_job_shutdown`) and survive their process (`notion_workspace/run.rs`):
+  (`with_job_shutdown`) and survive their process (`workspace/run.rs`):
   the running process holds a lease on the run row (`lease_owner`,
   `lease_expires_at`, renewed by the heartbeat, recording the job: `scope` or
   `review_id`). A cancel from any process flips the run to `dismissed`; on
@@ -147,12 +152,14 @@ from this import's other databases into it are not linked.
   still being written. Left open: a takeover racing the original holder's own
   resume can leave both copies.
 - The agent session presenting a plan's review hears what becomes of it as
-  system events (`notion_workspace/events.rs`), each produced in the
+  system events (`workspace/events.rs`), each produced in the
   transaction that moves the run (`NotionRunRepo::transition_reviewed_run`,
   through `agent_session`'s `NotificationWriter`): `import.planned` once a
   plan presented while planning is `ready`, and `review.settled` with the
   final report (outcome, counts, failures, by-hand items, root folder) once
-  its write ends however it ended, including a resumed write and a stalled
+  its write ends however it ended; both carry the workspace (`source`:
+  Notion, Linear or Jira, Notion when absent) so tracker counts read as
+  projects and tasks, including a resumed write and a stalled
   one given up on. A cancel from another process keeps the run `dismissed`,
   so the write's end reports it cancelled. `attach_review` records the
   session (`import_run.review_session_id`); hosts that run Notion imports
@@ -166,10 +173,38 @@ from this import's other databases into it are not linked.
   and a task list's `taskFields` for the review card.
 - While planning, the inventory's counts go over a `watch` channel to the run
   row (`scanned_pages`/`scanned_data_sources`, at most every 2s and once at the
-  end, `notion_workspace/scan.rs`); `list_runs` and the report show them only
+  end, `workspace/scan.rs`); `list_runs` and the report show them only
   while the run is `running`.
 
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`
 - Skill: `cloud-storage-hexagonal-architecture`
+
+## Issue tracker workspace imports
+
+`ImportFromLinear` and `ImportFromJira` use the same reviewed lifecycle as Notion.
+Hosts register their read-only `import_linear`/`import_jira` connections with
+`with_tracker_connections`. `WorkspaceImporter` scopes every operation to the
+selected source; `/import/workspaces/{source}` and its `/cancel` route back the
+review card. The legacy Notion method and repository names remain for callers.
+
+Plans retain complete issue/group snapshots. The decision model triages groups;
+issues inherit copy/skip/hand and sharing. Issues become tasks through ordinary
+markdown conversion, comments append to the body, labels become personal tags,
+and group projects are initiatives. Project and Parent Task properties link only
+targets available in Macro. Assignees match team emails. Source values without a
+Macro property equivalent stay in the body.
+
+Tasks and projects use UUIDv5 identities derived from ledger rows. Tasks record a
+written marker before relationship enrichment and stay private until it
+succeeds; only then are they shared with the team and marked imported. Failures remain staged and appear in the report; replanning preserves
+rows with written markers, so retrying a partial write reuses its identity.
+Teammate copies are linked without editing them; only the holder keeps `team_id`.
+A selected parent/project that failed or is still waiting is reported for retry.
+Optional task properties and tags follow the existing best-effort enrichment
+contract; original source values remain in the task body.
+
+Jira ids include the cloud id. Epic groups have a separate identity from their
+issue task. Tracker imports never use the generic accept/finalize paths; those
+paths reject workspace-plan rows so approval cannot be bypassed.

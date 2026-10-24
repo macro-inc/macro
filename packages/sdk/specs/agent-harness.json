@@ -3972,7 +3972,7 @@
           "drafts": {
             "type": "array",
             "items": {},
-            "description": "One to one hundred independent drafts. Email: {subject, body: Markdown,\nto: [{email, name?}], cc?: [{email, name?}], bcc?: [{email, name?}],\nreplyingToId?, attachments?: [{documentId}]}. Calendar: {title,\ntime: {kind: \"timed\", startsAt: ISO datetime, endsAt: ISO datetime,\ntimeZone?: IANA zone} or {kind: \"allDay\", startDate: ISO date,\nendDate: exclusive ISO date}, description?, location?, attendees?:\n[{email, isOptional?}]}. Import: exactly one draft {source: \"notion\"},\npresenting the plan ImportFromNotion staged.\nCreating any review only presents these drafts; the user acts separately."
+            "description": "One to one hundred independent drafts. Email: {subject, body: Markdown,\nto: [{email, name?}], cc?: [{email, name?}], bcc?: [{email, name?}],\nreplyingToId?, attachments?: [{documentId}]}. Calendar: {title,\ntime: {kind: \"timed\", startsAt: ISO datetime, endsAt: ISO datetime,\ntimeZone?: IANA zone} or {kind: \"allDay\", startDate: ISO date,\nendDate: exclusive ISO date}, description?, location?, attendees?:\n[{email, isOptional?}]}. Import: exactly one draft {source: \"notion\" | \"linear\" | \"jira\"},\npresenting the plan ImportFromNotion, ImportFromLinear or ImportFromJira staged.\nCreating any review only presents these drafts; the user acts separately."
           },
           "executionId": {
             "oneOf": [

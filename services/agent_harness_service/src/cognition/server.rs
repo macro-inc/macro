@@ -732,6 +732,7 @@ pub async fn build(
         task_properties: task_properties_for_import,
         document_properties: document_properties_for_import,
         team_repository: ai_tools::build_team_repository(db.clone()),
+        initiative_service: initiative_tool_context.service.clone(),
         project_service: project_tool_context.service.clone(),
         databases_service: databases_tool_context.service.clone(),
         document_service: document_tool_context.service.clone(),
@@ -746,6 +747,20 @@ pub async fn build(
         .with_slack_source(Arc::new(
             import::outbound::mcp_slack_source::McpSlackSource::new(mcp_selector.clone()),
         ))
+        .with_tracker_connections(
+            Arc::new(
+                import_linear::outbound::client::PipedreamLinearConnections::new(
+                    Arc::new(pipedream_repo.clone()),
+                    pipedream_client.clone(),
+                ),
+            ),
+            Arc::new(
+                import_jira::outbound::client::PipedreamJiraConnections::new(
+                    Arc::new(pipedream_repo.clone()),
+                    pipedream_client.clone(),
+                ),
+            ),
+        )
         .with_notion_connections(Arc::new(
             import_notion::outbound::pipedream::PipedreamNotionConnections::new(
                 Arc::new(pipedream_repo.clone()),

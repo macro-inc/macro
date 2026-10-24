@@ -17,13 +17,14 @@ use super::write::{FolderLayout, WriteItem};
 mod test;
 
 /// Why a user without a team keeps everything.
-pub(super) const NO_TEAM: &str = "You're not on a team, so this stays visible only to you.";
+pub(in crate::domain::service) const NO_TEAM: &str =
+    "You're not on a team, so this stays visible only to you.";
 /// Why an object is not shared when the decision model gave no answer.
 const NO_ANSWER: &str = "Kept visible only to you: the decision model gave no answer.";
 
 /// What the plan says about one object's sharing.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) struct PlanSharing {
+pub(in crate::domain::service) struct PlanSharing {
     /// Shared with the team.
     pub shared: bool,
     /// Why, when there is something to say.
@@ -33,7 +34,11 @@ pub(super) struct PlanSharing {
 }
 
 /// The plan's sharing for one object under the user's choice.
-pub(super) fn plan_sharing(sharing: NotionSharing, verdict: &Verdict, team: bool) -> PlanSharing {
+pub(in crate::domain::service) fn plan_sharing(
+    sharing: NotionSharing,
+    verdict: &Verdict,
+    team: bool,
+) -> PlanSharing {
     let personal = |reason: &str| PlanSharing {
         shared: false,
         reason: Some(reason.to_string()),
@@ -60,7 +65,7 @@ pub(super) fn plan_sharing(sharing: NotionSharing, verdict: &Verdict, team: bool
 /// The owner's changes to the plan's sharing that the import accepts: rows
 /// that can be shared, set to a value other than the plan's. Returns the
 /// rows to share and the rows to keep.
-pub(super) fn sharing_changes(
+pub(in crate::domain::service) fn sharing_changes(
     items: &[WriteItem],
     shared: &[Uuid],
     personal: &[Uuid],

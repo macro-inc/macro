@@ -191,6 +191,8 @@
   "cognition.runImportHandler": "Run Import",
   "cognition.discoverHandler": "Discover",
   "cognition.getStateHandler": "Get State",
+  "cognition.workspaceReportHandler": "Workspace Report",
+  "cognition.cancelWorkspaceHandler": "Cancel Workspace",
   "cognition.deleteMcpServer": "Delete Mcp Server",
   "cognition.listMcpServers": "List Mcp Servers",
   "cognition.addMcpServer": "Add Mcp Server",

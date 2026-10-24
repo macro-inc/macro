@@ -13,7 +13,7 @@ import {
   connectPipedreamApp,
   usePipedreamConnectedSlugs,
 } from '@queries/pipedream-connectors';
-import { createMemo, type JSX } from 'solid-js';
+import { type Accessor, createMemo, type JSX } from 'solid-js';
 import { ConnectorImportProvider } from './context/connector-import-context';
 import type {
   ConnectOutcome,
@@ -25,7 +25,9 @@ import {
   type ImportAlternative,
 } from './views/import-dialog';
 
-function useProductionContext(): ConnectorImportContext {
+function useProductionContext(
+  config: Accessor<ImportCategoryConfig>
+): ConnectorImportContext {
   const startMcpAuth = useStartMcpAuthMutation();
 
   // Opens the OAuth tab synchronously, inside the click, so it isn't blocked.
@@ -69,7 +71,12 @@ function useProductionContext(): ConnectorImportContext {
                 server.authenticated && server.enabled
                   ? nativeToolSlug(server)
                   : undefined;
-              return slug ? [slug] : [];
+              return slug &&
+                config().providers.some(
+                  (provider) => provider.appSlug === slug && provider.mcpUrl
+                )
+                ? [slug]
+                : [];
             })
           : []
       );
@@ -107,7 +114,7 @@ export function ConnectorImportDialogHost(props: {
   alternatives?: readonly ImportAlternative[];
 }): JSX.Element {
   return (
-    <ConnectorImportProvider context={useProductionContext()}>
+    <ConnectorImportProvider context={useProductionContext(() => props.config)}>
       <ConnectorImportDialog
         config={props.config}
         open={props.open}
