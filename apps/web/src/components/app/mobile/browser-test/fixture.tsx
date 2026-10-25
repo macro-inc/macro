@@ -2,6 +2,7 @@ import '@fontsource-variable/inter';
 import '../../../../index.css';
 import { MobileSettingsSheet } from '@app/features/settings/MobileSettingsSheet';
 import { SettingsPage, SettingsRow } from '@app/features/settings/primitives';
+import { ShareDrawer } from '@core/component/TopBar/ShareDrawer';
 import type { SettingsTab } from '@core/constant/SettingsState';
 import { SETTINGS_TAB_GROUPS } from '@core/constant/settingsTabsConfig';
 import { EmailProviderDialog } from '@core/email-link/ProviderDialog';
@@ -14,7 +15,7 @@ import {
   openDialog,
   useImperativeDialog,
 } from '@ui';
-import { createSignal, getOwner, Show } from 'solid-js';
+import { createSignal, getOwner, Match, Show, Switch } from 'solid-js';
 import { render } from 'solid-js/web';
 import { macroLightTheme } from '../../../../features/theme/themes/macro-light';
 import { MobileDrawer } from '../MobileDrawer';
@@ -148,6 +149,18 @@ function EventScenario() {
   );
 }
 
+/** The Share drawer closes on pointerdown, so its whole tap follows the unmount. */
+function ShareScenario() {
+  const [open, setOpen] = createSignal(true);
+  return (
+    <Show when={open()}>
+      <ShareDrawer open onOpenChange={setOpen}>
+        <div class="h-40 px-3">To</div>
+      </ShareDrawer>
+    </Show>
+  );
+}
+
 function Fixture() {
   const scenario = new URLSearchParams(location.search).get('scenario');
   return (
@@ -158,9 +171,14 @@ function Fixture() {
       <output aria-label="Pressed" class="fixed top-2 left-4 text-xs">
         {pressed().join(', ')}
       </output>
-      <Show when={scenario === 'settings'} fallback={<EventScenario />}>
-        <SettingsScenario />
-      </Show>
+      <Switch fallback={<EventScenario />}>
+        <Match when={scenario === 'settings'}>
+          <SettingsScenario />
+        </Match>
+        <Match when={scenario === 'share'}>
+          <ShareScenario />
+        </Match>
+      </Switch>
       <ImperativeDialogHost />
     </>
   );

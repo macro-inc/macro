@@ -70,22 +70,27 @@ for (const [opener, sheetName] of [
   });
 }
 
-test('a tap on the backdrop of event details closes it without pressing the page', async ({
-  page,
-}) => {
-  await page.goto('/?scenario=event');
-  const details = page.getByRole('dialog', { name: 'Weekly product sync' });
-  await settled(details);
-  const pageControl = page.getByRole('button', {
-    name: 'Page control',
-    includeHidden: true,
+for (const [scenario, sheetName] of [
+  ['event', 'Weekly product sync'],
+  ['share', 'Share'],
+]) {
+  test(`a tap on the backdrop of ${sheetName} closes it without pressing the page`, async ({
+    page,
+  }) => {
+    await page.goto(`/?scenario=${scenario}`);
+    const sheet = page.getByRole('dialog', { name: sheetName });
+    await settled(sheet);
+    const pageControl = page.getByRole('button', {
+      name: 'Page control',
+      includeHidden: true,
+    });
+
+    await tap(page, pageControl);
+
+    await expect(sheet).toHaveCount(0);
+    await expect(pressed(page)).toHaveText('');
+
+    await tap(page, pageControl);
+    await expect(pressed(page)).toHaveText('Page control');
   });
-
-  await tap(page, pageControl);
-
-  await expect(details).toHaveCount(0);
-  await expect(pressed(page)).toHaveText('');
-
-  await tap(page, pageControl);
-  await expect(pressed(page)).toHaveText('Page control');
-});
+}

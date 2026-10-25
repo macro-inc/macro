@@ -1,5 +1,4 @@
 import { useIsInsideHoverCard } from '@core/component/HoverCard';
-import { blockNextClick } from '@core/util/blockNextClick';
 import { cn, Dropdown } from '@ui';
 import { type JSX, onCleanup, onMount, useContext } from 'solid-js';
 import { PropertyRootContext } from '../../core/context';
@@ -69,7 +68,24 @@ export function EditorPopover(props: EditorPopoverProps) {
       close();
       return;
     }
-    blockNextClick();
+    // Swallow the next global click. Or reset on next pointer down.
+    const swallow = (clickEvent: PointerEvent) => {
+      clickEvent.stopPropagation();
+      clickEvent.preventDefault();
+    };
+    window.addEventListener('click', swallow, {
+      capture: true,
+      once: true,
+    });
+    window.addEventListener(
+      'pointerdown',
+      () => {
+        window.removeEventListener('click', swallow, {
+          capture: true,
+        });
+      },
+      { capture: true, once: true }
+    );
     close();
   };
 

@@ -1,6 +1,5 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
-import { blockNextClick } from '@core/util/blockNextClick';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Popover } from '@kobalte/core/popover';
 import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
@@ -357,7 +356,23 @@ function TagPickerBody(props: {
 
     // Kobalte closes popovers on an outside interaction but leaves the
     // following click to bubble through to the row beneath it.
-    blockNextClick();
+    const swallow = (clickEvent: PointerEvent) => {
+      clickEvent.stopPropagation();
+      clickEvent.preventDefault();
+    };
+    window.addEventListener('click', swallow, {
+      capture: true,
+      once: true,
+    });
+    window.addEventListener(
+      'pointerdown',
+      () => {
+        window.removeEventListener('click', swallow, {
+          capture: true,
+        });
+      },
+      { capture: true, once: true }
+    );
   };
 
   const initialAppliedTags = createMemo(() => props.docTags.appliedTags());
