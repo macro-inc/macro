@@ -8,7 +8,7 @@ import {
   settledSendAttempt,
   watchEmailSends,
 } from '@queries/email/send-queue';
-import { recordEmailSend } from '@queries/email/send-telemetry';
+import { recordEmailSend, traceEmailSend } from '@queries/email/send-telemetry';
 import type { EmailSendProgress } from '../context/compose-capabilities';
 
 function emailSendProgress(intent: EmailSendIntent): EmailSendProgress {
@@ -32,10 +32,24 @@ function emailSendProgress(intent: EmailSendIntent): EmailSendProgress {
 
 /** The outbox drops a send only once it is sent, or when it restores a cancelled one. */
 async function departedSendProgress(
-  seen: EmailSendIntent | undefined
+  seen: EmailSendIntent | undefined,
+  started: number
 ): Promise<EmailSendProgress> {
   if (!seen) return { state: 'untracked' };
-  const attempt = await fetchEmailSendStatus(seen);
+  const attempt = await traceEmailSend(
+    'status',
+    seen.metadata.payload.input.attempt,
+    () => fetchEmailSendStatus(seen)
+  );
+  recordEmailSend(
+    {
+      operation: 'status',
+      outcome: 'observed',
+      status: attempt?.status,
+      durationMs: performance.now() - started,
+    },
+    seen
+  );
   if (attempt?.status === 'SENT') return { state: 'sent' };
   // A restored send was cancelled, or never reached the server.
   if (!attempt || attempt.status === 'CANCELLED') return { state: 'cancelled' };
@@ -67,7 +81,7 @@ export function watchEmailSendProgress(
       stop();
       let progress: EmailSendProgress = { state: 'untracked' };
       try {
-        progress = await departedSendProgress(seen);
+        progress = await departedSendProgress(seen, started);
       } finally {
         if (!disposed) changed(progress);
       }
