@@ -59,7 +59,9 @@ pub struct SendDomainNoticeResponse {
 }
 
 /// Routes for the domain notice, to merge at the service root.
-pub fn domain_notice_router<D, Eas, Auth, S>(state: DomainNoticeRouterState<D, Eas, Auth>) -> Router<S>
+pub fn domain_notice_router<D, Eas, Auth, S>(
+    state: DomainNoticeRouterState<D, Eas, Auth>,
+) -> Router<S>
 where
     D: DomainNoticeService,
     Eas: EntityAccessService,
@@ -88,7 +90,11 @@ where
     ),
 )]
 #[tracing::instrument(skip_all, err)]
-pub async fn handler<D: DomainNoticeService, Eas: EntityAccessService, Auth: MacroAuthorizationService>(
+pub async fn handler<
+    D: DomainNoticeService,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
     access: MacroUserTeamExtractorV2<AdminTeamRole, Eas, Auth>,
     State(state): State<DomainNoticeRouterState<D, Eas, Auth>>,
 ) -> Result<Json<SendDomainNoticeResponse>, DomainNoticeHttpError> {

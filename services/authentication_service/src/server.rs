@@ -637,22 +637,23 @@ pub async fn run() -> anyhow::Result<()> {
     .with_open_seat_release((*ai_billing_service).clone())
     .with_owned_entity_cleanup(team_owned_entity_cleanup);
     let teams_service = Arc::new(teams_service_impl);
-    let domain_notice_service = Arc::new(teams::domain::domain_notice::DomainNoticeServiceImpl::new(
-        teams::outbound::colleague_directory::ContactsColleagueDirectory::new(
-            contacts::outbound::repository::DbContactsRepository::new(db.clone()),
-        ),
-        teams::domain::join_announcement::JoinAnnouncementServiceImpl::new(
-            teams::outbound::join_announcement_repo::JoinAnnouncementRepositoryImpl::new(
-                db.clone(),
+    let domain_notice_service =
+        Arc::new(teams::domain::domain_notice::DomainNoticeServiceImpl::new(
+            teams::outbound::colleague_directory::ContactsColleagueDirectory::new(
+                contacts::outbound::repository::DbContactsRepository::new(db.clone()),
             ),
-            SqsNotificationIngress {
-                queue: SqsQueue::new(
-                    aws_sdk_sqs::Client::new(&aws_config),
-                    notification_queue.to_string(),
+            teams::domain::join_announcement::JoinAnnouncementServiceImpl::new(
+                teams::outbound::join_announcement_repo::JoinAnnouncementRepositoryImpl::new(
+                    db.clone(),
                 ),
-            },
-        ),
-    ));
+                SqsNotificationIngress {
+                    queue: SqsQueue::new(
+                        aws_sdk_sqs::Client::new(&aws_config),
+                        notification_queue.to_string(),
+                    ),
+                },
+            ),
+        ));
     let user_deletion = Arc::new(
         crate::outbound::user_deletion::UserDeletionAdapter::new(
             db.clone(),

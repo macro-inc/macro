@@ -224,7 +224,11 @@ async fn claims_stop_at_the_team_limit_across_calls(pool: PgPool) {
         .await
         .unwrap();
     let second = repo
-        .claim(TEAM1, &users(&["a@user.com", "c@user.com", "d@user.com"]), 3)
+        .claim(
+            TEAM1,
+            &users(&["a@user.com", "c@user.com", "d@user.com"]),
+            3,
+        )
         .await
         .unwrap();
 

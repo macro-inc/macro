@@ -2820,7 +2820,10 @@ async fn create_team_sets_slug_from_name_or_uses_default() {
             NoOpTeamCrmSettingsRepository,
         );
 
-        service.create_team(&owner, team_name, None, true).await.unwrap();
+        service
+            .create_team(&owner, team_name, None, true)
+            .await
+            .unwrap();
 
         assert_eq!(
             *create_team_calls.lock().unwrap(),
@@ -2954,7 +2957,12 @@ async fn test_create_team_moves_github_installation_to_created_team() {
     );
 
     let created_team = service
-        .create_team(&user_id, "New Team", Some(&"sub_test".parse().unwrap()), true)
+        .create_team(
+            &user_id,
+            "New Team",
+            Some(&"sub_test".parse().unwrap()),
+            true,
+        )
         .await
         .unwrap();
 
@@ -2993,7 +3001,12 @@ async fn test_create_team_propagates_github_installation_move_failure() {
     );
 
     let err = service
-        .create_team(&user_id, "New Team", Some(&"sub_test".parse().unwrap()), true)
+        .create_team(
+            &user_id,
+            "New Team",
+            Some(&"sub_test".parse().unwrap()),
+            true,
+        )
         .await
         .err()
         .unwrap();

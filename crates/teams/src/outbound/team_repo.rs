@@ -365,7 +365,7 @@ impl TeamRepository for TeamRepositoryImpl {
             auto_join_domain,
         )
         .await
-            .map_err(|e| e.into())
+        .map_err(|e| e.into())
     }
 
     #[tracing::instrument(skip(self), err)]
