@@ -47,6 +47,12 @@ fn colleague_joined_is_an_organization_notice_that_links_to_signup() {
             .contains("Sign up with <strong>bob@acme.com</strong>")
     );
     assert!(email.body.contains("one-time notice"));
+    assert!(
+        email
+            .body
+            .contains("href=\"macro-unsubscribe:colleague_joined_macro\"")
+    );
+    assert!(email.body.contains("54 W 21st St, Suite 503, New York, NY"));
     assert!(email.body.contains("/app/signup\""));
     assert!(email.body.contains(">Join Acme</a"));
     assert!(!email.body.contains("referral_code"));

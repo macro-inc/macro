@@ -47,6 +47,11 @@ impl ColleagueJoinedMacro {
     fn signup_url(&self) -> Url {
         signup_url(Environment::new_or_prod())
     }
+
+    /// The notification service signs this into a link that stops these notices.
+    fn unsubscribe_href(&self) -> String {
+        notification::domain::models::signing::unsubscribe_placeholder(Self::TYPE_NAME)
+    }
 }
 
 impl Notification for ColleagueJoinedMacro {

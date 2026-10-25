@@ -5,7 +5,7 @@ use ::notification::domain::models::email_notification_digest::ports::DigestBatc
 use ::notification::domain::service::NotificationEgressService;
 use ::notification::inbound::notification_events_listener::NotificationEventsListener;
 use ::notification::inbound::worker::NotificationWorker;
-use ::notification::outbound::email::EmailAdapter;
+use ::notification::outbound::email::{EmailAdapter, SignedUnsubscribeLinks};
 use ::notification::outbound::fanout_notification_realtime::FanoutNotificationRealtimePublisher;
 use ::notification::outbound::fanout_realtime::FanoutRealtimeSender;
 use ::notification::outbound::kafka_notification_realtime::KafkaNotificationRealtimePublisher;
@@ -232,7 +232,12 @@ pub async fn main() -> anyhow::Result<()> {
     };
 
     let ses_client = aws_sdk_sesv2::Client::new(&aws_config);
-    let email_adapter = EmailAdapter::new(ses_client, crate::env::SENDER_ADDRESS.clone());
+    let email_adapter = SignedUnsubscribeLinks::new(
+        EmailAdapter::new(ses_client, crate::env::SENDER_ADDRESS.clone()),
+        macro_service_urls::NotificationServiceUrl::new_for_environment(config.environment)?
+            .parse_url()?,
+        hmac_key.clone(),
+    );
 
     let redis_multiplexed_conn = redis_client
         .get_multiplexed_async_connection()
