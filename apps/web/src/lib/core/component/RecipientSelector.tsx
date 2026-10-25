@@ -192,6 +192,53 @@ function getRecipientOptionTextValue(option: CombinedRecipientItem) {
   }
 }
 
+const RECIPIENT_MATCH_ORDER = [
+  'address',
+  'address-start',
+  'word-start',
+  'other',
+] as const;
+type RecipientMatch = (typeof RECIPIENT_MATCH_ORDER)[number];
+
+const WORD_BREAK = /[^\p{L}\p{N}]+/u;
+
+function recipientMatch(
+  option: CombinedRecipientItem,
+  query: string,
+  queryWords: string[]
+): RecipientMatch {
+  const email = getRecipientOptionEmail(option)?.toLowerCase();
+  if (email === query) return 'address';
+  if (email && query.includes('@') && email.startsWith(query))
+    return 'address-start';
+  const words = getRecipientOptionTextValue(option)
+    .toLowerCase()
+    .split(WORD_BREAK);
+  if (queryWords.every((part) => words.some((word) => word.startsWith(part))))
+    return 'word-start';
+  return 'other';
+}
+
+// Fuzzy search scores every hit alike, leaving recency and length to decide
+// what Enter commits. Stronger matches go first; the search order breaks ties.
+function rankRecipientMatches<T extends CombinedRecipientItem>(
+  found: T[],
+  query: string
+): T[] {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) return found;
+  const queryWords = normalized.split(WORD_BREAK).filter(Boolean);
+  return found
+    .map((option) => ({
+      option,
+      rank: RECIPIENT_MATCH_ORDER.indexOf(
+        recipientMatch(option, normalized, queryWords)
+      ),
+    }))
+    .sort((a, b) => a.rank - b.rank)
+    .map(({ option }) => option);
+}
+
 type RecipientComboboxItemProps = CollectionNode<CombinedRecipientItem> & {
   inviteExternalEmails?: boolean;
 };
@@ -485,15 +532,11 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
       (props.triedToSubmit?.() ?? false) && props.selectedOptions.length === 0
   );
 
-  const currentUserEmail = useEmail();
-  const currentUserDomain = createMemo(() => {
-    const email = currentUserEmail();
-    return email ? email.split('@')[1] : undefined;
-  });
+  const selfDomain = createMemo(() => selfEmail()?.split('@')[1]);
 
   const baseRecipientSearchConfig =
     FreshSearchPresets.baseUserSearch<CombinedRecipientItem>(
-      currentUserDomain,
+      selfDomain,
       getRecipientOptionEmail
     );
 
@@ -599,8 +642,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
     const searched = searchTerm
       ? recipientSearch(raw, searchTerm).map((item) => item.item)
       : sorted;
-
-    const allOptions = [...searched, ...customUsers()];
+    const typed: CombinedRecipientItem[] = [];
 
     // Only add custom input if it doesn't match an existing email
     if (
@@ -615,11 +657,13 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
         invalid: !EmailValidator.validate(currentUserInput),
       };
 
-      const customEntity = recipientEntityMapper('custom')(customUserInput);
-      allOptions.push(customEntity);
+      typed.push(recipientEntityMapper('custom')(customUserInput));
     }
 
-    return allOptions as CombinedRecipientItem<K>[];
+    return [
+      ...rankRecipientMatches([...searched, ...typed], searchTerm),
+      ...customUsers(),
+    ] as CombinedRecipientItem<K>[];
   });
 
   const visibleOptionKeys = createMemo(
