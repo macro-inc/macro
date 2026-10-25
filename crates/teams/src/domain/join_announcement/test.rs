@@ -50,6 +50,7 @@ impl JoinAnnouncementRepository for FakeRepository {
         &self,
         _team_id: Uuid,
         candidates: &[MacroUserIdStr<'static>],
+        team_limit: u32,
     ) -> Result<Vec<ClaimedJoinEmail>, Report<JoinAnnouncementError>> {
         self.claim_calls.lock().unwrap().push(
             candidates
@@ -65,6 +66,7 @@ impl JoinAnnouncementRepository for FakeRepository {
             .iter()
             .filter(|candidate| {
                 self.eligible.contains(candidate.email_str())
+                    && claimed.len() < team_limit as usize
                     && claimed.insert(candidate.email_str().to_owned())
             })
             .map(|candidate| ClaimedJoinEmail {
@@ -279,6 +281,21 @@ async fn large_candidate_lists_are_claimed_in_chunks_of_fifty() {
         .map(Vec::len)
         .collect();
     assert_eq!(chunk_sizes, vec![50, 50, 20]);
+}
+
+#[tokio::test]
+async fn a_team_emails_at_most_twenty_five_colleagues() {
+    let emails: Vec<String> = (0..60).map(|i| format!("user{i:03}@acme.com")).collect();
+    let candidates: Vec<&str> = emails.iter().map(String::as_str).collect();
+    let service = JoinAnnouncementServiceImpl::new(
+        FakeRepository::eligible(&candidates),
+        FakeIngress::default(),
+    );
+
+    let report = service.announce_join(announce(&candidates)).await.unwrap();
+
+    assert_eq!(report.claimed, MAX_RECIPIENTS_PER_TEAM);
+    assert_eq!(report.sent, MAX_RECIPIENTS_PER_TEAM);
 }
 
 #[tokio::test]

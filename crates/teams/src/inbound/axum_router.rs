@@ -6,6 +6,8 @@ pub mod create_team;
 pub mod delete_team;
 /// Delete a team invite.
 pub mod delete_team_invite;
+/// Email a new team's domain contacts that it exists.
+pub mod domain_notice;
 /// Get a team by ID.
 pub mod get_team;
 /// Get all invites for a team.

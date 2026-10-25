@@ -36,6 +36,7 @@ impl JoinAnnouncementRepository for JoinAnnouncementRepositoryImpl {
         &self,
         team_id: Uuid,
         candidates: &[MacroUserIdStr<'static>],
+        team_limit: u32,
     ) -> Result<Vec<ClaimedJoinEmail>, Report<JoinAnnouncementError>> {
         let by_email: HashMap<&str, &MacroUserIdStr<'static>> = candidates
             .iter()
@@ -67,6 +68,19 @@ impl JoinAnnouncementRepository for JoinAnnouncementRepositoryImpl {
                       SELECT 1 FROM team_invite ti
                       WHERE ti.team_id = t.id AND ti.email = c.email
                   )
+                  AND NOT EXISTS (
+                      SELECT 1 FROM "User" u WHERE lower(u.email) = lower(c.email)
+                  )
+                  AND NOT EXISTS (
+                      SELECT 1 FROM team_joined_macro_email e
+                      WHERE e.team_id = t.id AND e.email = c.email
+                  )
+                ORDER BY c.email
+                LIMIT GREATEST(
+                    $4::bigint
+                        - (SELECT count(*) FROM team_joined_macro_email e WHERE e.team_id = $1),
+                    0
+                )
                 ON CONFLICT (team_id, email) DO NOTHING
                 RETURNING email
             )
@@ -77,6 +91,7 @@ impl JoinAnnouncementRepository for JoinAnnouncementRepositoryImpl {
             team_id,
             &emails[..],
             &user_ids[..],
+            i64::from(team_limit),
         )
         .fetch_all(&self.pool)
         .await

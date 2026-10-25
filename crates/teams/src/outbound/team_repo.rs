@@ -78,6 +78,7 @@ impl TeamRepositoryImpl {
         team_slug: &str,
         subscription_id: Option<&stripe::SubscriptionId>,
         owner_plan: SeatPlan,
+        auto_join_domain: Option<&str>,
     ) -> Result<Team, sqlx::Error> {
         let mut transaction = self.pool.begin().await?;
 
@@ -85,9 +86,12 @@ impl TeamRepositoryImpl {
 
         let team = sqlx::query!(
             r#"
-            INSERT INTO team (id, name, slug, owner_id, seat_count, subscription_id, paying)
-            VALUES ($1, $2, $3, $4, 1, $5, $6)
+            INSERT INTO team (
+                id, name, slug, owner_id, seat_count, subscription_id, paying, auto_join_domain
+            )
+            VALUES ($1, $2, $3, $4, 1, $5, $6, $7)
             RETURNING id, name, slug, owner_id, enterprise, allow_non_admin_invites,
+                auto_join_domain,
                 default_link_share as "default_link_share: LinkShare"
             "#,
             id,
@@ -96,6 +100,7 @@ impl TeamRepositoryImpl {
             user_id.as_ref(),
             subscription_id.map(|s| s.to_string()),
             subscription_id.is_some(),
+            auto_join_domain,
         )
         .try_map(|row| {
             Ok(Team {
@@ -107,8 +112,7 @@ impl TeamRepositoryImpl {
                     .into_owned(),
                 // New teams have no team_crm_settings row yet.
                 crm_enabled: false,
-                // New teams start without an auto-join domain.
-                auto_join_domain: None,
+                auto_join_domain: row.auto_join_domain,
                 enterprise: row.enterprise,
                 allow_non_admin_invites: row.allow_non_admin_invites,
                 default_link_share: row.default_link_share,
@@ -346,13 +350,21 @@ impl TeamRepository for TeamRepositoryImpl {
         team_slug: &str,
         subscription_id: Option<&stripe::SubscriptionId>,
         owner_plan: SeatPlan,
+        auto_join_domain: Option<&str>,
     ) -> Result<Team, CreateTeamError> {
         if team_name.is_empty() || team_name.len() > 50 {
             return Err(CreateTeamError::InvalidTeamName(team_name.to_string()));
         }
 
-        self.create_team_inner(user_id, team_name, team_slug, subscription_id, owner_plan)
-            .await
+        self.create_team_inner(
+            user_id,
+            team_name,
+            team_slug,
+            subscription_id,
+            owner_plan,
+            auto_join_domain,
+        )
+        .await
             .map_err(|e| e.into())
     }
 

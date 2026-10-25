@@ -14,6 +14,10 @@ event contract (schema, sanitization, delivery semantics).
 - `src/domain/team_service/invite_link.rs`: the team's shareable invite link
   (`TeamInviteLinkService`) — who may see, create, reset, or turn it off, and
   joining through it via the same direct-join path as domain auto-join.
+- `src/domain/domain_notice.rs` + `join_announcement.rs`: the one-time email a
+  new work-domain team sends to the creator's same-domain contacts who are not
+  on Macro yet (`POST /team/domain-notice`, at most 25 per team). Its
+  unsubscribe link is signed by the notification service at send time.
 - `src/domain/owned_entity_cleanup.rs` + `open_seat_release.rs`: account/team
   deletion side effects (owned-entity transfer, seat release).
 - `src/inbound/axum_router.rs` / `src/inbound/toolset.rs`: HTTP routes and AI
@@ -29,7 +33,7 @@ event contract (schema, sanitization, delivery semantics).
 
 ## Boundaries
 
-- Depends on: `entity_access`, `channels` (feature `backfill_binary`),
+- Depends on: `entity_access`, `contacts` (feature `outbound`), `channels` (feature `backfill_binary`),
   `analytics_client`, `ai_toolset` (feature `ai_tools`).
 - Used by: `services/authentication_service`, `services/document_storage_service`,
   `services/calendar_service`, `services/agent_harness_service`,

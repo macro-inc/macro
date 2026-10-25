@@ -1370,6 +1370,7 @@ where
         user_id: &MacroUserIdStr<'_>,
         team_name: &str,
         subscription_id: Option<&stripe::SubscriptionId>,
+        allow_domain_join: bool,
     ) -> Result<Team, CreateTeamError> {
         // New teams start with `team_crm_settings.crm_enabled = false`
         // (seeded by `team_repository.create_team`), so there's nothing
@@ -1386,9 +1387,23 @@ where
                 .await
                 .map_err(|e| CreateTeamError::StorageLayerError(e.into()))?,
         );
+        // Colleagues who sign up with the owner's work domain join the team
+        // automatically unless the owner opted out. Owners can change it in
+        // settings.
+        let owner_email = user_id.email_part().lowercase();
+        let auto_join_domain = (allow_domain_join
+            && !is_generic_email_domain(owner_email.domain_part()))
+        .then(|| owner_email.domain_part().to_owned());
         let team = self
             .team_repository
-            .create_team(user_id, team_name, &team_slug, subscription_id, owner_plan)
+            .create_team(
+                user_id,
+                team_name,
+                &team_slug,
+                subscription_id,
+                owner_plan,
+                auto_join_domain.as_deref(),
+            )
             .await?;
         let owner_id = user_id.clone().into_owned();
         self.channel_service
@@ -1415,22 +1430,6 @@ where
         self.team_repository
             .move_github_app_installation_to_team_if_exists(user_id, team.id())
             .await?;
-
-        // Auto-join is on by default for corporate domains: colleagues who
-        // sign up with the same domain are added to the team automatically.
-        // Owners can turn it off in settings. Best-effort - creation
-        // succeeds even if this fails.
-        let owner_email = user_id.email_part().lowercase();
-        let auto_join_domain = if is_generic_email_domain(owner_email.domain_part()) {
-            None
-        } else {
-            self.team_repository
-                .toggle_auto_join_domain(team.id())
-                .await
-                .inspect_err(|e| tracing::error!(error=?e, "unable to default auto-join domain on"))
-                .ok()
-                .flatten()
-        };
 
         self.track_team_analytics_event(TeamAnalyticsEvent::TeamCreated {
             team_id: *team.id(),
