@@ -1,5 +1,5 @@
 import 'fake-indexeddb/auto';
-import { createClient, type Operation } from '@urql/core';
+import { CombinedError, createClient, type Operation } from '@urql/core';
 import { IDBFactory } from 'fake-indexeddb';
 import { Kind } from 'graphql';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -17,6 +17,7 @@ import { mountReplyComposer } from '../tests/reply';
 
 const network = vi.hoisted(() => ({
   client: undefined as unknown,
+  uncertainDelete: false,
   readRecordsByKeys: undefined as unknown as (
     request: unknown
   ) => Promise<unknown>,
@@ -117,6 +118,7 @@ const operationName = (operation: Operation) =>
 function createQueueContext(inbox: EmailInbox) {
   const deleteSent = Promise.withResolvers<void>();
   const deleteAnswered = Promise.withResolvers<void>();
+  network.uncertainDelete = false;
   network.readRecordsByKeys = async () => ({ revision: '1', records: [] });
   network.client = createClient({
     url: 'http://example.test/graphql',
@@ -129,6 +131,17 @@ function createQueueContext(inbox: EmailInbox) {
             fromPromise(
               (async () => {
                 if (operationName(operation) === 'DeleteEmailDraft') {
+                  if (network.uncertainDelete)
+                    return {
+                      operation,
+                      stale: false,
+                      hasNext: false,
+                      error: new CombinedError({
+                        networkError: new Error(
+                          'cache storage changed during enqueue'
+                        ),
+                      }),
+                    };
                   deleteSent.resolve();
                   await deleteAnswered.promise;
                 }
@@ -228,6 +241,25 @@ const timedOutCacheRead = async () => {
   throw new Error('cache worker timeout: read-records-by-keys');
 };
 
+const unqueuedDeletes = providers.flatMap(([provider, inbox]) => [
+  [
+    provider,
+    'its cache read timed out',
+    inbox,
+    () => {
+      network.readRecordsByKeys = timedOutCacheRead;
+    },
+  ] as const,
+  [
+    provider,
+    'its enqueue outcome was uncertain',
+    inbox,
+    () => {
+      network.uncertainDelete = true;
+    },
+  ] as const,
+]);
+
 /** Type, then clear every field so the composer deletes the draft it saved. */
 async function emptySavedDraft(
   root: ReturnType<typeof mountEmailComposer>,
@@ -287,11 +319,11 @@ it.each(providers)(
   }
 );
 
-it.each(providers)(
-  'keeps a recipient added on %s after the emptied draft could not be queued for deletion',
-  async (_provider, inbox) => {
+it.each(unqueuedDeletes)(
+  "keeps a recipient added on %s after the emptied draft's delete failed because %s",
+  async (_provider, _failure, inbox, failDelete) => {
     const { context, saves } = createQueueContext(inbox);
-    network.readRecordsByKeys = timedOutCacheRead;
+    failDelete();
     const root = mountEmailComposer(context);
     try {
       const emptied = await emptySavedDraft(root, saves);
