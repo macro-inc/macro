@@ -592,7 +592,12 @@ but the panel stays silent for routine delivery: it lists a send only while it
 waits on this device, needs attention, or is scheduled. Thread surfaces project
 approved immediate sends from the journal as sent messages
 (`email-thread/primitives/optimistic-send.ts`) until the thread read shows them,
-and read the thread once when delivery is confirmed.
+and read the thread once when delivery is confirmed. Every surface reads one
+document-scoped journal snapshot (`queries/email/queued-sends.ts`). The outbox
+session reads it at sign-in and clears it on account change, the first mounted
+observer starts its watcher and poll, and Send refreshes it before the thread
+opens, so that thread mounts with the send already projected instead of its
+draft.
 
 Deploy schema/migrations and all generation-aware backend writers before
 releasing this frontend, including before applying `ios-update`: that workflow

@@ -570,6 +570,9 @@ Standalone compose uses one right-aligned row inside its 16px content padding:
 delete, attach, format, schedule, and send. Touch compose uses its header toolbar.
 `R` and `Alt+R` (`Option+R` on macOS) open reply-all for the selected message,
 or the latest message when none is selected. `F` opens a forward and focuses To.
+A new email also focuses To once it mounts, unless the user already moved to
+another field: with the CPU throttled, click Subject right after opening compose
+and type; every character must stay in Subject.
 In new emails, replies, reply-alls, and forwards, `Cmd+Shift+C` (`Ctrl+Shift+C`)
 reveals and focuses Cc and `Cmd+Shift+B` does the same for Bcc, expanding a
 collapsed reply header; inside a composer they never fall through to the
@@ -649,17 +652,22 @@ also enables sending immediately. A late lookup must not overwrite that choice.
 Implicit senders omit `from` on edits and sends. An explicit sender is preserved
 even while inboxes load or after disconnection; an unavailable sender blocks Send
 until another connected inbox is selected. New emails default to the primary
-inbox after inboxes load. Repeat on mobile using the expanded `Cc/Bcc, From:` row.
+inbox after inboxes load; until then the desktop From row keeps its place with a
+placeholder. The first compose after sign-in, including from All inboxes, opens
+editable with Send available, because the device outbox is read at sign-in.
+Repeat on mobile using the expanded `Cc/Bcc, From:` row.
 
 With GraphQL draft queuing enabled, working copies and pending attachment bytes
 are saved on this device independently of the mutation queue. A failed server
 save must leave the draft discoverable in **Drafts** (including grouped views)
-and in its reply thread. Saving is silent on desktop and mobile: no saved or
-syncing text appears, including offline. A failure shows a banner inside the
-composer, above the recipients, with **Retry** (or **Retry discard**); while the
-local cache waits for another owner the banner keeps **Retry** and retries by
-itself, and once local storage needs recovery it offers **Reload** instead. It
-never appears in the toolbar or the mobile header actions. Verify the banner on mobile
+and in its reply thread. Saving is silent on desktop and mobile while online: no
+saved or syncing text appears. Offline, once an edit is saved only on this
+device, the composer shows **Saved on this device; waiting to sync** above the
+recipients until the server acknowledges it. A failure shows a banner in the same
+place with **Retry** (or **Retry discard**); while the local cache waits for
+another owner the banner keeps **Retry** and retries by itself, and once local
+storage needs recovery it offers **Reload** instead. Neither appears in the
+toolbar or the mobile header actions. Verify the banner on mobile
 sits below the header and that editing while failed continues saving locally
 without repeatedly submitting the rejected request. If sender metadata is still
 unavailable, the local draft is retained; reconnect and select an inbox before
@@ -780,6 +788,8 @@ Sending must leave the new message's reply composer closed. After delivery,
 focus belongs to the sent message card in the same thread pane, even while
 the thread refresh is still pending. Replying again requires clicking Reply
 or using a reply shortcut.
+Sending a new email opens its thread with the message already shown as sent; it
+must not show the draft or **Loading draft…** first.
 
 After a send is queued, its notice offers `Undo`. Undo restores the
 sent envelope and editable content, including when the reply used another inbox;
@@ -1049,6 +1059,11 @@ deletion finishes in the background; a failed deletion reports **Failed to
 delete draft** and keeps the draft. No empty **[No subject]** thread may show
 in between. Check both the toolbar trash button and the mobile Delete Draft
 action, including after a pasted image leaves a save pending.
+Clearing every field of a draft deletes it. Edits made while that delete is on
+the wire, such as re-adding a recipient during a slow Outlook delete, must save
+to a fresh draft (or the same draft when the delete failed) and never report
+**This draft session is no longer active**. Verify with the delete request
+delayed and with it timing out.
 In Email's inline detail, deletion closes the detail and preserves the current
 mail tab and filters; it must not navigate split history to an older composer.
 Discarding a reply draft must preserve the remaining conversation. A previously
