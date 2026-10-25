@@ -376,17 +376,13 @@ describe('standalone compose controller', () => {
     },
     {
       type: 'no_message',
-      leaveUnmet: (root: Composer) =>
-        root.state.context.setSubject('Review'),
-      meet: (root: Composer) =>
-        root.edit('Ready to send'),
+      leaveUnmet: (root: Composer) => root.state.context.setSubject('Review'),
+      meet: (root: Composer) => root.edit('Ready to send'),
     },
     {
       type: 'no_subject',
-      leaveUnmet: (root: Composer) =>
-        root.edit('Ready to send', ''),
-      meet: (root: Composer) =>
-        root.state.context.setSubject('Review'),
+      leaveUnmet: (root: Composer) => root.edit('Ready to send', ''),
+      meet: (root: Composer) => root.state.context.setSubject('Review'),
     },
   ] as const;
 

@@ -84,7 +84,8 @@ it.each(bounceSenders)(
 it.each(bounceSenders)(
   'sends nothing when Reply answers a $provider bounce addressed only to me',
   async ({ provider, from }) => {
-    expect(await sendReply(provider, from, [{ email: 'me@example.com' }]))
-      .toEqual([]);
+    expect(
+      await sendReply(provider, from, [{ email: 'me@example.com' }])
+    ).toEqual([]);
   }
 );
