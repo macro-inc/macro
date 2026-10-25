@@ -253,6 +253,32 @@ it.each(providers)(
 );
 
 it.each(providers)(
+  '%s: leaves no Undo on offer once a send accepted with time left is sent',
+  async (provider) => {
+    const { context, report } = outbox(provider);
+    let notice = 0;
+    vi.mocked(context.notices.feedback.success).mockImplementation(
+      () => ++notice
+    );
+    const reply = mountReplyComposer(context);
+    try {
+      await reply.sendEmail();
+      report({
+        state: 'accepted',
+        undoUntil: new Date(Date.now() + 10_000).toISOString(),
+      });
+      expect(openUndoOffers(context)).toBe(1);
+
+      report({ state: 'pending' });
+      report({ state: 'sent' });
+      expect(openUndoOffers(context)).toBe(0);
+    } finally {
+      reply.dispose();
+    }
+  }
+);
+
+it.each(providers)(
   '%s: returns the thread to the inbox when it is marked done after its send failed',
   async (provider) => {
     const { context, report } = outbox(provider);
