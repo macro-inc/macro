@@ -4,6 +4,7 @@ import type {
   EmailComposeContext,
   EmailInbox,
   EmailSendProgress,
+  EmailUndoHandle,
 } from '../context/compose-capabilities';
 import type { EmailRecipient } from '../core/email-recipient';
 import type { ReplyType } from '../core/reply-type';
@@ -210,6 +211,36 @@ it.each(providers)(
       report({ state: 'failed' });
       await vi.advanceTimersByTimeAsync(0);
       expect(cancelled?.()).toBe(true);
+    } finally {
+      reply.dispose();
+    }
+  }
+);
+
+it.each(providers)(
+  '%s: returns the thread to the inbox when it is marked done after its send failed',
+  async (provider) => {
+    const { context, report } = outbox(provider);
+    const undo = vi.fn(async () => {});
+    let markedDone: ((handle: EmailUndoHandle) => void) | undefined;
+    const reply = mountReplyComposer(
+      context,
+      undefined,
+      {
+        onMarkDone: (options) => {
+          markedDone = options?.onUndoHandle;
+        },
+      },
+      { inboxVisible: true }
+    );
+    try {
+      await reply.sendEmail(true);
+      report({ state: 'failed' });
+      await vi.advanceTimersByTimeAsync(0);
+      markedDone?.({ id: 'done', undo, dispose() {} });
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(undo).toHaveBeenCalledOnce();
     } finally {
       reply.dispose();
     }
