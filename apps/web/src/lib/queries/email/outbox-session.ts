@@ -7,7 +7,7 @@ import {
 import { createEmailSendDispatcher } from './email-send-dispatcher';
 import { createEmailSendRecovery } from './email-send-recovery';
 import { emailStorageSession, localDraftStore } from './local-drafts';
-import { resetQueuedEmailSends } from './queued-sends';
+import { setQueuedSendSession } from './queued-sends';
 import {
   emailSendFailureKind,
   recordEmailSend,
@@ -32,7 +32,7 @@ export function setEmailOutboxSession(accountId: string | undefined): void {
   recovery = undefined;
   dispatcher = undefined;
   setServerSendSession(accountId);
-  resetQueuedEmailSends();
+  setQueuedSendSession(accountId);
   if (accountId) fireAndForget(start(accountId, current), 'email-outbox');
 }
 

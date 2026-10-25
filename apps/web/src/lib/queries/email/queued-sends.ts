@@ -51,13 +51,14 @@ function observe() {
   };
 }
 
-/** Another account's sends never carry over to the next session. */
-export function resetQueuedEmailSends() {
+/** Read at sign-in so the first compose starts unlocked; another account's
+ * sends never carry over. */
+export function setQueuedSendSession(accountId: string | undefined) {
   generation++;
   storageFailureReported = false;
   setIntents([]);
   setReady(false);
-  if (observers > 0) wake();
+  if (accountId) wake();
 }
 
 /** Shared outbox observer; missed events are recovered by reading durable state. */

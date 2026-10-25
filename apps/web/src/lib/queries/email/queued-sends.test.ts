@@ -1,6 +1,6 @@
 import { createRoot } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { resetQueuedEmailSends, useQueuedEmailSends } from './queued-sends';
+import { setQueuedSendSession, useQueuedEmailSends } from './queued-sends';
 import type { EmailSendIntent } from './send-queue';
 
 const mocks = vi.hoisted(() => ({
@@ -55,7 +55,7 @@ beforeEach(() => {
   mocks.status.mockResolvedValue(null);
   vi.stubGlobal('navigator', { onLine: true });
   vi.stubGlobal('window', { addEventListener() {}, removeEventListener() {} });
-  resetQueuedEmailSends();
+  setQueuedSendSession(undefined);
 });
 afterEach(() => vi.unstubAllGlobals());
 
@@ -136,7 +136,7 @@ it('drops the previous account’s sends when the session changes', async () => 
     await queue.refresh();
     expect(queue.intents()).toEqual([intent]);
     mocks.read.mockResolvedValue([]);
-    resetQueuedEmailSends();
+    setQueuedSendSession('next-account');
     expect(queue.ready()).toBe(false);
     expect(queue.intents()).toEqual([]);
     await vi.waitFor(() => expect(queue.ready()).toBe(true));
