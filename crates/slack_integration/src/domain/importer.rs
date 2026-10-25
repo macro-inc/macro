@@ -68,10 +68,6 @@ pub struct ConversationImporter<R, S, L, T, H, A> {
 
 impl<R, S, L, T, H, A> ConversationImporter<R, S, L, T, H, A> {
     /// Construct with validated bounds; no environment access in the domain.
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "each persistence port stays a separate generic at the composition root"
-    )]
     pub fn new(
         repo: R,
         storage: S,
