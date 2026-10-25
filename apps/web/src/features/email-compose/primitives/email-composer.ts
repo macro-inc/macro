@@ -731,8 +731,35 @@ export function createEmailComposer(props: EmailComposerOptions) {
 
   // --- Send ---
 
-  const [validationError, setValidationError] =
-    createSignal<ComposeValidationError | null>(null);
+  const sendRequirements: {
+    error: ComposeValidationError;
+    met: () => boolean;
+  }[] = [
+    {
+      error: {
+        type: 'no_recipient',
+        message: 'Please select at least one recipient',
+      },
+      met: () => form.recipients().to.length > 0,
+    },
+    {
+      error: { type: 'no_message', message: 'Please enter a message' },
+      met: () => !!content().trim(),
+    },
+    {
+      error: { type: 'no_subject', message: 'Please enter a subject' },
+      met: () => !!form.subject()?.trim(),
+    },
+    {
+      error: {
+        type: 'no_link',
+        message: 'Unable to find linked email account. Select a sending inbox.',
+      },
+      met: () => !!link(),
+    },
+  ];
+  const [refusedRequirement, setRefusedRequirement] =
+    createSignal<(typeof sendRequirements)[number]>();
 
   // Snapshot the form before any watermark so an undo can reopen it as it was.
   const rememberForUndo = (draftId: string, inboxId: string) => {
@@ -864,43 +891,12 @@ export function createEmailComposer(props: EmailComposerOptions) {
       sendLocked()
     )
       return;
-    setValidationError(null);
-
+    const refused = sendRequirements.find((requirement) => !requirement.met());
+    setRefusedRequirement(refused);
     const currentEditor = editor();
     const currentLink = link();
     const recipients = form.recipients();
-
-    if (!recipients.to.length) {
-      setValidationError({
-        type: 'no_recipient',
-        message: 'Please select at least one recipient',
-      });
-      return;
-    }
-
-    if (!content().trim()) {
-      setValidationError({
-        type: 'no_message',
-        message: 'Please enter a message',
-      });
-      return;
-    }
-
-    if (!form.subject()?.trim()) {
-      setValidationError({
-        type: 'no_subject',
-        message: 'Please enter a subject',
-      });
-      return;
-    }
-
-    if (!currentLink) {
-      setValidationError({
-        type: 'no_link',
-        message: 'Unable to find linked email account. Select a sending inbox.',
-      });
-      return;
-    }
+    if (refused || !currentLink) return;
 
     const offline = sendRefusalBeforeSave(
       props.connectivity,
@@ -1523,10 +1519,9 @@ export function createEmailComposer(props: EmailComposerOptions) {
 
     // Validation
     validationError: (type) => {
-      if (type === 'no_link' && link()) return undefined;
-      const error = validationError();
-      if (error?.type === type) return error;
-      return undefined;
+      const refused = refusedRequirement();
+      if (refused?.error.type !== type || refused.met()) return undefined;
+      return refused.error;
     },
 
     // Recipients
