@@ -110,6 +110,7 @@
   "auth.createTeam": "Create Team",
   "auth.toggleTeamAutoJoinDomain": "Toggle Team Auto Join Domain",
   "auth.patchTeamCrmSettings": "Patch Team Crm Settings",
+  "auth.sendTeamDomainNotice": "Send Team Domain Notice",
   "auth.inviteToTeam": "Invite To Team",
   "auth.deleteTeamInviteLink": "Delete Team Invite Link",
   "auth.getTeamInviteLink": "Get Team Invite Link",
