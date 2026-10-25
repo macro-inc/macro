@@ -121,7 +121,7 @@ export function ViewerToolbar(props: {
 }) {
   return (
     <div
-      class="-translate-x-1/2 absolute bottom-4 left-1/2 z-10 flex w-max max-w-[calc(100%-1rem)] items-center gap-1 rounded-2xl border border-edge-muted bg-menu p-2 shadow-lg"
+      class="menu-surface -translate-x-1/2 absolute bottom-4 left-1/2 z-10 flex w-max max-w-[calc(100%-1rem)] items-center gap-1 rounded-2xl p-2"
       data-testid="fig-toolbar"
       aria-label="Drawing tools"
       role="toolbar"

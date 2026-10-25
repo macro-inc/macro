@@ -16,10 +16,11 @@ const OTHER_TEAM: Uuid = Uuid::from_u128(0x000000000000000000000000000ca102);
 enum CallTable {
     Calls,
     CallRecords,
+    CallEntities,
 }
 
 impl CallTable {
-    const ALL: [Self; 2] = [Self::Calls, Self::CallRecords];
+    const ALL: [Self; 3] = [Self::Calls, Self::CallRecords, Self::CallEntities];
 }
 
 #[derive(Clone, Copy)]
@@ -167,6 +168,16 @@ async fn insert_link_shared_call(
     insert_channel(pool, channel_id, owner_id).await?;
 
     match call_table {
+        CallTable::CallEntities => {
+            sqlx::query!(
+                "INSERT INTO call_entities (id, user_id, created_via, share_permission_id) VALUES ($1, $2, 'import', $3)",
+                call_id,
+                owner_id,
+                share_permission_id,
+            )
+            .execute(pool)
+            .await?;
+        }
         CallTable::Calls => {
             sqlx::query!(
                 r#"

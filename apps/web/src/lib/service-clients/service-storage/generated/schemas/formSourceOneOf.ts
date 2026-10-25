@@ -11,5 +11,8 @@ import type { FormSourceOneOfKind } from './formSourceOneOfKind';
 starts with only the form's own columns.
  */
 export type FormSourceOneOf = {
+  /** Keep the form, and the database made for it, out of Drive, as
+for a channel poll. */
+  isHiddenInDrive?: boolean;
   kind: FormSourceOneOfKind;
 };

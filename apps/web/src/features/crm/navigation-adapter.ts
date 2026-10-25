@@ -19,8 +19,20 @@ export function buildCrmViewShareUrl(config: CrmViewConfig): string {
 }
 
 export async function copyCrmViewLink(config: CrmViewConfig) {
+  await copyCrmLink(buildCrmViewShareUrl(config));
+}
+/** A pipeline's link opens Customers on it. */
+export async function copyCrmPipelineLink(pipelineId: string) {
+  await copyCrmLink(
+    new URL(
+      `/app/companies/pipeline/${encodeURIComponent(pipelineId)}`,
+      getWebOrigin()
+    ).toString()
+  );
+}
+async function copyCrmLink(url: string) {
   try {
-    await navigator.clipboard.writeText(buildCrmViewShareUrl(config));
+    await navigator.clipboard.writeText(url);
     toast.success('Link copied to clipboard');
   } catch {
     toast.failure('Failed to copy link');

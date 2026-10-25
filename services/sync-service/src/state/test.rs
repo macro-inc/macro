@@ -1,4 +1,66 @@
+use loro::{LoroMap, LoroMovableList, LoroText};
+
 use super::*;
+
+#[test]
+fn imported_updates_report_the_lexical_nodes_they_touch() {
+    let state = DocumentState::new();
+    let writer = LoroDoc::new();
+    writer.set_peer_id(1).unwrap();
+    let children = writer
+        .get_map("root")
+        .insert_container("children", LoroMovableList::new())
+        .unwrap();
+    let mut texts = Vec::new();
+    for id in ["intro", "body", "outro"] {
+        let node = children.push_container(LoroMap::new()).unwrap();
+        node.insert_container("$", LoroMap::new())
+            .unwrap()
+            .insert("id", id)
+            .unwrap();
+        texts.push(node.insert_container("text", LoroText::new()).unwrap());
+    }
+    writer.commit();
+    let created = state
+        .import(&writer.export(ExportMode::all_updates()).unwrap())
+        .unwrap();
+    assert!(created.changed);
+    assert_eq!(created.touched_nodes, ["body", "intro", "outro"]);
+
+    let seen = writer.oplog_vv();
+    for (peer, text) in [(2, &texts[0]), (3, &texts[2]), (2, &texts[0])] {
+        writer.set_peer_id(peer).unwrap();
+        text.insert(0, "typed").unwrap();
+        writer.commit();
+    }
+    let edited = state
+        .import(&writer.export(ExportMode::updates(&seen)).unwrap())
+        .unwrap();
+    assert!(edited.changed);
+    assert_eq!(edited.touched_nodes, ["intro", "outro"]);
+
+    let seen = writer.oplog_vv();
+    writer.set_peer_id(4).unwrap();
+    texts[1].insert(0, "first").unwrap();
+    writer.commit();
+    let missing = writer.oplog_vv();
+    let first = writer.export(ExportMode::updates(&seen)).unwrap();
+    let child = children.insert_container(0, LoroMap::new()).unwrap();
+    child
+        .insert_container("$", LoroMap::new())
+        .unwrap()
+        .insert("id", "heading")
+        .unwrap();
+    writer.commit();
+    let early = state
+        .import(&writer.export(ExportMode::updates(&missing)).unwrap())
+        .unwrap();
+    assert!(!early.changed);
+    assert!(early.touched_nodes.is_empty());
+    let unblocking = state.import(&first).unwrap();
+    assert!(unblocking.changed);
+    assert_eq!(unblocking.touched_nodes, ["body", "heading"]);
+}
 
 #[test]
 fn concurrent_branches_survive_session_snapshot_roundtrip() {

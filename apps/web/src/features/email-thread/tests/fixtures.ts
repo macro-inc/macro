@@ -47,6 +47,7 @@ export function createThreadContext(
       canMarkThreadNotDone: () => false,
       markThreadNotDone: () => false,
       isThreadMarkedUnread: () => false,
+      isThreadMarkedRead: () => false,
       markThreadUnread: () => false,
       markThreadRead: () => false,
       blockSender: () => false,

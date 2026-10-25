@@ -16,8 +16,21 @@ under `services/` throw and validate with zod; elsewhere in `apps/web` and
 
 - **FE-35** Branch on unions and literal sets with ts-pattern:
   `match(x).with(...).exhaustive()`. `.otherwise` only for open domains
-  (arbitrary strings, error codes). Never hand-write `switch` on a discriminant;
-  a `switch` over `event.key` in a keyboard handler is fine.
+  (arbitrary strings, error codes, and any payload from a Tauri plugin, worker,
+  or the network: the sender ships separately and `.exhaustive()` throws on a
+  shape it doesn't know). When such a payload is typed by a closed union you
+  still want checked (a generated service enum, a message union, persisted
+  data), use `.exhaustive((unknown) => fallback)` instead: it keeps the
+  compile-time check and returns the fallback rather than throwing. Read paths
+  fall back to an empty or unknown value; write paths and request handlers fail
+  the operation (`err`, a rejected mutation, an `ok: false` reply) instead of
+  sending or reporting a default. Bare `.exhaustive()` is for closed,
+  client-built values; parse anything else into one first
+  (`stringToItemType`, `parseEntityType`). Enforced in wire adapters,
+  service clients, transports, workers, and SDK event hydrators by ast-grep
+  `ts-exhaustive-boundary-fallback` + `tsx-exhaustive-boundary-fallback`, CI
+  error. Never hand-write `switch` on a discriminant; a `switch` over
+  `event.key` in a keyboard handler is fine.
 - **FE-36** Fallible operations return neverthrow `Result` / `ResultAsync`. New
   feature code types errors as `{ kind:... }` unions matched with ts-pattern;
   transport code keeps `ResultError<Code>[]`. Guard with `if (r.isErr())

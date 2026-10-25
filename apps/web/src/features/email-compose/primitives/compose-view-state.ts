@@ -18,7 +18,6 @@ export interface ComposeContextValue extends ComposeState {
   bodyActions: ComposeBodyActions;
   isMobile: Accessor<boolean>;
   scheduleEnabled: boolean;
-  attachmentFailure(message: string, options?: { subtext?: string }): void;
   onUpgrade?: () => void;
   viewerLoading?: Accessor<boolean>;
 }
@@ -28,7 +27,6 @@ export interface ComposeState {
   recipients: () => EmailFormRecipients;
   subject: () => string;
   attachments: () => DraftFormAttachment[];
-  attachmentLimitBytes?: Accessor<number>;
   initialHtml: () => string | undefined;
   initialMarkdown?: () => string | undefined;
 
@@ -39,7 +37,8 @@ export interface ComposeState {
   ) => void;
   setSubject: (value: string) => void;
   onContentChange: (content: string) => void;
-  onAddAttachments: (attachments: DraftFormAttachment[]) => void;
+  /** Files the user picked or dropped; the controller decides what attaches. */
+  onAddAttachments: (files: File[]) => void;
   onRemoveAttachment: (attachment: DraftFormAttachment) => void;
 
   // Editor
@@ -57,6 +56,7 @@ export interface ComposeState {
     operation: Accessor<'idle' | 'committing' | 'updating' | 'cancelling'>;
     onSelect(date: Date | null): boolean;
     onCancel(): Promise<boolean>;
+    onCheckStatus?(): Promise<void>;
     pickerDisabled: Accessor<boolean>;
   };
 

@@ -1,3 +1,4 @@
+import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { NoiseBackground } from '@core/component/NoiseBackground';
 import { useIsAuthenticated } from '@core/context/user';
@@ -75,7 +76,7 @@ export function InviteWelcome() {
       .with('expired', () => ({ kind: 'expired' }))
       .with('revoked', () => ({ kind: 'revoked' }))
       .with('redeemed', 'converted', () => ({ kind: 'used' }))
-      .exhaustive();
+      .exhaustive(() => ({ kind: 'invalid' }));
   });
   const welcomeDetails = () => {
     const current = view();
@@ -140,8 +141,8 @@ export function InviteWelcome() {
           <Switch>
             <Match when={view().kind === 'loading'}>
               <div class="flex flex-col gap-3">
-                <div class="h-8 w-56 animate-pulse rounded-md bg-ink/10" />
-                <div class="h-4 w-80 max-w-full animate-pulse rounded-md bg-ink/10" />
+                <ListSkeleton.Bar class="h-8 w-56 rounded-lg" />
+                <ListSkeleton.Bar class="h-4 w-80 max-w-full" />
               </div>
             </Match>
 

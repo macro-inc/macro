@@ -4,6 +4,7 @@ use async_graphql::{Context, ID, Object, SimpleObject, dataloader::DataLoader};
 use email::domain::models::{
     AttachmentDraft, AttachmentForwarded, ContactInfo, EmailThreadMailProjection,
     EmailThreadMetadata, Message, MessageAttachment, ParsedLabel, ParsedMessage,
+    ScheduledSendStatus,
 };
 
 use crate::loaders::{
@@ -18,6 +19,7 @@ const FULL_MESSAGE_FIELDS: &[&str] = &[
     "providerId",
     "replyingToId",
     "scheduledSendTime",
+    "scheduledSendStatus",
     "attachments",
     "attachmentsDraft",
     "attachmentsForwarded",
@@ -69,6 +71,30 @@ impl From<email::domain::models::EmailPreview> for GraphqlMailPreviewMessage {
 /// An adaptively hydrated email content projection for Soup queries.
 pub struct GraphqlSoupEmailMessage(EmailContentMessage);
 
+/// The persisted state of a scheduled delivery.
+#[derive(async_graphql::Enum, Copy, Clone, Eq, PartialEq)]
+pub enum GraphqlScheduledSendStatus {
+    /// Waiting for its send time or safely retrying preparation.
+    Pending,
+    /// Provider submission has started.
+    Sending,
+    /// Delivery was definitely rejected; the draft can be restored.
+    Failed,
+    /// Delivery may have succeeded; reconciliation is required.
+    Unconfirmed,
+}
+
+impl From<ScheduledSendStatus> for GraphqlScheduledSendStatus {
+    fn from(status: ScheduledSendStatus) -> Self {
+        match status {
+            ScheduledSendStatus::Pending => Self::Pending,
+            ScheduledSendStatus::Sending => Self::Sending,
+            ScheduledSendStatus::Failed => Self::Failed,
+            ScheduledSendStatus::Unconfirmed => Self::Unconfirmed,
+        }
+    }
+}
+
 impl GraphqlSoupEmailMessage {
     /// Wraps a message produced outside the DataLoader path (e.g. a
     /// mutation payload's draft record).
@@ -90,6 +116,10 @@ impl GraphqlSoupEmailMessage {
 /// An adaptively hydrated email content projection for Soup queries.
 #[Object]
 impl GraphqlSoupEmailMessage {
+    /// Generation required when editing a draft after send/cancellation.
+    async fn draft_generation(&self) -> i32 {
+        self.parsed().draft_generation
+    }
     /// Immutable scheduling snapshots; JSON keeps both transports identical.
     async fn calendar_invitations(
         &self,
@@ -188,6 +218,13 @@ impl GraphqlSoupEmailMessage {
             .full()?
             .scheduled_send_time
             .map(|value| value.to_rfc3339()))
+    }
+
+    /// Whether the scheduled delivery is pending, sending, failed, or unconfirmed.
+    async fn scheduled_send_status(
+        &self,
+    ) -> async_graphql::Result<Option<GraphqlScheduledSendStatus>> {
+        Ok(self.full()?.scheduled_send_status.map(Into::into))
     }
 
     /// The sender of the message.
@@ -620,6 +657,7 @@ mod tests {
     fn message(thread_id: Uuid) -> ParsedMessage {
         let now = Utc::now();
         ParsedMessage {
+            draft_generation: 0,
             db_id: Uuid::from_u128(1),
             link_id: Uuid::from_u128(3),
             thread_db_id: thread_id,

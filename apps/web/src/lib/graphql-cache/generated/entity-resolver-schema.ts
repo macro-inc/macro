@@ -59,6 +59,26 @@ export const entityResolverSchema = {
       targets: ['GraphqlSoupInitiative'],
       argumentPaths: [['initiativeId']],
     },
+    soupEntity: {
+      targets: [
+        'GraphqlSoupAgentSession',
+        'GraphqlSoupCalendarEvent',
+        'GraphqlSoupCall',
+        'GraphqlSoupChannel',
+        'GraphqlSoupChannelMessage',
+        'GraphqlSoupChat',
+        'GraphqlSoupCrmCompany',
+        'GraphqlSoupCrmContact',
+        'GraphqlSoupDatabaseRow',
+        'GraphqlSoupDocument',
+        'GraphqlSoupEmailThread',
+        'GraphqlSoupForeignEntity',
+        'GraphqlSoupInitiative',
+        'GraphqlSoupProject',
+        'GraphqlSoupReminder',
+      ],
+      argumentPaths: [['input', 'entityId']],
+    },
   },
 } as const;
 
@@ -67,11 +87,24 @@ export type GeneratedEntityResolverTarget =
   | 'GraphqlChannelActivity'
   | 'GraphqlProperty'
   | 'GraphqlSoupAgentSession'
+  | 'GraphqlSoupCalendarEvent'
+  | 'GraphqlSoupCall'
+  | 'GraphqlSoupChannel'
+  | 'GraphqlSoupChannelMessage'
+  | 'GraphqlSoupChat'
+  | 'GraphqlSoupCrmCompany'
+  | 'GraphqlSoupCrmContact'
+  | 'GraphqlSoupDatabaseRow'
+  | 'GraphqlSoupDocument'
   | 'GraphqlSoupEmailThread'
-  | 'GraphqlSoupInitiative';
+  | 'GraphqlSoupForeignEntity'
+  | 'GraphqlSoupInitiative'
+  | 'GraphqlSoupProject'
+  | 'GraphqlSoupReminder';
 export type GeneratedEntityResolverArgumentPath =
   | readonly ['initiativeId']
   | readonly ['input', 'channelId']
+  | readonly ['input', 'entityId']
   | readonly ['input', 'labelId']
   | readonly ['input', 'messageId']
   | readonly ['input', 'propertyDefinitionId']

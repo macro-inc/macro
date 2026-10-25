@@ -6,10 +6,7 @@ import {
   SplitHeaderLeft,
   SplitHeaderRight,
 } from '@components/app/split-layout/components/SplitHeader';
-import {
-  BlockItemSplitLabel,
-  StaticSplitLabel,
-} from '@components/app/split-layout/components/SplitLabel';
+import { BlockItemSplitLabel } from '@components/app/split-layout/components/SplitLabel';
 import { useBlockAliasedName, useBlockId, useBlockName } from '@core/block';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
@@ -59,13 +56,5 @@ export function TopBar(props: { name?: Accessor<string | undefined> } = {}) {
         name={name()}
       />
     </>
-  );
-}
-
-export function InstructionsTopBar() {
-  return (
-    <SplitHeaderLeft>
-      <StaticSplitLabel label="AI Instructions" iconType="md" />
-    </SplitHeaderLeft>
   );
 }

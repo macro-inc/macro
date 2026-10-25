@@ -11,7 +11,6 @@ import { createToolRenderer } from './ToolRenderer';
 const HARNESS_NAMES: Record<string, string> = {
   'in-memory': 'Macro',
   cursor: 'Cursor',
-  'claude-cloud': 'Claude Cloud',
   macrod: 'Self-hosted harness',
 };
 

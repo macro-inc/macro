@@ -1,4 +1,5 @@
 import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import {
   FileDetailsSection,
   FilePropertiesSection,
@@ -26,7 +27,7 @@ function PdfHeaderActions() {
   const fileType = () => blockMetadataSignal()?.fileType;
 
   return (
-    <div class="flex shrink-0 items-center gap-1">
+    <HeaderActionGroup label="Actions">
       <AskMacroButton
         entity={{
           type: 'document',
@@ -35,6 +36,6 @@ function PdfHeaderActions() {
           fileType: fileType(),
         }}
       />
-    </div>
+    </HeaderActionGroup>
   );
 }

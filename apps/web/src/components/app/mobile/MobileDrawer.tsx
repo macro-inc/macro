@@ -104,8 +104,11 @@ function MobileDrawerContent(
 function MobileDrawerOverlay(props: ComponentProps<typeof Drawer.Overlay>) {
   const [local, rest] = splitProps(props, ['class']);
   return (
+    // On the sheets' own layer, as Dialog's scrim is: a sheet opened from
+    // another sheet comes later in the document, so its scrim dims the sheet
+    // beneath like the rest of the page.
     <Drawer.Overlay
-      class={cn('fixed inset-0 z-modal-overlay scrim-glass', local.class)}
+      class={cn('fixed inset-0 z-modal scrim-glass', local.class)}
       {...rest}
     />
   );
@@ -241,6 +244,34 @@ function dismissesDrawer(event: PointerEvent) {
 }
 
 /**
+ * The rest of a tap that dismisses a drawer must not reach what its scrim
+ * covered. Corvu dismisses on the tap's pointerdown or pointerup, and a sheet
+ * its owner unmounts on close (a `<Show>` around it, or `openDialog`'s host)
+ * takes the scrim with it, so the tap's mouse events and click are hit-tested
+ * against the control underneath and press it. Swallow them until the tap's
+ * click, the next pointerdown or a key press.
+ */
+function swallowRestOfTap() {
+  const listening = new AbortController();
+  const swallow = (event: Event) => {
+    if (!event.isTrusted) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.type === 'click') listening.abort();
+  };
+  for (const type of ['mousedown', 'mouseup', 'click'])
+    window.addEventListener(type, swallow, {
+      capture: true,
+      signal: listening.signal,
+    });
+  for (const type of ['pointerdown', 'keydown'])
+    window.addEventListener(type, () => listening.abort(), {
+      capture: true,
+      signal: listening.signal,
+    });
+}
+
+/**
  * Wrapper around Corvu's Drawer for mobile. Handles styling and input/virtual keyboard behaviour.
  */
 export const MobileDrawer = Object.assign(
@@ -256,6 +287,7 @@ export const MobileDrawer = Object.assign(
         onOutsidePointer={(event) => {
           if (!dismissesDrawer(event)) event.preventDefault();
           local.onOutsidePointer?.(event);
+          if (!event.defaultPrevented) swallowRestOfTap();
         }}
       />
     );

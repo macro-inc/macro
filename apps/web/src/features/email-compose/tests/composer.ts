@@ -13,7 +13,15 @@ import { createEmailEditor, setEmailEditorText } from './editor';
 export function mountEmailComposer(
   context: EmailComposeContext,
   host?: EmailComposeHost,
-  seed?: Pick<EmailComposerOptions, 'draft' | 'draftId' | 'initialInboxId'>
+  seed?: Pick<
+    EmailComposerOptions,
+    | 'draft'
+    | 'draftId'
+    | 'initialInboxId'
+    | 'initialSubject'
+    | 'initialBodyText'
+    | 'initialAttachments'
+  >
 ) {
   const root = createRoot((dispose) => ({
     dispose,

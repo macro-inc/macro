@@ -29,7 +29,7 @@ function Card(props: {
         <Tool.ResultToggle
           expanded={expanded()}
           onToggle={() => setExpanded((value) => !value)}
-          showToggle={props.children !== undefined}
+          showToggle={props.status !== undefined}
           status={props.status}
         />
       </div>
@@ -124,7 +124,7 @@ const readForm = createToolRenderer({
                   <p>
                     {section.title ||
                       (section.kind === 'gate'
-                        ? 'Screener'
+                        ? 'Gate'
                         : section.kind === 'booking'
                           ? 'Booking'
                           : 'Questions')}

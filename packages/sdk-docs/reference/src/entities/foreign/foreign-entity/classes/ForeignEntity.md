@@ -52,6 +52,22 @@ Arbitrary source-specific metadata stored with the mapping.
 
 ***
 
+### permission()
+
+> **permission**(): `Promise`\<\{ `permission`: [`EntityPermission`](../../../../../generated/storage/types.gen/type-aliases/EntityPermission.md); `status`: `"access"`; \} \| \{ `status`: `"no_access"`; \}\>
+
+Read the caller's effective permission on this entity.
+
+#### Returns
+
+`Promise`\<\{ `permission`: [`EntityPermission`](../../../../../generated/storage/types.gen/type-aliases/EntityPermission.md); `status`: `"access"`; \} \| \{ `status`: `"no_access"`; \}\>
+
+#### Inherited from
+
+[`FavoritableEntity`](../../../entity/classes/FavoritableEntity.md).[`permission`](../../../entity/classes/FavoritableEntity.md#permission)
+
+***
+
 ### toJSON()
 
 > **toJSON**(): \{ `detail?`: [`ForeignEntity`](../../../../../generated/storage/types.gen/type-aliases/ForeignEntity.md); `id`: `string`; \}

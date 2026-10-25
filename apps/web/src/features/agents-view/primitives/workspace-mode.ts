@@ -4,8 +4,8 @@ import { createSignal } from 'solid-js';
 import type { AgentsMode } from '../core/mode';
 
 /**
- * Whether the Agents workspace shows chat agents (Work) or coding agents
- * (Code). Scoped to the signed-in user; a new person starts in Work.
+ * Whether the new-conversation composer starts chat agents (Chat) or coding
+ * agents (Code). Scoped to the signed-in user; a new person starts in Chat.
  */
 export function createWorkspaceMode(userId: string | undefined) {
   const storage = createUserScopedStorage('agents-view-mode-v1');

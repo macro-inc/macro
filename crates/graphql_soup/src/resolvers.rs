@@ -23,7 +23,7 @@ use soup_realtime::domain::{models::Patch, ports::SoupRealtimeSubscriptionServic
 
 use crate::{
     inputs::{GroupedSoupInput, SoupInput},
-    loaders::{AgentSessionEntityLoader, SoupItemDataLoader, SoupUpdateHydrationLoader},
+    loaders::{AgentSessionEntityLoader, PrimarySoupItemLoader, SoupItemDataLoader},
     objects::{
         GraphqlSoupAgentSession, GraphqlSoupEmailThread, GraphqlSoupEntity, GroupedSoup,
         SoupEntityEdges, SoupPage, SoupPatch,
@@ -47,7 +47,7 @@ where
     let macro_user_id = require_authorized_user::<Auth, St>(ctx).await?;
     let mut receiver = service.subscribe(macro_user_id.clone());
     let loader = ctx
-        .data_opt::<SoupUpdateHydrationLoader>()
+        .data_opt::<PrimarySoupItemLoader>()
         .map(|loader| loader.0.clone());
     const BUFFER_SIZE: usize = 10;
     let mut buf = Vec::with_capacity(BUFFER_SIZE);
@@ -159,6 +159,22 @@ where
             "Soup returned a non-agent-session entity for an agent-session request",
         )),
     }
+}
+
+/// Fetch one Soup entity the viewer can see, through the same access filter
+/// the Soup list uses, so an inaccessible or missing entity reads as absent.
+/// Reads the primary: see [`PrimarySoupItemLoader`].
+pub async fn resolve_soup_entity<Edges>(
+    ctx: &Context<'_>,
+    user_id: MacroUserIdStr<'static>,
+    entity: model_entity::Entity<'static>,
+) -> async_graphql::Result<Option<GraphqlSoupEntity<Edges>>>
+where
+    Edges: SoupEntityEdges,
+{
+    let loader = &ctx.data::<PrimarySoupItemLoader>()?.0;
+    let item = loader.load_one((user_id, entity)).await?;
+    Ok(item.map(GraphqlSoupEntity::<Edges>::new_with_projection))
 }
 
 /// Mutation-output adapter that reloads the canonical Soup email-thread object.

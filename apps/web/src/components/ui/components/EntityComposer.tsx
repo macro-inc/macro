@@ -1,5 +1,5 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { type JSX, splitProps } from 'solid-js';
+import { type JSX, Show, splitProps } from 'solid-js';
 import { cn } from '../utils/classname';
 import { Button, type ButtonProps } from './Button';
 import { Hotkey } from './Hotkey';
@@ -100,10 +100,12 @@ function Submit(props: ButtonProps & { hasContent: boolean }) {
       )}
     >
       {local.children}
-      <Hotkey
-        shortcut="cmd+enter"
-        theme={local.variant === 'outline' ? 'subtle' : 'current'}
-      />
+      <Show when={!isTouchDevice()}>
+        <Hotkey
+          shortcut="cmd+enter"
+          theme={local.variant === 'outline' ? 'subtle' : 'current'}
+        />
+      </Show>
     </Button>
   );
 }

@@ -1,7 +1,9 @@
 import { SplitPanel } from '@components/app/split-panel';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
+import { cn } from '@ui';
 import { For, type JSX, type ParentProps, Show } from 'solid-js';
+import { ListHeader } from './ListHeader';
 import { ListSkeleton } from './ListSkeleton';
 import { SidebarCreateHeader } from './SidebarCreateButton';
 import { ViewShell, type ViewShellRootProps } from './ViewShell';
@@ -63,7 +65,10 @@ function Root(
   );
 }
 
-/** The view's sidebar: its title, its create action if it has one, and rows. */
+// The sidebar's search field, before the view can search.
+const sidebarSearch = () => <ListSkeleton.Bar class="h-8 w-full" />;
+
+/** The view's sidebar: its title and search, its create action if it has one, and rows. */
 function Sidebar(props: {
   title: string;
   createLabel?: string;
@@ -75,7 +80,7 @@ function Sidebar(props: {
         when={props.createLabel}
         fallback={
           <Show when={!isTouchDevice()}>
-            <ViewSidebar.Header>
+            <ViewSidebar.Header search={sidebarSearch}>
               <div class="flex min-w-0 items-center gap-1">
                 <ViewSidebar.CloseButton class="shrink-0" />
                 <ViewSidebar.Title>{props.title}</ViewSidebar.Title>
@@ -89,6 +94,7 @@ function Sidebar(props: {
             title={props.title}
             label={label()}
             onCreate={() => {}}
+            search={sidebarSearch}
           />
         )}
       </Show>
@@ -97,9 +103,47 @@ function Sidebar(props: {
   );
 }
 
-/** The view's main area: its top bar title, its search box, and rows or `children`. */
+// Icon-only islands are 32px per control.
+const ISLAND_WIDTH: Record<number, string> = {
+  1: 'w-8',
+  2: 'w-16',
+  3: 'w-24',
+  4: 'w-32',
+};
+
+/**
+ * A control that hasn't loaded: a shimmering 32px pill. A string sizes it to
+ * that label; a number is an icon-only island of that many controls.
+ */
+function ControlPill(props: { control: string | number; class?: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      class={cn(
+        'skeleton-shimmer inline-flex h-8 shrink-0 items-center rounded-full bg-skeleton text-sm text-transparent select-none',
+        typeof props.control === 'number'
+          ? (ISLAND_WIDTH[props.control] ?? 'w-8')
+          : 'px-3',
+        props.class
+      )}
+    >
+      {typeof props.control === 'string' ? props.control : null}
+    </span>
+  );
+}
+
+/**
+ * The view's main area: on desktop its one-row header (title, view tabs, and
+ * header controls as placeholders); on touch its search box. Then rows or
+ * `children`.
+ */
 function Main(props: {
   title?: string;
+  /** View tab labels, left of the header controls. */
+  tabs?: readonly string[];
+  /** Header controls in order: a label, or an icon-only island's control count. */
+  controls?: readonly (string | number)[];
+  /** Touch only: the search box above the list. */
   searchPlaceholder?: string;
   children?: JSX.Element;
 }) {
@@ -107,17 +151,30 @@ function Main(props: {
     <ViewShell.Main class="flex flex-col overflow-hidden">
       <Show when={props.title}>
         {(title) => (
-          <ViewShell.TopBar>
-            <span class="truncate font-semibold text-ink text-sm">
-              {title()}
-            </span>
-          </ViewShell.TopBar>
+          <ListHeader
+            title={
+              <div class="flex min-w-0 items-center gap-3">
+                <span class="truncate font-semibold text-ink text-sm">
+                  {title()}
+                </span>
+                <div class="flex shrink-0 items-center gap-1.5">
+                  <For each={props.tabs}>
+                    {(tab) => <ControlPill control={tab} />}
+                  </For>
+                </div>
+              </div>
+            }
+          >
+            <For each={props.controls}>
+              {(control) => <ControlPill control={control} />}
+            </For>
+          </ListHeader>
         )}
       </Show>
-      <Show when={props.searchPlaceholder}>
+      <Show when={isTouchDevice() && props.searchPlaceholder}>
         {(placeholder) => (
           <ViewShell.Header>
-            <div class="flex h-10 w-full max-w-md min-w-0 items-center gap-2 rounded-full border border-edge-button bg-control px-3 text-ink-placeholder text-sm">
+            <div class="flex h-10 w-full max-w-md min-w-0 items-center gap-2 rounded-full border border-edge-button bg-control not-touch:elevated px-3 text-ink-placeholder text-sm">
               <MagnifyingGlassIcon class="size-4 shrink-0 text-ink-extra-muted" />
               <span class="truncate">{placeholder()}</span>
             </div>
@@ -132,4 +189,10 @@ function Main(props: {
 }
 
 /** Building blocks for a view's loading skeleton, rendered before its code arrives. */
-export const ViewSkeleton = { Root, Sidebar, Main, Rows };
+export const ViewSkeleton = {
+  Root,
+  Sidebar,
+  Main,
+  Rows,
+  Control: ControlPill,
+};

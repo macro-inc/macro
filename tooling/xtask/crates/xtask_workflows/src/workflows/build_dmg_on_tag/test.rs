@@ -480,10 +480,11 @@ if [[ "${STUB_FAIL_VALIDATE:-0}" == 1 && "$2" == validate ]]; then exit 27; fi
     }
 
     fn run(&self, fail_validate: bool, fail_flush: bool) -> Output {
-        let path = format!(
-            "{}:/usr/bin:/bin:/usr/sbin:/sbin",
-            self.temp.path().join("bin").display(),
-        );
+        // Keep Nix-provided shell tools available while preferring every stub.
+        let path = std::env::join_paths(std::iter::once(self.temp.path().join("bin")).chain(
+            std::env::split_paths(&std::env::var_os("PATH").expect("inherited tool path")),
+        ))
+        .expect("stub command path");
         Command::new("bash")
             .arg(
                 Path::new(env!("CARGO_MANIFEST_DIR")).join("src/workflows/scripts/cloudkit_tcp.sh"),

@@ -12,7 +12,7 @@ import ArrowsOutIcon from '@phosphor/arrows-out.svg';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { debounce } from '@solid-primitives/scheduled';
-import { Button, Card, cn, SegmentedControl } from '@ui';
+import { Button, Card, cn, Tabs } from '@ui';
 import {
   type Accessor,
   createContext,
@@ -447,7 +447,8 @@ function StyleToggle(props: {
   class?: string;
 }) {
   return (
-    <SegmentedControl
+    <Tabs
+      touch="segmented"
       size="sm"
       aria-label="Diff layout"
       value={props.value}

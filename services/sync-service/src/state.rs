@@ -1,7 +1,7 @@
-use std::{borrow::Cow, sync::Mutex};
+use std::{borrow::Cow, collections::HashSet, sync::Mutex};
 
 use loro::{
-    Container, ContainerID, ExportMode, Frontiers, LoroDoc, LoroValue, ToJson, VersionVector,
+    Container, ContainerID, ExportMode, Frontiers, ID, LoroDoc, LoroValue, ToJson, VersionVector,
 };
 use tracing::debug;
 use web_time::Instant;
@@ -107,11 +107,11 @@ impl DocumentState {
     /// Import an update and report whether it changed the operation log plus
     /// the deduplicated Lexical node IDs used by blame tracking.
     pub fn import(&self, update: &[u8]) -> Result<ImportedUpdate> {
-        let before = self.loro_doc.oplog_frontiers();
+        let before = self.loro_doc.oplog_vv();
         self.loro_doc
             .import_with(update, FROM_CLIENT_TAG)
             .context("failed to import update")?;
-        let after = self.loro_doc.oplog_frontiers();
+        let after = self.loro_doc.oplog_vv();
 
         *self
             .last_update
@@ -153,15 +153,24 @@ impl DocumentState {
         }))
     }
 
-    /// Diff the two frontiers and return the Lexical node IDs whose backing
-    /// containers were modified, deduplicated. Empty `Vec` on diff failure.
-    fn touched_lexical_ids(&self, before: &Frontiers, after: &Frontiers) -> Vec<String> {
-        let Ok(diff) = self.loro_doc.diff(before, after) else {
-            return Vec::new();
-        };
-        let mut touched: Vec<String> = diff
+    /// The deduplicated Lexical node IDs whose backing containers were written
+    /// by operations in `after` but not in `before`. This runs on every update,
+    /// so it reads only those operations: diffing the two versions checks the
+    /// document out and costs time that grows with its history.
+    fn touched_lexical_ids(&self, before: &VersionVector, after: &VersionVector) -> Vec<String> {
+        let mut containers = HashSet::new();
+        for span in after.sub_iter(before) {
+            let Ok(len) = usize::try_from(span.counter.end - span.counter.start) else {
+                continue;
+            };
+            containers.extend(
+                self.loro_doc
+                    .get_changed_containers_in(ID::new(span.peer, span.counter.start), len),
+            );
+        }
+        let mut touched: Vec<String> = containers
             .iter()
-            .filter_map(|(cid, _)| self.find_lexical_id(cid))
+            .filter_map(|cid| self.find_lexical_id(cid))
             .collect();
         touched.sort();
         touched.dedup();

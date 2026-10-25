@@ -187,6 +187,8 @@ async fn managed_open_checks_quota_before_provisioning_without_an_initial_prompt
                     bot_id: bot_id::MACRO_CODER_BOT_ID,
                     profile: None,
                 }),
+                source: agent_session::domain::model::SessionSource::User,
+                visibility: agent_session::domain::model::SessionVisibility::Listed,
             })
             .await;
         assert!(matches!(result, Err(AgentSessionError::Admission(error)) if error == failure));
@@ -224,7 +226,7 @@ async fn spending_actions_charge_the_persisted_owner_not_the_actor() {
 
 #[tokio::test]
 async fn externally_funded_runtimes_accept_spending_actions_without_quota_io() {
-    for harness in ["cursor", "codex-cloud", "claude-cloud", "macrod", "custom"] {
+    for harness in ["cursor", "codex-cloud", "macrod", "custom"] {
         let (service, repo, admission) = bench(Some(denied()));
         let id = session(&repo, BotId::TEST_A, harness, Owner::User(staff_sender())).await;
         service.inner.busy.admit(id);
@@ -418,6 +420,7 @@ async fn enqueue_waiting(service: &TestHarness, id: AgentSessionId) -> Vec<Agent
 
 fn turn_ended() -> HarnessCommand {
     HarnessCommand::Turn(TurnSignal::TurnEnded {
+        notification_noop: false,
         turn: agent_fold::domain::model::TurnId(0),
         action_id: None,
         stop: agent_fold::domain::model::StopReason::EndTurn,

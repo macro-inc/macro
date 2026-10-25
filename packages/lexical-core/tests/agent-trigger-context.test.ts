@@ -164,12 +164,13 @@ describe('composeAgentContextPrompt with a trigger', () => {
       },
     });
 
-    expect(hiddenContext(markdown)).toBe(
+    const context = hiddenContext(markdown);
+    expect(context).toContain(
+      '<session owner="Julia" owner_id="macro|julia@example.com">'
+    );
+    expect(context).toContain('Choose acting_as explicitly');
+    expect(context?.slice(context.indexOf('<trigger'))).toBe(
       [
-        '<session owner="Julia" owner_id="macro|julia@example.com">',
-        '  <prompted_by name="Julia" id="macro|julia@example.com" is_owner="true"/>',
-        '  <note>Julia owns this session and sent this prompt.</note>',
-        '</session>',
         '<trigger kind="follow_up" addressed_by="inferred">',
         '  <note>This session was already running when Julia posted this message in its discussion. It neither mentions you nor quote-replies to you: a model judged from the discussion that it was meant for you. That judgment can be wrong, so if the message reads as meant for someone else, say so briefly instead of acting on it. The message is the prompt.</note>',
         '  <discussion>',

@@ -36,11 +36,17 @@ impl IntoResponse for PreviewError {
 }
 /// Public listener. Mount only on the isolated preview domain, never a Macro cookie domain.
 pub fn router(service: PreviewService) -> Router {
-    Router::new().fallback(any(handle)).with_state(service)
+    Router::new()
+        .fallback(any(handle))
+        .with_state(service)
+        .layer(
+            macro_tower_layers::MacroRequestIdAndTracingLayer::new(Duration::from_secs(2))
+                .into_inner(),
+        )
 }
 async fn handle(
     State(service): State<PreviewService>,
-    mut request: Request,
+    request: Request,
 ) -> Result<Response, PreviewError> {
     let host = request
         .headers()
@@ -56,6 +62,51 @@ async fn handle(
     };
     let id = PreviewId::parse(host.strip_suffix(&suffix).ok_or(PreviewError::Invalid)?)?;
     let origin = settings.origin(&id);
+    // Apply syntax/origin/body bounds before any peer dial. Tickets are consumed
+    // only by the receiving owner below, never by the forwarding replica.
+    let auth = request.uri().path() == AUTH_PATH;
+    let upgrade = request
+        .headers()
+        .get(header::UPGRADE)
+        .is_some_and(|v| v.as_bytes().eq_ignore_ascii_case(b"websocket"));
+    if request.method() == Method::CONNECT
+        || (request.headers().contains_key(header::UPGRADE) && !upgrade)
+    {
+        return Err(PreviewError::Invalid);
+    }
+    if auth
+        && (request.method() != Method::POST
+            || request
+                .headers()
+                .get(header::ORIGIN)
+                .and_then(|v| v.to_str().ok())
+                != Some(settings.app_origin.as_str()))
+    {
+        return Err(PreviewError::Denied);
+    }
+    let limit = if auth { 1024 } else { 16 * 1024 * 1024 };
+    if request
+        .headers()
+        .get(header::CONTENT_LENGTH)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.parse::<usize>().ok())
+        .is_some_and(|len| len > limit)
+    {
+        return Err(PreviewError::Invalid);
+    }
+    let (parts, body) = request.into_parts();
+    let mut request = Request::from_parts(parts, Body::new(Limited::new(body, limit)));
+    if let Some(peer) = service
+        .peer_stream(
+            &id,
+            request.headers().contains_key(super::peer::FORWARDED),
+            upgrade,
+        )
+        .await?
+    {
+        return super::peer::forward(request, peer).await;
+    }
+    request.headers_mut().remove(super::peer::FORWARDED);
     if request.uri().path() == AUTH_PATH {
         if request.method() != Method::POST
             || request

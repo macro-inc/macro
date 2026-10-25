@@ -7,7 +7,11 @@ use crate::domain::ports::{
 use crate::domain::service::AgentSessionServiceImpl;
 use crate::testing::InMemoryAgentSessionRepo;
 async fn view_router() -> Router {
+    view_router_with_log(Vec::new()).await
+}
+async fn view_router_with_log(log: Vec<crate::domain::model::AgentSessionLog>) -> Router {
     let repo = InMemoryAgentSessionRepo::new();
+    repo.extend_log(log);
     repo.create(CreateAgentSessionParams {
         purpose: crate::domain::model::SessionPurpose::Standalone,
         repo_branch: None,
@@ -88,4 +92,41 @@ async fn detached_session_returns_saved_metadata() {
         .unwrap();
     let value: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(value["id"], AgentSessionId::TEST_A.to_string());
+}
+#[tokio::test]
+async fn folded_log_serves_the_folded_conversation() {
+    let recorded =
+        agent_fold::testing::parse_log_as(AgentSessionId::TEST_A, agent_fold::testing::TURN);
+    let expected = agent_fold::domain::fold::fold(recorded.clone());
+    let response = view_router_with_log(recorded)
+        .await
+        .oneshot(
+            Request::builder()
+                .uri(format!("/{}/log/folded", AgentSessionId::TEST_A))
+                .header(
+                    macro_authorization::INTERNAL_API_KEY_HEADER,
+                    "test-internal-key",
+                )
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let expected = serde_json::to_value(
+        expected
+            .into_iter()
+            .map(|message| {
+                agent_fold::inbound::wire::FoldedMessage::new(AgentSessionId::TEST_A, message)
+            })
+            .collect::<Vec<_>>(),
+    )
+    .unwrap();
+    assert_eq!(body["messages"], expected);
+    assert!(!body["messages"].as_array().unwrap().is_empty());
+    assert!(body["bot"]["name"].is_string());
 }

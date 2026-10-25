@@ -83,16 +83,8 @@ export const BulkRenameEntitiesView = (props: {
             aria-label="Rename mode"
             value={mode()}
             fullWidth
-            onChange={(next) => {
-              if (
-                next === 'prepend' ||
-                next === 'append' ||
-                next === 'replace' ||
-                next === 'total'
-              )
-                setMode(next);
-            }}
-            list={[
+            onChange={setMode}
+            options={[
               { value: 'prepend', label: 'Prepend' },
               { value: 'append', label: 'Append' },
               { value: 'replace', label: 'Replace' },

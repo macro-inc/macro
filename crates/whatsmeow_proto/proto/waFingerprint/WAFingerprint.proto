@@ -1,0 +1,27 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+syntax = "proto2";
+package WAFingerprint;
+option go_package = "go.mau.fi/whatsmeow/proto/waFingerprint";
+
+enum HostedState {
+	E2EE = 0;
+	HOSTED = 1;
+}
+
+message FingerprintData {
+	optional bytes publicKey = 1;
+	optional bytes pnIdentifier = 2;
+	optional bytes lidIdentifier = 3;
+	optional bytes usernameIdentifier = 4;
+	optional HostedState hostedState = 5;
+	optional bytes hashedPublicKey = 6;
+}
+
+message CombinedFingerprint {
+	optional uint32 version = 1;
+	optional FingerprintData localFingerprint = 2;
+	optional FingerprintData remoteFingerprint = 3;
+}

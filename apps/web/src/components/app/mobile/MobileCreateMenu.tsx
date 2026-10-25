@@ -1,5 +1,4 @@
 import './MobileCreateMenu.css';
-import { hapticImpact } from '@core/mobile/haptics';
 import { Dialog } from '@kobalte/core/dialog';
 import PlusIcon from '@phosphor/plus.svg';
 import { Layer } from '@ui/components/Layer';
@@ -67,7 +66,6 @@ export function MobileCreateMenu(props: {
 
   const select = (item: MobileCreateMenuItem) => {
     selectedAction = item.onSelect;
-    hapticImpact('light');
     setOpen(false);
   };
 
@@ -77,7 +75,6 @@ export function MobileCreateMenu(props: {
         <Dialog.Trigger
           ref={triggerRef}
           aria-label="New"
-          onPointerDown={() => hapticImpact('light')}
           class="relative flex h-(--mobile-chrome-button-size) items-center justify-center gap-1.5 rounded-full pl-3 pr-4 text-base font-medium whitespace-nowrap"
         >
           <PlusIcon class="size-5.5 shrink-0" />
@@ -138,7 +135,6 @@ export function MobileCreateMenu(props: {
               <Dialog.CloseButton
                 aria-label="Close create menu"
                 style={{ width: `${position().width}px` }}
-                onPointerDown={() => hapticImpact('light')}
                 class="flex h-(--mobile-chrome-button-size) items-center justify-center gap-1.5 rounded-full pl-3 pr-4 text-base font-medium outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
                 <PlusIcon class="mobile-create-menu-plus size-5.5 shrink-0" />

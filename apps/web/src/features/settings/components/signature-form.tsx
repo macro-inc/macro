@@ -1,9 +1,10 @@
+import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import DownloadIcon from '@phosphor-icons/core/regular/download-simple.svg?component-solid';
 import SignatureIcon from '@phosphor-icons/core/regular/signature.svg?component-solid';
 import { ToggleSwitch } from '@ui';
 import { lazy, Show, Suspense } from 'solid-js';
 
-import { SettingsButton as Button, SettingsSurface } from '../primitives';
+import { SettingsButton as Button } from '../primitives';
 
 const SignatureEditor = lazy(() => import('../SignatureEditor'));
 
@@ -26,7 +27,9 @@ export function SignatureForm(props: {
   mobile: boolean;
 }) {
   return (
-    <SettingsSurface class="@container/signature flex flex-col gap-4 rounded-2xl border border-edge-muted p-4">
+    // A row of the Signatures card on desktop, divided like the card's other
+    // lists; touch keeps its boxed signatures.
+    <div class="@container/signature flex flex-col gap-4 touch:rounded-2xl touch:border touch:border-edge-muted touch:p-4 not-touch:not-first:border-t not-touch:not-first:border-edge-divider not-touch:not-first:pt-4 not-touch:not-last:pb-2">
       <div class="flex items-start justify-between gap-3">
         <div class="min-w-0">
           <h3 class="text-base font-medium break-all">{props.email}</h3>
@@ -64,9 +67,7 @@ export function SignatureForm(props: {
         }
       >
         <Suspense
-          fallback={
-            <div class="h-44 animate-pulse rounded-lg border-1 border-ink/10" />
-          }
+          fallback={<ListSkeleton.Bar class="h-44 w-full rounded-xl" />}
         >
           <SignatureEditor
             label={`Signature for ${props.email}`}
@@ -116,6 +117,6 @@ export function SignatureForm(props: {
       <Show when={props.error}>
         {(msg) => <p class="text-right text-sm text-failure-ink">{msg()}</p>}
       </Show>
-    </SettingsSurface>
+    </div>
   );
 }

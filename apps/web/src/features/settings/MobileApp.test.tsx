@@ -60,7 +60,7 @@ describe('MobileApp', () => {
   it('renders the QR code and text', () => {
     render(() => <MobileApp />);
 
-    expect(screen.getByText(/Download Macro Alpha on the/)).toBeTruthy();
+    expect(screen.getByText(/Download Macro on the/)).toBeTruthy();
     // Use getAllByText and check it appears multiple times (in the paragraph and in the button)
     const appStoreText = screen.getAllByText(/App Store/);
     expect(appStoreText.length).toBeGreaterThan(0);

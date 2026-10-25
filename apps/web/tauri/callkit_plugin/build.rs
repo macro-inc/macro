@@ -24,6 +24,8 @@ const COMMANDS: &[&str] = &[
     "set_call_drawer_theme",
     "set_participant_display_name",
     "switch_camera",
+    "can_use_full_screen_intent",
+    "open_full_screen_intent_settings",
 ];
 
 struct BuildEnv {

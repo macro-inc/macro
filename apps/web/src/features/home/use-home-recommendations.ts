@@ -45,6 +45,7 @@ export function useHomeRecommendations() {
       failed:
         (emailLinks.isError && emailLinks.data === undefined) ||
         recommendations.hasError(),
+      retryable: recommendations.canRetry(),
       items: recommendations.items(),
       emailLinked:
         emailLinks.isSuccess && (emailLinks.data?.links.length ?? 0) > 0,

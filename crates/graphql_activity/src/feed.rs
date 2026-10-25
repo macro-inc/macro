@@ -1,6 +1,6 @@
 use std::num::NonZeroU32;
 
-use async_graphql::{Context, InputObject, SimpleObject};
+use async_graphql::{Context, Enum, InputObject, SimpleObject};
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{Base64Str, CursorVal, CursorWithVal, Sortable};
@@ -29,17 +29,33 @@ impl Sortable for OccurredAt {
 /// of the last item on the previous page.
 type ActivityFeedCursor = CursorWithVal<Uuid, OccurredAt>;
 
+/// Whose activity an activity feed page reads.
+#[derive(Enum, Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum ActivityFeedScope {
+    /// The authenticated user's own activity, delegated actions included.
+    #[default]
+    Mine,
+    /// Activity by the authenticated user's teammates, on entities shared
+    /// with the user (link sharing alone does not count; forms never). A
+    /// page may hold fewer items than its limit, or none, while
+    /// `nextCursor` is set: keep paging until it is absent.
+    Team,
+}
+
 /// Page request for the authenticated user's activity feed.
 #[derive(InputObject)]
 pub struct ActivityFeedInput {
     /// Opaque cursor from the previous page's `nextCursor`; absent for the
-    /// first page.
+    /// first page. Pass it back with the same `scope`.
     pub cursor: Option<String>,
     /// Page size; defaults to 25, capped at 100.
     pub limit: Option<i32>,
+    /// Whose activity to read; defaults to the user's own.
+    #[graphql(default)]
+    pub scope: ActivityFeedScope,
 }
 
-/// One page of the authenticated user's activity, newest first.
+/// One page of activity, newest first.
 #[derive(SimpleObject)]
 pub struct GraphqlActivityPage {
     /// The page's activity events.
@@ -79,10 +95,13 @@ fn encode_cursor(occurred_at: DateTime<Utc>, id: Uuid, limit: u32) -> String {
 
 /// Resolve one page of the authenticated user's activity feed, newest first.
 ///
-/// The subject is the viewer's principal string, so delegated actions a bot
-/// performed on the user's behalf appear in the user's own feed. Pagination
-/// follows the page's `next` position, which storage derives from raw rows —
-/// a corrupt row shrinks a page but never ends the feed.
+/// In the `MINE` scope the subject is the viewer's principal string, so
+/// delegated actions a bot performed on the user's behalf appear in the
+/// user's own feed. In the `TEAM` scope storage keeps only teammates' rows on
+/// entities shared with the viewer. Pagination follows the page's `next`
+/// position, which storage derives from raw rows — a corrupt row, or a team
+/// page's bounded scan, shrinks a page (possibly to empty) but never ends the
+/// feed.
 pub async fn resolve_activity_feed<R>(
     ctx: &Context<'_>,
     user_id: &MacroUserIdStr<'static>,
@@ -95,10 +114,11 @@ where
     let limit = parse_feed_limit(input.limit)?;
     let cursor = input.cursor.map(decode_cursor).transpose()?;
 
-    let page = reader
-        .subject_feed(user_id.as_ref(), cursor, limit)
-        .await
-        .map_err(|_| async_graphql::Error::new("activity feed is unavailable"))?;
+    let page = match input.scope {
+        ActivityFeedScope::Mine => reader.subject_feed(user_id.as_ref(), cursor, limit).await,
+        ActivityFeedScope::Team => reader.teammate_feed(user_id.as_ref(), cursor, limit).await,
+    }
+    .map_err(|_| async_graphql::Error::new("activity feed is unavailable"))?;
 
     Ok(GraphqlActivityPage {
         items: page.records.into_iter().map(Into::into).collect(),

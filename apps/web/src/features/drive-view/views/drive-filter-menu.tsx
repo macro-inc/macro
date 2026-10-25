@@ -1,4 +1,5 @@
 import {
+  ListFilterCountBadge,
   ListFilterDropdown,
   useViewControlHotkeys,
 } from '@app/components/view-shell';
@@ -28,14 +29,17 @@ export function DriveFilterMenu() {
   });
 
   return (
-    <ListFilterDropdown
-      label="Filter files"
-      open={open()}
-      onOpenChange={setOpen}
-      groups={filters.groups()}
-      onClear={filters.clear}
-      isSelected={filters.isSelected}
-      onSelectionChange={filters.setSelected}
-    />
+    <div class="relative shrink-0">
+      <ListFilterDropdown
+        label="Filter files"
+        open={open()}
+        onOpenChange={setOpen}
+        groups={filters.groups()}
+        onClear={filters.clear}
+        isSelected={filters.isSelected}
+        onSelectionChange={filters.setSelected}
+      />
+      <ListFilterCountBadge count={filters.activeCount()} />
+    </div>
   );
 }

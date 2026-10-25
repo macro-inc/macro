@@ -41,7 +41,7 @@ export function pipelineCell(
         })
       )
     )
-    .exhaustive();
+    .exhaustive(() => null);
 }
 
 /** Transport adapter only; the shared provider owns queries and editing. */

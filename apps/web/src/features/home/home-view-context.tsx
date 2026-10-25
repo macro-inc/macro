@@ -72,7 +72,10 @@ export type HomeViewContext = {
   calendarOpen: Accessor<boolean>;
   /** Bumped when the open calendar event is requested again, to re-aim in place. */
   calendarRefocus: Accessor<number>;
-  openPreview: (entity: PreviewSelection) => boolean;
+  openPreview: (
+    entity: PreviewSelection,
+    options?: { activate?: boolean }
+  ) => boolean;
   closePreview: () => void;
   setTab: (tab: HomeTab) => void;
   setFacets: (facets: FacetSelection) => void;
@@ -179,8 +182,13 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
   };
   const [previewNavigationRequest, setPreviewNavigationRequest] =
     createSignal(0);
-  const openPreview = (entity: PreviewSelection) => {
-    if (entity.type === 'calendar_event') return openCalendarEvent(entity);
+  const openPreview = (
+    entity: PreviewSelection,
+    options?: { activate?: boolean }
+  ) => {
+    if (entity.type === 'calendar_event') {
+      return openCalendarEvent(entity, options);
+    }
     return openPreviewTarget(previewBlockTarget(entity));
   };
   const openPreviewTarget = (target: PreviewBlockTarget) => {

@@ -19,7 +19,8 @@
 //                it exits non-zero unless exactly this version+build is live
 //                on the App Store, built from --native-tree (or this checkout's
 //                native code) — the gate the `iOS Native Check` job runs on
-//                PRs with native iOS changes.
+//                PRs with native iOS changes. Writes a JSON gate_result to
+//                GITHUB_OUTPUT only after evaluating the App Store response.
 //
 // Auth (same values as ios-release.sh):
 //   APPLE_API_KEY       App Store Connect API Key ID
@@ -130,17 +131,21 @@ const WITHDRAWABLE_SUBMISSION_STATES = new Set([
 const BOOLEAN_FLAGS = new Set(["require-live", "require-unused-build"]);
 
 /// "The native code": every tracked blob under this directory except what
-/// never reaches the iOS binary — anything Android-only by Tauri's naming
-/// convention (a path component `android`, `android_*`, `android.*` or
-/// `*.android.*`), the desktop updater manifest, editor config — plus the
-/// version of the client cache wasm package, which the team bumps when a
-/// cache change must ship (the app compiles the cache crates natively). Must
-/// match `native_tree_hash` in
+/// never reaches the iOS binary — anything Android-only or desktop-only by
+/// Tauri's naming convention (a path component `android`, `macos`, `linux`,
+/// `windows` or `desktop`, that name plus `_`, `.` or `-`, or a `*.android.*`
+/// / `*.macos.*` / `*.linux.*` / `*.windows.*` infix; all behind
+/// cfg(target_os) / cfg(desktop)), the desktop updater manifest, editor
+/// config and Markdown docs — plus the version of the client cache wasm
+/// package, which the team bumps when a cache change must ship (the app compiles the cache crates
+/// natively). `apple`/`ios` paths stay included: gen/apple is the Xcode
+/// project. Must match `native_tree_hash` in
 /// tooling/xtask/.../workflows/scripts/ios_native_tree.sh and the iOS Native
 /// Check's change detection.
 const NATIVE_TREE_PATH = "apps/web/tauri";
 const CACHE_WASM_MANIFEST = "crates/client/cache-wasm/Cargo.toml";
-const NATIVE_TREE_EXCLUDE = /(^|\/)android([_.\/]|$)|\.android\.|^desktop-release\.json$|^\.helix\//;
+const NATIVE_TREE_EXCLUDE =
+  /(^|\/)(android|macos|linux|windows|desktop)([_./-]|$)|\.(android|macos|linux|windows)\.|\.md$|^desktop-release\.json$|^\.helix\//;
 const STAMP_RE = /native tree ([0-9a-f]{40})/;
 const STAMP_PR_RE = /for PR #(\d+)/;
 
@@ -1046,7 +1051,14 @@ async function status() {
   }
   const versionRecord = await findAppStoreVersion();
 
-  const fail = (reason) => {
+  const report = (kind, reason, state = null) => {
+    setGitHubOutput("gate_result", JSON.stringify({
+      kind, reason, state, version, build, distributionUrl,
+      floor: readJson("min-native-build.json").ios,
+    }));
+  };
+  const fail = (reason, kind = "release-required", state = null) => {
+    report(kind, reason, state);
     console.error(`${reason}
 
 This PR changes native iOS code, so iOS ${version} (build ${build}) must be
@@ -1088,23 +1100,37 @@ ${distributionUrl}`);
       `App Store version ${version} was live but has been superseded (state ${state}), ` +
         "so the store build may lack this PR's native code. Bump (`just ios-bump` moves " +
         "the version), commit, and re-add the ios-update label to release again.",
+      "mismatch", state,
     );
   }
   if (!LIVE_STATES.has(state)) {
-    fail(`App Store version ${version} is not live yet (state ${state}).`);
+    fail(
+      `App Store version ${version} is not live yet (state ${state}).`,
+      SUBMITTED_STATES.has(state) ? "waiting" : "release-required",
+      state,
+    );
   }
   if (attachedBuildNumber !== build) {
     fail(
       `App Store version ${version} is live but was built from build ` +
         `${attachedBuildNumber ?? "unknown"}, not this PR's build ${build}.`,
+      "mismatch", state,
     );
   }
   const stamp = (await buildStamp(attachedBuild.data.id))?.tree ?? null;
   const ours = nativeTreeHash();
-  if (!ours || stamp !== ours) {
+  if (!ours) {
+    console.error(
+      "Could not compute this checkout's native tree; the live build could not be verified. " +
+        "Check the Git checkout and rerun the check.",
+    );
+    exit(1);
+  }
+  if (stamp !== ours) {
+    report("mismatch", "The live build does not match this PR's current merge result.", state);
     console.error(`App Store version ${version} (${build}) is live, but that build was not built from
 the native code this merge would produce: its stamp is ${stamp ?? "missing (uploaded outside the release flow)"},
-the merge result's native tree (${NATIVE_TREE_PATH}) is ${ours ?? "unknown"}.
+the merge result's native tree (${NATIVE_TREE_PATH}) is ${ours}.
 Either native commits were pushed to this PR after the release, native code landed
 on main since the release (so the merge would contain code the shipped build lacks),
 or another PR / a hand release shipped the same version + build number. Merging main
@@ -1114,6 +1140,7 @@ actually be merged gets released:
 ${distributionUrl}`);
     exit(1);
   }
+  report("live", "The exact version, build, and native code are live and verified.", state);
   console.log(`App Store version ${version} (${build}) is live, built from this native tree.`);
 }
 

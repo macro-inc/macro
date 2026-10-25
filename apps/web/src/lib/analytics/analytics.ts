@@ -7,14 +7,16 @@ import {
   initializeGoogleAnalytics,
   initializeMetaPixel,
 } from '@app/lib/analytics/providers';
+import { frontendInstanceId } from '@app/observability/frontend-instance';
 import { DEV_MODE_ENV, PROD_MODE_ENV } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getPlatform, isTauri } from '@core/util/platform';
 import {
-  redactCallLinkProperties,
-  redactCallLinkTokens,
+  redactLinkTokenProperties,
+  redactLinkTokens,
 } from '@core/util/telemetryUrl';
 import { getWebOrigin } from '@core/util/webOrigin';
+import type { Team } from '@service-auth/generated/schemas/team';
 import { type CaptureOptions, PostHog } from 'posthog-js';
 import { match } from 'ts-pattern';
 import { isIgnorableException, rewriteNativeFrameUrls } from './exceptionList';
@@ -35,6 +37,8 @@ const DEVICE_PROPERTY = 'macro_device' as const;
 const ENVIRONMENT_PROPERTY = 'macro_environment' as const;
 const PLAN_TIER_AT_EVENT_PROPERTY = 'plan_tier_at_event' as const;
 const HAS_PAID_ACCESS_AT_EVENT_PROPERTY = 'has_paid_access_at_event' as const;
+/** PostHog group type for team analytics; server events send the same key. */
+const TEAM_GROUP_TYPE = 'team' as const;
 
 function getEnvironment(): 'dev' | 'prod' | 'unknown' {
   if (PROD_MODE_ENV) return 'prod';
@@ -69,6 +73,8 @@ type TrackFn = <E extends EventName>(
   providersToSendTo?: AnalyticsProvider[],
   options?: TrackOptions
 ) => void;
+
+type TeamGroupInfo = Pick<Team, 'id' | 'name' | 'enterprise'>;
 
 interface UserIdentifyInfo {
   email: string;
@@ -119,7 +125,7 @@ const POSTHOG_RECORDER_PROXY_SCRIPT_NAME = 'runtime.js';
 
 function isPrivateCallPage() {
   const path = window.location.pathname + window.location.hash;
-  return redactCallLinkTokens(path) !== path;
+  return redactLinkTokens(path) !== path;
 }
 
 const initializePosthog = (instance: PostHog) => {
@@ -144,10 +150,11 @@ const initializePosthog = (instance: PostHog) => {
       // Call URLs are bearer capabilities and meeting content must not replay.
       if (isPrivateCallPage()) return null;
       if (cr) {
-        cr.properties = redactCallLinkProperties(cr.properties);
-        if (cr.$set) cr.$set = redactCallLinkProperties(cr.$set);
+        cr.properties = redactLinkTokenProperties(cr.properties);
+        cr.properties.frontend_instance_id = frontendInstanceId;
+        if (cr.$set) cr.$set = redactLinkTokenProperties(cr.$set);
         if (cr.$set_once) {
-          cr.$set_once = redactCallLinkProperties(cr.$set_once);
+          cr.$set_once = redactLinkTokenProperties(cr.$set_once);
         }
         cr.properties.env = DEV_MODE_ENV
           ? 'DEV'
@@ -344,11 +351,49 @@ const createAnalytics = () => {
     }
   };
 
+  // `group` with properties captures a `$groupidentify` event, so only send
+  // it when the team or its properties change, not on every team refetch.
+  let syncedTeamGroupKey: string | undefined;
+
+  const setTeamGroup = (team: TeamGroupInfo) => {
+    if (disabled) return;
+
+    const key = `${team.id}:${team.name}:${team.enterprise}`;
+    if (syncedTeamGroupKey === key) return;
+
+    try {
+      posthog.group(TEAM_GROUP_TYPE, team.id, {
+        name: team.name,
+        enterprise: team.enterprise,
+      });
+      syncedTeamGroupKey = key;
+    } catch (e) {
+      console.error('[Analytics] Failed to set team group:', e);
+    }
+  };
+
+  const clearTeamGroup = () => {
+    if (disabled) return;
+
+    syncedTeamGroupKey = undefined;
+    try {
+      // The group persists across reloads; clear it only when one is set,
+      // since `resetGroups` also reloads feature flags.
+      if (posthog.getGroups()[TEAM_GROUP_TYPE] === undefined) return;
+      posthog.resetGroups();
+    } catch (e) {
+      console.error('[Analytics] Failed to clear team group:', e);
+    }
+  };
+
   const reset = () => {
     if (disabled) return;
 
     try {
       gtag('config', GA_ID, { user_id: undefined });
+
+      // `posthog.reset()` clears the persisted groups.
+      syncedTeamGroupKey = undefined;
 
       posthog.unregister(PLAN_TIER_AT_EVENT_PROPERTY);
       posthog.unregister(HAS_PAID_ACCESS_AT_EVENT_PROPERTY);
@@ -362,10 +407,8 @@ const createAnalytics = () => {
     if (disabled) return;
 
     if (isPrivateCallPage()) return;
-    const pagePath = redactCallLinkTokens(
-      opts?.path ?? window.location.pathname
-    );
-    const pageLocation = redactCallLinkTokens(
+    const pagePath = redactLinkTokens(opts?.path ?? window.location.pathname);
+    const pageLocation = redactLinkTokens(
       opts?.location ?? window.location.href
     );
     const deviceType = getDeviceType();
@@ -408,6 +451,8 @@ const createAnalytics = () => {
     trackGoogleConversion,
     identify,
     setPlanProperties,
+    setTeamGroup,
+    clearTeamGroup,
     reset,
     pageView,
   };
@@ -427,6 +472,10 @@ export type AnalyticsInterface = {
   ) => void;
   identify: (userID: string, info: Partial<UserIdentifyInfo>) => void;
   setPlanProperties: (licenseStatus: string | undefined) => void;
+  /** Associates this user's events with their team (PostHog group analytics). */
+  setTeamGroup: (team: TeamGroupInfo) => void;
+  /** Detaches events from any team, e.g. after leaving it. */
+  clearTeamGroup: () => void;
   reset: () => void;
   pageView: (pageTitle: string, opts?: PageViewOptions) => void;
 };

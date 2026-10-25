@@ -181,6 +181,25 @@ pub trait MacroAuthorizationService: Clone + Send + Sync + 'static {
         jwt: &str,
     ) -> impl Future<Output = Result<UserContext, Report<MacroAuthorizationError>>> + Send;
 
+    /// Authorize a user credential while retaining signed agent attribution.
+    /// Context-only authorizers establish no agent identity.
+    fn authorize_identity(
+        &self,
+        jwt: &str,
+    ) -> impl Future<Output = Result<ValidatedIdentity, Report<MacroAuthorizationError>>> + Send
+    {
+        async {
+            let context = self.authorize(jwt).await?;
+            Ok(ValidatedIdentity {
+                agent_id: None,
+                user_id: context.user_id,
+                fusion_user_id: context.fusion_user_id,
+                organization_id: context.organization_id,
+                permissions: context.permissions,
+            })
+        }
+    }
+
     /// Authorize a bot token, verifying any acting-user claims.
     ///
     /// Services reject bot credentials unless they explicitly provide a bot

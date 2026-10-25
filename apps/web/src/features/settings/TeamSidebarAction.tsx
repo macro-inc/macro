@@ -6,7 +6,7 @@ import { useTeamQuery, useUserTeamsQuery } from '@queries/team/teams';
 import { pressHandlers } from '@ui';
 import { createSignal, type JSX, Show } from 'solid-js';
 import { CreateTeamDialog, InviteToTeamDialog } from './Team';
-import { canInviteToTeam } from './teamMemberPermissions';
+import { canInviteToTeam, isTeamAdminOrOwner } from './teamMemberPermissions';
 
 /**
  * The settings sidebar's footer action: invite people to your team, or create
@@ -49,13 +49,14 @@ function InviteToTeamAction(props: { teamId: string }) {
   const userId = useUserId();
   const teamQuery = useTeamQuery(() => props.teamId);
   const [open, setOpen] = createSignal(false);
+  const role = () => {
+    const team = teamQuery.isSuccess ? teamQuery.data : undefined;
+    return team?.members.find((member) => member.user_id === userId())?.role;
+  };
   const canInvite = () => {
     const team = teamQuery.isSuccess ? teamQuery.data : undefined;
     if (!team) return false;
-    const role = team.members.find(
-      (member) => member.user_id === userId()
-    )?.role;
-    return canInviteToTeam(role, team.team.allow_non_admin_invites);
+    return canInviteToTeam(role(), team.team.allow_non_admin_invites);
   };
 
   return (
@@ -67,6 +68,7 @@ function InviteToTeamAction(props: { teamId: string }) {
       />
       <InviteToTeamDialog
         teamId={props.teamId}
+        canManageLink={isTeamAdminOrOwner(role())}
         open={open()}
         onClose={() => setOpen(false)}
       />

@@ -19,6 +19,7 @@ struct UserCredentials;
 impl JwtValidator for UserCredentials {
     fn validate(&self, _: &str) -> Result<ValidatedIdentity, Report<MacroAuthorizationError>> {
         Ok(ValidatedIdentity {
+            agent_id: None,
             user_id: USER.into(),
             fusion_user_id: "fusion-owner".into(),
             organization_id: None,
@@ -34,6 +35,14 @@ struct ServiceSpy {
 }
 
 impl CodingAgentService for ServiceSpy {
+    fn create(
+        &self,
+        command: DispatchCodingAgentRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<DispatchedCodingAgent, CodingAgentError>> + Send + '_>>
+    {
+        self.dispatch(command)
+    }
+
     fn list(
         &self,
         user_id: MacroUserIdStr<'static>,
@@ -106,7 +115,7 @@ async fn body(response: Response) -> Value {
 #[tokio::test]
 async fn internal_credentials_are_required_before_discovery_or_dispatch() {
     let service = Arc::new(ServiceSpy::default());
-    for operation in ["list", "dispatch"] {
+    for operation in ["list", "dispatch", "create-session"] {
         for (header, expected) in [
             (None, StatusCode::UNAUTHORIZED),
             (
@@ -131,7 +140,7 @@ async fn internal_credentials_are_required_before_discovery_or_dispatch() {
 #[tokio::test]
 async fn authenticated_commands_preserve_user_and_task_identity() {
     let service = Arc::new(ServiceSpy::default());
-    for operation in ["list", "dispatch"] {
+    for operation in ["list", "dispatch", "create-session"] {
         let command = command(operation);
         let response = app(service.clone())
             .oneshot(request(
@@ -156,7 +165,7 @@ async fn authenticated_commands_preserve_user_and_task_identity() {
 #[tokio::test]
 async fn malformed_identity_and_oversized_tasks_never_reach_the_domain() {
     let service = Arc::new(ServiceSpy::default());
-    for operation in ["list", "dispatch"] {
+    for operation in ["list", "dispatch", "create-session"] {
         for invalid in [None, Some(json!("invalid-user")), Some(Value::Null)] {
             let mut command = command(operation);
             command.as_object_mut().unwrap().remove("user_id");

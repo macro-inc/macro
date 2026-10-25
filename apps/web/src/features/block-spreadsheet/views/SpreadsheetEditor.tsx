@@ -17,6 +17,8 @@ import {
   createSignal,
   For,
   on,
+  onCleanup,
+  onMount,
   Show,
 } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -852,21 +854,38 @@ export function SpreadsheetEditor(props: {
     }
   }
 
+  // Capture so formula-bar / toolbar inputs that stopPropagation cannot open
+  // the browser find dialog; always route Cmd/Ctrl+F to the sheet find bar.
+  onMount(() => {
+    const onFindShortcut = (event: KeyboardEvent) => {
+      if (
+        !(event.metaKey || event.ctrlKey) ||
+        event.altKey ||
+        event.code !== 'KeyF'
+      )
+        return;
+      event.preventDefault();
+      event.stopPropagation();
+      command('find');
+      queueMicrotask(() => {
+        const input = editorElement.querySelector<HTMLInputElement>(
+          '[aria-label="Find in sheet"]'
+        );
+        input?.focus();
+        input?.select();
+      });
+    };
+    editorElement.addEventListener('keydown', onFindShortcut, true);
+    onCleanup(() =>
+      editorElement.removeEventListener('keydown', onFindShortcut, true)
+    );
+  });
+
   return (
     <section
       ref={editorElement}
       class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden bg-panel text-ink"
       aria-label={`${props.name} spreadsheet`}
-      onKeyDown={(event) => {
-        if (
-          (event.metaKey || event.ctrlKey) &&
-          event.key.toLowerCase() === 'f'
-        ) {
-          event.preventDefault();
-          event.stopPropagation();
-          command('find');
-        }
-      }}
     >
       <SpreadsheetDialog
         open={!!resize()}

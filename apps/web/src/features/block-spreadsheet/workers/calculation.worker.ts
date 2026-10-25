@@ -184,7 +184,14 @@ self.onmessage = async (event: MessageEvent<CalculationRequest>) => {
               message: 'Calculate the sheet before using Goal Seek.',
             }),
       }))
-      .exhaustive();
+      .exhaustive((unknown) => {
+        console.warn('calculation worker: unknown request', unknown);
+        return {
+          id: request.id,
+          type: 'error',
+          message: 'Unknown calculation request.',
+        };
+      });
   } catch (error) {
     response = {
       id: request.id,

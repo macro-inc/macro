@@ -21,7 +21,7 @@ import type {
   SoupApiItem,
   SoupPage,
 } from '@service-storage/generated/schemas';
-import { Button, InlineCheckbox, SegmentedControl } from '@ui';
+import { Button, InlineCheckbox, Tabs } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 
 type FilterTokenId =
@@ -465,8 +465,10 @@ export default function DocumentWherePlayground() {
         <aside class="flex min-h-0 flex-col gap-4 border-edge-muted border-r p-4">
           <section class="space-y-2">
             <div class="text-sm font-medium">Endpoint</div>
-            <SegmentedControl
-              class="w-full"
+            <Tabs
+              aria-label="Endpoint"
+              touch="segmented"
+              fullWidth
               size="sm"
               value={mode()}
               options={[

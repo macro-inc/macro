@@ -125,11 +125,12 @@ export function getActionVerb(type: NotificationType): string {
       // Reads as a standalone phrase, not an actor's action — nobody sent it.
       .with('reminder', () => 'reminder')
       .with('calendar_event_reminder', () => 'upcoming event')
+      .with('calendar_event_join_request', () => 'asked to join')
       .with('inbox_reauth_required', () => 'needs reconnection')
       .with('agent_session_settled', () => 'finished')
       .with('agent_session_waiting_for_input', () => 'needs your answer')
       .with('agent_session_mentioned', () => 'mentioned you')
-      .exhaustive()
+      .exhaustive(() => 'updated')
   );
 }
 
@@ -182,6 +183,9 @@ export function getTypeNoun(type: NotificationType, count: number): string {
     .with('call_started', () => (count === 1 ? 'call' : 'calls'))
     .with('reminder', () => (count === 1 ? 'reminder' : 'reminders'))
     .with('calendar_event_reminder', () => (count === 1 ? 'event' : 'events'))
+    .with('calendar_event_join_request', () =>
+      count === 1 ? 'request to join' : 'requests to join'
+    )
     .with('inbox_reauth_required', () => (count === 1 ? 'inbox' : 'inboxes'))
     .with('agent_session_settled', () =>
       count === 1 ? 'agent run' : 'agent runs'
@@ -192,7 +196,7 @@ export function getTypeNoun(type: NotificationType, count: number): string {
     .with('agent_session_mentioned', () =>
       count === 1 ? 'mention' : 'mentions'
     )
-    .exhaustive();
+    .exhaustive(() => (count === 1 ? 'notification' : 'notifications'));
 }
 
 export function getTypePreposition(type: NotificationType): string {

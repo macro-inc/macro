@@ -7,7 +7,7 @@ import {
   dispatchCodingAgentHandler,
   listCodingAgentsHandler,
 } from './CodingAgents';
-import { ToolErrorContext } from './ToolRenderer';
+import { type ToolEnding, ToolErrorContext } from './ToolRenderer';
 
 vi.mock('../../../LexicalMarkdown/component/decorator/MagicChip', () => ({
   MagicChip: (props: MagicChipData) => (
@@ -69,7 +69,7 @@ describe('coding agent dispatch', () => {
   });
 
   it('shows a dispatch error without leaving a starting indicator or session card', () => {
-    const [error, setError] = createSignal<string>();
+    const [error, setError] = createSignal<ToolEnding>();
     const view = render(() => (
       <ToolErrorContext.Provider value={error}>
         <dispatchCodingAgentHandler.render
@@ -89,7 +89,7 @@ describe('coding agent dispatch', () => {
         />
       </ToolErrorContext.Provider>
     ));
-    setError('failed');
+    setError({ kind: 'failed', reason: 'failed' });
     expect(view.getByRole('status').textContent).toContain(
       'Could not confirm coding agent dispatch'
     );
@@ -102,7 +102,7 @@ describe('available coding agents', () => {
   it.each([false, true])(
     'updates an already mounted row when listing fails (grouped: %s)',
     (grouped) => {
-      const [error, setError] = createSignal<string>();
+      const [error, setError] = createSignal<ToolEnding>();
       const view = render(() => (
         <ToolErrorContext.Provider value={error}>
           <listCodingAgentsHandler.render
@@ -123,7 +123,7 @@ describe('available coding agents', () => {
       expect(view.queryByText('Failed')).toBeNull();
       expect(label.closest('.opacity-50')).toBeNull();
 
-      setError('failed');
+      setError({ kind: 'failed', reason: 'failed' });
       expect(view.getByText('Failed')).toBeTruthy();
       expect(label.closest('.opacity-50')).toBeTruthy();
       expect(view.getByText('Available coding agents')).toBe(label);

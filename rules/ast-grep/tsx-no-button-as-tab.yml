@@ -1,0 +1,20 @@
+id: tsx-no-button-as-tab
+language: tsx
+severity: error
+message: Don't render a tab as a Button; use `Tabs` or `TabSelector.Tab`.
+note: |-
+  Rule FE-61 in .agents/rules/web/design-system.md. A Button inside a tab list
+  draws the action frame instead of the selected pill.
+files:
+  - apps/web/src/**
+rule:
+  any:
+    - kind: jsx_opening_element
+    - kind: jsx_self_closing_element
+  all:
+    - has:
+        field: name
+        regex: ^(Tabs\.Trigger|TabSelector\.Tab)$
+    - has:
+        kind: jsx_attribute
+        regex: ^as=\{Button\}$

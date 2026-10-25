@@ -12,11 +12,28 @@ execution, display) that don't belong to a single domain.
 - `src/lib.rs`: the composition point — imports each domain crate's
   `inbound::toolset` module and builds the combined `AsyncToolCollection`
   and frontend schema set.
+- `ReadAgentSession` is eager across chat, agent sessions, and MCP, and is also
+  available to subagents; keep its registration covered by the host tests.
 - `src/subagent.rs`: dispatches `snippet_specs` to parallel subagents.
 - `src/search.rs` / `src/search_tools.rs`: cross-entity search tools.
 - `src/deferred.rs`: tools whose result arrives after the turn (long-running
   work).
 - `src/tool_context.rs` + `src/tool_context/`: per-tool context extraction.
+- `src/import_workspace.rs`: `ToolEntityCreator` as the import crate's
+  `WorkspaceWriter` (folders, documents, tasks, databases as Macro AI for the
+  user), sharing its document/task paths with `EntityCreator`; Notion bodies
+  go through `DocumentCreator::create_notion_markdown`. `share_with_team`
+  shares a folder through `ProjectService::edit_project` (edit level) and a
+  document through `DocumentService::set_team_share`; Notion tasks are created
+  unshared and reached through their shared folder, while single tracked tasks
+  (Linear) stay team-shared at creation.
+- `src/import_jobs.rs`: `ImportJobs`, the shutdown token and tracker every
+  host passes to `build_tool_service_context_from_env` (or its own import
+  service) and calls `hand_over` on at shutdown, so running Notion imports
+  release their runs to another process. Those hosts build the import ledger
+  with `build_import_repo`, which wires agent-session notifications so the
+  session presenting an import's review hears when its plan is ready and
+  when its write ends.
 - `src/bin/gen_tool_schemas.rs`, `src/bin/gen_ai_request_schemas.rs`:
   schema-generation binaries the frontend consumes.
 
@@ -32,8 +49,8 @@ execution, display) that don't belong to a single domain.
 
 - Depends on: nearly every domain crate with tools (`forms`, `activity`,
   `agent_session`, `anthropic`, `initiative`, `collab_surface`, `favorites`,
-  `routines`, `ai_billing`, `ai_usage`, `ai_toolset`, `agent`), plus
-  `bot_id`, `attachment`, `static_file`.
+  `messages`, `routines`, `ai_billing`, `ai_usage`, `ai_toolset`, `agent`),
+  plus `bot_id`, `attachment`, `static_file`.
 - Used by: `document_storage_service`, `document_cognition_service`,
   `agent_harness_service`, `mcp_service`.
 
@@ -44,6 +61,16 @@ execution, display) that don't belong to a single domain.
   existing import — no change needed here unless it's cross-domain.
 - Add a cross-domain tool: new module in `src/` → register in
   `src/lib.rs`'s toolset assembly → regenerate schemas (see Checks).
+
+Canvas tools come from the Documents subtoolset and inherit its worker client,
+admission and usage recorder in every host. ApplyCanvasEdits uses the same
+edit capability but calls no nested model and emits no additional model charge; no new context or env vars are needed.
+
+## Tool contracts
+
+- Session user-tool finishers authorize the final edited arguments after review; preserve the selected account through confirmation and never approve an earlier draft then execute a changed one.
+
+- Executable toolsets exclude legacy chats in every host and code mode. Keep historical parsing compatibility only in `frontend_compat.rs`; never merge it into provider schemas.
 
 ## Checks
 

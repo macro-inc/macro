@@ -300,7 +300,11 @@ export const E_DOCUMENT_MENTION: ElementTransformer = {
     }
 
     const hostname = cleanHostname(window.location.hostname);
-    const documentUrl = `https://${hostname}/app/${blockType}/${documentId}`;
+    const path =
+      blockType === 'routine' || blockType === 'automation'
+        ? 'routines'
+        : blockType;
+    const documentUrl = `https://${hostname}/app/${path}/${documentId}`;
     return `[${documentName}](${documentUrl})`;
   },
   replace: (

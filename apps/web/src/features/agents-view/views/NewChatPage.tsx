@@ -12,21 +12,29 @@ import {
   speedForModel,
 } from '@core/component/AI/constant/speed';
 import { fastModeEnabled } from '@core/component/AI/signal/speed';
+import { ComposerGreeting } from '@core/component/ComposerGreeting';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserId } from '@core/context/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { uploadFile } from '@core/util/upload';
+import ChatIcon from '@phosphor/chat-circle.svg';
+import CodeIcon from '@phosphor/code.svg';
 import { useAgentCapabilitiesQuery } from '@queries/agents/capabilities';
+import { useAiBillingSummaryQuery } from '@queries/auth/ai-billing';
 import type { PromptAttachment } from '@service-agent-harness/generated/schemas';
+import { Tabs } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import { createMemo, createSignal, Show } from 'solid-js';
+import { EffortSelector } from '../../block-agent/component/EffortSelector';
 import {
   type EffortChoice,
   effortConfigOption,
   effortLabel,
 } from '../../block-agent/state/session-config';
 import { ChatComposer } from '../components/ChatComposer';
-import type { AgentKind } from '../core/agent-kind';
+import { type AgentKind, kindForMode } from '../core/agent-kind';
+import { type AgentsMode, agentsModeLabel } from '../core/mode';
 import { defaultBranchFor } from '../core/repository';
 import { MACRO_PERSONA_ID, type RosterAgent } from '../core/roster';
 import {
@@ -35,6 +43,7 @@ import {
 } from '../primitives/composer-draft';
 import { createPreferredInmemModel } from '../primitives/preferred-inmem-model';
 import { createRecentRepositories } from '../primitives/recent-repositories';
+import { createWorkspaceMode } from '../primitives/workspace-mode';
 import { createComposerModels } from '../queries/composer-models';
 import { createReachableRepositories } from '../queries/reachable-repositories';
 import { createRepositoryBranches } from '../queries/repository-branches';
@@ -69,8 +78,12 @@ export function NewChatPage(props: {
   autoFocus?: boolean;
   registerFocus?: (focus: () => void) => void;
   roster: RosterAgent[];
-  /** Offer only this kind; the Agents workspace passes its Work or Code mode. */
-  kind?: AgentKind;
+  /**
+   * Chat or Code, which also limits the agents offered. Uncontrolled callers
+   * get the signed-in user's last choice.
+   */
+  mode?: AgentsMode;
+  onModeChange?: (mode: AgentsMode) => void;
   rosterLoading: boolean;
   /** Agents are listed but whether they can start is still unknown. */
   availabilityLoading?: boolean;
@@ -79,19 +92,19 @@ export function NewChatPage(props: {
   onOpenRoster: (kind: AgentKind) => void;
 }) {
   const userId = useUserId();
+  const billing = useAiBillingSummaryQuery();
   const { openSettings } = useSettingsState();
   const recentAgents = createRecentAgentSelections(userId());
   const repositories = createRecentRepositories(userId());
   const preferredInmem = createPreferredInmemModel(userId());
-  const options = () => {
-    const kind = props.kind;
-    return kind
-      ? props.roster.filter((agent) => agent.kind === kind)
-      : props.roster;
-  };
+  const ownMode = createWorkspaceMode(userId());
+  const mode = () => props.mode ?? ownMode.mode();
+  const options = () =>
+    props.roster.filter((agent) => agent.kind === kindForMode(mode()));
   const [agentId, setAgentId] = createSignal<string>();
   /** One-shot model from a coding agent's submenu; Macro uses {@link preferredInmem}. */
   const [modelOverride, setModelOverride] = createSignal<string>();
+  const [effortPickerOpen, setEffortPickerOpen] = createSignal(false);
   const [repositoryPickerOpen, setRepositoryPickerOpen] = createSignal(false);
   // A new conversation starts on Automatic until the caller picks a repository.
   const [repoUrl, setRepoUrl] = createSignal<string | undefined>();
@@ -168,12 +181,22 @@ export function NewChatPage(props: {
   // The submenu already validated this choice. Retain it while the selected
   // model's discovery refreshes; startup revalidates against the runtime.
   const effortOverride = () => {
-    const selection = selectedEffort();
+    const config = effort();
+    const minimum =
+      billing.isSuccess &&
+      (billing.data.tier === 'free' || billing.data.tier === 'premium')
+        ? config?.options[0]
+        : undefined;
+    const selection =
+      selectedEffort() ??
+      (minimum && config
+        ? { configId: config.id, value: minimum.value, name: minimum.name }
+        : undefined);
     return selection
       ? { configId: selection.configId, value: selection.value }
       : undefined;
   };
-  const coding = () => (props.kind ?? selected()?.kind) === 'coder';
+  const coding = () => mode() === 'code';
   const localRuntime = () => selected()?.harness === 'macrod';
   const canSelectRepository = () =>
     selected()?.harness === 'cursor' || localRuntime();
@@ -201,7 +224,11 @@ export function NewChatPage(props: {
   };
 
   const connect = (agent: RosterAgent) => {
-    if (agent.harness === 'cursor') openSettings('Harness');
+    // Both land on Settings → Runtimes: Cursor to save an API key, macrod to
+    // restart the local runtime (one click on desktop) or re-pair it.
+    if (agent.harness === 'cursor' || agent.harness === 'macrod') {
+      openSettings('Harness');
+    }
   };
 
   const attachmentTracker = createMemo(() => {
@@ -304,14 +331,22 @@ export function NewChatPage(props: {
     );
   };
 
+  let focusInput: (() => void) | undefined;
+  const restoreInputFocus = (event: Event) => {
+    event.preventDefault();
+    focusInput?.();
+  };
   const agentSelector = () => (
     <AgentPicker
       agents={options()}
       selected={selected()}
       modelOverride={composerModelOverride()}
       loading={props.rosterLoading}
-      effortLabel={selectedEffort()?.name ?? effortLabel(effort())}
+      effortLabel={
+        selectedEffort()?.name ?? effortLabel(effort(), effortOverride()?.value)
+      }
       effortSelection={effortOverride()}
+      onCloseAutoFocus={restoreInputFocus}
       onSelect={selectAgent}
       onSelectEffort={selectAgent}
       onConnect={connect}
@@ -319,18 +354,82 @@ export function NewChatPage(props: {
     />
   );
 
+  const setMode = (next: AgentsMode) => {
+    // A model or effort picked for the other mode's agent does not carry over.
+    setModelOverride(undefined);
+    setEffortSelection(undefined);
+    if (props.onModeChange) props.onModeChange(next);
+    else ownMode.setMode(next);
+  };
+
+  const modeSwitch = () => (
+    <div ref={tourTarget(AGENTS_TOUR.modeSwitch)} class="shrink-0">
+      <Tabs
+        aria-label="Conversation mode"
+        options={[
+          { value: 'chat', label: agentsModeLabel('chat'), icon: ChatIcon },
+          { value: 'code', label: agentsModeLabel('code'), icon: CodeIcon },
+        ]}
+        variant="track"
+        fullWidth
+        // Phones keep the icons; the name stays for assistive tech.
+        iconOnly={isTouchDevice()}
+        value={mode()}
+        onChange={setMode}
+        class="w-56 touch:w-24"
+      />
+    </div>
+  );
+
+  const repositoryPicker = () => (
+    <RepositoryPicker
+      onOpenChange={setRepositoryPickerOpen}
+      repoUrl={repoUrl()}
+      branch={repoBranch()}
+      branchLocked={localRuntime()}
+      repositories={reachable.repositories()}
+      repositoriesLoading={reachable.loading()}
+      repositoriesError={reachable.error()}
+      recentRepositories={repositories.urls()}
+      onRetryRepositories={reachable.retry}
+      branches={reachableBranches.branches()}
+      branchesLoading={reachableBranches.loading()}
+      branchesError={reachableBranches.error()}
+      onRetryBranches={reachableBranches.retry}
+      onConnectGitHub={() => openSettings('Connected')}
+      onSelectRepository={selectRepository}
+      onSelectBranch={setBranchOverride}
+    />
+  );
+
   const composer = () => (
     <ChatComposer
       autoFocus={props.autoFocus}
       collapseOnBlur={props.compact}
-      controlsOpen={repositoryPickerOpen()}
-      registerFocus={props.registerFocus}
+      controlsOpen={repositoryPickerOpen() || effortPickerOpen()}
+      registerFocus={(focus) => {
+        focusInput = focus;
+        props.registerFocus?.(focus);
+      }}
       draft={draft()}
       onDraftChange={setDraft}
       blockedReason={blocked()}
       selector={
         <div class="flex min-w-0 items-center gap-1">
           {agentSelector()}
+          <EffortSelector
+            onCloseAutoFocus={restoreInputFocus}
+            onOpenChange={setEffortPickerOpen}
+            config={effort()}
+            value={effortOverride()?.value}
+            disabled={Boolean(blocked())}
+            onChange={(choice) =>
+              setEffortSelection({
+                ...choice,
+                target: JSON.stringify(capabilityTarget()),
+              })
+            }
+          />
           <Show
             when={['macro-inmem', 'in-memory'].includes(
               selected()?.harness ?? ''
@@ -341,26 +440,16 @@ export function NewChatPage(props: {
         </div>
       }
       drawer={
-        <RepositoryPicker
-          onOpenChange={setRepositoryPickerOpen}
-          repoUrl={repoUrl()}
-          branch={repoBranch()}
-          branchLocked={localRuntime()}
-          repositories={reachable.repositories()}
-          repositoriesLoading={reachable.loading()}
-          repositoriesError={reachable.error()}
-          recentRepositories={repositories.urls()}
-          onRetryRepositories={reachable.retry}
-          branches={reachableBranches.branches()}
-          branchesLoading={reachableBranches.loading()}
-          branchesError={reachableBranches.error()}
-          onRetryBranches={reachableBranches.retry}
-          onConnectGitHub={() => openSettings('Connected')}
-          onSelectRepository={selectRepository}
-          onSelectBranch={setBranchOverride}
-        />
+        <div class="flex w-full min-w-0 items-center gap-2">
+          {modeSwitch()}
+          <Show when={coding()}>
+            <div class="min-w-0 flex-1 touch:[&>div]:justify-end">
+              {repositoryPicker()}
+            </div>
+          </Show>
+        </div>
       }
-      drawerOpen={coding()}
+      drawerOpen
       placeholder={coding() ? 'Describe what you want to build' : undefined}
       onSend={send}
       supportsImages={
@@ -381,9 +470,17 @@ export function NewChatPage(props: {
       <section class="page newchat" data-active aria-label="New conversation">
         <div ref={tourTarget(AGENTS_TOUR.composer)} class="col">
           <div class="greeting">
-            <h2>
-              {coding() ? 'What should we build?' : 'What should we work on?'}
-            </h2>
+            <ComposerGreeting wireframe={coding()}>
+              <Show when={mode()} keyed>
+                {(currentMode) => (
+                  <span class="greeting-text">
+                    {currentMode === 'code'
+                      ? 'What should we build?'
+                      : 'What should we work on?'}
+                  </span>
+                )}
+              </Show>
+            </ComposerGreeting>
           </div>
           <FloatRegionOrInline
             region="accessory"

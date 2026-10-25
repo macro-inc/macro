@@ -1,3 +1,4 @@
+import { reloadApp } from '@app/observability/reload';
 /**
  * The Photoshop block: app chrome (header, file menu, sharing) around the
  * editor, wired to the worker engine, live collaboration, and document
@@ -112,7 +113,7 @@ function PsdHost(props: {
           message:
             'This document was replaced by a newer file (an upload or an AI edit). Reload to edit the latest version.',
           action: 'Reload',
-          onAction: () => window.location.reload(),
+          onAction: () => reloadApp('user_recovery'),
         }
       : props.notice;
   onMount(() => {

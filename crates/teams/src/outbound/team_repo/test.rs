@@ -7,6 +7,7 @@ use super::*;
 use crate::domain::model::SeatPlan;
 
 mod delete_team;
+mod invite_link;
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",

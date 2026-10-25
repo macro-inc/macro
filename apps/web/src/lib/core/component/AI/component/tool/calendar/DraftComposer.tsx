@@ -11,6 +11,7 @@
 import { createCalendarEventFormController } from '@app/features/calendar/components/composer/create-calendar-event-form-controller';
 import { EventForm } from '@app/features/calendar/components/composer/EventForm';
 import type { EventEditorSubmitValues } from '@app/features/calendar/components/composer/event-form-model';
+import { useCalendarGuestInvitesFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { DEFAULT_CALENDAR_SOURCE } from '@app/features/calendar/types';
 import {
   calendarDisplayLabel,
@@ -66,30 +67,30 @@ function CalendarDraftComposerFallback() {
         role="status"
         aria-label="Loading calendar editor"
         aria-busy="true"
-        class="flex min-h-64 animate-pulse flex-col gap-6 rounded-xl border border-edge-muted bg-surface p-4 shadow-sm"
+        class="flex min-h-64 flex-col gap-6 rounded-xl border border-edge-muted bg-surface p-4 shadow-sm"
       >
         <span class="sr-only">Loading calendar editor</span>
 
         <div class="flex flex-col gap-4">
           <div class="flex items-center gap-2">
-            <div class="h-7 w-28 rounded-lg bg-skeleton" />
-            <div class="h-7 w-28 rounded-lg bg-skeleton" />
-            <div class="h-7 w-16 rounded-lg bg-skeleton" />
+            <div class="skeleton-shimmer h-8 w-28 rounded-full bg-skeleton" />
+            <div class="skeleton-shimmer h-8 w-28 rounded-full bg-skeleton" />
+            <div class="skeleton-shimmer h-8 w-16 rounded-full bg-skeleton" />
           </div>
-          <div class="h-6 w-2/5 rounded-md bg-skeleton" />
-          <div class="h-3 w-3/4 rounded-full bg-skeleton" />
+          <div class="skeleton-shimmer h-6 w-2/5 rounded-md bg-skeleton" />
+          <div class="skeleton-shimmer h-3 w-3/4 rounded-full bg-skeleton" />
         </div>
 
         <div class="flex flex-wrap gap-2">
-          <div class="h-7 w-24 rounded-full bg-skeleton" />
-          <div class="h-7 w-28 rounded-full bg-skeleton" />
-          <div class="h-7 w-20 rounded-full bg-skeleton" />
-          <div class="h-7 w-24 rounded-full bg-skeleton" />
+          <div class="skeleton-shimmer h-7 w-24 rounded-full bg-skeleton" />
+          <div class="skeleton-shimmer h-7 w-28 rounded-full bg-skeleton" />
+          <div class="skeleton-shimmer h-7 w-20 rounded-full bg-skeleton" />
+          <div class="skeleton-shimmer h-7 w-24 rounded-full bg-skeleton" />
         </div>
 
         <div class="mt-auto flex justify-end gap-3">
-          <div class="h-8 w-16 rounded-lg bg-skeleton" />
-          <div class="h-8 w-28 rounded-lg bg-skeleton" />
+          <div class="skeleton-shimmer h-8 w-16 rounded-full bg-skeleton" />
+          <div class="skeleton-shimmer h-8 w-28 rounded-full bg-skeleton" />
         </div>
       </div>
     </Layer>
@@ -131,6 +132,8 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
   // choice under the same flag as the calendar's own event composer.
   const quickCalls = useQuickCallsFlag();
   const macroCallsEnabled = () => quickCalls().enabled && !quickCalls().loading;
+  // Guest permissions roll out with guest invites.
+  const guestInvitesEnabled = useCalendarGuestInvitesFlag();
   const [operation, setOperation] = createSignal<'create' | 'reject'>();
   let finalized = false;
 
@@ -207,7 +210,13 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
 
   function currentArgs(values = controller.submitValues()) {
     return values
-      ? editorSubmitValuesToCreateCalendarEvent(values, props.initialData)
+      ? editorSubmitValuesToCreateCalendarEvent(
+          values,
+          props.initialData,
+          guestInvitesEnabled() &&
+            controller.selectedCalendarOption()?.capabilities?.guestPolicy !==
+              false
+        )
       : undefined;
   }
 
@@ -316,6 +325,7 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
           <EventForm
             controller={controller}
             macroCallsEnabled={macroCallsEnabled()}
+            guestPolicyEditable={guestInvitesEnabled()}
             class="min-w-0"
             disabled={
               finalized || !props.sink.canAct() || operation() === 'reject'

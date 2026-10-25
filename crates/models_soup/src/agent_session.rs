@@ -1,4 +1,5 @@
 use chrono::Utc;
+pub use item_filters::ast::agent_session::{AgentSessionSource, AgentSessionVisibility};
 use model_owner::Owner;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -69,6 +70,14 @@ pub struct SoupAgentSession<T = ()> {
     /// The channel thread the session was opened from, when any
     #[serde(skip_serializing_if = "Option::is_none")]
     pub thread_id: Option<Uuid>,
+
+    /// Who started the session
+    #[serde(default)]
+    pub source: AgentSessionSource,
+
+    /// Where the session is shown
+    #[serde(default)]
+    pub visibility: AgentSessionVisibility,
 
     /// The session's last known status.
     ///

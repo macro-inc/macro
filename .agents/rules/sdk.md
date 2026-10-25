@@ -20,6 +20,8 @@ pass the wrong kind of id and scatters operations away from the thing they act o
   methods on them (`entry.edit(...)`, `entry.remove()`).
 - The only id-taking entry point is `static byId(client, id)`, which mints a handle.
 
+Separate the import block, top-level declarations, and class members with blank lines; place JSDoc above the member it documents.
+
 Details and conventions: the `add-sdk-endpoint` skill.
 
 Check: no exported SDK method has a parameter or return type that is a bare id

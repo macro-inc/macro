@@ -18,12 +18,14 @@
 mod config;
 mod daemon;
 mod dispatch;
+mod executable;
 mod harness;
 #[cfg(unix)]
 mod herdr;
 mod outbound;
 mod repository;
 mod runtime;
+mod service;
 mod trigger;
 mod tui;
 
@@ -85,6 +87,38 @@ enum Command {
         #[arg(last = true)]
         agent_args: Vec<String>,
     },
+    /// Run headless, managed by an embedding app such as the Macro desktop
+    /// app: no terminal panel, state changes as JSON lines on stdout, and
+    /// shutdown on SIGTERM, Ctrl-C, or stdin closing.
+    Service {
+        /// Config file; defaults to `~/.macrod/macrod.toml`, created when the
+        /// setup flags are given.
+        #[arg(long)]
+        config: Option<std::path::PathBuf>,
+        /// Agent preset id from `detect-agents`, e.g. `claude-code`.
+        #[arg(long)]
+        agent: Option<String>,
+        /// Absolute directory sessions run in; created when missing.
+        #[arg(long)]
+        workspace: Option<std::path::PathBuf>,
+        /// Requested display name for the next pairing.
+        #[arg(long)]
+        name: Option<String>,
+        /// Requested ownership for the next pairing.
+        #[arg(long, value_enum)]
+        scope: Option<service::ServiceScope>,
+        /// Whether the next pairing may enable permission bypass.
+        #[arg(long)]
+        allow_permission_bypass: Option<bool>,
+    },
+    /// List the ACP agents installed on this machine as JSON.
+    DetectAgents,
+    /// Report the service config's state as JSON without running anything.
+    Inspect {
+        /// Config file; defaults to `~/.macrod/macrod.toml`.
+        #[arg(long)]
+        config: Option<std::path::PathBuf>,
+    },
 }
 
 #[tokio::main]
@@ -104,8 +138,54 @@ async fn main() -> ExitCode {
             }
         };
     }
-    #[cfg(unix)]
     match args.command {
+        Some(Command::Service {
+            config,
+            agent,
+            workspace,
+            name,
+            scope,
+            allow_permission_bypass,
+        }) => {
+            // stdout is the event protocol: logs go to stderr, like herdr-acp.
+            tracing_subscriber::fmt()
+                .with_writer(std::io::stderr)
+                .init();
+            return match service::run(service::ServiceOptions {
+                config,
+                agent,
+                workspace,
+                name,
+                scope,
+                allow_permission_bypass,
+            })
+            .await
+            {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(error) => {
+                    service::emit_fatal(&format!("{error}"));
+                    eprintln!("macrod service: {error:?}");
+                    ExitCode::FAILURE
+                }
+            };
+        }
+        Some(Command::DetectAgents) => {
+            println!("{}", service::detect_agents_json());
+            return ExitCode::SUCCESS;
+        }
+        Some(Command::Inspect { config }) => {
+            return match service::inspect_json(config) {
+                Ok(inspection) => {
+                    println!("{inspection}");
+                    ExitCode::SUCCESS
+                }
+                Err(error) => {
+                    eprintln!("macrod inspect: {error:?}");
+                    ExitCode::FAILURE
+                }
+            };
+        }
+        #[cfg(unix)]
         Some(Command::HerdrPane { socket, session }) => {
             return match tui::run_herdr_pane(&socket, &session).await {
                 Ok(()) => ExitCode::SUCCESS,
@@ -115,6 +195,7 @@ async fn main() -> ExitCode {
                 }
             };
         }
+        #[cfg(unix)]
         Some(Command::HerdrAcp {
             state_dir,
             model,

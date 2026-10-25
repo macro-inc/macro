@@ -6,7 +6,7 @@ import type { EmailThreadState } from './email-thread-state';
 
 export function openEmailReplyComposerForMessage(args: {
   ctx: EmailThreadState;
-  /** Touch layouts reply in the compose drawer; the inline reply input only
+  /** Touch layouts reply in the full-screen composer; the inline reply input only
    * renders for non-touch. Phone width alone is not the gate: tablets are
    * touch at desktop widths. */
   isTouch: boolean;

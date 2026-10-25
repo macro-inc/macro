@@ -1,22 +1,30 @@
 import type { Link as EmailLink } from '@service-email/generated/schemas';
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { onlineManager } from '@tanstack/query-core';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { err, type Ok, ok } from 'neverthrow';
-import { Suspense } from 'solid-js';
+import { createSignal, Suspense } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { emailKeys } from './keys';
-import { useDisableCalendarMutation, usePrimaryEmailLinkId } from './link';
+import {
+  useDisableCalendarMutation,
+  useEmailLinksQuery,
+  useInboxHealthProbeQuery,
+  usePrimaryEmailLinkId,
+} from './link';
 import { mountEmailMutation } from './tests/mutation';
 
 const disableLinkCalendarMock = vi.hoisted(() => vi.fn());
 const getLinksMock = vi.hoisted(() => vi.fn());
+const healthCheckMock = vi.hoisted(() => vi.fn());
+const [authenticated, setAuthenticated] = createSignal(true);
 const invalidateCalendarViewsMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@service-email/client', () => ({
   emailClient: {
     disableLinkCalendar: disableLinkCalendarMock,
     getLinks: getLinksMock,
+    healthCheckLinks: healthCheckMock,
   },
 }));
 
@@ -28,7 +36,10 @@ vi.mock('@queries/auth/user-info', () => ({ invalidateUserInfo: vi.fn() }));
 vi.mock('@queries/soup/normalized-cache', () => ({
   invalidateAllSoup: vi.fn(),
 }));
-vi.mock('@core/context/user', () => ({ useUserId: () => () => 'macro|self' }));
+vi.mock('@core/context/user', () => ({
+  useUserId: () => () => 'macro|self',
+  useIsAuthenticated: () => authenticated,
+}));
 
 let testQueryClient: QueryClient;
 
@@ -88,6 +99,7 @@ it('does not suspend an offline composer when its primary-inbox lookup resumes',
 });
 
 beforeEach(() => {
+  setAuthenticated(true);
   vi.clearAllMocks();
   testQueryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -95,6 +107,45 @@ beforeEach(() => {
   testQueryClient.setQueryData(emailKeys.links.queryKey, {
     links: [link('inbox-a'), link('inbox-b')],
   });
+});
+
+it('starts account lookups and health probes only after sign-in and stops on logout', async () => {
+  testQueryClient.clear();
+  setAuthenticated(false);
+  getLinksMock.mockResolvedValue(ok({ links: [] }));
+  healthCheckMock.mockResolvedValue(ok({}));
+  function Account() {
+    const links = useEmailLinksQuery();
+    const health = useInboxHealthProbeQuery();
+    return (
+      <>
+        <button onClick={() => setAuthenticated(true)}>Sign in</button>
+        <button onClick={() => setAuthenticated(false)}>Sign out</button>
+        <span>
+          {authenticated() && links.isSuccess && health.isSuccess
+            ? 'Connected'
+            : 'Anonymous'}
+        </span>
+      </>
+    );
+  }
+  render(() => (
+    <QueryClientProvider client={testQueryClient}>
+      <Account />
+    </QueryClientProvider>
+  ));
+  expect(screen.getByText('Anonymous')).toBeTruthy();
+  expect(getLinksMock).not.toHaveBeenCalled();
+  expect(healthCheckMock).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+  expect(await screen.findByText('Connected')).toBeTruthy();
+  expect(getLinksMock).toHaveBeenCalledOnce();
+  expect(healthCheckMock).toHaveBeenCalledOnce();
+  fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
+  await testQueryClient.invalidateQueries();
+  expect(screen.getByText('Anonymous')).toBeTruthy();
+  expect(getLinksMock).toHaveBeenCalledOnce();
+  expect(healthCheckMock).toHaveBeenCalledOnce();
 });
 
 describe('useDisableCalendarMutation', () => {

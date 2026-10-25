@@ -81,15 +81,20 @@ check *ARGS:
           ox_other_paths+=("$PWD/$f")
         fi
       done <<<"$js"
+      # A generated-client-only web diff can be entirely ignored by oxlint.
       echo "── oxlint (docs/development/style-guide.md FE-12, FE-13)"
       if [ "${#ox_web_paths[@]}" -gt 0 ]; then
         (\cd apps/web && npm exec --yes --package=oxlint@1.73.0 \
-            --package=oxlint-tsgolint@7.0.2004 -- oxlint --type-aware "${ox_web_paths[@]}") \
+            --package=oxlint-tsgolint@7.0.2004 -- oxlint --type-aware --no-error-on-unmatched-pattern "${ox_web_paths[@]}") \
           || { echo "   fix: await, return, or .catch the promise; void only if it cannot reject (FE-13)"; fail=1; }
       fi
       if [ "${#ox_other_paths[@]}" -gt 0 ]; then
-        (\cd apps/web && bunx --yes oxlint@1.73.0 "${ox_other_paths[@]}") || fail=1
+        (\cd apps/web && bunx --yes oxlint@1.73.0 --no-error-on-unmatched-pattern "${ox_other_paths[@]}") || fail=1
       fi
+    fi
+    if grep -qx 'static_assets/schema.graphql' <<<"$changed"; then
+      echo "── GraphQL schema compatibility (docs/guides/add-graphql-field.md step 8)"
+      cargo x graphql-schema-compat --base "${base:-origin/main}" || fail=1
     fi
     if [ -n "$sg" ]; then
       echo "── ast-grep code rules (rule ids map to docs/development/style-guide.md)"

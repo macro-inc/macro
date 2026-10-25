@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => ({
   contacts: [] as import('@core/context/quickAccess').EntityItem[],
   hasMoreContacts: false,
   loadMoreContacts: vi.fn(async () => {}),
+  calendarEvents:
+    [] as import('../../../utils/mentionsUtils').CalendarEventMentionItem[],
 }));
 
 vi.mock('@app/features/crm/record-adapter', () => ({
@@ -42,6 +44,7 @@ vi.mock('@core/block', () => ({
 vi.mock('@core/constant/featureFlags', () => ({
   enableCrm: {},
   isFeatureEnabled: () => mocks.crmEnabled,
+  ENABLE_BEARER_TOKEN_AUTH: false,
 }));
 vi.mock('@core/context/quickAccess', () => ({
   useQuickAccess: () => ({
@@ -89,6 +92,15 @@ vi.mock('./utils/mentionHandlers', () => ({ createItemHandler: vi.fn() }));
 vi.mock('./hooks/useEmailSearchMention', () => ({
   useEmailSearchMention: vi.fn(),
 }));
+vi.mock('./hooks/useBookingLinkMention', () => ({
+  useBookingLinkMention: () => ({
+    bookingLinks: () => [],
+    isLoading: () => false,
+  }),
+}));
+vi.mock('./hooks/useCalendarEventMention', () => ({
+  useCalendarEventMention: () => ({ events: () => mocks.calendarEvents }),
+}));
 vi.mock('@core/component/EntityIcon', () => ({ EntityIcon: () => null }));
 vi.mock('@core/component/UserIcon', () => ({ UserIcon: () => null }));
 vi.mock('@ui', () => ({
@@ -98,6 +110,19 @@ vi.mock('@ui', () => ({
 }));
 
 const originalScrollIntoView = Element.prototype.scrollIntoView;
+const mockNoEmails = () =>
+  vi.mocked(useEmailSearchMention).mockReturnValue({
+    emails: () => [],
+    totalCount: () => 0,
+    hasMore: () => false,
+    isLoadingMore: () => false,
+    loadMore: async () => {},
+  });
+const manyUsers: IUser[] = Array.from({ length: 20 }, (_, i) => ({
+  id: `macro|person${i}@macro.com`,
+  name: `Person ${i}`,
+  email: `person${i}@macro.com`,
+}));
 
 afterEach(() => {
   mocks.crmEnabled = false;
@@ -106,6 +131,7 @@ afterEach(() => {
   mocks.contacts = [];
   mocks.hasMoreContacts = false;
   mocks.loadMoreContacts.mockClear();
+  mocks.calendarEvents = [];
   cleanup();
   vi.useRealTimers();
   vi.restoreAllMocks();
@@ -220,6 +246,51 @@ it.each([false, true])(
   }
 );
 
+it('closes the mobile menu on the first Escape', () => {
+  mocks.mobile = true;
+  Element.prototype.scrollIntoView = vi.fn();
+  mockNoEmails();
+  const menu = createMenuOperations();
+  render(() => (
+    <MentionsMenu
+      menu={menu}
+      editor={createEditor()}
+      users={() => manyUsers}
+      sources={['users']}
+    />
+  ));
+
+  menu.openMenu();
+  expect(menu.isOpen()).toBe(true);
+  expect(screen.queryByText(/View all/)).toBeNull();
+  fireEvent.keyDown(document, { key: 'Escape' });
+  expect(menu.isOpen()).toBe(false);
+  expect(screen.queryByText(/View all/)).toBeNull();
+});
+
+it('leaves a category list on the first desktop Escape and closes on the second', () => {
+  Element.prototype.scrollIntoView = vi.fn();
+  mockNoEmails();
+  const menu = createMenuOperations();
+  render(() => (
+    <MentionsMenu
+      menu={menu}
+      editor={createEditor()}
+      users={() => manyUsers}
+      sources={['users']}
+    />
+  ));
+
+  menu.openMenu();
+  fireEvent.keyDown(document, { key: 'ArrowRight' });
+  expect(screen.getByText('Back to everything')).toBeTruthy();
+  fireEvent.keyDown(document, { key: 'Escape' });
+  expect(menu.isOpen()).toBe(true);
+  expect(screen.queryByText('Back to everything')).toBeNull();
+  fireEvent.keyDown(document, { key: 'Escape' });
+  expect(menu.isOpen()).toBe(false);
+});
+
 it('only paginates an open mobile menu and resumes on reopen', async () => {
   mocks.mobile = true;
   mocks.crmEnabled = true;
@@ -279,6 +350,38 @@ it('offers CRM companies and contacts', () => {
   ));
   expect(mocks.requestedBuckets).toContain('crm_company');
   expect(mocks.requestedBuckets).toContain('crm_contact');
+});
+
+it('offers calendar events and picks one', () => {
+  Element.prototype.scrollIntoView = vi.fn();
+  vi.mocked(useEmailSearchMention).mockReturnValue({
+    emails: () => [],
+    totalCount: () => 0,
+    hasMore: () => false,
+    isLoadingMore: () => false,
+    loadMore: async () => {},
+  } as unknown as ReturnType<typeof useEmailSearchMention>);
+  mocks.calendarEvents = [
+    {
+      kind: 'calendarEvent',
+      id: 'event-1',
+      data: { eventId: 'event-1', title: 'Planning', when: 'Mon, Oct 26' },
+    },
+  ];
+  const onPick = vi.fn();
+  const menu = createMenuOperations();
+  menu.openMenu();
+  render(() => (
+    <MentionsMenu
+      menu={menu}
+      users={() => []}
+      anchor={document.createElement('div')}
+      onPick={onPick}
+    />
+  ));
+  expect(screen.getByText('Calendar events')).toBeTruthy();
+  fireEvent.click(screen.getByText('Planning'));
+  expect(onPick).toHaveBeenCalledWith(mocks.calendarEvents[0]);
 });
 
 it('opens cell pickers without replaying the menu entrance animation', () => {

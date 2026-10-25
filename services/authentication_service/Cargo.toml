@@ -189,6 +189,8 @@ database_env_vars = { path = "../../crates/database_env_vars" }
 [dev-dependencies]
 cool_asserts = "2"
 macro_db_migrator = { path = "../../crates/macro_db_migrator" }
+serde_urlencoded = { workspace = true }
+wiremock = { workspace = true }
 
 [package.metadata.cargo-machete]
 ignored = ["async-stripe"]

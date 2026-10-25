@@ -29,7 +29,7 @@ function isAgentConversation(
   return entity.type === 'agent_session' || entity.type === 'chat';
 }
 
-/** When a conversation last moved, as epoch millis; 0 when unknown. */
+/** When a conversation last had user-visible work, as epoch millis; 0 when unknown. */
 export function conversationTimestamp(
   entity: Pick<AgentConversationEntity, 'updatedAt' | 'createdAt'>
 ): number {

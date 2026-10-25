@@ -18,6 +18,10 @@ export type ConfirmDialogDisplayProps = {
   /** Dialog copy. `children` is used when `body` is omitted. */
   body?: JSX.Element;
   children?: JSX.Element;
+  /** Phone-only artwork above centered copy and a single full-width action.
+   * Dismiss with the handle, backdrop, or Escape instead of a cancel button.
+   */
+  mobileHero?: JSX.Element;
   confirmLabel?: JSX.Element;
   cancelLabel?: JSX.Element;
   tone?: 'default' | 'danger' | 'success';

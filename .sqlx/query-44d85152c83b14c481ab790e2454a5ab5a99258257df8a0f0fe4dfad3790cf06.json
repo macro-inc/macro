@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE import_entity AS mine\n            SET status = 'staged', last_error = $2, team_id = NULL, waiting_on = NULL,\n                updated_at = NOW()\n            WHERE mine.user_id = $1 AND mine.source = 'notion' AND mine.status = 'importing'\n              AND mine.metadata->'plan' IS NOT NULL\n              AND NOT EXISTS (\n                  SELECT 1 FROM import_run\n                  WHERE user_id = $1 AND source = 'notion' AND status = 'importing'\n              )\n              AND NOT EXISTS (\n                  SELECT 1 FROM import_entity AS holder\n                  WHERE holder.id = mine.waiting_on AND holder.status = 'importing'\n              )\n            RETURNING mine.id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "44d85152c83b14c481ab790e2454a5ab5a99258257df8a0f0fe4dfad3790cf06"
+}

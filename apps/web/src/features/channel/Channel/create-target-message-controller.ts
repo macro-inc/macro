@@ -1,4 +1,5 @@
 import { createSolidMachine } from '@macro-inc/machine/solid';
+import { markNotificationTargetVisible } from '@notifications/notification-open-trace';
 import { queryClient } from '@queries/client';
 import {
   getMessageTimelineQueryKey,
@@ -117,10 +118,28 @@ export function createTargetMessageController(
         targetLoaded: untrack(() => options.messageKeys().includes(messageId)),
         ready: untrack(ready),
       }),
-    completePendingScroll: (messageId: string) =>
-      machine.dispatch({ t: 'root-scroll-done', messageId }),
-    completePendingReplyScroll: (messageId: string, replyId: string) =>
-      machine.dispatch({ t: 'reply-scroll-done', messageId, replyId }),
+    completePendingScroll: (messageId: string) => {
+      const before = state();
+      machine.dispatch({ t: 'root-scroll-done', messageId });
+      if (
+        before.t === 'targeting' &&
+        before.target.messageId === messageId &&
+        !before.target.replyId &&
+        state().t === 'flashing'
+      )
+        markNotificationTargetVisible(options.channelId(), messageId);
+    },
+    completePendingReplyScroll: (messageId: string, replyId: string) => {
+      const before = state();
+      machine.dispatch({ t: 'reply-scroll-done', messageId, replyId });
+      if (
+        before.t === 'targeting' &&
+        before.target.messageId === messageId &&
+        before.target.replyId === replyId &&
+        state().t === 'flashing'
+      )
+        markNotificationTargetVisible(options.channelId(), replyId);
+    },
     clearActiveTarget: (messageId: string) =>
       machine.dispatch({ t: 'release', messageId }),
     reset: () => machine.dispatch({ t: 'reset' }),

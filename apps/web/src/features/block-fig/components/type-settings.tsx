@@ -45,7 +45,7 @@ export function TypeSettings(props: {
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content
-          class="fig-editor-theme z-modal w-64 rounded-xl border border-edge-muted bg-menu p-3 text-ink text-xs shadow-xl outline-none"
+          class="menu-surface fig-editor-theme z-modal w-64 p-3 text-xs outline-none"
           aria-label="Type settings"
           onKeyDown={(e) => {
             if (!e.metaKey && !e.ctrlKey) e.stopPropagation();

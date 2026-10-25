@@ -1,70 +1,75 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { enableSlackArchiveImport } from '@core/constant/featureFlags';
-import { useUserId } from '@core/context/user';
-import SlackIcon from '@icon/slack-color.svg';
-import XIcon from '@phosphor/x.svg';
-import { useCurrentTeamQuery, useIsTeamAdmin } from '@queries/team/teams';
-import { Button } from '@ui';
-import { Show } from 'solid-js';
+import { ConnectorImportPromotion } from '@app/features/connector-import/connector-import';
 import {
-  hideSlackImportPromotion,
-  isSlackImportPromotionHidden,
-} from './primitives/promotion';
-import { SlackImport } from './slack-import';
+  allOf,
+  flagVerdict,
+} from '@app/features/sidebar-promotion/sidebar-promotion';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { openNewChannelModal } from '@channel/CreateChannelModal';
+import { enableSlackArchiveImport } from '@core/constant/featureFlags';
+import { lazyNamed } from '@core/util/lazyNamed';
+import FileZipIcon from '@phosphor/file-zip.svg';
+import { useCurrentTeamQuery, useIsTeamAdmin } from '@queries/team/teams';
+import { Show, Suspense } from 'solid-js';
 
+// The archive dialog's code loads behind the card, which renders at once.
+const SlackImport = lazyNamed(() => import('./slack-import'), 'SlackImport');
+
+/**
+ * The Channels rail's Slack card: the shared connector-import card, whose
+ * dialog picks channels through the Slack connector and hands history
+ * imports to the archive dialog. Its second button creates a channel from
+ * scratch instead.
+ */
 export function SlackImportSidebar() {
   const flag = useFeatureFlag(enableSlackArchiveImport);
   const team = useCurrentTeamQuery(() => flag().enabled);
   const isAdmin = useIsTeamAdmin();
-  const userId = useUserId();
   const teamId = () => (team.isSuccess ? team.data?.team.id : undefined);
+  let openHistory: ((opener: HTMLButtonElement) => void) | undefined;
 
   return (
-    <Show when={flag().enabled && isAdmin() && teamId()}>
-      {(id) => (
-        <SlackImport
-          teamId={id()}
-          isAdmin={isAdmin()}
-          trigger={(onOpen) => (
-            <Show when={!isSlackImportPromotionHidden(userId(), id())}>
-              <div class="px-(--sidebar-gutter) py-2">
-                <section class="w-full rounded-xl border border-edge-muted bg-control px-2 py-3">
-                  <div class="flex items-start gap-2.5">
-                    <SlackIcon
-                      aria-hidden="true"
-                      class="mt-0.5 size-4 shrink-0"
-                    />
-                    <div class="min-w-0 flex-1">
-                      <h2 class="text-xs font-medium text-ink">
-                        Bring Slack to Macro
-                      </h2>
-                      <p class="mt-1 text-xs leading-relaxed text-ink-muted">
-                        Bring over channels with or without message history.
-                      </p>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label="Dismiss Slack import"
-                      onClick={() => hideSlackImportPromotion(userId(), id())}
-                    >
-                      <XIcon class="size-3.5" aria-hidden="true" />
-                    </Button>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    class="mt-3 w-full"
-                    onClick={(event) => onOpen(event.currentTarget)}
-                  >
-                    Import from Slack
-                  </Button>
-                </section>
-              </div>
-            </Show>
-          )}
-        />
-      )}
-    </Show>
+    <>
+      <Show when={flag().enabled && isAdmin() && teamId()}>
+        {(id) => (
+          <Suspense>
+            <SlackImport
+              teamId={id()}
+              isAdmin={isAdmin()}
+              historyOnly
+              trigger={(open) => {
+                // The archive dialog has no button of its own here; the
+                // card's "Import with history" option opens it.
+                openHistory = open;
+                return null;
+              }}
+            />
+          </Suspense>
+        )}
+      </Show>
+      <ConnectorImportPromotion
+        category="channels"
+        class="px-(--sidebar-gutter) py-2"
+        applies={allOf(
+          flagVerdict(flag()),
+          team.isSuccess ? isAdmin() && !!teamId() : undefined
+        )}
+        alternatives={[
+          {
+            icon: FileZipIcon,
+            label: 'Import with history',
+            description:
+              'Upload a Slack export from a workspace owner or admin.',
+            onSelect: (opener) => {
+              if (opener) openHistory?.(opener);
+            },
+          },
+        ]}
+        actionLabel="Import Slack"
+        secondaryAction={{
+          label: 'New channel',
+          onClick: () => openNewChannelModal(),
+        }}
+      />
+    </>
   );
 }

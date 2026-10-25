@@ -69,7 +69,8 @@ const foreignBase = {
 } as const;
 
 function pullRequest(
-  status: GithubPullRequestEntity['metadata']['status']
+  status: GithubPullRequestEntity['metadata']['status'],
+  draft = false
 ): GithubPullRequestEntity {
   return {
     ...foreignBase,
@@ -81,6 +82,7 @@ function pullRequest(
       repo: 'macro',
       url: 'https://github.com/macro-inc/macro/pull/42',
       status,
+      draft,
       additions: 1,
       deletions: 1,
       comments: [],
@@ -236,6 +238,16 @@ describe('Entity.Icon', () => {
     ));
     expectGlyph(container, Glyph);
     expect(container.firstElementChild?.classList.contains(color)).toBe(true);
+  });
+
+  it('renders draft pull request with muted color', () => {
+    const { container } = render(() => (
+      <EntityIcon entity={pullRequest('open', true)} />
+    ));
+    expectGlyph(container, GitPullRequestIcon);
+    expect(
+      container.firstElementChild?.classList.contains('text-ink-muted')
+    ).toBe(true);
   });
 
   it('uses a generic file for unknown foreign sources even with PR-like metadata', () => {

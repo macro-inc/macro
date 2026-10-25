@@ -22,6 +22,7 @@ import { addMediaFromFile } from '@core/component/LexicalMarkdown/plugins/media'
 import { singleLineMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import { createComposerLayout } from '@core/component/LexicalMarkdown/utils/create-composer-layout';
 import { toast } from '@core/component/Toast/Toast';
+import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { IUser } from '@core/user/types';
@@ -52,6 +53,8 @@ export type DiscussionInputProps = InputCallbacks & {
   collapsible?: boolean;
   /** Blur and collapse after onSend completes; other inputs retain focus. */
   blurOnSend?: boolean;
+  /** Dismiss the host after Escape has closed inline menus. */
+  onEscape?: () => void;
 };
 
 function AttachImagesAction() {
@@ -271,6 +274,21 @@ export function DiscussionInput(props: DiscussionInputProps) {
     },
   });
 
+  const [attach, scopeId] = useHotkeyDOMScope('discussion-input-intercept');
+  registerHotkey({
+    scopeId,
+    description: 'block escape from moving up scope',
+    hotkey: ['escape'],
+    runWithInputFocused: true,
+    hide: true,
+    keyDownHandler: () => {
+      if (markdownEditor.controls.isInlineMenuOpen()) return true;
+      if (!props.onEscape) return false;
+      props.onEscape();
+      return true;
+    },
+  });
+
   return (
     <Input.Root input={inputView()} commands={commands}>
       <Show when={isCollapsed()}>
@@ -343,6 +361,7 @@ export function DiscussionInput(props: DiscussionInputProps) {
                   initialValue={inputView().value}
                   autofocus={!isMobile() && (props.autofocus ?? true)}
                   class="text-base"
+                  refFn={attach}
                 />
               </Input.Editor>
             </Input.Layout.Editor>

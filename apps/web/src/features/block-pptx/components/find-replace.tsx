@@ -138,7 +138,7 @@ export function FindReplace(props: {
 
   return (
     <div
-      class="absolute top-2 right-3 z-20 flex w-80 flex-col gap-1.5 rounded-xl border border-edge bg-menu p-2 shadow-xl"
+      class="menu-surface absolute top-2 right-3 z-20 flex w-80 flex-col gap-1.5 p-2"
       data-testid="pptx-find"
       role="search"
       onKeyDown={onKeyDown}

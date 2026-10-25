@@ -29,7 +29,7 @@ macro_env_var::env_vars!(
     /// validators expect.
     pub struct MacroApiTokenIssuer;
     /// OAuth client ID for the Pipedream API. The same credentials
-    /// `document_cognition_service` uses: the connections a sandbox spends
+    /// `agent_harness_service::cognition` uses: the connections a sandbox spends
     /// are the ones the person connected in Macro, in the same rows.
     pub struct PipedreamClientId;
     /// OAuth client secret for the Pipedream API.
@@ -37,19 +37,17 @@ macro_env_var::env_vars!(
     /// The Pipedream Connect project ID (`proj_...`).
     pub struct PipedreamProjectId;
     /// AES key the `mcp_servers` rows' OAuth credentials are encrypted with -
-    /// the same one `document_cognition_service` writes them with, so the
+    /// the same one `agent_harness_service::cognition` writes them with, so the
     /// custom MCP servers a person added in Macro are the ones the egress
     /// proxy can refresh and stamp for their sandboxes.
     pub struct McpCredentialsKeySecretName;
 );
 
 macro_env_var::maybe_env_vars!(
-    /// PostHog project token. Absent deployments retain standard agent tools.
+    /// PostHog project token for feature flags; reserved for future MCP analytics. No MCP events are emitted.
     pub struct PosthogApiKey;
     /// Regional PostHog ingestion origin; defaults to the US origin.
     pub struct PosthogHost;
-    /// KMS key for encrypted per-owner Claude OAuth connections.
-    pub struct ClaudeOauthKmsKeyId;
     /// Dedicated KMS key for encrypted per-owner Codex OAuth state.
     pub struct CodexOauthKmsKeyId;
     /// Rollout gate for sessions owned by a bot.
@@ -73,6 +71,26 @@ fn default_pipedream_environment() -> String {
 #[derive(macro_config::MacroConfig)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub struct Config {
+    /// Shared pool for sessions, chat, integrations, and routine workers.
+    #[macro_config_default(30)]
+    pub database_max_connections: u32,
+    /// FusionAuth API origin used by the public MCP OAuth broker.
+    pub fusionauth_base_url: FusionauthBaseUrl,
+    /// FusionAuth application used for MCP sign-in.
+    pub fusionauth_client_id: FusionauthClientId,
+    /// Secret name of the FusionAuth API credential.
+    pub fusionauth_api_key_secret_key: FusionauthApiKeySecretKey,
+    /// Secret name of the FusionAuth OAuth client credential.
+    pub fusionauth_client_secret_key: FusionauthClientSecretKey,
+    /// Google OAuth application used by MCP sign-in.
+    pub google_client_id: GoogleClientId,
+    /// Secret name of the Google OAuth client credential.
+    pub google_client_secret_key: GoogleClientSecretKey,
+    /// Browser-reachable FusionAuth origin, when different from the API.
+    pub fusionauth_public_url: FusionauthPublicUrl,
+    /// Additional trusted client callback hosts, overriding the built-in list.
+    pub mcp_allowed_redirect_hosts: McpAllowedRedirectHosts,
+
     /// Hide agent DM contexts from standalone lists. Enable only after all
     /// replicas use the independent for_warming lifecycle marker.
     #[macro_config_default(false)]
@@ -105,8 +123,6 @@ pub struct Config {
     /// Markup on paid AI usage past the allowance, as a whole percent of
     /// provider cost. Mandatory; set in Doppler.
     pub ai_usage_overage_markup_percent: ai_billing::OverageMarkupPercent,
-    /// OAuth encryption key; deployments without a key do not advertise sign-in.
-    pub claude_oauth_kms_key_id: ClaudeOauthKmsKeyId,
     /// The environment we are in.
     #[macro_config_default(Environment::new_or_prod())]
     pub environment: Environment,
@@ -254,26 +270,6 @@ impl Config {
         )
     }
 
-    /// Resolve the deployment-injected encryption key. Local stacks use their
-    /// existing LocalStack key with a separate Claude encryption context.
-    pub fn claude_oauth_kms_key_id(&self) -> Option<String> {
-        self.claude_oauth_kms_key_id
-            .value()
-            .filter(|key| !key.trim().is_empty())
-            .map(str::to_owned)
-            .or_else(|| {
-                ClaudeOauthKmsKeyId::new().and_then(|key| {
-                    key.value()
-                        .filter(|key| !key.trim().is_empty())
-                        .map(str::to_owned)
-                })
-            })
-            .or_else(|| {
-                matches!(self.environment, Environment::Local)
-                    .then(|| "alias/macro-local-cursor-api-key".to_owned())
-            })
-    }
-
     /// Resolve the optional key from Doppler or the deployment-injected environment.
     pub fn codex_oauth_kms_key_id(&self) -> Option<String> {
         self.codex_oauth_kms_key_id
@@ -326,4 +322,25 @@ impl Config {
         config.enable_ai_usage_billing = billing;
         Ok(config)
     }
+}
+
+macro_env_var::env_vars! {
+    /// Public MCP OAuth configuration.
+    pub struct FusionauthBaseUrl;
+    /// Public MCP OAuth configuration.
+    pub struct FusionauthClientId;
+    /// Public MCP OAuth configuration.
+    pub struct FusionauthApiKeySecretKey;
+    /// Public MCP OAuth configuration.
+    pub struct FusionauthClientSecretKey;
+    /// Public MCP OAuth configuration.
+    pub struct GoogleClientId;
+    /// Public MCP OAuth configuration.
+    pub struct GoogleClientSecretKey;
+}
+macro_env_var::maybe_env_vars! {
+    /// Optional public MCP OAuth configuration.
+    pub struct FusionauthPublicUrl;
+    /// Optional public MCP OAuth configuration.
+    pub struct McpAllowedRedirectHosts;
 }

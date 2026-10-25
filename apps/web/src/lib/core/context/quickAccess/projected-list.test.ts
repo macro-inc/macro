@@ -55,6 +55,48 @@ function deferred<T>() {
 }
 
 describe('Quick Access local projection', () => {
+  it('distinguishes a failed initial read from a successful empty retry', async () => {
+    const [revision, setRevision] = createSignal(0);
+    const error = new Error('Cache unavailable');
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const search = vi
+      .fn()
+      .mockRejectedValueOnce(error)
+      .mockResolvedValueOnce(page([]));
+    const list = root(() =>
+      createProjectedList({
+        host: { search },
+        buckets: ['note'],
+        revision,
+        materialize,
+      })
+    );
+    await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+    expect(list.error()).toBe(error);
+    expect(list.items()).toEqual([]);
+    expect(list.hasMore()).toBe(false);
+    setRevision(1);
+    expect(list.isLoading()).toBe(true);
+    await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+    expect(list.error()).toBeUndefined();
+    expect(list.items()).toEqual([]);
+  });
+
+  it('reports an initial read as pending before mount effects start it', () => {
+    const search = vi.fn().mockResolvedValue(page([]));
+    root(() => {
+      const list = createProjectedList({
+        host: { search },
+        buckets: ['note'],
+        revision: () => 0,
+        materialize,
+      });
+      // Consumers restore history from eager memos before createEffect runs.
+      expect(list.isLoading()).toBe(true);
+      expect(list.items()).toEqual([]);
+    });
+  });
+
   it('retains matching rows until the next query commits, without retaining its cursor', async () => {
     const [query, setQuery] = createSignal('sea');
     const pending = deferred<SearchCachePage>();

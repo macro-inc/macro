@@ -1,13 +1,11 @@
 import { useOpenAgentDm } from '@app/features/agent-dms/open-agent-dm';
 import { isCoderHarness } from '@app/features/agents-view/core/agent-kind';
 import { AGENTS_TOUR } from '@app/features/agents-view/tour';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import AnthropicIcon from '@core/component/AI/assets/anthropic.svg';
 import { ModelCatalogPicker } from '@core/component/AI/component/input/ModelCatalogPicker';
 import { isLargeModelCatalog } from '@core/component/AI/component/input/modelCatalog';
 import { MODEL_PRETTYNAME, Model } from '@core/component/AI/constant/model';
 import { toast } from '@core/component/Toast/Toast';
-import { claudeCloud, ENABLE_AGENT_DMS } from '@core/constant/featureFlags';
+import { ENABLE_AGENT_DMS } from '@core/constant/featureFlags';
 import {
   MACRO_AGENT_BOT_ID,
   MACRO_HARNESS_NAME,
@@ -44,7 +42,11 @@ import {
 import { useCursorApiKeyStatusQuery } from '@queries/auth/cursor-api-key';
 import { useHarnessesQuery } from '@queries/harnesses/harnesses';
 import { usePipedreamConnectedSlugs } from '@queries/pipedream-connectors';
-import { useCurrentTeamQuery, useIsTeamOwner } from '@queries/team/teams';
+import {
+  useCurrentTeamQuery,
+  useIsTeamAdmin,
+  useIsTeamOwner,
+} from '@queries/team/teams';
 import type { AgentMcpServer } from '@service-storage/generated/schemas/agentMcpServer';
 import type { AgentMcpServers } from '@service-storage/generated/schemas/agentMcpServers';
 import { useSearchParams } from '@solidjs/router';
@@ -136,7 +138,6 @@ export function Agents(props: {
   const messageAgent = (id: string) =>
     agentDm?.open(id === MACRO_AGENT_BOT_ID ? MACRO_NEW_BOT_ID : id);
   const agentList = tourTarget(AGENTS_TOUR.agentList);
-  const claudeCloudFlag = useFeatureFlag(claudeCloud);
   const [creating, setCreating] = createSignal(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const creatingFromLink = () => searchParams.createAgent === 'true';
@@ -156,52 +157,42 @@ export function Agents(props: {
   const updateAgentMutation = useUpdateAgentMutation();
   const currentTeamQuery = useCurrentTeamQuery();
   const isTeamOwner = useIsTeamOwner();
+  const isTeamAdmin = useIsTeamAdmin();
   const cursorStatus = useCursorApiKeyStatusQuery();
   const cursorConnected = () =>
     cursorStatus.isSuccess ? cursorStatus.data.registered : false;
   const harnessesQuery = useHarnessesQuery();
   const connectedHarnesses = (): readonly ConnectedHarness[] => {
     const harnesses = harnessesQuery.isSuccess ? harnessesQuery.data : [];
-    return buildAgentModelTargets(
-      cursorConnected(),
-      harnesses,
-      claudeCloudFlag().enabled
-    ).map((target) => {
-      if (target.harness === 'in-memory') return IN_MEMORY_HARNESS;
-      if (target.harness === 'claude-cloud') {
-        return {
-          id: 'claude-cloud',
-          name: 'Claude Cloud',
-          kind: 'builtin',
-          allowPermissionBypass: true,
-          target,
-        };
-      }
-      if (target.harness === 'cursor') {
-        return {
-          id: 'cursor',
-          name: 'Cursor',
-          kind: 'builtin',
-          allowPermissionBypass: true,
-          target,
-        };
-      }
+    return buildAgentModelTargets(cursorConnected(), harnesses).map(
+      (target) => {
+        if (target.harness === 'in-memory') return IN_MEMORY_HARNESS;
+        if (target.harness === 'cursor') {
+          return {
+            id: 'cursor',
+            name: 'Cursor',
+            kind: 'builtin',
+            allowPermissionBypass: true,
+            target,
+          };
+        }
 
-      const harness = harnesses.find(
-        (candidate) => candidate.id === target.harnessId
-      );
-      return {
-        id: target.harnessId ?? '',
-        name:
-          harness?.owner.type === 'team'
-            ? `${harness.name} · Team`
-            : (harness?.name ?? 'macrod'),
-        kind: 'macrod',
-        allowPermissionBypass: harness?.allow_permission_bypass ?? false,
-        target,
-        connected: harness?.connected,
-      };
-    });
+        const harness = harnesses.find(
+          (candidate) => candidate.id === target.harnessId
+        );
+        return {
+          id: target.harnessId ?? '',
+          name:
+            harness?.owner.type === 'team'
+              ? `${harness.name} · Team`
+              : (harness?.name ?? 'macrod'),
+          kind: 'macrod',
+          allowPermissionBypass: harness?.allow_permission_bypass ?? false,
+          target,
+          connected: harness?.connected,
+        };
+      }
+    );
   };
   const channelOptions = createMemo(() =>
     botAssignableChannelOptions(channelsContext.channels())
@@ -214,7 +205,13 @@ export function Agents(props: {
   const canMakePrivate = (agent: AgentWithHarnessId) =>
     agent.bot.owner?.type !== 'team' || isAgentCreator(agent);
   const canDeleteAgent = (agent: AgentWithHarnessId) =>
-    canDeleteBot(agent.bot, currentUserId(), currentTeamId(), isTeamOwner());
+    canDeleteBot(
+      agent.bot,
+      currentUserId(),
+      currentTeamId(),
+      isTeamOwner(),
+      isTeamAdmin()
+    );
   const agents = createMemo(() =>
     (agentsQuery.isSuccess ? agentsQuery.data : [])
       .filter((agent) =>
@@ -273,6 +270,7 @@ export function Agents(props: {
         channelIds: current.channel_ids,
       });
       setDeletingAgent(undefined);
+      if (editingAgent()?.bot.id === current.bot.id) setEditingAgent(undefined);
       toast.success('Agent deleted');
     } catch {
       toast.failure('Failed to delete agent');
@@ -378,6 +376,9 @@ export function Agents(props: {
             pending={updateAgentMutation.isPending}
             onClose={() => setEditingAgent(undefined)}
             onSave={updateAgent}
+            onDelete={
+              canDeleteAgent(agent) ? () => setDeletingAgent(agent) : undefined
+            }
           />
         )}
       </Show>
@@ -431,7 +432,6 @@ function summarizeAgent(
 function whereItRunsLabel(id: string, harness?: ConnectedHarness): string {
   if (id === 'in-memory') return 'In Macro';
   if (id === 'cursor') return 'In Cursor';
-  if (id === 'claude-cloud') return 'In Claude Code';
   // Any other id is a registered macrod harness uuid; if it is not in the
   // connected list any more, the harness has been removed.
   return harness ? `In your harness · ${harness.name}` : 'Disconnected runtime';
@@ -597,6 +597,7 @@ function AgentEditorPage(props: {
   pending: boolean;
   onClose: () => void;
   onSave: (agent: CreateAgentParams) => Promise<boolean>;
+  onDelete?: () => void;
 }) {
   const [name, setName] = createSignal(props.agent?.bot.name ?? '');
   const [tag, setTag] = createSignal(props.agent?.bot.handle ?? '');
@@ -745,14 +746,6 @@ function AgentEditorPage(props: {
     props.connectedHarnesses.find((harness) => harness.id === 'cursor');
   const macrodHarnesses = () =>
     props.connectedHarnesses.filter((harness) => harness.kind === 'macrod');
-  // Claude Cloud stays behind its flag and only once it can list models.
-  const claudeCloudOption = () =>
-    props.connectedHarnesses.find(
-      (harness) =>
-        harness.id === 'claude-cloud' &&
-        (harness.id === harnessId() ||
-          modelDataForHarness(harness.id)?.status === 'available')
-    );
   // Back from a setup guide, land on what was just set up.
   const finishSetup = () => {
     const finished = setup();
@@ -1094,20 +1087,6 @@ function AgentEditorPage(props: {
                   >
                     {modelField()}
                   </WhereItRunsOption>
-                  <Show when={claudeCloudOption()}>
-                    {(claude) => (
-                      <WhereItRunsOption
-                        value="claude-cloud"
-                        title="In Claude Code"
-                        description="Runs Claude Code in the cloud on your Claude plan."
-                        icon={<AnthropicIcon />}
-                        checked={harnessId() === claude().id}
-                        onSelect={() => handleHarnessChange(claude().id)}
-                      >
-                        {modelField()}
-                      </WhereItRunsOption>
-                    )}
-                  </Show>
                   <WhereItRunsOption
                     value="cursor"
                     title="In Cursor"
@@ -1380,31 +1359,47 @@ function AgentEditorPage(props: {
                 </Show>
               </AgentFormSection>
             </form>
-            <div class="mt-6 flex justify-end gap-2 border-t border-edge-muted pt-4">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={close}
-                disabled={busy()}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                form="agent-form"
-                variant="strong"
-                size="sm"
-                disabled={!canCreate()}
-              >
-                {props.pending
-                  ? props.agent
-                    ? 'Saving…'
-                    : 'Creating…'
-                  : props.agent
-                    ? 'Save changes'
-                    : 'Create agent'}
-              </Button>
+            <div class="mt-6 flex flex-wrap items-center gap-2 border-t border-edge-muted pt-4">
+              <Show when={props.onDelete}>
+                {(onDelete) => (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    class="text-negative"
+                    disabled={busy()}
+                    onClick={onDelete()}
+                  >
+                    <TrashIcon /> Delete agent
+                  </Button>
+                )}
+              </Show>
+              <div class="ml-auto flex gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={close}
+                  disabled={busy()}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  form="agent-form"
+                  variant="strong"
+                  size="sm"
+                  disabled={!canCreate()}
+                >
+                  {props.pending
+                    ? props.agent
+                      ? 'Saving…'
+                      : 'Creating…'
+                    : props.agent
+                      ? 'Save changes'
+                      : 'Create agent'}
+                </Button>
+              </div>
             </div>
           </section>
         </SettingsPage>

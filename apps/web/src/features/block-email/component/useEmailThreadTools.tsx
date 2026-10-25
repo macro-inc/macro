@@ -110,7 +110,10 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
       return;
     }
     if (props.listNavigation) {
-      props.listNavigation.markDone(emailCtx.archiveThread);
+      fireAndForget(
+        props.listNavigation.markDone(emailCtx.archiveThread),
+        'email-thread-tools'
+      );
       return;
     }
     // Prefer the active Mark done command so it drives soup navigation and
@@ -259,6 +262,7 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
       icon: TrashIcon,
       action: trashThread,
       condition: isOwnThread,
+      hotkeyToken: TOKENS.email.trash,
     },
     {
       group: 'sender',
@@ -306,6 +310,7 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
   ];
 
   return {
+    openShare,
     isInvite,
     emailEntity,
     permissions: () => getPermissions(emailCtx.thread()?.access_level),

@@ -22,7 +22,7 @@ export function SpreadsheetCommentCard(props: {
       <div
         role="dialog"
         aria-label={`Comments on ${props.label}`}
-        class="absolute z-modal w-88 max-w-[calc(100vw-24px)] rounded-xl border border-edge bg-panel text-ink shadow-xl"
+        class="menu-surface absolute z-modal w-88 max-w-[calc(100vw-24px)]"
         use:floatWithElement={{
           element: () => props.element,
           spacing: 6,

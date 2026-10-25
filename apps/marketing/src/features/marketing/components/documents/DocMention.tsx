@@ -85,19 +85,19 @@ export const people = {
   julia: {
     kind: 'person',
     label: homepagePeople.julia.name,
-    detail: 'julia@macro.com',
+    detail: 'julia@coparse.com',
     photo: homepagePeople.julia.photo,
   },
   teo: {
     kind: 'person',
     label: homepagePeople.teo.name,
-    detail: 'teo@macro.com',
+    detail: 'teo@coparse.com',
     photo: homepagePeople.teo.photo,
   },
   gabriel: {
     kind: 'person',
     label: homepagePeople.gabriel.name,
-    detail: 'gabriel@macro.com',
+    detail: 'gabriel@coparse.com',
     photo: homepagePeople.gabriel.photo,
   },
 } satisfies Record<string, DocMentionItem>;

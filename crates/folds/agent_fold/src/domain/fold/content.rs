@@ -28,7 +28,26 @@ impl FoldState {
     }
 
     /// Append agent prose, extending the trailing text part when there is one.
-    pub(super) fn append_text(&mut self, text: String) -> Option<Changed> {
+    pub(super) fn append_text(&mut self, mut text: String) -> Option<Changed> {
+        let new_message = self.turn.as_ref().is_some_and(|turn| turn.agent.is_none());
+        if let Some(turn) = self.turn.as_mut()
+            && turn.can_noop
+        {
+            turn.noop_buffer.push_str(&text);
+            if "<noop/>".starts_with(&turn.noop_buffer) {
+                return None;
+            }
+            text = std::mem::take(&mut turn.noop_buffer);
+            turn.can_noop = false;
+        }
+        let thought = self
+            .turn
+            .as_mut()
+            .map(|turn| std::mem::take(&mut turn.pending_thought))
+            .unwrap_or_default();
+        if !thought.is_empty() {
+            self.append_thought(thought);
+        }
         if text.is_empty() {
             return None;
         }
@@ -39,12 +58,24 @@ impl FoldState {
             return Some(Changed::updated(message));
         }
         self.push_agent_part(MessagePart::Text { text })
-            .map(|(changed, _)| changed)
+            .map(|(changed, _)| {
+                if new_message {
+                    Changed::new(changed.message)
+                } else {
+                    changed
+                }
+            })
     }
 
     /// Append agent reasoning, extending the trailing thought part when there
     /// is one.
     pub(super) fn append_thought(&mut self, text: String) -> Option<Changed> {
+        if let Some(turn) = self.turn.as_mut()
+            && turn.can_noop
+        {
+            turn.pending_thought.push_str(&text);
+            return None;
+        }
         if let Some((message, parts)) = self.agent_parts_mut()
             && let MessagePart::Thought { text: existing } = parts.last_mut()
         {
@@ -62,6 +93,29 @@ impl FoldState {
     /// Every way the agent contributes content comes through here, which is
     /// why opening the turn belongs here rather than in each caller.
     pub(super) fn push_agent_part(&mut self, part: MessagePart) -> Option<(Changed, usize)> {
+        let new_message = self.turn.as_ref().is_some_and(|turn| turn.agent.is_none());
+        if !matches!(part, MessagePart::Text { .. }) {
+            // Conservatively treat every tool as potentially side effecting.
+            let thought = self
+                .turn
+                .as_mut()
+                .map(|turn| std::mem::take(&mut turn.pending_thought))
+                .unwrap_or_default();
+            let buffered = self
+                .turn
+                .as_mut()
+                .map(|turn| {
+                    turn.can_noop = false;
+                    std::mem::take(&mut turn.noop_buffer)
+                })
+                .unwrap_or_default();
+            if !thought.is_empty() {
+                self.append_thought(thought);
+            }
+            if !buffered.is_empty() {
+                self.append_text(buffered);
+            }
+        }
         if self.turn.is_none() {
             self.begin_turn_without_prompt();
         }
@@ -87,7 +141,14 @@ impl FoldState {
         let parts = &mut self.messages[message].parts;
         let position = parts.len();
         parts.push(part);
-        Some((Changed::updated(message), position))
+        Some((
+            if new_message {
+                Changed::new(message)
+            } else {
+                Changed::updated(message)
+            },
+            position,
+        ))
     }
 
     /// The open turn's agent message: where it sits in [`State::messages`],

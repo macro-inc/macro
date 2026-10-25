@@ -1,10 +1,20 @@
 use std::{collections::HashSet, sync::Mutex};
 
 use chrono::Utc;
-use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
+use cowlike::CowLike;
+use entity_access::domain::{
+    models::{
+        AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo, Entity as AccessEntity,
+        EntityAccessReceipt, EntityPermission, ParticipantRole, RequiredPermission, TeamRole,
+        UserTeamInfo,
+    },
+    ports::EntityAccessService,
+};
+use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
+use uuid::Uuid;
 
 use super::*;
-use crate::domain::ports::FavoritesAuthorizer;
+use crate::domain::ports::{FavoriteView, FavoritesAuthorizer};
 
 const USER_ID: &str = "macro|favorites-mutation@example.com";
 
@@ -31,7 +41,7 @@ impl FakeFavoritesService {
 impl FavoritesService for FakeFavoritesService {
     async fn add_favorite(
         &self,
-        receipt: &EntityAccessReceipt<ViewAccessLevel>,
+        receipt: &EntityAccessReceipt<FavoriteView>,
     ) -> Result<Favorite, FavoritesError> {
         let entity = receipt.entity();
         self.calls
@@ -133,7 +143,7 @@ impl FavoritesAuthorizer for FakeAuthorizer {
         &self,
         actor: &FavoritesMutationActor,
         entity: &Entity<'static>,
-    ) -> Result<EntityAccessReceipt<ViewAccessLevel>, FavoritesError> {
+    ) -> Result<EntityAccessReceipt<FavoriteView>, FavoritesError> {
         self.calls
             .lock()
             .expect("calls lock poisoned")
@@ -147,12 +157,111 @@ impl FavoritesAuthorizer for FakeAuthorizer {
             return Err(FavoritesError::Unauthorized);
         }
         Ok(
-            EntityAccessReceipt::<ViewAccessLevel>::dangerously_assert_authenticated_user(
+            EntityAccessReceipt::<FavoriteView>::dangerously_assert_authenticated_user(
                 actor.user_id.clone(),
                 &entity.entity_id,
                 entity.entity_type,
             ),
         )
+    }
+}
+
+/// Entity access that resolves every entity to one permission and mints
+/// receipts through the same requirement check as the real service.
+#[derive(Clone)]
+struct ResolvedAccess {
+    permission: EntityPermission,
+}
+
+impl EntityAccessService for ResolvedAccess {
+    async fn generate_entity_access_receipt<T: RequiredPermission>(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+        _user_org_id: Option<i64>,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> Result<EntityAccessReceipt<T>, AccessError> {
+        EntityAccessReceipt::try_new_authenticated_user(
+            MacroUserIdStr(user_id.clone().into_owned()),
+            AccessEntity {
+                entity_id: entity_id.to_string(),
+                entity_type,
+            },
+            self.permission,
+        )
+    }
+    async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
+        &self,
+        _: BotId,
+        _: BotAccessScope,
+        _: &str,
+        _: EntityType,
+    ) -> Result<EntityAccessReceipt<T>, AccessError> {
+        unreachable!()
+    }
+    async fn get_access_level(
+        &self,
+        _: Option<&MacroUserId<Lowercase<'_>>>,
+        _: &str,
+        _: EntityType,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        unreachable!()
+    }
+    async fn check_access(
+        &self,
+        _: Option<&MacroUserId<Lowercase<'_>>>,
+        _: &str,
+        _: EntityType,
+        _: AccessLevel,
+    ) -> Result<AccessLevel, AccessError> {
+        unreachable!()
+    }
+    async fn check_public_access(
+        &self,
+        _: &str,
+        _: EntityType,
+        _: AccessLevel,
+    ) -> Result<AccessLevel, AccessError> {
+        unreachable!()
+    }
+    async fn get_entity_permission(
+        &self,
+        _: Option<&MacroUserId<Lowercase<'_>>>,
+        _: &str,
+        _: EntityType,
+        _: Option<i64>,
+    ) -> Result<EntityPermission, AccessError> {
+        unreachable!()
+    }
+    async fn get_crm_entity_permission_with_team(
+        &self,
+        _: Option<&MacroUserId<Lowercase<'_>>>,
+        _: &str,
+        _: EntityType,
+    ) -> Result<(EntityPermission, Uuid, TeamRole), AccessError> {
+        unreachable!()
+    }
+    async fn get_users_by_entity(
+        &self,
+        _: &str,
+        _: EntityType,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        unreachable!()
+    }
+    async fn get_call_channel(&self, _: &Uuid) -> Result<Option<CallChannelInfo>, AccessError> {
+        unreachable!()
+    }
+    async fn get_call_channel_by_channel_id(
+        &self,
+        _: &Uuid,
+    ) -> Result<Option<CallChannelInfo>, AccessError> {
+        unreachable!()
+    }
+    async fn get_user_team(
+        &self,
+        _: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<Option<UserTeamInfo>, AccessError> {
+        unreachable!()
     }
 }
 
@@ -270,6 +379,48 @@ async fn every_supported_interactive_entity_can_be_added_and_removed() {
                 ServiceCall::Add(entity_type, "entity-1".to_string()),
                 ServiceCall::Remove(entity_type, "entity-1".to_string()),
             ]
+        );
+    }
+}
+
+#[tokio::test]
+async fn entity_access_authorizes_each_entity_kind_with_its_own_view_permission() {
+    for (entity_type, permission) in [
+        (
+            EntityType::Document,
+            EntityPermission::AccessLevel {
+                access_level: AccessLevel::View,
+            },
+        ),
+        (EntityType::Channel, EntityPermission::ChannelViewOnly),
+        (
+            EntityType::Channel,
+            EntityPermission::ChannelRole {
+                role: ParticipantRole::Member,
+            },
+        ),
+    ] {
+        let favorites = Arc::new(FakeFavoritesService::default());
+        let service = FavoritesMutationServiceImpl::new(
+            favorites.clone(),
+            Arc::new(ResolvedAccess { permission }),
+        );
+
+        let result = service
+            .set_favorite(
+                actor(),
+                entity_type.with_entity_string("entity-1".to_string()),
+                true,
+            )
+            .await;
+
+        assert!(
+            result.is_ok(),
+            "{entity_type:?} with {permission:?} should be favoritable, got {result:?}"
+        );
+        assert_eq!(
+            favorites.calls(),
+            vec![ServiceCall::Add(entity_type, "entity-1".to_string())]
         );
     }
 }

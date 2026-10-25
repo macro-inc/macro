@@ -454,7 +454,9 @@ async function activate(
             })
           );
         })
-        .exhaustive();
+        .exhaustive((unknown) =>
+          console.warn('cache engine: unknown coordinator envelope', unknown)
+        );
     },
     onError: (error) => {
       runnerFailed = true;

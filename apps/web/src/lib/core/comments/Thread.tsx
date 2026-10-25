@@ -1,6 +1,7 @@
 import { URL_PARAMS as MD_URL_PARAMS } from '@block-md/constants';
 import { ChannelInput } from '@channel/Input';
 import { buildPostMessageSendPayload } from '@channel/Input/message-payload';
+import { CollapseLongContentProvider } from '@channel/Message/context';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { createTheme } from '@core/component/LexicalMarkdown/theme';
 import { UserIcon } from '@core/component/UserIcon';
@@ -133,6 +134,7 @@ export function ThreadBody(props: ThreadBodyProps) {
             flat={props.flatComposer}
             input={{ mode: 'reply', placeholder: 'Leave a comment...' }}
             onClose={() => context.setActiveThread(null)}
+            onEscape={() => context.setActiveThread(null)}
             onSend={async (snapshot) => {
               const { thread_id: _threadId, ...message } =
                 buildPostMessageSendPayload({ snapshot }).message;
@@ -162,6 +164,7 @@ export function ThreadBody(props: ThreadBodyProps) {
             canWrite={context.canComment()}
             canModerate={context.isDocumentOwner()}
             monorail
+            keyboardActive={props.isActive}
             hideReplyInput={props.hideReplyInput}
             onEditingChange={context.setMessageEditing}
             targetId={targetId()}
@@ -251,7 +254,6 @@ export function Thread(props: {
   layout: Layout;
   isActive: boolean;
   theme?: EditorThemeClasses;
-  maxHeight?: number;
   handleMouseDown?: (e: MouseEvent) => void;
 }) {
   let measureContainerRef!: HTMLDivElement;
@@ -272,7 +274,6 @@ export function Thread(props: {
       ref={measureContainerRef}
       top={props.layout.calculatedYPos}
       threadId={props.comment.threadId}
-      maxHeight={props.maxHeight}
       isActive={props.isActive}
       transition={false}
     >
@@ -295,6 +296,7 @@ export function ThreadCard(props: {
   /** Nudge the active card toward the text it annotates. */
   shifted?: boolean;
 }) {
+  const context = useContext(CommentsContext);
   return (
     <Layer depth={2}>
       <div
@@ -309,13 +311,21 @@ export function ThreadCard(props: {
         style={{
           width: props.width ? `${props.width}px` : 'auto',
         }}
+        onKeyDown={(e) => {
+          if (e.key !== 'Escape' || e.defaultPrevented) return;
+          e.preventDefault();
+          context.setActiveThread(null);
+        }}
       >
-        <ThreadBody
-          comment={props.comment}
-          isActive={props.isActive}
-          theme={props.theme}
-          flatComposer
-        />
+        {/* The card is narrow, so long comments fold behind "Show more". */}
+        <CollapseLongContentProvider value={true}>
+          <ThreadBody
+            comment={props.comment}
+            isActive={props.isActive}
+            theme={props.theme}
+            flatComposer
+          />
+        </CollapseLongContentProvider>
       </div>
     </Layer>
   );

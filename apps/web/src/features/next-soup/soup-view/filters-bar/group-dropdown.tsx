@@ -26,8 +26,8 @@ export const GroupDropdown: Component<GroupDropdownProps> = (props) => {
       <Tooltip label="Group">
         <Dropdown.Trigger
           variant={props.variant ?? 'outline'}
+          size={props.hideLabel ? 'icon-md' : 'sm'}
           depth={2}
-          class={props.variant === 'ghost' ? undefined : 'bg-surface'}
           aria-label={props.hideLabel ? 'Group' : undefined}
         >
           <StackSimpleIcon />

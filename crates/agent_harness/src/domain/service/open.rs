@@ -83,13 +83,19 @@ where
                 })?;
         }
         let defaults = self.inner.defaults.for_bot(request.bot_id);
-        let (model, harness, profile_instructions) = match request.profile {
+        let (model, harness, profile_instructions, mcp_servers) = match request.profile {
             Some(profile) => (
                 profile.model,
                 profile.harness,
                 Some(profile.instructions).filter(|value| !value.trim().is_empty()),
+                profile.mcp_servers,
             ),
-            None => (defaults.model.clone(), defaults.harness.clone(), None),
+            None => (
+                defaults.model.clone(),
+                defaults.harness.clone(),
+                None,
+                AgentMcpServers::OwnerConnections,
+            ),
         };
         let instructions = self
             .inner
@@ -100,7 +106,7 @@ where
                 request.instructions.or(profile_instructions),
             )
             .await?;
-        let session = self
+        let created = self
             .inner
             .sessions
             .create_session(CreateAgentSessionParams {
@@ -117,20 +123,89 @@ where
                 workspace: request.workspace,
                 sandbox_size: SandboxSize::Default,
                 instructions,
-                // No egress, so no MCP servers of ours to select from.
-                mcp_servers: AgentMcpServers::OwnerConnections,
-                // Mint the internal-tool credential when an authenticated
+                mcp_servers,
+                // Mint the session MCP credential when an authenticated
                 // runtime binds, and rotate it on each subsequent binding.
                 egress_token_hash: None,
                 // The thread linkage is the caller's claim, not an observed
                 // mention; it must not grant the channel anything.
             })
-            .await?;
-        self.inner.publish_opened(&session).await;
+            .await;
+        let (session, existing) = match created {
+            Ok(session) => (session, false),
+            Err(AgentSessionError::SessionIdTaken(id))
+                if self.inner.external_replies.is_some() && request.thread.is_some() =>
+            {
+                let session = self.inner.sessions.get_session(id).await?;
+                if session.bot_id != request.bot_id
+                    || session.thread_id != request.thread.as_ref().map(|thread| thread.thread_id)
+                    || session.owner_user()? != &owner_user
+                {
+                    return Err(AgentSessionError::SessionIdTaken(id));
+                }
+                (session, true)
+            }
+            Err(AgentSessionError::ThreadSessionExists)
+                if self.inner.external_replies.is_some() =>
+            {
+                let thread = request
+                    .thread
+                    .as_ref()
+                    .ok_or(AgentSessionError::ThreadSessionExists)?;
+                match self
+                    .inner
+                    .sessions
+                    .find_for_thread(Some(thread.thread_id), Some(request.bot_id))
+                    .await?
+                {
+                    agent_session::domain::model::ThreadSession::CreatedFromThread(session) => {
+                        (session, true)
+                    }
+                    agent_session::domain::model::ThreadSession::None => {
+                        return Err(AgentSessionError::ThreadSessionExists);
+                    }
+                }
+            }
+            Err(error) => return Err(error),
+        };
+        if !existing {
+            self.inner.publish_opened(&session).await;
+        }
 
         if let Some(thread) = request.thread {
+            let persona = self
+                .inner
+                .reply_persona(&session)
+                .await
+                .map_err(into_session_error)?;
+            if !persona.is_coding
+                && !thread.reuse_origin_message
+                && self.inner.external_replies.is_some()
+            {
+                self.inner
+                    .announce_external_reply(
+                        session.id,
+                        AnnounceOrigin {
+                            reply_placement: Default::default(),
+                            reuse_origin_message: false,
+                            parent: thread.parent,
+                            thread_id: thread.thread_id,
+                            message_id: thread.message_id,
+                        },
+                        owner_user,
+                    )
+                    .await
+                    .map_err(into_session_error)?;
+                return if existing {
+                    Err(AgentSessionError::ThreadSessionExists)
+                } else {
+                    Ok(session)
+                };
+            }
+            if existing {
+                return Err(AgentSessionError::ThreadSessionExists);
+            }
             let announce = async {
-                let persona = self.inner.reply_persona(&session).await?;
                 let announcement = SessionAnnouncement {
                     reply_message_id: None,
                     reply_placement: Default::default(),
@@ -145,7 +220,7 @@ where
                     prompted_content: thread.content,
                     triggered_by: owner_user,
                 };
-                self.inner.announcer.announce(announcement).await
+                self.inner.announcer.announce(announcement).await.map(drop)
             };
             if let Err(error) = announce.await {
                 tracing::warn!(
@@ -156,6 +231,9 @@ where
             }
         }
 
+        if existing {
+            return Err(AgentSessionError::ThreadSessionExists);
+        }
         Ok(session)
     }
 

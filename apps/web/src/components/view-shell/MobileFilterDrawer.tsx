@@ -188,7 +188,10 @@ function Option(props: {
     <MobileDrawer.Item
       role={props.selectionMode === 'single' ? 'radio' : 'checkbox'}
       aria-checked={props.checked}
-      class={props.class}
+      class={cn(
+        '[&[role=checkbox][aria-checked=true]:has(+[role=checkbox][aria-checked=true])]:rounded-b-none [&[role=checkbox][aria-checked=true]+[role=checkbox][aria-checked=true]]:rounded-t-none',
+        props.class
+      )}
       onClick={() => props.onChange(!props.checked)}
     >
       <Show when={props.icon}>

@@ -1,3 +1,4 @@
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import XIcon from '@phosphor/x.svg';
 import { mergeRefs } from '@solid-primitives/refs';
 import {
@@ -38,18 +39,18 @@ const INPUT_GROUP_ADDON_PADDING: Record<
     buttonEnd: '[&:has([data-button])]:pe-0',
   },
   sm: {
-    start: 'ps-2',
-    end: 'pe-2',
+    start: 'ps-2.5',
+    end: 'pe-2.5',
     buttonEnd: '[&:has([data-button])]:pe-0',
   },
   md: {
-    start: 'ps-2',
-    end: 'pe-2',
+    start: 'ps-3',
+    end: 'pe-3',
     buttonEnd: '[&:has([data-button])]:pe-1',
   },
   lg: {
-    start: 'ps-3',
-    end: 'pe-3',
+    start: 'ps-3.5',
+    end: 'pe-3.5',
     buttonEnd: '[&:has([data-button])]:pe-0.5',
   },
   xl: {
@@ -57,6 +58,18 @@ const INPUT_GROUP_ADDON_PADDING: Record<
     end: 'pe-4',
     buttonEnd: '[&:has([data-button])]:pe-1.5',
   },
+};
+
+// Touch keeps its original addon inset; desktop matches the pill Input.
+const TOUCH_INPUT_GROUP_ADDON_PADDING: Record<
+  InputSize,
+  { start: string; end: string }
+> = {
+  xs: { start: 'ps-1', end: 'pe-1' },
+  sm: { start: 'ps-2', end: 'pe-2' },
+  md: { start: 'ps-2', end: 'pe-2' },
+  lg: { start: 'ps-3', end: 'pe-3' },
+  xl: { start: 'ps-4', end: 'pe-4' },
 };
 
 const INPUT_GROUP_BUTTON_SIZE: Record<InputSize, ButtonSize> = {
@@ -70,14 +83,14 @@ const INPUT_GROUP_BUTTON_SIZE: Record<InputSize, ButtonSize> = {
 /** Canonical variants for a framed input composition. */
 export const inputGroupVariants = createVariants(
   cn(
-    'group/input-group relative flex w-full min-w-0 items-center overflow-hidden rounded-lg border transition-[background-color,border-color,box-shadow] duration-120 motion-reduce:transition-none',
+    'group/input-group relative flex w-full min-w-0 items-center overflow-hidden border transition-[background-color,border-color,box-shadow] duration-120 motion-reduce:transition-none',
     'has-[[data-slot=input-group-control]:disabled]:pointer-events-none has-[[data-slot=input-group-control]:disabled]:opacity-50',
     'has-[[data-slot=input-group-control][aria-invalid=true]]:border-failure has-[[data-slot=input-group-control][aria-invalid=true]]:ring-2 has-[[data-slot=input-group-control][aria-invalid=true]]:ring-failure/20'
   ),
   {
     variant: {
       outline: cn(
-        'border-edge-frame bg-control',
+        'border-edge-frame bg-control not-touch:elevated',
         'has-[[data-slot=input-group-control]:focus-visible]:ring-2 has-[[data-slot=input-group-control]:focus-visible]:ring-edge-muted'
       ),
       bare: 'border-transparent bg-transparent',
@@ -175,6 +188,7 @@ function InputGroupRoot(props: InputGroupProps) {
             size: size(),
             variant: grouped() ? 'bare' : variant(),
           }),
+          isTouchDevice() ? 'rounded-lg' : 'rounded-full',
           grouped() &&
             'flex-1 rounded-none border-0 bg-transparent outline-none has-[[data-slot=input-group-control]:focus-visible]:ring-0',
           local.class
@@ -220,6 +234,8 @@ function InputGroupInput(props: InputGroupInputProps) {
       data-slot="input-group-control"
       class={cn(
         'h-full flex-1 rounded-none border-0 bg-transparent px-2 focus-visible:ring-0 aria-invalid:ring-0 [&::-webkit-search-cancel-button]:hidden',
+        // Without an addon beside it, the text keeps the standalone Input inset.
+        !isTouchDevice() && 'first:ps-3 last:pe-3',
         local.class
       )}
       on:input={(event) =>
@@ -238,7 +254,10 @@ function InputGroupAddon(props: InputGroupAddonProps) {
   const [local, rest] = splitProps(props, ['align', 'children', 'class']);
   const group = useInputGroupContext();
   const align = () => local.align ?? 'inline-start';
-  const padding = () => INPUT_GROUP_ADDON_PADDING[group.size];
+  const padding = () => ({
+    ...INPUT_GROUP_ADDON_PADDING[group.size],
+    ...(isTouchDevice() ? TOUCH_INPUT_GROUP_ADDON_PADDING[group.size] : {}),
+  });
 
   return (
     <div

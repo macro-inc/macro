@@ -756,9 +756,12 @@ export function HeroChannelWindow() {
   // shared files, and its members.
   const [activeTab, setActiveTab] = createSignal(0);
   const attachments = [
-    { name: 'Q3 launch plan.pdf', meta: 'Gabriel Birman · Jun 12 · 2.4 MB' },
+    {
+      name: 'Website launch plan.pdf',
+      meta: 'Gabriel Birman · Jun 12 · 2.4 MB',
+    },
     { name: 'posthog-flags.png', meta: 'Rahul · 4:38 PM · 184 KB' },
-    { name: 'deploy-logs.txt', meta: 'Dana Cole · 4:41 PM · 12 KB' },
+    { name: 'deploy-logs.txt', meta: 'Valentina · 4:41 PM · 12 KB' },
   ];
   const participants: {
     name: string;
@@ -774,7 +777,12 @@ export function HeroChannelWindow() {
       color: 'var(--b3)',
     },
     { name: 'Rahul', role: 'Member', initials: 'R', color: 'var(--b4)' },
-    { name: 'Dana Cole', role: 'Member', initials: 'DC', color: 'var(--b3)' },
+    {
+      name: 'Valentina',
+      role: 'Member',
+      initials: 'V',
+      color: 'var(--b3)',
+    },
     {
       name: 'Julia Westphal',
       role: 'Member',
@@ -1179,7 +1187,7 @@ export function HeroChannelWindow() {
                     gap: '8px',
                   }}
                 >
-                  <span style={nameStyle}>Dana Cole</span>
+                  <span style={nameStyle}>Valentina</span>
                   <span style={timeStyle}>4:41 PM</span>
                 </div>
                 <p style={msgText}>
@@ -1756,7 +1764,7 @@ function ChatHeroEmailCard(props: { compact: boolean }) {
               'white-space': 'nowrap',
             }}
           >
-            Email thread · Dana Wells · 6 messages
+            Email thread · Valentina · 6 messages
           </span>
         </div>
       </div>
@@ -2729,7 +2737,7 @@ export function SharingGraphic() {
               >
                 Plan lives in{' '}
                 <span class="sharing-mention-1" style={mentionWrap}>
-                  <MentionPill kind="doc" label="Q3 launch plan" brand />
+                  <MentionPill kind="doc" label="Website launch plan" brand />
                 </span>
                 , tracked in{' '}
                 <span class="sharing-mention-2" style={mentionWrap}>
@@ -3533,7 +3541,7 @@ function CohesionDocPane(props: { compact: boolean }) {
             'white-space': 'nowrap',
           }}
         >
-          Q3 launch plan
+          Website launch plan
         </span>
         <span
           style={{
@@ -3569,7 +3577,7 @@ function CohesionDocPane(props: { compact: boolean }) {
             margin: 0,
           }}
         >
-          Q3 launch plan
+          Website launch plan
         </h3>
         <p style={body}>
           Ship the new workspace to general availability the week of{' '}
@@ -3966,7 +3974,11 @@ export function ChannelCohesionGraphic() {
                         'vertical-align': 'middle',
                       }}
                     >
-                      <MentionPill kind="doc" label="Q3 launch plan" brand />
+                      <MentionPill
+                        kind="doc"
+                        label="Website launch plan"
+                        brand
+                      />
                       {/* synthetic click ring */}
                       <Show when={clickPulse() > 0 && clickPulse() < 1}>
                         <span
@@ -4045,13 +4057,15 @@ export function ChannelCohesionGraphic() {
                     {
                       heading: 'Documents',
                       items: [
-                        { kind: 'doc', label: 'Q3 launch plan' },
+                        { kind: 'doc', label: 'Website launch plan' },
                         { kind: 'doc', label: 'Q3 metrics dashboard' },
                       ],
                     },
                     {
                       heading: 'Tasks',
-                      items: [{ kind: 'task', label: 'Q3 launch checklist' }],
+                      items: [
+                        { kind: 'task', label: 'Website launch checklist' },
+                      ],
                     },
                   ]}
                 >
@@ -4205,7 +4219,11 @@ export function ChannelCohesionGraphic() {
                       </span>
                     </Show>
                     <Show when={showPill()}>
-                      <MentionPill kind="doc" label="Q3 launch plan" brand />
+                      <MentionPill
+                        kind="doc"
+                        label="Website launch plan"
+                        brand
+                      />
                     </Show>
                     <span
                       aria-hidden="true"
@@ -4396,7 +4414,7 @@ export function ChannelCohesionGraphic() {
                   'font-size': compact() ? '12px' : '12.5px',
                 }}
               >
-                Q3 launch plan · everyone now has access
+                Website launch plan · everyone now has access
               </span>
             </div>
           </div>

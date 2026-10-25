@@ -61,6 +61,7 @@ import {
   createCacheCoordinatorPageAdapter,
 } from '../worker/coordinator-page-adapter';
 import type { EngineOpenOutcome } from '../worker/coordinator-protocol';
+import { WorkerRestartedError } from '../worker/effect-worker-transport';
 import { isUnambiguousCacheScope } from '../worker/stale-databases';
 import {
   CacheBootstrapExhaustedError,
@@ -250,7 +251,9 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   let state: HostState = 'idle';
   let initialization: Promise<void> | undefined;
   let initializationAttempt = 0;
-  let navigationGeneration = 0;
+  let transportGeneration = 0;
+  let transportInterruption: Error | undefined;
+  let coordinatorRestarts = 0;
   let suspension: Promise<void> | undefined;
   let initializationError: Error | undefined;
   let replacementError: CacheResponseError | undefined;
@@ -490,8 +493,9 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       onTerminalError: (error) => {
         // start() also rejects; let the bounded registration loop retry before
         // reporting a terminal failure or quarantining any cache scope.
-        if (adapter === created && !registrationInProgress && !suspension)
-          failTransport(error);
+        if (adapter !== created || registrationInProgress || suspension) return;
+        if (error instanceof WorkerRestartedError) reconnectCoordinator(error);
+        else failTransport(error);
       },
       onCacheUnavailable: (reason) => {
         if (adapter === created) retireUnavailable(reason);
@@ -891,6 +895,53 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     await retirement;
   }
 
+  function suspendTransport(error: Error): void {
+    state = 'suspended';
+    transportGeneration += 1;
+    transportInterruption = error;
+    initializationAttempt += 1;
+    beginRecoveryGeneration();
+    // All active operations need fresh dependencies after reconnect, including
+    // reads that never reached the old engine before the connection was lost.
+    for (const key of activeOpKeys) lostRegisteredOpKeys.add(key);
+    replacementReadOpKeys.clear();
+    cancelRegistration?.(error);
+    rejectPending(error, true);
+    if (adapter) adapter.onmessage = null;
+    suspension = finishSuspension(initialization, disposeAdapter(false, true));
+    finishTelemetry();
+  }
+
+  function reconnectCoordinator(cause: WorkerRestartedError): void {
+    if (state === 'failed' || state === 'suspended') return;
+    const error = new CacheResponseError(
+      'cache coordinator transport restarted',
+      OWNER_EPOCH_LOST_ERROR_CODE,
+      { cause }
+    );
+    telemetry.record({
+      name: 'graphql_cache.owner',
+      operationCategory: 'lifecycle',
+      outcome: 'abrupt',
+      ownerEvent: 'coordinator-restarted',
+      errorCode: 'transport',
+    });
+    if (state === 'disposing' || state === 'disposed') {
+      stopForSession(error, { uncertain: true, preserveDatabase: true });
+      return;
+    }
+    // Bound restarts during startup just like registration retries. A completed
+    // handshake resets this budget; separate later restarts can recover again.
+    if (++coordinatorRestarts >= COORDINATOR_CONNECT_ATTEMPTS) {
+      stopStorageHealthSampling();
+      stopForSession(error, { uncertain: true, preserveDatabase: true });
+      reportFailure(error);
+      return;
+    }
+    suspendTransport(error);
+    fireAndForget(resumeTransport(), 'graphql-cache-host');
+  }
+
   function onPagehide(event: PageTransitionEvent): void {
     if (
       !event.persisted ||
@@ -902,34 +953,22 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       return;
     }
     if (state === 'suspended') return;
-    state = 'suspended';
-    navigationGeneration += 1;
-    initializationAttempt += 1;
-    beginRecoveryGeneration();
-    // All active operations need fresh dependencies after reconnect, including
-    // reads that never reached the old engine before the page was frozen.
-    for (const key of activeOpKeys) lostRegisteredOpKeys.add(key);
-    replacementReadOpKeys.clear();
-    cancelRegistration?.(new CacheNavigationError());
-    rejectPending(new CacheNavigationError(), true);
-    if (adapter) adapter.onmessage = null;
-    suspension = finishSuspension(initialization, disposeAdapter(false, true));
-    finishTelemetry();
+    suspendTransport(new CacheNavigationError());
   }
 
-  async function resumeAfterNavigation(): Promise<void> {
+  async function resumeTransport(): Promise<void> {
     try {
-      // Keep the host and all its subscribers alive; only the page transport is
-      // replaced. Initialization waits for the suspended startup to unwind.
+      // Keep the host and subscribers; only the connection and engine epochs
+      // are replaced. Wait for the interrupted startup to unwind first.
       await startInitialization();
     } catch {
-      // Non-navigation failures already invoke the normal product fallback.
+      // Initialization failures already invoke the normal product fallback.
     }
   }
 
   function onPageshow(event: PageTransitionEvent): void {
     if (!event.persisted || state !== 'suspended') return;
-    fireAndForget(resumeAfterNavigation(), 'graphql-cache-host');
+    fireAndForget(resumeTransport(), 'graphql-cache-host');
   }
 
   function navigationError(): CacheNavigationError | undefined {
@@ -1111,6 +1150,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
           return;
         state = 'ready';
         initialization = undefined;
+        coordinatorRestarts = 0;
         if (suspended) {
           // A surviving coordinator need not send engine-replaced to a late
           // joiner. Resets while frozen are unknowable, so conservatively
@@ -1178,10 +1218,11 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     msg: DistributiveOmit<CacheRequest, 'id'>,
     opKey?: number
   ): Promise<unknown> {
-    const generation = navigationGeneration;
+    const generation = transportGeneration;
     await ensureInitialized();
-    // Do not admit an old-page operation to a newly restored transport.
-    if (generation !== navigationGeneration) throw new CacheNavigationError();
+    // Never admit an interrupted operation to a different transport generation.
+    if (generation !== transportGeneration)
+      throw transportInterruption ?? new CacheNavigationError();
     return await request(msg, opKey);
   }
 
@@ -1204,9 +1245,8 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     },
 
     async currentStorageGeneration(): Promise<string> {
-      await ensureInitialized();
       return parseStorageGeneration(
-        await request({ kind: 'current-storage-generation' })
+        await initializedRequest({ kind: 'current-storage-generation' })
       );
     },
 

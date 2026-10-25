@@ -77,7 +77,7 @@ pub(crate) async fn user_label_preview_cursor(
                 FROM email_messages m
                 JOIN email_effective_message_labels ml ON m.id = ml.message_id
                 JOIN email_labels l ON ml.label_id = l.id
-                WHERE m.link_id = ANY($1) AND l.name = $5
+                WHERE m.link_id = ANY($1) AND l.link_id = ANY($1) AND l.name = $5
                   AND EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND mf.is_present AND NOT mf.in_trash)
                 GROUP BY m.thread_id
             ) llpt

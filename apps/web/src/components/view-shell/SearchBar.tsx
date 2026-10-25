@@ -67,8 +67,8 @@ export function SearchBar(props: SearchBarProps) {
       depth={2}
       hideBorder
       class={cn(
-        'w-full min-w-0 rounded-full border border-edge-button bg-control text-ink has-[input:focus-visible]:ring-2 has-[input:focus-visible]:ring-edge-muted',
-        local.size === 'sm' ? 'h-8' : 'h-10',
+        'w-full min-w-0 rounded-full border border-edge-button bg-control not-touch:elevated text-ink has-[input:focus-visible]:ring-2 has-[input:focus-visible]:ring-edge-muted',
+        local.size === 'sm' ? 'h-8' : 'h-[var(--view-search-height,2.5rem)]',
         local.class
       )}
       data-search-bar=""

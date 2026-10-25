@@ -631,7 +631,15 @@ where
             .append(AgentSessionLog {
                 agent_session_id: self.machine.id(),
                 user_id: from,
-                content: Message::ToRuntime(message.clone()),
+                content: if agent_runtime_protocol::domain::notification::input_from_runtime(
+                    &message,
+                )
+                .is_some_and(|input| input.system_turn)
+                {
+                    Message::Notification(message.clone())
+                } else {
+                    Message::ToRuntime(message.clone())
+                },
                 logged_at: None,
             })
             .await?;

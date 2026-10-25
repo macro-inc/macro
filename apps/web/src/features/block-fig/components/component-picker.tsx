@@ -73,7 +73,7 @@ export function ComponentPicker(props: {
       <Popover.Portal>
         <Layer depth={3}>
           <Popover.Content
-            class="fig-editor-theme z-modal flex max-h-96 w-64 flex-col rounded-xl border border-edge-muted bg-menu p-2 text-xs shadow-xl outline-none"
+            class="menu-surface fig-editor-theme z-modal flex max-h-96 w-64 flex-col p-2 text-xs outline-none"
             aria-label={props.label}
             data-testid="fig-component-picker"
             onKeyDown={(e: KeyboardEvent) => {

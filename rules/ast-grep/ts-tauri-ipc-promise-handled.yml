@@ -1,0 +1,68 @@
+id: ts-tauri-ipc-promise-handled
+language: typescript
+# Twin of tsx-tauri-ipc-promise-handled — ast-grep rules are single-language,
+# and `tsx` only scans .tsx files.
+severity: error
+message: Await, return, `.catch`, or fireAndForget this Tauri IPC promise; a dropped one becomes an unhandled rejection when the plugin rejects.
+note: |-
+  Rule FE-56 in docs/development/style-guide.md. Native plugins reject when
+  their resource is already gone (a cancelled request, a closed socket, a
+  listener removed during teardown), and nothing awaits a promise started with
+  `void` or a bare `.then(cb)`, so each rejection reaches the global
+  unhandledrejection handler. Start un-awaited teardown work with
+  fireAndForget from @core/util/fireAndForget (FE-13).
+files:
+  - apps/web/src/**
+  - packages/**
+ignores:
+  - '**/*.test.ts'
+rule:
+  matches: unhandled-ipc-chain
+  any:
+    - inside:
+        kind: expression_statement
+    - inside:
+        kind: unary_expression
+        regex: ^void
+    - inside:
+        kind: arrow_function
+        inside:
+          kind: arguments
+          inside:
+            pattern: onCleanup($$$)
+  inside:
+    kind: program
+    stopBy: end
+    has:
+      kind: import_statement
+      regex: "@tauri-apps/"
+utils:
+  ipc-call:
+    any:
+      - pattern: invoke($$$)
+      - pattern: invoke<$$$T>($$$)
+      - pattern: listen($$$)
+      - pattern: listen<$$$T>($$$)
+      - pattern: once($$$)
+      - pattern: once<$$$T>($$$)
+      - pattern: addPluginListener($$$)
+      - pattern: addPluginListener<$$$T>($$$)
+      - pattern: $LISTENER.unregister()
+  ipc-chain:
+    any:
+      - matches: ipc-call
+      # A stored IPC promise (e.g. an unlisten promise) chained in teardown.
+      - pattern: $PROMISE.then($ON_FULFILLED)
+      - kind: call_expression
+        has:
+          field: function
+          kind: member_expression
+          has:
+            field: object
+            matches: ipc-chain
+  unhandled-ipc-chain:
+    matches: ipc-chain
+    not:
+      any:
+        - pattern: $PROMISE.catch($$$)
+        - pattern: $PROMISE.then($ON_FULFILLED, $ON_REJECTED)

@@ -21,7 +21,7 @@ export function LibraryUpdatesNotice(props: {
   return (
     <Show when={!dismissed()}>
       <div
-        class="absolute bottom-14 left-3 z-30 flex w-64 flex-col gap-1.5 rounded-xl border border-edge-muted bg-menu p-3 text-xs shadow-xl"
+        class="menu-surface absolute bottom-14 left-3 z-30 flex w-64 flex-col gap-1.5 p-3 text-xs"
         data-testid="fig-library-updates"
         onPointerDown={(e) => e.stopPropagation()}
       >

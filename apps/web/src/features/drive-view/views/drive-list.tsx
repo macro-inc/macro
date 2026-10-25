@@ -13,6 +13,7 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { toast } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { createScrollTopFade } from '@core/util/createScrollTopFade';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import EmptyStateFolderGraphic from '@design/empty-state-folder.svg';
@@ -81,6 +82,7 @@ export function DriveList() {
   const [grid, setGrid] = createSignal<HTMLDivElement>();
 
   const [viewport, setViewport] = createSignal<HTMLDivElement>();
+  createScrollTopFade(viewport);
 
   const [virtualizer, setVirtualizer] = createSignal<VirtualizerHandle>();
 

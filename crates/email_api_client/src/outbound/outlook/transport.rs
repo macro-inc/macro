@@ -62,14 +62,20 @@ impl OutlookApiClientRepository {
         let token = refreshed.as_ref().unwrap_or(token);
         let mut request = self
             .client
-            .request(method, url)
+            .request(method.clone(), url)
             .bearer_auth(token.expose_secret())
             .header("Prefer", IMMUTABLE_ID_PREFERENCE);
         if let Some(version) = expected_version {
             request = request.header("If-Match", version);
         }
-        if let Some(body) = body {
-            request = request.json(body);
+        match body {
+            Some(body) => request = request.json(body),
+            // reqwest omits Content-Length for an empty body, and Graph answers a
+            // bodyless POST or PATCH without it with 411 Length Required.
+            None if matches!(method, Method::POST | Method::PATCH) => {
+                request = request.header("Content-Length", 0)
+            }
+            None => {}
         }
         let retry = self
             .rejected_token_refresh
@@ -129,13 +135,23 @@ impl OutlookApiClientRepository {
     }
 
     async fn send_request(request: RequestBuilder) -> Result<Response, EmailApiError> {
-        let response = request.send().await.map_err(|_| EmailApiError::Transient {
+        let transport_failed = |_| EmailApiError::Transient {
             message: "Microsoft Graph transport failed".into(),
-        })?;
+        };
+        let (client, request) = request.build_split();
+        let request = request.map_err(transport_failed)?;
+        let method = request.method().clone();
+        let response = client.execute(request).await.map_err(transport_failed)?;
         if response.status().is_success() {
             return Ok(response);
         }
         let status = response.status();
+        let path = response.url().path().to_owned();
+        let request_id = response
+            .headers()
+            .get("request-id")
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_owned);
         let retry_after = response
             .headers()
             .get("Retry-After")
@@ -147,8 +163,23 @@ impl OutlookApiClientRepository {
                         .map(|date| date.duration_since(SystemTime::now()).unwrap_or_default())
                 })
             });
-        let body: Value = response.json().await.unwrap_or(Value::Null);
-        let code = body.pointer("/error/code").and_then(Value::as_str);
+        let body = response.text().await.unwrap_or_default();
+        let error: Value = serde_json::from_str(&body).unwrap_or(Value::Null);
+        let code = error.pointer("/error/code").and_then(Value::as_str);
+        if method != Method::GET {
+            // Graph error messages can quote recipient addresses. The code and
+            // request-id identify the failure; only bodies without a Graph error
+            // code, such as the front end's 411 page, are logged verbatim.
+            tracing::warn!(
+                %method,
+                path,
+                status = status.as_u16(),
+                graph_error_code = code,
+                graph_request_id = request_id.as_deref(),
+                body = code.is_none().then_some(body.as_str()),
+                "Microsoft Graph rejected a write"
+            );
+        }
         // Do not propagate provider messages, bodies, request URLs, or cursor tokens.
         Err(match status {
             StatusCode::UNAUTHORIZED => EmailApiError::AuthRequired,

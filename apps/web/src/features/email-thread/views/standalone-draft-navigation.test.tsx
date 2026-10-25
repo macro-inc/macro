@@ -30,8 +30,8 @@ vi.mock('@core/component/CustomScrollbar', () => ({
 }));
 vi.mock('./message-list', () => ({ MessageList: () => null }));
 vi.mock('./bottom-reply-buttons', () => ({ BottomReplyButtons: () => null }));
-vi.mock('./mobile-email-compose-drawer', () => ({
-  MobileEmailComposeDrawer: () => null,
+vi.mock('./mobile-email-compose', () => ({
+  MobileEmailCompose: () => null,
 }));
 
 it.each(['accepted', 'rejected'] as const)(

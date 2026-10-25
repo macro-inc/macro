@@ -1772,6 +1772,17 @@
       "get": {
         "tags": ["link::outlook"],
         "operationId": "email_connection_providers",
+        "parameters": [
+          {
+            "name": "original_url",
+            "in": "query",
+            "description": "**OPTIONAL**. Where the admin-consent flow returns to; required for `outlook_admin_consent_url`.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "",
@@ -1779,6 +1790,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/EmailConnectionProviders"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -2832,6 +2853,9 @@
           "200": {
             "description": ""
           },
+          "303": {
+            "description": "Back to the app with link identifiers, an `email_link_error`, or an `email_link_notice`"
+          },
           "304": {
             "description": "",
             "content": {
@@ -3539,6 +3563,270 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team/invite-link": {
+      "get": {
+        "tags": ["teams::inbound::axum_router::invite_link"],
+        "summary": "Gets the team's invite link. Anyone who may invite people to the team may\nsee it.",
+        "operationId": "get_team_invite_link",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamInviteLinkResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["teams::inbound::axum_router::invite_link"],
+        "summary": "Creates the team's invite link, replacing any existing one. Anyone who may\ninvite people may create the first link; replacing one requires a team\nadmin or owner.",
+        "operationId": "create_team_invite_link",
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedTeamInviteLinkResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["teams::inbound::axum_router::invite_link"],
+        "summary": "Turns off the team's invite link. Requires a team admin or owner.",
+        "operationId": "delete_team_invite_link",
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team/invite-link/join": {
+      "post": {
+        "tags": ["teams::inbound::axum_router::invite_link"],
+        "summary": "Joins the team an invite link belongs to.",
+        "operationId": "join_team_by_invite_link",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TeamInviteLinkTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JoinTeamByInviteLinkResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team/invite-link/team": {
+      "post": {
+        "tags": ["teams::inbound::axum_router::invite_link"],
+        "summary": "Gets the team an invite link joins, so the user can see it before joining.",
+        "operationId": "get_team_by_invite_link",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TeamInviteLinkTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamInviteLinkTeam"
                 }
               }
             }
@@ -5546,6 +5834,17 @@
           }
         }
       },
+      "CreatedTeamInviteLinkResponse": {
+        "type": "object",
+        "description": "A newly created team invite link.",
+        "required": ["token"],
+        "properties": {
+          "token": {
+            "$ref": "#/components/schemas/TeamInviteLinkToken",
+            "description": "The new link's token. Any previous link stops working."
+          }
+        }
+      },
       "CreditCheckoutRequestBody": {
         "type": "object",
         "description": "Request body for [`create_credit_checkout_handler`].",
@@ -5650,6 +5949,10 @@
           },
           "outlook": {
             "type": "boolean"
+          },
+          "outlook_admin_consent_url": {
+            "type": ["string", "null"],
+            "description": "Where a Microsoft 365 administrator approves Macro for their whole\ndirectory. Present when Outlook is configured and the request named an\n`original_url` for the administrator's browser to return to."
           }
         }
       },
@@ -6540,6 +6843,22 @@
           }
         }
       },
+      "JoinTeamByInviteLinkResponse": {
+        "type": "object",
+        "description": "The result of opening a team invite link.",
+        "required": ["team_id", "already_member"],
+        "properties": {
+          "already_member": {
+            "type": "boolean",
+            "description": "True when the user was already on the team and nothing changed."
+          },
+          "team_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The team the link joins."
+          }
+        }
+      },
       "LinkShare": {
         "type": "string",
         "description": "Defines who can access an item through its share link.",
@@ -7246,6 +7565,54 @@
           "team_role": {
             "$ref": "#/components/schemas/TeamRole",
             "description": "The role being invited as"
+          }
+        }
+      },
+      "TeamInviteLinkResponse": {
+        "type": "object",
+        "description": "The caller's team invite link.",
+        "properties": {
+          "token": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TeamInviteLinkToken",
+                "description": "The link's token, or null when the team has no invite link."
+              }
+            ]
+          }
+        }
+      },
+      "TeamInviteLinkTeam": {
+        "type": "object",
+        "description": "The team an invite link joins, shown before the user accepts.",
+        "required": ["team_id", "team_name"],
+        "properties": {
+          "team_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Id of the team the link joins."
+          },
+          "team_name": {
+            "type": "string",
+            "description": "Name of the team the link joins."
+          }
+        }
+      },
+      "TeamInviteLinkToken": {
+        "type": "string",
+        "description": "The secret in a team's shareable invite link.\n\nAnyone signed in who holds the token can join the team, so it is a random\nvalue rather than a time-ordered id, and an admin resetting the link\nreplaces it."
+      },
+      "TeamInviteLinkTokenRequest": {
+        "type": "object",
+        "description": "Identifies an invite link. The token travels in the body, not the path, so\nrequest spans and access logs that record the path never see it.",
+        "required": ["token"],
+        "properties": {
+          "token": {
+            "$ref": "#/components/schemas/TeamInviteLinkToken",
+            "description": "The invite link's token."
           }
         }
       },

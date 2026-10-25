@@ -1,0 +1,12 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+syntax = "proto2";
+package WAWebProtobufsEphemeral;
+option go_package = "go.mau.fi/whatsmeow/proto/waEphemeral";
+
+message EphemeralSetting {
+	optional sfixed32 duration = 1;
+	optional sfixed64 timestamp = 2;
+}

@@ -101,7 +101,7 @@ function refusalOf(code: FormErrorCode): FormRefusal {
     .with('tallyHidden', () => 'tally-hidden')
     .with('conflict', () => 'conflict')
     .with('internal', () => 'internal')
-    .exhaustive();
+    .exhaustive(() => 'internal');
 }
 
 /** A refused write in the words the UI shows, naming the question it refused. */
@@ -277,20 +277,16 @@ export function createTallySource(
         ? query.data.questions.map((question) => ({
             questionId: question.question,
             responses: question.responses,
-            buckets: question.buckets.map((bucket) =>
+            buckets: question.buckets.flatMap((bucket) =>
               match(bucket.value)
-                .returnType<QuestionTally['buckets'][number]>()
-                .with({ kind: 'option' }, ({ option }) => ({
-                  kind: 'option',
-                  optionId: option,
-                  count: bucket.count,
-                }))
-                .with({ kind: 'checkbox' }, ({ checked }) => ({
-                  kind: 'checkbox',
-                  checked,
-                  count: bucket.count,
-                }))
-                .exhaustive()
+                .returnType<QuestionTally['buckets']>()
+                .with({ kind: 'option' }, ({ option }) => [
+                  { kind: 'option', optionId: option, count: bucket.count },
+                ])
+                .with({ kind: 'checkbox' }, ({ checked }) => [
+                  { kind: 'checkbox', checked, count: bucket.count },
+                ])
+                .exhaustive(() => [])
             ),
           }))
         : undefined,

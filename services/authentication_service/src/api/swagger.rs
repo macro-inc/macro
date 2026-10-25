@@ -14,11 +14,14 @@ use gtm_invite::inbound::axum_router::dto::{
 use model::authentication::login::request::{AppleLoginRequest, PasswordRequest};
 use teams::domain::model::{
     PatchTeamCrmSettingsRequest, PatchTeamCrmSettingsResponse, PatchTeamMemberPlanRequest,
-    PatchTeamRequest, PatchTeamUserRole, Team, TeamInviteDetails, TeamMember, TeamPlan, TeamRole,
-    TeamWithMembers,
+    PatchTeamRequest, PatchTeamUserRole, Team, TeamInviteDetails, TeamInviteLinkTeam,
+    TeamInviteLinkToken, TeamMember, TeamPlan, TeamRole, TeamWithMembers,
 };
 use teams::inbound::axum_router::get_team_invites::TeamInvitesResponse as TeamTeamInvitesResponse;
 use teams::inbound::axum_router::get_user_invites::TeamInvitesResponse as UserTeamInvitesResponse;
+use teams::inbound::axum_router::invite_link::{
+    CreatedTeamInviteLinkResponse, JoinTeamByInviteLinkResponse, TeamInviteLinkResponse,
+};
 use teams::inbound::axum_router::toggle_auto_join_domain::ToggleAutoJoinDomainResponse;
 use teams::inbound::axum_router::toggle_non_admin_invites::ToggleNonAdminInvitesResponse;
 use teams::inbound::axum_router::{
@@ -184,6 +187,11 @@ use model::user::{
                 teams::inbound::axum_router::remove_user_from_team::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
                 teams::inbound::axum_router::patch_team_member_plan::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
                 teams::inbound::axum_router::delete_team_invite::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                teams::inbound::axum_router::invite_link::get_handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                teams::inbound::axum_router::invite_link::create_handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                teams::inbound::axum_router::invite_link::delete_handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                teams::inbound::axum_router::invite_link::get_team_handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                teams::inbound::axum_router::invite_link::join_handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
 
                 /// /referral
                 referral::inbound::axum_router::get_referral_code_handler::<crate::api::context::ReferralServiceType, crate::api::context::RateLimiter, crate::api::context::AuthorizationService>,
@@ -314,6 +322,11 @@ use model::user::{
                         PatchTeamCrmSettingsResponse,
                         ToggleAutoJoinDomainResponse,
                         ToggleNonAdminInvitesResponse,
+                        TeamInviteLinkResponse,
+                        CreatedTeamInviteLinkResponse,
+                        JoinTeamByInviteLinkResponse,
+                        TeamInviteLinkTeam,
+                        TeamInviteLinkToken,
                         TeamTeamInvitesResponse,
                         UserTeamInvitesResponse,
 

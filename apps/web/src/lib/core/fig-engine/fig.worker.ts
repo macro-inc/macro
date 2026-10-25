@@ -323,7 +323,11 @@ async function serve(request: FigRequest) {
         .with('apply', () =>
           f.apply(request.page, request.ops ?? '[]', request.coalesce)
         )
-        .exhaustive();
+        .exhaustive(() => undefined);
+      if (json === undefined) {
+        fail(request.id, `unknown edit action: ${request.action}`);
+        return;
+      }
       post({ id: request.id, ok: true, kind: 'edit', json });
       return;
     }

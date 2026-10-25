@@ -3,8 +3,12 @@ package com.macro.call
 import android.Manifest
 import android.app.Activity
 import android.content.Intent
+import android.app.NotificationManager
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
+import android.provider.Settings
+import android.webkit.WebView
 import androidx.appcompat.app.AppCompatActivity
 import app.tauri.annotation.*
 import app.tauri.plugin.*
@@ -41,6 +45,12 @@ internal class ModeArgs { var mode = "hidden" }
 @TauriPlugin(permissions = [Permission(strings = [Manifest.permission.RECORD_AUDIO], alias = "microphone"), Permission(strings = [Manifest.permission.CAMERA], alias = "camera")])
 class CallPlugin(private val activity: Activity) : Plugin(activity) {
     private var preparePermissionCallId: String? = null
+    private var miniWindow: CallMiniWindow? = null
+    override fun load(webView: WebView) { miniWindow = CallMiniWindow(activity, webView) }
+    // Back in Macro, a drawer left in PiP opens again, as iOS returns to PiP's source.
+    override fun onResume(activity: AppCompatActivity) { if (CallActivity.inPictureInPicture) Calls.openDrawer(activity) }
+    // Once Macro is out of sight (PiP closed, phone locked) nothing shows the camera.
+    override fun onStop(activity: AppCompatActivity) { if (!CallActivity.isOpen) Calls.stopCamera(activity) }
     private fun finishPreparePermission() {
         preparePermissionCallId?.let { Calls.finishMicrophonePermission(it) }
         preparePermissionCallId = null
@@ -116,12 +126,8 @@ class CallPlugin(private val activity: Activity) : Plugin(activity) {
     @Command fun setVideoOverlayMode(invoke: Invoke) {
         val mode = invoke.parseArgs(ModeArgs::class.java).mode
         if (mode !in listOf("hidden", "expanded", "minimized")) { invoke.reject("Invalid call surface mode"); return }
-        Calls.overlay = mode
-        if (mode != "hidden" && Calls.offer != null) {
-            activity.startActivity(Intent(activity, CallActivity::class.java))
-            Calls.offer?.let { Calls.emit("drawer", JSObject().apply { put("channelId", it.channelId) }) }
-        }
-        Calls.publish(); invoke.resolve()
+        if (mode == "expanded") Calls.openDrawer(activity) else Calls.setOverlay(mode)
+        invoke.resolve()
     }
     @Command fun switchCamera(invoke: Invoke) { Calls.switchCamera(); invoke.resolve() }
     @Command fun setCallDrawerTheme(invoke: Invoke) {
@@ -141,9 +147,29 @@ class CallPlugin(private val activity: Activity) : Plugin(activity) {
     @Command fun setParticipantDisplayName(invoke: Invoke) {
         val args = invoke.parseArgs(NameArgs::class.java)
         val name = args.displayName?.trim()?.takeIf { it.isNotEmpty() }
-        if (name == null) Calls.displayNames.remove(args.identity) else Calls.displayNames[args.identity] = name
-        Calls.publish(); invoke.resolve()
+        // Names only change native UI. Publishing would re-emit identities, which makes JS resend every name.
+        if (Calls.displayNames[args.identity] != name) {
+            if (name == null) Calls.displayNames.remove(args.identity) else Calls.displayNames[args.identity] = name
+            Calls.refresh()
+        }
+        invoke.resolve()
     }
     @Command fun getVoipToken(invoke: Invoke) { invoke.resolve(JSObject().apply { put("token", org.json.JSONObject.NULL) }) }
-    override fun onDestroy(activity: AppCompatActivity) { finishPreparePermission(); Calls.abortPendingJoin(activity); Calls.unwatch() }
+    // Android 14+ revokes full-screen intents unless the user (or a Play declaration) allows them,
+    // so incoming calls can't take over the lock screen.
+    @Command fun canUseFullScreenIntent(invoke: Invoke) {
+        val allowed = Build.VERSION.SDK_INT < 34 || activity.getSystemService(NotificationManager::class.java).canUseFullScreenIntent()
+        invoke.resolve(JSObject().apply { put("allowed", allowed) })
+    }
+    @Command fun openFullScreenIntentSettings(invoke: Invoke) {
+        if (Build.VERSION.SDK_INT >= 34) {
+            runCatching { activity.startActivity(Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, Uri.parse("package:${activity.packageName}"))) }
+                .onFailure { invoke.reject("Unable to open full-screen notification settings"); return }
+        }
+        invoke.resolve()
+    }
+    override fun onDestroy(activity: AppCompatActivity) {
+        finishPreparePermission(); Calls.abortPendingJoin(activity); Calls.unwatch()
+        miniWindow?.release(); miniWindow = null
+    }
 }

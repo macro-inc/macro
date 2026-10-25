@@ -13,7 +13,6 @@ export function MinimizedThread(props: {
   layout: Layout;
   isActive: boolean;
   theme?: EditorThemeClasses;
-  maxHeight?: number;
   /**
    * When false, tapping only activates the thread instead of expanding the
    * floating card in place — for hosts that present the active thread
@@ -79,7 +78,6 @@ export function MinimizedThread(props: {
         alignmentOffset={0}
         top={props.layout.calculatedYPos}
         threadId={props.comment.threadId}
-        maxHeight={props.maxHeight}
         isActive={props.isActive}
         transition={false}
       >

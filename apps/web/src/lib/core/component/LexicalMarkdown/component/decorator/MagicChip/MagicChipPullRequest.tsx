@@ -61,6 +61,8 @@ export const MagicChipPullRequest: Component<{ url: string }> = (props) => {
     const value = metadata()[key];
     return typeof value === 'number' ? value : undefined;
   };
+  const isDraft = () =>
+    metadata().draft === true && metadata().status === 'open';
   const content = () => (
     <>
       <Show
@@ -70,8 +72,9 @@ export const MagicChipPullRequest: Component<{ url: string }> = (props) => {
             aria-hidden="true"
             class="size-3.5"
             classList={{
-              'text-success': metadata().status === 'open',
+              'text-success': metadata().status === 'open' && !isDraft(),
               'text-failure': metadata().status === 'closed',
+              'text-ink-muted': isDraft(),
             }}
           />
         }

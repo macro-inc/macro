@@ -48,6 +48,9 @@ by policy.
 
 - `cargo test -p macro_authorization` (`SQLX_OFFLINE` unset).
 
+`authorize_identity` retains signed agent attribution on user authentication. It
+does not turn a user credential into bot authority or change endpoint policies.
+
 ## Gotchas
 
 - Both extractors reject (400) a request that combines explicit credential

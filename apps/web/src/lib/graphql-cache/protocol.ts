@@ -656,6 +656,7 @@ export type MutationInspection = Pick<
   | 'operationName'
   | 'variables'
   | 'clientMetadata'
+  | 'enqueuedAtMs'
 > & { optimisticData: unknown };
 
 /** Claimed strict queue head, ready to be forwarded through urql. */
@@ -675,6 +676,12 @@ export type ClaimedMutation = {
   attemptCount: number;
   /** Retryable server failures; transport failures do not consume this budget. */
   serverFailureCount: number;
+  /**
+   * Durable first-enqueue wall-clock time in epoch ms, kept when a write
+   * replaces an unsent one for the same UUID. Native claims and hosts built
+   * before this field omit it, so it is unknown rather than zero.
+   */
+  enqueuedAtMs?: number;
 };
 
 /** Outcome of the strict-head claim attempted immediately after enqueue. */

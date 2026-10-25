@@ -20,6 +20,28 @@ fn android_native_check_is_an_unconditional_required_merge_check() {
     assert!(android.contains("bun scripts/android-version-check.mjs"));
     assert!(android.contains("bun scripts/android-play-status.mjs --version-code"));
     assert!(android.contains("id-token: write"));
+    // skip-android-update bypasses the bump too, like skip-ios-update: the
+    // labels are read first, and the version check only runs without it.
+    let labels = android.find("id: labels").expect("labels step");
+    let version = android
+        .find("id: android-version")
+        .expect("version check step");
+    assert!(
+        labels < version,
+        "labels must be read before the version check: {android}"
+    );
+    let version_step = android[version..]
+        .split("\n    - ")
+        .next()
+        .expect("version check step body");
+    assert!(
+        version_step.contains("if: steps.labels.outputs.skip != 'true'"),
+        "the version check runs only without the skip label: {android}"
+    );
+    assert!(
+        !android.contains("!steps.labels"),
+        "never negate a comparison with a leading `!`: {android}"
+    );
     let status = yaml
         .split("\n  status-check:\n")
         .nth(1)
@@ -75,6 +97,14 @@ fn status_check_requires_the_ios_native_check() {
     assert!(
         gate.contains("predicate-quantifier: every"),
         "negated path filters need the `every` quantifier: {gate}"
+    );
+    assert!(
+        gate.contains("!apps/web/tauri/**/*.md"),
+        "documentation must not trigger an iOS native release: {gate}"
+    );
+    assert!(
+        gate.contains("!apps/web/tauri/**/desktop-*/**"),
+        "macOS CEF files must not trigger an iOS native release: {gate}"
     );
     // `!` binds tighter than `==` in GitHub expressions: `!x == 'true'` is
     // always false, which silently skipped every gated step.
@@ -441,4 +471,40 @@ native_tree_fetch HEAD
             "persisted credentials: {persisted}"
         );
     }
+}
+
+#[test]
+fn ios_gate_comment_runs_after_failures_and_only_for_same_repo_prs() {
+    let yaml = web_app_check_main().to_string().expect("workflow yaml");
+    let gate = job(&yaml, "ios-native-check", "status-check");
+    assert!(gate.contains("pull-requests: write"));
+    assert!(gate.contains(
+        "!cancelled() && github.event.pull_request.head.repo.full_name == github.repository"
+    ));
+    assert!(gate.contains("IOS_GATE_STEPS: ${{ toJSON(steps) }}"));
+    for id in ["checkout", "bun", "bump", "credentials", "live"] {
+        assert!(gate.contains(&format!("id: {id}")), "missing step id: {id}");
+    }
+}
+
+#[test]
+fn ios_gate_status_and_comment_scenarios() {
+    let output = std::process::Command::new("node")
+        .arg("--test")
+        .arg(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../../../apps/web/scripts/ios-app-store.test.mjs"
+        ))
+        .arg(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/src/workflows/scripts/ios_native_check_comment.test.cjs"
+        ))
+        .output()
+        .expect("run iOS gate scenarios with Node");
+    assert!(
+        output.status.success(),
+        "iOS gate scenarios failed:\n{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
 }

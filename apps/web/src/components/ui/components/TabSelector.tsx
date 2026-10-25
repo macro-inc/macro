@@ -1,3 +1,4 @@
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { Tabs } from '@kobalte/core/tabs';
 import CaretLeft from '@phosphor/caret-left.svg';
 import CaretRight from '@phosphor/caret-right.svg';
@@ -20,17 +21,23 @@ import { Layer } from './Layer';
 export type TabSelectorProps = ParentProps<{ class?: string }>;
 
 /**
- * Inset navigation with a scrollable track and a fixed, independently focused add menu.
- * @do Compose List and Tab inside Kobalte Tabs to retain keyboard navigation and selection semantics.
+ * Tabs that own panels or a dynamic collection: a scrollable row of the same
+ * pills as `Tabs`, with an optional add menu that stays at the end.
+ * @do Wrap the List and its Panels in `TabSelector.Root`; it owns selection and tab/tabpanel semantics.
  * @do Give List an accessible label and provide tooltips for truncated tab names.
- * @dont Put AddMenu inside the tab collection; keep it beside Tabs so it remains independently focusable.
+ * @do Use for tables, forms, and editor sections whose tabs control `TabSelector.Panel`s.
+ * @dont Use for a plain view switch with no panels; use `Tabs`.
+ * @dont Put AddMenu inside the tab collection; keep it beside List so it remains independently focusable.
+ * @dont Put a TabSelector inside a HeaderActionGroup or ButtonGroup.
  */
 export function TabSelector(props: TabSelectorProps) {
   return (
     <Layer depth={0}>
       <div
         class={cn(
-          'flex min-w-0 items-center rounded-full border border-edge-muted bg-surface p-0.5',
+          'flex min-w-0 items-center',
+          // Touch keeps its inset track; desktop tabs are separate pills.
+          'touch:rounded-full touch:border touch:border-edge-muted touch:bg-surface touch:p-0.5',
           props.class
         )}
       >
@@ -38,6 +45,16 @@ export function TabSelector(props: TabSelectorProps) {
       </div>
     </Layer>
   );
+}
+
+/** Owns the selected tab; wrap the List and every Panel it controls. */
+function Root(props: ComponentProps<typeof Tabs>) {
+  return <Tabs {...props} />;
+}
+
+/** Content shown while its tab is selected. */
+function Panel(props: ComponentProps<typeof Tabs.Content>) {
+  return <Tabs.Content {...props} />;
 }
 
 function List(props: ComponentProps<typeof Tabs.List>) {
@@ -90,7 +107,8 @@ function List(props: ComponentProps<typeof Tabs.List>) {
           if (typeof local.ref === 'function') local.ref(element);
         }}
         class={cn(
-          'relative flex min-w-0 items-center gap-0.5 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
+          // Desktop padding keeps the pills' outline rings inside the scroll clip.
+          'relative flex min-w-0 items-center gap-0.5 overflow-x-auto overscroll-x-contain [scrollbar-width:none] not-touch:-m-1 not-touch:gap-1.5 not-touch:p-1 [&::-webkit-scrollbar]:hidden',
           local.class
         )}
         onScroll={measure}
@@ -145,7 +163,13 @@ function Tab(props: ComponentProps<typeof Tabs.Trigger>) {
       <Tabs.Trigger
         {...rest}
         class={cn(
-          'relative flex max-w-40 shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium text-ink-extra-muted outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-accent/50 data-selected:bg-surface data-selected:text-ink data-selected:ring data-selected:ring-inset data-selected:ring-edge-muted data-selected:shadow-sm',
+          'relative flex max-w-40 shrink-0 items-center gap-1.5 rounded-full font-medium whitespace-nowrap outline-none',
+          'touch:px-3 touch:py-1 touch:text-xs touch:text-ink-extra-muted touch:hover:text-ink touch:focus-visible:ring-2 touch:focus-visible:ring-accent/50 touch:data-selected:bg-surface touch:data-selected:text-ink touch:data-selected:ring touch:data-selected:ring-inset touch:data-selected:ring-edge-muted touch:data-selected:shadow-sm',
+          // Desktop matches a `Tabs` pill: the outline Button frame, pressed fill when selected.
+          'not-touch:h-8 not-touch:border not-touch:bg-control not-touch:px-3 not-touch:text-sm not-touch:text-ink-muted not-touch:elevated not-touch:transition-colors not-touch:duration-120 motion-reduce:transition-none',
+          'not-touch:not-data-selected:hover:overlay-hover not-touch:not-data-selected:hover:text-ink',
+          'not-touch:data-selected:border-edge-button not-touch:data-selected:overlay-active not-touch:data-selected:text-ink not-touch:data-selected:shadow-none',
+          'not-touch:focus-visible:ring-2 not-touch:focus-visible:ring-inset not-touch:focus-visible:ring-edge-focus',
           local.class
         )}
       />
@@ -161,11 +185,11 @@ function AddMenu(
   }>
 ) {
   return (
-    <div class="ml-0.5 shrink-0 pl-0.5">
+    <div class="ml-0.5 shrink-0 pl-0.5 not-touch:ml-1.5 not-touch:pl-0">
       <Dropdown>
         <Dropdown.Trigger
           ref={props.ref}
-          size="icon-sm"
+          size={isTouchDevice() ? 'icon-sm' : 'icon-md'}
           class="rounded-full"
           aria-label={props.label}
         >
@@ -179,6 +203,8 @@ function AddMenu(
   );
 }
 
+TabSelector.Root = Root;
 TabSelector.List = List;
 TabSelector.Tab = Tab;
+TabSelector.Panel = Panel;
 TabSelector.AddMenu = AddMenu;

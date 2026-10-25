@@ -39,7 +39,7 @@ use super::anthropic_prompt_layout::AnthropicPromptLayout;
 use super::gemini::{GeminiCompletionModel, GeminiModel};
 use super::metering::{MeteringContext, WireProtocol};
 use super::metering_http::MeteredHttpClient;
-use super::openai::{OpenAiChatCompletionsModel, OpenAiResponsesModel};
+use super::openai::{CompatibleCompletionModel, OpenAiChatCompletionsModel, OpenAiResponsesModel};
 use super::types::Model;
 use super::usage_amount::usage_amount;
 use super::{ModelSpeed, PredefinedModel, ReasoningEffort};
@@ -234,7 +234,7 @@ pub(crate) enum ProviderAgent<
     /// An agent over Gemini's native GenerateContent model.
     Gemini(Agent<TracedModel<GeminiCompletionModel<H>>>),
     /// An agent over the OpenAI Chat Completions model.
-    OpenAiChatCompletions(Agent<TracedModel<openai::completion::CompletionModel<H>>>),
+    OpenAiChatCompletions(Agent<TracedModel<CompatibleCompletionModel<H>>>),
     /// An agent over the OpenAI Responses model.
     OpenAiResponses(Agent<TracedModel<openai::responses_api::ResponsesCompletionModel<H>>>),
     /// A test-only agent over an arbitrary completion model (e.g. a scripted

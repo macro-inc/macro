@@ -3,11 +3,18 @@ import type {
   ActivityRow,
   FoldedMessage,
 } from '@service-agent-fold/generated/types';
-import { cleanup, render } from '@solidjs/testing-library';
+import type { ExecutionRecord } from '@service-agent-harness/generated/schemas';
+import { cleanup, render, waitFor } from '@solidjs/testing-library';
+import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
+import { ok } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 
 const live = vi.hoisted(() => ({ acquired: [] as (string | undefined)[] }));
+const code = vi.hoisted(() => ({ read: vi.fn() }));
+vi.mock('@service-agent-harness/client', () => ({
+  agentHarnessServiceClient: { getCodeExecution: code.read },
+}));
 const [messages, setMessages] = createSignal<FoldedMessage[]>([]);
 vi.mock('./queries/live-session', () => ({
   createLiveSession: (id: () => string | undefined) => {
@@ -19,12 +26,22 @@ vi.mock('@app/features/block-agent/ui', () => ({
   TextShimmer: (props: { text: string }) => <>{props.text}</>,
 }));
 
-import { AgentActivity } from './agent-activity';
+import type { AgentActivityData } from '@macro-inc/lexical-core';
+import { AgentActivity as Activity } from './agent-activity';
+
+function AgentActivity(props: AgentActivityData) {
+  return (
+    <QueryClientProvider client={new QueryClient()}>
+      <Activity {...props} />
+    </QueryClientProvider>
+  );
+}
 
 afterEach(() => {
   cleanup();
   live.acquired.length = 0;
   setMessages([]);
+  code.read.mockReset();
 });
 
 const snapshot: AgentActivityRow[] = [
@@ -112,6 +129,96 @@ it('folds a long run behind a count of its earlier steps', () => {
   expect(view.queryByText('Step 1')).toBeNull();
   view.getByRole('button', { name: '2 earlier steps' }).click();
   expect(view.getByText('Step 1')).toBeTruthy();
+});
+
+it('replaces a live code step with observed SDK operations and preserves uncertain outcomes', async () => {
+  const executionId = '019a0000-0000-7000-8000-000000000001';
+  const record: ExecutionRecord = {
+    executionId,
+    source: 'export async function main() {}',
+    status: 'running',
+    calls: [],
+    activity: [
+      { id: 1, label: 'Search documents', status: 'completed' },
+      { id: 2, label: 'Read email', status: 'running' },
+    ],
+    activityTruncated: false,
+  };
+  code.read.mockResolvedValue(ok(record));
+  const client = new QueryClient();
+  const view = render(() => (
+    <QueryClientProvider client={client}>
+      <Activity
+        agentSessionId="session"
+        turn={2}
+        segment={1}
+        rows={[{ id: 'code-1', label: 'Execute code', status: 'running' }]}
+        sealed={false}
+      />
+    </QueryClientProvider>
+  ));
+  const message = reply([
+    { id: 'code-1', label: 'Execute code', detail: null, status: 'running' },
+  ]);
+  message.parts = [
+    { kind: 'text', text: 'Checking' },
+    {
+      kind: 'tool_use',
+      id: 'code-1',
+      name: { kind: 'mcp', server: 'macro_internal', tool: 'ExecuteCode' },
+      status: 'running',
+      detail: {
+        kind: 'other',
+        acpKind: 'other',
+        input: { execution_id: executionId, source: record.source },
+        result: null,
+        output: null,
+        error: null,
+      },
+    },
+  ];
+  setMessages([message]);
+  await waitFor(() =>
+    expect(steps(view)).toEqual([
+      ['Search documents', 'completed'],
+      ['Read email', 'running'],
+    ])
+  );
+  expect(code.read).toHaveBeenCalledWith('session', executionId);
+
+  client.setQueriesData(
+    { queryKey: ['agentCodeExecution'] },
+    {
+      ...record,
+      status: 'cancelled',
+      activity: [
+        { id: 1, label: 'Search documents', status: 'completed' },
+        { id: 2, label: 'Read email', status: 'unknown' },
+      ],
+    }
+  );
+  await waitFor(() =>
+    expect(steps(view)).toEqual([
+      ['Search documents', 'completed'],
+      ['Read email', 'interrupted'],
+    ])
+  );
+  expect(view.queryByText(record.source)).toBeNull();
+
+  code.read.mockRejectedValue(new Error('Temporary network failure'));
+  await client.refetchQueries({ queryKey: ['agentCodeExecution'] });
+  expect(steps(view)).toEqual([
+    ['Search documents', 'completed'],
+    ['Read email', 'interrupted'],
+  ]);
+
+  client.setQueriesData(
+    { queryKey: ['agentCodeExecution'] },
+    { ...record, source: 'another execution' }
+  );
+  await waitFor(() =>
+    expect(steps(view)).toEqual([['Execute code', 'running']])
+  );
 });
 
 it('updates a live row in place as the run paints, rather than redrawing it', () => {

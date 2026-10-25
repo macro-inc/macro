@@ -10,6 +10,7 @@ A Macro project: a folder-like container for documents, chats, and subprojects.
 
 | Property | Modifier | Type | Default value | Description | Overrides | Inherited from |
 | ------ | ------ | ------ | ------ | ------ | ------ | ------ |
+| <a id="property-access"></a> `access` | `readonly` | [`EntityAccess`](../../../sharing/access/classes/EntityAccess.md) | `...` | Access requests and direct user grants. | - | - |
 | <a id="property-createdat"></a> `createdAt` | `readonly` | () => `Promise`\<`string` \| `undefined`\> | `...` | When the project was created (RFC 3339 timestamp). | - | - |
 | <a id="property-entitytype"></a> `entityType` | `readonly` | `"project"` | `'project'` | Favorites identify projects as `project`. | [`PropertiedEntity`](../../../entity/classes/PropertiedEntity.md).[`entityType`](../../../entity/classes/PropertiedEntity.md#property-entitytype) | - |
 | <a id="property-id"></a> `id` | `public readonly` | `string` | `undefined` | - | - | [`PropertiedEntity`](../../../entity/classes/PropertiedEntity.md).[`id`](../../../entity/classes/PropertiedEntity.md#property-id) |
@@ -18,6 +19,18 @@ A Macro project: a folder-like container for documents, chats, and subprojects.
 | <a id="property-search"></a> `search` | `static` | (`client`, `query`, `searchOpts?`) => `AsyncGenerator`\<`Project`\> | `...` | Search projects by name and content, most relevant first, auto-paginated. | - | - |
 
 ## Methods
+
+### accessLevel()
+
+> **accessLevel**(): `Promise`\<`"view"` \| `"comment"` \| `"edit"` \| `"owner"`\>
+
+Read the caller's effective access level.
+
+#### Returns
+
+`Promise`\<`"view"` \| `"comment"` \| `"edit"` \| `"owner"`\>
+
+***
 
 ### delete()
 
@@ -88,6 +101,22 @@ The items (documents, chats, subprojects) directly inside this project.
 #### Returns
 
 `Promise`\<[`Item`](../../../../../generated/storage/types.gen/type-aliases/Item.md)[]\>
+
+***
+
+### permission()
+
+> **permission**(): `Promise`\<\{ `permission`: [`EntityPermission`](../../../../../generated/storage/types.gen/type-aliases/EntityPermission.md); `status`: `"access"`; \} \| \{ `status`: `"no_access"`; \}\>
+
+Read the caller's effective permission on this entity.
+
+#### Returns
+
+`Promise`\<\{ `permission`: [`EntityPermission`](../../../../../generated/storage/types.gen/type-aliases/EntityPermission.md); `status`: `"access"`; \} \| \{ `status`: `"no_access"`; \}\>
+
+#### Inherited from
+
+[`PropertiedEntity`](../../../entity/classes/PropertiedEntity.md).[`permission`](../../../entity/classes/PropertiedEntity.md#permission)
 
 ***
 
@@ -181,6 +210,18 @@ value when `value` is omitted.
 #### Inherited from
 
 [`PropertiedEntity`](../../../entity/classes/PropertiedEntity.md).[`setProperty`](../../../entity/classes/PropertiedEntity.md#setproperty)
+
+***
+
+### sharePermissions()
+
+> **sharePermissions**(): `Promise`\<[`SharePermissionV2`](../../../../../generated/storage/types.gen/type-aliases/SharePermissionV2.md)\>
+
+Read this project's sharing configuration.
+
+#### Returns
+
+`Promise`\<[`SharePermissionV2`](../../../../../generated/storage/types.gen/type-aliases/SharePermissionV2.md)\>
 
 ***
 

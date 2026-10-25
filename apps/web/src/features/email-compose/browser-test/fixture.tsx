@@ -22,6 +22,7 @@ import { CalendarReplacementFixture } from './calendar-replacement-fixture';
 import { DraftOwnerFixture } from './draft-owner-fixture';
 import { DraftRecoveryFixture } from './draft-recovery-fixture';
 import { OutlookRecoveryFixture } from './outlook-recovery-fixture';
+import { ScheduleRecoveryFixture } from './schedule-recovery-fixture';
 import { SenderFixture } from './sender-fixture';
 
 type ScheduledItem = {
@@ -348,6 +349,8 @@ render(
       <DraftOwnerFixture />
     ) : new URLSearchParams(location.search).has('recovery') ? (
       <DraftRecoveryFixture />
+    ) : new URLSearchParams(location.search).has('scheduled-recovery') ? (
+      <ScheduleRecoveryFixture />
     ) : new URLSearchParams(location.search).has('android-back') ? (
       <AndroidBackFixture />
     ) : (

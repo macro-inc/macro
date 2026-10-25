@@ -1,14 +1,14 @@
 # Also used as a typed entrypoint for optimistic property-list links.
-query EntityProperties($input: SoupInput!) {
+# soupEntity reads the primary, so a just-created or just-edited entity is not
+# hidden behind a lagging replica.
+query EntityProperties($input: SoupEntityInput!) {
   user {
     id
-    soup(input: $input) {
-      items {
-        __typename
-        id
-        properties {
-          ...SoupPropertyFields
-        }
+    soupEntity(input: $input) {
+      __typename
+      id
+      properties {
+        ...SoupPropertyFields
       }
     }
   }

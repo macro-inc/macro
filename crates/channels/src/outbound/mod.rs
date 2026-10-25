@@ -4,6 +4,8 @@ pub mod channel_name;
 pub mod connection_gateway_realtime;
 /// Contacts adapter for channel side effects.
 pub mod contacts_dispatcher;
+/// Entity-access adapter authorizing comment references by their parent.
+pub mod entity_access_comment_parents;
 /// Notification adapter for channel notification side effects.
 pub mod notification_sender;
 /// Postgres adapter for channel reference share-permission side effects.

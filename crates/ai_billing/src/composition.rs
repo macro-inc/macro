@@ -1,6 +1,6 @@
 //! Composition helpers for hosts that gate and record AI usage without owning
-//! Stripe: quota admission, and the usage recorder that asks the
-//! authentication service to settle.
+//! Stripe: quota admission, the usage recorder that asks the
+//! authentication service to settle, and operator credit grants.
 
 use crate::{
     AiAdmissionService, AiPricing, AiUsageBilling, AiUsageEnforcement, BillingAdmissionService,
@@ -83,6 +83,35 @@ pub fn pg_admission_service(
         teams::outbound::team_repo::TeamRepositoryImpl::new(pool),
         enforcement,
         pricing,
+    )
+}
+
+/// Postgres-backed [`CreditGrantService`] for operator tools.
+#[cfg(feature = "pg-admission")]
+pub type PgCreditGrantService = crate::domain::CreditGrantService<
+    RolesTeamsEntitlementSource<
+        roles_and_permissions::domain::service::UserRolesAndPermissionsServiceImpl<
+            roles_and_permissions::outbound::pgpool::MacroDB,
+            roles_and_permissions::outbound::pgpool::MacroDB,
+        >,
+        teams::outbound::team_repo::TeamRepositoryImpl,
+    >,
+    crate::outbound::PgCreditGrantRepo,
+>;
+
+/// Compose credit grants over one database pool. Needs no pricing or Stripe:
+/// the grant only books ledger credit, and the next settlement uses it.
+#[cfg(feature = "pg-admission")]
+pub fn pg_credit_grant_service(pool: PgPool) -> PgCreditGrantService {
+    crate::domain::CreditGrantService::new(
+        RolesTeamsEntitlementSource::new(
+            roles_and_permissions::domain::service::UserRolesAndPermissionsServiceImpl::new(
+                roles_and_permissions::outbound::pgpool::MacroDB::new(pool.clone()),
+                roles_and_permissions::outbound::pgpool::MacroDB::new(pool.clone()),
+            ),
+            teams::outbound::team_repo::TeamRepositoryImpl::new(pool.clone()),
+        ),
+        crate::outbound::PgCreditGrantRepo::new(pool),
     )
 }
 

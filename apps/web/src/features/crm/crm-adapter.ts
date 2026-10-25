@@ -1,9 +1,13 @@
+import { useCreateContext } from '@app/features/command/context/create-context';
 import { useQuickAccessCrmCompaniesQuery } from '@app/features/crm/crm-search';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import { useSplitLayout } from '@components/app/split-layout/layout';
+import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
 import {
+  enableCrmActivity,
   enableCrmLists,
   enableCrmPipelines,
 } from '@core/constant/featureFlags';
@@ -38,16 +42,15 @@ import {
 import { createAppCrmDisplayOptions } from './display-adapter';
 import { downloadCrmCsv } from './download-adapter';
 import {
+  copyCrmPipelineLink,
   copyCrmRecordLink,
   copyCrmViewLink,
   createAppCrmNavigation,
 } from './navigation-adapter';
 import { PipelineDatabaseEditor, PipelineShare } from './pipeline-adapter';
 import { createCrmPipelineEntries } from './pipeline-entries-adapter';
-import {
-  createClosedStageIds,
-  createCrmPermissions,
-} from './primitives/team-config';
+import { createCrmPermissions } from './primitives/team-config';
+import { useCrmActivityQuery } from './queries/activity';
 import {
   createCompanyImporter,
   useCompanyQuery,
@@ -83,6 +86,7 @@ import {
 import { useTeamCrmConfig } from './queries/team-config';
 import { useQuickAccessCrmContactsQuery } from './record-adapter';
 import { createAppDealStages } from './stage-adapter';
+import { crmTaskComposerContext } from './task-composer';
 
 // Loaded on demand: the Tasks list imports soup, which imports CRM entry points.
 const CrmRecordTasks = lazy(async () => ({
@@ -168,8 +172,18 @@ export function createAppCrmContext(): CrmContext {
     feedback: toast,
   };
   const userId = useUserId();
+  const layout = useSplitLayout();
+  const panel = useSplitPanel();
+  const createContext = useCreateContext();
+  const activityFlag = useFeatureFlag(enableCrmActivity);
   const createSettings = () => useTeamCrmConfig(deps);
   return {
+    registerTaskComposerRecord(source) {
+      if (!panel) return () => {};
+      return createContext.register(panel.handle.id, () => ({
+        task: activityFlag().enabled ? crmTaskComposerContext(source()) : null,
+      }));
+    },
     createPipelines: (teamId) => createPipelinesSource(deps, teamId),
     PipelineEditor: PipelineDatabaseEditor,
     PipelineEntries: createCrmPipelineEntries({
@@ -188,6 +202,7 @@ export function createAppCrmContext(): CrmContext {
     createNavigation: createAppCrmNavigation,
     copyRecordLink: copyCrmRecordLink,
     copyViewLink: copyCrmViewLink,
+    copyPipelineLink: copyCrmPipelineLink,
     listsEnabled() {
       const flag = useFeatureFlag(enableCrmLists);
       return () => flag().enabled;
@@ -204,6 +219,20 @@ export function createAppCrmContext(): CrmContext {
       withRowNotifications(
         useContactEmailsQuery(useSoupAstItemsQuery, ...args)
       ),
+    createActivity: (tab) =>
+      withRowNotifications(
+        useCrmActivityQuery(deps, useSoupAstItemsQuery, tab, userId)
+      ),
+    openTaskComposer: () =>
+      layout.popoverSplit({
+        type: 'component',
+        id: 'task-compose',
+        params: {
+          composerContext: panel
+            ? createContext.snapshot('task', panel.handle.id)
+            : undefined,
+        },
+      }),
     createRecordFiles: (scope) =>
       withRowNotifications(useRecordFilesQuery(useSoupAstItemsQuery, scope)),
     createRecordCalls: (scope) =>
@@ -274,8 +303,6 @@ export function createAppCrmContext(): CrmContext {
     createCapabilities: () =>
       createCrmPermissions(userId, useCurrentTeamQuery(), createSettings()),
     createDealStages: createAppDealStages,
-    createClosedStageIds: (stages) =>
-      createClosedStageIds(createSettings(), stages),
     createPersonalViews: () => usePersonalCrmViews(deps),
     createTeamViews: () => useTeamCrmViews(deps, userId, createSettings()),
     createLists: (teamId) => useCrmLists(deps, teamId),

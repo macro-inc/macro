@@ -53,12 +53,15 @@ export function createProjectCollection(capabilities: {
   onOpen?: (id: string, metadata?: ProjectListActivation) => void;
   initialState?: ProjectCollectionSnapshot;
   captureState?: (read: Accessor<ProjectCollectionSnapshot>) => void;
+  search?: { value: Accessor<string>; onChange: (value: string) => void };
 }) {
   const initial = capabilities.initialState;
   const [layout, setLayout] = createSignal<'list' | 'gantt'>(
     initial?.layout ?? 'list'
   );
-  const [search, setSearch] = createSignal(initial?.search ?? '');
+  const [localSearch, setLocalSearch] = createSignal(initial?.search ?? '');
+  const search = capabilities.search?.value ?? localSearch;
+  const setSearch = capabilities.search?.onChange ?? setLocalSearch;
   const query = debouncedDependent(search, 150);
   const [status, setStatus] = createSignal(initial?.status ?? '');
   const [priority, setPriority] = createSignal(initial?.priority ?? '');

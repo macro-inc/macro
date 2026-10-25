@@ -100,6 +100,7 @@ export function createGithubWorkspace(agent = false) {
                 person: 'julia' as const,
                 time: '9:54 AM',
                 body: '@[Cursor](demo-mention:cursor) can you fix this?',
+                replyTo: 'bug',
                 taskId: GITHUB_TASK,
               },
             ]
@@ -118,6 +119,7 @@ export function createGithubWorkspace(agent = false) {
   ]);
   w.openItem('messages', 'website');
   w.setChannel('website');
+  if (agent) w.setChannelThread('bug');
   return w;
 }
 

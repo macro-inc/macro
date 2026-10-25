@@ -6,6 +6,7 @@ use super::*;
 use crate::domain::models::{
     AttendeeResponseStatus, CalendarAttendee, CalendarCapabilities, CalendarProvider,
     EventReminders, EventStatus, EventTime, EventTransparency, EventType, EventVisibility,
+    GuestPolicy, ViewerCapabilities,
 };
 
 const VIEWER: &str = "macro|viewer@example.com";
@@ -18,7 +19,7 @@ struct FakeChanges {
     events: HashMap<Uuid, CalendarEventChange>,
     calendars: Vec<VisibleCalendar>,
     occurrence_cap_events: Option<usize>,
-    owned_inboxes: Vec<String>,
+    owned_inboxes: Vec<OwnedInbox>,
     loads: Mutex<Vec<Vec<Uuid>>>,
 }
 
@@ -90,7 +91,7 @@ impl CalendarChangeRepository for FakeChanges {
             .collect())
     }
 
-    async fn owned_inbox_emails(&self, _viewer: &str) -> Result<Vec<String>, Report> {
+    async fn owned_inboxes(&self, _viewer: &str) -> Result<Vec<OwnedInbox>, Report> {
         Ok(self.owned_inboxes.clone())
     }
 }
@@ -158,6 +159,9 @@ fn event_change(id: Uuid, link_id: Uuid, occurrences: i64) -> CalendarEventChang
                 comment: None,
             }],
             reminders: EventReminders::default(),
+            guest_policy: GuestPolicy::default(),
+            is_snapshot: false,
+            viewer_can: ViewerCapabilities::NONE,
             created_at: starts_at,
             updated_at: starts_at,
         },
@@ -457,7 +461,11 @@ async fn attendee_self_flags_follow_the_viewers_inboxes() {
     let service = CalendarChangeService::new(FakeChanges {
         logs: vec![log(LINK_A, 0, vec![CalendarChangeOp::UpsertEvent(id(1))])],
         events: HashMap::from([(id(1), change)]),
-        owned_inboxes: vec!["viewer@example.com".to_owned()],
+        owned_inboxes: vec![OwnedInbox {
+            link_id: LINK_A,
+            email: "viewer@example.com".to_owned(),
+            provider: CalendarProvider::Google,
+        }],
         ..Default::default()
     });
 
@@ -490,7 +498,11 @@ async fn nothing_is_hydrated_when_no_event_was_upserted() {
 async fn one_event_is_read_with_the_viewers_attendee_flags() {
     let service = CalendarChangeService::new(FakeChanges {
         events: HashMap::from([(id(1), event_change(id(1), LINK_A, 2))]),
-        owned_inboxes: vec!["viewer@example.com".to_owned()],
+        owned_inboxes: vec![OwnedInbox {
+            link_id: LINK_A,
+            email: "viewer@example.com".to_owned(),
+            provider: CalendarProvider::Google,
+        }],
         ..Default::default()
     });
 

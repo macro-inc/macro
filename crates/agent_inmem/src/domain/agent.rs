@@ -653,6 +653,10 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                         agent.turn.first_text_ms = tracing::field::Empty,
                         agent.turn.admission_wait_ms = tracing::field::Empty,
                         agent.turn.lock_wait_ms = tracing::field::Empty,
+                        agent.turn.stop_reason = tracing::field::Empty,
+                        agent.turn.text_chars = tracing::field::Empty,
+                        agent.turn.tool_calls = tracing::field::Empty,
+                        agent.turn.replied = tracing::field::Empty,
                     );
                     genai_telemetry::propagation::set_parent(&span, request.meta.as_ref());
                     let prompt = UserPrompt::from_request(&request);
@@ -947,6 +951,7 @@ async fn run_turn(
     let mut was_cancelled = false;
     let mut first_part_seen = false;
     let mut first_text_seen = false;
+    let mut output = TurnOutput::default();
     loop {
         match tokio::time::timeout(TURN_IDLE_TIMEOUT, parts.recv()).await {
             Ok(Some(Ok(part))) => {
@@ -978,6 +983,7 @@ async fn run_turn(
                         break;
                     }
                 }
+                output.observe(&part);
                 accumulator.push(part);
             }
             Ok(Some(Err(error))) => {
@@ -1026,12 +1032,60 @@ async fn run_turn(
 
     // A failure first: the idle timeout cancels the stream itself, and a turn
     // it stopped failed rather than being stopped by the user.
-    if let Some(failure) = failure {
+    let result = if let Some(failure) = failure {
         Err(AcpError::internal_error().data(failure))
     } else if was_cancelled || cancel.is_cancelled() {
         Ok(StopReason::Cancelled)
     } else {
         Ok(StopReason::EndTurn)
+    };
+    output.record(&span, &result);
+    result
+}
+
+/// What a turn said, recorded on its `agent.acp.prompt` span so a turn that
+/// ended without answering is found by query, not by reading its log.
+#[derive(Default)]
+struct TurnOutput {
+    text_chars: i64,
+    tool_calls: i64,
+    /// Text after the last tool call: the answer the reader is left with.
+    replied: bool,
+}
+
+impl TurnOutput {
+    fn observe(&mut self, part: &StreamPart) {
+        match part {
+            StreamPart::Content(text) => {
+                self.text_chars += i64::try_from(text.chars().count()).unwrap_or(i64::MAX);
+                self.replied |= !text.trim().is_empty();
+            }
+            StreamPart::ToolCall(_) => {
+                self.tool_calls += 1;
+                self.replied = false;
+            }
+            StreamPart::Thinking(_) | StreamPart::ToolResponse(_) | StreamPart::Usage(_) => {}
+        }
+    }
+
+    // `i64`, not `u64`: a `u64` reaches OpenTelemetry as a string attribute.
+    fn record(&self, span: &tracing::Span, result: &Result<StopReason, AcpError>) {
+        let stop_reason = match result {
+            Ok(StopReason::EndTurn) => "end_turn",
+            Ok(StopReason::Cancelled) => "cancelled",
+            Ok(_) => "other",
+            Err(_) => "error",
+        };
+        span.record("agent.turn.stop_reason", stop_reason);
+        span.record("agent.turn.text_chars", self.text_chars);
+        span.record("agent.turn.tool_calls", self.tool_calls);
+        span.record("agent.turn.replied", self.replied);
+        if stop_reason == "end_turn" && !self.replied {
+            tracing::warn!(
+                tool_calls = self.tool_calls,
+                "the turn ended without a reply after its last tool call"
+            );
+        }
     }
 }
 

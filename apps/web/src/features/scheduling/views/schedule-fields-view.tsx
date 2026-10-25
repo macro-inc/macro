@@ -204,14 +204,12 @@ export function ScheduleFields(props: {
           </div>
           <Tabs
             aria-label="Time format"
-            list={[
+            options={[
               { value: '12h', label: '12h' },
               { value: '24h', label: '24h' },
             ]}
             value={timeFormat()}
-            onChange={(value) => {
-              if (value === '12h' || value === '24h') setTimeFormat(value);
-            }}
+            onChange={setTimeFormat}
           />
         </div>
       </header>

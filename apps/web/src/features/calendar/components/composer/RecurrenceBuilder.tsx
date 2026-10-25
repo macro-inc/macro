@@ -136,9 +136,7 @@ export function RecurrenceBuilder(props: RecurrenceBuilderProps) {
                 {(code) => (
                   <Button
                     type="button"
-                    variant={
-                      props.value.byDay.includes(code) ? 'accent' : 'ghost'
-                    }
+                    variant="outline"
                     size="icon-sm"
                     class="text-xxs"
                     aria-label={code}

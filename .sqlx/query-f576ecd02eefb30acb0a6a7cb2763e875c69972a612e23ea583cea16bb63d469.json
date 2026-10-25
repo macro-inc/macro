@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE import_run SET root_folder_id = $2 WHERE user_id = $1 AND source = 'notion'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f576ecd02eefb30acb0a6a7cb2763e875c69972a612e23ea583cea16bb63d469"
+}

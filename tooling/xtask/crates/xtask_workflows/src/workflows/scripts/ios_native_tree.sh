@@ -1,23 +1,28 @@
 # --- native tree ------------------------------------------------------------
 # Hash identifying "the iOS native code" at a commit: every tracked blob under
-# apps/web/tauri except the paths that never reach the iOS binary. Android-only
-# code is recognised by Tauri's naming convention — a path component that is
-# `android`, starts with `android_` / `android.`, or contains `.android.`
-# (the android_* plugins, every android/ directory, android.rs / android.json,
-# android_tls.rs, tauri.android.conf.json; the Rust ones are all behind
-# cfg(target_os = "android")) — plus the desktop updater manifest and editor
-# config. Plus one thing outside that tree: the version of the client cache
-# wasm package (crates/client/cache-wasm/Cargo.toml). The app compiles the
-# cache crates natively, and the team bumps that version when a cache change
-# must ship, so the bump — not every edit under crates/client — is the native
-# signal. The release stamps uploaded builds with the hash, the merge gate
-# compares the live build's stamp against the merge result's, and the drift /
-# head guards compare commits with it. Must match nativeTreeHash() in
+# apps/web/tauri except the paths that never reach the iOS binary, recognised
+# by the same naming convention the Android gate uses (android-native.mjs,
+# which excludes iOS/macOS/linux/windows/apple/desktop-named paths): a path
+# component that is `android`, `macos`, `linux`, `windows` or `desktop`,
+# starts with that name plus `_`, `.` or `-`, or an extension-style
+# `.android.` / `.macos.` / `.linux.` / `.windows.` infix (the android_*
+# plugins, tauri.android.conf.json and tauri.macos.conf.json, desktop_update
+# and the desktop_* modules, linux_notification, the macos icons; the Rust
+# ones are all behind cfg(target_os) / cfg(desktop)) — plus the desktop
+# updater manifest, editor config and Markdown docs. `apple`/`ios` paths
+# stay included: gen/apple is the Xcode project. Plus one thing outside that tree: the
+# version of the client cache wasm package
+# (crates/client/cache-wasm/Cargo.toml). The app compiles the cache crates
+# natively, and the team bumps that version when a cache change must ship, so
+# the bump — not every edit under crates/client — is the native signal. The
+# release stamps uploaded builds with the hash, the merge gate compares the
+# live build's stamp against the merge result's, and the drift / head guards
+# compare commits with it. Must match nativeTreeHash() in
 # apps/web/scripts/ios-app-store.mjs and the iOS Native Check's change
 # detection (web_app_check_main/ios_native_check.rs).
 NATIVE_TREE_PATH=apps/web/tauri
 CACHE_WASM_MANIFEST=crates/client/cache-wasm/Cargo.toml
-export NATIVE_TREE_EXCLUDE='(^|/)android([_./]|$)|\.android\.|^desktop-release\.json$|^\.helix/'
+export NATIVE_TREE_EXCLUDE='(^|/)(android|macos|linux|windows|desktop)([_./-]|$)|\.(android|macos|linux|windows)\.|\.md$|^desktop-release\.json$|^\.helix/'
 
 # native_tree_hash <commit>: prints the hash, fails if the path is missing.
 # (--full-tree: ls-tree otherwise narrows its output to the current directory,

@@ -2,10 +2,8 @@ import {
   useForegroundMobileView,
   useMobileNavNavigate,
 } from '@components/app/mobile/use-mobile-nav';
-import { hapticImpact } from '@core/mobile/haptics';
 import { usePreserveFocusOnButtonTaps } from '@core/mobile/usePreserveFocusOnButtonTaps';
 import XIcon from '@phosphor/x.svg';
-import { createEffect, on } from 'solid-js';
 import { SearchState } from './mobileSearchState';
 
 // The input lives in app chrome, outside result/category boundaries, and stays
@@ -22,16 +20,7 @@ export function MobileSearchInput() {
   // notably the category pills, so switching categories keeps the keyboard up.
   usePreserveFocusOnButtonTaps(() => containerRef);
 
-  // Navigation outside Search ends the session even when another surface
-  // opens the result (for example a link inside a full-text snippet).
-  createEffect(
-    on(foregroundView, (view, prevView) => {
-      if (!SearchState.isOpen()) return;
-      if (prevView === 'search' && view !== 'search') SearchState.close();
-    })
-  );
-
-  // The X is how search mode ends (besides opening a result): close() resets
+  // The X explicitly ends search: close() resets
   // the query and unmounts the search row with its input (dropping the
   // keyboard). The Search view only exists for searching, so exiting from it
   // returns to the default view.
@@ -55,7 +44,7 @@ export function MobileSearchInput() {
         placeholder="Search…"
         value={SearchState.query()}
         // Blurring never ends the session — the keyboard drops but search
-        // mode stays until the X is pressed (or a result opens).
+        // mode stays until the X is pressed or navigation covers this entry.
         onInput={(e) => SearchState.setQuery(e.currentTarget.value)}
         onKeyDown={(e) => {
           // Enter (the keyboard's Search key) drops the keyboard; the view is
@@ -73,7 +62,6 @@ export function MobileSearchInput() {
         aria-label="Close search"
         onPointerDown={(e) => {
           e.preventDefault();
-          hapticImpact('light');
         }}
         onClick={handleClear}
       >

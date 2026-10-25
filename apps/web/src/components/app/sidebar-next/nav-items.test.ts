@@ -21,6 +21,7 @@ const defaultGates = (overrides: Partial<NavItemGates> = {}): NavItemGates => ({
   showCustomers: true,
   showCalls: true,
   showReviews: true,
+  showActivity: true,
   prefs: defaultPrefs(),
   ...overrides,
 });
@@ -47,8 +48,30 @@ describe('sidebar visibility preferences', () => {
     expect(items.map((item) => item.id)).toEqual([
       'calls',
       'reviews',
+      'activity',
       'booking-links',
     ]);
+  });
+
+  it('starts Activity in More and keeps it absent when its flag is off', () => {
+    expect(
+      visibleNavItems(defaultGates()).some((item) => item.id === 'activity')
+    ).toBe(false);
+    expect(moreMenuItems(defaultGates())).toContainEqual(
+      expect.objectContaining({ label: 'Activity', href: '/activity' })
+    );
+
+    const gates = defaultGates({
+      showActivity: false,
+      prefs: defaultPrefs({ hidden: new Set() }),
+    });
+    for (const items of [
+      customizableNavItems(gates),
+      visibleNavItems(gates),
+      moreMenuItems(gates),
+    ]) {
+      expect(items.some((item) => item.id === 'activity')).toBe(false);
+    }
   });
 
   it('shows an item on the rail when it is not hidden', () => {

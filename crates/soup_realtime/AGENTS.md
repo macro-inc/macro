@@ -3,7 +3,7 @@
 ## What it is
 
 Part of the Soup query feature (Home/Recent/Signal) — keeps cached Soup
-results live by turning document/project/chat/email/channel/property Kafka
+results live by turning document/project/chat/email/channel/property/call Kafka
 events into recipient-targeted Soup patches, and fanning those out to
 instance-local, user-keyed subscriptions. No composition root; starts no
 tasks itself.
@@ -32,7 +32,7 @@ tasks itself.
 
 - Depends on: `macro_event_broker`, `macro_event_topics`, `model-entity`,
   `model_owner`; feature-gated: `channels`, `chat`, `documents`, `email`,
-  `github_pull_requests`, `initiative`, `properties`, `projects`,
+  `call`, `github_pull_requests`, `initiative`, `properties`, `projects`,
   `system_properties`, `rdkafka` (`consumer`), `agent_session`/`entity_access`
   (`outbound`).
 - Used by: `complete_graph`, `graphql_soup`, `work_feed`.
@@ -55,6 +55,8 @@ tasks itself.
 - Property definition/option lifecycle events are intentionally ignored; they
   don't identify every affected entity.
 - Channel threads use their containing channel as the access source.
+- Only `call.record_imported` patches calls; native call lifecycle events on
+  `macro.calls` are ignored.
 
 ## Related
 

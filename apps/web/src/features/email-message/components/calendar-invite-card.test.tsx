@@ -10,6 +10,7 @@ import { CalendarInviteCard } from './calendar-invite-card';
 
 vi.mock('@ui', async () => ({
   ...(await vi.importActual('@app/components/ui/components/Avatar')),
+  ...(await vi.importActual('@app/components/ui/components/Tabs')),
   Button: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button {...props} />
   ),
@@ -58,20 +59,22 @@ describe('native invitation card', () => {
         }}
       />
     ));
-    const yes = screen.getByRole('button', { name: 'Yes' });
-    const maybe = screen.getByRole('button', { name: 'Maybe' });
-    expect(yes.getAttribute('aria-pressed')).toBe('true');
+    const yes = screen.getByRole('radio', { name: 'Yes' }) as HTMLInputElement;
+    const maybe = screen.getByRole('radio', {
+      name: 'Maybe',
+    }) as HTMLInputElement;
+    expect(yes.checked).toBe(true);
     maybe.focus();
     fireEvent.click(maybe);
-    expect(screen.getByRole('button', { name: 'Maybe' })).toBe(maybe);
+    expect(screen.getByRole('radio', { name: 'Maybe' })).toBe(maybe);
     expect(document.activeElement).toBe(maybe);
-    expect(maybe.getAttribute('aria-pressed')).toBe('true');
+    expect(maybe.checked).toBe(true);
     expect(screen.getByRole('status').textContent).toContain('Saving');
     setPending(false);
     setError('Could not save. Please try again.');
     setState(resolved);
     expect(document.activeElement).toBe(maybe);
-    expect(yes.getAttribute('aria-pressed')).toBe('true');
+    expect(yes.checked).toBe(true);
     expect(screen.getByRole('status').textContent).toContain('try again');
   });
   it.each(['cancelled', 'reply', 'counter'] as const)(
@@ -87,7 +90,7 @@ describe('native invitation card', () => {
           }}
         />
       ));
-      expect(screen.queryByRole('button', { name: 'Yes' })).toBeNull();
+      expect(screen.queryByRole('radio', { name: 'Yes' })).toBeNull();
       expect(screen.queryByRole('button', { name: /Join meeting/ })).toBeNull();
     }
   );
@@ -126,6 +129,28 @@ describe('native invitation card', () => {
     ).toBeNull();
     expect(screen.getAllByText('Cancelled').length).toBeGreaterThan(0);
   });
+  it('points at the invitation attachment only from outside it', () => {
+    const noMatch: InvitationResolution = { kind: 'no_match' };
+    render(() => (
+      <>
+        <CalendarInviteCard
+          invitation={invitationFixture}
+          actions={{ resolution: noMatch }}
+        />
+        <CalendarInviteCard
+          invitation={invitationFixture}
+          actions={{ resolution: noMatch }}
+          inCalendarFile
+        />
+      </>
+    ));
+    const [inline, inFile] = screen.getAllByText(/^Saved invitation\./);
+    expect(inline.textContent).toBe(
+      'Saved invitation. Open the original email or invitation attachment for more options.'
+    );
+    expect(inFile.textContent).toBe('Saved invitation.');
+  });
+
   it('expands guest identities and descriptions explicitly', () => {
     render(() => <CalendarInviteCard invitation={invitationFixture} />);
     fireEvent.click(screen.getByRole('button', { name: '+3 more' }));
@@ -158,7 +183,7 @@ describe('native invitation card', () => {
     expect(
       screen.getByRole('heading', { name: 'Product review' })
     ).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Yes' })).toBeNull();
+    expect(screen.queryByRole('radio', { name: 'Yes' })).toBeNull();
     expect(screen.getByText(/Responses are paused/)).toBeTruthy();
   });
   it('renders formatted descriptions and keeps lists outside paragraphs', () => {

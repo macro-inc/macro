@@ -1,6 +1,11 @@
 import { EventType } from '@service-storage/generated/schemas/eventType';
 import { describe, expect, it } from 'vitest';
-import type { CalendarEvent, CalendarSource } from '../types';
+import {
+  type CalendarEvent,
+  type CalendarSource,
+  DEFAULT_GUEST_POLICY,
+  NO_VIEWER_CAPABILITIES,
+} from '../types';
 import {
   type MergedCalendarEvent,
   mergeWorkingLocationEvents,
@@ -31,6 +36,8 @@ function event(
     occurrenceKey: id,
     isCancelled: overrides.isCancelled ?? false,
     isReadOnly: true,
+    guestPolicy: DEFAULT_GUEST_POLICY,
+    viewerCan: NO_VIEWER_CAPABILITIES,
     attendees: [],
     recurrenceLines: ['RRULE:FREQ=WEEKLY'],
     sourceCalendarIds: [],

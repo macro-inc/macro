@@ -225,7 +225,7 @@ describe('an id whose create is in flight', () => {
       expect(refetchSoupEntity).toHaveBeenCalledExactlyOnceWith(
         placeholder,
         'agentSession',
-        { created: true }
+        { created: true, refreshGraphql: true }
       );
       dispose();
     });
@@ -244,7 +244,7 @@ describe('an id whose create is in flight', () => {
       expect(refetchSoupEntity).toHaveBeenCalledExactlyOnceWith(
         'server-minted',
         'agentSession',
-        { created: true }
+        { created: true, refreshGraphql: true }
       );
       dispose();
     });

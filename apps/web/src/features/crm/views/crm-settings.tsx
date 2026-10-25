@@ -1,4 +1,5 @@
 import type { ItemDragOverlayData } from '@app/components/app/ItemDragAndDrop';
+import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
@@ -15,19 +16,34 @@ import {
   useDragDropContext,
   useSortableContext,
 } from '@thisbeyond/solid-dnd';
-import { Button, Checkbox, cn, Dialog, Panel, Tooltip } from '@ui';
-import { createSignal, For, type JSX, Show, Suspense } from 'solid-js';
+import {
+  Button,
+  ConfirmDialog,
+  cn,
+  Dialog,
+  Panel,
+  ToggleSwitch,
+  Tooltip,
+} from '@ui';
+import {
+  createSignal,
+  For,
+  type JSX,
+  Match,
+  Show,
+  Suspense,
+  Switch,
+} from 'solid-js';
 import {
   SettingsCard,
   SettingsPage,
   SettingsRow,
   SettingsSection,
 } from '../../settings/primitives';
-import { CrmStageDot as StageDot } from '../components/stage-icon';
+import { CrmStageIcon } from '../components/stage-icon';
 import { useCrmContext } from '../context/crm-context';
 import { createStageEditor } from '../primitives/stage-editor';
 import {
-  useClosedStageIds,
   useCrmPermissions,
   useCurrentTeamQuery,
   useDealStages,
@@ -39,19 +55,19 @@ import {
 } from './use-crm';
 
 /* ------------------------------------------------------------------ */
-/* Shared bits                                                        */
+/* CRM enablement                                                     */
 /* ------------------------------------------------------------------ */
 
-/** Confirm dialog matching the Team tab's destructive-action dialogs. */
-function ConfirmDialog(props: {
+const DISABLE_CRM_PHRASE = 'Disable CRM';
+
+/** Typed confirmation matching the Team tab's Delete Team dialog. */
+function DisableCrmDialog(props: {
   open: boolean;
-  title: string;
-  confirmLabel: string;
-  pending?: boolean;
-  confirmDisabled?: boolean;
+  pending: boolean;
+  confirmation: string;
+  onConfirmationInput: (value: string) => void;
   onConfirm: () => void;
   onClose: () => void;
-  children: JSX.Element;
 }) {
   return (
     <Dialog open={props.open} onOpenChange={(open) => !open && props.onClose()}>
@@ -61,11 +77,27 @@ function ConfirmDialog(props: {
             <XIcon />
           </Dialog.CloseButton>
           <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
-            {props.title}
+            Disable CRM
           </Dialog.Title>
         </Panel.Header>
         <Panel.Body class="p-3 flex flex-col gap-3">
-          {props.children}
+          <p>
+            Disabling the CRM{' '}
+            <span class="font-medium">permanently purges</span> your team's CRM
+            data — companies, contacts, and their history. Re-enabling later
+            lets you backfill again or start fresh.
+          </p>
+          <p class="text-sm text-ink-muted">
+            Type <span class="font-medium text-ink">{DISABLE_CRM_PHRASE}</span>{' '}
+            to confirm.
+          </p>
+          <input
+            type="text"
+            value={props.confirmation}
+            onInput={(e) => props.onConfirmationInput(e.currentTarget.value)}
+            placeholder={DISABLE_CRM_PHRASE}
+            class="settings-input w-full"
+          />
           <div class="flex justify-end gap-1 pt-2">
             <Button
               variant="ghost"
@@ -76,10 +108,12 @@ function ConfirmDialog(props: {
             </Button>
             <Button
               variant="strong"
-              disabled={props.pending || props.confirmDisabled}
+              disabled={
+                props.pending || props.confirmation !== DISABLE_CRM_PHRASE
+              }
               onClick={props.onConfirm}
             >
-              <Show when={props.pending} fallback={props.confirmLabel}>
+              <Show when={props.pending} fallback={DISABLE_CRM_PHRASE}>
                 <SpinnerIcon class="size-4 animate-spin" />
               </Show>
             </Button>
@@ -90,19 +124,14 @@ function ConfirmDialog(props: {
   );
 }
 
-/* ------------------------------------------------------------------ */
-/* CRM enablement                                                     */
-/* ------------------------------------------------------------------ */
-
-const DISABLE_CRM_PHRASE = 'Disable CRM';
-
 function CrmEnablementSection() {
   const isTeamAdmin = useIsTeamAdmin();
   const teamQuery = useCurrentTeamQuery();
   const patchCrmMutation = usePatchTeamCrmSettingsMutation();
 
   // The mutation invalidates the team query on success, which refetches
-  // the authoritative flag.
+  // the authoritative flag. The switch stays on that flag until a dialog
+  // confirms the change.
   const crmEnabled = () => teamQuery.data?.team.crm_enabled ?? false;
   const [showEnableModal, setShowEnableModal] = createSignal(false);
   const [enableChoice, setEnableChoice] = createSignal<'backfill' | 'fresh'>();
@@ -145,36 +174,24 @@ function CrmEnablementSection() {
     <SettingsSection title="General">
       <SettingsCard>
         <SettingsRow
-          label={crmEnabled() ? 'Disable CRM' : 'Enable CRM'}
-          description={`Turn the CRM ${crmEnabled() ? 'off' : 'on'} for everyone on your team.`}
-          hideDescriptionOnMobile
+          label="Team CRM"
+          description={
+            isTeamAdmin()
+              ? 'Companies, contacts, and pipelines for everyone on your team.'
+              : 'Companies, contacts, and pipelines for everyone on your team. Only team admins can turn it on or off.'
+          }
         >
-          <Show
-            when={isTeamAdmin()}
-            fallback={
-              <Tooltip label="Only team admins can change CRM settings.">
-                <span>
-                  <Button variant="outline" size="sm" disabled>
-                    Admins only
-                  </Button>
-                </span>
-              </Tooltip>
-            }
-          >
-            <div class="flex items-center gap-2">
-              <Show when={patchCrmMutation.isPending}>
-                <SpinnerIcon class="size-4 animate-spin text-ink-muted" />
-              </Show>
-              <Button
-                variant={crmEnabled() ? 'danger' : 'accent'}
-                size="sm"
-                disabled={patchCrmMutation.isPending}
-                onClick={() => handleToggle(!crmEnabled())}
-              >
-                {crmEnabled() ? 'Disable CRM' : 'Enable CRM'}
-              </Button>
-            </div>
+          <Show when={patchCrmMutation.isPending}>
+            <SpinnerIcon class="size-4 animate-spin text-ink-muted" />
           </Show>
+          <ToggleSwitch
+            size="md"
+            label="Team CRM"
+            labelClass="sr-only"
+            checked={crmEnabled()}
+            disabled={!isTeamAdmin() || patchCrmMutation.isPending}
+            onChange={handleToggle}
+          />
         </SettingsRow>
       </SettingsCard>
 
@@ -237,45 +254,27 @@ function CrmEnablementSection() {
         </Panel>
       </Dialog>
 
-      <ConfirmDialog
+      <DisableCrmDialog
         open={showDisableModal()}
-        title="Disable CRM"
-        confirmLabel="Disable CRM"
         pending={patchCrmMutation.isPending}
-        confirmDisabled={disableConfirmation() !== DISABLE_CRM_PHRASE}
+        confirmation={disableConfirmation()}
+        onConfirmationInput={setDisableConfirmation}
         onConfirm={handleDisable}
         onClose={() => setShowDisableModal(false)}
-      >
-        <p>
-          Disabling the CRM <span class="font-medium">permanently purges</span>{' '}
-          your team's CRM data — companies, contacts, and their history.
-          Re-enabling later lets you backfill again or start fresh.
-        </p>
-        <p class="text-sm text-ink-muted">
-          Type <span class="font-medium text-ink">{DISABLE_CRM_PHRASE}</span> to
-          confirm.
-        </p>
-        <input
-          type="text"
-          value={disableConfirmation()}
-          onInput={(e) => setDisableConfirmation(e.currentTarget.value)}
-          placeholder={DISABLE_CRM_PHRASE}
-          class="settings-input w-full"
-        />
-      </ConfirmDialog>
+      />
     </SettingsSection>
   );
 }
 
 /* ------------------------------------------------------------------ */
-/* Deal stages                                                        */
+/* Stages                                                             */
 /* ------------------------------------------------------------------ */
 
 /**
  * Drag data carried by stage row sortables. Distinct from `EntityDragData`
  * so entity drop consumers ignore stage drags. Supplies its own overlay icon.
  */
-export type StageDragData = ItemDragOverlayData & {
+type StageDragData = ItemDragOverlayData & {
   dragType: 'stage';
   name: string;
 };
@@ -302,13 +301,49 @@ function StageList(props: { ids: string[]; children: JSX.Element }) {
   );
 }
 
+/** Same colored icon the CRM list groups and filters show for a stage. */
+function StageIcon(props: { id: string; index: number }) {
+  return (
+    <CrmStageIcon optionId={props.id} index={props.index} class="size-3.5" />
+  );
+}
+
+function StageRow(props: { id: string; label: string; index: number }) {
+  return (
+    <div class="flex min-h-12 items-center gap-3 px-4 py-3">
+      <StageIcon id={props.id} index={props.index} />
+      <span class="min-w-0 truncate text-sm text-ink">{props.label}</span>
+    </div>
+  );
+}
+
+/** Reads as plain text until hovered or focused, so the list stays a list. */
+function InlineStageInput(props: {
+  value: string;
+  placeholder: string;
+  label: string;
+  onInput: (value: string) => void;
+  onKeyDown: (e: KeyboardEvent & { currentTarget: HTMLInputElement }) => void;
+}) {
+  return (
+    <input
+      type="text"
+      value={props.value}
+      aria-label={props.label}
+      placeholder={props.placeholder}
+      onInput={(e) => props.onInput(e.currentTarget.value)}
+      onKeyDown={(e) => props.onKeyDown(e)}
+      class="-mx-2 h-8 min-w-0 flex-1 truncate rounded-md bg-transparent px-2 text-sm text-ink outline-none transition-colors placeholder:text-ink-placeholder not-touch:hover:bg-hover focus:bg-control focus-visible:ring-2 focus-visible:ring-edge-muted"
+    />
+  );
+}
+
 function StageEditorRow(props: {
   id: string;
   label: string;
   draft: string | undefined;
   index: number;
   count: number;
-  disabled: boolean;
   pending: boolean;
   onDraft: (value: string | undefined) => void;
   onRename: (value: string) => void;
@@ -333,7 +368,6 @@ function StageEditorRow(props: {
   const isLastStage = () => props.count <= 1;
   const isFirst = () => props.index === 0;
   const isLast = () => props.index === props.count - 1;
-  const canMove = () => !props.disabled && !props.pending;
 
   const reorderMode = useStageReorderMode();
   const [dndState] = useDragDropContext() ?? [];
@@ -341,7 +375,7 @@ function StageEditorRow(props: {
     reorderMode === 'drag'
       ? createSortable(props.id, {
           dragType: 'stage',
-          overlayIcon: StageDot,
+          overlayIcon: () => <StageIcon id={props.id} index={props.index} />,
           get name() {
             return props.label;
           },
@@ -351,7 +385,7 @@ function StageEditorRow(props: {
   const handleKeyDown = (e: KeyboardEvent) => {
     if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
     e.preventDefault();
-    if (!canMove()) return;
+    if (props.pending) return;
     if (e.key === 'ArrowUp' && !isFirst()) props.onMove(-1);
     if (e.key === 'ArrowDown' && !isLast()) props.onMove(1);
   };
@@ -361,32 +395,33 @@ function StageEditorRow(props: {
       ref={sortable?.ref}
       style={sortable ? maybeTransformStyle(sortable.transform) : undefined}
       class={cn(
-        'flex items-center gap-2 px-6 py-2.5',
+        'flex min-h-12 items-center gap-3 px-4 py-2',
         // Shift rows out of the way while a drag is live; snap when it ends
         // so the settled order doesn't animate twice.
         !!dndState?.active.draggable && 'transition-transform',
         sortable?.isActiveDraggable && 'opacity-40'
       )}
     >
-      <Show when={sortable && !props.disabled} fallback={<StageDot />}>
+      <Show when={sortable}>
         <Tooltip label="Drag to reorder, or use the arrow keys">
           <Button
             {...(sortable?.dragActivators ?? {})}
             aria-label={`Reorder ${props.label}. Press the up or down arrow keys to move it.`}
             variant="ghost"
             size="icon-sm"
-            class="-ml-1.5 cursor-grab touch-none active:cursor-grabbing"
+            class="-mx-1.5 cursor-grab touch-none text-ink-extra-muted active:cursor-grabbing"
             onKeyDown={handleKeyDown}
           >
             <DotsSixVerticalIcon class="size-4" />
           </Button>
         </Tooltip>
       </Show>
-      <input
-        type="text"
+      <StageIcon id={props.id} index={props.index} />
+      <InlineStageInput
         value={value()}
-        disabled={props.disabled}
-        onInput={(e) => props.onDraft(e.currentTarget.value)}
+        label={`Rename ${props.label}`}
+        placeholder="Stage name"
+        onInput={(next) => props.onDraft(next)}
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
             commit();
@@ -395,45 +430,44 @@ function StageEditorRow(props: {
             e.currentTarget.blur();
           }
         }}
-        placeholder="Stage name"
-        class="settings-input flex-1 min-w-0"
       />
-      <Show when={isEditing()}>
-        <Tooltip label="Save">
-          <Button
-            aria-label="Save stage name"
-            variant="accent"
-            size="icon-sm"
-            class="shrink-0"
-            disabled={props.pending || !hasChanged()}
-            onClick={commit}
-          >
-            <Show when={props.pending} fallback={<CheckIcon class="size-4" />}>
-              <SpinnerIcon class="size-4 animate-spin" />
-            </Show>
-          </Button>
-        </Tooltip>
-        <Tooltip label="Cancel">
-          <Button
-            aria-label="Cancel rename"
-            variant="ghost"
-            size="icon-sm"
-            class="shrink-0"
-            disabled={props.pending}
-            onClick={cancel}
-          >
-            <XIcon class="size-4" />
-          </Button>
-        </Tooltip>
-      </Show>
-      <div class="flex items-center gap-0.5 shrink-0">
+      <div class="flex shrink-0 items-center gap-0.5">
+        <Show when={isEditing()}>
+          <Tooltip label="Save">
+            <Button
+              aria-label="Save stage name"
+              variant="accent"
+              size="icon-sm"
+              disabled={props.pending || !hasChanged()}
+              onClick={commit}
+            >
+              <Show
+                when={props.pending}
+                fallback={<CheckIcon class="size-4" />}
+              >
+                <SpinnerIcon class="size-4 animate-spin" />
+              </Show>
+            </Button>
+          </Tooltip>
+          <Tooltip label="Cancel">
+            <Button
+              aria-label="Cancel rename"
+              variant="ghost"
+              size="icon-sm"
+              disabled={props.pending}
+              onClick={cancel}
+            >
+              <XIcon class="size-4" />
+            </Button>
+          </Tooltip>
+        </Show>
         <Show when={reorderMode === 'buttons'}>
           <Tooltip label="Move up">
             <Button
               aria-label={`Move ${props.label} up`}
               variant="ghost"
               size="icon-sm"
-              disabled={!canMove() || isFirst()}
+              disabled={props.pending || isFirst()}
               onClick={() => props.onMove(-1)}
             >
               <CaretUpIcon class="size-4" />
@@ -444,7 +478,7 @@ function StageEditorRow(props: {
               aria-label={`Move ${props.label} down`}
               variant="ghost"
               size="icon-sm"
-              disabled={!canMove() || isLast()}
+              disabled={props.pending || isLast()}
               onClick={() => props.onMove(1)}
             >
               <CaretDownIcon class="size-4" />
@@ -460,7 +494,8 @@ function StageEditorRow(props: {
             aria-label={`Delete ${props.label}`}
             variant="ghost"
             size="icon-sm"
-            disabled={props.disabled || props.pending || isLastStage()}
+            class="text-ink-extra-muted not-touch:hover:text-failure"
+            disabled={props.pending || isLastStage()}
             onClick={() => props.onDelete()}
           >
             <TrashIcon class="size-4" />
@@ -471,11 +506,10 @@ function StageEditorRow(props: {
   );
 }
 
-function DealStagesSection() {
+function StagesSection() {
   const dealStages = useDealStages();
   const crmPermissions = useCrmPermissions();
   const teamCrmConfig = useTeamCrmConfig();
-  const closedStageIds = useClosedStageIds(dealStages.stages);
   const replaceMutation = useReplaceCrmStagesMutation();
   const resetMutation = useResetCrmStagesMutation();
 
@@ -490,7 +524,6 @@ function DealStagesSection() {
     pending,
     loading,
     failed,
-    busy,
     blocked,
     drafts,
     setDrafts,
@@ -504,12 +537,10 @@ function DealStagesSection() {
     handleAddStage,
     handleDeleteStage,
     handleReset,
-    toggleClosedStage,
   } = createStageEditor({
     dealStages,
     crmPermissions,
     teamCrmConfig,
-    closedStageIds,
     replaceMutation,
     resetMutation,
     onSuccess: useCrmContext().feedback.success,
@@ -529,76 +560,62 @@ function DealStagesSection() {
     );
   });
 
+  const editing = () => dealStages.isCustomized() && canEdit();
+  const description = () => {
+    const scope =
+      'The Stage options on companies. New pipelines start with these stages.';
+    if (loading() || canEdit()) return scope;
+    return crmPermissions.permissions().editStages === 'owner'
+      ? `${scope} Only the team owner can change them.`
+      : `${scope} Only team admins can change them.`;
+  };
+
   return (
     <SettingsSection
-      title="Deal stages"
-      description="The pipeline stages deals move through on the CRM board."
+      title="Stages"
+      description={description()}
       actions={
-        <Show when={dealStages.isCustomized() && canEdit()}>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={blocked()}
-            onClick={() => setShowResetModal(true)}
+        <Show when={canEdit() && !loading() && !failed()}>
+          <Show
+            when={dealStages.isCustomized()}
+            fallback={
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={pending()}
+                onClick={handleCustomize}
+              >
+                <Show when={pending()} fallback="Customize">
+                  <SpinnerIcon class="size-4 animate-spin" />
+                </Show>
+              </Button>
+            }
           >
-            Reset to defaults
-          </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={blocked()}
+              onClick={() => setShowResetModal(true)}
+            >
+              Reset to defaults
+            </Button>
+          </Show>
         </Show>
       }
     >
-      <Show
-        when={!loading() && !failed()}
-        fallback={
-          <SettingsCard>
-            <Show
-              when={failed()}
-              fallback={
-                <div class="animate-pulse bg-skeleton rounded h-4 w-32 m-6" />
-              }
-            >
-              <div class="px-6 py-4 text-sm text-ink-muted">
-                Deal stages could not be loaded. Reload to try again.
-              </div>
-            </Show>
-          </SettingsCard>
-        }
-      >
-        <Show
-          when={dealStages.isCustomized()}
-          fallback={
-            <SettingsCard>
-              <div class="flex flex-col gap-1 px-6 py-4">
-                <For each={dealStages.stages()}>
-                  {(stage) => (
-                    <div class="flex items-center gap-2 py-1">
-                      <StageDot />
-                      <span class="text-sm text-ink">{stage.label}</span>
-                    </div>
-                  )}
-                </For>
-              </div>
-              <div class="flex items-center justify-between gap-4 px-6 py-3.5">
-                <p class="text-xs text-ink-muted">
-                  Stages are Macro's defaults. Customize them for your team.
-                </p>
-                <Show when={canEdit()}>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    class="shrink-0"
-                    disabled={busy()}
-                    onClick={handleCustomize}
-                  >
-                    <Show when={pending()} fallback="Customize stages">
-                      <SpinnerIcon class="size-4 animate-spin" />
-                    </Show>
-                  </Button>
-                </Show>
-              </div>
-            </SettingsCard>
-          }
-        >
-          <SettingsCard>
+      <SettingsCard>
+        <Switch>
+          <Match when={failed()}>
+            <div class="px-4 py-4 text-sm text-ink-muted">
+              Stages could not be loaded. Reload to try again.
+            </div>
+          </Match>
+          <Match when={loading()}>
+            <div class="px-4 py-4">
+              <ListSkeleton.Bar class="h-4 w-32" />
+            </div>
+          </Match>
+          <Match when={editing()}>
             <StageList ids={stageIds()}>
               <For each={orderedStages()}>
                 {(stage, index) => (
@@ -608,8 +625,7 @@ function DealStagesSection() {
                     draft={drafts[stage.id]}
                     index={index()}
                     count={orderedStages().length}
-                    disabled={!canEdit()}
-                    pending={busy()}
+                    pending={pending()}
                     onDraft={(value) => setDrafts(stage.id, value)}
                     onRename={(label) => handleRename(index(), label)}
                     onMove={(direction) => handleMove(index(), direction)}
@@ -618,98 +634,77 @@ function DealStagesSection() {
                 )}
               </For>
             </StageList>
-            <Show when={canEdit()}>
-              <div class="flex items-center gap-2 px-6 py-2.5">
-                <PlusIcon class="size-4 shrink-0 text-ink-muted" />
-                <input
-                  type="text"
-                  value={newStageName()}
-                  onInput={(e) => setNewStageName(e.currentTarget.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleAddStage();
-                  }}
-                  placeholder="Add stage"
-                  class="settings-input flex-1 min-w-0"
-                />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  class="shrink-0"
-                  disabled={newStageName().trim() === '' || busy()}
-                  onClick={handleAddStage}
-                >
-                  Add
-                </Button>
-              </div>
-            </Show>
-          </SettingsCard>
-        </Show>
-        <div aria-live="polite" class="sr-only">
-          {announcement()}
-        </div>
-
-        <SettingsCard>
-          <SettingsRow
-            align="start"
-            label="Closed stages"
-            description="Stages that count as closed deals. Moving deals out of a closed stage can be restricted under Permissions."
-          >
-            <div class="flex flex-col items-start gap-1.5">
-              <For each={orderedStages()}>
-                {(stage) => (
-                  <Checkbox
-                    checked={closedStageIds().has(stage.id)}
-                    onChange={() => toggleClosedStage(stage.id)}
-                    disabled={!canEdit() || blocked()}
-                    class="cursor-default"
-                  >
-                    <Checkbox.Control>
-                      <Checkbox.Indicator />
-                    </Checkbox.Control>
-                    <Checkbox.Label class="text-sm text-ink">
-                      {stage.label}
-                    </Checkbox.Label>
-                  </Checkbox>
-                )}
-              </For>
+            <div class="flex min-h-12 items-center gap-3 px-4 py-2">
+              <PlusIcon class="size-3.5 shrink-0 text-ink-muted" />
+              <InlineStageInput
+                value={newStageName()}
+                label="New stage name"
+                placeholder="Add stage"
+                onInput={setNewStageName}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleAddStage();
+                }}
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                class="shrink-0"
+                disabled={newStageName().trim() === '' || pending()}
+                onClick={handleAddStage}
+              >
+                Add
+              </Button>
             </div>
-          </SettingsRow>
-        </SettingsCard>
-      </Show>
+          </Match>
+          <Match when={true}>
+            <For each={dealStages.stages()}>
+              {(stage, index) => (
+                <StageRow id={stage.id} label={stage.label} index={index()} />
+              )}
+            </For>
+          </Match>
+        </Switch>
+      </SettingsCard>
+      <div aria-live="polite" class="sr-only">
+        {announcement()}
+      </div>
 
       <ConfirmDialog
         open={!!stageToDelete()}
-        title="Delete Stage"
-        confirmLabel="Delete Stage"
+        onOpenChange={(open) => !open && setStageToDelete(null)}
+        title="Delete stage"
+        tone="danger"
+        confirmLabel="Delete"
         pending={replaceMutation.isPending}
         onConfirm={handleDeleteStage}
-        onClose={() => setStageToDelete(null)}
-      >
-        <p>
-          Are you sure you want to delete{' '}
-          <span class="font-medium">{stageToDelete()?.label ?? ''}</span>?
-          Companies currently in this stage lose it and show under No stage on
-          the board.
-        </p>
-      </ConfirmDialog>
+        body={
+          <>
+            Companies at{' '}
+            <span class="font-medium text-ink">
+              {stageToDelete()?.label ?? ''}
+            </span>{' '}
+            lose their stage and show under No stage. Pipelines keep their own
+            stages.
+          </>
+        }
+      />
 
       <ConfirmDialog
         open={showResetModal()}
-        title="Reset Stages"
-        confirmLabel="Reset to Defaults"
+        onOpenChange={setShowResetModal}
+        title="Reset stages"
+        tone="danger"
+        confirmLabel="Reset to defaults"
         pending={resetMutation.isPending}
         onConfirm={handleReset}
-        onClose={() => setShowResetModal(false)}
-      >
-        <p>
-          This removes your team's custom stage set and returns everyone to
-          Macro's default stages.
-        </p>
-        <p class="text-sm text-ink-muted">
-          Companies keep their stored stage values, and stages whose names match
-          a default continue to display as before.
-        </p>
-      </ConfirmDialog>
+        body={
+          <>
+            Your team returns to Macro's default stages. Companies keep their
+            stored stage values, and stages whose names match a default display
+            as before.
+          </>
+        }
+      />
     </SettingsSection>
   );
 }
@@ -739,11 +734,11 @@ function CrmContent() {
     <Show when={teamQuery.data} fallback={<NoTeamState />}>
       <SettingsPage
         title="CRM"
-        description="Enable your team's CRM and shape its deal pipeline."
+        description="Turn your team's CRM on or off and choose its stages."
       >
         <CrmEnablementSection />
         <Show when={teamQuery.data?.team.crm_enabled}>
-          <DealStagesSection />
+          <StagesSection />
         </Show>
       </SettingsPage>
     </Show>
@@ -752,9 +747,7 @@ function CrmContent() {
 
 export function Crm() {
   return (
-    <Suspense
-      fallback={<div class="animate-pulse bg-skeleton rounded h-4 w-32 m-6" />}
-    >
+    <Suspense fallback={<ListSkeleton.Bar class="m-6 h-4 w-32" />}>
       <CrmContent />
     </Suspense>
   );

@@ -42,7 +42,7 @@ function BookingLinkPreviewCard(props: {
 }) {
   return (
     <div class="select-none w-72 text-ink">
-      <Surface depth={3} class="glass bg-menu-glass rounded-xl">
+      <Surface depth={3} hideBorder class="menu-surface rounded-xl">
         <div class="w-full flex flex-col">
           <div class="flex items-center justify-between gap-2 p-2">
             <div class="flex items-center gap-2 min-w-0">

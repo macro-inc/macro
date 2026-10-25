@@ -34,7 +34,7 @@ function exampleValue(column: DatabaseViewColumn, today: string): ExampleValue {
         : label;
     })
     .with('ENTITY', () => null)
-    .exhaustive();
+    .exhaustive(() => null);
 }
 
 /** A `curl` that posts the payload to the webhook. */

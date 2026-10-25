@@ -3,6 +3,7 @@ import {
   ChatWithAgentIcon,
   openChatWithAgent,
 } from '@app/features/chat/ChatWithAgentButton';
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import {
   type BlockTool,
   ResponsiveBlockToolbar,
@@ -20,6 +21,7 @@ import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { getShareDrawerRecipientInput } from '@core/component/TopBar/ShareDrawer';
 import { useShareModal } from '@core/component/TopBar/shareModal';
 import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { blockMetadataSignal } from '@core/signal/load';
 import { useGetPermissions } from '@core/signal/permissions';
 import { buildEntityData } from '@entity';
@@ -146,18 +148,20 @@ export function CallRecordingSplitHeader(props: { record: CallRecord }) {
         </div>
         <Show when={!isMobile() && !record().isActive && canCallAgain()}>
           <div class="order-[900] flex items-center">
-            <HeaderIsland>
-              <Button
-                depth={2}
-                variant="outline"
-                size="icon-xs"
-                class="bg-surface"
-                tooltip="Call Again"
-                onClick={callAgain}
-              >
-                <PhoneCallIcon class="size-4" />
-              </Button>
-            </HeaderIsland>
+            <HeaderActionGroup label="Call actions">
+              <HeaderIsland>
+                <Button
+                  depth={2}
+                  variant="outline"
+                  size={isTouchDevice() ? 'icon-xs' : 'icon-md'}
+                  class={isTouchDevice() ? 'bg-surface' : undefined}
+                  tooltip="Call Again"
+                  onClick={callAgain}
+                >
+                  <PhoneCallIcon class="size-4" />
+                </Button>
+              </HeaderIsland>
+            </HeaderActionGroup>
           </div>
         </Show>
       </SplitHeaderRight>

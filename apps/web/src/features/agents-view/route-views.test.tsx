@@ -53,7 +53,9 @@ vi.mock('@core/mobile/isTouchDevice', () => ({
 vi.mock('@app/features/routines/queries/entities', () => ({}));
 vi.mock('../next-soup/sidebar/soup-filter-presets', () => ({}));
 vi.mock('./views/AgentsView', () => ({ AgentsView: () => null }));
-vi.mock('../settings/McpConnections', () => ({ McpConnections: () => null }));
+vi.mock('../settings/IntegrationsPage', () => ({
+  IntegrationsPage: () => null,
+}));
 
 beforeEach(() => {
   vi.clearAllMocks();

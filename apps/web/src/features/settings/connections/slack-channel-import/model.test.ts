@@ -18,6 +18,7 @@ function entity(overrides: Partial<ImportEntity> = {}): ImportEntity {
     id: 'ledger-1',
     user_id: 'me',
     source: 'slack',
+    kind: 'channel',
     foreign_id: 'C123',
     status: 'staged',
     initiator: 'manual',
@@ -37,7 +38,7 @@ function entity(overrides: Partial<ImportEntity> = {}): ImportEntity {
 }
 
 function run(status: ImportRun['status']): ImportRun {
-  return { source: 'slack', status, auto_import: false, updated_at: '' };
+  return { source: 'slack', status, updated_at: '' };
 }
 
 function state(entities: ImportEntity[], runs: ImportRun[] = []): ImportState {

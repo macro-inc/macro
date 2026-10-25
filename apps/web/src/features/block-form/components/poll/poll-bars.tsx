@@ -92,11 +92,13 @@ export function PollBars(props: {
                 }}
               >
                 <Show when={props.showResults}>
+                  {/* accent-bg is the voted button fill; active is 6% ink.
+                      Matching those made the bar invisible. */}
                   <span
                     aria-hidden="true"
                     class={cn(
                       'absolute inset-y-0 left-0 transition-[width] duration-300 motion-reduce:transition-none',
-                      bar().mine ? 'bg-accent-bg' : 'bg-active'
+                      bar().mine ? 'bg-accent/20' : 'bg-ink/10'
                     )}
                     style={{ width: `${bar().percent}%` }}
                   />

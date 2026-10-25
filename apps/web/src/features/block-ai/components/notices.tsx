@@ -45,7 +45,7 @@ export function FileNotice(props: {
   return (
     <div
       role="status"
-      class="pointer-events-auto flex max-w-md items-start gap-2 rounded-lg border border-edge-muted bg-menu px-3 py-2 text-ink text-xs shadow-lg"
+      class="menu-surface pointer-events-auto flex max-w-md items-start gap-2 px-3 py-2 text-xs"
       data-testid={props.testId}
       onPointerDown={(e) => e.stopPropagation()}
     >

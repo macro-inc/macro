@@ -17,16 +17,11 @@ export function RoutineRunButton(props: {
 }) {
   return (
     <Dropdown placement="bottom-end">
-      <ButtonGroup
-        variant="ghost"
-        size="sm"
-        depth={2}
-        class="rounded-full border border-edge-muted"
-      >
+      <ButtonGroup variant="outline" size="sm" depth={2} label="Run routine">
         <Button
+          variant="ghost"
           disabled={props.runDisabled}
           onClick={props.onRun}
-          class="bg-transparent hover:bg-ink/[0.04]"
         >
           <PlayIcon class="size-3" />
           Run now
@@ -34,8 +29,8 @@ export function RoutineRunButton(props: {
         <ButtonGroup.Divider />
         <Dropdown.Trigger
           variant="ghost"
+          size="icon-sm"
           aria-label="Run options"
-          class="bg-transparent p-1 hover:bg-ink/[0.04]"
         >
           <CaretDownIcon class="size-3.5" />
         </Dropdown.Trigger>

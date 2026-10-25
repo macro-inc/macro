@@ -95,10 +95,11 @@ export function createNativeUpdates(flush: () => Promise<void>) {
         }
       );
       if (disposed) {
-        stop();
+        // UnlistenFn returns the unlisten IPC promise despite its void type.
+        fireAndForget(stop(), 'native-updates');
         return;
       }
-      unsubscribe = stop;
+      unsubscribe = () => fireAndForget(stop(), 'native-updates');
       const current = await invoke<NativeUpdateStatus>(
         'get_native_update_status'
       );

@@ -503,7 +503,12 @@ export function Account() {
           label="Log out"
           description="Sign out of Macro on this device."
         >
-          <Button variant="outline" depth={3} onClick={() => logout()}>
+          <Button
+            variant="outline"
+            size="sm"
+            depth={3}
+            onClick={() => logout()}
+          >
             <SignOutIcon class="size-4" />
             Log out
           </Button>
@@ -771,10 +776,10 @@ function NameInput(props: {
   // Pull the box out by its padding and border (12px + 1px) so the text, not the
   // border, lines up with the other values in the column.
   return (
-    <div class="ph-no-capture group relative -ml-[13px] flex w-[calc(100%+13px)] items-center gap-1.5 rounded-lg h-9 px-3 border text-sm bg-transparent text-ink-muted border-edge-muted hover:text-ink focus-within:text-ink focus-within:border-accent">
+    <div class="ph-no-capture group settings-input relative -ml-[13px] flex w-[calc(100%+13px)] items-center gap-1.5 focus-within:ring-2 focus-within:ring-edge-muted">
       <input
         type="text"
-        class="flex-1 min-w-0 bg-transparent outline-none border-0 p-0 text-sm placeholder:text-ink-placeholder"
+        class="flex-1 min-w-0 bg-transparent outline-none border-0 p-0 placeholder:text-ink-placeholder"
         value={inputValue()}
         onInput={(e) => setInputValue(e.currentTarget.value)}
         onFocus={() => {
@@ -824,23 +829,22 @@ function bundleUpdateAction(
 ): { label: string; action: () => void } | null {
   const grantBundleUpdate = () =>
     invoke('grant_bundle_update', { approved: true }).catch(console.error);
+  const checkForUpdate = () => invoke('check_for_update').catch(console.error);
+  const performUpdate = () => invoke('perform_update').catch(console.error);
 
   switch (status.status) {
     case 'Idle':
-      return {
-        label: 'Check for Update',
-        action: () => invoke('check_for_update'),
-      };
+      return { label: 'Check for Update', action: checkForUpdate };
     case 'Error':
-      return { label: 'Retry', action: () => invoke('check_for_update') };
+      return { label: 'Retry', action: checkForUpdate };
     case 'UpdateFound':
       return { label: 'Download', action: grantBundleUpdate };
     case 'WaitingForWifi':
       return { label: 'Download anyway', action: grantBundleUpdate };
     case 'ClearRequired':
-      return { label: 'Reload', action: () => invoke('perform_update') };
+      return { label: 'Reload', action: performUpdate };
     case 'Completed':
-      return { label: 'Update', action: () => invoke('perform_update') };
+      return { label: 'Update', action: performUpdate };
     default:
       return null;
   }

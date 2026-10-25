@@ -161,6 +161,7 @@ fn bot_authentication() -> BotAuthentication {
         bot_scope: BotScope::Team,
         team_id: Some(TEAM_ID),
         acting_user: Some(MacroUserAuthentication {
+            agent_id: None,
             macro_user_id: MacroUserIdStr::try_from("macro|acting@example.com".to_string())
                 .expect("valid Macro user id"),
             user_context: UserContext {
@@ -308,6 +309,7 @@ async fn authorize_constructs_user_context_from_validated_identity() {
     let service = MacroAuthorizationServiceImpl::new(
         FakeJwtValidator {
             result: Ok(ValidatedIdentity {
+                agent_id: None,
                 user_id: "macro|user@example.com".to_string(),
                 fusion_user_id: "fusion-user-id".to_string(),
                 organization_id: Some(42),
@@ -522,4 +524,29 @@ async fn authorize_user_api_key_passes_through_authorizer_errors() {
 
         assert_eq!(error.current_context(), &expected);
     }
+}
+
+#[tokio::test]
+async fn authorize_identity_keeps_verified_agent_and_owner() {
+    let service = MacroAuthorizationServiceImpl::new(
+        FakeJwtValidator {
+            result: Ok(ValidatedIdentity {
+                agent_id: Some(bot_id::MACRO_NEW_BOT_ID),
+                user_id: "macro|owner@example.com".into(),
+                fusion_user_id: "fusion-owner".into(),
+                organization_id: Some(42),
+                permissions: None,
+            }),
+        },
+        internal_auth_config(None),
+        NoBotAuthorizer,
+        NoUserApiKeyAuthorizer,
+    );
+    let identity = service.authorize_identity("signed-token").await.unwrap();
+    assert_eq!(identity.agent_id, Some(bot_id::MACRO_NEW_BOT_ID));
+    assert_eq!(identity.user_id, "macro|owner@example.com");
+    assert_eq!(
+        service.authorize("signed-token").await.unwrap().user_id,
+        identity.user_id
+    );
 }

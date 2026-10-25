@@ -42,7 +42,7 @@ pub use form::FormAccessLevelExtractor;
 pub use history::HistoryAccessExtractor;
 pub use initiative::InitiativeAccessExtractor;
 pub use pin::PinAccessLevelExtractor;
-pub use principal::principal_entity_access_receipt;
+pub use principal::{message_sender_entity_access_receipt, principal_entity_access_receipt};
 pub use project::{ProjectAccessLevelExtractor, ProjectBodyAccessLevelExtractorV2};
 pub use reminder::ReminderAccessExtractor;
 pub use scheduled_action::ScheduledActionAccessExtractor;

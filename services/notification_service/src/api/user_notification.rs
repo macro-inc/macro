@@ -54,6 +54,7 @@ pub(crate) static BLOCKABLE_NOTIFICATIONS: LazyLock<HashSet<&'static str>> = Laz
         InitiativeDiscussionMetadata::TYPE_NAME,
         CrmDiscussionMetadata::TYPE_NAME,
         CalendarEventReminderMetadata::TYPE_NAME,
+        model_notifications::CalendarEventJoinRequestMetadata::TYPE_NAME,
         AgentSessionSettledMetadata::TYPE_NAME,
         AgentSessionWaitingForInputMetadata::TYPE_NAME,
         AgentSessionMentionedMetadata::TYPE_NAME,

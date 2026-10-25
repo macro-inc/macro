@@ -14,6 +14,7 @@ import { useCurrentTeamQuery, useTeamQuery } from '@queries/team/teams';
 import { useNavigate, useSearchParams } from '@solidjs/router';
 import { Button, Surface } from '@ui';
 import { createMemo, Match, Show, Switch } from 'solid-js';
+import { TeamInviteLinkAcceptance } from './TeamInviteLinkAcceptance';
 
 export function TeamInviteAcceptance() {
   const [searchParams] = useSearchParams();
@@ -21,6 +22,9 @@ export function TeamInviteAcceptance() {
   const userInfo = useUserInfo();
 
   const inviteId = () => searchParams.id as string | undefined;
+  // A team's shareable invite link opens this page with `link` instead of an
+  // emailed invite's `id`.
+  const inviteLink = () => searchParams.link as string | undefined;
 
   const invitesQuery = useUserInvitesQuery();
 
@@ -71,7 +75,12 @@ export function TeamInviteAcceptance() {
 
   const handleLogin = () => {
     const id = inviteId();
-    const returnUrl = id ? `/team-invite?id=${encodeURIComponent(id)}` : '/';
+    const link = inviteLink();
+    const returnUrl = link
+      ? `/team-invite?link=${encodeURIComponent(link)}`
+      : id
+        ? `/team-invite?id=${encodeURIComponent(id)}`
+        : '/';
     navigate(`/login?redirect=${encodeURIComponent(returnUrl)}`);
   };
 
@@ -103,12 +112,16 @@ export function TeamInviteAcceptance() {
             </div>
             <div class="flex flex-col items-center">
               <Switch>
-                <Match when={!inviteId()}>
+                <Match when={!inviteId() && !inviteLink()}>
                   <NoInviteId />
                 </Match>
 
                 <Match when={!userInfo()?.authenticated}>
                   <UnauthenticatedView onLogin={handleLogin} />
+                </Match>
+
+                <Match when={inviteLink()}>
+                  {(token) => <TeamInviteLinkAcceptance token={token()} />}
                 </Match>
 
                 <Match when={isLoading()}>

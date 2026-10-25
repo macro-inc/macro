@@ -199,7 +199,7 @@ function htmlText(html: string): string {
   );
 }
 
-/** The email as drafted, read-only: recipients, subject, body. */
+/** The email as drafted, read-only: sender, recipients, subject, body. */
 export function EmailDraft(props: { email: SendEmail; inFlight: boolean }) {
   const body = createMemo(() => emailBody(props.email.body));
   const recipients = () =>
@@ -211,6 +211,16 @@ export function EmailDraft(props: { email: SendEmail; inFlight: boolean }) {
   return (
     <div class="flex flex-col gap-2">
       <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
+        {/* Only once the draft names a sender: a transcript should not
+            claim an inbox the send would have derived for itself. */}
+        <Show when={props.email.from?.trim()}>
+          {(from) => (
+            <>
+              <dt class="text-ink-muted">From</dt>
+              <dd class="text-ink wrap-break-word">{from()}</dd>
+            </>
+          )}
+        </Show>
         <For each={recipients()}>
           {([field, list]) => (
             <Show when={list.length > 0}>

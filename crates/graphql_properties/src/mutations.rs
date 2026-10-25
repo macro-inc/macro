@@ -434,6 +434,7 @@ where
     T: EntityPropertyWriter,
 {
     /// Remove a property assignment and identify its normalized cache record.
+    #[tracing::instrument(skip_all, err(Debug))]
     async fn delete_entity_property(
         &self,
         ctx: &Context<'_>,
@@ -454,6 +455,7 @@ where
     }
 
     /// Set or attach one property on an entity.
+    #[tracing::instrument(skip_all, err(Debug))]
     async fn set_entity_property(
         &self,
         ctx: &Context<'_>,
@@ -481,6 +483,11 @@ where
     }
 
     /// Add and remove options across one entity's multi-select properties.
+    #[tracing::instrument(
+        skip_all,
+        err(Debug),
+        fields(property_count = input.properties.len())
+    )]
     async fn update_entity_property_options(
         &self,
         ctx: &Context<'_>,

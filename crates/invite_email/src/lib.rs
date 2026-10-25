@@ -2,8 +2,9 @@
 //! Domain models for invitation email notifications.
 //!
 //! Contains the [`InviteToMacro`] referral notification, the [`InviteToTeamMetadata`] team
-//! invitation notification, the [`ChannelInviteMetadata`] channel invitation, the
-//! [`ColleagueJoinedMacro`] colleague join email, and the [`ReferralCode`] newtype.
+//! invitation notification and its [`InviteePlan`], the [`ChannelInviteMetadata`] channel
+//! invitation, the [`ColleagueJoinedMacro`] colleague join email, and the [`ReferralCode`]
+//! newtype.
 
 #[cfg(test)]
 mod test;
@@ -256,6 +257,8 @@ impl NotificationExtIos for ChannelInviteMetadata {
             push_notification_data: PushNotificationData {
                 notification_id,
                 sender_profile_picture_url: self.sender_profile_picture_url.clone(),
+                recipient_id: None,
+                navigation: None,
             },
         })
     }
@@ -286,7 +289,26 @@ pub struct InviteToTeamMetadata {
     #[serde(default)]
     #[schema(value_type = Option<String>)]
     pub sender_profile_picture_url: Option<Url>,
+
+    /// What the invitee gets by joining, as the team stood when the invite was sent.
+    #[serde(default, alias = "invitee_plan")]
+    pub invitee_plan: InviteePlan,
 }
+
+/// What a team invitee gets by joining.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, Default, PartialEq, Eq, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum InviteePlan {
+    /// Macro's free plan. Invites sent before the plan was recorded read as
+    /// this, which stays true: joining a team never costs the invitee anything.
+    #[default]
+    Free,
+    /// A Pro seat that a paying, trialing, or enterprise team covers.
+    Premium,
+}
+
+/// Longest team name that still fits on the email's join button.
+const MAX_BUTTON_TEAM_NAME_CHARS: usize = 24;
 
 impl InviteToTeamMetadata {
     /// Returns the team invite URL for the current environment.
@@ -300,6 +322,19 @@ impl InviteToTeamMetadata {
 
         url
     }
+
+    fn inviter(&self) -> &str {
+        self.invited_by.email_str()
+    }
+
+    /// Names the team on the button unless the name would crowd it.
+    fn join_label(&self) -> String {
+        if self.team_name.chars().count() <= MAX_BUTTON_TEAM_NAME_CHARS {
+            format!("Join {}", self.team_name)
+        } else {
+            "Join team".to_string()
+        }
+    }
 }
 
 impl Notification for InviteToTeamMetadata {
@@ -310,8 +345,8 @@ impl NotificationExtEmail for InviteToTeamMetadata {
     fn format_email(&self) -> EmailContent {
         EmailContent {
             subject: format!(
-                "{} has invited you to the {} team on Macro",
-                self.invited_by.email_part().as_ref(),
+                "{} invited you to join {} on Macro",
+                self.inviter(),
                 self.team_name
             ),
             body: self
@@ -328,10 +363,12 @@ impl NotificationExtEmail for InviteToTeamMetadata {
         }
     }
 
+    /// One bucket per invite (one invite per recipient per team), so inviting
+    /// several teammates at once emails each of them. Resends reuse the invite.
     fn rate_limit_key(&self) -> RateLimitKey {
         RateLimitKey::builder(&Self::TYPE_NAME)
             .append(&self.team_id)
-            .append(&self.invited_by.as_ref())
+            .append(&self.team_invite_id)
             .finish()
     }
 }

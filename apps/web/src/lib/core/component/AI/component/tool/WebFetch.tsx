@@ -7,7 +7,7 @@ const handler = createToolRenderer({
   name: 'WebFetch',
   render: (ctx) => (
     <BaseTool icon={Globe} renderContext={ctx.renderContext} type="call">
-      Fetched{' '}
+      {ctx.response ? 'Fetched' : 'Fetch'}{' '}
       <a
         href={ctx.tool.data.input}
         target="_blank"

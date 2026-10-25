@@ -125,13 +125,14 @@ export function createBookingReceiptSource(
       await reschedule.mutateAsync(startsAt);
       await receipt.refetch();
     },
-    replacementSlots: (date: string) =>
+    replacementSlots: (date: string, timeZone: string) =>
       queryClient.fetchQuery({
-        queryKey: schedulingKeys.replacementSlots(id(), token(), date).queryKey,
+        queryKey: schedulingKeys.replacementSlots(id(), token(), date, timeZone)
+          .queryKey,
         queryFn: async () =>
           (
             await throwOnErr(() =>
-              schedulingClient.replacementSlots(id(), token(), date)
+              schedulingClient.replacementSlots(id(), token(), date, timeZone)
             )
           ).slots,
         staleTime: 0,

@@ -276,7 +276,7 @@ export function TableSelectionActionBar() {
               }}
             />
             <div
-              class="z-30 flex items-center gap-0.5 rounded-lg bg-surface p-1 shadow-lg ring-1 ring-edge"
+              class="menu-surface z-30 flex items-center gap-0.5 p-1"
               use:floatWithElement={{
                 element: anchorElem,
                 floatingOptions: { placement: 'top' },

@@ -62,7 +62,7 @@ export function ToolBar(props: {
   const tools = () => TOOLS.filter((t) => props.editable || !t.edit);
   return (
     <div
-      class="absolute top-3 left-3 z-10 flex flex-col items-center gap-0.5 rounded-xl border border-edge-muted bg-menu p-1 shadow-lg"
+      class="menu-surface absolute top-3 left-3 z-10 flex flex-col items-center gap-0.5 p-1"
       data-testid="ai-toolbar"
       onPointerDown={(e) => e.stopPropagation()}
     >

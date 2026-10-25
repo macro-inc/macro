@@ -48,7 +48,7 @@ it('opens the same palette from Search and ⌘K without changing the underlying 
   expect(screen.queryByRole('dialog')).toBeNull();
   fireEvent.keyDown(document.body, { key: 'k', ctrlKey: true });
   fireEvent.input(screen.getByRole('combobox'), {
-    target: { value: 'Q3 launch' },
+    target: { value: 'Website launch' },
   });
   fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Enter' });
   expect(screen.queryByRole('dialog')).toBeNull();
@@ -194,4 +194,23 @@ it('supports Chat search, collapsible groups, and opening a thread from the side
       .querySelector('[data-thread-id="history-morning"]')
       ?.getAttribute('data-thread-open')
   ).toBe('true');
+});
+
+it('keeps the workspace sidebar usable around a featured document', () => {
+  render(() => (
+    <DummyWorkspace
+      initialView="documents"
+      embedded
+      demoTitle="Website brief"
+      demoContent={<p>Featured collaborative document</p>}
+    />
+  ));
+  expect(
+    screen.getByRole('navigation', { name: 'Workspace navigation' })
+  ).toBeTruthy();
+  expect(screen.getByText('Featured collaborative document')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Website launch plan' }));
+  expect(screen.queryByText('Featured collaborative document')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Website brief' }));
+  expect(screen.getByText('Featured collaborative document')).toBeTruthy();
 });

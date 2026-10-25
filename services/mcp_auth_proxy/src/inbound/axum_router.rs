@@ -273,8 +273,11 @@ pub fn oauth_router<I>(auth_proxy: McpAuthProxyServiceImpl<I>) -> Router
 where
     I: InflightAuthStore + 'static,
 {
+    oauth_routes(auth_proxy).route("/health", routing::get(health))
+}
+
+fn oauth_routes<I: InflightAuthStore + 'static>(auth_proxy: McpAuthProxyServiceImpl<I>) -> Router {
     Router::new()
-        .route("/health", routing::get(health))
         .route(
             "/.well-known/oauth-protected-resource",
             routing::get(protected_resource_metadata),
@@ -315,6 +318,38 @@ where
     S::Response: axum::response::IntoResponse,
     S::Future: Send + 'static,
 {
+    mcp_router_with_oauth(oauth_router(auth_proxy), jwt_args, mcp_service)
+}
+
+/// MCP routes for a shared HTTP listener whose process owns health checks.
+pub fn mounted_mcp_router<I, S>(
+    auth_proxy: McpAuthProxyServiceImpl<I>,
+    jwt_args: JwtValidationArgs,
+    mcp_service: S,
+) -> Router
+where
+    I: InflightAuthStore + 'static,
+    S: tower::Service<axum::http::Request<axum::body::Body>, Error = std::convert::Infallible>
+        + Clone
+        + Send
+        + Sync
+        + 'static,
+    S::Response: axum::response::IntoResponse,
+    S::Future: Send + 'static,
+{
+    mcp_router_with_oauth(oauth_routes(auth_proxy), jwt_args, mcp_service)
+}
+
+fn mcp_router_with_oauth<S>(oauth: Router, jwt_args: JwtValidationArgs, mcp_service: S) -> Router
+where
+    S: tower::Service<axum::http::Request<axum::body::Body>, Error = std::convert::Infallible>
+        + Clone
+        + Send
+        + Sync
+        + 'static,
+    S::Response: axum::response::IntoResponse,
+    S::Future: Send + 'static,
+{
     let mcp_route =
         Router::new()
             .nest_service("/mcp", mcp_service)
@@ -323,7 +358,7 @@ where
                 super::middleware::validate_bearer,
             ));
 
-    mount_at_root_and_prefix(oauth_router(auth_proxy).merge(mcp_route)).layer(mcp_cors_layer())
+    mount_at_root_and_prefix(oauth.merge(mcp_route)).layer(mcp_cors_layer())
 }
 
 fn mount_at_root_and_prefix(inner: Router) -> Router {

@@ -5,7 +5,7 @@ import { match } from 'ts-pattern';
 import { platformFetch } from './platformFetch';
 import type { ObjectLike, ResultError } from './result';
 import { sleep } from './sleep';
-import { redactCallLinkTokens } from './telemetryUrl';
+import { redactLinkTokens } from './telemetryUrl';
 
 const tracedOrigins: ReadonlySet<string> = (() => {
   const origins = new Set<string>();
@@ -45,7 +45,7 @@ function tracedFetch(
   const url = requestUrl(input);
   if (!url) return platformFetch(input, init);
   const method = (init.method ?? 'GET').toUpperCase();
-  const path = redactCallLinkTokens(url.pathname);
+  const path = redactLinkTokens(url.pathname);
   const span = Telemetry.clientSpan(`http ${method} ${path}`);
   const started = performance.now();
   span.setAttr('http.method', method);
@@ -81,12 +81,10 @@ function tracedFetch(
         error instanceof Error
           ? {
               name: error.name,
-              message: redactCallLinkTokens(error.message),
-              stack: error.stack
-                ? redactCallLinkTokens(error.stack)
-                : undefined,
+              message: redactLinkTokens(error.message),
+              stack: error.stack ? redactLinkTokens(error.stack) : undefined,
             }
-          : redactCallLinkTokens(String(error))
+          : redactLinkTokens(String(error))
       );
       throw error;
     } finally {
@@ -327,7 +325,10 @@ export async function safeFetch<
           return ok({ contentType, body: text } as T);
         }
 
-        if (contentType.includes('application/octet-stream')) {
+        if (
+          contentType.includes('application/octet-stream') ||
+          contentType.includes('text/calendar')
+        ) {
           return ok(new Uint8Array(await response.arrayBuffer()) as T);
         }
 
@@ -347,9 +348,7 @@ export async function safeFetch<
         return fetchErr([
           {
             code: 'UNKNOWN_ERROR',
-            message: redactCallLinkTokens(
-              `An unknown error occurred: ${error}`
-            ),
+            message: redactLinkTokens(`An unknown error occurred: ${error}`),
           },
         ]);
       }

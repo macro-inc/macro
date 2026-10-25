@@ -8,12 +8,14 @@ use entity_access::domain::models::{
 use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr};
 
 use crate::domain::model::{
-    AcceptedTeamInvite, CreateTeamError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError,
-    PatchTeamCrmSettingsResponse, PatchTeamRequest, RemoveTeamInviteError,
-    RemoveUserFromAllTeamsError, RemoveUserFromTeamError, RestorePermissionsForTeamMembersError,
-    RevokePermissionsForTeamMembersError, SeatPlan, SetTeamMemberPlanError, Team, TeamError,
-    TeamInvite, TeamInviteDetails, TeamMember, TeamMembers, TeamPlan, TeamRole, TeamWithMembers,
-    ToggleAutoJoinDomainError, TryJoinTeamByDomainError,
+    AcceptedTeamInvite, CreateTeamError, DeleteTeamError, InviteUsersToTeamError,
+    JoinTeamByInviteLinkError, JoinTeamByInviteLinkOutcome, JoinTeamDirectlyError, JoinTeamError,
+    ManageTeamInviteLinkError, PatchTeamCrmSettingsResponse, PatchTeamRequest,
+    RemoveTeamInviteError, RemoveUserFromAllTeamsError, RemoveUserFromTeamError,
+    RestorePermissionsForTeamMembersError, RevokePermissionsForTeamMembersError, SeatPlan,
+    SetTeamMemberPlanError, Team, TeamError, TeamInvite, TeamInviteDetails, TeamInviteLinkTeam,
+    TeamInviteLinkToken, TeamMember, TeamMembers, TeamPlan, TeamRole, TeamWithMembers,
+    ToggleAutoJoinDomainError,
 };
 use crate::domain::owned_entity_cleanup::ClearedTeam;
 
@@ -333,6 +335,31 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         after_team_id: Option<uuid::Uuid>,
         limit: u32,
     ) -> impl Future<Output = Result<Vec<uuid::Uuid>, TeamError>> + Send;
+
+    /// The token of the team's invite link, if the team has one.
+    fn get_team_invite_link(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<Option<TeamInviteLinkToken>, TeamError>> + Send;
+
+    /// Sets the team's invite link to `token`, replacing any existing link.
+    fn set_team_invite_link(
+        &self,
+        team_id: &uuid::Uuid,
+        token: &TeamInviteLinkToken,
+    ) -> impl Future<Output = Result<(), TeamError>> + Send;
+
+    /// Removes the team's invite link. A no-op when the team has none.
+    fn delete_team_invite_link(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<(), TeamError>> + Send;
+
+    /// The team whose invite link has `token`, if any.
+    fn get_team_by_invite_link(
+        &self,
+        token: &TeamInviteLinkToken,
+    ) -> impl Future<Output = Result<Option<TeamInviteLinkTeam>, TeamError>> + Send;
 }
 
 /// The TeamMembersService defines read-only team membership queries.
@@ -355,7 +382,7 @@ pub trait TeamService: Clone + Send + Sync + 'static {
         subscription_id: Option<&stripe::SubscriptionId>,
     ) -> impl Future<Output = Result<Team, CreateTeamError>> + Send;
 
-    /// Returns the user's active stripe subscription id when the user is premium.
+    /// Returns the user's active or trialing Stripe subscription id, if any.
     fn is_user_premium(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -563,5 +590,46 @@ pub trait TeamService: Clone + Send + Sync + 'static {
     fn try_join_team_by_domain(
         &self,
         user_id: &MacroUserIdStr<'_>,
-    ) -> impl Future<Output = Result<Option<TeamMember<'static>>, TryJoinTeamByDomainError>> + Send;
+    ) -> impl Future<Output = Result<Option<TeamMember<'static>>, JoinTeamDirectlyError>> + Send;
+}
+
+/// Manages a team's shareable invite link and joins users through it.
+///
+/// Showing or creating the link is inviting, so it follows the team's invite
+/// policy: any member by default, admins only when the team restricts
+/// inviting. Replacing or turning off a link that already exists breaks links
+/// people have shared, so only admins may do it.
+pub trait TeamInviteLinkService: Clone + Send + Sync + 'static {
+    /// The token of the caller's team invite link, if the team has one.
+    fn get_team_invite_link(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<MemberTeamRole>,
+    ) -> impl Future<Output = Result<Option<TeamInviteLinkToken>, ManageTeamInviteLinkError>> + Send;
+
+    /// Creates the team's invite link, or replaces it with a new token when
+    /// one already exists. Returns the new token.
+    fn create_team_invite_link(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<MemberTeamRole>,
+    ) -> impl Future<Output = Result<TeamInviteLinkToken, ManageTeamInviteLinkError>> + Send;
+
+    /// Turns off the team's invite link.
+    fn delete_team_invite_link(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
+    ) -> impl Future<Output = Result<(), TeamError>> + Send;
+
+    /// The team an invite link joins, so the user can see it before joining.
+    fn get_team_by_invite_link(
+        &self,
+        token: &TeamInviteLinkToken,
+    ) -> impl Future<Output = Result<TeamInviteLinkTeam, JoinTeamByInviteLinkError>> + Send;
+
+    /// Adds the user to the team whose invite link has `token`, with the same
+    /// billing, role, and channel side effects as accepting an email invite.
+    fn join_team_by_invite_link(
+        &self,
+        token: &TeamInviteLinkToken,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<JoinTeamByInviteLinkOutcome, JoinTeamByInviteLinkError>> + Send;
 }

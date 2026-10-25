@@ -10,6 +10,7 @@ struct Directory {
 
 fn entry() -> CatalogEntry {
     CatalogEntry {
+        categories: vec![],
         app_slug: "linear".into(),
         display_name: "Linear".into(),
         description: None,

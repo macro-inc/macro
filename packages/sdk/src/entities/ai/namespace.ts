@@ -3,9 +3,11 @@ import type {
   DecisionResponse,
   StructuredCompletionRequest,
   StructuredCompletionResponse,
+  UsageRequest,
 } from '../../../generated/cognition/types.gen';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
+import type { User } from '../users/user';
 
 export type {
   DecisionRequest,
@@ -16,6 +18,18 @@ export type {
 
 /** Shared cognition endpoints, charged to the authenticated acting user. */
 export class AiNamespace {
+  /** Read AI usage over a time range, optionally restricting it to users. */
+  async usage(
+    options: Omit<UsageRequest, 'include_users'> & { users?: User[] } = {},
+  ) {
+    const { users, ...rest } = options;
+    return unwrap(
+      await this.client.cognition.getUsageHandler({
+        body: { ...rest, include_users: users?.map((u) => u.id) },
+      }),
+    );
+  }
+
   constructor(private readonly client: MacroClient) {}
 
   /**

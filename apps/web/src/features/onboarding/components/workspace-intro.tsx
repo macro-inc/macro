@@ -1,3 +1,4 @@
+import { WorkspaceTexture } from '@app/components/WorkspaceTexture';
 import CheckIcon from '@phosphor/check.svg';
 import {
   createEffect,
@@ -14,7 +15,6 @@ import {
 } from '../core/workspace-accent';
 import { ContinueButton } from './controls';
 import { MacroMarkIcon } from './macro-mark-icon';
-import { WorkspaceTexture } from './workspace-texture';
 import './workspace-intro.css';
 
 /** An onboarding-only introduction; the public homepage keeps its own hero. */

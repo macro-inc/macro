@@ -31,6 +31,7 @@ const schedule: ScheduledAction = {
   trigger: { type: 'cron', schedule: '0 0 9 * * *', timezone: 'UTC' },
   configuration_revision: 1,
   enabled: true,
+  run_visibility: 'unlisted',
   created_at: '2026-09-28T00:00:00Z',
   updated_at: '2026-09-28T00:00:00Z',
 };

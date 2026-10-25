@@ -1,6 +1,8 @@
 use super::*;
 use crate::domain::error::Result as SessionResult;
-use crate::domain::model::{AgentMcpServers, ReplicaId, SandboxSize};
+use crate::domain::model::{
+    AgentMcpServers, ReplicaId, SandboxSize, SessionSource, SessionVisibility,
+};
 use crate::domain::ports::{
     AcceptedControl, BotFacts, ManagedAgentProfile, NoOpAgentSessionNameGenerator, NoOpRealtime,
     NoOpTurnObserver, NoopLifecyclePublisher, OpenExternalAgentSession, QueuedControl,
@@ -256,6 +258,8 @@ impl Fixture {
         PrepareRoutineSession {
             selection: self.selection(),
             session_id: self.session.id,
+            source: SessionSource::Routine,
+            visibility: SessionVisibility::Unlisted,
         }
     }
 
@@ -284,6 +288,7 @@ async fn managed_preparation_preserves_persona_and_applies_override_without_prom
     assert!(request.prompt.is_none());
     assert!(request.instructions.is_none());
     assert!(request.repo_url.is_none() && request.repo_branch.is_none());
+    assert_eq!(request.source, SessionSource::Routine);
     let persona = request.profile.as_ref().unwrap();
     assert_eq!(persona.bot_id, fx.session.bot_id);
     let profile = persona.profile.as_ref().unwrap();
@@ -314,6 +319,8 @@ async fn external_preparation_uses_requested_identity_and_model() {
                 bot_id: fx.session.bot_id,
                 owner: fx.session.owner_user().unwrap().clone(),
                 model: override_model,
+                source: SessionSource::Routine,
+                visibility: SessionVisibility::Unlisted,
             }]
         );
         assert!(fx.openings.managed.lock().unwrap().is_empty());

@@ -1,4 +1,5 @@
 import { fireAndForget } from '@core/util/fireAndForget';
+import { catchToResult } from '@core/util/result';
 import {
   fetchResolvedChannelMessage,
   findThreadIdInMessageTimeline,
@@ -10,10 +11,12 @@ import {
   createComputed,
   createContext,
   createEffect,
+  createMemo,
   createSignal,
   on,
   onCleanup,
   type ParentProps,
+  Show,
   untrack,
   useContext,
 } from 'solid-js';
@@ -22,6 +25,7 @@ import {
   type ChannelHandle,
   type MessageTimelineStateSnapshot,
 } from './Channel';
+import { ChannelLoading } from './ChannelLoading';
 
 /**
  * A navigation intent for a channel. Hosts own this as state and pass it
@@ -59,6 +63,7 @@ export type ChannelSurfaceProps = {
 type ChannelSurfaceContextValue = {
   channelId: Accessor<string>;
   resolvedTarget: Accessor<ChannelResolvedTarget | undefined>;
+  isTargetResolving: Accessor<boolean>;
 };
 
 type ChannelSurfaceInternal = ChannelSurfaceContextValue & {
@@ -133,6 +138,43 @@ function resolveSync(
 export function ChannelSurface(props: ParentProps<ChannelSurfaceProps>) {
   const [resolvedTarget, setResolvedTarget] =
     createSignal<ChannelResolvedTarget>();
+  let disposed = false;
+  onCleanup(() => {
+    disposed = true;
+  });
+
+  async function resolveTarget(
+    channelId: string,
+    request: Extract<ChannelTargetRequest, { kind: 'message' }>
+  ) {
+    const result = await catchToResult(() =>
+      fetchResolvedChannelMessage(
+        { type: 'channel', id: channelId },
+        request.messageId
+      )
+    );
+    if (
+      disposed ||
+      props.channelId !== channelId ||
+      props.targetRequest !== request
+    )
+      return;
+    const resolved = result.isOk() ? result.value : undefined;
+    setResolvedTarget(
+      resolved?.kind === 'thread_reply'
+        ? {
+            kind: 'message',
+            request,
+            targetMessageId: resolved.thread_id,
+            targetMessageReplyId: request.messageId,
+          }
+        : {
+            kind: 'message',
+            request,
+            targetMessageId: request.messageId,
+          }
+    );
+  }
 
   // Resolution runs once per request (not as a derived memo) so the resolved
   // object stays identity-stable while cache contents shift underneath, and
@@ -153,30 +195,7 @@ export function ChannelSurface(props: ParentProps<ChannelSurfaceProps>) {
         }
         setResolvedTarget(undefined);
         if (request.kind !== 'message') return;
-        fireAndForget(
-          (async () => {
-            const resolved = await fetchResolvedChannelMessage(
-              { type: 'channel', id: channelId },
-              request.messageId
-            ).catch(() => undefined);
-            if (props.targetRequest !== request) return;
-            setResolvedTarget(
-              resolved?.kind === 'thread_reply'
-                ? {
-                    kind: 'message',
-                    request,
-                    targetMessageId: resolved.thread_id,
-                    targetMessageReplyId: request.messageId,
-                  }
-                : {
-                    kind: 'message',
-                    request,
-                    targetMessageId: request.messageId,
-                  }
-            );
-          })(),
-          'channel-surface'
-        );
+        fireAndForget(resolveTarget(channelId, request), 'channel-surface');
       }
     )
   );
@@ -208,6 +227,8 @@ export function ChannelSurface(props: ParentProps<ChannelSurfaceProps>) {
       value={{
         channelId: () => props.channelId,
         resolvedTarget,
+        isTargetResolving: () =>
+          props.targetRequest?.kind === 'message' && !resolvedTarget(),
         // The messages part restores from here on every mount: the host's
         // initial state until the first cleanup stashes something fresher, so
         // leaving the messages pane and returning keeps scroll/thread/reply
@@ -239,6 +260,21 @@ export type ChannelMessagesProps = {
  * restores the stashed timeline state instead.
  */
 export function ChannelMessages(props: ChannelMessagesProps) {
+  const surface = useChannelSurfaceInternal();
+  // Wait only before the first timeline mounts. Later jumps keep the live
+  // composer and scroll state while their destination is resolved.
+  const canMount = createMemo(
+    (mounted: boolean) => mounted || !surface.isTargetResolving(),
+    false
+  );
+  return (
+    <Show when={canMount()} fallback={<ChannelLoading />}>
+      <MountedChannelMessages {...props} />
+    </Show>
+  );
+}
+
+function MountedChannelMessages(props: ChannelMessagesProps) {
   const surface = useChannelSurfaceInternal();
   const [handle, setHandle] = createSignal<ChannelHandle>();
   const mountTarget = untrack(surface.resolvedTarget);

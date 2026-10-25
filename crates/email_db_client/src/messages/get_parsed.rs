@@ -1,12 +1,78 @@
 use crate::parse::db_to_service::{self};
 use crate::{contacts, labels};
 
+use chrono::{DateTime, Utc};
 use futures::future::join_all;
 use models_email::email::service::message;
 use models_email::email::{db, service};
 use models_email::service::message::{MessageWithBodyReplyless, ParsedMessage};
+use serde_json::Value as JsonValue;
 use sqlx::PgPool;
 use sqlx::types::Uuid;
+
+// Keep the edit generation in the same SQL snapshot as the parsed message.
+struct ParsedMessageRow {
+    draft_generation: i32,
+    id: Uuid,
+    provider_id: Option<String>,
+    thread_id: Uuid,
+    provider_thread_id: Option<String>,
+    replying_to_id: Option<Uuid>,
+    global_id: Option<String>,
+    link_id: Uuid,
+    provider_history_id: Option<String>,
+    internal_date_ts: Option<DateTime<Utc>>,
+    snippet: Option<String>,
+    size_estimate: Option<i64>,
+    subject: Option<String>,
+    from_name: Option<String>,
+    from_contact_id: Option<Uuid>,
+    sent_at: Option<DateTime<Utc>>,
+    has_attachments: bool,
+    is_read: bool,
+    is_starred: bool,
+    is_sent: bool,
+    is_draft: bool,
+    body_text: Option<String>,
+    body_html_sanitized: Option<String>,
+    body_macro: Option<String>,
+    headers_jsonb: Option<JsonValue>,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+}
+
+impl From<ParsedMessageRow> for db::message::Message {
+    fn from(row: ParsedMessageRow) -> Self {
+        Self {
+            id: row.id,
+            provider_id: row.provider_id,
+            thread_id: row.thread_id,
+            provider_thread_id: row.provider_thread_id,
+            replying_to_id: row.replying_to_id,
+            global_id: row.global_id,
+            link_id: row.link_id,
+            provider_history_id: row.provider_history_id,
+            internal_date_ts: row.internal_date_ts,
+            snippet: row.snippet,
+            size_estimate: row.size_estimate,
+            subject: row.subject,
+            from_name: row.from_name,
+            from_contact_id: row.from_contact_id,
+            sent_at: row.sent_at,
+            has_attachments: row.has_attachments,
+            is_read: row.is_read,
+            is_starred: row.is_starred,
+            is_sent: row.is_sent,
+            is_draft: row.is_draft,
+            body_text: row.body_text,
+            body_html_sanitized: row.body_html_sanitized,
+            body_macro: row.body_macro,
+            headers_jsonb: row.headers_jsonb,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+        }
+    }
+}
 
 /// retreive a parsed message by its id.
 /// returns None if no message was found.
@@ -19,10 +85,10 @@ pub async fn get_parsed_message_by_id(
 
     // Only fetch parsed body
     let db_message = sqlx::query_as!(
-        db::message::Message,
+        ParsedMessageRow,
         r#"
         SELECT
-            m.id, m.provider_id, m.global_id, m.link_id, m.thread_id, m.provider_thread_id, m.provider_history_id,
+            m.draft_generation, m.id, m.provider_id, m.global_id, m.link_id, m.thread_id, m.provider_thread_id, m.provider_history_id,
             m.replying_to_id, m.internal_date_ts, m.snippet, m.size_estimate, m.subject, m.from_name,
             m.from_contact_id, m.sent_at, m.has_attachments, m.is_read, m.is_starred, m.is_sent, m.is_draft,
             NULL::TEXT as body_text,
@@ -38,7 +104,7 @@ pub async fn get_parsed_message_by_id(
         .fetch_optional(&mut *conn)
         .await?;
 
-    let db_message: db::message::Message = if let Some(db_message) = db_message {
+    let db_message = if let Some(db_message) = db_message {
         db_message
     } else {
         return Ok(None);
@@ -62,13 +128,19 @@ pub async fn get_parsed_message_by_id(
         .unwrap_or_default();
     let labels = labels_map.get(&db_message.id).cloned().unwrap_or_default();
 
+    let draft_generation = db_message.draft_generation;
     let service_message = db_to_service::map_attachmentless_db_message_to_service(
-        db_message, sender, recipients, None, labels,
+        db_message.into(),
+        sender,
+        recipients,
+        None,
+        labels,
     );
 
-    Ok(Some(ParsedMessage::from(MessageWithBodyReplyless::from(
-        service_message,
-    ))))
+    Ok(Some(ParsedMessage::with_generation(
+        MessageWithBodyReplyless::from(service_message),
+        draft_generation,
+    )))
 }
 
 /// retreive a list of parsed message by their ids
@@ -79,11 +151,11 @@ pub async fn get_parsed_messages_by_id_batch(
 ) -> anyhow::Result<Vec<service::message::ParsedMessage>> {
     let mut conn = pool.acquire().await?;
 
-    let db_messages: Vec<db::message::Message> = sqlx::query_as!(
-        db::message::Message,
+    let db_messages: Vec<ParsedMessageRow> = sqlx::query_as!(
+        ParsedMessageRow,
         r#"
         SELECT
-            m.id, m.provider_id, m.global_id, m.link_id, m.thread_id, m.provider_thread_id, m.provider_history_id,
+            m.draft_generation, m.id, m.provider_id, m.global_id, m.link_id, m.thread_id, m.provider_thread_id, m.provider_history_id,
             m.replying_to_id, m.internal_date_ts, m.snippet, m.size_estimate, m.subject, m.from_name,
             m.from_contact_id, m.sent_at, m.has_attachments, m.is_read, m.is_starred, m.is_sent, m.is_draft,
             m.body_text as body_text,
@@ -127,11 +199,19 @@ pub async fn get_parsed_messages_by_id_batch(
                 let recipients = recipients_map.get(&message.id).cloned().unwrap_or_default();
                 let labels = labels_map.get(&message.id).cloned().unwrap_or_default();
 
+                let draft_generation = message.draft_generation;
                 let service_message = db_to_service::map_attachmentless_db_message_to_service(
-                    message, sender, recipients, None, labels,
+                    message.into(),
+                    sender,
+                    recipients,
+                    None,
+                    labels,
                 );
 
-                ParsedMessage::from(MessageWithBodyReplyless::from(service_message))
+                ParsedMessage::with_generation(
+                    MessageWithBodyReplyless::from(service_message),
+                    draft_generation,
+                )
             }
         })
         .collect();
@@ -152,10 +232,11 @@ pub async fn get_paginated_parsed_messages_by_thread_id(
     let mut conn = pool.acquire().await?;
 
     // Get messages for thread
-    let db_messages: Vec<db::message::Message> = sqlx::query_as!(
-        db::message::Message,
+    let db_messages: Vec<ParsedMessageRow> = sqlx::query_as!(
+        ParsedMessageRow,
         r#"
         SELECT
+            draft_generation,
             id,
             provider_id,
             global_id,
@@ -223,11 +304,19 @@ pub async fn get_paginated_parsed_messages_by_thread_id(
                 let recipients = recipients_map.get(&message.id).cloned().unwrap_or_default();
                 let labels = labels_map.get(&message.id).cloned().unwrap_or_default();
 
+                let draft_generation = message.draft_generation;
                 let service_message = db_to_service::map_attachmentless_db_message_to_service(
-                    message, sender, recipients, None, labels,
+                    message.into(),
+                    sender,
+                    recipients,
+                    None,
+                    labels,
                 );
 
-                ParsedMessage::from(MessageWithBodyReplyless::from(service_message))
+                ParsedMessage::with_generation(
+                    MessageWithBodyReplyless::from(service_message),
+                    draft_generation,
+                )
             }
         })
         .collect();

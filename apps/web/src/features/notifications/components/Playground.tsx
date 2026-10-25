@@ -22,6 +22,7 @@ import {
 import { NOTIFICATION_LABEL_BY_TYPE } from '../notification-preview';
 import {
   DefaultDocumentNameResolver,
+  DefaultUserAvatarResolver,
   DefaultUserNameResolver,
 } from '../notification-resolvers';
 import { createNotificationSource } from '../notification-source';
@@ -151,7 +152,8 @@ function BrowserFormat(props: { notification: UnifiedNotification }) {
       toPlatformNotificationData(
         props.notification,
         DefaultUserNameResolver,
-        DefaultDocumentNameResolver
+        DefaultDocumentNameResolver,
+        DefaultUserAvatarResolver
       )
         .then(setBrowserNotif)
         .catch((error) =>

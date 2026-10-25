@@ -191,6 +191,10 @@ async fn grouped_query_explain_local(pool: PgPool) -> anyhow::Result<()> {
                 builder.sql()
             );
             for repetition in 1..=3 {
+                #[expect(
+                    clippy::disallowed_methods,
+                    reason = "explains SQL generated from the AST and grouping"
+                )]
                 let query = sqlx::query_scalar::<_, serde_json::Value>(&sql)
                     .bind("macro|user-1@test.com")
                     .bind(sort.to_string())

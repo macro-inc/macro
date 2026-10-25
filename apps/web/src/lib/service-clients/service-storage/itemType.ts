@@ -59,6 +59,7 @@ export function stringToItemType(str: string): ItemType | undefined {
       'project',
       'channel',
       'crm_company',
+      'crm_contact',
       'crm_pipeline',
       'initiative',
       (itemType) => itemType

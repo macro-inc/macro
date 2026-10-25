@@ -101,3 +101,43 @@ async fn a_batch_of_editors_still_publishes_only_one_search_event() {
         2
     );
 }
+
+#[cfg(feature = "document_create")]
+#[tokio::test]
+async fn native_canvas_initialization_compensates_an_ambiguous_room_or_failed_ready_update() {
+    for initialized in [false, true] {
+        let mut repo = make_mock_repo();
+        let mut sync = crate::domain::ports::sync::MockDocumentSyncPort::new();
+        sync.expect_initialize_canvas()
+            .withf(|id| id == "fresh-canvas")
+            .times(1)
+            .returning(move |_| {
+                Box::pin(std::future::ready(if initialized {
+                    Ok(())
+                } else {
+                    Err(anyhow!("connection lost after initialize"))
+                }))
+            });
+        if initialized {
+            repo.expect_set_document_content()
+                .withf(|id, content| {
+                    id == "fresh-canvas"
+                        && content == &DocumentContent::ready(DocumentContentLocation::SyncService)
+                })
+                .times(1)
+                .returning(|_, _| {
+                    Box::pin(std::future::ready(Err(anyhow!("ready metadata failed"))))
+                });
+        }
+        sync.expect_delete_document()
+            .withf(|id| id == "fresh-canvas")
+            .times(1)
+            .returning(|_| Box::pin(std::future::ready(Ok(()))));
+        let service = spreadsheet_test_service(repo, sync);
+        assert!(
+            DocumentCreationService::initialize_canvas(&service, "fresh-canvas")
+                .await
+                .is_err()
+        );
+    }
+}

@@ -129,6 +129,9 @@ pub struct Form {
     pub created_at: DateTime<Utc>,
     /// When its facts or layout last changed.
     pub updated_at: DateTime<Utc>,
+    /// Whether Drive leaves it, and the database behind it, out of its
+    /// listings, as for a channel poll.
+    pub is_hidden_in_drive: bool,
 }
 
 impl Form {
@@ -161,7 +164,12 @@ pub struct CreateForm {
 pub enum FormSource {
     /// A new database named like the form, whose one table, "Responses",
     /// starts with only the form's own columns.
-    New,
+    New {
+        /// Keep the form, and the database made for it, out of Drive, as
+        /// for a channel poll.
+        #[serde(default, rename = "isHiddenInDrive")]
+        is_hidden_in_drive: bool,
+    },
     /// An existing table in a database the caller owns. The form starts with a
     /// question per column.
     Table {

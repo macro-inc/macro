@@ -93,7 +93,7 @@ pub enum FormErrorCode {
     rename_all_fields = "camelCase"
 )]
 pub enum LayoutProblem {
-    /// A booking step must be unique and follow all questions and screeners.
+    /// A booking step must be unique and follow all questions and gates.
     #[error("the booking step must be the final section of the form")]
     BookingMustBeLast,
     /// A question names a column the form's table does not have.

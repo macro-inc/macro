@@ -102,7 +102,7 @@ export function RibbonPopover(props: {
       <Popover.Portal>
         <Popover.Content
           class={cn(
-            'z-action-menu rounded-xl border border-edge bg-menu p-2 text-ink text-xs shadow-xl outline-none',
+            'menu-surface z-action-menu p-2 text-xs outline-none',
             props.class
           )}
           onCloseAutoFocus={(e) => e.preventDefault()}

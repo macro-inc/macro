@@ -412,6 +412,30 @@ describe('CoordinatorRouter', () => {
     expect(router.snapshot()).toBeUndefined();
   });
 
+  it('reports an unknown message kind from a newer tab as a protocol error', async () => {
+    const router = new CoordinatorRouter({
+      verifyTabLockHeld: async () => true,
+      watchTabLock: () => () => {},
+    });
+    const port = new FakePort();
+    await register(router, port, 'tab-a');
+    const fromNewerTab = JSON.parse('"tab-took-a-nap"');
+
+    await expect(
+      router.handleTabMessage(port as CoordinatorMessagePort, {
+        ...version,
+        kind: fromNewerTab,
+        tabId: 'tab-a',
+      })
+    ).resolves.toBeUndefined();
+
+    expect(messagesOfKind(port, 'protocol-error')).toContainEqual(
+      expect.objectContaining({
+        error: 'invalid tab-took-a-nap coordinator envelope',
+      })
+    );
+  });
+
   it('routes colliding tab ids through unique engine ids, restores responses, and fans pushes', async () => {
     const router = new CoordinatorRouter({
       verifyTabLockHeld: async () => true,
@@ -1538,9 +1562,22 @@ describe('CoordinatorRouter', () => {
     ]);
     const late = new FakePort();
     await register(router, late, 'tab-b');
-    expect(messagesOfKind(late, 'terminal-error')).toEqual([
-      expect.objectContaining({ storageUntouched: true }),
-    ]);
+    expect(messagesOfKind(late, 'terminal-error')).toEqual([]);
+    expect(router.snapshot()?.state).toMatchObject({
+      kind: 'activating',
+      tabId: 'tab-b',
+      ownerEpoch: 7,
+      databaseAction: 'open-existing',
+    });
+    // A fresh registration gets a fresh bounded budget, not another immediate
+    // terminal error from the previous host's exhausted cycle.
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(messagesOfKind(late, 'become-owner')).toHaveLength(6);
+    expect(messagesOfKind(tab, 'become-owner')).toHaveLength(6);
+    expect(router.snapshot()?.state).toMatchObject({
+      kind: 'failed',
+      storageUntouched: true,
+    });
   });
 
   it('preserves the owner and in-flight work through repeated missed heartbeats', async () => {

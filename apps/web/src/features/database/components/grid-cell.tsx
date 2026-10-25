@@ -67,6 +67,8 @@ export type GridCellProps = GridCellEditorOptions & {
   column: DatabaseViewColumn;
   value: DatabaseCellValue;
   emptyLabel?: string;
+  /** Text values wrap onto as many lines as they need instead of truncating to one. */
+  wrap?: boolean;
   canEdit: boolean;
   renderTextEditor?: (props: DatabaseTextEditorProps) => JSX.Element;
   renderTextValue?: (value: string) => JSX.Element;
@@ -415,6 +417,7 @@ export function GridCell(props: GridCellProps) {
                 column={props.column}
                 value={props.value}
                 emptyLabel={props.emptyLabel}
+                wrap={props.wrap}
                 editable={editable()}
                 isEntity={isEntity()}
                 mentionPreview={mentionPreview()}
@@ -547,6 +550,7 @@ function TextCell(props: {
   column: DatabaseViewColumn;
   value: DatabaseCellValue;
   emptyLabel?: string;
+  wrap?: boolean;
   editable: boolean;
   isEntity: boolean;
   mentionPreview: MentionPreview | undefined;
@@ -638,7 +642,12 @@ function TextCell(props: {
       <Show when={props.hasResolvedMentionLabel}>
         <span class="sr-only">{props.column.name}: </span>
       </Show>
-      <span class="truncate">
+      <span
+        classList={{
+          truncate: !props.wrap,
+          'min-w-0 wrap-break-word': props.wrap,
+        }}
+      >
         <Switch
           fallback={
             (props.column.dataType === 'STRING' &&

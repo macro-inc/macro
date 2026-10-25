@@ -23,6 +23,8 @@ export type CanvasDocumentMethods = {
 export type CanvasDocumentProps = {
   documentId: string;
   file?: Blob;
+  /** Backend-owned content is loaded from sync, without an object-storage seed. */
+  shared?: boolean;
   canEdit: boolean;
   isNested?: boolean;
   view?: CanvasView;
@@ -49,8 +51,19 @@ export function CanvasDocument(props: CanvasDocumentProps) {
 
 function CanvasDocumentLoader(props: CanvasDocumentProps) {
   const [loaded] = createResource(
-    () => ({ file: props.file }),
-    async ({ file }): Promise<CanvasLoadResult> => {
+    () => ({ file: props.file, shared: props.shared }),
+    async ({ file, shared }): Promise<CanvasLoadResult> => {
+      if (shared)
+        return {
+          kind: 'next',
+          file: {
+            version: 2,
+            document: {
+              rootId: 'canvas-root',
+              items: { 'canvas-root': { id: 'canvas-root', type: 'surface' } },
+            },
+          },
+        };
       if (!file) return { kind: 'error', message: 'Canvas file unavailable' };
       try {
         return loadCanvasFile(

@@ -22,6 +22,7 @@ export function AttachFilesAction(
     accept?: string | null;
     disabled?: boolean;
     children?: JSX.Element;
+    trigger?: (openPicker: () => void) => JSX.Element;
   } = {}
 ) {
   const commands = useInputCommands();
@@ -54,13 +55,17 @@ export function AttachFilesAction(
         disabled={props.disabled}
         data-input-attach-file-picker
       />
-      <InputActionButton
-        label="Attach files"
-        disabled={props.disabled}
-        onClick={() => fileInputRef?.click()}
-      >
-        {props.children ?? <PaperclipIcon />}
-      </InputActionButton>
+      {props.trigger ? (
+        props.trigger(() => fileInputRef?.click())
+      ) : (
+        <InputActionButton
+          label="Attach files"
+          disabled={props.disabled}
+          onClick={() => fileInputRef?.click()}
+        >
+          {props.children ?? <PaperclipIcon />}
+        </InputActionButton>
+      )}
     </>
   );
 }

@@ -1,15 +1,15 @@
-import ArrowLeft from '@phosphor/arrow-left.svg';
 import CalendarBlank from '@phosphor/calendar-blank.svg';
-import FileText from '@phosphor/file-text.svg';
 import X from '@phosphor/x.svg';
 import { Button } from '@ui';
 import { createEffect, createSignal, For, Match, Show, Switch } from 'solid-js';
 import type { DummyWorkspace } from '../../primitives/createDummyWorkspace';
-import { ViewShell } from '../DemoWorkspaceChrome';
+import { DocMention } from '../documents/DocMention';
+import { DocumentShareSheet } from '../documents/DocumentShareSheet';
 import { ProductWorkspace } from '../product/ProductWorkspace';
 import { WorkspaceDesktopDemo } from '../WorkspaceDesktopDemo';
 import { TaskMention } from '../workspace/frozen/TaskMention';
 import { TaskNotebook } from '../workspace/frozen/TaskNotebook';
+import { WorkspaceDocuments } from '../workspace/WorkspaceDocuments';
 import { REQUEST_DOCUMENT } from './taskProject';
 import './task-stories.css';
 
@@ -30,6 +30,10 @@ export function TaskProjectView(props: {
   const w = props.workspace;
   let root!: HTMLDivElement;
   const [returnId, setReturnId] = createSignal<string>();
+  const [sharing, setSharing] = createSignal(false);
+  const brief = () =>
+    w.data.documents.find((doc) => doc.id === 'customer-brief');
+  const documentTitle = () => brief()?.title ?? REQUEST_DOCUMENT;
   let returnLabel = 'From sales';
   const selected = () =>
     w.contentView() === 'tasks'
@@ -47,7 +51,9 @@ export function TaskProjectView(props: {
       const button = [
         ...root.querySelectorAll<HTMLButtonElement>('button'),
       ].find(
-        (item) => item.textContent?.replace(/\s+/g, ' ').trim() === returnLabel
+        (item) =>
+          item.textContent?.replace(/\s+/g, ' ').trim() === returnLabel ||
+          item.matches('.task-plan-link')
       );
       button?.focus({ preventScroll: true });
     });
@@ -89,11 +95,12 @@ export function TaskProjectView(props: {
                 props.documentSource ? (
                   <button
                     type="button"
-                    class="task-plan-link dummy-entity-link"
+                    class="task-plan-link sample-inline-reference"
                     onClick={() => w.open('documents', 'customer-brief')}
                   >
-                    <FileText class="size-4" />
-                    {REQUEST_DOCUMENT}
+                    <DocMention
+                      item={{ kind: 'document', label: documentTitle() }}
+                    />
                   </button>
                 ) : undefined
               }
@@ -106,9 +113,9 @@ export function TaskProjectView(props: {
                 <Show when={!props.documentSource}>
                   <button
                     type="button"
-                    class="task-plan-link dummy-entity-link"
+                    class="task-plan-link sample-inline-reference"
                     onClick={() => {
-                      returnLabel = REQUEST_DOCUMENT;
+                      returnLabel = documentTitle();
                       w.open('documents', 'customer-brief');
                       queueMicrotask(() =>
                         root
@@ -119,8 +126,9 @@ export function TaskProjectView(props: {
                       );
                     }}
                   >
-                    <FileText class="size-4" />
-                    {REQUEST_DOCUMENT}
+                    <DocMention
+                      item={{ kind: 'document', label: documentTitle() }}
+                    />
                   </button>
                 </Show>
               }
@@ -128,39 +136,39 @@ export function TaskProjectView(props: {
           )}
         </Match>
         <Match when={w.contentView() === 'documents'}>
-          <ViewShell.TopBar>
-            <Button
-              variant="plain"
-              size="icon-sm"
-              label="Back to task"
-              onClick={close}
-            >
-              <ArrowLeft />
-            </Button>
-            <FileText class="size-4 text-note" />
-            <span class="truncate text-sm">{REQUEST_DOCUMENT}</span>
-          </ViewShell.TopBar>
-          <div class="dummy-scroll task-checklist-doc">
-            <h1>{REQUEST_DOCUMENT}</h1>
-            <p class="task-checklist-after">
-              Update the homepage and pricing page. Send a proposal by Friday.
-            </p>
-            <h2>Next step</h2>
-            <ul class="task-checklist-list">
-              <For each={w.data.tasks}>
-                {(task) => (
-                  <li>
-                    <TaskMention
-                      task={task}
-                      onOpen={() => w.open('tasks', task.id)}
-                    />
-                  </li>
-                )}
-              </For>
-            </ul>
-          </div>
+          <WorkspaceDocuments
+            workspace={{
+              ...w,
+              selected: () => 'customer-brief',
+              backToCollection: close,
+            }}
+            backLabel="Back to task"
+            onShare={() => setSharing(true)}
+            sharingDescription="Shared with #sales"
+            relatedContent={
+              <div class="mt-6 md">
+                <h2 class="text-[1.125em] font-semibold mb-2">Next step</h2>
+                <For each={w.data.tasks}>
+                  {(task) => (
+                    <p>
+                      <TaskMention
+                        inline
+                        task={task}
+                        onOpen={() => w.open('tasks', task.id)}
+                      />
+                    </p>
+                  )}
+                </For>
+              </div>
+            }
+          />
         </Match>
       </Switch>
+      <DocumentShareSheet
+        open={sharing()}
+        title={documentTitle()}
+        onClose={() => setSharing(false)}
+      />
       <Show when={sourceOpen() && w.contentView() === 'messages'}>
         <Button
           class="task-source-close"

@@ -6,7 +6,8 @@ use uuid::Uuid;
 
 use super::models::CallError;
 
-/// A bearer capability that grants access only to a meeting's RTC room.
+/// An invitation capability for joining a meeting's RTC room. Chat additionally
+/// requires the resulting participant credential and current guest membership.
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(try_from = "String", into = "String")]

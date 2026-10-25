@@ -1,6 +1,7 @@
 import { ViewShell } from '@app/components/view-shell';
 import { DebugSuspense } from '@channel/DebugSuspense';
 import { MessageThread, threadListItem } from '@core/messages/MessageThread';
+import { createScrollTopFade } from '@core/util/createScrollTopFade';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { ChannelEntity, ChannelThreadEntity } from '@entity';
 import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
@@ -193,6 +194,7 @@ function ThreadList(props: {
   onOpenThread: ChannelThreadsViewProps['onOpenThread'];
 }) {
   const [scrollRoot, setScrollRoot] = createSignal<HTMLDivElement>();
+  createScrollTopFade(scrollRoot);
   const [virtualizer, setVirtualizer] = createSignal<VirtualizerHandle>();
   // A card being replied to stays mounted while scrolled away, so its draft
   // and focus survive virtualization.

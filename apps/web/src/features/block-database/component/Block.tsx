@@ -1,3 +1,4 @@
+import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { openChatWithInput } from '@app/features/chat/ChatWithAgentButton';
 import { toQuerySchema } from '@app/features/database-query/queries/query-source';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
@@ -546,12 +547,10 @@ function DatabaseSkeleton() {
       aria-label="Loading database"
     >
       <div class="mb-3 flex gap-2">
-        <For each={[0, 1]}>
-          {() => <div class="h-7 w-24 animate-pulse rounded-md bg-hover" />}
-        </For>
+        <For each={[0, 1]}>{() => <ListSkeleton.Bar class="h-8 w-24" />}</For>
       </div>
       <For each={[0, 1, 2, 3, 4, 5]}>
-        {() => <div class="h-9 animate-pulse rounded-md bg-hover" />}
+        {() => <ListSkeleton.Bar class="h-9 w-full rounded-lg" />}
       </For>
     </div>
   );

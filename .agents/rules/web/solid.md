@@ -77,3 +77,21 @@ State ownership, reactivity, and async error handling.
 - **FE-52** Read reactive values (feature flags, `isEditable()`, the current
   user) inside a reactive scope, never as a snapshot at mount. A flag that is
   still loading is not "off".
+- **FE-58** A memo that builds an array or object must not recompute on
+  unrelated changes: read each input through its own memo first, so the result
+  keeps its identity while its contents do. A prop that looks like a plain
+  string often reaches you from an accessor that rereads the whole editor
+  state, and a fresh `options` array makes a Kobalte `Select` re-assert its
+  selection and call `onChange` again. Pair it with setters that write nothing
+  when nothing changed (`setReminderMinutes` and `setField` in
+  `create-calendar-event-form-controller.ts`): without both, the control's
+  answer edits the state that produced it and the loop only ends in a stack
+  overflow that takes the app down.
+- **FE-59** Browser callbacks (observers, timers, listeners) run without a
+  Solid owner: `onCleanup` there never runs, and computations created there,
+  including the memo behind a `cond && value` prop read, are never disposed.
+  Wait for an element to enter the document with `onElementConnect` from
+  `@core/util/onElementConnect`, which runs the callback under the caller's
+  owner, and register cleanup for setup-time resources (plugins, debounced
+  saves) at setup, not in that callback. Enforced by ast-grep
+  `ts-/tsx-no-ownerless-element-connect`, CI error.

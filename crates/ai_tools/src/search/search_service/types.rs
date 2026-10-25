@@ -12,6 +12,78 @@ use serde::{Deserialize, Serialize};
 
 use super::context::SearchToolContext;
 
+/// Searchable entities exposed to agents. Legacy conversations are not tool targets.
+#[derive(Debug, Clone, Copy, Deserialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum SearchEntityType {
+    AgentSessions,
+    Documents,
+    Emails,
+    Channels,
+    Projects,
+    CallRecords,
+    CalendarEvents,
+}
+
+impl From<SearchEntityType> for models_search::unified::UnifiedSearchIndex {
+    fn from(value: SearchEntityType) -> Self {
+        match value {
+            SearchEntityType::AgentSessions => Self::AgentSessions,
+            SearchEntityType::Documents => Self::Documents,
+            SearchEntityType::Emails => Self::Emails,
+            SearchEntityType::Channels => Self::Channels,
+            SearchEntityType::Projects => Self::Projects,
+            SearchEntityType::CallRecords => Self::CallRecords,
+            SearchEntityType::CalendarEvents => Self::CalendarEvents,
+        }
+    }
+}
+
+/// Explicitly exclude legacy chats even when no type filter was supplied.
+pub(super) fn search_filters(
+    types: &[SearchEntityType],
+    base: item_filters::EntityFilters,
+) -> item_filters::EntityFilters {
+    let mut filters = models_search::unified::entity_filters_from_include(
+        types.iter().copied().map(Into::into).collect(),
+        base,
+    );
+    filters.chat_filters.chat_ids = vec![uuid::Uuid::nil().to_string()];
+    filters
+}
+
+/// Search results agents can act on.
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", tag = "type")]
+pub enum SessionAwareSearchResult {
+    Document(models_search::document::DocumentSearchResponseItemWithMetadata),
+    Email(models_search::email::EmailSearchResponseItemWithMetadata),
+    ChannelMessage(models_search::channel::ChannelMessageSearchResponseItem),
+    Channel(models_search::channel::ChannelNameSearchResponseItem),
+    Project(models_search::project::ProjectSearchResponseItemWithMetadata),
+    Call(models_search::call_record::CallRecordSearchResponseItemWithMetadata),
+    Company(models_search::crm_company::CrmCompanySearchResponseItem),
+    CalendarEvent(models_search::calendar_event::CalendarEventSearchResponseItemWithMetadata),
+    AgentSession(models_search::agent_session::AgentSessionSearchResponseItem),
+}
+
+impl SessionAwareSearchResult {
+    fn from_unified(item: UnifiedSearchResponseItem) -> Option<Self> {
+        Some(match item {
+            UnifiedSearchResponseItem::Chat(_) => return None,
+            UnifiedSearchResponseItem::Document(item) => Self::Document(item),
+            UnifiedSearchResponseItem::Email(item) => Self::Email(item),
+            UnifiedSearchResponseItem::ChannelMessage(item) => Self::ChannelMessage(item),
+            UnifiedSearchResponseItem::Channel(item) => Self::Channel(item),
+            UnifiedSearchResponseItem::Project(item) => Self::Project(item),
+            UnifiedSearchResponseItem::Call(item) => Self::Call(item),
+            UnifiedSearchResponseItem::Company(item) => Self::Company(item),
+            UnifiedSearchResponseItem::CalendarEvent(item) => Self::CalendarEvent(item),
+            UnifiedSearchResponseItem::AgentSession(item) => Self::AgentSession(item),
+        })
+    }
+}
+
 pub const PAGE_SIZE: i64 = 50;
 
 /// How search tools match query terms. Restricted to partial/exact — the
@@ -38,10 +110,10 @@ impl From<SearchMatchType> for MatchType {
 
 /// A search result annotated with the caller-visible tags on the item.
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
-pub struct TaggedSearchResult {
+pub struct TaggedSessionAwareSearchResult {
     /// The search result itself.
     #[serde(flatten)]
-    pub item: UnifiedSearchResponseItem,
+    pub item: SessionAwareSearchResult,
     /// Tags on this item visible to the user.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<AppliedTag>,
@@ -49,7 +121,7 @@ pub struct TaggedSearchResult {
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
 pub struct SearchToolResponse {
-    pub results: Vec<TaggedSearchResult>,
+    pub results: Vec<TaggedSessionAwareSearchResult>,
 }
 
 /// Map the model-facing tag match mode onto the search request's filter mode.
@@ -101,7 +173,7 @@ pub(super) async fn annotate_result_tags(
     user_id: &str,
     results: Vec<UnifiedSearchResponseItem>,
     tag_sets: Option<CallerTagSets>,
-) -> ToolResult<Vec<TaggedSearchResult>> {
+) -> ToolResult<Vec<TaggedSessionAwareSearchResult>> {
     let any_tags = results.iter().any(|item| {
         item_properties(item).is_some_and(|props| {
             props
@@ -122,7 +194,7 @@ pub(super) async fn annotate_result_tags(
 
     Ok(results
         .into_iter()
-        .map(|mut item| {
+        .filter_map(|mut item| {
             let mut tags: Vec<AppliedTag> = Vec::new();
             if let Some(props) = item_properties_mut(&mut item) {
                 for property in props.iter() {
@@ -142,7 +214,10 @@ pub(super) async fn annotate_result_tags(
                 }
                 props.retain(|p| p.definition.data_type != DataType::Tag);
             }
-            TaggedSearchResult { item, tags }
+            Some(TaggedSessionAwareSearchResult {
+                item: SessionAwareSearchResult::from_unified(item)?,
+                tags,
+            })
         })
         .collect())
 }
@@ -191,3 +266,6 @@ fn item_properties_mut(item: &mut UnifiedSearchResponseItem) -> Option<&mut Vec<
         | UnifiedSearchResponseItem::Company(_) => None,
     }
 }
+
+#[cfg(test)]
+mod test;

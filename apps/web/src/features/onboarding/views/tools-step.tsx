@@ -41,13 +41,7 @@ export function ToolsStep(props: { onContinue: () => void }) {
           class="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-ink-placeholder"
         />
       </label>
-      <div
-        role="region"
-        aria-label="Available integrations"
-        tabindex="0"
-        class="h-[32rem] overflow-y-auto rounded-xl px-1 py-1 outline-none focus-visible:ring-1 focus-visible:ring-ink/30"
-        style={{ 'scrollbar-gutter': 'stable' }}
-      >
+      <div role="region" aria-label="Available integrations" class="px-1 py-1">
         <div class="grid grid-cols-3 gap-x-2 gap-y-5 sm:grid-cols-4">
           <For each={entries()}>
             {(tool) => (
@@ -129,10 +123,12 @@ export function ToolsStep(props: { onContinue: () => void }) {
           </button>
         </Show>
       </div>
-      <ContinueButton
-        disabled={busy() !== undefined}
-        onClick={props.onContinue}
-      />
+      <div class="sticky bottom-0 z-10 bg-surface pb-[var(--safe-bottom,0px)]">
+        <ContinueButton
+          disabled={busy() !== undefined}
+          onClick={props.onContinue}
+        />
+      </div>
     </div>
   );
 }

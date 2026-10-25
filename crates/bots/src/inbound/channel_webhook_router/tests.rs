@@ -565,6 +565,7 @@ impl messages::domain::api::MessageCommands for TestChannelPoster {
                 parent: messages::domain::models::MessageParent::Channel(channel_id),
                 thread_id: input.thread_id,
                 sender_id: actor,
+                guest_name: None,
                 imported_author: None,
                 bot_profile: None,
                 mentions: Vec::new(),
@@ -726,6 +727,7 @@ struct FakeJwtValidator;
 impl JwtValidator for FakeJwtValidator {
     fn validate(&self, jwt: &str) -> Result<ValidatedIdentity, Report<MacroAuthorizationError>> {
         Ok(ValidatedIdentity {
+            agent_id: None,
             user_id: jwt.to_string(),
             fusion_user_id: "fusion-user".to_string(),
             organization_id: None,
@@ -813,6 +815,7 @@ fn bot_authentication_with_acting_user(bot_id: BotId) -> BotAuthentication {
         bot_scope: BotScope::User,
         team_id: None,
         acting_user: Some(MacroUserAuthentication {
+            agent_id: None,
             macro_user_id: MacroUserIdStr::parse_from_str("macro|acting-bot@example.com").unwrap(),
             user_context: Default::default(),
         }),

@@ -7,10 +7,12 @@ import { Sdk as ContactsSdk } from '../../generated/contacts/sdk.gen';
 import { Sdk as EmailSdk } from '../../generated/email/sdk.gen';
 import { Sdk as NotificationSdk } from '../../generated/notification/sdk.gen';
 import { Sdk as PropertiesSdk } from '../../generated/properties/sdk.gen';
+import { Sdk as ScheduledActionSdk } from '../../generated/scheduled-action/sdk.gen';
 import { Sdk as SearchSdk } from '../../generated/search/sdk.gen';
 import { createClient } from '../../generated/storage/client';
 import { Sdk as StorageSdk } from '../../generated/storage/sdk.gen';
 import type { Bot } from '../../generated/storage/types.gen';
+import { Sdk as UnfurlSdk } from '../../generated/unfurl/sdk.gen';
 import {
   type Env,
   HOSTS,
@@ -27,7 +29,9 @@ import { type LocalPortmap, resolveLocalPortmap } from '../local-portmap';
 import { observeSdk } from './activity';
 
 const USER_API_KEY_HEADER = 'x-macro-user-api-key';
+
 const USER_API_KEY_PREFIX = 'mak_';
+
 const BOT_TOKEN_PREFIX = 'mbot_';
 
 type CredentialHeader = readonly [name: string, value: string];
@@ -95,28 +99,50 @@ export async function requestAuthHeaders(
 }
 
 export class MacroClient {
+  readonly scheduledAction: ScheduledActionSdk;
+
+  readonly unfurl: UnfurlSdk;
+
   readonly agentHarness: AgentHarnessSdk;
+
   readonly auth: AuthSdk;
+
   readonly calendar: CalendarSdk;
+
   readonly cognition: CognitionSdk;
+
   readonly contacts: ContactsSdk;
+
   readonly email: EmailSdk;
+
   readonly notification: NotificationSdk;
+
   readonly properties: PropertiesSdk;
+
   readonly search: SearchSdk;
+
   readonly storage: StorageSdk;
+
   readonly webAppUrl: string;
+
   readonly wsVerify?: string;
+
   readonly events: MacroEvents;
+
   /** Resolved authentication config (distinct from `auth`, the auth-service SDK). */
   readonly authConfig: MacroAuth;
+
   /** Resolved service base urls: env defaults, then the local-stack portmap,
    * then `opts.hosts` overrides. */
   readonly hosts: Record<ServiceName, string>;
+
   /** The local stack's generated port map; only set when env is `local`. */
   readonly localPortmap?: LocalPortmap;
+
   private readonly requestedAs?: string;
+
   private selfBotRecord?: Promise<Bot>;
+
   private selfPrincipal?: Promise<string>;
 
   constructor(opts: MacroOpts) {
@@ -141,6 +167,18 @@ export class MacroClient {
     }
     this.wsVerify = opts.wsVerify;
 
+    this.scheduledAction = observeSdk(
+      new ScheduledActionSdk({
+        client: this.makeClient(hosts['scheduled-action']),
+      }),
+      'scheduled-action',
+      opts.onRequest,
+    );
+    this.unfurl = observeSdk(
+      new UnfurlSdk({ client: this.makeClient(hosts.unfurl) }),
+      'unfurl',
+      opts.onRequest,
+    );
     this.agentHarness = observeSdk(
       new AgentHarnessSdk({
         client: this.makeClient(hosts['agent-harness']),

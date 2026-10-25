@@ -73,7 +73,7 @@ function MoreMenu(props: {
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content
-          class="z-action-menu w-48 rounded-xl border border-edge bg-menu p-1 text-ink text-xs shadow-xl outline-none"
+          class="menu-surface z-action-menu w-48 p-1 text-xs outline-none"
           onCloseAutoFocus={(e) => e.preventDefault()}
         >
           {props.children(() => setOpen(false))}

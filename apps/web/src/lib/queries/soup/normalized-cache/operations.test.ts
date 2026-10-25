@@ -552,6 +552,19 @@ describe('removeSearchEntities', () => {
     expect(getSearchQuery()!.pages[0].results[0]).toEqual(session);
   });
 
+  it('keeps a result of a type this build does not know', () => {
+    const fromNewerServer = JSON.parse('{"type":"newKind","id":"new-1"}');
+    seedSearchQuery(
+      mockSearchCache([
+        [fromNewerServer, mockSearchResult('document', 'doc-1')],
+      ])
+    );
+
+    removeSearchEntities(new Set(['doc-1']));
+
+    expect(getSearchQuery()!.pages[0].results).toEqual([fromNewerServer]);
+  });
+
   it('filters matching IDs from search results', () => {
     seedSearchQuery(
       mockSearchCache([

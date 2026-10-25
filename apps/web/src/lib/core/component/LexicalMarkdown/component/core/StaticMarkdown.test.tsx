@@ -188,6 +188,33 @@ describe('static agent session previews', () => {
   });
 });
 
+describe('display-only markdown previews', () => {
+  it('keeps formatted message text and mention names outside the inert subtree', () => {
+    const [markdown, setMarkdown] = createSignal(
+      'Review **the plan** with <m-document-mention>{"documentId":"plan-1","documentName":"Launch plan","blockName":"md","blockParams":{}}</m-document-mention>'
+    );
+    const rendered = render(() => (
+      <StaticMarkdownContext>
+        <StaticMarkdown inert markdown={markdown()} singleLine />
+      </StaticMarkdownContext>
+    ));
+
+    const accessibleText = rendered.getByText(
+      'Review the plan with Launch plan'
+    );
+    expect(accessibleText.closest('[inert], [aria-hidden="true"]')).toBeNull();
+
+    setMarkdown('Updated **plan**');
+    expect(rendered.queryByText('Review the plan with Launch plan')).toBeNull();
+    expect(
+      rendered
+        .getByText('Updated plan')
+        .closest('[inert], [aria-hidden="true"]')
+    ).toBeNull();
+    rendered.unmount();
+  });
+});
+
 describe('static pull request mentions', () => {
   it.each([
     [

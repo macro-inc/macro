@@ -4,7 +4,7 @@ use agent_session::domain::events::{
     SessionOpenedMetadata, SessionSettledMetadata, ThreadOrigin, TurnStartedMetadata, TurnSummary,
     WaitingForInputMetadata,
 };
-use agent_session::domain::model::AgentSessionId;
+use agent_session::domain::model::{AgentSessionId, SessionSource};
 use bot_id::BotId;
 
 const SESSION: Uuid = Uuid::from_u128(0xA);
@@ -35,6 +35,7 @@ fn identity() -> SessionIdentity {
             Uuid::from_u128(3),
         )),
         audience: vec![owner(), user("alice@macro.com"), user("bob@macro.com")],
+        source: agent_session::domain::model::SessionSource::User,
     }
 }
 
@@ -193,6 +194,69 @@ fn settled_without_a_turn_record_notifies_nobody() {
     ));
 
     assert!(actions.is_empty());
+}
+
+fn routine_run() -> SessionIdentity {
+    SessionIdentity {
+        origin: None,
+        source: SessionSource::Routine,
+        ..identity()
+    }
+}
+
+fn routine_settled(turn: u32, stop_reason: &str) -> AgentSessionLifecycleEvent {
+    AgentSessionLifecycleEvent::Settled(SessionSettledMetadata {
+        identity: routine_run(),
+        last_turn: Some(TurnSummary {
+            turn: TurnId(turn),
+            action_id: AgentActionId::mint(),
+            actor: Some(owner()),
+            announcement_message_id: None,
+            stop_reason: stop_reason.to_owned(),
+            excerpt: Some("Nothing new today.".to_owned()),
+        }),
+    })
+}
+
+#[test]
+fn a_routine_run_that_finished_normally_notifies_nobody() {
+    assert!(coder(&routine_settled(0, "end_turn")).is_empty());
+    assert!(plan(&routine_settled(0, "end_turn"), false).is_empty());
+}
+
+#[test]
+fn a_routine_run_that_failed_still_notifies() {
+    for stop_reason in ["cancelled", "error", "max_tokens", "refusal"] {
+        let notify = one_settled(coder(&routine_settled(0, stop_reason)));
+        assert_eq!(notify.metadata.stop_reason, stop_reason);
+        assert_eq!(
+            notify.recipients,
+            vec![owner(), user("alice@macro.com"), user("bob@macro.com")]
+        );
+    }
+}
+
+#[test]
+fn a_turn_the_owner_prompts_after_a_routine_run_notifies() {
+    let notify = one_settled(coder(&routine_settled(1, "end_turn")));
+    assert_eq!(notify.metadata.turn, 1);
+}
+
+#[test]
+fn a_routine_runs_question_still_notifies() {
+    let actions = coder(&AgentSessionLifecycleEvent::WaitingForInput(
+        WaitingForInputMetadata {
+            identity: routine_run(),
+            turn: TurnId(0),
+            action_id: AgentActionId::mint(),
+            announcement_message_id: None,
+            question: "Which inbox?".to_owned(),
+        },
+    ));
+    assert!(matches!(
+        actions.as_slice(),
+        [PlannedNotification::WaitingForInput(_)]
+    ));
 }
 
 #[test]

@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   graphqlEnabled: vi.fn(() => true),
   deleteItem: vi.fn(),
   deleteCall: vi.fn(),
+  deleteCallGraphql: vi.fn(),
   deleteReminder: vi.fn(),
   deleteSchedule: vi.fn(),
   moveToFolder: vi.fn(),
@@ -57,6 +58,9 @@ vi.mock('@queries/soup/cache', () => ({
 }));
 vi.mock('@queries/soup/graphql/active-queries', () => ({
   refreshActiveGraphqlSoupQueries: mocks.refresh,
+}));
+vi.mock('@queries/storage/entity-mutations', () => ({
+  permanentlyDeleteEntity: mocks.deleteCallGraphql,
 }));
 vi.mock('@service-call/client', () => ({
   callServiceClient: { deleteCallRecord: mocks.deleteCall },
@@ -336,7 +340,7 @@ describe('bulk delete GraphQL optimism', () => {
     ];
     client.setQueryData(scheduledActionKeys.list.queryKey, schedules);
     mocks.deleteItem.mockRejectedValue(new Error('document delete failed'));
-    mocks.deleteCall.mockResolvedValue(ok(undefined));
+    mocks.deleteCallGraphql.mockResolvedValue(undefined);
     mocks.deleteSchedule.mockImplementation(
       async ({ scheduleId }: { scheduleId: string }) =>
         scheduleId === 'deleted-auto'
@@ -352,6 +356,11 @@ describe('bulk delete GraphQL optimism', () => {
         entity('failed-auto', 'routine'),
       ])
     ).rejects.toBeInstanceOf(BulkDeleteFailure);
+    expect(mocks.deleteCallGraphql).toHaveBeenCalledWith({
+      type: 'CALL',
+      id: 'deleted-call',
+    });
+    expect(mocks.deleteCall).not.toHaveBeenCalled();
     expect(invalidate).toHaveBeenCalledWith({ queryKey: callKeys._def });
     expect(invalidate).toHaveBeenCalledWith({
       queryKey: scheduledActionKeys.list.queryKey,
@@ -372,7 +381,7 @@ describe('bulk delete GraphQL optimism', () => {
       .mockResolvedValue(undefined);
     const schedules = [{ id: 'failed-auto' }];
     client.setQueryData(scheduledActionKeys.list.queryKey, schedules);
-    mocks.deleteCall.mockRejectedValue(new Error('failed call'));
+    mocks.deleteCallGraphql.mockRejectedValue(new Error('failed call'));
     mocks.deleteSchedule.mockRejectedValue(new Error('failed schedule'));
     const { mutation } = mount();
     await expect(

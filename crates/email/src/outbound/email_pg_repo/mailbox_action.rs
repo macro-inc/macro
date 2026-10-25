@@ -9,7 +9,7 @@ pub(super) async fn messages(
     thread_id: Uuid,
 ) -> Result<Vec<MailboxActionMessage>, sqlx::Error> {
     sqlx::query_as!(MailboxActionMessage, r#"
-        SELECT m.id,m.provider_id,m.is_draft,m.is_sent,
+        SELECT m.id,m.provider_id,m.is_draft,m.is_sent,m.is_read,
             f.in_inbox AS "in_inbox!", f.in_trash AS "in_trash!", f.in_junk AS "in_junk!", f.is_present AS "is_present!"
         FROM email_messages m JOIN email_message_mailbox_facts f ON f.id = m.id
         WHERE m.link_id = $1 AND m.thread_id = $2 ORDER BY m.id
@@ -128,8 +128,11 @@ pub(super) async fn operations(
     link: Uuid,
     thread: Uuid,
 ) -> Result<Vec<MailboxOperation>, sqlx::Error> {
+    // A reconnect rebinds unfinished commands into the new generation; commands
+    // left in an earlier generation can never run, so they report no outcome.
     let rows=sqlx::query!(r#"SELECT DISTINCT ON(c.intent->>'kind',c.intent->'value'->>'name') c.id,c.intent,c.status,c.updated_at
-        FROM email_mailbox_commands c WHERE c.link_id=$1 AND EXISTS(SELECT 1 FROM email_mailbox_command_targets t
+        FROM email_mailbox_commands c JOIN email_links l ON l.id=c.link_id AND l.sync_generation=c.generation
+        WHERE c.link_id=$1 AND EXISTS(SELECT 1 FROM email_mailbox_command_targets t
             JOIN email_messages m ON m.id=t.message_id WHERE t.command_id=c.id AND m.thread_id=$2 AND m.link_id=$1)
         ORDER BY c.intent->>'kind',c.intent->'value'->>'name',c.accepted_order DESC LIMIT 100"#,link,thread).fetch_all(pool).await?;
     rows.into_iter()
@@ -138,11 +141,17 @@ pub(super) async fn operations(
                 id: row.id,
                 action: serde_json::from_value(row.intent)
                     .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
+                // Nothing resumes an unknown write, so it never reads as waiting.
                 state: match row.status.as_str() {
+                    "pending" | "running" | "confirming" => MailboxOperationState::Pending,
                     "succeeded" => MailboxOperationState::Applied,
-                    "failed" => MailboxOperationState::Failed,
-                    "cancelled" => MailboxOperationState::Cancelled,
-                    _ => MailboxOperationState::Pending,
+                    "failed" | "conflict" => MailboxOperationState::Failed,
+                    "cancelled" | "unknown" => MailboxOperationState::Cancelled,
+                    status => {
+                        return Err(sqlx::Error::Decode(
+                            format!("unexpected mailbox command status {status}").into(),
+                        ));
+                    }
                 },
                 updated_at: row.updated_at,
             })

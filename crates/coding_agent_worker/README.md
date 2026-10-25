@@ -79,6 +79,11 @@ visible dialog, and the same Herdr state generation. Sign-in prompts and other
 unknown dialogs require native interaction. Herdr does not offer an atomic
 compare-and-send-key operation, so native interaction remains the authority.
 
+Macro supplies the session's configured MCP connections when macrod binds it:
+owner-connection sessions include enabled connected apps and custom MCP servers;
+explicit agent selections retain their selected apps. All connections use the
+session credential through Macro's egress proxy.
+
 Claude receives MCP configuration in a private file. Codex receives per-launch
 MCP overrides; HTTP credentials come from private environment files sourced in
 the native pane, and stdio servers use private launch scripts. This requires a
@@ -103,3 +108,22 @@ The Config tab adds **Model** (empty uses the native default), **Extra args**
 previous agent's model and extra arguments. Storage and focus preferences remain.
 Session metadata stays in the instance directory even with custom worktree storage.
 Choose a repository in Macro's composer; local sessions always start from `main`.
+
+## Replies to chat-agent mentions
+
+Trigger prompts use the source channel/document message UUID as the control
+action ID, scoped to their session. Initial mentions, follow-ups, and retries
+after an existing-thread conflict all retain that ID. The backend joins it to
+the authorized reply destination, so a completed external chat turn replaces
+its pending thread reply. The backend retains the result and reserved reply ID
+to retry channel updates without rerunning the prompt. Direct session controls
+continue using newly generated action IDs.
+
+After 24 hours, replies without a persisted completion are checked at most hourly.
+Direct completion handling remains immediate. If a completion callback is lost
+for an older reply, recovery can take an hour plus the recovery backlog; the
+durable answer is retained. Successful pending announcements are not posted again.
+
+Deploy the backend migration/service and update macrod to enable this path.
+Previously released daemons generate unrelated action IDs; this change does
+not repair old pending replies produced by those versions.

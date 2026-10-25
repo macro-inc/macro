@@ -91,12 +91,12 @@ const ROUTE_MODULES: Array<[RegExp, string]> = [
   [/^\/dpa$/, 'src/app/routes/RouteDpa.tsx'],
   [/^\/tasks$/, 'src/app/routes/RouteTasks.tsx'],
   [/^\/email$/, 'src/app/routes/RouteEmail.tsx'],
-  [/^\/documents$/, 'src/app/routes/RouteDocuments.tsx'],
-  [/^\/channels$/, 'src/app/routes/RouteChannels.tsx'],
-  [/^\/calls$/, 'src/app/routes/RouteCalls.tsx'],
+  [/^\/documents$/, 'src/features/marketing/views/ProductDocumentsPage.tsx'],
+  [/^\/channels$/, 'src/features/marketing/views/ProductChannelsPage.tsx'],
+  [/^\/calls$/, 'src/features/marketing/views/ProductCallsPage.tsx'],
   [/^\/crm$/, 'src/app/routes/RouteCrm.tsx'],
-  [/^\/agents$/, 'src/app/routes/RouteAgents.tsx'],
-  [/^\/github$/, 'src/app/routes/RouteGithub.tsx'],
+  [/^\/agents$/, 'src/features/marketing/views/ProductAgentsPage.tsx'],
+  [/^\/github$/, 'src/features/marketing/views/ProductReviewsPage.tsx'],
   [/^\/pricing$/, 'src/app/routes/RoutePricing.tsx'],
   [/^\/download$/, 'src/app/routes/RouteDownload.tsx'],
   [/^\/tour$/, 'src/features/marketing/views/SalesPage.tsx'],
@@ -111,6 +111,8 @@ const ROUTE_MODULES: Array<[RegExp, string]> = [
 
 interface ManifestChunk {
   file: string;
+  name?: string;
+  isDynamicEntry?: boolean;
   css?: string[];
   imports?: string[];
 }
@@ -121,16 +123,30 @@ function collectChunkAssets(
   manifest: Manifest,
   key: string
 ): { js: string[]; css: string[] } {
+  // Vite may emit a shared dynamic route under a generated _Name-hash.js key
+  // rather than its source path (CRM does this). Resolve that real entry too.
+  const candidates = manifest[key]
+    ? [key]
+    : Object.keys(manifest).filter(
+        (candidate) =>
+          manifest[candidate].isDynamicEntry &&
+          manifest[candidate].name === path.basename(key, path.extname(key))
+      );
+  if (candidates.length !== 1)
+    throw new Error(
+      `Expected one built route entry for ${key}, found ${candidates.length}`
+    );
   const js = new Set<string>();
   const css = new Set<string>();
   const visit = (k: string) => {
     const chunk = manifest[k];
-    if (!chunk || js.has(chunk.file)) return;
+    if (!chunk) throw new Error(`Missing static route dependency: ${k}`);
+    if (js.has(chunk.file)) return;
     js.add(chunk.file);
     for (const c of chunk.css ?? []) css.add(c);
     for (const imp of chunk.imports ?? []) visit(imp);
   };
-  visit(key);
+  visit(candidates[0]);
   return { js: [...js], css: [...css] };
 }
 

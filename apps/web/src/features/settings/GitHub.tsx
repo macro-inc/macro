@@ -15,10 +15,10 @@ import {
   type ConnectionState,
   StatusDot,
 } from './integration-ui';
-import { IntegrationRow, SettingsCard, SettingsRow } from './primitives';
+import { IntegrationRow, SettingsCard } from './primitives';
 
 /** GitHub integration as a Connected-accounts card. */
-export function GitHubCard() {
+export function GitHubCard(props: { class?: string } = {}) {
   const githubLink = useGithubLinkStatusQuery();
   const initGithubLink = useInitGithubLinkMutation();
   const deleteGithubLink = useDeleteGithubLinkMutation();
@@ -68,29 +68,19 @@ export function GitHubCard() {
   };
 
   return (
-    <SettingsCard>
+    <SettingsCard class={props.class}>
       <IntegrationRow
         icon={<GithubIcon />}
         title="GitHub"
-        description="Connect Macro to your GitHub account and repositories."
-      />
-
-      <SettingsRow
-        label={
-          <span class="flex items-center gap-2">
-            <span>Account</span>
-            <Show when={connectionState()}>
-              {(state) => (
-                <StatusDot state={state()} label={connectionLabel()} />
-              )}
-            </Show>
-          </span>
+        status={
+          <Show when={connectionState()}>
+            {(state) => <StatusDot state={state()} label={connectionLabel()} />}
+          </Show>
         }
-        description="Identify your GitHub activity in Macro."
       >
         <Show
           when={!githubLink.isLoading}
-          fallback={<span class="text-xs text-ink-muted">Loading…</span>}
+          fallback={<span class="text-sm text-ink-muted">Loading…</span>}
         >
           <Switch
             fallback={
@@ -104,7 +94,7 @@ export function GitHubCard() {
             <Match when={status() === 'linked'}>
               <Show when={username()}>
                 {(name) => (
-                  <span class="ph-no-capture text-xs text-ink-muted">
+                  <span class="ph-no-capture text-sm text-ink-muted">
                     @{name()}
                   </span>
                 )}
@@ -125,24 +115,7 @@ export function GitHubCard() {
             </Match>
           </Switch>
         </Show>
-      </SettingsRow>
-
-      <SettingsRow
-        label="GitHub App"
-        description="Choose repositories for Macro to sync."
-      >
-        {/* The install callback rejects users without a linked account, so
-            don't offer the flow until the account above is connected. */}
-        <Show
-          when={status() === 'linked'}
-          fallback={
-            <span class="text-xs text-ink-muted">
-              {githubLink.isLoading
-                ? 'Loading…'
-                : 'Connect your GitHub account first'}
-            </span>
-          }
-        >
+        <Show when={status() === 'linked'}>
           <a
             href={`${SERVER_HOSTS['document-storage-service']}/github/install-sync`}
             target="_blank"
@@ -153,7 +126,7 @@ export function GitHubCard() {
             <ArrowUpRightIcon class="size-3.5 opacity-70" />
           </a>
         </Show>
-      </SettingsRow>
+      </IntegrationRow>
     </SettingsCard>
   );
 }

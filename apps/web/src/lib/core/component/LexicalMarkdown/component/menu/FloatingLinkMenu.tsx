@@ -25,6 +25,7 @@ import {
   createMemo,
   createSignal,
   Match,
+  on,
   onCleanup,
   onMount,
   type ParentProps,
@@ -61,7 +62,8 @@ export function FloatingLinkMenu(props: {
   closePopup?: () => void;
   autoLinkMatchMode?: AutoLinkMatchMode;
 }) {
-  const { plugins, editor } = useContext(LexicalWrapperContext) ?? {};
+  const { plugins, editor, isInteractable } =
+    useContext(LexicalWrapperContext) ?? {};
   if (!plugins || !editor) {
     console.error(
       'FloatingLinkMenu requires plugins and editor from LexicalWrapperContext!'
@@ -104,6 +106,15 @@ export function FloatingLinkMenu(props: {
     setPreviewHover(false);
     setCreateMode(false);
   };
+
+  createEffect(
+    on(
+      () => isInteractable?.(),
+      (interactable) => {
+        if (interactable === false) reset();
+      }
+    )
+  );
 
   // Passed to link plugin in to be called when the mouse hovers over a link.
   const onHoverLink = (link?: ILinkInfo) => {
@@ -159,6 +170,7 @@ export function FloatingLinkMenu(props: {
   };
 
   const handleUnlink = () => {
+    if (!editor.isEditable()) return;
     editor.dispatchCommand(UNLINK_COMMAND, undefined);
     reset();
     setTimeout(() => {
@@ -184,6 +196,7 @@ export function FloatingLinkMenu(props: {
   };
 
   const handleEditClick = () => {
+    if (!editor.isEditable()) return;
     setIsEditing(true);
     setTimeout(() => {
       if (urlInputRef) {
@@ -193,6 +206,7 @@ export function FloatingLinkMenu(props: {
   };
 
   const handleSubmit = () => {
+    if (!editor.isEditable()) return;
     const prev = linkInfo();
     const pending = pendingLinkInfo();
     if (!prev || !pending) {
@@ -262,7 +276,8 @@ export function FloatingLinkMenu(props: {
         pendingLinkInfo()?.url === undefined
       ) {
         setTimeout(() => {
-          editor.dispatchCommand(UNLINK_COMMAND, undefined);
+          if (editor.isEditable())
+            editor.dispatchCommand(UNLINK_COMMAND, undefined);
         });
       }
       reset();
@@ -366,11 +381,7 @@ export function FloatingLinkMenu(props: {
             }}
             ref={menuRef}
           >
-            <Surface
-              depth={2}
-              hideBorder
-              class="rounded-xl glass bg-menu-glass p-1.5"
-            >
+            <Surface depth={2} hideBorder class="menu-surface p-1.5">
               {props.children}
             </Surface>
           </div>

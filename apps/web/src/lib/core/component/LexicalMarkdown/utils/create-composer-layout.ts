@@ -32,6 +32,7 @@ export function createComposerLayout(
       .exhaustive();
   let queued = false;
   let disposed = false;
+  let resizeFrame: number | undefined;
 
   const measure = () => {
     const element = root();
@@ -102,7 +103,20 @@ export function createComposerLayout(
     })
   );
   onCleanup(editor.registerUpdateListener(schedule));
-  createResizeObserver(() => [root(), options.container()], schedule);
+  // A wrapping change can resize the container and its scroll viewport.
+  // Applying it during ResizeObserver delivery invalidates ancestors already
+  // measured in that delivery. Coalesce resize work into the next frame;
+  // draft edits still measure in a microtask before their first paint.
+  createResizeObserver(
+    () => [root(), options.container()],
+    () => {
+      if (resizeFrame !== undefined) return;
+      resizeFrame = requestAnimationFrame(() => {
+        resizeFrame = undefined;
+        schedule();
+      });
+    }
+  );
   createEffect(() => {
     isCompact();
     options.container();
@@ -131,6 +145,7 @@ export function createComposerLayout(
   });
   onCleanup(() => {
     disposed = true;
+    if (resizeFrame !== undefined) cancelAnimationFrame(resizeFrame);
   });
 
   return { isCompact, hasMultilineContent };

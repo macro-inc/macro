@@ -6,7 +6,7 @@ import PushPinIcon from '@phosphor/push-pin.svg';
 import SlidersIcon from '@phosphor/sliders-horizontal.svg';
 import StackIcon from '@phosphor/stack.svg';
 import TrashIcon from '@phosphor/trash.svg';
-import { Button, cn, Dropdown, SegmentedControl, Tooltip } from '@ui';
+import { Button, cn, Dropdown, Tabs, Tooltip } from '@ui';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import { unwrap } from 'solid-js/store';
 import { useCrmContext } from '../context/crm-context';
@@ -183,6 +183,7 @@ export function CompanyViewsMenu(props: { hideLabel?: boolean } = {}) {
     <Dropdown open={open()} onOpenChange={handleOpenChange}>
       <Dropdown.Trigger
         variant="ghost"
+        size={props.hideLabel ? 'icon-md' : 'sm'}
         label={props.hideLabel ? 'Views' : undefined}
         aria-label={props.hideLabel ? 'Views' : undefined}
       >
@@ -278,7 +279,8 @@ export function CompanyViewsMenu(props: { hideLabel?: boolean } = {}) {
                 )}
               />
               <div class="flex items-center justify-between gap-1.5">
-                <SegmentedControl
+                <Tabs
+                  touch="segmented"
                   size="sm"
                   aria-label="View visibility"
                   value={saveScope()}
@@ -329,7 +331,11 @@ export function CompanyDisplayMenu() {
   return (
     <Dropdown>
       <Tooltip label="Display options">
-        <Dropdown.Trigger variant="ghost" label="Display options">
+        <Dropdown.Trigger
+          variant="ghost"
+          size="icon-md"
+          label="Display options"
+        >
           <SlidersIcon />
         </Dropdown.Trigger>
       </Tooltip>

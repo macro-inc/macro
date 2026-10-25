@@ -4,6 +4,7 @@ import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownS
 
 export function RoutinePromptEditor(props: {
   initialValue: string;
+  disabled?: boolean;
   onChange: (markdown: string) => void;
 }) {
   const editor = new EditorConfigBuilder()
@@ -19,6 +20,7 @@ export function RoutinePromptEditor(props: {
       <MarkdownShell
         config={editor}
         initialValue={props.initialValue}
+        disabled={props.disabled}
         placeholder="What should this routine do? Type @ to add context…"
         portalScope="local"
         class="min-h-28"

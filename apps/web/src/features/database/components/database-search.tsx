@@ -1,3 +1,4 @@
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import XIcon from '@phosphor/x.svg';
 import { Button } from '@ui/components/Button';
@@ -68,19 +69,20 @@ export function DatabaseSearch(props: {
     <Show
       when={props.isOpen}
       fallback={
-        <Button
-          ref={searchButton}
-          type="button"
-          variant="ghost"
-          size="md"
-          square
-          label="Search"
-          aria-keyshortcuts="Control+F Meta+F"
-          tooltip="Search every table"
-          onClick={() => props.onOpen()}
-        >
-          <MagnifyingGlassIcon class="size-3.5" />
-        </Button>
+        <HeaderActionGroup label="Search">
+          <Button
+            ref={searchButton}
+            type="button"
+            variant="ghost"
+            size="icon-md"
+            label="Search"
+            aria-keyshortcuts="Control+F Meta+F"
+            tooltip="Search every table"
+            onClick={() => props.onOpen()}
+          >
+            <MagnifyingGlassIcon class="size-4 touch:size-3.5" />
+          </Button>
+        </HeaderActionGroup>
       }
     >
       <div

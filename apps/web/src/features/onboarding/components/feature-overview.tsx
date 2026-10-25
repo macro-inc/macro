@@ -1,3 +1,4 @@
+import { WorkspaceTexture } from '@app/components/WorkspaceTexture';
 import Logo from '@icon/macro-logo.svg';
 import Sheet from '@icon/wide-spreadsheet.svg';
 import CRM from '@phosphor/buildings.svg';
@@ -19,7 +20,6 @@ import { makePersisted } from '@solid-primitives/storage';
 import { createSignal, createUniqueId, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { ContinueButton } from './controls';
-import { WorkspaceTexture } from './workspace-texture';
 import './feature-overview.css';
 
 // Matching connector names let StoryStage carry the actual welcome icons here.

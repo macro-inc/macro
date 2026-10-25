@@ -66,6 +66,9 @@ pub enum PgDatabasesRepoError {
     /// This build cannot interpret the persisted journal payload format.
     #[error("unsupported database journal payload version {0}")]
     UnsupportedJournalPayloadVersion(i32),
+    /// The canonical team-share writer failed.
+    #[error("team share: {0}")]
+    TeamShare(rootcause::Report<share_permission_db_utils::team_share::TeamShareError>),
 }
 
 /// The UUIDs of typed ids, for a statement's `ANY($n)`.

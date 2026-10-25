@@ -51,34 +51,58 @@ const listed: ListedDatabase[] = [
   },
 ];
 
+const none: ReadonlySet<string> = new Set();
+
 describe('Drive database listing', () => {
   it('separates owned and shared databases and excludes trash', () => {
     expect(
-      selectDriveDatabases(listed, selection, 'me').map((entity) => entity.id)
+      selectDriveDatabases(listed, selection, 'me', none).map(
+        (entity) => entity.id
+      )
     ).toEqual(['mine']);
     expect(
       selectDriveDatabases(
         listed,
         { ...selection, location: { kind: 'tab', tab: 'shared' } },
-        'me'
+        'me',
+        none
       ).map((entity) => entity.id)
     ).toEqual(['shared']);
     expect(
-      selectDriveDatabases(listed, { ...selection, scope: 'all' }, 'me').map(
-        (entity) => entity.id
-      )
+      selectDriveDatabases(
+        listed,
+        { ...selection, scope: 'all' },
+        'me',
+        none
+      ).map((entity) => entity.id)
     ).toEqual(['mine', 'shared']);
+  });
+  it('leaves out the databases made for forms kept out of Drive', () => {
+    expect(
+      selectDriveDatabases(
+        listed,
+        { ...selection, scope: 'all' },
+        'me',
+        new Set(['shared'])
+      ).map((entity) => entity.id)
+    ).toEqual(['mine']);
   });
   it('searches names without depending on the document search service', () => {
     expect(
       selectDriveDatabases(
         listed,
         { ...selection, search: ' PRODUCT ' },
-        'me'
+        'me',
+        none
       ).map((entity) => entity.id)
     ).toEqual(['mine']);
     expect(
-      selectDriveDatabases(listed, { ...selection, search: 'customer' }, 'me')
+      selectDriveDatabases(
+        listed,
+        { ...selection, search: 'customer' },
+        'me',
+        none
+      )
     ).toEqual([]);
   });
   it('does not claim folder membership, attachment status or view history', () => {
@@ -93,13 +117,15 @@ describe('Drive database listing', () => {
       } satisfies DriveSelection,
       { ...selection, scope: 'attachments' } satisfies DriveSelection,
     ]) {
-      expect(selectDriveDatabases(listed, selected, 'me')).toEqual([]);
+      expect(selectDriveDatabases(listed, selected, 'me', none)).toEqual([]);
     }
-    expect(selectDriveDatabases(listed, selection, undefined)).toEqual([]);
+    expect(selectDriveDatabases(listed, selection, undefined, none)).toEqual(
+      []
+    );
   });
   it('preserves scope through the normalized list filter and sorts the available timestamp', () => {
     const selected = { ...selection, scope: 'all' } satisfies DriveSelection;
-    const entities = selectDriveDatabases(listed, selected, 'me');
+    const entities = selectDriveDatabases(listed, selected, 'me', none);
     expect(
       entities.every((entity) =>
         driveEntityMatchesLocation(entity, selected, 'me')

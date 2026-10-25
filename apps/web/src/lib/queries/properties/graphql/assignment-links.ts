@@ -29,7 +29,7 @@ function propertyParent(
     .with('COMPANY', () => 'GraphqlSoupCrmCompany' as const)
     .with('DATABASE_ROW', () => 'GraphqlSoupDatabaseRow' as const)
     .with('USER', () => undefined)
-    .exhaustive();
+    .exhaustive(() => undefined);
   return typename
     ? selectRecord(PropertyAssignmentParentFragmentDoc, {
         __typename: typename,

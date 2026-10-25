@@ -978,7 +978,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                   inputRef()?.focus({ preventScroll: true });
                 }
               }}
-              class="z-modal-content translate-y-1 rounded-xl p-1.5 glass bg-menu-glass menu-open-animation text-sm [--color-surface:var(--color-menu)]"
+              class="menu-surface z-modal-content translate-y-1 p-1.5 menu-open-animation text-sm"
             >
               <Combobox.Listbox
                 ref={setListboxRef}

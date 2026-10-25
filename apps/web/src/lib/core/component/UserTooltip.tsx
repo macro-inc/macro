@@ -34,7 +34,7 @@ export function UserTooltip(props: UserTooltipProps) {
   };
 
   return (
-    <Surface depth={2} class="glass bg-menu-glass rounded-xl">
+    <Surface depth={2} hideBorder class="menu-surface rounded-xl">
       <div class="text-ink max-w-lg">
         <div class="flex items-center gap-2 p-2">
           <UserIcon

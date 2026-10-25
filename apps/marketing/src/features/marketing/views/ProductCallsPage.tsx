@@ -6,6 +6,7 @@ import {
 } from '../components/calls/CallStories';
 import { CallsComparison } from '../components/calls/CallsComparison';
 import { CallTeamMemoryDemo } from '../components/calls/CallTeamMemoryDemo';
+import { DemoInteractionBoundary } from '../components/DemoInteractionBoundary';
 import { FeaturePageFaq, FeaturePageSection } from '../components/FeaturePage';
 import { HomepageClosing } from '../components/HomepageClosing';
 import {
@@ -18,27 +19,47 @@ import './calls-page.css';
 
 const callsFaq = [
   {
-    q: 'Can I bring my Granola transcripts into Macro?',
-    a: 'Yes. Bring your Granola transcripts into Macro so your agents can use them alongside your tasks, docs, and email. You can keep using Granola with your current meeting app.',
-  },
-  {
-    q: 'Are calls recorded automatically?',
-    a: 'Yes. Macro records, transcribes, and summarizes calls. Participants see a recording and transcription notice.',
-  },
-  {
-    q: 'Who can access the recording and transcript?',
-    a: 'The organizer and signed-in participants have access to the saved call. Additional access depends on the call’s sharing settings. Agents can only read calls you have access to.',
-  },
-  {
-    q: 'Can guests join without a Macro account?',
-    a: 'Yes. Share a link to an instant or scheduled meeting and guests can join in their browser without creating an account.',
-  },
-  {
-    q: 'Are calls included in the free plan?',
+    q: 'How do I start a call?',
     a: (
       <>
-        Calls, recording, and transcription are included in the paid plan. See{' '}
-        <a href="/pricing">pricing</a> for details.
+        Start from Calls, a channel, or a direct message. You can also create a
+        meeting link for an instant or scheduled call. See the{' '}
+        <a href="https://docs.macro.com/product/calls">calls guide</a>.
+      </>
+    ),
+  },
+  {
+    q: 'Can someone join without a Macro account?',
+    a: 'Yes. Guests can join standalone meeting links in their browser without an account. Channel-linked calls require sign-in.',
+  },
+  {
+    q: 'Are calls recorded and transcribed?',
+    a: 'Yes. Participants see a recording and transcription notice. After the call, open its recording, transcript, and summary in Calls.',
+  },
+  {
+    q: 'Can an agent turn a call into next steps?',
+    a: (
+      <>
+        Yes. Ask an agent to use an accessible transcript to draft a follow-up,
+        create tasks, or update customer records. See{' '}
+        <a href="/agents">Macro Agents</a>.
+      </>
+    ),
+  },
+  {
+    q: 'Who can read the recording and transcript?',
+    a: 'Channel calls share with the creator’s team by default; turn off Share with team to prevent that. Standalone meetings are not shared to the wider team automatically. Signed-in participants retain access to their recordings.',
+  },
+  {
+    q: 'Can I use transcripts from another meeting app?',
+    a: 'You can bring a transcript into Macro as a document and use it as agent context. This is separate from recording a call in Macro.',
+  },
+  {
+    q: 'Which plan includes calls?',
+    a: (
+      <>
+        Calls, recording, and transcription are included in paid plans. See{' '}
+        <a href="/pricing">current pricing</a> for details.
       </>
     ),
   },
@@ -79,13 +100,13 @@ export function RouteCalls() {
         <ProductHero
           cta="calls_hero_get_started"
           product="Calls"
-          title={['Turn your conversations into', 'tasks and updates.']}
+          title={['Call from anywhere in Macro', 'with every call recorded.']}
           description={[
-            'Macro records and transcribes your calls.',
-            'Ask your agent to handle the follow-up.',
+            'Macro records and transcribes your calls',
+            'so your agent can handle what comes next.',
           ]}
         />
-        <CallHeroDemo />
+        <DemoInteractionBoundary render={() => <CallHeroDemo />} />
         <nav class="feature-page-jump-links" aria-label="On this page">
           <a href="#call-start" onClick={revisitSection}>
             <CallGraphic />
@@ -102,32 +123,36 @@ export function RouteCalls() {
         </nav>
         <FeaturePageSection
           id="call-start"
-          title="Start a call in one click."
-          description={'Click Call in a channel or DM.'}
+          title={[
+            'Start a call in channels, DMs,',
+            'or through meeting links.',
+          ]}
+          description="You can start calls from channels, DMs, or through meeting links. People outside of Macro can join your meeting links. Create your own booking links so people can set up times with you."
         >
-          <div class="feature-page-visual">
-            <CallStartDemo />
-          </div>
+          <DemoInteractionBoundary
+            class="feature-page-visual"
+            render={() => <CallStartDemo />}
+          />
         </FeaturePageSection>
         <FeaturePageSection
           id="call-followup"
-          title="Update tasks from your calls."
-          description="Ask an agent to update the owner and next steps from your call."
+          title={['Turn what was said on', 'your calls into next steps.']}
+          description="Tell your agent to turn what was said on a call into tasks, follow-up emails, and CRM updates. Your agent can read the transcript and determine who said what."
         >
-          <div class="feature-page-visual">
-            <CallFollowupDemo />
-          </div>
+          <DemoInteractionBoundary
+            class="feature-page-visual"
+            render={() => <CallFollowupDemo />}
+          />
         </FeaturePageSection>
         <FeaturePageSection
           id="call-default"
-          title="Your team can catch up without being there."
-          description={
-            'Share a call’s recording, transcript, and summary with your team.'
-          }
+          title={['View call recordings', 'after they finish.']}
+          description="After calls finish, you can go back and watch the recording, review the transcript, or get a summary of what was said. Call recordings are shareable across your team."
         >
-          <div class="feature-page-visual">
-            <CallTeamMemoryDemo />
-          </div>
+          <DemoInteractionBoundary
+            class="feature-page-visual"
+            render={() => <CallTeamMemoryDemo />}
+          />
         </FeaturePageSection>
         <CallsComparison />
         <FeaturePageFaq

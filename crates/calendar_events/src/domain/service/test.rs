@@ -8,8 +8,8 @@ use crate::domain::{
         CalendarOccurrence, CalendarSyncStatus, DisconnectedCalendar, EventReminders, EventStatus,
         EventTime, EventTransparency, EventType, EventVisibility, GOOGLE_CALENDAR_FULL_SCOPE,
         GOOGLE_CALENDAR_SCOPES, GoogleBackfillRunReport, GoogleCalendarSyncSnapshot,
-        GoogleEventSyncBatch, GoogleWatchChannel, GoogleWatchConfig, ProviderCalendar,
-        ProviderEventSource, StoredGoogleCalendar,
+        GoogleEventSyncBatch, GoogleWatchChannel, GoogleWatchConfig, GuestPolicy, ProviderCalendar,
+        ProviderEventSource, StoredGoogleCalendar, ViewerCapabilities,
     },
     ports::{
         CalendarBackfillRepository, CalendarEventWrite, CalendarProviderError,
@@ -105,6 +105,61 @@ impl CalendarRepository for FakeRepo {
             .collect())
     }
 
+    async fn meeting_copies(
+        &self,
+        _requester_id: &str,
+        _event_id: Uuid,
+    ) -> Result<Vec<crate::domain::models::MeetingCopy>, Report> {
+        Ok(Vec::new())
+    }
+
+    async fn event_export(
+        &self,
+        _requester_id: &str,
+        _event_id: Uuid,
+    ) -> Result<Option<crate::domain::ics::CalendarEventExport>, Report> {
+        unreachable!("event export is not exercised by sync tests")
+    }
+
+    async fn open_join_request(
+        &self,
+        _event_id: Uuid,
+        _requester_id: &str,
+        _requester_email: &str,
+    ) -> Result<(crate::domain::join_requests::CalendarJoinRequest, bool), Report> {
+        unreachable!("join requests are not exercised by sync tests")
+    }
+
+    async fn find_join_request(
+        &self,
+        _event_id: Uuid,
+        _requester_id: &str,
+    ) -> Result<Option<crate::domain::join_requests::CalendarJoinRequest>, Report> {
+        unreachable!("join requests are not exercised by sync tests")
+    }
+
+    async fn list_pending_join_requests(
+        &self,
+        _event_id: Uuid,
+    ) -> Result<Vec<crate::domain::join_requests::CalendarJoinRequest>, Report> {
+        unreachable!("join requests are not exercised by sync tests")
+    }
+
+    async fn get_join_request(
+        &self,
+        _request_id: Uuid,
+    ) -> Result<Option<crate::domain::join_requests::CalendarJoinRequest>, Report> {
+        unreachable!("join requests are not exercised by sync tests")
+    }
+
+    async fn resolve_join_request(
+        &self,
+        _request_id: Uuid,
+        _status: crate::domain::join_requests::CalendarJoinRequestStatus,
+    ) -> Result<Option<crate::domain::join_requests::CalendarJoinRequest>, Report> {
+        unreachable!("join requests are not exercised by sync tests")
+    }
+
     async fn list_team_out_of_office(
         &self,
         _requester_id: &str,
@@ -135,6 +190,22 @@ impl CalendarRepository for FakeRepo {
         unreachable!("mutation lookups are not exercised by sync tests")
     }
 
+    async fn get_event_details(
+        &self,
+        _event_id: Uuid,
+        _occurrence_key: Option<&str>,
+    ) -> Result<Option<crate::domain::models::EventDetails>, Report> {
+        unreachable!("mutation lookups are not exercised by sync tests")
+    }
+
+    async fn record_guest_policy(
+        &self,
+        _event_id: Uuid,
+        _policy: GuestPolicy,
+    ) -> Result<(), Report> {
+        unreachable!("mutation writes are not exercised by sync tests")
+    }
+
     async fn get_creation_target(
         &self,
         _requester_id: &str,
@@ -155,7 +226,10 @@ impl CalendarRepository for FakeRepo {
         Ok(None)
     }
 
-    async fn owned_inbox_emails(&self, _requester_id: &str) -> Result<Vec<String>, Report> {
+    async fn owned_inboxes(
+        &self,
+        _requester_id: &str,
+    ) -> Result<Vec<crate::domain::models::OwnedInbox>, Report> {
         Ok(Vec::new())
     }
 
@@ -328,6 +402,9 @@ fn valid_upsert() -> CalendarEventUpsert {
                 comment: None,
             }],
             reminders: EventReminders::default(),
+            guest_policy: GuestPolicy::default(),
+            is_snapshot: false,
+            viewer_can: ViewerCapabilities::NONE,
             created_at: starts_at,
             updated_at: starts_at,
         },

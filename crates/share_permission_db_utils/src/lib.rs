@@ -2,6 +2,19 @@
 
 pub mod team_share;
 
+/// Create private sharing state for an entity, without team defaults or grants.
+pub async fn create_private_share_permission<'e, E>(
+    executor: E,
+    id: &str,
+) -> Result<(), sqlx::Error>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Postgres>,
+{
+    sqlx::query!(r#"INSERT INTO "SharePermission" (id, "linkShare", "linkShareAccessLevel") VALUES ($1, NULL, NULL)"#, id)
+        .execute(executor).await?;
+    Ok(())
+}
+
 use anyhow::Context;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use models_permissions::share_permission::access_level::AccessLevel;
@@ -113,12 +126,7 @@ where
             sqlx::query_scalar!(
                 r#"
                 SELECT share_permission_id as "share_permission_id!"
-                FROM (
-                    SELECT share_permission_id FROM calls WHERE id = $1
-                    UNION ALL
-                    SELECT share_permission_id FROM call_records WHERE id = $1
-                ) t
-                LIMIT 1
+                FROM call_entities WHERE id = $1
                 "#,
                 item_id,
             )

@@ -112,7 +112,8 @@ class CallService : Service() {
             .setSmallIcon(android.R.drawable.sym_call_incoming).setContentTitle(Calls.title ?: call?.title ?: "Macro call")
             .setCategory(NotificationCompat.CATEGORY_CALL).setOngoing(true).setOnlyAlertOnce(true)
             .setSilent(!ringing)
-            .setContentIntent(screen(this)).setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            // Like the system dialer and CallKit, show who is calling and the call controls on the lock screen.
+            .setContentIntent(screen(this)).setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setFullScreenIntent(if (ringing) screen(this) else null, ringing)
         if (call != null) {
             val person = Person.Builder().setName((Calls.title ?: call.title).ifBlank { "Macro call" }).setImportant(true).build()

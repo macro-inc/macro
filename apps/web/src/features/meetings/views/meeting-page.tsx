@@ -1,16 +1,18 @@
+import { getCallExitPath } from '@channel/Call/call-exit';
 import type { BackgroundEffect } from '@core/media/background-effect';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { Telemetry } from '@macro-inc/observability';
 import ArrowLeft from '@phosphor/arrow-left.svg';
 import Phone from '@phosphor/phone-call.svg';
-import { Button } from '@ui';
+import { Button, Input } from '@ui';
 import {
   type Accessor,
-  batch,
   createEffect,
   createSignal,
   type JSX,
   Match,
   on,
+  onCleanup,
   Show,
   Switch,
 } from 'solid-js';
@@ -21,6 +23,7 @@ import {
   type MeetingParticipantsState,
 } from '../components/meeting-participants';
 import type {
+  MeetingCredentials,
   MeetingPageState,
   MeetingSessionCapabilities,
 } from '../context/meeting-session';
@@ -48,16 +51,24 @@ export function MeetingPage(props: {
   /** The host keeps the URL in sync without replacing this session owner. */
   onCallStateChange?: (connected: boolean) => void;
   /** Explicit hangup, distinct from losing the connection or cancelling setup. */
-  onLeave?: () => void;
+  onLeave?: (path: string) => void;
   /** Supplied only for the creator's New Call setup flow. */
   renderInvite?: (joining: Accessor<boolean>) => JSX.Element;
   /** Login redirect for channel-linked calls, which are members-only. */
   onSignIn?: () => void;
-  renderCall: (onLeave: () => void, name: Accessor<string>) => JSX.Element;
+  renderCall: (
+    onLeave: () => void,
+    name: Accessor<string>,
+    credentials: Accessor<MeetingCredentials | undefined>
+  ) => JSX.Element;
 }) {
   const session = createMeetingSession(props.session);
   const [name, setName] = createSignal('');
   const [leaving, setLeaving] = createSignal(false);
+  let disposed = false;
+  onCleanup(() => {
+    disposed = true;
+  });
   const media = createMeetingMedia(props.mediaAccess, props.initialBackground);
   const [uploadingBackground, setUploadingBackground] = createSignal(false);
   const ready = () => {
@@ -74,7 +85,11 @@ export function MeetingPage(props: {
     props.session.activeCallId() === session.joinedCallId() &&
     props.session.isInCall();
 
-  createEffect(on(inCall, (connected) => props.onCallStateChange?.(connected)));
+  createEffect(
+    on(inCall, (connected) => {
+      if (!leaving()) props.onCallStateChange?.(connected);
+    })
+  );
 
   async function warmup() {
     try {
@@ -106,23 +121,43 @@ export function MeetingPage(props: {
       return;
     // The call publishes the preview tracks rather than re-opening the
     // devices, so the waiting room is the only place permission is asked.
-    return session.join(props.authenticated() ? undefined : name(), {
-      microphoneEnabled: media.microphoneEnabled(),
-      cameraEnabled: media.cameraEnabled(),
-      microphoneDeviceId: media.selectedDevices().microphone,
-      cameraDeviceId: media.selectedDevices().camera,
-      speakerDeviceId: media.selectedDevices().speaker,
-      backgroundEffect: media.backgroundEffect(),
-      localTracks: media.handoff(),
-    });
+    return session.join(
+      props.authenticated() ? undefined : name(),
+      {
+        microphoneEnabled: media.microphoneEnabled(),
+        cameraEnabled: media.cameraEnabled(),
+        microphoneDeviceId: media.selectedDevices().microphone,
+        cameraDeviceId: media.selectedDevices().camera,
+        speakerDeviceId: media.selectedDevices().speaker,
+        backgroundEffect: media.backgroundEffect(),
+        localTracks: media.handoff(),
+      },
+      media.diagnostics()
+    );
   };
-  const leave = () => {
-    batch(() => {
-      setLeaving(true);
-      fireAndForget(session.leave(), 'meetings');
-      props.onLeave?.();
+  async function leave() {
+    if (leaving()) return;
+    const callId = session.joinedCallId();
+    const channelId = ready()?.channelId;
+    const scheduledStart = ready()?.scheduledStart;
+    const authenticated = props.authenticated() === true;
+    setLeaving(true);
+    await Telemetry.span('meeting.leave', async (span) => {
+      if (callId) span.setAttr('call.id', callId);
+      const result = await session.leave();
+      if (disposed) return;
+      const path = getCallExitPath({
+        authenticated,
+        callId,
+        channelId,
+        scheduledStart,
+        callEnded: result?.callEnded,
+      });
+      span.setAttr('call.leave.ended', result?.callEnded ?? false);
+      span.setAttr('call.leave.destination', path);
+      props.onLeave?.(path);
     });
-  };
+  }
 
   return (
     <main class="ph-no-capture flex h-dvh min-h-0 flex-col bg-surface p-4 text-ink sm:p-6">
@@ -170,7 +205,11 @@ export function MeetingPage(props: {
         </Match>
         <Match when={inCall()}>
           <div class="min-h-0 flex-1">
-            {props.renderCall(leave, displayName)}
+            {props.renderCall(
+              () => fireAndForget(leave(), 'meetings'),
+              displayName,
+              session.credentials
+            )}
           </div>
         </Match>
         <Match when={props.source().kind === 'loading'}>
@@ -260,8 +299,8 @@ export function MeetingPage(props: {
               >
                 <label class="flex flex-col gap-2 text-sm font-medium">
                   Your name
-                  <input
-                    class="rounded-lg border border-edge-muted bg-input px-3 py-2.5 text-ink placeholder:text-ink-placeholder outline-none focus:border-accent"
+                  <Input
+                    size="lg"
                     placeholder="Enter your name"
                     autocomplete="name"
                     value={name()}

@@ -1,9 +1,10 @@
 import BuildingOffice from '@phosphor/building-office.svg';
-import { createEffect, createSignal, For, on, Show } from 'solid-js';
+import { createEffect, createSignal, For, type JSX, on, Show } from 'solid-js';
 import type { WorkspaceView } from '../../core/dummy-workspace';
 import { homepagePeople } from '../../core/homepage-demo-people';
 import { dealStages, type SampleCompany } from '../../core/workspace-fixtures';
 import type { DummyWorkspace } from '../../primitives/createDummyWorkspace';
+import type { ChannelComposerHandle } from '../email/frozen/ChannelComposer';
 import { SearchBar } from '../email/frozen/SearchBar';
 import { CompanyRecord, type CompanySection, StageIcon } from './CompanyRecord';
 
@@ -32,6 +33,12 @@ const byRecency = (a: SampleCompany, b: SampleCompany) =>
  */
 export function WorkspaceCompanies(props: {
   workspace: DummyWorkspace;
+  hideCopyLink?: boolean;
+  onComposerReady?: (handle: ChannelComposerHandle | undefined) => void;
+  richComposer?: boolean;
+  onOpenCall?: (id: string) => void;
+  onOpenTask?: (id: string) => void;
+  pipeline?: (company: SampleCompany) => JSX.Element;
   /** The floating details panel is closed by default, as in the app. */
   initialPanelOpen?: boolean;
   section?: CompanySection;
@@ -205,8 +212,14 @@ export function WorkspaceCompanies(props: {
     >
       {(company) => (
         <CompanyRecord
+          onComposerReady={props.onComposerReady}
+          richComposer={props.richComposer}
           workspace={w}
           company={company()}
+          onOpenCall={props.onOpenCall}
+          onOpenTask={props.onOpenTask}
+          hideCopyLink={props.hideCopyLink}
+          pipeline={props.pipeline?.(company())}
           section={props.section ?? localSection()}
           onSectionChange={(section) => {
             setLocalSection(section);

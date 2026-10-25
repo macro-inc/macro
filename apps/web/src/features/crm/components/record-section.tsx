@@ -18,7 +18,7 @@ export function RecordSection(
       aria-label={props.title}
       class="@container/record flex size-full min-h-0 flex-col"
     >
-      <div class="flex min-h-12 min-w-0 shrink-0 flex-wrap items-center gap-3 px-4 py-2">
+      <div class="flex min-h-12 min-w-0 shrink-0 flex-wrap items-center gap-3 px-4 py-2 touch:pt-[calc(var(--mobile-content-inset-top,0px)+0.5rem)]">
         <SearchBar
           size="sm"
           label={`Search ${props.title.toLowerCase()}`}
@@ -36,7 +36,7 @@ export function RecordSection(
           </div>
         </Show>
       </div>
-      <div class="min-h-0 flex-1 overflow-y-auto px-2 pb-6">
+      <div class="min-h-0 flex-1 overflow-y-auto px-2 pb-6 touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+1.5rem)] touch:[--mobile-content-inset-top:0px]">
         {props.children}
       </div>
     </section>

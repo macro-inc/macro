@@ -17,6 +17,7 @@ import {
 import { LauncherMenuItem, useRecentCreateMenuBlocks } from '../Launcher';
 import type { CreatableBlock } from '../types';
 import { CarouselCards } from './CarouselCards';
+import { CreateMenuAction } from './CreateMenuAction';
 import { LauncherDetails } from './LauncherDetails';
 
 /** Inline previews using Jacob's layout proportions and the existing static icons. */
@@ -196,9 +197,29 @@ export function CreateMenuPreview(props: {
         </Show>
       </Show>
       <Show when={props.layout !== 'carousel'}>
-        <div class="flex h-9 shrink-0 items-center gap-4 px-5 text-xs text-ink-extra-muted">
+        <div
+          class={cn(
+            'relative flex shrink-0 items-center gap-4 px-5 text-xs text-ink-extra-muted',
+            props.layout === 'details'
+              ? 'min-h-12 border-t border-edge-divider'
+              : 'h-9'
+          )}
+        >
           <span>↑ ↓ Navigate</span>
-          <span>↵ Choose</span>
+          <Show when={props.layout !== 'details'}>
+            <span>↵ Choose</span>
+          </Show>
+          <Show when={props.layout === 'details' && items()[c.selectedIndex()]}>
+            {(item) => (
+              <div class="absolute right-2 bottom-2">
+                <CreateMenuAction
+                  item={item()}
+                  shiftHeld={pressedKeys().has('shift')}
+                  onChoose={props.onChoose}
+                />
+              </div>
+            )}
+          </Show>
         </div>
       </Show>
     </div>

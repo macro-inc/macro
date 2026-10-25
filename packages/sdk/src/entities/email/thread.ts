@@ -5,11 +5,17 @@ import type {
   MailboxOperation,
   UpdateThreadStateRequest,
 } from '../../../generated/email/types.gen';
+import type { EmailFollowupCommand } from '../../../generated/storage/types.gen';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { PropertiedEntity } from '../entity';
 import { Project } from '../projects/project';
 import { entitySearch } from '../search';
+import { EntityAccess } from '../sharing/access';
+import {
+  type SharePermissionOptions,
+  sharePermissionBody,
+} from '../sharing/permissions';
 import { EmailAttachment } from './attachment';
 import type { Label } from './label';
 import { Link } from './link';
@@ -38,6 +44,58 @@ export interface ReplyEmailOptions {
  * up to the first 100 messages) loads lazily on first field access.
  */
 export class EmailThread extends PropertiedEntity<ThreadDetail> {
+  /** Access requests and direct user grants. */
+  readonly access = new EntityAccess(this.client, 'email_thread', this);
+
+  /** Read follow-up state for this thread. */
+  async followup() {
+    return unwrap(
+      await this.client.storage.getEmailFollowup({
+        path: { thread_id: this.id },
+      }),
+    );
+  }
+
+  /** Set or remove a follow-up using a persisted operation id and revision. */
+  async setFollowup(command: EmailFollowupCommand) {
+    return unwrap(
+      await this.client.storage.setEmailFollowup({
+        path: { thread_id: this.id },
+        body: command,
+      }),
+    );
+  }
+
+  /** Calendar invitations resolved from this thread's messages. */
+  async calendarInvitations() {
+    return unwrap(
+      await this.client.email.getThreadCalendarInvitations({
+        path: { thread_id: this.id },
+      }),
+    );
+  }
+
+  /** Change project membership or share permissions for this thread. */
+  async update(options: {
+    project?: Project | null;
+    sharePermission?: SharePermissionOptions;
+  }): Promise<void> {
+    await this.mutate((c) =>
+      c.storage.editThreadV2({
+        path: { thread_id: this.id },
+        body: {
+          projectId:
+            options.project === undefined
+              ? undefined
+              : (options.project?.id ?? null),
+          sharePermission: options.sharePermission
+            ? sharePermissionBody(options.sharePermission)
+            : undefined,
+        },
+      }),
+    );
+  }
+
   /** Favorites identify email threads as `email_thread`. */
   readonly entityType = 'email_thread';
 

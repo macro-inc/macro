@@ -782,13 +782,18 @@ where
         let bot = self.ensure_manageable(caller.clone(), bot_id).await?;
         if let Some(BotOwner::Team { team_id }) = &bot.owner
             && bot.created_by.as_deref() != Some(caller.as_ref())
-            && !self
-                .repo
-                .user_owns_team(caller.clone(), *team_id)
-                .await
-                .map_err(|err| BotError::Repo(err.into()))?
         {
-            return Err(BotError::Unauthorized);
+            let allowed = if bot.has_agent {
+                self.repo
+                    .user_can_administer_team(caller.clone(), *team_id)
+                    .await
+            } else {
+                self.repo.user_owns_team(caller.clone(), *team_id).await
+            }
+            .map_err(|err| BotError::Repo(err.into()))?;
+            if !allowed {
+                return Err(BotError::Unauthorized);
+            }
         }
         if !self
             .repo

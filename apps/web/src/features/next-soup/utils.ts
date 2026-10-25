@@ -87,7 +87,6 @@ import {
   getChannelNotificationParams,
   getDocumentCommentLocation,
   getDocumentCommentNotification,
-  markNotificationsForEntityAsReadInBackground,
   type NotificationSource,
   notificationIsRead,
   setDoneOverride,
@@ -730,8 +729,13 @@ export const openEntityInSplitFromUnifiedList = async (
           threadId: channelMessageTarget.threadId,
         }
       : undefined);
+  // A row keeps pointing at its comment notification until that notification is
+  // done, so on touch — where the thread is a drawer over the whole page, not a
+  // margin card beside the text — the row would cover the document with the
+  // same comment on every open. A tap on a document row asks for the document;
+  // the notification list still opens the comment itself.
   const commentParams =
-    !target && entity.type === 'document'
+    !target && entity.type === 'document' && !isTouchDevice()
       ? getDocumentCommentTarget(entity)?.params
       : undefined;
 
@@ -883,21 +887,7 @@ export function markChannelNotificationsSeenOnOpen(
   });
 }
 
-/** Mark calendar-event notifications seen when opening their occurrence. */
-export function markCalendarNotificationSeenOnOpen(
-  entity: EntityData,
-  notificationSource: NotificationSource
-) {
-  // Calendar events open a component split without a block to clear notifications.
-  if (entity.type !== 'calendar_event') return;
-  fireAndForget(
-    markNotificationsForEntityAsReadInBackground(notificationSource, {
-      type: entity.type,
-      id: entity.id,
-    }),
-    'open-entity-in-split'
-  );
-}
+export { markCalendarNotificationSeenOnOpen } from '../calendar/mark-event-notifications-seen';
 
 /**
  * The event and instance a calendar row points at, resolved exactly as the

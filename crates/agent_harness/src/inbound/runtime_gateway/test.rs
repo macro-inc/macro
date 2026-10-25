@@ -25,6 +25,7 @@ struct FakeJwtValidator;
 impl JwtValidator for FakeJwtValidator {
     fn validate(&self, jwt: &str) -> Result<ValidatedIdentity, Report<MacroAuthorizationError>> {
         Ok(ValidatedIdentity {
+            agent_id: None,
             user_id: jwt.to_string(),
             fusion_user_id: "fusion-user".to_string(),
             organization_id: None,
@@ -56,6 +57,7 @@ impl HarnessAuthorizer for SelfHarnessAuthorizer {
                 user_id: user_id.clone(),
             },
             acting_user: MacroUserAuthentication {
+                agent_id: None,
                 macro_user_id,
                 user_context: model_user::UserContext {
                     user_id,

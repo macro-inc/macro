@@ -335,7 +335,6 @@ export function DispatchAgentButton(
         variant="outline"
         size={props.showPrimaryLabel ? 'md' : 'icon-sm'}
         depth={2}
-        class={props.showPrimaryLabel ? 'h-8' : undefined}
       >
         <Dynamic
           component={lastUsed().key === 'copy' ? CopyButton : Button}
@@ -356,8 +355,7 @@ export function DispatchAgentButton(
         <ButtonGroup.Divider />
         <Dropdown.Trigger
           variant="outline"
-          size={props.showPrimaryLabel ? 'md' : 'icon-sm'}
-          class="px-2"
+          size={props.showPrimaryLabel ? 'icon-md' : 'icon-sm'}
           label="Agent options"
         >
           <CaretDown class="size-3.5!" />

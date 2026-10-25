@@ -1,5 +1,6 @@
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
+import PlusIcon from '@phosphor/plus.svg';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { hasValue } from '@property/utils/typeGuards';
 import { Button } from '@ui/components/Button';
@@ -30,6 +31,7 @@ const CARD_PROPERTY_IDS = [
 export function TaskBoardView(props: {
   data: TaskBoardData;
   onOpen(task: TaskBoardTask, event: MouseEvent): void;
+  onCreate?: (columnId: string) => void;
   ref?: (element: HTMLDivElement) => void;
 }) {
   const { state, source, projectsEnabled, setFacets } = useTasksView();
@@ -250,6 +252,18 @@ export function TaskBoardView(props: {
                   grouping={grouping()}
                   createAssigneeName={props.data.createAssigneeName}
                 />
+                <Show when={props.onCreate}>
+                  <div class="ml-auto flex shrink-0">
+                    <Button
+                      size="icon-sm"
+                      variant="ghost"
+                      label={`Add task to ${column().label}`}
+                      onClick={() => props.onCreate?.(column().id)}
+                    >
+                      <PlusIcon />
+                    </Button>
+                  </div>
+                </Show>
               </TaskBoard.Header>
               <TaskBoard.DropOverlay>
                 Board sorted by {sortLabel()}

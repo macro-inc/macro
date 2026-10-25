@@ -2,7 +2,8 @@
 
 use crate::{
     account_link_state::{
-        AccountLinkState, AccountLinkStateKey, LinkProvider, sign_account_link_state,
+        AccountLinkState, AccountLinkStateKey, AdminConsentKind, AdminConsentState, LinkProvider,
+        sign_account_link_state, sign_admin_consent_state,
     },
     domain::microsoft::{token::MicrosoftRefreshToken, *},
 };
@@ -59,6 +60,24 @@ impl MicrosoftIdentityProvider for MicrosoftOAuthProvider {
                 &attempt.nonce,
                 attempt.calendar_requested,
             )
+            .map_err(|_| MicrosoftAuthError::NotConfigured)
+    }
+
+    fn admin_consent_url(
+        &self,
+        redirect_uri: &str,
+        return_uri: &str,
+        calendar: bool,
+    ) -> Result<String, MicrosoftAuthError> {
+        let state = AdminConsentState {
+            kind: AdminConsentKind::AdminConsent,
+            provider: LinkProvider::Microsoft,
+            original_url: return_uri.to_owned(),
+        };
+        let state = sign_admin_consent_state(&state, &self.state_key)
+            .map_err(|_| MicrosoftAuthError::Unavailable)?;
+        self.client
+            .construct_microsoft_admin_consent_url(redirect_uri, &state, calendar)
             .map_err(|_| MicrosoftAuthError::NotConfigured)
     }
 

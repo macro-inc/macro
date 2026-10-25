@@ -58,7 +58,10 @@ function sameAsCalendar(person: CalendarPerson, calendar: CalendarSource) {
   );
 }
 
-function findOrganizer(event: CalendarEvent): CalendarPerson | undefined {
+/** Who organizes the event, whether or not event details show them. */
+export function findOrganizer(
+  event: CalendarEvent
+): CalendarPerson | undefined {
   const organizerAttendee = event.attendees.find(
     (attendee) => attendee.isOrganizer
   );

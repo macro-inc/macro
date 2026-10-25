@@ -4,7 +4,7 @@ import { parseTime } from '@core/util/dateSearch/parseTime';
 import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
 import CalendarIcon from '@phosphor/calendar.svg';
 import CaretRightIcon from '@phosphor/caret-right.svg';
-import { cn } from '@ui';
+import { Button, Input, Tabs } from '@ui';
 import { addDays, format } from 'date-fns';
 import { createSignal, For, onMount, Show } from 'solid-js';
 import {
@@ -45,13 +45,14 @@ function RunOnceSettings(props: {
         when={!calendar()}
         fallback={
           <>
-            <button
-              type="button"
-              class="px-2 text-left text-xs text-ink-muted hover:text-ink"
+            <Button
+              variant="ghost"
+              size="sm"
+              class="justify-self-start"
               onClick={() => setCalendar(false)}
             >
               Type a date instead
-            </button>
+            </Button>
             <div class="[&>div]:w-full [&>div]:p-0">
               <DatePickerUI
                 value={selected() ?? tomorrow}
@@ -66,7 +67,7 @@ function RunOnceSettings(props: {
           </>
         }
       >
-        <input
+        <Input
           ref={inputRef}
           aria-label="Run once date"
           placeholder="Tomorrow 9am, in 2 hours…"
@@ -78,7 +79,6 @@ function RunOnceSettings(props: {
               props.onChange({ onceAt: options()[0].date.toISOString() });
             }
           }}
-          class="w-full rounded-md border border-edge-muted bg-input px-3 py-2 text-sm outline-none focus:border-accent"
         />
         <div class="grid gap-0.5" aria-label="Suggested dates">
           <For each={options()}>
@@ -103,13 +103,14 @@ function RunOnceSettings(props: {
             </p>
           </Show>
         </div>
-        <button
-          type="button"
-          class="flex items-center gap-2 rounded-md px-2 py-2 text-sm text-ink-muted hover:bg-hover"
+        <Button
+          variant="ghost"
+          class="justify-self-start"
           onClick={() => setCalendar(true)}
         >
-          <CalendarIcon class="size-4" /> Custom date and time…
-        </button>
+          <CalendarIcon class="size-3.5 touch:size-4" />
+          Custom date and time…
+        </Button>
       </Show>
       <Show when={selected()}>
         {(date) => (
@@ -151,56 +152,43 @@ function RecurringSettings(props: {
       when={choosingZone()}
       fallback={
         <div class="grid gap-4">
-          <input
+          <Input
             ref={inputRef}
             aria-label="Describe schedule"
             placeholder="Every weekday at 9am"
             value={words()}
             onInput={(e) => describe(e.currentTarget.value)}
-            class="w-full rounded-md border border-edge-muted bg-input px-3 py-2 text-sm outline-none focus:border-accent"
           />
           <Show when={words() && !parsed()}>
             <p class="text-xs text-ink-muted">
               Try “every day at 9am”, or choose below.
             </p>
           </Show>
-          <div class="flex flex-wrap gap-1" role="group" aria-label="Repeat">
-            <For
-              each={triggerFrequencies.filter((item) => item.value !== 'once')}
-            >
-              {(item) => (
-                <button
-                  type="button"
-                  class={cn(
-                    'rounded-md px-2 py-1.5 text-xs hover:bg-hover',
-                    props.trigger.frequency === item.value
-                      ? 'bg-hover text-ink'
-                      : 'text-ink-muted'
-                  )}
-                  aria-pressed={props.trigger.frequency === item.value}
-                  onClick={() => {
-                    setWords('');
-                    props.onChange({ frequency: item.value });
-                  }}
-                >
-                  {item.value === 'custom' ? 'Cron' : item.label}
-                </button>
-              )}
-            </For>
-          </div>
+          <Tabs
+            aria-label="Repeat"
+            size="sm"
+            wrap
+            options={triggerFrequencies
+              .filter((item) => item.value !== 'once')
+              .map((item) => ({
+                value: item.value,
+                label: item.value === 'custom' ? 'Cron' : item.label,
+              }))}
+            value={props.trigger.frequency}
+            onChange={(frequency) => {
+              setWords('');
+              props.onChange({ frequency });
+            }}
+          />
           <Show when={props.trigger.frequency === 'week'}>
             <div class="flex gap-1" role="group" aria-label="Days of the week">
               <For each={WEEKDAY_OPTIONS}>
                 {(day) => (
-                  <button
-                    type="button"
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    class="flex-1"
                     aria-pressed={props.trigger.daysOfWeek.includes(day.value)}
-                    class={cn(
-                      'flex-1 rounded-md py-1.5 text-xs hover:bg-hover',
-                      props.trigger.daysOfWeek.includes(day.value)
-                        ? 'bg-hover text-ink'
-                        : 'text-ink-muted'
-                    )}
                     onClick={() =>
                       props.onChange({
                         daysOfWeek: props.trigger.daysOfWeek.includes(day.value)
@@ -212,7 +200,7 @@ function RecurringSettings(props: {
                     }
                   >
                     {day.label}
-                  </button>
+                  </Button>
                 )}
               </For>
             </div>
@@ -220,7 +208,7 @@ function RecurringSettings(props: {
           <Show when={props.trigger.frequency === 'month'}>
             <label class="flex items-center justify-between gap-3 text-xs text-ink-muted">
               Day of month
-              <input
+              <Input
                 type="number"
                 min="1"
                 max="31"
@@ -228,7 +216,7 @@ function RecurringSettings(props: {
                 onInput={(e) =>
                   props.onChange({ dayOfMonth: e.currentTarget.value })
                 }
-                class="w-16 rounded-md border border-edge-muted bg-input px-2 py-1.5 text-sm text-ink"
+                class="w-20"
               />
             </label>
           </Show>
@@ -240,7 +228,7 @@ function RecurringSettings(props: {
           >
             <label class="flex items-center justify-between gap-3 text-xs text-ink-muted">
               Time
-              <input
+              <Input
                 aria-label="Run time"
                 placeholder="9:00 AM"
                 value={timeText()}
@@ -254,18 +242,18 @@ function RecurringSettings(props: {
                       : text;
                   props.onChange({ time });
                 }}
-                class="w-28 rounded-md border border-edge-muted bg-input px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
+                class="w-28"
               />
             </label>
           </Show>
           <Show when={props.trigger.frequency === 'custom'}>
             <label class="grid gap-2 text-xs text-ink-muted">
               Cron expression
-              <input
+              <Input
                 aria-label="Cron expression"
                 value={props.trigger.cron}
                 onInput={(e) => props.onChange({ cron: e.currentTarget.value })}
-                class="w-full rounded-md border border-edge-muted bg-input p-2 font-mono text-sm text-ink outline-none focus:border-accent"
+                class="font-mono"
               />
               <span>
                 Seconds, minutes, hours, day, month, weekday, optional year.
@@ -321,7 +309,7 @@ function TimezoneChoices(props: {
     );
   return (
     <div class="grid gap-2">
-      <input
+      <Input
         ref={inputRef}
         aria-label="Search timezones"
         placeholder="Search time zones…"
@@ -333,7 +321,6 @@ function TimezoneChoices(props: {
             props.onChange(options()[0]);
           }
         }}
-        class="w-full rounded-md border border-edge-muted bg-input px-3 py-2 text-sm outline-none focus:border-accent"
       />
       <div class="max-h-48 overflow-y-auto" aria-label="Time zones">
         <For each={options()}>
@@ -352,13 +339,14 @@ function TimezoneChoices(props: {
           <p class="p-2 text-xs text-ink-muted">No matching time zones</p>
         </Show>
       </div>
-      <button
-        type="button"
-        class="px-2 py-1 text-left text-xs text-ink-muted hover:text-ink"
+      <Button
+        variant="ghost"
+        size="sm"
+        class="justify-self-start"
         onClick={props.onBack}
       >
         Back to schedule
-      </button>
+      </Button>
     </div>
   );
 }

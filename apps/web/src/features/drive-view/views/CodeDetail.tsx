@@ -6,9 +6,10 @@ import {
 import { CodeModeControl } from '@block-code/component/CodeModeControl';
 import { isHtmlFileType } from '@block-code/util/fileMode';
 import { SidePanel } from '@components/app/side-panel';
+import { createFileDownload } from '@core/util/createFileDownload';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { downloadFile } from '@filesystem/download';
 import { Rerun } from '@solid-primitives/keyed';
+import { ok } from 'neverthrow';
 import {
   type Accessor,
   createSignal,
@@ -72,17 +73,18 @@ function CodeDetailSession(props: {
 }) {
   const analytics = useAnalytics();
   const [text, setText] = createSignal(props.data.text);
-  const operations = [
-    downloadFileOperation(() => {
-      fireAndForget(
-        downloadFile(
-          new Blob([text() ?? ''], { type: 'text/plain' }),
-          documentDownloadName(props.data.documentMetadata)
-        ),
-        'drive-file-download'
-      );
+  const download = createFileDownload(() => ({
+    id: `${props.documentId}:${props.data.documentMetadata.documentVersionId}`,
+    name: documentDownloadName(props.data.documentMetadata),
+    load: async () => {
       analytics.track('download', { blockType: 'code' });
-    }),
+      return ok({ blob: new Blob([text() ?? ''], { type: 'text/plain' }) });
+    },
+  }));
+  const operations = [
+    downloadFileOperation(() =>
+      fireAndForget(download.start(), 'drive-file-download')
+    ),
   ];
 
   return (
@@ -92,6 +94,7 @@ function CodeDetailSession(props: {
         documentMetadata: props.data.documentMetadata,
         userAccessLevel: props.data.userAccessLevel,
         operations,
+        download,
       })}
       <CodeDetailContent
         documentId={props.documentId}

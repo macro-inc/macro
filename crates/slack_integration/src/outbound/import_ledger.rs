@@ -177,7 +177,11 @@ fn map_error(error: import::domain::ports::ImportError) -> rootcause::Report<Imp
         // These errors are unexpected adapter failures, not permission to proceed.
         LedgerError::Admission(_)
         | LedgerError::Metadata(_)
-        | LedgerError::UnsupportedDiscovery(_) => ImportError::Internal,
+        | LedgerError::UnsupportedDiscovery(_)
+        | LedgerError::Notion(_)
+        | LedgerError::NotionNotConnected
+        | LedgerError::NotionSharingRequired
+        | LedgerError::NotReady(_) => ImportError::Internal,
     };
     rootcause::Report::new(error).context(code)
 }

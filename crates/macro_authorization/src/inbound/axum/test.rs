@@ -179,6 +179,7 @@ fn bot_authentication(bot_scope: BotScope, acting_user_id: Option<&str>) -> BotA
         bot_scope,
         team_id: (bot_scope == BotScope::Team).then_some(BOT_TEAM_ID),
         acting_user: acting_user_id.map(|user_id| MacroUserAuthentication {
+            agent_id: None,
             macro_user_id: MacroUserIdStr::try_from(user_id.to_owned())
                 .expect("valid bot acting user id"),
             user_context: user_context(user_id, Some(42)),
@@ -2202,6 +2203,7 @@ fn policies_report_typed_acting_entity_variants_with_display_parity() {
 
 fn macro_user_authentication(user_id: &str) -> MacroUserAuthentication {
     MacroUserAuthentication {
+        agent_id: None,
         macro_user_id: MacroUserIdStr::try_from(user_id.to_owned()).expect("valid Macro user ID"),
         user_context: user_context(user_id, None),
     }

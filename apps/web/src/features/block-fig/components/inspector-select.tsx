@@ -62,7 +62,7 @@ export function InspectorSelect<T extends string>(props: {
       </Select.Trigger>
       <Select.Portal>
         <Select.Content
-          class="fig-editor-theme z-modal min-w-32 max-w-72 rounded-xl border border-edge-muted bg-menu p-1.5 text-xs text-ink shadow-xl outline-none"
+          class="menu-surface fig-editor-theme z-modal min-w-32 max-w-72 p-1.5 text-xs outline-none"
           onKeyDown={(event) => event.stopPropagation()}
           onPointerDown={(event) => event.stopPropagation()}
           onPointerUp={(event) => event.stopPropagation()}

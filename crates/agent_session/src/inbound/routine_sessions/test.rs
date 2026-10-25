@@ -27,6 +27,7 @@ struct Credentials;
 impl JwtValidator for Credentials {
     fn validate(&self, _: &str) -> Result<ValidatedIdentity, Report<MacroAuthorizationError>> {
         Ok(ValidatedIdentity {
+            agent_id: None,
             user_id: OWNER.into(),
             fusion_user_id: "fusion-owner".into(),
             organization_id: None,
@@ -65,6 +66,7 @@ impl HarnessAuthorizer for Credentials {
                 user_id: OWNER.into(),
             },
             acting_user: MacroUserAuthentication {
+                agent_id: None,
                 macro_user_id: MacroUserIdStr::try_from(OWNER).unwrap(),
                 user_context: model_user::UserContext {
                     user_id: OWNER.into(),
@@ -167,7 +169,10 @@ fn command(operation: &str) -> Value {
     });
     match operation {
         "validate" => selection,
-        "prepare" => json!({ "selection": selection, "session_id": Uuid::now_v7() }),
+        "prepare" => json!({
+            "selection": selection, "session_id": Uuid::now_v7(),
+            "source": "routine", "visibility": "unlisted",
+        }),
         "prompt" => json!({ "action": action, "prompt": "private routine instructions" }),
         _ => action,
     }

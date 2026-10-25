@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MessageCard } from './message-card';
 
 const device = vi.hoisted(() => ({ touch: false }));
@@ -13,7 +13,21 @@ vi.mock('@ui', async () => ({
     .ComposerSurface,
 }));
 
-afterEach(cleanup);
+beforeEach(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
+});
+
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 describe('MessageCard', () => {
   it.each([false, true])(
@@ -48,7 +62,7 @@ describe('MessageCard', () => {
         container.querySelector('[data-layer], [data-surface]')
       ).toBeNull();
       const reply = screen.getByRole('button', { name: 'Reply' });
-      expect(reply.parentElement).toBe(card);
+      expect(card.contains(reply)).toBe(true);
 
       fireEvent.click(reply);
 

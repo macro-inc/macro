@@ -1,4 +1,4 @@
-//! `Web App Pr Checks` — frontend PR checks for the web app.
+//! `Web App Pr Checks` — frontend and mobile PR checks.
 //! Generated into `web-app-check-main.yml`.
 
 use gh_workflow::{

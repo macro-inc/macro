@@ -1,3 +1,4 @@
+mod address_groups;
 use super::SqlFragment;
 use super::resolve::ResolvedFilters;
 use crate::domain::models::{PreviewView, PreviewViewStandardLabel};
@@ -273,6 +274,9 @@ fn build_candidate_pair_predicate(
     sort_ts_field: &str,
     resolved: &ResolvedFilters,
 ) -> SqlFragment {
+    if let Some(literals) = flatten_or_tree_of_address_literals(ast) {
+        return address_groups::message_predicate(literals, resolved);
+    }
     ast.collapse_frames(|frame| match frame {
         filter_ast::ExprFrame::And(a, b) => SqlFragment::and(a, b),
         filter_ast::ExprFrame::Or(a, b) => SqlFragment::or(a, b),
@@ -324,6 +328,9 @@ pub(super) fn build_message_email_filter(
     resolved: &ResolvedFilters,
     sort_ts_field: &str,
 ) -> SqlFragment {
+    if let Some(literals) = flatten_or_tree_of_address_literals(ast) {
+        return address_groups::message_predicate(literals, resolved).with_and_prefix();
+    }
     let fragment = ast.collapse_frames(|frame| match frame {
         filter_ast::ExprFrame::And(a, b) => SqlFragment::and(a, b),
         filter_ast::ExprFrame::Or(a, b) => SqlFragment::or(a, b),
@@ -403,6 +410,9 @@ fn build_address_message_predicate(
     expr: &Expr<EmailLiteral>,
     resolved: &ResolvedFilters,
 ) -> SqlFragment {
+    if let Some(literals) = flatten_or_tree_of_address_literals(expr) {
+        return address_groups::message_predicate(literals, resolved);
+    }
     expr.collapse_frames(|frame| match frame {
         filter_ast::ExprFrame::And(a, b) => SqlFragment::and(a, b),
         filter_ast::ExprFrame::Or(a, b) => SqlFragment::or(a, b),
@@ -532,7 +542,7 @@ fn flatten_or_tree_of_address_literals(
 /// Which roles (sender / TO / CC / BCC) one address predicate was requested
 /// in across the OR-tree. Merging roles lets the CTE emit a single recipient
 /// branch per address instead of one per role.
-#[derive(Default)]
+#[derive(Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
 struct AddressKinds {
     sender: bool,
     to: bool,
@@ -573,34 +583,6 @@ impl AddressKinds {
             1 => format!(" AND mr.recipient_type = {}", types[0]),
             _ => format!(" AND mr.recipient_type IN ({})", types.join(", ")),
         }
-    }
-}
-
-/// Identity of an address predicate for grouping OR'd literals: two literals
-/// with equal keys match the same contact rows, so their branches can share
-/// contact-resolution work.
-#[derive(PartialEq)]
-enum AddressGroupKey<'a> {
-    /// Complete email resolved to contact ids.
-    Contacts(&'a [Uuid]),
-    /// Partial text match (source string of the ILIKE pattern).
-    Partial(&'a str),
-    /// Bare domain, lowercased.
-    Domain(String),
-}
-
-/// Returns `None` for unresolved Complete emails — they can't match
-/// anything, so the literal is dropped rather than emitting a `WHERE FALSE`
-/// branch.
-fn address_group_key<'a>(
-    email: &'a Email,
-    resolved: &'a ResolvedFilters,
-) -> Option<AddressGroupKey<'a>> {
-    match (resolved.contact_ids_for(email), email) {
-        (Some(ids), _) => Some(AddressGroupKey::Contacts(ids)),
-        (None, Email::Complete(_)) => None,
-        (None, Email::Partial(s)) => Some(AddressGroupKey::Partial(s)),
-        (None, Email::Domain(s)) => Some(AddressGroupKey::Domain(s.to_ascii_lowercase())),
     }
 }
 
@@ -707,9 +689,8 @@ fn text_recipient_branch(
 
 /// Emits one text-matched group: a hoisted contacts CTE plus the branches
 /// that consume it.
-fn push_text_group(
-    predicate_prefix: &str,
-    bind_value: String,
+fn push_contact_group(
+    contact_query: SqlFragment,
     kinds: &AddressKinds,
     resolved: &ResolvedFilters,
     link_scope: Option<&[Uuid]>,
@@ -717,10 +698,7 @@ fn push_text_group(
     branches: &mut Vec<SqlFragment>,
 ) {
     let cte_name = format!("matching_contacts_{}", contact_ctes.len());
-    contact_ctes.push((
-        cte_name.clone(),
-        matching_contacts_cte_body(predicate_prefix, bind_value, link_scope),
-    ));
+    contact_ctes.push((cte_name.clone(), contact_query));
     if kinds.sender {
         branches.push(text_sender_branch(&cte_name, resolved, link_scope));
     }
@@ -748,16 +726,11 @@ pub(super) struct MatchingThreadsCtes {
 /// 1. **UNION-of-branches** (preferred): when the candidate filter is a
 ///    single conjunct that's a flat OR-tree of positive single-address
 ///    literals (e.g. `Sender(X) OR Cc(X) OR Bcc(X) OR Recipient(X)`),
-///    literals are grouped by address predicate and each group becomes at
-///    most two UNION branches: a sender branch and one merged recipient
-///    branch covering every requested recipient role (with no
-///    `recipient_type` filter at all when all three roles are present).
-///    Complete-email branches are index-driven via
-///    `idx_email_messages_from_contact_id` /
-///    `idx_email_message_recipients_contact_id`; Partial/Domain predicates
-///    resolve contacts once in a hoisted `matching_contacts_N` CTE (riding
-///    the trigram / domain expression index) that both branches consume,
-///    instead of re-scanning `email_contacts` per branch.
+///    predicates first collect their requested roles. Complete addresses and
+///    domains with identical role sets then share membership branches, keeping
+///    query size bounded for large CRMs. Complete-email branches use the
+///    contact-id indexes; domains resolve contacts once per role set in a
+///    hoisted `matching_contacts_N` CTE. Partial matches remain independent.
 /// 2. **Combined predicate**: for everything else (multiple AND conjuncts,
 ///    NOT inside a conjunct, mixed nested operators) we emit a single
 ///    `SELECT DISTINCT m.thread_id FROM email_messages m WHERE …` whose
@@ -786,61 +759,7 @@ pub(super) fn build_matching_threads_ctes(
     if conjuncts.len() == 1
         && let Some(literals) = flatten_or_tree_of_address_literals(conjuncts[0])
     {
-        // Group literals by address predicate so one address requested in
-        // several roles (the common "this address anywhere" case) shares
-        // branches and contact-resolution work.
-        let mut groups: Vec<(AddressGroupKey, AddressKinds)> = Vec::new();
-        for (kind, email) in literals {
-            let Some(key) = address_group_key(email, resolved) else {
-                continue;
-            };
-            match groups.iter_mut().find(|(k, _)| *k == key) {
-                Some((_, kinds)) => kinds.add(kind),
-                None => {
-                    let mut kinds = AddressKinds::default();
-                    kinds.add(kind);
-                    groups.push((key, kinds));
-                }
-            }
-        }
-
-        let mut contact_ctes: Vec<(String, SqlFragment)> = Vec::new();
-        let mut branches: Vec<SqlFragment> = Vec::new();
-        for (key, kinds) in &groups {
-            match key {
-                AddressGroupKey::Contacts(ids) => {
-                    if kinds.sender {
-                        branches.push(contacts_sender_branch(ids, resolved));
-                    }
-                    if kinds.any_recipient() {
-                        branches.push(contacts_recipient_branch(ids, kinds, resolved));
-                    }
-                }
-                AddressGroupKey::Partial(s) => {
-                    let pattern = format!("%{}%", escape_like_pattern(s));
-                    push_text_group(
-                        "c.email_address ILIKE ",
-                        pattern,
-                        kinds,
-                        resolved,
-                        link_scope,
-                        &mut contact_ctes,
-                        &mut branches,
-                    );
-                }
-                AddressGroupKey::Domain(domain) => {
-                    push_text_group(
-                        "LOWER(SPLIT_PART(c.email_address, '@', 2)) = ",
-                        domain.clone(),
-                        kinds,
-                        resolved,
-                        link_scope,
-                        &mut contact_ctes,
-                        &mut branches,
-                    );
-                }
-            }
-        }
+        let (contact_ctes, branches) = address_groups::build(literals, resolved, link_scope);
 
         if !branches.is_empty() {
             let mut iter = branches.into_iter();
@@ -1066,6 +985,8 @@ pub(super) fn get_sort_timestamp_field(view: &PreviewView) -> &'static str {
         PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox) => {
             "GREATEST(t.latest_inbound_message_ts, t.reminder_returned_at)"
         }
+        // Matches idx_email_threads_non_spam_link_ts_id, so a per-link
+        // equality scan can stop at LIMIT.
         _ => "COALESCE(t.latest_non_spam_message_ts, t.updated_at)",
     }
 }

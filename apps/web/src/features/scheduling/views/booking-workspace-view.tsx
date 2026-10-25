@@ -1,4 +1,10 @@
 import { SearchBar, ViewShell, ViewSidebar } from '@app/components/view-shell';
+import {
+  ListHeader,
+  ListHeaderSearch,
+} from '@app/components/view-shell/ListHeader';
+import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import PageIcon from '@phosphor/browser.svg';
@@ -19,6 +25,7 @@ import {
   createMemo,
   createSignal,
   For,
+  type JSX,
   mapArray,
   on,
   onCleanup,
@@ -78,6 +85,7 @@ export function BookingWorkspaceView(props: {
   registerBeforeLeave?: (
     guard: (signal: AbortSignal) => boolean | Promise<boolean>
   ) => void | (() => void);
+  registerSearchFocus?: (focus: (() => boolean) | undefined) => void;
 }) {
   const capabilities = useScheduling();
   const search = props.search;
@@ -122,6 +130,18 @@ export function BookingWorkspaceView(props: {
   const tab = () => TABS.find((item) => item.value === search.tab) ?? TABS[0];
   const editingSchedule = () =>
     search.tab === 'availability' && !!owner()?.schedule();
+  const hasListHeader = () =>
+    !isTouchDevice() &&
+    (search.tab === 'links' ||
+      search.tab === 'bookings' ||
+      (search.tab === 'availability' && !editingSchedule()));
+  let focusSearch: (() => void) | undefined;
+  props.registerSearchFocus?.(() => {
+    if (!hasListHeader() || !focusSearch) return false;
+    focusSearch();
+    return true;
+  });
+  onCleanup(() => props.registerSearchFocus?.(undefined));
   const isSaving = () => owners().some((item) => item.source.saving());
   const discardEditors = () => {
     for (const current of owners()) current.discardEditors();
@@ -368,25 +388,117 @@ export function BookingWorkspaceView(props: {
             onCreate={(opener) => fireAndForget(create(opener), 'scheduling')}
           />
         </Show>
-        <ViewShell.TopBar>
-          <Show
-            when={search.tab === 'availability'}
-            fallback={
-              <div class="flex min-w-0 flex-1 items-center gap-2">
-                <div class="flex min-w-0 items-center gap-1">
-                  <h1 class="min-w-0 truncate pl-2 text-sm font-semibold">
-                    {tab().label}
-                  </h1>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    label={`About ${tab().label.toLowerCase()}`}
-                    tooltip={tab().description}
-                  >
-                    <InfoIcon class="size-4 text-ink-muted" />
-                  </Button>
+        <Show
+          when={
+            isTouchDevice() ||
+            (search.tab !== 'bookings' &&
+              search.tab !== 'page' &&
+              search.tab !== 'insights')
+          }
+        >
+          <SchedulingHeader
+            list={hasListHeader()}
+            actions={
+              <>
+                <Show when={owner()?.scope().canEdit}>
+                  <Show when={search.tab === 'links'}>
+                    <HeaderActionGroup label="Booking link tools">
+                      <Button
+                        label="Create with agent"
+                        variant="ghost"
+                        size="icon-md"
+                        disabled={
+                          !owner()?.source.profile() ||
+                          isSaving() ||
+                          startingAgent()
+                        }
+                        onClick={() =>
+                          fireAndForget(createWithAgent(), 'scheduling')
+                        }
+                      >
+                        <SparkleIcon class="size-4" />
+                      </Button>
+                    </HeaderActionGroup>
+                  </Show>
+                  <ViewCreateButton
+                    presentation="toolbar"
+                    aria-label={
+                      search.tab === 'availability'
+                        ? 'New schedule'
+                        : 'New booking link'
+                    }
+                    disabled={
+                      !owner()?.source.profile() ||
+                      isSaving() ||
+                      startingAgent()
+                    }
+                    onClick={(event) =>
+                      fireAndForget(create(event.currentTarget), 'scheduling')
+                    }
+                  />
+                </Show>
+                <ListHeaderSearch
+                  label={
+                    search.tab === 'availability'
+                      ? 'Search schedules'
+                      : 'Search booking links'
+                  }
+                  value={
+                    search.tab === 'availability'
+                      ? availabilitySearch()
+                      : query()
+                  }
+                  onValueChange={(value) =>
+                    search.tab === 'availability'
+                      ? setAvailabilitySearch(value)
+                      : setQuery(value)
+                  }
+                  registerFocus={(focus) => (focusSearch = focus)}
+                />
+              </>
+            }
+          >
+            <Show
+              when={search.tab === 'availability'}
+              fallback={
+                <div class="flex min-w-0 flex-1 items-center gap-2">
+                  <div class="flex min-w-0 items-center gap-1">
+                    <h1 class="min-w-0 truncate pl-2 text-sm font-semibold">
+                      {tab().label}
+                    </h1>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      label={`About ${tab().label.toLowerCase()}`}
+                      tooltip={tab().description}
+                    >
+                      <InfoIcon class="size-4 text-ink-muted" />
+                    </Button>
+                  </div>
+                  <Show when={owner()}>
+                    {(current) => (
+                      <div class="hidden min-w-0 sm:block">
+                        <OwnerBadge scope={current().scope()} />
+                      </div>
+                    )}
+                  </Show>
                 </div>
-                <Show when={owner()}>
+              }
+            >
+              <div class="flex min-w-0 flex-1 items-center gap-2">
+                <AvailabilityTopBar
+                  editing={editingSchedule()}
+                  creating={
+                    !owner()
+                      ?.source.profile()
+                      ?.schedules.some(
+                        (schedule) => schedule.id === owner()?.schedule()?.id
+                      )
+                  }
+                  disabled={isSaving() || !owner()?.source.profile()}
+                  onBack={() => owner()?.closeScheduleEditor()}
+                />
+                <Show when={!editingSchedule() && owner()}>
                   {(current) => (
                     <div class="hidden min-w-0 sm:block">
                       <OwnerBadge scope={current().scope()} />
@@ -394,35 +506,14 @@ export function BookingWorkspaceView(props: {
                   )}
                 </Show>
               </div>
-            }
-          >
-            <div class="flex min-w-0 flex-1 items-center gap-2">
-              <AvailabilityTopBar
-                editing={editingSchedule()}
-                creating={
-                  !owner()
-                    ?.source.profile()
-                    ?.schedules.some(
-                      (schedule) => schedule.id === owner()?.schedule()?.id
-                    )
-                }
-                disabled={isSaving() || !owner()?.source.profile()}
-                onBack={() => owner()?.closeScheduleEditor()}
-              />
-              <Show when={!editingSchedule() && owner()}>
-                {(current) => (
-                  <div class="hidden min-w-0 sm:block">
-                    <OwnerBadge scope={current().scope()} />
-                  </div>
-                )}
-              </Show>
-            </div>
-          </Show>
-        </ViewShell.TopBar>
+            </Show>
+          </SchedulingHeader>
+        </Show>
         <Show
           when={
-            search.tab === 'links' ||
-            (search.tab === 'availability' && !editingSchedule())
+            isTouchDevice() &&
+            (search.tab === 'links' ||
+              (search.tab === 'availability' && !editingSchedule()))
           }
         >
           <ViewShell.Header class="touch:pt-0">
@@ -505,6 +596,10 @@ export function BookingWorkspaceView(props: {
         </Show>
         <ViewShell.Content
           class={cn('px-4', {
+            'not-touch:px-0':
+              search.tab === 'bookings' ||
+              search.tab === 'page' ||
+              search.tab === 'insights',
             'flex min-h-0 flex-col overflow-hidden':
               editingSchedule() || search.tab === 'page',
             'overflow-auto pb-8': !editingSchedule() && search.tab !== 'page',
@@ -567,6 +662,19 @@ export function BookingWorkspaceView(props: {
                 <Show when={search.tab === 'bookings' && owner() === current}>
                   <OwnerSettingsSection
                     kind="bookings"
+                    registerSearchFocus={(focus) => (focusSearch = focus)}
+                    bookingsTitle={
+                      !isTouchDevice() ? (
+                        <div class="flex items-center gap-2">
+                          <h1 class="text-sm font-semibold text-ink">
+                            Bookings
+                          </h1>
+                          <div class="hidden @min-[900px]/split-header:flex">
+                            <OwnerBadge scope={current.scope()} />
+                          </div>
+                        </div>
+                      ) : undefined
+                    }
                     owner={current}
                     search={bookingsSearch()}
                     onSearchChange={setBookingsSearch}
@@ -586,10 +694,35 @@ export function BookingWorkspaceView(props: {
                   />
                 </Show>
                 <Show when={search.tab === 'insights' && owner() === current}>
-                  <OwnerSettingsSection kind="insights" owner={current} />
+                  <OwnerSettingsSection
+                    kind="insights"
+                    owner={current}
+                    insightsTitle={
+                      !isTouchDevice() ? (
+                        <div class="flex items-center gap-2">
+                          <h1 class="text-sm font-semibold text-ink">
+                            Insights
+                          </h1>
+                          <div class="hidden @min-[900px]/split-header:flex">
+                            <OwnerBadge scope={current.scope()} />
+                          </div>
+                        </div>
+                      ) : undefined
+                    }
+                  />
                 </Show>
                 <Show when={search.tab === 'page' && owner() === current}>
-                  <OwnerSettingsSection kind="page" owner={current} />
+                  <OwnerSettingsSection
+                    kind="page"
+                    owner={current}
+                    pageTitle={
+                      !isTouchDevice() ? (
+                        <h1 class="text-sm font-semibold text-ink">
+                          Booking page
+                        </h1>
+                      ) : undefined
+                    }
+                  />
                 </Show>
               </div>
             )}
@@ -597,5 +730,20 @@ export function BookingWorkspaceView(props: {
         </ViewShell.Content>
       </ViewShell.Main>
     </ViewShell.Root>
+  );
+}
+
+function SchedulingHeader(props: {
+  list: boolean;
+  children: JSX.Element;
+  actions: JSX.Element;
+}) {
+  return (
+    <Show
+      when={props.list}
+      fallback={<ViewShell.TopBar>{props.children}</ViewShell.TopBar>}
+    >
+      <ListHeader title={props.children}>{props.actions}</ListHeader>
+    </Show>
   );
 }

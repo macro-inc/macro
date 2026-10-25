@@ -397,12 +397,12 @@ pub trait RuntimeConnections: Send + Sync + 'static {
 /// at spawn, at reattach, and before each prompt to a live session, for the
 /// session's own owner and policy.
 pub trait SandboxEgressProvisioner: Send + Sync + 'static {
-    /// Internal session tools at an address reachable by an external runtime.
+    /// The session's MCP servers at addresses reachable by an external runtime.
     fn external_mcp_servers(
         &self,
         egress: &SandboxEgress,
     ) -> Vec<agent_client_protocol::schema::v1::McpServer> {
-        vec![egress.internal_mcp_server(), egress.preview_mcp_server()]
+        egress.acp_servers()
     }
 
     /// The egress environment for one session, on behalf of `owner`, and the

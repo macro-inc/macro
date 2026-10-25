@@ -10,11 +10,13 @@ import { Show, Suspense } from 'solid-js';
 import { useMobileSettings } from './context/mobile-settings';
 import { MobileSettingsSheet } from './MobileSettingsSheet';
 import { SettingsTabContent } from './SettingsTabContent';
+import { useTeamSettingsGroups } from './teamSettingsGroups';
 
 export function MobileSettings() {
   const settings = useMobileSettings();
   const signatures = useFeatureFlag(enableEmailSignatures);
   const { groups, searchGroups } = useSettingsTabs();
+  const navGroups = useTeamSettingsGroups(groups);
   const userId = useUserId();
   const email = useEmail();
   const name = useOwnUserName();
@@ -32,7 +34,7 @@ export function MobileSettings() {
     <MobileSettingsSheet
       open={settings.open()}
       page={settings.page()}
-      groups={groups()}
+      groups={navGroups()}
       searchGroups={searchGroups()}
       emailSignatures={signatures().enabled}
       name={displayName()}

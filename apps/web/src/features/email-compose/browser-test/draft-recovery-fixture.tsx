@@ -82,6 +82,7 @@ function RecoveryEditor() {
         },
       },
       blockingNotice: async () => {},
+      confirm: async () => false,
       reportError: () => {},
     },
     accounts: {
@@ -93,6 +94,7 @@ function RecoveryEditor() {
       primaryId: () => 'inbox',
     },
     connectivity: { looksOffline: () => false },
+    editorFiles: { uploadDocuments: async () => [], makePublic: () => {} },
     viewerEmail: () => 'me@example.com',
     hasPaidAccess: () => true,
     recipients: () => [],

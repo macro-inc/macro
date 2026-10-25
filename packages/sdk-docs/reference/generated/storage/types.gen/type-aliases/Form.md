@@ -1,6 +1,6 @@
 # Type Alias: Form
 
-> **Form** = \{ `audience`: [`Audience`](Audience.md); `closesAt`: `string` \| `null`; `confirmationMessage`: `string`; `createdAt`: `string`; `databaseId`: `string`; `description`: `string`; `id`: `string`; `name`: `string`; `ownerId`: `string`; `respondentColumnId`: `string` \| `null`; `status`: [`FormStatus`](FormStatus.md); `submittedColumnId`: `string` \| `null`; `tableId`: `string`; `tallyVisible`: `boolean`; `updatedAt`: `string`; \}
+> **Form** = \{ `audience`: [`Audience`](Audience.md); `closesAt`: `string` \| `null`; `confirmationMessage`: `string`; `createdAt`: `string`; `databaseId`: `string`; `description`: `string`; `id`: `string`; `isHiddenInDrive`: `boolean`; `name`: `string`; `ownerId`: `string`; `respondentColumnId`: `string` \| `null`; `status`: [`FormStatus`](FormStatus.md); `submittedColumnId`: `string` \| `null`; `tableId`: `string`; `tallyVisible`: `boolean`; `updatedAt`: `string`; \}
 
 A form: a view of one database table whose rows are its responses.
 
@@ -15,6 +15,7 @@ A form: a view of one database table whose rows are its responses.
 | <a id="property-databaseid"></a> `databaseId` | `string` | The database holding its responses. |
 | <a id="property-description"></a> `description` | `string` | What respondents read under the name. |
 | <a id="property-id"></a> `id` | `string` | The form. |
+| <a id="property-ishiddenindrive"></a> `isHiddenInDrive` | `boolean` | Whether Drive leaves it, and the database behind it, out of its listings, as for a channel poll. |
 | <a id="property-name"></a> `name` | `string` | Its display name. A standalone form follows the database it created; a form attached to an existing table has its own name. |
 | <a id="property-ownerid"></a> `ownerId` | `string` | Its owner. |
 | <a id="property-respondentcolumnid"></a> `respondentColumnId` | `string` \| `null` | The person column each signed-in submission names its respondent in; `null` once deleted. |

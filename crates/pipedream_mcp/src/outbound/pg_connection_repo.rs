@@ -1,5 +1,5 @@
 use crate::domain::models::{MacroUserIdStr, PipedreamConnection};
-use crate::domain::ports::ConnectionStore;
+use crate::domain::ports::{AppConnections, ConnectionStore};
 use macro_user_id::cowlike::CowLike;
 use sqlx::PgPool;
 
@@ -104,6 +104,37 @@ impl ConnectionStore for PgConnectionRepo {
             ORDER BY server_name
             "#,
             user_id.as_ref(),
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter()
+            .map(|row| {
+                to_record(
+                    row.user_id,
+                    row.app_slug,
+                    row.server_name,
+                    row.account_id,
+                    row.enabled,
+                )
+            })
+            .collect()
+    }
+}
+
+impl AppConnections for PgConnectionRepo {
+    #[tracing::instrument(skip(self), err)]
+    async fn list_enabled_for_app(
+        &self,
+        app_slug: &str,
+    ) -> anyhow::Result<Vec<PipedreamConnection>> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT user_id, app_slug, server_name, account_id, enabled
+            FROM pipedream_mcp_connections
+            WHERE app_slug = $1 AND enabled
+            "#,
+            app_slug,
         )
         .fetch_all(&self.pool)
         .await?;

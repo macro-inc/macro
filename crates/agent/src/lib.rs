@@ -14,6 +14,7 @@ mod stream;
 pub mod structured_output;
 mod telemetry;
 mod tool_adapter;
+mod tool_media;
 
 #[cfg(test)]
 mod test;

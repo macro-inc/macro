@@ -404,7 +404,7 @@ function CropButton(props: { crop: CropMode }) {
         </Popover.Trigger>
         <Popover.Portal>
           <Popover.Content
-            class="z-action-menu rounded-xl border border-edge bg-menu p-2 text-ink text-xs shadow-xl outline-none"
+            class="menu-surface z-action-menu p-2 text-xs outline-none"
             onCloseAutoFocus={(e) => e.preventDefault()}
           >
             <div class="flex w-44 flex-col">

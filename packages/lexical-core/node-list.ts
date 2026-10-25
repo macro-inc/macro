@@ -156,7 +156,9 @@ export const RegisteredNodesByType: { [K in EditorType]: ValidNode[] } = {
   'plain-text': [ParagraphNode, TextNode],
   markdown: [...SupportedNodeTypes],
   'markdown-sync': [...SupportedNodeTypes],
-  chat: exclude([ImageNode, VideoNode]),
+  // Chat carries URL images (GIFs); uploaded media still goes as attachments,
+  // and the Image/Video slash actions need VideoNode, so they stay hidden.
+  chat: exclude([VideoNode]),
   // Calendar descriptions are provider-supplied HTML from anyone who can write
   // the event, so the editor must not carry a node that renders raw markup.
   calendar: exclude([HtmlRenderNode, ImageNode, VideoNode]),

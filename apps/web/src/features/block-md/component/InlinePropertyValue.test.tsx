@@ -32,7 +32,7 @@ const property: Property = {
   createdAt: '2026-01-01',
   updatedAt: '2026-01-01',
 };
-function setup(canEdit = true) {
+function setup(canEdit = true, canRemove = true) {
   const remove = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
   const unpin = vi.fn();
   const refresh = vi.fn();
@@ -49,7 +49,12 @@ function setup(canEdit = true) {
       removeProperty={remove}
       saveHandler={{ saveProperty: vi.fn(), saveDate: vi.fn() }}
     >
-      <InlinePropertyValue property={property} entityId="doc" canManage />
+      <InlinePropertyValue
+        property={property}
+        entityId="doc"
+        canManage
+        canRemove={canRemove}
+      />
     </PropertiesProvider>
   ));
   return { remove, unpin, refresh };
@@ -57,7 +62,7 @@ function setup(canEdit = true) {
 it('unpins without removing the saved property', async () => {
   const { remove, unpin } = setup();
   await fireEvent.click(screen.getByRole('button', { name: 'Unpin' }));
-  expect(unpin).toHaveBeenCalledWith('assignment');
+  expect(unpin).toHaveBeenCalledWith('assignment', 'definition');
   expect(remove).not.toHaveBeenCalled();
 });
 it('removes the property assignment and its pin after a successful save', async () => {
@@ -65,7 +70,9 @@ it('removes the property assignment and its pin after a successful save', async 
   await fireEvent.click(
     screen.getByRole('button', { name: 'Delete from item' })
   );
-  await waitFor(() => expect(unpin).toHaveBeenCalledWith('assignment'));
+  await waitFor(() =>
+    expect(unpin).toHaveBeenCalledWith('assignment', 'definition')
+  );
   expect(remove).toHaveBeenCalledWith('assignment');
   expect(refresh).toHaveBeenCalledOnce();
 });
@@ -88,4 +95,10 @@ it('keeps the pin if removing the property fails', async () => {
 it('hides management actions for read-only documents', () => {
   setup(false);
   expect(screen.queryByRole('button')).toBeNull();
+});
+
+it('allows unpinning protected task properties without exposing deletion', () => {
+  setup(true, false);
+  expect(screen.getByRole('button', { name: 'Unpin' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Delete from item' })).toBeNull();
 });

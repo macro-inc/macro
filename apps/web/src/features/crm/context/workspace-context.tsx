@@ -8,21 +8,31 @@ import {
 import type { EntityActionListState } from '../../next-soup/actions/entity-action-context';
 import type { SoupState } from '../../next-soup/create-soup-state';
 import type { QueryStore } from '../../next-soup/filters/filter-store/query-store';
+import type { CrmRecordRef, CrmRecordSection } from '../core/record';
 
-export type CrmRouteSearch = {
-  tab: Accessor<string>;
-  setTab(
-    tab: string,
-    options?: { replace?: boolean; clearPipelineRequest?: boolean }
-  ): void;
+/** A new `seek` asks to show the same message again. */
+export type CrmCommentTarget = { commentId: string; seek: string };
+
+/** Records opened inside the workspace; the route holds them. */
+export type CrmRecordNavigation = {
+  /** Records opened from the list, oldest first; empty on the list. */
+  records: Accessor<readonly CrmRecordRef[]>;
+  /** The shown record's tab; none is its Overview. */
+  section: Accessor<CrmRecordSection | undefined>;
+  /** A Discussion message of the shown record to scroll to. */
+  commentTarget: Accessor<CrmCommentTarget | undefined>;
+  /** Shows the last record of `trail` at its Overview. */
+  open(trail: readonly CrmRecordRef[]): void;
+  setSection(section: CrmRecordSection): void;
+  /** Returns to the list the records were opened from. */
+  close(): void;
 };
 
-/** A pipeline another view asked the workspace to show. */
-export type CrmPipelineRequest = {
-  /** A new `seek` repeats a request for the same pipeline. */
-  current: Accessor<{ pipelineId: string; seek: string } | undefined>;
-  /** Forgets the request once the workspace shows something else. */
-  release(): void;
+/** The Customers location: a list tab, and the records opened from it. */
+export type CrmRoute = CrmRecordNavigation & {
+  tab: Accessor<string>;
+  /** Shows the list of `tab`, closing any open record. */
+  setTab(tab: string, options?: { replace?: boolean }): void;
 };
 
 /** Collection capabilities consumed by CRM views, supplied by the host adapter. */
@@ -33,9 +43,14 @@ export type CrmWorkspace = {
     focus(): void;
     captureEntryState(): void;
     openCompany(entity: EntityData, newSplit: boolean): void;
-    openSettings(): void;
+    /** CRM settings, shown in the workspace over its list or record. */
+    settings: {
+      isOpen: Accessor<boolean>;
+      open(): void;
+      close(): void;
+    };
     openTeamSettings(): void;
-    pipelineRequest: CrmPipelineRequest['current'];
+    record: CrmRecordNavigation;
   };
 
   soup: EntityActionListState & {

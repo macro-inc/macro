@@ -12,8 +12,11 @@ use filter_ast::Expr;
 use item_filters::{
     SharedEmailFilter,
     ast::{
-        EmailFilterAst, EntityFilterAst, agent_session::AgentSessionLiteral,
-        channel::ChannelThreadLiteral, document::DocumentLiteral, email::EmailLiteral,
+        EmailFilterAst, EntityFilterAst,
+        agent_session::{AgentSessionLiteral, AgentSessionVisibility},
+        channel::ChannelThreadLiteral,
+        document::DocumentLiteral,
+        email::EmailLiteral,
         foreign_entity::ForeignEntityLiteral,
     },
 };
@@ -34,7 +37,9 @@ const GITHUB_PULL_REQUEST_SOURCE: &str = "github_pull_request";
 ///   Noise mail stays out even when the viewer touches it.
 /// - Channel threads include the viewer as a participant.
 /// - Pull requests include the viewer.
-/// - Agent sessions are opted in (Soup excludes them by default).
+/// - Agent sessions are opted in (Soup excludes them by default), except
+///   unlisted ones: a routine's runs, unless the routine lists them, live in
+///   its history and the Agents list.
 /// - Snippets are documents only when the caller shows them.
 pub fn signal_filter(user: &MacroUserIdStr<'static>, include_snippets: bool) -> EntityFilterAst {
     EntityFilterAst {
@@ -59,7 +64,12 @@ pub fn signal_filter(user: &MacroUserIdStr<'static>, include_snippets: bool) -> 
             )),
             Expr::val(ForeignEntityLiteral::IncludesMe),
         ))),
-        agent_session_filter: Some(Arc::new(Expr::val(AgentSessionLiteral::Include))),
+        agent_session_filter: Some(Arc::new(Expr::and(
+            Expr::val(AgentSessionLiteral::Include),
+            Expr::is_not(Expr::val(AgentSessionLiteral::Visibility(
+                AgentSessionVisibility::Unlisted,
+            ))),
+        ))),
         ..Default::default()
     }
 }

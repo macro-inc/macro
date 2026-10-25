@@ -198,7 +198,7 @@ export function filterSoupItemByRequestBody(
       // These partitions are opt-in through the filter AST only.
       return false;
     })
-    .exhaustive();
+    .exhaustive(() => false);
 }
 
 /**

@@ -1,8 +1,8 @@
-import { toast } from '@core/component/Toast/Toast';
 import { subscribeNativeNetworkStatus } from '@core/mobile/native-network-status';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { normalizedCacheResultMetadata } from '@graphql-cache/exchange/normalized-cache-exchange';
 import type { CacheHost } from '@graphql-cache/host/types';
+import { Telemetry } from '@macro-inc/observability';
 import type { Client, OperationResult } from '@urql/core';
 import type { Result } from 'neverthrow';
 import {
@@ -309,8 +309,8 @@ export function createGraphqlSoupSubscriptionsLifecycle(
               console.warn(errorMessage, result.error);
               if (!signaledFailure) {
                 signaledFailure = true;
-                toast.failure('Live updates disconnected', {
-                  subtext: 'Refresh to reconnect.',
+                Telemetry.error(result.error, {
+                  'error.source': 'graphql-soup-websocket',
                 });
               }
             }

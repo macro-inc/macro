@@ -8,7 +8,7 @@ import PauseCircle from '@phosphor/pause-circle.svg';
 import Users from '@phosphor/users.svg';
 import VideoCamera from '@phosphor/video-camera.svg';
 import X from '@phosphor/x.svg';
-import { Button } from '@ui';
+import { Button, Tabs } from '@ui';
 import { createMemo, createSignal, For, type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { sanitizeCalendarDescription } from '../../calendar/utils/calendar-description-sanitizer';
@@ -58,6 +58,8 @@ export function CalendarInviteCard(props: {
   actions?: CalendarInvitationActions;
   hour12?: boolean;
   timeZone?: string;
+  /** Shown inside the calendar file it came from, so it must not point back at that file. */
+  inCalendarFile?: boolean;
 }) {
   const [descriptionExpanded, setDescriptionExpanded] = createSignal(false);
   const [attendeesExpanded, setAttendeesExpanded] = createSignal(false);
@@ -152,9 +154,10 @@ export function CalendarInviteCard(props: {
           ? 'Waiting for your calendar to catch up. Responses are paused until it does.'
           : 'Your connected calendar does not allow a response to this event.'
       )
-      .otherwise(
-        () =>
-          'Saved invitation. Open the original email or invitation attachment for more options.'
+      .otherwise(() =>
+        props.inCalendarFile
+          ? 'Saved invitation.'
+          : 'Saved invitation. Open the original email or invitation attachment for more options.'
       );
   const lastResponse = () => {
     const response = resolved()?.response;
@@ -290,27 +293,17 @@ export function CalendarInviteCard(props: {
                   </div>
                 }
               >
-                <div
-                  role="group"
+                <Tabs
+                  touch="segmented"
                   aria-label="Your response"
-                  class="flex overflow-hidden rounded-lg border border-edge"
-                >
-                  <For each={RESPONSES}>
-                    {(option, index) => (
-                      <Button
-                        variant="ghost"
-                        class={`h-10 gap-1 rounded-none px-3.5 text-sm text-ink aria-pressed:bg-accent-bg aria-pressed:font-semibold aria-pressed:text-accent ${index() > 0 ? 'border-l border-edge' : ''}`}
-                        aria-pressed={resolved()?.response === option.value}
-                        onClick={() => props.actions?.respond?.(option.value)}
-                      >
-                        <Show when={resolved()?.response === option.value}>
-                          <Check class="size-3.5" />
-                        </Show>
-                        {option.label}
-                      </Button>
-                    )}
-                  </For>
-                </div>
+                  options={RESPONSES}
+                  value={
+                    RESPONSES.find(
+                      (option) => option.value === resolved()?.response
+                    )?.value
+                  }
+                  onChange={(response) => props.actions?.respond?.(response)}
+                />
               </Show>
               <div class="flex items-center gap-2">
                 <Show
@@ -320,8 +313,7 @@ export function CalendarInviteCard(props: {
                   }
                 >
                   <Button
-                    variant="ghost"
-                    class="h-10 border border-edge px-3.5 text-sm font-semibold text-ink"
+                    variant="strong"
                     onClick={() => props.actions?.connectCalendar?.()}
                   >
                     Connect calendar
@@ -329,21 +321,24 @@ export function CalendarInviteCard(props: {
                 </Show>
                 <Show when={conference() && props.actions?.openExternal}>
                   <Button
-                    variant="ghost"
-                    class="h-10 gap-1.5 bg-accent px-3.5 text-sm font-semibold text-accent-contrast"
+                    variant="cta"
                     aria-label="Join meeting"
                     onClick={() => props.actions?.openExternal?.(conference()!)}
                   >
-                    <VideoCamera class="size-4" />
+                    <VideoCamera class="size-3.5 touch:size-4" />
                     Join
                   </Button>
                 </Show>
                 <Show when={props.actions?.openCalendar}>
                   <Button
-                    variant="ghost"
-                    class="size-10 border border-edge p-0 text-ink-muted"
-                    aria-label="Open in calendar"
-                    onClick={() => props.actions?.openCalendar?.()}
+                    variant="outline"
+                    size="icon-md"
+                    label="Open in calendar"
+                    onClick={(event) =>
+                      props.actions?.openCalendar?.({
+                        openInNewSplit: event.shiftKey,
+                      })
+                    }
                   >
                     <CalendarBlank class="size-4" />
                   </Button>

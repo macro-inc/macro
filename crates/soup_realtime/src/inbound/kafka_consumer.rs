@@ -17,6 +17,7 @@ use crate::domain::{
     ports::{PullRequestSessions, SoupRealtimeService},
     service::SoupRealtimeServiceImpl,
 };
+use call::domain::events::{CallMacroEvent, CallTopicEvent};
 use channels::domain::{
     broker_events::{ChannelMacroEvent, ChannelTopicEvent},
     models::ReferencedShareItemType,
@@ -69,6 +70,7 @@ macro_event_broker::declare_topics!(
         MessageMacroEvent,
         PropertyMacroEvent,
         InitiativeMacroEvent,
+        CallMacroEvent,
 );
 
 fn entity(entity_type: EntityType, entity_id: impl ToString) -> Entity<'static> {
@@ -395,6 +397,22 @@ fn patches_from_channel_event(event: &ChannelTopicEvent) -> Vec<SoupRealtimePatc
     }
 }
 
+/// Imported records reach Soup as soon as they are stored. Native call
+/// lifecycle events don't patch Soup yet.
+fn patches_from_call_event(event: &CallTopicEvent) -> Vec<SoupRealtimePatch> {
+    match event {
+        CallTopicEvent::RecordImported(metadata) => {
+            vec![update(EntityType::Call, metadata.call_id)]
+        }
+        CallTopicEvent::Started(_)
+        | CallTopicEvent::RecordArchived(_)
+        | CallTopicEvent::RecordUpdated(_)
+        | CallTopicEvent::RecordDeleted(_)
+        | CallTopicEvent::RecordSummarized(_)
+        | CallTopicEvent::RecordingReady(_) => Vec::new(),
+    }
+}
+
 /// Message facts carry their parent. Channel messages are Soup items, so a
 /// channel post, edit, deletion, or attachment change patches the channel
 /// and its thread; document discussions are not Soup items and patch nothing.
@@ -585,6 +603,7 @@ fn patches_from_event(event: &DeclaredMacroEvent) -> Vec<SoupRealtimePatch> {
         DeclaredMacroEvent::PropertyMacroEvent(event) => {
             patches_from_property_event(&event.event().event)
         }
+        DeclaredMacroEvent::CallMacroEvent(event) => patches_from_call_event(&event.event().event),
     }
 }
 

@@ -89,6 +89,11 @@ pub async fn handler(
 
     let macro_api_token =
         macro_auth::macro_api_token::encode_macro_api_token(EncodeMacroApiTokenArgs {
+            agent_id: authorization
+                .authorization
+                .user
+                .agent_id
+                .map(|agent| agent.as_uuid()),
             macro_user_id,
             fusionauth_id: user_context.fusion_user_id.clone(),
             organization_id, // TOOD: get from user profile

@@ -13,7 +13,7 @@ async function fetchSystemSkills() {
   return result.value.skills;
 }
 
-function systemSkillsQueryOptions() {
+export function systemSkillsQueryOptions() {
   return {
     queryKey: SYSTEM_SKILLS_QUERY_KEY,
     queryFn: fetchSystemSkills,

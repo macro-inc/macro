@@ -471,7 +471,13 @@ export class Sdk extends HeyApiClient {
     }
     
     /**
-     * Disables inbox syncing for user.
+     * Disables inbox syncing for the selected inbox.
+     *
+     * The inbox is the caller's primary, or the one named by `X-Email-Link-Id`,
+     * which may be an inbox the caller only reaches through delegation. Removal
+     * therefore follows the same policy as `DELETE /email/links/{link_id}`: an
+     * owner's inbox is torn down, while a delegate only loses their
+     * `macro_user_links` edge and the owner's data stays intact.
      */
     public disableSync<ThrowOnError extends boolean = false>(options?: Options<DisableSyncData, ThrowOnError>): RequestResult<DisableSyncResponses, DisableSyncErrors, ThrowOnError> {
         return (options?.client ?? this.client).delete<DisableSyncResponses, DisableSyncErrors, ThrowOnError>({ url: '/email/sync', ...options });

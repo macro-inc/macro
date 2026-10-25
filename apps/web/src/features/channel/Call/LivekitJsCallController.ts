@@ -1,4 +1,5 @@
-import { Telemetry } from '@macro-inc/observability';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import type { CallTokenResponse } from '@service-call/client';
 import {
   type AudioCaptureOptions,
@@ -16,6 +17,7 @@ import {
   stopPrejoinTracks,
 } from './CallSessionController';
 import { startReceiverStatsSampling } from './call-audio-receiver-stats';
+import { traceCallMedia } from './call-media-telemetry';
 
 type LivekitJsCallControllerState = {
   activeChannelId: string | null;
@@ -34,7 +36,8 @@ type LivekitJsCallControllerOptions = {
   finishLocalMediaSetup: (
     room: Room,
     setupVersion: number,
-    prejoinTracks?: CallPrejoinTracks
+    prejoinTracks?: CallPrejoinTracks,
+    mediaSpan?: Span
   ) => Promise<void>;
   destroyProcessors: () => void;
   resetState: () => void;
@@ -81,11 +84,15 @@ export function createLivekitJsCallController(
 
     room.on(RoomEvent.ConnectionStateChanged, (state: ConnectionState) => {
       if (!isCurrentRoom(room)) return;
-      console.debug('[call] connection state changed', {
-        state,
-        room: call.channelId,
-        call: call.callId,
-      });
+      Telemetry.recordSample(
+        'call.connection.state',
+        {
+          'call.connection.state': state,
+          'channel.id': call.channelId ?? undefined,
+          'call.id': call.callId,
+        },
+        Date.now()
+      );
       // A terminal disconnect clears the UI state, but the current Room can
       // still report a late recovery. Restore its identity with the connection
       // state so audio and channel UI agree about which call is connected.
@@ -122,11 +129,17 @@ export function createLivekitJsCallController(
 
     room.on(RoomEvent.Disconnected, (reason?: unknown) => {
       if (!isCurrentRoom(room)) return;
-      console.warn('[call] room disconnected', {
-        reason,
-        room: call.channelId,
-        call: call.callId,
-      });
+      Telemetry.recordSample(
+        'call.connection.disconnected',
+        {
+          // LiveKit's disconnect reason is a numeric enum, never a raw error.
+          'call.connection.reason':
+            typeof reason === 'number' ? reason : undefined,
+          'channel.id': call.channelId ?? undefined,
+          'call.id': call.callId,
+        },
+        Date.now()
+      );
       options.resetState();
     });
   }
@@ -148,9 +161,17 @@ export function createLivekitJsCallController(
     preferences?: CallSessionConnectMetadata
   ) {
     let prejoinTracks = preferences?.localTracks;
+    const span = Telemetry.span('call.connect');
+    span.setAttr('call.id', tokenResponse.callId);
     try {
-      prejoinTracks = await connectRoom(tokenResponse, preferences);
+      prejoinTracks = await span.run(() =>
+        connectRoom(tokenResponse, span, preferences)
+      );
+    } catch (error) {
+      span.error('Call connection failed');
+      throw error;
     } finally {
+      span.end();
       stopPrejoinTracks(prejoinTracks);
     }
   }
@@ -158,6 +179,7 @@ export function createLivekitJsCallController(
   /** Returns the prejoin tracks it did not hand to media setup. */
   async function connectRoom(
     tokenResponse: CallTokenResponse,
+    connectSpan: Span,
     preferences?: CallSessionConnectMetadata
   ): Promise<CallPrejoinTracks | undefined> {
     const prejoinTracks = preferences?.localTracks;
@@ -256,12 +278,46 @@ export function createLivekitJsCallController(
     // run failed-join cleanup, which calls DELETE /call/:channel and kicks the
     // user out. Run the non-critical setup in the background instead.
     const setupVersion = options.nextMediaSetupVersion();
-    void options
-      .finishLocalMediaSetup(targetRoom, setupVersion, prejoinTracks)
-      .catch((e) => {
-        console.error('failed to finish local call media setup', e);
-      });
+    fireAndForget(
+      finishMediaSetup(
+        targetRoom,
+        setupVersion,
+        tokenResponse.callId,
+        connectSpan,
+        prejoinTracks
+      ),
+      'call-media'
+    );
     return undefined;
+  }
+
+  async function finishMediaSetup(
+    targetRoom: Room,
+    setupVersion: number,
+    callId: string,
+    connectSpan: Span,
+    prejoinTracks?: CallPrejoinTracks
+  ) {
+    try {
+      await traceCallMedia(
+        'setup',
+        {
+          'call.id': callId,
+          'call.media.microphone_track': Boolean(prejoinTracks?.microphone),
+          'call.media.camera_track': Boolean(prejoinTracks?.camera),
+        },
+        (mediaSpan) =>
+          options.finishLocalMediaSetup(
+            targetRoom,
+            setupVersion,
+            prejoinTracks,
+            mediaSpan
+          ),
+        connectSpan
+      );
+    } catch {
+      // The media span records a sanitized failure; joining still succeeds.
+    }
   }
 
   async function disconnect() {

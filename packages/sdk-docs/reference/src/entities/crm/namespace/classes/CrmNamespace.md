@@ -16,6 +16,12 @@
 
 `CrmNamespace`
 
+## Properties
+
+| Property | Modifier | Type | Description |
+| ------ | ------ | ------ | ------ |
+| <a id="property-pipelines"></a> `pipelines` | `readonly` | [`PipelineNamespace`](../../pipelines/classes/PipelineNamespace.md) | Pipelines, their records and sharing settings. |
+
 ## Methods
 
 ### companyById()

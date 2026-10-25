@@ -7,6 +7,8 @@ mark-changed = [
   "collab_surface",
   "complete_graph",
   "documents",
+  "graphql_calendar",
   "seed_cli",
+  "xtask_graphql_schema_compat",
   "xtask_workflows",
 ]

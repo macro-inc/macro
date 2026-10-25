@@ -36,6 +36,9 @@ pub enum TurnSignal {
     },
     /// The agent's message for `turn` closed.
     TurnEnded {
+        /// Exact noop from a system-only invocation with no tool activity.
+        #[serde(default)]
+        notification_noop: bool,
         /// The turn that closed.
         turn: TurnId,
         /// The prompt's action id, when the turn was opened by one this

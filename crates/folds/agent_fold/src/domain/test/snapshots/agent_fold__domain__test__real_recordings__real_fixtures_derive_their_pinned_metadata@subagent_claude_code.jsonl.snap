@@ -4,6 +4,8 @@ expression: machine.metadata()
 input_file: crates/folds/agent_fold/fixtures/real/subagent_claude_code.jsonl
 ---
 SessionMetadata {
+    notifications: [],
+    noop_turn: None,
     harness: ClaudeCode,
     model: Some(
         "opus[1m]",

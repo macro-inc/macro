@@ -6,7 +6,7 @@ import { encodeCrmViewParam } from './queries/saved-view-codec';
 import { CompaniesRouteView } from './route-views';
 
 const fixture = vi.hoisted(() => ({
-  setSearch: vi.fn(),
+  setTab: vi.fn(),
   search: undefined as unknown as () => string,
 }));
 
@@ -19,12 +19,8 @@ vi.mock('@core/constant/featureFlags', () => ({
   enableCrm: 'crm',
   isFeatureEnabled: () => true,
 }));
-vi.mock('@app/lib/split-router', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  createSearchParams: () => [
-    { tab: 'active', pipeline: '', seek: '' },
-    fixture.setSearch,
-  ],
+vi.mock('./route-adapter', () => ({
+  createCrmRoute: () => ({ setTab: fixture.setTab }),
 }));
 vi.mock('@solidjs/router', () => ({
   useLocation: () => ({
@@ -37,32 +33,28 @@ vi.mock('./crm', () => ({ Crm: () => null }));
 
 afterEach(() => {
   cleanup();
-  fixture.setSearch.mockReset();
+  fixture.setTab.mockReset();
 });
 
 const pipelineId = '01a1212c-74e5-79bd-8767-0d4943d55b15';
 const link = (activeTab: string) =>
   `?crmView=${encodeCrmViewParam({ kind: 'crm', activeTab })}`;
 
-it('opens a shared pipeline link followed while Customers is open', () => {
+it('opens an older shared pipeline link followed while Customers is open', () => {
   const [search, setSearch] = createSignal('?s0.crm.tab=people');
   fixture.search = search;
   render(() => <CompaniesRouteView />);
 
   setSearch(link(pipelineTab(pipelineId)));
-  expect(fixture.setSearch).toHaveBeenCalledExactlyOnceWith(
-    {
-      tab: pipelineTab(pipelineId),
-      pipeline: pipelineId,
-      seek: expect.any(String),
-    },
-    { mode: 'merge', history: 'replace' }
+  expect(fixture.setTab).toHaveBeenCalledExactlyOnceWith(
+    pipelineTab(pipelineId),
+    { replace: true }
   );
 
   // Moving between Customers tabs keeps the link in the URL.
   setSearch(`${link(pipelineTab(pipelineId))}&s0.crm.tab=people`);
   setSearch(link(pipelineTab(pipelineId)));
-  expect(fixture.setSearch).toHaveBeenCalledOnce();
+  expect(fixture.setTab).toHaveBeenCalledOnce();
 });
 
 it('leaves links to other Customers views alone', () => {
@@ -71,5 +63,5 @@ it('leaves links to other Customers views alone', () => {
   render(() => <CompaniesRouteView />);
 
   setSearch(link('people'));
-  expect(fixture.setSearch).not.toHaveBeenCalled();
+  expect(fixture.setTab).not.toHaveBeenCalled();
 });

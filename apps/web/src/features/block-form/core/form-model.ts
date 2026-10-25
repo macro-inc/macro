@@ -26,7 +26,7 @@ export type FormBookingTarget = { profileId: string; eventTypeId: string };
 
 /**
  * The booking step a response unlocked: only the server hands out its
- * target, once the response is saved and has passed every screener.
+ * target, once the response is saved and has passed every gate.
  */
 export type UnlockedBooking = {
   sectionId: string;

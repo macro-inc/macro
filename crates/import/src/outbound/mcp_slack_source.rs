@@ -58,7 +58,7 @@ impl<S: ConnectorSelect> SlackWorkspaceSource for McpSlackSource<S> {
     }
 }
 
-/// Connector tools and schemas loaded once for a gather or import batch.
+/// Connector tools and schemas loaded once for a discovery or import batch.
 pub struct McpSlackSession {
     tools: Arc<UserMcpTools>,
     user: MacroUserIdStr<'static>,

@@ -21,6 +21,11 @@ command!(end_active_call, "endActiveCall");
 command!(get_pending_answered_call, "getPendingAnsweredCall");
 command!(get_active_call_state, "getActiveCallState");
 command!(switch_camera, "switchCamera");
+command!(can_use_full_screen_intent, "canUseFullScreenIntent");
+command!(
+    open_full_screen_intent_settings,
+    "openFullScreenIntentSettings"
+);
 
 #[derive(Serialize)]
 struct WatchArgs {

@@ -1,15 +1,16 @@
 import { VideoContent } from '@block-video/component/VideoContent';
+import { createFileDownload } from '@core/util/createFileDownload';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { catchToResult } from '@core/util/result';
+import { getFileDocumentBlob } from '@queries/storage/file-document';
 import type { JSX } from 'solid-js';
 import { FileDetailLayout, FileDetailLoadGate } from '../components/FileDetail';
 import { downloadFileOperation } from '../components/file-detail-operations';
-import { getFileDocumentBlob } from '../queries/file-document';
 import {
   loadVideoDocument,
   type VideoDocumentData,
 } from '../queries/video-document';
 import { documentDownloadName } from '../util/document-download-name';
-import { downloadWithProgress } from '../util/download-with-progress';
 import type { FileDetailContext } from '../util/file-detail-context';
 
 export type VideoDetailContext = FileDetailContext<VideoDocumentData>;
@@ -19,22 +20,25 @@ export function VideoDetailDocument(props: {
   data: VideoDocumentData;
   children?: (context: VideoDetailContext) => JSX.Element;
 }) {
+  const download = createFileDownload(() => {
+    const documentId = props.documentId;
+    const metadata = props.data.documentMetadata;
+    return {
+      id: `${documentId}:${metadata.documentVersionId}`,
+      name: documentDownloadName(metadata),
+      load: (options) =>
+        catchToResult(async () => ({
+          blob: await getFileDocumentBlob(
+            { documentId, documentVersionId: metadata.documentVersionId },
+            options
+          ),
+        })),
+    };
+  });
   const operations = [
-    downloadFileOperation(() => {
-      const fileName = documentDownloadName(props.data.documentMetadata);
-      fireAndForget(
-        downloadWithProgress(fileName, (onProgress) =>
-          getFileDocumentBlob(
-            {
-              documentId: props.documentId,
-              documentVersionId: props.data.documentMetadata.documentVersionId,
-            },
-            { onProgress }
-          )
-        ),
-        'drive-view'
-      );
-    }),
+    downloadFileOperation(() =>
+      fireAndForget(download.start(), 'drive-file-download')
+    ),
   ];
 
   return (
@@ -49,6 +53,7 @@ export function VideoDetailDocument(props: {
         documentMetadata: props.data.documentMetadata,
         userAccessLevel: props.data.userAccessLevel,
         operations,
+        download,
       })}
       <VideoContent
         videoUrl={props.data.videoUrl}

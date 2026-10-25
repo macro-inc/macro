@@ -10,7 +10,7 @@ import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { type EntityData, isTaskEntity } from '@entity/types/entity';
 import { Telemetry } from '@macro-inc/observability';
-import { type Accessor, createMemo, onCleanup } from 'solid-js';
+import { type Accessor, onCleanup } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
 import type { SoupState } from '../create-soup-state';
 
@@ -29,23 +29,26 @@ type UseSoupNavigationHotkeysOptions = {
   error?: Accessor<Error | null>;
 };
 
-export const useSoupNavigationHotkeys = (
-  options: UseSoupNavigationHotkeysOptions
-) => {
-  const { scopeId, soup, splitHandle, virtualizerHandle } = options;
+// These callbacks outlive SoupViewList. Keep their closure separate from the
+// mounted view, and release the only route back to its virtualizer on cleanup.
+function createPersistentNavigation(
+  options: Omit<UseSoupNavigationHotkeysOptions, 'virtualizerHandle'>,
+  viewport: { current?: Accessor<VirtualizerHandle | undefined> }
+) {
+  const { scopeId, soup, splitHandle } = options;
   const notificationSource = useGlobalNotificationSource();
 
   const scrollTo = (index: number) => {
-    const handle = virtualizerHandle();
+    const handle = viewport.current?.();
 
     if (!handle) return;
 
-    virtualizerHandle()?.scrollToIndex(index, {
+    handle.scrollToIndex(index, {
       align: 'nearest',
     });
   };
 
-  const navigationReferredFrom = createMemo(() => {
+  const navigationReferredFrom = () => {
     const content = splitHandle.content();
 
     if (content.type === 'component' && isListViewID(content.id)) {
@@ -54,7 +57,7 @@ export const useSoupNavigationHotkeys = (
 
     const referredFrom = splitHandle.referredFrom();
     return isListViewID(referredFrom) ? referredFrom : undefined;
-  });
+  };
 
   const viewId = navigationReferredFrom();
   if (viewId) {
@@ -93,60 +96,6 @@ export const useSoupNavigationHotkeys = (
 
   const navigateToOpenableEntity = (offset: -1 | 1) =>
     soup.navigate.by(offset, { skipGroupHeaders: true });
-
-  const navigateAndSelectEntity = (offset: number) => {
-    const nextRow = soup.navigate.by(offset, { skipGroupHeaders: true });
-    if (!nextRow) return true;
-    soup.selection.select(nextRow.row.original);
-    scrollTo(nextRow.index);
-    return true;
-  };
-
-  const handleNavigationSelection = (offset: number) => {
-    const focusedEntity = soup.focus.item();
-    const next = soup.navigate.peekOffset(offset, { skipGroupHeaders: true });
-
-    const selection = soup.selection;
-
-    const nextEntity = next?.row.original;
-    if (!nextEntity) return true;
-
-    // At the boundary (top/bottom), peekOffset clamps and returns the
-    // same item we're already focused on. No-op to avoid toggling.
-    if (focusedEntity && nextEntity.id === focusedEntity.id) return true;
-
-    if (!focusedEntity) {
-      navigateAndSelectEntity(offset);
-      return true;
-    }
-
-    if (selection.count() === 0) {
-      selection.toggle(focusedEntity);
-      return true;
-    }
-
-    if (
-      !selection.isSelected(focusedEntity.id) &&
-      !selection.isSelected(nextEntity.id)
-    ) {
-      selection.toggle(focusedEntity);
-      navigateAndSelectEntity(offset);
-      return true;
-    }
-
-    if (selection.isSelected(nextEntity.id)) {
-      selection.toggle(focusedEntity);
-      soup.navigate.by(offset, { skipGroupHeaders: true });
-      scrollTo(next.index);
-      return true;
-    }
-
-    navigateAndSelectEntity(offset);
-
-    return true;
-  };
-
-  const group = createHotkeyGroup();
 
   const { fetchNextPage, isFetching, isFetchingNextPage, hasNextPage } =
     options;
@@ -213,14 +162,6 @@ export const useSoupNavigationHotkeys = (
     disposeWithOwner: false,
   });
 
-  registerHotkey({
-    hotkey: ['arrowdown'],
-    scopeId,
-    description: 'Down',
-    keyDownHandler: navigateDown,
-    hide: true,
-  }).withGroup(group);
-
   // Keep j/k registered on the split scope after the list unmounts. When an
   // entity is opened from a list into the same split, this lets j/k continue
   // navigating the originating soup list and update the split content.
@@ -234,6 +175,95 @@ export const useSoupNavigationHotkeys = (
     hide: true,
     disposeWithOwner: false,
   });
+
+  return { scrollTo, navigateDown, navigateUp };
+}
+
+export const useSoupNavigationHotkeys = (
+  options: UseSoupNavigationHotkeysOptions
+) => {
+  const { scopeId, soup, splitHandle } = options;
+  const viewport: { current?: Accessor<VirtualizerHandle | undefined> } = {
+    current: options.virtualizerHandle,
+  };
+  onCleanup(() => {
+    viewport.current = undefined;
+  });
+  const { scrollTo, navigateDown, navigateUp } = createPersistentNavigation(
+    {
+      scopeId,
+      soup,
+      splitHandle,
+      hasNextPage: options.hasNextPage,
+      isFetching: options.isFetching,
+      isFetchingNextPage: options.isFetchingNextPage,
+      fetchNextPage: options.fetchNextPage,
+      error: options.error,
+    },
+    viewport
+  );
+
+  const navigateAndSelectEntity = (offset: number) => {
+    const nextRow = soup.navigate.by(offset, { skipGroupHeaders: true });
+    if (!nextRow) return true;
+    soup.selection.select(nextRow.row.original);
+    scrollTo(nextRow.index);
+    return true;
+  };
+
+  const handleNavigationSelection = (offset: number) => {
+    const focusedEntity = soup.focus.item();
+    const next = soup.navigate.peekOffset(offset, { skipGroupHeaders: true });
+
+    const selection = soup.selection;
+
+    const nextEntity = next?.row.original;
+    if (!nextEntity) return true;
+
+    // At the boundary (top/bottom), peekOffset clamps and returns the
+    // same item we're already focused on. No-op to avoid toggling.
+    if (focusedEntity && nextEntity.id === focusedEntity.id) return true;
+
+    if (!focusedEntity) {
+      navigateAndSelectEntity(offset);
+      return true;
+    }
+
+    if (selection.count() === 0) {
+      selection.toggle(focusedEntity);
+      return true;
+    }
+
+    if (
+      !selection.isSelected(focusedEntity.id) &&
+      !selection.isSelected(nextEntity.id)
+    ) {
+      selection.toggle(focusedEntity);
+      navigateAndSelectEntity(offset);
+      return true;
+    }
+
+    if (selection.isSelected(nextEntity.id)) {
+      selection.toggle(focusedEntity);
+      soup.navigate.by(offset, { skipGroupHeaders: true });
+      scrollTo(next.index);
+      return true;
+    }
+
+    navigateAndSelectEntity(offset);
+
+    return true;
+  };
+
+  const group = createHotkeyGroup();
+
+  registerHotkey({
+    hotkey: ['arrowdown'],
+    scopeId,
+    description: 'Down',
+    keyDownHandler: navigateDown,
+    hide: true,
+  }).withGroup(group);
 
   registerHotkey({
     hotkey: ['arrowup'],

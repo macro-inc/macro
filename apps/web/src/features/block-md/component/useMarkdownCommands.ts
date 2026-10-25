@@ -130,15 +130,6 @@ function registerLexicalStateDebuggerHotkey(
   }).withGroup(group);
 }
 
-export function registerLexicalStateDebuggerCommand(
-  scopeId: string,
-  options: LexicalStateDebuggerCommandOptions
-) {
-  const group = createHotkeyGroup();
-  registerLexicalStateDebuggerHotkey(scopeId, options, group);
-  return group;
-}
-
 /**
  * Registers markdown formatting commands on the block hotkey scope so they
  * appear in the command menu (Cmd+K). Inline formats that already have

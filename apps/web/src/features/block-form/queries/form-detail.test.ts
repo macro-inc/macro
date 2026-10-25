@@ -118,6 +118,7 @@ describe('the booking step', () => {
     respondentColumnId: null,
     createdAt: '2026-10-01T12:00:00Z',
     updatedAt: '2026-10-01T12:00:00Z',
+    isHiddenInDrive: false,
   } as const;
 
   it('reads an editor’s booking step with its target and writes it back', () => {
@@ -180,6 +181,40 @@ describe('the booking step', () => {
     expect(() => toLayoutDocument(detail.layout)).toThrow(
       'Booking step “call” has no booking link'
     );
+  });
+
+  it('reads a step kind from a newer server as a plain section instead of throwing', () => {
+    const fromNewerServer = JSON.parse(
+      '{"kind":"payment","id":"pay","title":"Pay the fee","description":"Ten dollars."}'
+    );
+    const detail = toFormDetail({
+      form,
+      access: 'view',
+      tableGone: false,
+      sections: [fromNewerServer],
+    });
+    expect(detail.layout.sections).toEqual([
+      {
+        id: 'pay',
+        title: 'Pay the fee',
+        description: 'Ten dollars.',
+        kind: 'questions',
+        gateRules: null,
+        gateMessage: '',
+        bookingTarget: null,
+        questions: [],
+      },
+    ]);
+  });
+
+  it('does not report an outcome from a newer server as a submission', () => {
+    const fromNewerServer = JSON.parse('{"outcome":"queued","response":"r-1"}');
+
+    expect(toSubmitOutcome(fromNewerServer)).toEqual({
+      kind: 'stopped',
+      sectionId: '',
+      message: 'Update Macro to see whether your response was submitted.',
+    });
   });
 
   it('unlocks the booking step only from an accepted submission or a passing saved response', () => {

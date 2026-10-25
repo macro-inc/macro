@@ -1,9 +1,11 @@
 import {
   CollapsibleSection,
+  SearchBar,
   useViewTabHotkeys,
   ViewSidebar,
 } from '@app/components/view-shell';
 import { SidebarCreateHeader } from '@app/components/view-shell/SidebarCreateButton';
+import { ConnectorImportSidebar } from '@app/features/connector-import/connector-import';
 import { FavoriteContextMenu } from '@app/features/favorites/FavoriteContextMenu';
 import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
 import { openProject } from '@app/features/projects/open-project';
@@ -17,6 +19,7 @@ import {
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import CheckSquareIcon from '@phosphor/check-square.svg';
 import ListChecksIcon from '@phosphor/list-checks.svg';
@@ -26,6 +29,7 @@ import { useFavoritesData } from '@queries/favorites/favorites';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import { createMemo, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { TasksCreateAction } from '../tasks-create-action';
 import { useTasksView } from '../tasks-view-context';
 import type { TasksTab } from '../types';
 
@@ -149,6 +153,7 @@ export function TasksSidebar() {
   const panel = useSplitPanelOrThrow();
   const {
     state,
+    setState,
     projectsEnabled,
     setTab,
     isSidebarSectionOpen,
@@ -170,6 +175,23 @@ export function TasksSidebar() {
     <ViewSidebar.Root aria-label="Tasks navigation">
       <SidebarCreateHeader
         title="Tasks"
+        searchLabel="Search tasks"
+        search={() => (
+          <SearchBar
+            label="Search tasks"
+            placeholder="Search tasks"
+            value={state.search}
+            onValueChange={(search) => setState('search', search)}
+          />
+        )}
+        createAction={
+          !isTouchDevice() ? (
+            <TasksCreateAction
+              presentation="sidebar"
+              projectsEnabled={projectsEnabled()}
+            />
+          ) : undefined
+        }
         label={state.tab === 'projects' ? 'New project' : 'New task'}
         onCreate={() =>
           layout.popoverSplit({
@@ -209,6 +231,7 @@ export function TasksSidebar() {
             }}
           />
         </Show>
+        <ConnectorImportSidebar category="tasks" class="mt-auto" />
       </ViewSidebar.Content>
     </ViewSidebar.Root>
   );

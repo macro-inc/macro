@@ -6,7 +6,7 @@ import Plus from '@phosphor/plus.svg';
 import Trash from '@phosphor/trash.svg';
 import VideoCamera from '@phosphor/video-camera.svg';
 import Warning from '@phosphor/warning.svg';
-import { Button, ToggleSwitch } from '@ui';
+import { Button, Tabs, ToggleSwitch } from '@ui';
 import { Stepper } from '@ui/components/Stepper';
 import {
   batch,
@@ -591,38 +591,17 @@ export function EventEditor(props: EventEditorProps) {
                     </Button>
                   </div>
                   <div class="flex min-w-0 flex-col gap-3">
-                    <div
-                      role="group"
+                    <Tabs
+                      touch="pills"
                       aria-label="Scheduling type"
-                      class="flex flex-wrap gap-2"
-                    >
-                      <For
-                        each={
-                          [
-                            { value: 'collective', label: 'Collective' },
-                            { value: 'roundRobin', label: 'Round robin' },
-                          ] as const
-                        }
-                      >
-                        {(option) => (
-                          <Button
-                            type="button"
-                            size="md"
-                            variant="ghost"
-                            disabled={props.saving || props.step !== 'location'}
-                            aria-pressed={props.draft.mode === option.value}
-                            class={`rounded-full border px-4 ${
-                              props.draft.mode === option.value
-                                ? 'border-accent/30 bg-accent/10 text-accent not-touch:not-disabled:hover:bg-accent/15 not-touch:not-disabled:hover:text-accent'
-                                : 'border-edge-frame text-ink-muted not-touch:not-disabled:hover:text-ink-muted'
-                            }`}
-                            onClick={() => props.onUpdate('mode', option.value)}
-                          >
-                            {option.label}
-                          </Button>
-                        )}
-                      </For>
-                    </div>
+                      disabled={props.saving || props.step !== 'location'}
+                      options={[
+                        { value: 'collective', label: 'Collective' },
+                        { value: 'roundRobin', label: 'Round robin' },
+                      ]}
+                      value={props.draft.mode}
+                      onChange={(mode) => props.onUpdate('mode', mode)}
+                    />
                     <div class="flex w-72 max-w-full min-w-0 flex-col gap-2">
                       <div class="flex min-w-0 items-center gap-2">
                         <div class="min-w-0 flex-1">

@@ -66,9 +66,10 @@ both read states again. A badge counts hidden types plus an active status filter
 Read status and type selections persist.
 There are no desktop Signal/Noise tabs. A **Home** heading
 labels the top left of the block, matching the **Email**, **Tasks**, **Chat**, and
-**Agents** sidebar headings. The full-width **New chat** plus pill below the heading clears the preview and returns to the Home
-starting pane; it does not create a chat. Email and Tasks have matching top pills
-for **New email** and **New task**.
+**Agents** sidebar headings. The full-width **New** plus pill below the heading
+clears the preview and returns to the Home starting pane; it does not create a
+chat. It uses the shared desktop creation styling described in
+[navigation](navigation.md).
 
 The Home provider honors an explicit initial tab, search, grouping, and facet
 selection. Filters persist per user across reloads and fresh Home navigation;
@@ -77,7 +78,15 @@ overrides saved filters. Returning through split history resets navigation to Si
 
 Channel thread replies remain separate Home entries from their parent channel,
 using single-line rows and a reply arrow icon on desktop, labeled
-with the sender and channel (for example, **Peter in #battlefield**). Channel names
+with the sender and channel (for example, **Peter in #battlefield**). Replies and
+mentions name the latest notification's sender, including bots, even after the
+notification is read. Document-mention and reaction notifications also name
+their sender, never the thread's original author. Verify a reply containing a
+document chip in your own thread: the row must keep the replier's name when
+the document-mention notification arrives, including after it is marked done.
+To verify user mentions, mention yourself from a second account in a
+thread started by someone else: the row must name the mentioner and open their
+message. Channel names
 prefer the current channel cache, then a matching thread notification's name,
 then **Unknown channel** if neither source has a name. Selecting a
 thread opens that thread in the channel preview; Shift-click opens it in a split.
@@ -132,7 +141,9 @@ for tasks, skills, snippets, and other documents. Suggestion loading/errors
 are isolated from the input. If generation stalls for 45 seconds, the shimmer
 is replaced with a retry action; a late result still appears automatically.
 Generation status updates do not extend that deadline. Retry starts a fresh
-45-second wait. Shift+Enter adds a line. Selecting a Home row replaces
+45-second wait. Free users get suggestions from the free-tier model; if the
+plan refuses the request (403), the row says suggestions are unavailable and
+offers no retry. Shift+Enter adds a line. Selecting a Home row replaces
 the composer with its preview. Home uses the shared 256px sidebar and collapses
 navigation below 720px. The hamburger or `Cmd+.` opens the full feed as a
 slide-over. Activating a row or **New chat** closes that overlay to show content;
@@ -140,6 +151,11 @@ arrow-key browsing keeps it open. Preview headers start with **Home >**. Clickin
 **Home** clears the preview and returns to the starting pane without changing
 sidebar visibility. Use the hamburger to reopen the feed. Mobile continues to
 show the activity list alone.
+
+Desktop previews use the same header controls as their standalone views, with
+the **Home >** return breadcrumb added. Calendar shares its date, search,
+navigation, view, and New controls; email shares its action, navigation, AI/task,
+and Share groups. Touch previews retain their existing compact headers.
 
 Document previews opened from Home expose **Share** and **Copy Share Link** before
 the details toggle, including tasks, snippets, skills, canvases, PDFs, images,

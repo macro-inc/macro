@@ -359,3 +359,26 @@ async fn unprefixed_unknown_path_is_not_rewritten_onto_the_prefix() {
 
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
 }
+
+#[tokio::test]
+async fn mounted_mcp_preserves_process_readiness_and_bearer_protection() {
+    let app = super::mounted_mcp_router(
+        Harness::new().service,
+        JwtValidationArgs::new_testing(),
+        Router::new().route("/", get(ok)),
+    )
+    .merge(Router::new().route("/health", get(|| async { StatusCode::SERVICE_UNAVAILABLE })));
+
+    for (path, expected) in [
+        ("/health", StatusCode::SERVICE_UNAVAILABLE),
+        ("/mcp/.well-known/oauth-protected-resource", StatusCode::OK),
+        (
+            "/mcp/.well-known/oauth-authorization-server",
+            StatusCode::OK,
+        ),
+        ("/mcp", StatusCode::UNAUTHORIZED),
+        ("/mcp/mcp", StatusCode::UNAUTHORIZED),
+    ] {
+        assert_eq!(get_status(app.clone(), path).await, expected, "{path}");
+    }
+}

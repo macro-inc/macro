@@ -45,7 +45,8 @@ export function useInlineEditor(): {
   };
 
   const save = async () => {
-    if (isSaving()) return;
+    // Removing a canceled input can still fire blur.
+    if (!isEditing() || isSaving()) return;
     const property = ctx.property();
     const trimmedValue = inputValue().trim();
     const currentRawValue = getCurrentRawValue();

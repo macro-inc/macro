@@ -188,8 +188,8 @@ export function GateCard(props: {
             <span>{props.eyebrow}</span>
           </div>
           <LiveTextInput
-            aria-label="Screener title"
-            placeholder="Untitled screener"
+            aria-label="Gate title"
+            placeholder="Untitled gate"
             value={props.title}
             maxlength={200}
             class="h-8 w-full rounded-md border border-transparent bg-transparent px-1.5 text-base font-semibold text-ink outline-none placeholder:text-ink-placeholder hover:border-edge-muted focus:border-edge-focus focus:bg-input"
@@ -206,8 +206,8 @@ export function GateCard(props: {
           >
             <span class="flex-1">
               {props.brokenRules === 1
-                ? 'A rule checks a question that is no longer before this screener. Responses are refused until it is fixed.'
-                : `${props.brokenRules} rules check questions that are no longer before this screener. Responses are refused until they are fixed.`}
+                ? 'A rule checks a question that is no longer before this gate. Responses are refused until it is fixed.'
+                : `${props.brokenRules} rules check questions that are no longer before this gate. Responses are refused until they are fixed.`}
             </span>
             <Button variant="outline" size="sm" onClick={props.onRepair}>
               Remove broken rules
@@ -218,8 +218,8 @@ export function GateCard(props: {
           when={!props.noQuestionsBefore}
           fallback={
             <p class="rounded-lg border border-edge-muted bg-surface px-3 py-2 text-xs text-ink-muted">
-              A screener checks answers from the sections before it. Move it
-              below a section with questions to add rules.
+              A gate checks answers from the sections before it. Move it below a
+              section with questions to add rules.
             </p>
           }
         >

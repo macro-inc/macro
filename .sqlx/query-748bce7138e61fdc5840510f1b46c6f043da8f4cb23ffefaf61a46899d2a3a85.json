@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE agent_session\n                SET turn_state = $2,\n                    modified_at = CASE WHEN $3 THEN now() ELSE modified_at END\n                WHERE id = $1 AND turn_state IS DISTINCT FROM $2\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "748bce7138e61fdc5840510f1b46c6f043da8f4cb23ffefaf61a46899d2a3a85"
+}

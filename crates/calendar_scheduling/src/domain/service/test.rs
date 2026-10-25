@@ -1263,6 +1263,7 @@ impl AttachmentReadiness for Arc<Calendar> {
 mod booking_links;
 
 mod management;
+mod replacement;
 
 #[cfg(all(feature = "client", feature = "inbound"))]
 mod http_administration;

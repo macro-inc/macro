@@ -81,13 +81,13 @@ async fn gateway_requires_ticket_and_preserves_request_target_and_streamed_respo
         .unwrap();
     });
     let share = service.share(identity(), address.port()).await.unwrap();
-    let lease = service.authenticate_ssh(&share.token).unwrap();
+    let lease = service.authenticate_ssh(&share.token).await.unwrap();
     service
         .register(&lease, "127.0.0.1", 1, Arc::new(TcpTunnel(address)))
         .unwrap();
     probe(&lease).await.unwrap();
     service.ready(&lease).await;
-    let launch = service.launch(receipt(AccessLevel::View)).unwrap();
+    let launch = service.launch(receipt(AccessLevel::View)).await.unwrap();
     let host = format!("{}.preview.test", share.preview.id);
     let gateway = router(service.clone());
     let denied = gateway
@@ -200,12 +200,12 @@ async fn non_upgraded_stream_holds_permit_and_rechecks_viewer_permission() {
         .unwrap();
     });
     let share = service.share(identity(), address.port()).await.unwrap();
-    let lease = service.authenticate_ssh(&share.token).unwrap();
+    let lease = service.authenticate_ssh(&share.token).await.unwrap();
     service
         .register(&lease, "127.0.0.1", 1, Arc::new(TcpTunnel(address)))
         .unwrap();
     service.ready(&lease).await;
-    let ticket = service.launch(receipt(AccessLevel::View)).unwrap();
+    let ticket = service.launch(receipt(AccessLevel::View)).await.unwrap();
     let cookie = service
         .redeem(&share.preview.id, &ticket.ticket)
         .await

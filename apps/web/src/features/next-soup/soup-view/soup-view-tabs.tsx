@@ -21,12 +21,12 @@ import {
 } from '@app/features/next-soup/soup-view/tab-lists';
 import { PillTabs } from '@components/app/mobile/PillTabs';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import type { TabItem } from '@core/component/Tabs';
-import { TabsInset } from '@core/component/TabsInset';
-import { TabsInsetDropdown } from '@core/component/TabsInsetDropdown';
 import { useUserContext } from '@core/context/user';
+import CaretDownIcon from '@phosphor/caret-down.svg';
+import CheckIcon from '@phosphor/check.svg';
 import { useIsTeamAdmin } from '@queries/team/teams';
-import { batch, createMemo, For, Match, Switch } from 'solid-js';
+import { Dropdown, type TabOption, Tabs } from '@ui';
+import { batch, createMemo, For, Match, Show, Switch } from 'solid-js';
 
 const useCurrentListView = () => {
   const panel = useSplitPanelOrThrow();
@@ -46,7 +46,7 @@ const useCurrentListView = () => {
  * pills, and the number/cycle hotkeys — agrees on which tabs exist.
  */
 export const useVisibleViewTabs = () => {
-  return (view: TabbedListView): TabItem[] => VIEW_TAB_LISTS[view];
+  return (view: TabbedListView): TabOption<string>[] => VIEW_TAB_LISTS[view];
 };
 
 const PRESERVE_FILTERS_ON_TAB_CHANGE: ListView[] = [
@@ -229,16 +229,17 @@ const ViewTabs = (props: { view: TabbedListView }) => {
   const visibleViewTabs = useVisibleViewTabs();
 
   return (
-    <TabsInset
-      list={visibleViewTabs(props.view)}
-      value={activeTab()}
-      defaultValue={VIEW_TAB_PRESETS[props.view].default}
+    <Tabs
+      aria-label="View tabs"
+      class="shrink-0"
+      options={visibleViewTabs(props.view)}
+      value={activeTab() ?? VIEW_TAB_PRESETS[props.view].default}
       onChange={(value) => applyTabPreset(props.view, value)}
     />
   );
 };
 
-/** Compact dropdown variant of tabs, used when the header is too narrow for the full segmented control. */
+/** The selected tab as a menu, for a header too narrow for every tab. */
 export const CollapsedSoupViewTabs = () => {
   const listView = useCurrentListView();
   const { applyTabPreset } = useApplyPreset();
@@ -250,28 +251,43 @@ export const CollapsedSoupViewTabs = () => {
     return v && v in VIEW_TAB_LISTS ? (v as TabbedListView) : undefined;
   });
 
-  const list = createMemo(() => {
+  const options = () => {
     const v = view();
     return v ? visibleViewTabs(v) : [];
-  });
+  };
 
-  const defaultValue = createMemo(() => {
+  const selected = () => {
     const v = view();
-    return v ? VIEW_TAB_PRESETS[v].default : undefined;
-  });
+    const value = activeTab() ?? (v ? VIEW_TAB_PRESETS[v].default : undefined);
+    return options().find((option) => option.value === value) ?? options()[0];
+  };
 
   return (
-    <TabsInsetDropdown
-      list={list()}
-      value={activeTab()}
-      defaultValue={defaultValue()}
-      onChange={(value) => {
-        const v = view();
-        if (v) {
-          applyTabPreset(v, value);
-        }
-      }}
-    />
+    <Dropdown placement="bottom-start">
+      <Dropdown.Trigger variant="outline" size="md">
+        {selected()?.label}
+        <CaretDownIcon class="size-3 text-ink-extra-muted" />
+      </Dropdown.Trigger>
+      <Dropdown.Content>
+        <Dropdown.Group>
+          <For each={options()}>
+            {(option) => (
+              <Dropdown.Item
+                onSelect={() => {
+                  const v = view();
+                  if (v) applyTabPreset(v, option.value);
+                }}
+              >
+                <span class="flex-1 truncate">{option.label}</span>
+                <Show when={selected()?.value === option.value}>
+                  <CheckIcon class="size-3.5 text-accent" />
+                </Show>
+              </Dropdown.Item>
+            )}
+          </For>
+        </Dropdown.Group>
+      </Dropdown.Content>
+    </Dropdown>
   );
 };
 

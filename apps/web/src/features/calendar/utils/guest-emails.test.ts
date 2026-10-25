@@ -1,6 +1,10 @@
 import type { CalendarAttendee } from '@service-storage/generated/schemas/calendarAttendee';
 import { describe, expect, it } from 'vitest';
-import type { CalendarEvent } from '../types';
+import {
+  type CalendarEvent,
+  DEFAULT_GUEST_POLICY,
+  NO_VIEWER_CAPABILITIES,
+} from '../types';
 import { eventEmailRecipients, guestEmails } from './guest-emails';
 
 function attendee(
@@ -24,6 +28,8 @@ function event(attendees: CalendarAttendee[]): CalendarEvent {
     occurrenceKey: 'occurrence',
     isCancelled: false,
     isReadOnly: false,
+    guestPolicy: DEFAULT_GUEST_POLICY,
+    viewerCan: NO_VIEWER_CAPABILITIES,
     attendees,
     recurrenceLines: [],
     sourceCalendarIds: [],

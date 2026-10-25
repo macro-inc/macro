@@ -1,4 +1,5 @@
 import type { EditorConfigBuilder } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
+import { hapticImpact } from '@core/mobile/haptics';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal, type JSX, onCleanup, onMount } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -15,6 +16,8 @@ const mocks = vi.hoisted(() => ({
   startDictation: () => {},
   stopDictation: () => {},
 }));
+
+vi.mock('@core/mobile/haptics', () => ({ hapticImpact: vi.fn() }));
 
 vi.mock('@app/features/dictation/composer-dictation', () => ({
   createComposerDictation: () => {
@@ -262,7 +265,9 @@ describe('Enter', () => {
     // Not captured, so the editor inserts a newline instead of sending.
     expect(mocks.enter?.()).toBe(false);
     expect(onSend).not.toHaveBeenCalled();
+    expect(hapticImpact).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(hapticImpact).toHaveBeenCalledExactlyOnceWith('light');
     expect(onSend).toHaveBeenCalledWith(
       expect.objectContaining({ content: draft })
     );

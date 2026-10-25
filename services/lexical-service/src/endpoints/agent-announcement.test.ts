@@ -14,9 +14,9 @@ const request = (body: unknown) =>
     body: JSON.stringify(body),
   });
 const connectionPrompt = {
-  agentTag: '@claude',
-  message: 'Connect Claude, then mention me again.',
-  chip: { appSlug: 'claude-cloud', name: 'Claude', target: 'harness' },
+  agentTag: '@codex',
+  message: 'Connect Codex, then mention me again.',
+  chip: { appSlug: 'codex-cloud', name: 'Codex', target: 'harness' },
 };
 
 describe('agent announcements', () => {
@@ -25,7 +25,7 @@ describe('agent announcements', () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
       markdown:
-        '`@claude` Connect Claude, then mention me again. <m-connect-app>{"appSlug":"claude-cloud","name":"Claude","target":"harness"}</m-connect-app>',
+        '`@codex` Connect Codex, then mention me again. <m-connect-app>{"appSlug":"codex-cloud","name":"Codex","target":"harness"}</m-connect-app>',
     });
   });
   const chip = {

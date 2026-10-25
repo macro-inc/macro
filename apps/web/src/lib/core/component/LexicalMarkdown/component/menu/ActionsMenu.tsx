@@ -37,6 +37,7 @@ false && floatWithElement;
 
 // Surface's p-px border (2px) + py-2 padding (16px)
 const PANEL_DECORATION_HEIGHT = 18;
+const MAX_CONTENT_HEIGHT = 256;
 
 function ActionsMenuItem(props: {
   action: Action;
@@ -137,7 +138,10 @@ export function ActionMenu(props: {
   const contentMaxHeight = () => {
     const h = menuAvailableHeight();
     if (h === undefined) return undefined;
-    return Math.min(256, Math.max(0, h - PANEL_DECORATION_HEIGHT));
+    return Math.min(
+      MAX_CONTENT_HEIGHT,
+      Math.max(0, h - PANEL_DECORATION_HEIGHT)
+    );
   };
 
   const { isKeypressActive } = useIsKeyPressActive();
@@ -317,6 +321,7 @@ export function ActionMenu(props: {
           reactiveOnContainer: props.editor.getRootElement(),
           useBlockBoundary: props.useBlockBoundary,
           onAvailableHeight: setMenuAvailableHeight,
+          fullHeight: MAX_CONTENT_HEIGHT + PANEL_DECORATION_HEIGHT,
         }
       : undefined;
 
@@ -324,6 +329,7 @@ export function ActionMenu(props: {
     <Show when={isOpen()}>
       <ScopedPortal scope={props.portalScope}>
         <div
+          data-holds-prompts
           class="w-60 cursor-default select-none z-modal-content menu-open-animation"
           use:floatWithElement={floatWithElementProps()}
           use:floatWithSelection={floatWithSelectionProps()}
@@ -331,7 +337,7 @@ export function ActionMenu(props: {
           on:touchstart={(e) => e.stopPropagation()}
           ref={menuRef}
         >
-          <Surface depth={2} class="py-1.5 glass bg-menu-glass rounded-xl">
+          <Surface depth={2} hideBorder class="menu-surface rounded-xl py-1.5">
             <div
               class="overflow-y-auto scrollbar-hidden"
               style={{

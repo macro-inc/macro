@@ -19,6 +19,7 @@ pub trait StaleSessionRepo: Send + Sync {
     /// the claim, append `Disconnected`, and project its turn state. Return
     /// `None` if a heartbeat, takeover, release, or another recovery won.
     /// Revocation increments the fence so the old actor can never append again.
+    /// Closing an abandoned runtime must not reorder the session list.
     fn disconnect_stale_claim(
         &self,
         claim: SessionClaim,

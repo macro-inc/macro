@@ -3,8 +3,8 @@ use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use document_storage_service_client::DocumentStorageServiceClient;
 use email_api_client::domain::models::EmailApiError;
-use macro_user_id::cowlike::ArcCowStr;
-use macro_user_id::user_id::MacroUserId;
+use macro_user_id::lowercased::Lowercase;
+use macro_user_id::user_id::{MacroUserId, MacroUserIdStr};
 use model::document::MAX_DOCUMENT_NAME_GRAPHEMES;
 use model::document::response::{CreateDocumentRequest, CreateDocumentResponse};
 use models_email::service::attachment::{
@@ -365,55 +365,51 @@ async fn set_email_attachment_properties(
     document_id: &str,
     p: &AttachmentUploadArgs,
 ) -> Result<(), UploadAttachmentError> {
-    let sender_email = format!("macro|{}", p.attachment_metadata.sender_email);
-    let sender = MacroUserId::parse_from_str(&sender_email)
-        .map_err(|e| {
-            UploadAttachmentError::ParseError(format!(
-                "Failed to parse sender email {} into macro user id: {}",
-                p.attachment_metadata.sender_email, e
-            ))
-        })?
-        .lowercase();
-
-    // parse_from_str only accepts &str, so we need to store prefixed emails somewhere that outlives parsing
-    let prefixed_emails: Vec<String> = p
-        .recipient_emails
-        .iter()
-        .map(|email| format!("macro|{}", email))
-        .collect();
-
-    let recipients: Result<Vec<MacroUserId<ArcCowStr>>, _> = prefixed_emails
-        .iter()
-        .map(|email| {
-            MacroUserId::parse_from_str(email).map_err(|e| {
-                UploadAttachmentError::ParseError(format!(
-                    "Failed to parse recipient email {} into macro user id: {}",
-                    email, e
-                ))
-            })
-        })
-        .collect();
-
-    let recipients: Vec<_> = recipients?.into_iter().map(|id| id.lowercase()).collect();
-
     system_properties_service
         .set_email_attachment_properties(vec![EmailAttachmentInput {
             entity_id: document_id.to_string(),
-            properties: EmailAttachmentProperty {
-                source: Some(SourceEntity {
-                    entity_type: models_properties::EntityType::Thread,
-                    entity_id: p.attachment_metadata.thread_db_id.to_string(),
-                    specific_message_id: Some(p.attachment_metadata.message_db_id),
-                }),
-                // TODO: companies support
-                companies: None,
-                sender: Some(sender),
-                recipients: Some(recipients),
-                subject: p.attachment_metadata.subject.clone(),
-            },
+            properties: email_attachment_property(p),
         }])
         .await
         .map_err(|e| UploadAttachmentError::SystemPropertiesSetFailed(e.to_string()))?;
 
     Ok(())
+}
+
+/// Builds the attachment's properties from its message.
+///
+/// Header addresses are stored as Gmail sent them, so some are not valid Macro
+/// user ids. Those are left out rather than dropping every property.
+fn email_attachment_property(p: &AttachmentUploadArgs) -> EmailAttachmentProperty<'static> {
+    EmailAttachmentProperty {
+        source: Some(SourceEntity {
+            entity_type: models_properties::EntityType::Thread,
+            entity_id: p.attachment_metadata.thread_db_id.to_string(),
+            specific_message_id: Some(p.attachment_metadata.message_db_id),
+        }),
+        // TODO: companies support
+        companies: None,
+        sender: macro_user_id(p, &p.attachment_metadata.sender_email),
+        recipients: Some(
+            p.recipient_emails
+                .iter()
+                .filter_map(|email| macro_user_id(p, email))
+                .collect(),
+        ),
+        subject: p.attachment_metadata.subject.clone(),
+    }
+}
+
+fn macro_user_id(p: &AttachmentUploadArgs, email: &str) -> Option<MacroUserId<Lowercase<'static>>> {
+    match MacroUserIdStr::try_from_email(email) {
+        Ok(id) => Some(id.0),
+        // The parse error echoes the address, so it stays out of the log.
+        Err(_) => {
+            tracing::warn!(
+                message_id = %p.attachment_metadata.message_db_id,
+                "Leaving an address that is not a valid Macro user id out of attachment properties"
+            );
+            None
+        }
+    }
 }

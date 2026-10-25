@@ -120,6 +120,8 @@ pub trait EmailMutationService: Send + Sync + 'static {
         &self,
         user_id: MacroUserIdStr<'static>,
         draft_id: Uuid,
+
+        expected_generation: i32,
     ) -> impl Future<Output = Result<DeletedUserDraft, EmailErr>> + Send;
 }
 
@@ -201,8 +203,11 @@ where
         &self,
         user_id: MacroUserIdStr<'static>,
         draft_id: Uuid,
+
+        expected_generation: i32,
     ) -> Result<DeletedUserDraft, EmailErr> {
-        self.delete_draft_for_user(user_id, draft_id).await
+        self.delete_draft_for_user(user_id, draft_id, expected_generation)
+            .await
     }
 }
 
@@ -332,6 +337,8 @@ impl From<SaveEmailDraftContactInput> for ContactInfo {
 /// existing draft.
 #[derive(InputObject)]
 pub struct SaveEmailDraftInput {
+    /// Generation from the last loaded draft. Omitted by legacy clients.
+    pub draft_generation: Option<i32>,
     /// Verified sender address for the selected inbox. Absent selects its primary address.
     pub sender_email: Option<String>,
     /// Draft handle: a client-generated ID, or a server ID from a fetched
@@ -374,6 +381,8 @@ pub struct SaveEmailDraftInput {
 /// Input for deleting an email draft.
 #[derive(InputObject)]
 pub struct DeleteEmailDraftInput {
+    /// Generation from the last loaded draft.
+    pub draft_generation: Option<i32>,
     /// Draft handle to delete: a client-generated ID or a server ID, resolved
     /// like a save's. A handle that is already gone (or was never bound — a
     /// discard can replay before its draft's first save ever committed)
@@ -475,6 +484,7 @@ fn saved_draft_message(saved: SavedUserDraft) -> Message {
         draft.body_text.as_deref(),
     );
     Message {
+        draft_generation: draft.draft_generation,
         operation_status,
         db_id: draft.db_id,
         provider_id: draft.provider_id,
@@ -497,6 +507,7 @@ fn saved_draft_message(saved: SavedUserDraft) -> Message {
             || !attachments_draft.is_empty()
             || !attachments_forwarded.is_empty(),
         scheduled_send_time: draft.send_time,
+        scheduled_send_status: None,
         from: Some(sender),
         to: draft.to,
         cc: draft.cc,
@@ -519,8 +530,20 @@ fn saved_draft_message(saved: SavedUserDraft) -> Message {
 /// Error taxonomy for the draft mutations (save and delete), mirroring the
 /// REST `CreateDraftError` mapping with machine-readable `extensions.code`
 /// values the client can use to offer recovery without blocking its mutation queue.
-fn draft_mutation_error(error: &EmailErr) -> async_graphql::Error {
+pub fn draft_mutation_error(error: &EmailErr) -> async_graphql::Error {
     let (message, code) = match error {
+        EmailErr::SendAttemptConflict => (
+            "send attempt was reused with different content",
+            "SEND_ATTEMPT_CONFLICT",
+        ),
+        EmailErr::InvalidSendSnapshot(_) => (
+            "review the message and attachments before sending",
+            "INVALID",
+        ),
+        EmailErr::DraftGenerationConflict(_) => (
+            "draft changed on another device; preserve your edits and reload before retrying",
+            "DRAFT_VERSION_CONFLICT",
+        ),
         EmailErr::MessageAlreadySent(_) => {
             ("email draft has already been sent", "DRAFT_ALREADY_SENT")
         }
@@ -838,7 +861,11 @@ where
         let service = ctx.data::<Arc<S>>()?;
 
         let deleted = service
-            .delete_email_draft(user_id.clone(), draft_id)
+            .delete_email_draft(
+                user_id.clone(),
+                draft_id,
+                input.draft_generation.unwrap_or(0),
+            )
             .await
             .map_err(|error| {
                 tracing::error!(
@@ -868,7 +895,9 @@ where
 
 /// Convert transport input into the domain draft input. Drafts carry no
 /// actor: attribution happens when the draft is actually sent.
-fn draft_input_from_graphql(input: SaveEmailDraftInput) -> async_graphql::Result<CreateDraftInput> {
+pub(crate) fn draft_input_from_graphql(
+    input: SaveEmailDraftInput,
+) -> async_graphql::Result<CreateDraftInput> {
     let send_time = input
         .send_time
         .as_deref()
@@ -883,6 +912,8 @@ fn draft_input_from_graphql(input: SaveEmailDraftInput) -> async_graphql::Result
         .transpose()?;
 
     Ok(CreateDraftInput {
+        frozen_signature_html: None,
+        draft_generation: input.draft_generation.unwrap_or(0),
         sender_email: input
             .sender_email
             .map(|address| {

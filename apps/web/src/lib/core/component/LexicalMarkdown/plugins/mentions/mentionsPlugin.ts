@@ -6,6 +6,7 @@ import type { PeerIdValidator } from '@macro-inc/lexical-core';
 import {
   $collapseInlineSearch,
   $createAgentSessionMentionNode,
+  $createBookingLinkMentionNode,
   $createContactMentionNode,
   $createDateMentionNode,
   $createDocumentMentionNode,
@@ -27,6 +28,8 @@ import {
   $removeInlineSearch,
   type AgentSessionMentionInfo,
   AgentSessionMentionNode,
+  type BookingLinkMentionInfo,
+  BookingLinkMentionNode,
   type ContactMentionInfo,
   ContactMentionNode,
   type DateMentionInfo,
@@ -132,6 +135,9 @@ export const INSERT_PR_MENTION_COMMAND: LexicalCommand<PullRequestMentionInfo> =
 
 export const INSERT_THEME_MENTION_COMMAND: LexicalCommand<ThemeMentionInfo> =
   createCommand('INSERT_THEME_MENTION_COMMAND');
+
+export const INSERT_BOOKING_LINK_MENTION_COMMAND: LexicalCommand<BookingLinkMentionInfo> =
+  createCommand('INSERT_BOOKING_LINK_MENTION_COMMAND');
 
 export type ItemMention = {
   itemType:
@@ -720,6 +726,23 @@ function registerMentionsPlugin(
             mentionNode.selectEnd();
             return true;
           }
+          $insertNodes([mentionNode]);
+          if ($isRootOrShadowRoot(mentionNode.getParentOrThrow())) {
+            $wrapNodeInElement(mentionNode, $createParagraphNode);
+          }
+          mentionNode.selectEnd();
+        });
+        return true;
+      },
+      COMMAND_PRIORITY_NORMAL
+    ),
+
+    editor.registerCommand(
+      INSERT_BOOKING_LINK_MENTION_COMMAND,
+      (payload) => {
+        if (!editor.hasNode(BookingLinkMentionNode)) return false;
+        editor.update(() => {
+          const mentionNode = $createBookingLinkMentionNode(payload);
           $insertNodes([mentionNode]);
           if ($isRootOrShadowRoot(mentionNode.getParentOrThrow())) {
             $wrapNodeInElement(mentionNode, $createParagraphNode);

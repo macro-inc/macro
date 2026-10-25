@@ -8,6 +8,7 @@ import {
   loadTaskComposerDraft,
   saveTaskComposerDraft,
   type TaskComposerDraft,
+  taskComposerContextStorage,
 } from './taskComposerStorage';
 
 const DEFAULT_KEY = 'task-composer-draft';
@@ -93,5 +94,32 @@ describe('taskComposerStorage', () => {
     const loaded = loadTaskComposerDraft(storage);
     const due = loaded?.propertyValues.due as { value: unknown };
     expect(due.value).toBeInstanceOf(Date);
+  });
+});
+
+describe('context drafts', () => {
+  beforeEach(() => localStorage.clear());
+
+  it('isolates context keys and persists visible property ids without touching the global draft', () => {
+    const company = taskComposerContextStorage('crm:company:one');
+    const contact = taskComposerContextStorage('crm:contact:two');
+    saveTaskComposerDraft(
+      { ...draft, visiblePropertyIds: ['company'] },
+      company
+    );
+    saveTaskComposerDraft(
+      { ...draft, title: 'Contact', visiblePropertyIds: [] },
+      contact
+    );
+    saveTaskComposerDraft(draft);
+
+    expect(company.storageKey).toBe('task-composer-draft:crm:company:one');
+    expect(loadTaskComposerDraft(company)?.visiblePropertyIds).toEqual([
+      'company',
+    ]);
+    expect(loadTaskComposerDraft(contact)?.visiblePropertyIds).toEqual([]);
+    clearTaskComposerDraft(company);
+    expect(loadTaskComposerDraft(contact)?.title).toBe('Contact');
+    expect(loadTaskComposerDraft()?.title).toBe('A task');
   });
 });

@@ -39,6 +39,22 @@ function SizesDemo() {
 }
 // #endregion
 
+// #region demo:disabled
+function DisabledDemo() {
+  return (
+    <div class="flex flex-wrap items-center gap-6">
+      <ToggleSwitch disabled label="Off" labelClass="text-sm text-ink" />
+      <ToggleSwitch
+        disabled
+        defaultChecked
+        label="On"
+        labelClass="text-sm text-ink"
+      />
+    </div>
+  );
+}
+// #endregion
+
 // #region demo:settings-row
 function SettingsRowDemo() {
   const rows = [
@@ -94,6 +110,13 @@ export default defineDoc({
       description:
         '`sm` is the default toolbar size; `md` is for settings rows; `xs` is for dense inline chrome.',
       render: SizesDemo,
+    },
+    {
+      id: 'disabled',
+      title: 'Disabled',
+      description:
+        'A disabled switch dims, label included, and ignores clicks, like a disabled Checkbox.',
+      render: DisabledDemo,
     },
     {
       id: 'settings-row',

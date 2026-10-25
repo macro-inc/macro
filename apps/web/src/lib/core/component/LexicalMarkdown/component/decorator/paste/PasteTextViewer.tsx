@@ -52,7 +52,6 @@ export function PasteTextViewer(props: {
           open={props.open}
           onOpenChange={props.onOpenChange}
           position="center"
-          class="rounded-lg border border-edge bg-surface shadow-lg"
         >
           <div class="flex items-center justify-between px-4 py-2 border-b border-edge text-xs text-ink-muted">
             {header()}

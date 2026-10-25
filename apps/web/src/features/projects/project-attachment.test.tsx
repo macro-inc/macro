@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal, type ParentProps, Show } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { projectRouteId } from './core/route';
+import { projectHostedContent } from './open-project';
 import { ProjectAttachment } from './project-attachment';
 
 const mocks = vi.hoisted(() => ({
@@ -52,10 +52,7 @@ it('opens an authorized attachment using native project identity and split prefe
     shiftKey: true,
   });
   expect(mocks.open).toHaveBeenCalledWith(
-    {
-      type: 'component',
-      id: projectRouteId({ id: 'initiative-1', section: 'overview' }),
-    },
+    projectHostedContent('initiative-1', 'overview'),
     { preferNewSplit: true }
   );
 });

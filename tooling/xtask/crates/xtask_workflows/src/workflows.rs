@@ -50,6 +50,7 @@ mod path_validation;
 mod publish_sdk;
 mod pulumi_preview_pr;
 mod push_local_stack_binaries;
+mod release_label_check;
 mod release_sdk;
 mod reusable_deploy_service;
 mod reusable_preview_service;
@@ -142,7 +143,7 @@ const WORKFLOWS: &[WorkflowFile] = &[
     WorkflowFile {
         slug: "build_dmg_on_tag",
         file_name: "build_dmg_on_tag.yml",
-        render_yaml: || render_gh_workflow(build_dmg_on_tag::build_dmg)(),
+        render_yaml: || render_patched(build_dmg_on_tag::build_dmg, build_dmg_on_tag::patch),
     },
     WorkflowFile {
         slug: "build_desktop_on_tag",
@@ -308,6 +309,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "native_check_label",
         file_name: "native-check-label.yml",
         render_yaml: || render_gh_workflow(native_check_label::native_check_label)(),
+    },
+    WorkflowFile {
+        slug: "release_label_check",
+        file_name: "release-label-check.yml",
+        render_yaml: || render_gh_workflow(release_label_check::release_label_check)(),
     },
     WorkflowFile {
         slug: "android_play_release",

@@ -107,7 +107,7 @@ pub enum Rule {
     /// Nested conjunction.
     Group(Rules),
 }
-/// Screeners support AND/OR, at most eight levels and 200 conditions.
+/// Gates support AND/OR, at most eight levels and 200 conditions.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Rules {

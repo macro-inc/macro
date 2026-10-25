@@ -1,4 +1,10 @@
 import { SearchBar, ViewShell } from '@app/components/view-shell';
+import {
+  ListHeader,
+  ListHeaderSearch,
+} from '@app/components/view-shell/ListHeader';
+import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import ClockIcon from '@phosphor/clock-clockwise.svg';
 import { Button } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
@@ -10,7 +16,9 @@ export function RoutinesList(props: {
   loading: boolean;
   error: boolean;
   pendingId?: string;
-  searchRef?: (input: HTMLInputElement) => void;
+  /** False where the host already titles the page, as Settings does. */
+  showTitle?: boolean;
+  registerSearchFocus?: (focus: () => void) => void;
   onCreate: () => void;
   onOpen: (id: string, history?: boolean) => void;
   onToggle: (row: RoutineRow) => void;
@@ -26,31 +34,55 @@ export function RoutinesList(props: {
     );
   return (
     <div class="flex size-full min-h-0 min-w-0 flex-col">
-      <ViewShell.TopBar>
-        <h1 class="truncate text-sm font-semibold tracking-[-0.03em] text-ink">
-          Routines
-        </h1>
-      </ViewShell.TopBar>
-      <ViewShell.Header>
-        <h1 class="mb-3 text-xl font-semibold tracking-[-0.03em] text-ink not-touch:hidden">
-          Routines
-        </h1>
-        <div class="flex min-w-0 items-center justify-between gap-3">
-          <SearchBar
-            ref={props.searchRef}
+      <Show
+        when={!isTouchDevice()}
+        fallback={
+          <ViewShell.Header>
+            <Show when={props.showTitle !== false}>
+              <h1 class="mb-3 text-xl font-semibold tracking-[-0.03em] text-ink">
+                Routines
+              </h1>
+            </Show>
+            <div class="flex min-w-0 items-center justify-between gap-3">
+              <SearchBar
+                ref={(input) =>
+                  props.registerSearchFocus?.(() => {
+                    input.focus();
+                    input.select();
+                  })
+                }
+                label="Search routines"
+                placeholder="Search routines"
+                value={search()}
+                onValueChange={setSearch}
+                onEscape={() => list?.focus()}
+                class="max-w-md flex-1"
+                hotkey="cmd+f"
+              />
+              <Button variant="outline" onClick={props.onCreate}>
+                Create Routine
+              </Button>
+            </div>
+          </ViewShell.Header>
+        }
+      >
+        <ListHeader
+          title={<h1 class="text-sm font-semibold text-ink">Routines</h1>}
+        >
+          <ViewCreateButton
+            presentation="toolbar"
+            aria-label="Create Routine"
+            onClick={props.onCreate}
+          />
+          <ListHeaderSearch
             label="Search routines"
-            placeholder="Search routines"
             value={search()}
             onValueChange={setSearch}
             onEscape={() => list?.focus()}
-            class="max-w-md flex-1"
-            hotkey="cmd+f"
+            registerFocus={(focus) => props.registerSearchFocus?.(focus)}
           />
-          <Button variant="outline" onClick={props.onCreate}>
-            Create Routine
-          </Button>
-        </div>
-      </ViewShell.Header>
+        </ListHeader>
+      </Show>
       <Show when={props.error}>
         <div
           role="alert"

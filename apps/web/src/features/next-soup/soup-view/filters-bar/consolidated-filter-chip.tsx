@@ -66,7 +66,7 @@ interface ConsolidatedFilterChipProps {
 
 const ChipDivider = (props: { mobile?: boolean }) => (
   <Show when={!props.mobile}>
-    <div class="w-px self-stretch bg-edge-muted shrink-0" />
+    <div class="w-px self-stretch bg-edge-divider shrink-0" />
   </Show>
 );
 
@@ -101,7 +101,7 @@ const MultiValueDisplay = (props: { values: FilterValue[] }) => {
       </Show>
       <span class="truncate max-w-32">{first()?.label}</span>
       <Show when={overflowCount() > 0}>
-        <span class="inline-flex items-center justify-center px-1 min-w-4 h-4 rounded-full bg-ink/10 text-xxs">
+        <span class="inline-flex items-center justify-center px-1 min-w-4 h-4 rounded-full bg-active text-xxs">
           +{overflowCount()}
         </span>
       </Show>
@@ -130,7 +130,7 @@ const PeopleMultiValueDisplay = (props: { values: FilterValue[] }) => {
       </Show>
       <span class="truncate max-w-32">{first()?.label}</span>
       <Show when={overflowCount() > 0}>
-        <span class="inline-flex items-center justify-center px-1 min-w-4 h-4 rounded-full bg-ink/10 text-xxs">
+        <span class="inline-flex items-center justify-center px-1 min-w-4 h-4 rounded-full bg-active text-xxs">
           +{overflowCount()}
         </span>
       </Show>
@@ -315,7 +315,7 @@ const StandardValueSegment = (props: {
             'inline-flex items-center gap-1.5 px-2.5 h-auto!',
             props.mobile
               ? 'bg-active hover:bg-active active:bg-active rounded-none px-3'
-              : 'hover:bg-ink/5 active:bg-ink/8 rounded-none',
+              : 'hover:overlay-hover active:overlay-active rounded-none',
             props.class
           )}
         >
@@ -337,10 +337,11 @@ export const ConsolidatedFilterChip = (props: ConsolidatedFilterChipProps) => {
     <Layer depth={2}>
       <div
         class={cn(
-          props.mobile ? 'h-10' : 'h-7',
-          'flex items-stretch text-xs whitespace-nowrap rounded-md',
-          'bg-surface text-ink border border-edge-muted overflow-clip',
-          props.mobile && 'bg-active border-none rounded-lg',
+          'flex items-stretch text-xs whitespace-nowrap text-ink overflow-clip',
+          // Desktop chips share the control frame; touch keeps its filled chip.
+          props.mobile
+            ? 'h-10 bg-active rounded-lg'
+            : 'h-6 rounded-full border border-edge-button bg-control not-touch:elevated',
           props.class
         )}
       >

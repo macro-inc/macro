@@ -131,7 +131,7 @@ where
         };
         if let Err(error) = self
             .email
-            .delete_draft_for_user(actor.clone(), draft.db_id)
+            .delete_draft_for_user(actor.clone(), draft.db_id, 0)
             .await
         {
             tracing::warn!(

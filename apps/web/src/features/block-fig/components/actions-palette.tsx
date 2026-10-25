@@ -75,7 +75,7 @@ export function ActionsPalette(props: {
       role="dialog"
       aria-label="Actions"
       data-testid="fig-actions"
-      class="absolute inset-x-4 bottom-16 z-20 mx-auto flex max-h-[60%] max-w-md flex-col overflow-hidden rounded-xl border border-edge-muted bg-menu text-ink text-xs shadow-xl"
+      class="menu-surface absolute inset-x-4 bottom-16 z-20 mx-auto flex max-h-[60%] max-w-md flex-col overflow-hidden text-xs"
       onPointerDown={(e) => e.stopPropagation()}
       onFocusOut={(e) => {
         const next = e.relatedTarget as Node | null;

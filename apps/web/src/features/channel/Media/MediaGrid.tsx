@@ -1,7 +1,10 @@
+import { FileDownloadButton } from '@core/component/FileDownload';
+import { createFileDownload } from '@core/util/createFileDownload';
 import { constrainImageDimensions } from '@macro-inc/lexical-core/utils/media';
 import ExpandIcon from '@phosphor/arrows-out-simple.svg';
 import { Button, cn } from '@ui';
 import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
+import { mediaDownloadSource } from '../queries/static-media-download';
 import { MediaImage } from './MediaImage';
 import { MediaVideo } from './MediaVideo';
 import type { MediaItem } from './media-items';
@@ -82,66 +85,75 @@ function AttachmentImageTile(props: { item: MediaItem; onOpen?: () => void }) {
 }
 
 function MessageVideoTile(props: { item: MediaItem; onOpen: () => void }) {
+  const download = createFileDownload(() => mediaDownloadSource(props.item));
   const [isInlinePlaying, setIsInlinePlaying] = createSignal(false);
   const src = () => props.item.src;
   const videoWidth = () => props.item.width ?? undefined;
   const videoHeight = () => props.item.height ?? undefined;
 
   return (
-    <div class="group relative flex min-h-20 max-h-120 max-w-120 min-w-0 overflow-hidden rounded-2xl border border-edge bg-surface">
-      <Show
-        when={isInlinePlaying()}
-        fallback={
-          <>
-            <button
-              type="button"
-              class="block max-w-full"
-              onClick={props.onOpen}
-              aria-label="Open video viewer"
-            >
-              <MediaVideo.Preview
-                src={props.item.src}
-                class="block max-h-120 max-w-full"
-                width={videoWidth()}
-                height={videoHeight()}
-              />
-              <MediaVideo.PlayOverlay class="[&_svg]:size-6" />
-            </button>
-            <button
-              type="button"
-              class="absolute bottom-2 left-2 rounded-md bg-surface/90 px-2 py-1 text-xs font-medium text-ink shadow-sm"
-              onClick={(event) => {
-                event.stopPropagation();
-                setIsInlinePlaying(true);
-              }}
-            >
-              Play inline
-            </button>
-          </>
-        }
-      >
-        <video
-          class="block max-h-120 max-w-full"
-          controls
-          autoplay
-          playsinline
-          src={src()}
-          width={videoWidth()}
-          height={videoHeight()}
-        />
-      </Show>
-      <div class="absolute right-2 top-2 z-10">
-        <Button
-          variant="ghost"
-          size="icon-md"
-          onClick={(event) => {
-            event.stopPropagation();
-            props.onOpen();
-          }}
-          label="Open video viewer"
+    <div class="flex min-w-0 max-w-120 flex-col overflow-hidden rounded-2xl border border-edge bg-surface">
+      <div class="group/video relative flex min-h-20 max-h-120 min-w-0 overflow-hidden">
+        <Show
+          when={isInlinePlaying()}
+          fallback={
+            <>
+              <button
+                type="button"
+                class="block max-w-full"
+                onClick={props.onOpen}
+                aria-label="Open video viewer"
+              >
+                <MediaVideo.Preview
+                  src={props.item.src}
+                  class="block max-h-120 max-w-full"
+                  width={videoWidth()}
+                  height={videoHeight()}
+                />
+                <MediaVideo.PlayOverlay class="[&_svg]:size-6" />
+              </button>
+              <button
+                type="button"
+                class="absolute bottom-2 left-2 rounded-md bg-surface/90 px-2 py-1 text-xs font-medium text-ink shadow-sm"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setIsInlinePlaying(true);
+                }}
+              >
+                Play inline
+              </button>
+            </>
+          }
         >
-          <ExpandIcon />
-        </Button>
+          <video
+            class="block max-h-120 max-w-full"
+            controls
+            autoplay
+            playsinline
+            src={src()}
+            width={videoWidth()}
+            height={videoHeight()}
+          />
+        </Show>
+        <div
+          class={cn(
+            'absolute right-2 top-2 z-10 flex items-center rounded-full bg-surface/90 opacity-0 transition-opacity group-hover/video:opacity-100 group-focus-within/video:opacity-100 touch:opacity-100',
+            download.phase() !== 'idle' && 'opacity-100'
+          )}
+        >
+          <FileDownloadButton download={download} iconOnly />
+          <Button
+            variant="ghost"
+            size="icon-md"
+            onClick={(event) => {
+              event.stopPropagation();
+              props.onOpen();
+            }}
+            label="Open video viewer"
+          >
+            <ExpandIcon />
+          </Button>
+        </div>
       </div>
     </div>
   );

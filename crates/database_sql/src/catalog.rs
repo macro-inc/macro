@@ -169,6 +169,8 @@ pub enum ColumnKind {
 /// Spelled as the properties system spells entity types (`USER`,
 /// `DATABASE_ROW`), on the wire and in SQL, where it parses
 /// case-insensitively.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "openapi", schema(as = SqlEntityKind))]
 #[derive(
     Debug,
     Clone,
@@ -252,6 +254,8 @@ impl TryFrom<EntityKind> for OpEntityKind {
 }
 
 /// One option of a select column.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "openapi", schema(as = SqlSelectOption))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]

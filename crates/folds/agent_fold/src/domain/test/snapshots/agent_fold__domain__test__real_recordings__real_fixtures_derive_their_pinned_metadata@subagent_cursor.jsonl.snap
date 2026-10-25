@@ -4,6 +4,8 @@ expression: machine.metadata()
 input_file: crates/folds/agent_fold/fixtures/real/subagent_cursor.jsonl
 ---
 SessionMetadata {
+    notifications: [],
+    noop_turn: None,
     harness: Cursor,
     model: Some(
         "default",

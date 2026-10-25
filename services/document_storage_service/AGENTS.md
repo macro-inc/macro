@@ -11,14 +11,21 @@ threads, pins, recents, notifications, folders, activity.
 - `src/api.rs`: route module list — `documents`, `items`, `entity`,
   `folders_query`, `graphql_soup`, `threads`, `annotations`, `history`,
   `pins`, `recents`, `notification`, `instructions`, `internal`.
+- `/databases/query` mounts the `databases_sql` HTTP adapter, sharing the database/access services and the primary Soup reader; SQL authorization stays in its domain service.
 - `src/api/graphql_soup.rs`: the `/soup/graphql` (+ `/soup/graphql/ws`
   subscriptions) GraphQL API — the frontend's main read path for Home/Recent/
   search ("Soup" items); see `crates/graphql_soup` for resolvers/loaders.
 - `src/server.rs`: composition root, including access-request routes and the
   tracked delivery dispatcher; `src/outbound/access_requests.rs` composes the
   notification/withdrawal/realtime ports. Policy lives in `crates/access_requests`.
+- Guest call chat is mounted outside account auth at `/call/guest-chat/{call_id}`;
+  `call` verifies the RTC session and `messages` owns the shared discussion.
 - `src/service/entity_mutation.rs`: generic entity-mutation plumbing used
   across item types.
+- `src/outbound/docx_export.rs`: primary-database parts and immutable DOCX export
+  objects keyed by part paths/hashes. The export route maps the documents domain's
+  pending result to 409 with `Retry-After`; never reuse document-id-only archives.
+  Location and export URLs share signing helpers in `src/service/cloudfront.rs`.
 - `src/service/delete_document_worker.rs`: background worker handling document
   deletion side effects (feature-gated: `delete_document_worker`).
 - `src/service/conn_gateway.rs`: pushes realtime updates through
@@ -57,6 +64,9 @@ threads, pins, recents, notifications, folders, activity.
 - Soup GraphQL reads a replica with multi-second lag; a read immediately after
   a write through the same request needs the primary-reading loader, not the
   default one — see `crates/graphql_soup`.
+- The GraphQL calendar feed (occurrence ranges and `calendarChanges`) reads the
+  primary, like the REST calendar routes: a `refresh_calendar` poke goes out as
+  a write commits, so a replica-backed delta misses the change it announces.
 
 ## Related
 

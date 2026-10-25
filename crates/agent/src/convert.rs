@@ -159,11 +159,23 @@ fn convert_assistant(msg: &ChatMessage) -> Vec<Message> {
                 ));
             }
             AssistantMessagePart::ToolCallResponseJson { id, json, .. } => {
-                let text = serde_json::to_string(json).unwrap_or_default();
+                let content = if json.get("modelMedia").is_some() {
+                    crate::tool_media::model_output(json.clone())
+                        .map(|output| output.into_content())
+                        .unwrap_or_else(|_| {
+                            OneOrMany::one(ToolResultContent::text(
+                                "Tool image could not be replayed. Render the canvas again.",
+                            ))
+                        })
+                } else {
+                    OneOrMany::one(ToolResultContent::text(
+                        serde_json::to_string(json).unwrap_or_default(),
+                    ))
+                };
                 tool_results.push(UserContent::tool_result_with_call_id(
                     replay_item_id(id),
                     replay_call_id(id),
-                    OneOrMany::one(ToolResultContent::text(text)),
+                    content,
                 ));
             }
             AssistantMessagePart::ToolCallErr {

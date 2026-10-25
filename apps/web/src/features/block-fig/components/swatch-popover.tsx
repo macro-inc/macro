@@ -42,7 +42,7 @@ export function SwatchPopover(props: {
       <Popover.Portal>
         <Layer depth={3}>
           <Popover.Content
-            class="fig-editor-theme z-modal rounded-xl border border-edge-muted bg-menu p-3 shadow-xl outline-none"
+            class="menu-surface fig-editor-theme z-modal p-3 outline-none"
             aria-label={props.label}
             onKeyDown={(e: KeyboardEvent) => {
               if (!e.metaKey && !e.ctrlKey) e.stopPropagation();

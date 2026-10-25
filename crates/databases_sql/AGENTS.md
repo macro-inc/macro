@@ -3,12 +3,13 @@
 ## What it is
 
 Part of the Databases feature: runs the `database_sql` engine over Macro
-databases for agents, as the agent-tool counterpart to the browser's direct
+databases for agents and authenticated HTTP clients, alongside the browser's direct
 `database_sql` wasm usage. Reads go through Soup and contacts, writes go
 through `databases`' typed ops.
 
 ## Start here
 
+- `src/inbound/axum_router.rs`: `POST /databases/query`, delegating to the same SQL service.
 - `src/lib.rs`: module list and public re-exports (`DatabasesSql`, `SqlRequest`,
   `SqlOutcome`).
 - `src/service.rs`: the entry point — runs a parsed statement's engine
@@ -24,8 +25,7 @@ through `databases`' typed ops.
 
 ## Scope
 
-- Owns: binding the `database_sql` engine to live Macro data for agents, and
-  the two SQL agent tools.
+- Owns: binding the `database_sql` engine to live Macro data for agents, the HTTP query adapter, and the two SQL agent tools.
 - Not here: the SQL grammar/engine itself → `crates/database_sql`; table/row
   persistence and the ops API → `crates/databases`.
 
@@ -35,7 +35,7 @@ through `databases`' typed ops.
   `soup`, `contacts`, `entity_access` (all `ports`-only — this crate is an
   adapter, not a composition root).
 - Used by: `crates/ai_tools` (wires the `ai_tools` feature's `QueryDatabase`/
-  `SaveDatabaseQuery` into the agent toolset).
+  `SaveDatabaseQuery` into the agent toolset), and DSS (HTTP query composition).
 
 ## Recipes
 
@@ -47,13 +47,16 @@ through `databases`' typed ops.
 
 ## Checks
 
-- `cargo test -p databases_sql --features ai_tools`.
+- `cargo test -p databases_sql --features ai_tools,inbound`.
 
 ## Gotchas
 
 - This crate only depends on `ports` features of its domain crates — it must
   not import `databases`' or `soup`'s `outbound` adapters directly; the
   composition root supplies those.
+
+- HTTP SQL reads use the viewer catalog; writes mint edit receipts and forward
+  version guards into atomic ops. Never retry a statement automatically.
 
 ## Related
 

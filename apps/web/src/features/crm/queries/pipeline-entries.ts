@@ -37,7 +37,7 @@ function optionLabel(option: GraphqlCell['column']['options'][number]): string {
     .with({ __typename: 'GraphqlNumberPropertyOptionValue' }, (value) =>
       String(value.numberValue)
     )
-    .exhaustive();
+    .exhaustive(() => '');
 }
 
 function entryColumn(column: GraphqlCell['column']): DatabaseViewColumn {
@@ -92,7 +92,7 @@ export function entryCellValue(cell: GraphqlCell): DatabaseCellValue {
         })
       )
     )
-    .exhaustive();
+    .exhaustive(() => null);
 }
 
 export function toPipelineEntry(

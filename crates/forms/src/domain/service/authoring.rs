@@ -38,7 +38,7 @@ where
             ]
         };
         match source {
-            CreateSource::NewDatabase => {
+            CreateSource::NewDatabase { .. } => {
                 let columns = new_columns();
                 let managed = columns.iter().map(|c| c.id).collect();
                 Ok((columns, managed))

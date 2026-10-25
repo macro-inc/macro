@@ -252,7 +252,7 @@ function isSingleEntityReference(value: unknown): value is EntityReference {
  */
 function createNullApiValue(
   valueType: Property['valueType']
-): PropertyApiValues {
+): PropertyApiValues | null {
   return match(valueType)
     .with('STRING', () => ({ valueType: 'STRING' as const, value: null }))
     .with('NUMBER', () => ({ valueType: 'NUMBER' as const, value: null }))
@@ -268,7 +268,7 @@ function createNullApiValue(
     }))
     .with('ENTITY', () => ({ valueType: 'ENTITY' as const, refs: null }))
     .with('LINK', () => ({ valueType: 'LINK' as const, values: null }))
-    .exhaustive();
+    .exhaustive(() => null);
 }
 
 /**
@@ -345,5 +345,5 @@ export function toPropertyApiValue(
       }
       return null;
     })
-    .exhaustive();
+    .exhaustive(() => null);
 }

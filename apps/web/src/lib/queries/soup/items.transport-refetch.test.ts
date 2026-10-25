@@ -55,7 +55,6 @@ vi.mock('@queries/soup/keys', () => ({
 }));
 vi.mock('@queries/soup/transform-utils', () => ({
   isDisplayableSoupItem: vi.fn(() => true),
-  isInstructionsMdDoc: vi.fn(() => false),
   mapApiSoupItemToEntity: vi.fn((item) => ({
     ...item.data,
     touchedAt: item.touched_at,
@@ -63,9 +62,6 @@ vi.mock('@queries/soup/transform-utils', () => ({
   mapSoupPageToEntityList: vi.fn((page) =>
     page.items.map((item: { data: unknown }) => item.data)
   ),
-}));
-vi.mock('@queries/storage/instructions-md', () => ({
-  useInstructionsMdIdQuery: vi.fn(() => ({})),
 }));
 vi.mock('@service-storage/client', () => ({
   storageServiceClient: { getSoupItems: vi.fn(), getSoupAstItems: fetchSoup },
@@ -322,7 +318,7 @@ describe('Soup refetch transport selection', () => {
     vi.clearAllMocks();
     await refreshActiveGraphqlSoupQueries();
 
-    expect(groupedQuery.resetToInitialPage).toHaveBeenCalledOnce();
+    expect(groupedQuery.resetToInitialPage).not.toHaveBeenCalled();
     expect(groupedQuery.refresh).toHaveBeenCalledOnce();
     expect(restRefetch).not.toHaveBeenCalled();
   });

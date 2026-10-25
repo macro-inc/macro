@@ -76,7 +76,10 @@ export function operationActions(
   return [];
 }
 
-export function operationDescription(operation: MessageOperation): string {
+/** Routine progress and confirmed outcomes stay silent, matching Gmail. */
+export function operationDescription(
+  operation: MessageOperation
+): string | undefined {
   if (operation.issue === 'MOVE_PENDING')
     return 'Finishing the inbox change. You can edit this copy; sending waits until the original draft is resolved.';
   if (operation.issue === 'MOVE_CONFLICT')
@@ -95,23 +98,33 @@ export function operationDescription(operation: MessageOperation): string {
     return 'Access to this inbox has changed. Reconnect it or ask its owner to restore your access.';
   if (operation.issue === 'INVALID_CONTENT')
     return 'Your mail provider could not save this draft. Edit the message or attachments to try again.';
-  const descriptions: Record<MessageOperation['state'], string> = {
-    PENDING: 'Synchronizing draft…',
-    SYNCHRONIZED: 'Draft synchronized',
+  const descriptions: Record<MessageOperation['state'], string | undefined> = {
+    PENDING: undefined,
+    SYNCHRONIZED: undefined,
     CONFLICT:
       'This draft changed in your mailbox. Choose which version to keep. Either choice cancels scheduled delivery.',
     UNCERTAIN:
       operation.issue === 'SEND_UNKNOWN'
         ? 'Delivery could not be confirmed. Macro will not resend automatically. Check Sent mail or check again here.'
         : 'A draft or attachment write could not be confirmed. Your local copy is preserved; check again before making further changes.',
-    SUBMITTING: 'Submitting email…',
-    CONFIRMING: 'Confirming delivery…',
-    SENT: 'Sent copy confirmed',
-    DELETED: 'Draft deleted',
+    SUBMITTING: undefined,
+    CONFIRMING: undefined,
+    SENT: undefined,
+    DELETED: undefined,
     CANCELLED: 'This operation was cancelled. Your local copy is preserved.',
     FAILED: 'This operation needs attention. Your local copy is preserved.',
   };
   return descriptions[operation.state];
+}
+
+/** Provider delivery still in flight; composers present it like their own send. */
+export function operationSending(operation?: MessageOperation | null): boolean {
+  return operation?.state === 'SUBMITTING' || operation?.state === 'CONFIRMING';
+}
+
+/** Sent and deleted are final and silent, so nothing needs to observe them. */
+export function operationSettled(operation: MessageOperation): boolean {
+  return operation.state === 'SENT' || operation.state === 'DELETED';
 }
 
 /** A move may remain editable while the original copy still prevents delivery. */

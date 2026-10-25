@@ -1,4 +1,4 @@
-import { throwOnErr } from '@core/util/result';
+import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
 import { invalidateAgents } from '@queries/agents/agents';
 import { queryClient } from '@queries/client';
 import {
@@ -25,7 +25,12 @@ const harnessesQueryOptions = queryOptions({
   queryKey: harnessKeys.list.queryKey,
   queryFn: async (): Promise<Harness[]> =>
     await throwOnErr(() => storageServiceClient.getHarnesses()),
-  refetchInterval: 15_000,
+  // A dead session answers every poll with a 401, so wait for the next
+  // successful fetch (login invalidates every query) before polling again.
+  refetchInterval: (query) =>
+    thrownResultErrorHasCode(query.state.error, 'UNAUTHORIZED')
+      ? false
+      : 15_000,
 });
 
 /**

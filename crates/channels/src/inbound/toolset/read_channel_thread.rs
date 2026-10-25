@@ -4,7 +4,7 @@ use messages::domain::ports::MessageTimelineQuery;
 use super::ChannelToolContext;
 use super::types::{
     ToolChannelMessage, ToolOmission, ToolOmissionKind, ToolResolvedMessage, ToolThreadReply,
-    clamp_limit, clamp_max_chars, content_truncation_omissions,
+    clamp_limit, clamp_max_chars, content_truncation_omissions, user_senders,
 };
 use crate::domain::ports::ChannelService;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
@@ -128,7 +128,12 @@ where
 {
     type Output = ReadChannelThreadResponse;
 
-    #[tracing::instrument(skip_all, fields(user_id=?request_context.user_id), err)]
+    #[tracing::instrument(
+        name = "channels.tool.read_thread",
+        skip_all,
+        fields(user_id=?request_context.user_id, channel_id=%self.channel_id),
+        err
+    )]
     async fn call(
         &self,
         service_context: ServiceContext<ChannelToolContext<Svc, AccessSvc>>,
@@ -164,8 +169,6 @@ where
             description: "thread parent message not found".to_string(),
             internal_error: anyhow::anyhow!("thread parent not returned by channel service"),
         })?;
-        let parent =
-            ToolChannelMessage::from_message(parent, self.channel_id, true, max_chars_per_message);
 
         let all_replies = service_context
             .messages
@@ -185,44 +188,64 @@ where
             limit,
         )?;
 
+        let context_items = if self.include_channel_context.unwrap_or(false) {
+            let mut page = service_context
+                .messages
+                .timeline(
+                    access.clone(),
+                    MessageTimelineQuery {
+                        around: Some(resolved.root_id()),
+                        limit: Some(7),
+                        ..Default::default()
+                    },
+                )
+                .await
+                .map_err(tool_err("failed to read channel context around thread"))?;
+            page.items.reverse();
+            Some(page.items)
+        } else {
+            None
+        };
+
+        let senders = user_senders(
+            std::iter::once(&parent.message)
+                .chain(&parent.thread.preview)
+                .chain(&reply_window)
+                .chain(context_items.iter().flatten().map(|item| &item.message)),
+        );
+        let names = service_context.sender_names(senders).await;
+        let parent = ToolChannelMessage::from_message(
+            parent,
+            self.channel_id,
+            true,
+            max_chars_per_message,
+            &names,
+        );
         let replies: Vec<ToolThreadReply> = reply_window
             .into_iter()
             .map(|reply| {
-                ToolThreadReply::from_reply(reply, resolved.root_id(), max_chars_per_message)
+                ToolThreadReply::from_reply(
+                    reply,
+                    resolved.root_id(),
+                    max_chars_per_message,
+                    &names,
+                )
             })
             .collect();
-
-        let channel_context: Option<Vec<ToolChannelMessage>> =
-            if self.include_channel_context.unwrap_or(false) {
-                let mut page = service_context
-                    .messages
-                    .timeline(
-                        access.clone(),
-                        MessageTimelineQuery {
-                            around: Some(resolved.root_id()),
-                            limit: Some(7),
-                            ..Default::default()
-                        },
+        let channel_context: Option<Vec<ToolChannelMessage>> = context_items.map(|items| {
+            items
+                .into_iter()
+                .map(|message| {
+                    ToolChannelMessage::from_message(
+                        message,
+                        self.channel_id,
+                        false,
+                        max_chars_per_message,
+                        &names,
                     )
-                    .await
-                    .map_err(tool_err("failed to read channel context around thread"))?;
-                page.items.reverse();
-                Some(
-                    page.items
-                        .into_iter()
-                        .map(|message| {
-                            ToolChannelMessage::from_message(
-                                message,
-                                self.channel_id,
-                                false,
-                                max_chars_per_message,
-                            )
-                        })
-                        .collect(),
-                )
-            } else {
-                None
-            };
+                })
+                .collect()
+        });
 
         let mut omissions = Vec::new();
         if omitted_before > 0 {

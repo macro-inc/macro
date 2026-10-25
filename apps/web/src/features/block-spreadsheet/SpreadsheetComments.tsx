@@ -24,8 +24,8 @@ import {
   useSendMessageMutation,
 } from '@queries/messages/mutations';
 import type { MessageListItem } from '@service-storage/messages';
+import { Tabs } from '@ui';
 import { Button } from '@ui/components/Button';
-import { SegmentedControl } from '@ui/components/SegmentedControl';
 import {
   createEffect,
   createMemo,
@@ -421,7 +421,8 @@ export function SpreadsheetComments(props: {
               >
                 <section aria-label="Cell comments">
                   <div class="mb-3">
-                    <SegmentedControl
+                    <Tabs
+                      touch="segmented"
                       value={commentFilter()}
                       options={COMMENT_FILTER_OPTIONS}
                       onChange={setCommentFilter}

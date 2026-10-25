@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE import_run\n            SET lease_owner = NULL, lease_expires_at = NOW()\n            WHERE user_id = $1 AND source = 'notion' AND lease_owner = $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4cd2ab841670fcca8f3d4037c0c3b82c7e6b9cda5fea3fc22f4197c782b0558f"
+}

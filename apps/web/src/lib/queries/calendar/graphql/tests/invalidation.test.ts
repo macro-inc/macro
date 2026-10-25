@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { calendarKeys } from '../../keys';
-import { invalidateCalendarOccurrences } from '../../occurrences';
+import {
+  invalidateCalendarOccurrences,
+  syncCalendarOccurrences,
+} from '../../occurrences';
 import {
   type CalendarSyncController,
   setActiveCalendarSyncController,
@@ -69,6 +72,43 @@ describe('invalidateCalendarOccurrences', () => {
 
     expect(invalidateQueriesMock).toHaveBeenCalledTimes(1);
     warn.mockRestore();
+  });
+
+  it('syncs a starting cache before an expected read refetches', async () => {
+    const order: string[] = [];
+    let ready!: () => void;
+    const runDelta = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          ready = () => {
+            order.push('delta');
+            resolve();
+          };
+        })
+    );
+    invalidateQueriesMock.mockImplementation(async () => {
+      order.push('invalidate');
+    });
+    setActiveCalendarSyncController({
+      answering: () => false,
+      runDelta,
+    } as unknown as CalendarSyncController);
+
+    const sync = syncCalendarOccurrences();
+    await Promise.resolve();
+    expect(invalidateQueriesMock).not.toHaveBeenCalled();
+    ready();
+    await sync;
+
+    expect(order).toEqual(['delta', 'invalidate']);
+  });
+
+  it('refetches the REST viewports when there is no cache to sync', async () => {
+    await syncCalendarOccurrences();
+
+    expect(invalidateQueriesMock).toHaveBeenCalledWith({
+      queryKey: calendarKeys.occurrences._def,
+    });
   });
 
   it('nests cache-backed keys under the REST prefix', () => {

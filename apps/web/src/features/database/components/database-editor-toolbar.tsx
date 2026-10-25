@@ -1,5 +1,6 @@
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import CheckIcon from '@phosphor/check.svg';
-import FunnelIcon from '@phosphor/funnel.svg';
+import FunnelIcon from '@phosphor/funnel-simple.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import SortAscendingIcon from '@phosphor/sort-ascending.svg';
 import StackIcon from '@phosphor/stack.svg';
@@ -44,78 +45,82 @@ export function DatabaseEditorToolbar(props: {
         </div>
         <div class="flex shrink-0 items-center gap-2 @max-[520px]/view-toolbar:w-full @max-[520px]/view-toolbar:flex-wrap @max-[520px]/view-toolbar:justify-end">
           <Show when={props.canChangeView !== false}>
-            <Show when={board()}>
-              {(current) => (
-                <Dropdown placement="bottom-start">
-                  <Dropdown.Trigger
-                    label="Group board by"
-                    tooltip="Group by"
-                    size="md"
-                    square
-                    variant="ghost"
-                  >
-                    <StackIcon class="size-3.5" />
-                  </Dropdown.Trigger>
-                  <Dropdown.Content class="min-w-48">
-                    <Dropdown.Group>
-                      <Dropdown.RadioGroup
-                        value={current().groupBy}
-                        onChange={(columnId) => {
-                          if (columnId !== current().groupBy)
-                            props.onChangeView({
-                              layout: {
-                                ...current(),
-                                groupBy: columnId,
-                                lanes: [],
-                              },
-                            });
-                        }}
-                      >
-                        <For each={groupColumns()}>
-                          {(column) => (
-                            <Dropdown.RadioItem closeOnSelect value={column.id}>
-                              <span class="flex-1">{column.name}</span>
-                              <Dropdown.ItemIndicator>
-                                <CheckIcon class="size-3.5 text-accent" />
-                              </Dropdown.ItemIndicator>
-                            </Dropdown.RadioItem>
-                          )}
-                        </For>
-                      </Dropdown.RadioGroup>
-                    </Dropdown.Group>
-                  </Dropdown.Content>
-                </Dropdown>
-              )}
-            </Show>
+            <HeaderActionGroup label="Table view options">
+              <Show when={board()}>
+                {(current) => (
+                  <Dropdown placement="bottom-start">
+                    <Dropdown.Trigger
+                      label="Group board by"
+                      tooltip="Group by"
+                      size="icon-md"
+                      variant="ghost"
+                    >
+                      <StackIcon class="size-4 touch:size-3.5" />
+                    </Dropdown.Trigger>
+                    <Dropdown.Content class="min-w-48">
+                      <Dropdown.Group>
+                        <Dropdown.RadioGroup
+                          value={current().groupBy}
+                          onChange={(columnId) => {
+                            if (columnId !== current().groupBy)
+                              props.onChangeView({
+                                layout: {
+                                  ...current(),
+                                  groupBy: columnId,
+                                  lanes: [],
+                                },
+                              });
+                          }}
+                        >
+                          <For each={groupColumns()}>
+                            {(column) => (
+                              <Dropdown.RadioItem
+                                closeOnSelect
+                                value={column.id}
+                              >
+                                <span class="flex-1">{column.name}</span>
+                                <Dropdown.ItemIndicator>
+                                  <CheckIcon class="size-3.5 text-accent" />
+                                </Dropdown.ItemIndicator>
+                              </Dropdown.RadioItem>
+                            )}
+                          </For>
+                        </Dropdown.RadioGroup>
+                      </Dropdown.Group>
+                    </Dropdown.Content>
+                  </Dropdown>
+                )}
+              </Show>
 
-            <ToolbarPopover
-              label="Filter"
-              compact
-              count={filterConditionCount(props.view.query.filter)}
-              icon={<FunnelIcon class="size-3.5" />}
-            >
-              <FilterPanel
-                columns={props.columns}
-                filter={props.view.query.filter}
-                onChange={(filter) =>
-                  props.onChangeView({
-                    query: { ...props.view.query, filter },
-                  })
-                }
-              />
-            </ToolbarPopover>
-            <ToolbarPopover
-              label="Sort"
-              compact
-              count={sort().length}
-              icon={<SortAscendingIcon class="size-3.5" />}
-            >
-              <SortPanel
-                columns={props.columns}
-                view={props.view}
-                onChange={props.onChangeView}
-              />
-            </ToolbarPopover>
+              <ToolbarPopover
+                label="Filter"
+                compact
+                count={filterConditionCount(props.view.query.filter)}
+                icon={<FunnelIcon class="size-4 touch:size-3.5" />}
+              >
+                <FilterPanel
+                  columns={props.columns}
+                  filter={props.view.query.filter}
+                  onChange={(filter) =>
+                    props.onChangeView({
+                      query: { ...props.view.query, filter },
+                    })
+                  }
+                />
+              </ToolbarPopover>
+              <ToolbarPopover
+                label="Sort"
+                compact
+                count={sort().length}
+                icon={<SortAscendingIcon class="size-4 touch:size-3.5" />}
+              >
+                <SortPanel
+                  columns={props.columns}
+                  view={props.view}
+                  onChange={props.onChangeView}
+                />
+              </ToolbarPopover>
+            </HeaderActionGroup>
           </Show>
           {props.search}
           <div class="flex shrink-0 items-center gap-2">

@@ -4,6 +4,7 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
+import type { InviteePlan } from './inviteePlan';
 import type { InviteToTeamMetadataRole } from './inviteToTeamMetadataRole';
 import type { InviteToTeamMetadataSenderProfilePictureUrl } from './inviteToTeamMetadataSenderProfilePictureUrl';
 
@@ -13,6 +14,8 @@ import type { InviteToTeamMetadataSenderProfilePictureUrl } from './inviteToTeam
 export interface InviteToTeamMetadata {
   /** The user who sent the invitation */
   invitedBy: string;
+  /** What the invitee gets by joining, as the team stood when the invite was sent. */
+  inviteePlan?: InviteePlan;
   /** Role/permission level in the team */
   role?: InviteToTeamMetadataRole;
   /** The sender's profile picture URL, if available. */

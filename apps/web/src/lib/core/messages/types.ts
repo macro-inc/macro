@@ -8,6 +8,7 @@ import type {
 export type MessageData = {
   parent?: MessageParent;
   imported_author?: { name: string } | null;
+  guest_name?: string | null;
   id: string;
   content: string;
   sender_id: string;

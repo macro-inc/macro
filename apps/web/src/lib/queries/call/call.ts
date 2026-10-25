@@ -10,6 +10,10 @@ import type { SharePermissionV2 } from '@service-storage/generated/schemas/share
 import type { UpdateSharePermissionRequestV2 } from '@service-storage/generated/schemas/updateSharePermissionRequestV2';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
+import {
+  updateEntitySharePolicy,
+  usesGraphqlSharePolicy,
+} from '../storage/entity-mutations';
 import { callKeys } from './keys';
 
 function activeCallQueryOptions(channelId: string) {
@@ -230,6 +234,12 @@ export function buildCallTeamSharePayload(
 }
 
 export function updateCallTeamShare(callId: string, shared: boolean) {
+  if (usesGraphqlSharePolicy('call'))
+    return updateEntitySharePolicy(
+      'call',
+      callId,
+      buildCallTeamSharePayload(shared)
+    );
   return callServiceClient.editCallRecord({
     callId,
     sharePermission: buildCallTeamSharePayload(shared),

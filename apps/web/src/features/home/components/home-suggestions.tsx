@@ -10,7 +10,7 @@ import {
   type RecommendedItem,
   type RecommendedView,
 } from '@queries/ai/homeRecommendations';
-import { For, Match, Switch } from 'solid-js';
+import { For, Match, Show, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { match } from 'ts-pattern';
 
@@ -88,13 +88,15 @@ export function HomeSuggestions(props: {
         <Match when={props.view.kind === 'error'}>
           <div class="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm text-ink-muted">
             <span>Suggestions are unavailable right now.</span>
-            <button
-              type="button"
-              class="rounded-lg px-2 py-1 text-accent hover:bg-hover"
-              onClick={props.onRetry}
-            >
-              Try again
-            </button>
+            <Show when={props.view.kind === 'error' && props.view.retryable}>
+              <button
+                type="button"
+                class="rounded-lg px-2 py-1 text-accent hover:bg-hover"
+                onClick={props.onRetry}
+              >
+                Try again
+              </button>
+            </Show>
           </div>
         </Match>
         <Match when={props.view.kind === 'connect-inbox'}>

@@ -4,6 +4,8 @@ import type { Component, JSX } from 'solid-js';
 import { Show } from 'solid-js';
 
 type ToolRowProps = {
+  /** The call is still running: its text shimmers, as an active agent row does. */
+  active?: boolean;
   align?: 'center' | 'start';
   grouped?: boolean;
   children: JSX.Element;
@@ -78,7 +80,12 @@ function Row(props: ToolRowProps) {
         class="size-4 shrink-0 text-ink-extra-muted"
         classList={{ 'mt-0.5': alignStart() }}
       />
-      <div class="min-w-0 flex-1 overflow-hidden">{props.children}</div>
+      <div
+        class="min-w-0 flex-1 overflow-hidden"
+        classList={{ 'magic-chip-shimmer': props.active }}
+      >
+        {props.children}
+      </div>
       <Show when={props.trailing}>
         <div class="shrink-0 whitespace-nowrap">{props.trailing}</div>
       </Show>

@@ -100,33 +100,7 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 	__typename
 	cacheProjection @cacheOnly
 	...SoupEntityIdentityFields
-	... on GraphqlSoupAgentSession {
-		sessionName: name
-		isArchived
-		ownerId
-		botId
-		harness
-		repoUrl
-		repoBranch
-		pullRequestUrl
-		workingBranch
-		pullRequestState
-		pullRequestId
-		turnState
-		bot {
-			id
-			name
-			avatarUrl
-		}
-		threadId
-		status
-		createdAt
-		updatedAt
-		viewedAt
-		properties {
-			...SoupPropertyFields
-		}
-	}
+	...SoupAgentSessionFields
 	frecencyScore
 	... on GraphqlSoupDatabaseRow {
 		tableId
@@ -352,6 +326,38 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 fragment SoupEntityCoreFields on GraphqlSoupEntity {
 	...SoupEntityIdentityFields
 	notifications { ...SoupNotificationFields }
+}
+
+# An agent session's list fields. Also re-read alone, from the primary, when
+# the session reports a committed change: see AgentSessionRow.
+fragment SoupAgentSessionFields on GraphqlSoupAgentSession {
+	sessionName: name
+	isArchived
+	ownerId
+	botId
+	harness
+	repoUrl
+	repoBranch
+	pullRequestUrl
+	workingBranch
+	pullRequestState
+	pullRequestId
+	turnState
+	bot {
+		id
+		name
+		avatarUrl
+	}
+	threadId
+	source
+	visibility
+	status
+	createdAt
+	updatedAt
+	viewedAt
+	properties {
+		...SoupPropertyFields
+	}
 }
 
 fragment SoupEntityIdentityFields on GraphqlSoupEntity {
@@ -618,6 +624,11 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 		calendarEventReminderStartDate: startDate
 		calendarEventReminderTimeZone: timeZone
 		calendarEventReminderMinutesBefore: minutesBefore
+	}
+	... on GraphqlCalendarEventJoinRequestMetadata {
+		calendarEventJoinRequestRequestId: requestId
+		calendarEventJoinRequestEventId: eventId
+		calendarEventJoinRequestTitle: title
 	}
 	... on GraphqlAiResponseMetadata {
 		aiResponseSummary: summary

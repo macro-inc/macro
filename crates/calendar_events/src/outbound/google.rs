@@ -1,6 +1,6 @@
 //! Google Calendar API adapter.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use chrono::{DateTime, NaiveDate, Utc};
 use reqwest::{Client, RequestBuilder, StatusCode};
@@ -8,20 +8,25 @@ use rootcause::Report;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use uuid::Uuid;
 
+mod import;
+
 use crate::domain::{
+    ics::CalendarEventExport,
     models::{
         ActorInboxes, AttendeeResponseStatus, CalendarAttendee, CalendarAttendeeInput,
         CalendarEvent, CalendarEventDraft, CalendarEventOverride, CalendarEventPatch,
         CalendarEventSource, CalendarEventUpsert, CalendarOccurrence, ConferenceChange,
         ConferenceProvider, EventReminderOverride, EventReminders, EventStart, EventStatus,
         EventTime, EventTransparency, EventType, EventVisibility, GoogleEventSyncBatch,
-        GoogleSyncPlan, GoogleWatchChannel, GoogleWatchConfig, OccurrenceRange,
+        GoogleSyncPlan, GoogleWatchChannel, GoogleWatchConfig, GuestPolicy, OccurrenceRange,
         OutOfOfficeProperties, ProviderCalendar, ProviderCalendarTarget, ProviderEventSource,
+        ViewerCapabilities,
     },
     ports::{
         CalendarMutationProvider, CalendarProviderError, CalendarProviderErrorKind,
-        CalendarRsvpScope, GoogleCalendarProvider, GoogleEventSyncContext,
-        ProviderInstanceUpdateOutcome, ProviderRsvpOutcome, ProviderSeriesMutationOutcome,
+        CalendarRsvpScope, CalendarUpdateScope, GoogleCalendarProvider, GoogleEventSyncContext,
+        ProviderImportOutcome, ProviderInstanceUpdateOutcome, ProviderInviteOutcome,
+        ProviderRsvpOutcome, ProviderSeriesMutationOutcome,
     },
 };
 
@@ -990,6 +995,22 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
         provider_event_id: &str,
         body: serde_json::Value,
     ) -> Result<Option<GoogleEvent>, CalendarProviderError> {
+        self.patch_event_checked(access_token, target, provider_event_id, body)
+            .await
+            .map_err(|failure| match failure {
+                PatchFailure::Forbidden(error) | PatchFailure::Failed(error) => error,
+            })
+    }
+
+    /// [`Self::patch_event_raw`], keeping Google's refusal of a write the
+    /// account may not make on this event apart from every other failure.
+    async fn patch_event_checked(
+        &self,
+        access_token: &str,
+        target: &ProviderCalendarTarget,
+        provider_event_id: &str,
+        body: serde_json::Value,
+    ) -> Result<Option<GoogleEvent>, PatchFailure> {
         let calendar = urlencoding::encode(&target.provider_calendar_id);
         let event = urlencoding::encode(provider_event_id);
         self.gate.acquire(target.email_link_id).await?;
@@ -1012,17 +1033,38 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
         }
         if !status.is_success() {
             let body = response.text().await.map_err(provider_transport_error)?;
-            return Err(provider_response_error(
-                GoogleRequestKind::Mutation,
-                status,
-                &body,
-            ));
+            let error = provider_response_error(GoogleRequestKind::Mutation, status, &body);
+            // Rate limits and missing scopes also answer 403; they classify
+            // as transient or reauth, so only a permanent 403 is a refusal.
+            return Err(
+                if status == StatusCode::FORBIDDEN
+                    && error.kind() == CalendarProviderErrorKind::Permanent
+                {
+                    PatchFailure::Forbidden(error)
+                } else {
+                    PatchFailure::Failed(error)
+                },
+            );
         }
-        response
+        Ok(response
             .json()
             .await
             .map(Some)
-            .map_err(provider_transport_error)
+            .map_err(provider_transport_error)?)
+    }
+}
+
+/// Why a provider event patch failed.
+enum PatchFailure {
+    /// Google refused a write the account may not make on this event.
+    Forbidden(CalendarProviderError),
+    /// Any other failure.
+    Failed(CalendarProviderError),
+}
+
+impl From<CalendarProviderError> for PatchFailure {
+    fn from(error: CalendarProviderError) -> Self {
+        Self::Failed(error)
     }
 }
 
@@ -1381,6 +1423,101 @@ impl<G: GoogleRequestGate> CalendarMutationProvider for GoogleCalendarClient<G> 
         }
     }
 
+    #[tracing::instrument(
+        skip(self, access_token, target, actor, guests),
+        fields(provider_calendar_id = %target.provider_calendar_id),
+        err
+    )]
+    async fn add_attendees(
+        &self,
+        access_token: &str,
+        target: &ProviderCalendarTarget,
+        master_provider_event_id: &str,
+        actor: &ActorInboxes,
+        guests: &[CalendarAttendeeInput],
+        scope: &CalendarUpdateScope,
+    ) -> Result<ProviderInviteOutcome, CalendarProviderError> {
+        let provider_event_id = match scope {
+            CalendarUpdateScope::All => master_provider_event_id.to_string(),
+            CalendarUpdateScope::ThisEvent { recurrence_id } => {
+                let instance = self
+                    .instance_id_at(
+                        access_token,
+                        target,
+                        master_provider_event_id,
+                        recurrence_id,
+                    )
+                    .await?;
+                let Some(instance) = instance else {
+                    // Nothing was written; hand back the provider's current
+                    // series so the vanished occurrence leaves the projection.
+                    return Ok(
+                        match self
+                            .refreshed_series_outcome(
+                                access_token,
+                                target,
+                                master_provider_event_id,
+                            )
+                            .await?
+                        {
+                            ProviderSeriesMutationOutcome::Applied(upsert) => {
+                                ProviderInviteOutcome::OccurrenceGone(upsert)
+                            }
+                            ProviderSeriesMutationOutcome::SeriesDeleted
+                            | ProviderSeriesMutationOutcome::Gone => ProviderInviteOutcome::Gone,
+                        },
+                    );
+                };
+                instance
+            }
+        };
+        let wrote = match self
+            .patch_new_attendees(access_token, target, &provider_event_id, actor, guests)
+            .await?
+        {
+            InvitePatch::Applied => true,
+            InvitePatch::NothingNew => false,
+            InvitePatch::NotAttendee => return Ok(ProviderInviteOutcome::NotAttendee),
+            InvitePatch::Forbidden(policy) => return Ok(ProviderInviteOutcome::Forbidden(policy)),
+            InvitePatch::GuestListHidden(policy) => {
+                return Ok(ProviderInviteOutcome::GuestListHidden(policy));
+            }
+            InvitePatch::Gone => return Ok(ProviderInviteOutcome::Gone),
+        };
+        // As for RSVPs, Google owns recurrence expansion, so every scope
+        // resolves by refreshing the series; only a landed patch makes that
+        // refresh non-retryable.
+        let outcome = if wrote {
+            self.series_outcome(access_token, target, master_provider_event_id)
+                .await?
+        } else {
+            self.refreshed_series_outcome(access_token, target, master_provider_event_id)
+                .await?
+        };
+        match outcome {
+            ProviderSeriesMutationOutcome::Applied(upsert) => {
+                Ok(ProviderInviteOutcome::Applied(upsert))
+            }
+            ProviderSeriesMutationOutcome::SeriesDeleted | ProviderSeriesMutationOutcome::Gone => {
+                Ok(ProviderInviteOutcome::Gone)
+            }
+        }
+    }
+
+    #[tracing::instrument(
+        skip(self, access_token, target, source),
+        fields(calendar_id = %target.calendar_id),
+        err
+    )]
+    async fn import_event(
+        &self,
+        access_token: &str,
+        target: &ProviderCalendarTarget,
+        source: &CalendarEventExport,
+    ) -> Result<ProviderImportOutcome, CalendarProviderError> {
+        self.import_copy(access_token, target, source).await
+    }
+
     #[tracing::instrument(skip(self, access_token), err)]
     async fn stop_watch_channel(
         &self,
@@ -1419,6 +1556,19 @@ impl<G: GoogleRequestGate> CalendarMutationProvider for GoogleCalendarClient<G> 
 enum RsvpPatch {
     Applied,
     NotAttendee,
+    Gone,
+}
+
+/// Outcome of adding guests to one provider event.
+enum InvitePatch {
+    Applied,
+    /// Every guest was already on the event; nothing was written.
+    NothingNew,
+    NotAttendee,
+    /// Carries the policy Google reported for the event.
+    Forbidden(GuestPolicy),
+    /// Carries the policy Google reported for the event.
+    GuestListHidden(GuestPolicy),
     Gone,
 }
 
@@ -1501,6 +1651,111 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
             None => Ok(RsvpPatch::Gone),
         }
     }
+}
+
+impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
+    /// Add guests to one provider event, keeping every attendee already on
+    /// it with their answer, and notify the new guests.
+    ///
+    /// The read distinguishes a vanished event from an actor who neither
+    /// organizes nor attends it, supplies the list the write keeps, and
+    /// carries the organizer's live guest policy: the stored one can predate
+    /// it. A guest is refused when the policy does not let guests invite, and
+    /// when it hides the guest list, since their copy then lists only
+    /// themselves and the organizer and the write would drop everyone else.
+    async fn patch_new_attendees(
+        &self,
+        access_token: &str,
+        target: &ProviderCalendarTarget,
+        provider_event_id: &str,
+        actor: &ActorInboxes,
+        guests: &[CalendarAttendeeInput],
+    ) -> Result<InvitePatch, CalendarProviderError> {
+        let Some(current) = self
+            .event(
+                access_token,
+                target.email_link_id,
+                &target.provider_calendar_id,
+                provider_event_id,
+            )
+            .await?
+        else {
+            return Ok(InvitePatch::Gone);
+        };
+        let policy = guest_policy(&current);
+        let organizes = current
+            .organizer
+            .as_ref()
+            .and_then(|organizer| organizer.email.as_deref())
+            .is_some_and(|email| actor.matches(email));
+        let attendees = current.attendees.unwrap_or_default();
+        if !organizes {
+            if find_actor_attendee(&attendees, actor).is_none() {
+                return Ok(InvitePatch::NotAttendee);
+            }
+            if !(policy.can_modify || policy.can_invite_others) {
+                return Ok(InvitePatch::Forbidden(policy));
+            }
+            if !policy.can_see_other_guests {
+                return Ok(InvitePatch::GuestListHidden(policy));
+            }
+        }
+        let listed: HashSet<String> = attendees
+            .iter()
+            .filter_map(|attendee| attendee.email.as_deref())
+            .map(str::to_ascii_lowercase)
+            .collect();
+        let additions: Vec<CalendarAttendeeInput> = guests
+            .iter()
+            .filter(|guest| !listed.contains(&guest.email.trim().to_ascii_lowercase()))
+            .cloned()
+            .collect();
+        if additions.is_empty() {
+            return Ok(InvitePatch::NothingNew);
+        }
+        match self
+            .patch_event_checked(
+                access_token,
+                target,
+                provider_event_id,
+                invite_attendees_body(&attendees, &additions),
+            )
+            .await
+        {
+            Ok(Some(_)) => Ok(InvitePatch::Applied),
+            Ok(None) => Ok(InvitePatch::Gone),
+            Err(PatchFailure::Forbidden(error)) => {
+                tracing::warn!(error = ?error, "Google refused to add guests to the event");
+                Ok(InvitePatch::Forbidden(GuestPolicy {
+                    can_modify: false,
+                    can_invite_others: false,
+                    ..policy
+                }))
+            }
+            Err(PatchFailure::Failed(error)) => Err(error),
+        }
+    }
+}
+
+/// Body adding guests while keeping everyone already on the event.
+///
+/// Google's `attendeesOmitted` mode only updates attendees already on the
+/// event and refuses new ones (`omittedAttendeesSpecified`), so the patch
+/// carries the whole list: every attendee Google returned, unchanged so their
+/// answers, comments, and other fields survive, then the new guests. With
+/// `sendUpdates=all` Google invites the new guests.
+fn invite_attendees_body(
+    current: &[GoogleAttendee],
+    additions: &[CalendarAttendeeInput],
+) -> serde_json::Value {
+    let mut attendees: Vec<serde_json::Value> = current
+        .iter()
+        .map(|attendee| serde_json::json!(attendee))
+        .collect();
+    if let serde_json::Value::Array(new) = google_attendees_body(additions) {
+        attendees.extend(new);
+    }
+    serde_json::json!({ "attendees": attendees })
 }
 
 /// Parse a stored occurrence key (RFC 3339 instant or local date).
@@ -1755,7 +2010,17 @@ fn draft_body(draft: &CalendarEventDraft) -> serde_json::Value {
             serde_json::Value::String(EventTransparency::Opaque.as_str().to_string());
         body["outOfOfficeProperties"] = google_out_of_office_body(out_of_office);
     }
+    if let Some(policy) = draft.guest_policy {
+        google_guest_policy_body(&mut body, policy);
+    }
     body
+}
+
+/// Write the three guest switches, so the stored copy reflects all of them.
+fn google_guest_policy_body(body: &mut serde_json::Value, policy: GuestPolicy) {
+    body["guestsCanModify"] = serde_json::Value::Bool(policy.can_modify);
+    body["guestsCanInviteOthers"] = serde_json::Value::Bool(policy.can_invite_others);
+    body["guestsCanSeeOtherGuests"] = serde_json::Value::Bool(policy.can_see_other_guests);
 }
 
 /// Serialize the `outOfOfficeProperties` block Google requires on an
@@ -1844,6 +2109,9 @@ fn patch_body(patch: &CalendarEventPatch) -> serde_json::Value {
     // already out-of-office event can change.
     if let Some(out_of_office) = &patch.out_of_office {
         body["outOfOfficeProperties"] = google_out_of_office_body(out_of_office);
+    }
+    if let Some(policy) = patch.guest_policy {
+        google_guest_policy_body(&mut body, policy);
     }
     body
 }
@@ -2071,6 +2339,9 @@ fn map_upsert(
             .filter_map(map_attendee)
             .collect(),
         reminders: map_reminders(master.reminders.as_ref()),
+        guest_policy: guest_policy(&master),
+        is_snapshot: import::is_snapshot(&master, &target.provider_calendar_id),
+        viewer_can: ViewerCapabilities::NONE,
         created_at,
         updated_at,
     };
@@ -2228,6 +2499,20 @@ fn google_start(value: &GoogleEventDateTime) -> Option<EventStart> {
                 .ok()
                 .map(EventStart::AllDay)
         })
+    }
+}
+
+/// Google omits each guest switch while it holds its default.
+fn guest_policy(event: &GoogleEvent) -> GuestPolicy {
+    let default = GuestPolicy::default();
+    GuestPolicy {
+        can_modify: event.guests_can_modify.unwrap_or(default.can_modify),
+        can_invite_others: event
+            .guests_can_invite_others
+            .unwrap_or(default.can_invite_others),
+        can_see_other_guests: event
+            .guests_can_see_other_guests
+            .unwrap_or(default.can_see_other_guests),
     }
 }
 
@@ -2442,6 +2727,28 @@ struct GoogleEvent {
     sequence: Option<u32>,
     created: Option<String>,
     updated: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    guests_can_modify: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    guests_can_invite_others: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    guests_can_see_other_guests: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    extended_properties: Option<GoogleExtendedProperties>,
+    /// Every field Macro does not map, so the stored raw payload is Google's
+    /// event as it arrived.
+    #[serde(flatten)]
+    extra: serde_json::Map<String, serde_json::Value>,
+}
+
+/// Key-value pairs an app stores on an event. `private` ones belong to the
+/// one calendar's copy they were written to; `shared` ones reach every copy.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct GoogleExtendedProperties {
+    #[serde(default, skip_serializing_if = "serde_json::Map::is_empty")]
+    private: serde_json::Map<String, serde_json::Value>,
+    #[serde(flatten)]
+    extra: serde_json::Map<String, serde_json::Value>,
 }
 
 /// The requester's private reminder configuration on an event.

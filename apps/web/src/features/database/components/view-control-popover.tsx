@@ -21,8 +21,7 @@ export function ToolbarPopover(props: {
       <Popover.Trigger
         as={Button}
         variant="ghost"
-        size="md"
-        square={props.compact && !props.count}
+        size={props.compact && !props.count ? 'icon-md' : 'md'}
         class={props.count ? 'text-accent' : undefined}
         label={`${props.label}${props.count ? ` ${props.count}` : ''}`}
         tooltip={props.label}

@@ -174,6 +174,7 @@ export type QuickAccessList<T extends QuickAccessItem = QuickAccessItem> = {
   hasMore: Accessor<boolean>;
   isLoading: Accessor<boolean>;
   isLoadingMore: Accessor<boolean>;
+  error: Accessor<unknown>;
   loadMore: () => Promise<void>;
 };
 

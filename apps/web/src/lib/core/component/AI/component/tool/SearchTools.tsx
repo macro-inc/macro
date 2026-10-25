@@ -21,7 +21,7 @@ const handler = createToolRenderer({
       >
         <div class="flex min-w-0 flex-1 items-center justify-between gap-3 overflow-hidden">
           <span class="min-w-0 truncate">
-            Searched tools for{' '}
+            {ctx.response ? 'Searched tools for' : 'Search tools for'}{' '}
             <span class="text-ink">{ctx.tool.data.query}</span>
           </span>
           <Show when={ctx.response}>

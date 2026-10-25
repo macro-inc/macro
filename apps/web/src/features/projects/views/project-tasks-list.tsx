@@ -15,7 +15,7 @@ import { createProjectTasksDataSource } from '../queries/project-tasks';
 export type ProjectTasksProviderProps = ParentProps<{
   projectId: string;
   onOpenTask: NonNullable<TasksViewProviderProps['onOpenTask']>;
-  onCreateTask?: (dueDate?: Date) => void;
+  onCreateTask?: TasksViewProviderProps['onCreateTask'];
 }>;
 
 export type ProjectTasksListProps = Omit<

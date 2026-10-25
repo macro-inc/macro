@@ -138,9 +138,12 @@ fn soup_response_schema_exposes_frontend_fields() {
         "saveEmailDraft(input: SaveEmailDraftInput!): SaveEmailDraftPayload!",
         "sendEmailMessage(input: SendEmailMessageInput!): SendEmailMessagePayload!",
         "input SendEmailMessageInput {",
+        "sendEmailAttempt(input: SendEmailAttemptInput!): SendEmailAttemptPayload!",
+        "input SendEmailAttemptInput {",
         "draft: SaveEmailDraftInput!",
         "includeSignature: Boolean",
         "type SendEmailMessagePayload {",
+        "type SendEmailAttemptPayload {",
         "messageId: ID!",
         "senderEmail: String",
         "deleteEmailDraft(input: DeleteEmailDraftInput!): DeleteEmailDraftPayload!",
@@ -345,6 +348,7 @@ fn soup_interface_exposes_the_complete_shared_entity_contract() {
         "GraphqlSoupForeignEntity",
         "GraphqlSoupAgentSession",
         "GraphqlSoupDatabaseRow",
+        "GraphqlSoupReminder",
     ] {
         let ExtendedType::Object(object) = schema.types.get(name).expect("Soup object exists")
         else {

@@ -937,8 +937,9 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         metadata: &DomainMetadata,
     ) -> Result<(), CrmError> {
         let normalized_domain = domain.to_ascii_lowercase();
-        // First-write-wins. All-empty rows are negative-cache entries that
-        // suppress future resolver calls; `enriched_at` stamps resolve time.
+        // First-write-wins for resolved rows; a pending row (NULL
+        // `enriched_at`) is filled in. All-empty resolved rows are
+        // negative-cache entries that suppress future resolver calls.
         sqlx::query!(
             r#"
             INSERT INTO crm_domain_directory (
@@ -961,7 +962,38 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                 $22, $23, $24, $25,
                 $26, $27, $28, $29, $30, now()
             )
-            ON CONFLICT (LOWER(domain)) DO NOTHING
+            ON CONFLICT (LOWER(domain)) DO UPDATE SET
+                name = EXCLUDED.name,
+                description = EXCLUDED.description,
+                icon_url = EXCLUDED.icon_url,
+                apollo_organization_id = EXCLUDED.apollo_organization_id,
+                website_url = EXCLUDED.website_url,
+                linkedin_url = EXCLUDED.linkedin_url,
+                twitter_url = EXCLUDED.twitter_url,
+                facebook_url = EXCLUDED.facebook_url,
+                industry = EXCLUDED.industry,
+                keywords = EXCLUDED.keywords,
+                technologies = EXCLUDED.technologies,
+                estimated_num_employees = EXCLUDED.estimated_num_employees,
+                annual_revenue = EXCLUDED.annual_revenue,
+                annual_revenue_printed = EXCLUDED.annual_revenue_printed,
+                total_funding = EXCLUDED.total_funding,
+                total_funding_printed = EXCLUDED.total_funding_printed,
+                latest_funding_stage = EXCLUDED.latest_funding_stage,
+                latest_funding_round_date = EXCLUDED.latest_funding_round_date,
+                founded_year = EXCLUDED.founded_year,
+                publicly_traded_symbol = EXCLUDED.publicly_traded_symbol,
+                publicly_traded_exchange = EXCLUDED.publicly_traded_exchange,
+                phone = EXCLUDED.phone,
+                raw_address = EXCLUDED.raw_address,
+                street_address = EXCLUDED.street_address,
+                city = EXCLUDED.city,
+                state = EXCLUDED.state,
+                postal_code = EXCLUDED.postal_code,
+                country = EXCLUDED.country,
+                raw = EXCLUDED.raw,
+                enriched_at = EXCLUDED.enriched_at
+            WHERE crm_domain_directory.enriched_at IS NULL
             "#,
             normalized_domain,
             metadata.name,
@@ -999,6 +1031,61 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
         Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn insert_pending_domain(&self, domain: &str) -> Result<(), CrmError> {
+        sqlx::query!(
+            r#"
+            INSERT INTO crm_domain_directory (domain)
+            VALUES ($1)
+            ON CONFLICT (LOWER(domain)) DO NOTHING
+            "#,
+            domain.to_ascii_lowercase(),
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn claim_pending_domains(
+        &self,
+        limit: i64,
+        max_attempts: i16,
+        attempted_before: DateTime<Utc>,
+    ) -> Result<Vec<String>, CrmError> {
+        // `crm_domains.domain` and directory domains are both stored
+        // lower-cased, so plain equality uses `crm_domains_domain_idx`.
+        sqlx::query_scalar!(
+            r#"
+            WITH candidate AS (
+                SELECT dd.id
+                FROM crm_domain_directory dd
+                WHERE dd.enriched_at IS NULL
+                  AND dd.enrichment_attempts < $2
+                  AND (dd.enrichment_attempted_at IS NULL OR dd.enrichment_attempted_at < $3)
+                  AND EXISTS (SELECT 1 FROM crm_domains d WHERE d.domain = dd.domain)
+                ORDER BY dd.enrichment_attempted_at NULLS FIRST, dd.created_at
+                LIMIT $1
+                FOR UPDATE OF dd SKIP LOCKED
+            )
+            UPDATE crm_domain_directory dd
+            SET enrichment_attempts = dd.enrichment_attempts + 1,
+                enrichment_attempted_at = now()
+            FROM candidate c
+            WHERE dd.id = c.id
+            RETURNING dd.domain
+            "#,
+            limit,
+            max_attempts,
+            attempted_before,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))
     }
 
     #[tracing::instrument(skip(self), err)]

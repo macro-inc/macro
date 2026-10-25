@@ -13,6 +13,7 @@ note: |-
   untyped wire JSON for property-changed rows. In block-agent, `ui/` is
   the presentation layer and `component/` is the composition layer.
 files:
+  - apps/web/src/features/calendar-notes/components/**
   - apps/web/src/features/access-requests/components/**
   - apps/web/src/features/agent-activity/components/**
   - apps/web/src/features/agent-dms/components/**
@@ -38,7 +39,6 @@ files:
   - apps/web/src/features/meetings/components/**
   - apps/web/src/features/block-spreadsheet/components/**
   - apps/web/src/features/property/tags/components/**
-  - apps/web/src/features/claude-connection/components/**
   - apps/web/src/features/activity/components/**
   - apps/web/src/features/drive-view/components/**
   - apps/web/src/features/email-message/components/**

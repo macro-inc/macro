@@ -156,7 +156,9 @@ function persistedAgent(
     connectLabel:
       agent.harness === 'cursor' && input.cursorNeedsConnection
         ? 'Connect Cursor'
-        : undefined,
+        : agent.harness === 'macrod' && !connected
+          ? 'Reconnect runtime'
+          : undefined,
     unavailableReason:
       agent.harness === 'macrod' && !connected
         ? 'Its runtime is disconnected'

@@ -35,6 +35,7 @@ type SendEmailSnapshot = {
   body: string;
   bcc: Array<{ email: string; name: string | null }>;
   cc: Array<{ email: string; name: string | null }>;
+  from: string | null;
   includeSignature: boolean | null;
   replyingToId: string | null;
   subject: string;
@@ -58,6 +59,7 @@ function createSendEmailSnapshot(data: SendEmail): SendEmailSnapshot {
     })),
     subject: data.subject ?? '',
     replyingToId: data.replyingToId ?? null,
+    from: data.from ?? null,
     includeSignature: data.includeSignature ?? null,
     attachments: (data.attachments ?? []).map((item) => item.documentId),
   };

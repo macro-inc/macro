@@ -13,6 +13,8 @@ use uuid::Uuid;
 /// A user identity that has been authenticated or verified for a bot.
 #[derive(Clone, Debug)]
 pub struct MacroUserAuthentication {
+    /// Signed agent attribution for user-authorized SDK messages, not a bot credential.
+    pub agent_id: Option<BotId>,
     /// The user's parsed Macro identifier.
     pub macro_user_id: MacroUserIdStr<'static>,
     /// The authenticated user context.
@@ -253,6 +255,8 @@ pub struct InternalAuthConfig {
 /// to the authorization service.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ValidatedIdentity {
+    /// Agent attribution from a cryptographically verified Macro API token.
+    pub agent_id: Option<BotId>,
     /// The user's Macro identifier.
     pub user_id: String,
     /// The user's FusionAuth or root identifier.

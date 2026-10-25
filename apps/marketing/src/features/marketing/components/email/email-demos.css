@@ -60,7 +60,6 @@
 .mail-recipient-option { position: absolute; z-index: 1; top: 94px; left: 8px; right: 8px; padding: 12px; display: flex; align-items: center; gap: 8px; border: 1px solid var(--color-edge-muted); border-radius: 8px; background: var(--color-panel); color: var(--color-ink); box-shadow: 0 5px 20px #0006; font-size: 14px; }
 .mail-typing-caret { border-right: 1px solid var(--color-accent); margin-left: 2px; }
 .mail-demo-controls { min-height: 48px; display: flex; align-items: center; justify-content: center; gap: 8px; padding-top: 12px; color: var(--color-ink-muted); }
-.mail-demo-controls > span { font: 400 12px/1.5 'Inter Variable', Inter, sans-serif; margin-left: 8px; color: #737373; }
 .mail-channel { min-height: 718px; padding-bottom: 100px; display: flex; flex-direction: column; }
 .mail-channel-messages { flex: 1; display: flex; align-items: flex-end; padding: 28px 32px; }
 .mail-channel-messages .homepage-conversation { width: min(660px, 100%); margin: 0 auto; font-size: 14px; }
@@ -104,7 +103,6 @@
   .mail-channel-composer { padding: 0 12px 16px; }
   .mail-share-scrim { padding: 10px; }
   .mail-demo-controls { flex-wrap: wrap; }
-  .mail-demo-controls > span { flex-basis: 100%; margin: 0; text-align: center; }
 }
 
 /* Keep the public site's unlayered button reset out of the frozen app UI.
@@ -132,3 +130,10 @@
 
 /* Preserve dark arrow contrast when the shared button's generic hover applies. */
 .feature-page [data-input-action=send]:not(:disabled) { color: var(--color-composer-action-ink); }
+
+/* Keep sender names readable when the same email opens in a narrow split. */
+.mail-message-content { container: mail-message / inline-size; }
+@container mail-message (max-width: 320px) {
+  .mail-message-recipient { display: none; }
+  .mail-message-text { padding-right: 0; }
+}

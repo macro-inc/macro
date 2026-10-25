@@ -11,6 +11,7 @@ up to the first 100 messages) loads lazily on first field access.
 
 | Property | Modifier | Type | Default value | Description | Overrides | Inherited from |
 | ------ | ------ | ------ | ------ | ------ | ------ | ------ |
+| <a id="property-access"></a> `access` | `readonly` | [`EntityAccess`](../../../sharing/access/classes/EntityAccess.md) | `...` | Access requests and direct user grants. | - | - |
 | <a id="property-accesslevel"></a> `accessLevel` | `readonly` | () => `Promise`\<[`AccessLevel`](../../../../../generated/email/types.gen/type-aliases/AccessLevel.md)\> | `...` | The viewer's access level to this thread. | - | - |
 | <a id="property-createdat"></a> `createdAt` | `readonly` | () => `Promise`\<`string`\> | `...` | When the thread was created. | - | - |
 | <a id="property-entitytype"></a> `entityType` | `readonly` | `"email_thread"` | `'email_thread'` | Favorites identify email threads as `email_thread`. | [`PropertiedEntity`](../../../entity/classes/PropertiedEntity.md).[`entityType`](../../../entity/classes/PropertiedEntity.md#property-entitytype) | - |
@@ -76,6 +77,18 @@ The attachments across this thread's first 100 messages, pre-seeded from the thr
 
 ***
 
+### calendarInvitations()
+
+> **calendarInvitations**(): `Promise`\<\{\[`key`: `string`\]: [`InvitationResolution`](../../../../../generated/email/types.gen/type-aliases/InvitationResolution.md); \}\>
+
+Calendar invitations resolved from this thread's messages.
+
+#### Returns
+
+`Promise`\<\{\[`key`: `string`\]: [`InvitationResolution`](../../../../../generated/email/types.gen/type-aliases/InvitationResolution.md); \}\>
+
+***
+
 ### deleteProperty()
 
 > **deleteProperty**(`assignment`): `Promise`\<`void`\>
@@ -113,6 +126,18 @@ entity's own detail, so there's nothing cached to invalidate.
 #### Inherited from
 
 [`PropertiedEntity`](../../../entity/classes/PropertiedEntity.md).[`favorite`](../../../entity/classes/PropertiedEntity.md#favorite)
+
+***
+
+### followup()
+
+> **followup**(): `Promise`\<[`EmailFollowupResponse`](../../../../../generated/storage/types.gen/type-aliases/EmailFollowupResponse.md)\>
+
+Read follow-up state for this thread.
+
+#### Returns
+
+`Promise`\<[`EmailFollowupResponse`](../../../../../generated/storage/types.gen/type-aliases/EmailFollowupResponse.md)\>
 
 ***
 
@@ -191,6 +216,22 @@ Derived from the thread's first 100 messages.
 
 ***
 
+### permission()
+
+> **permission**(): `Promise`\<\{ `permission`: [`EntityPermission`](../../../../../generated/storage/types.gen/type-aliases/EntityPermission.md); `status`: `"access"`; \} \| \{ `status`: `"no_access"`; \}\>
+
+Read the caller's effective permission on this entity.
+
+#### Returns
+
+`Promise`\<\{ `permission`: [`EntityPermission`](../../../../../generated/storage/types.gen/type-aliases/EntityPermission.md); `status`: `"access"`; \} \| \{ `status`: `"no_access"`; \}\>
+
+#### Inherited from
+
+[`PropertiedEntity`](../../../entity/classes/PropertiedEntity.md).[`permission`](../../../entity/classes/PropertiedEntity.md#permission)
+
+***
+
 ### properties()
 
 > **properties**(`opts?`): `Promise`\<[`EntityPropertyWithDefinition`](../../../../../generated/properties/types.gen/type-aliases/EntityPropertyWithDefinition.md)[]\>
@@ -266,6 +307,24 @@ Send a reply within this thread. Returns a handle when the API reports the creat
 
 ***
 
+### setFollowup()
+
+> **setFollowup**(`command`): `Promise`\<[`EmailFollowup`](../../../../../generated/storage/types.gen/type-aliases/EmailFollowup.md)\>
+
+Set or remove a follow-up using a persisted operation id and revision.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `command` | [`EmailFollowupCommand`](../../../../../generated/storage/types.gen/type-aliases/EmailFollowupCommand.md) |
+
+#### Returns
+
+`Promise`\<[`EmailFollowup`](../../../../../generated/storage/types.gen/type-aliases/EmailFollowup.md)\>
+
+***
+
 ### setProperty()
 
 > **setProperty**(`property`, `value?`): `Promise`\<`void`\>
@@ -334,6 +393,26 @@ Remove this entity from the user's favorites. Returns this handle for chaining.
 #### Inherited from
 
 [`PropertiedEntity`](../../../entity/classes/PropertiedEntity.md).[`unfavorite`](../../../entity/classes/PropertiedEntity.md#unfavorite)
+
+***
+
+### update()
+
+> **update**(`options`): `Promise`\<`void`\>
+
+Change project membership or share permissions for this thread.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `options` | \{ `project?`: [`Project`](../../../projects/project/classes/Project.md) \| `null`; `sharePermission?`: [`SharePermissionOptions`](../../../sharing/permissions/type-aliases/SharePermissionOptions.md); \} |
+| `options.project?` | [`Project`](../../../projects/project/classes/Project.md) \| `null` |
+| `options.sharePermission?` | [`SharePermissionOptions`](../../../sharing/permissions/type-aliases/SharePermissionOptions.md) |
+
+#### Returns
+
+`Promise`\<`void`\>
 
 ***
 

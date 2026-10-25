@@ -227,7 +227,7 @@ pub(super) async fn messages_by_thread_id_paginated(
         DbMessageRow,
         r#"
         SELECT
-            id, provider_id, thread_id, provider_thread_id, replying_to_id,
+            draft_generation, id, provider_id, thread_id, provider_thread_id, replying_to_id,
             global_id, link_id, provider_history_id, internal_date_ts, snippet,
             size_estimate, subject, sent_at, has_attachments, is_read, is_starred,
             is_sent, is_draft, body_text, body_html_sanitized, body_macro,
@@ -260,7 +260,7 @@ pub(super) async fn latest_content_message_rows(
     let rows = sqlx::query_as::<_, DbMessageRow>(
         r#"
         SELECT
-            message.id, message.provider_id, message.thread_id,
+            message.draft_generation, message.id, message.provider_id, message.thread_id,
             message.provider_thread_id, message.replying_to_id,
             message.global_id, message.link_id, message.provider_history_id,
             message.internal_date_ts, message.snippet, message.size_estimate,
@@ -272,7 +272,7 @@ pub(super) async fn latest_content_message_rows(
         FROM UNNEST($1::uuid[]) AS requested(thread_id)
         CROSS JOIN LATERAL (
             SELECT
-                id, provider_id, thread_id, provider_thread_id, replying_to_id,
+                draft_generation, id, provider_id, thread_id, provider_thread_id, replying_to_id,
                 global_id, link_id, provider_history_id, internal_date_ts,
                 snippet, size_estimate, subject, sent_at, has_attachments,
                 is_read, is_starred, is_sent, is_draft, body_text,
@@ -308,7 +308,7 @@ pub(super) async fn cross_inbox_reply_drafts(
         DbMessageRow,
         r#"
         SELECT
-            id, provider_id, thread_id, provider_thread_id, replying_to_id,
+            draft_generation, id, provider_id, thread_id, provider_thread_id, replying_to_id,
             global_id, link_id, provider_history_id, internal_date_ts, snippet,
             size_estimate, subject, sent_at, has_attachments, is_read, is_starred,
             is_sent, is_draft, body_text, body_html_sanitized, body_macro,

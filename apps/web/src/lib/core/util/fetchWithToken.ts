@@ -1,3 +1,4 @@
+import { perfMark } from '@app/observability/perf-marks';
 import { ENABLE_BEARER_TOKEN_AUTH } from '@core/constant/featureFlags';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { Telemetry } from '@macro-inc/observability';
@@ -11,7 +12,7 @@ import {
   type SafeFetchInit,
   safeFetch,
 } from './safeFetch';
-import { redactCallLinkTokens, telemetryUrl } from './telemetryUrl';
+import { redactLinkTokens, telemetryUrl } from './telemetryUrl';
 
 export type FetchWithTokenErrorCode = BaseFetchErrorCode;
 
@@ -120,6 +121,7 @@ export async function fetchToken(): Promise<TokenResult> {
   if (tokenPromise == null) {
     const generation = refreshGeneration;
     tokenPromise = (async () => {
+      perfMark('auth.refresh-start');
       try {
         const result = await fetchWithCredentials(
           `${SERVER_HOSTS['auth-service']}/jwt/refresh`,
@@ -134,6 +136,7 @@ export async function fetchToken(): Promise<TokenResult> {
           }
         );
 
+        perfMark('auth.refresh-end', { ok: result.isOk() });
         if (result.isErr()) {
           const failure = err(result.error);
           if (
@@ -206,7 +209,7 @@ export async function fetchWithToken<
       Telemetry.error('fetchWithToken: fetchWithAuth failed', {
         input: telemetryUrl(input),
         method: init?.method,
-        errors: redactCallLinkTokens(JSON.stringify(result.error)),
+        errors: redactLinkTokens(JSON.stringify(result.error)),
       });
     }
 

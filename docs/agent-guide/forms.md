@@ -52,7 +52,7 @@ on hover and navigates to them on click. It marks the selected section or questi
 Each question section ends with a large **Add question** menu. It appends a new
 question or existing database field to that section, regardless of the current
 selection. Three visible actions sit below the canvas: **Add section** adds a
-question section directly, **Add gate** adds a screener with its inline rule editor
+question section directly, **Add gate** adds a gate with its inline rule editor
 open, and **Add meeting link** opens the booking-link picker (when scheduling is
 available). Hover a question boundary to reveal a plus that inserts a question
 at that position. Hover between sections to insert a **Section** or **Gate**.
@@ -93,14 +93,14 @@ keeps the meeting link last. Start an empty form by adding a section, then its q
   questions; **Add** puts one on the form.
 - Layout edits collaborate live through Loro. Other editors' selections appear
   in the builder. Connection and save failures are visible; there is no
-  persistent saved badge. Invalid screener drafts remain editable while the
+  persistent saved badge. Invalid gate drafts remain editable while the
   public form keeps its last valid layout.
 - A type change that existing answers do not fit shows **Convert into a new
   question**: a new column gets the answers that convert and the question
   moves to it; the old column stays (listed under columns not on the form).
 - **Preview** opens a new tab with the respondent experience after pending
   question and form settings edits are saved, including edits started before
-  switching tabs. Fill it, try the screeners, and return to the builder. Preview
+  switching tabs. Fill it, try the gates, and return to the builder. Preview
   creates no response rows, file uploads or bookings.
   On touch devices, Preview, Publish (or Open form), and Share are in the
   floating header above the editor.
@@ -108,14 +108,14 @@ keeps the meeting link last. Start an empty form by adding a section, then its q
   **More → Scheduling** workspace, or opens that workspace to create one.
   It is always the last step. Once added, the action becomes **View meeting link**
   and focuses the existing step rather than adding a duplicate. **Change** selects another link;
-  **Remove booking step** leaves the link itself intact. A form's screeners
+  **Remove booking step** leaves the link itself intact. A form's gates
   control when its respondents see the link; the native link still works directly.
 - New standalone forms share their name with the database they create. Rename
   either to change both. Forms added to existing tables have independent names.
 
 ### Responses
 
-The linked table's grid, embedded and live, with summary tiles: Responses, Stopped submissions (per screener in its hint), Rows in
+The linked table's grid, embedded and live, with summary tiles: Responses, Stopped submissions (per gate in its hint), Rows in
 the table, and (owners, when posted in channels) People in its channels (the
 owner excluded; a dash for public forms). Every row of the table shows,
 including rows added in the grid. Stopped submissions counts signed-in respondents
@@ -182,7 +182,7 @@ discovers an existing response but cannot load its receipt, **Try again** reload
 that response without submitting another one.
 
 When the form ends with a booking step, the last action reads **Continue to
-booking**. After the server accepts the response and its screeners, Macro's
+booking**. After the server accepts the response and its gates, Macro's
 time picker appears. Booking opens `/app/booking/<id>#<private-token>`; retain
 that private link for cancellation or rescheduling. A returning signed-in
 respondent can use **Book a time** on their receipt if their saved answers still
@@ -239,12 +239,12 @@ linked type changes, independent display-label overrides, and reference pickers
 are not offered by these tools.
 
 Required means an answer must be present; it does not mean the answer qualifies.
-Use nonempty AND/OR screeners for qualification. Rules must refer to questions in
+Use nonempty AND/OR gates for qualification. Rules must refer to questions in
 earlier sections and options belonging to those questions. Empty answers pass
 only an `isEmpty` presence check, including for negative comparisons. Zero and
 false are answers. Put at most one booking section last. Select a saved accessible
 profile/event identity from the scheduling UI or available booking tools. Booking
-screeners reveal a link after an accepted response; the independent booking URL
+gates reveal a link after an accepted response; the independent booking URL
 remains usable. Requests for strict booking enforcement are refused.
 
 `ListForms` searches forms reachable through your actual grants, not every public

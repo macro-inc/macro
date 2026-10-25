@@ -72,6 +72,16 @@ function setup(extra: Partial<Parameters<typeof createCallLifecycle>[0]> = {}) {
 }
 
 describe('shared call lifecycle', () => {
+  it.each([true, false])(
+    'returns the server call-ended result: %s',
+    async (callEnded) => {
+      const { lifecycle, join } = setup({ leave: async () => ({ callEnded }) });
+      await join();
+      await expect(lifecycle.leave(call.channelId)).resolves.toEqual({
+        callEnded,
+      });
+    }
+  );
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(1_700_000_000_000);

@@ -14,6 +14,7 @@ import type {
   AgentSessionQueueResponse,
   AgentSessionResponse,
   AnswerToolApprovalResponse,
+  AppConnectedRequest,
   CodingPreferencesBody,
   ControlRequest,
   ControlResponse,
@@ -428,6 +429,23 @@ export const agentHarnessServiceClient = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ answer }),
+      }
+    );
+  },
+
+  /**
+   * Continue the session now that its owner connected `appSlug`. The
+   * harness wakes it with an `app.connected` system event, so the transcript
+   * shows no prompt. 422 when the app is not actually connected.
+   */
+  reportAppConnected(sessionId: string, appSlug: string) {
+    return fetchWithToken<Record<string, never>, typeof AI_USAGE_LIMIT_ERROR>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}/app-connections`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ appSlug } satisfies AppConnectedRequest),
+        errorResponseHandler: sessionAiError,
       }
     );
   },

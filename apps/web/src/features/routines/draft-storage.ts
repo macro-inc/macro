@@ -20,6 +20,7 @@ const draftFields = {
   dayOfMonth: z.string(),
   // Older clients saved routine activation with the draft.
   enabled: z.boolean().optional(),
+  runVisibility: z.enum(['listed', 'unlisted']).optional(),
 };
 
 const draftSchema = z

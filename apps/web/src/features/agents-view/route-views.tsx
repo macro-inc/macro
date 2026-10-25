@@ -25,8 +25,8 @@ const AgentsView = lazy(async () => ({
 const RoutinesPage = lazy(async () => ({
   default: (await import('../routines/routines-page')).RoutinesPage,
 }));
-const McpConnections = lazy(async () => ({
-  default: (await import('../settings/McpConnections')).McpConnections,
+const IntegrationsPage = lazy(async () => ({
+  default: (await import('../settings/IntegrationsPage')).IntegrationsPage,
 }));
 
 function LegacyAgentsView() {
@@ -154,7 +154,7 @@ export const AgentsRouteView = withAuth(() => {
               </Show>
             }
           >
-            <McpConnections />
+            <IntegrationsPage />
           </Show>
         }
       >

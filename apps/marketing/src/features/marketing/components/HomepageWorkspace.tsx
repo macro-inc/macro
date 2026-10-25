@@ -71,7 +71,7 @@ const PAGES: DemoPage[] = [
 const TITLES: Record<DemoPage, string> = {
   home: 'launch',
   messages: 'launch',
-  documents: 'Q3 launch plan',
+  documents: 'Website launch plan',
   tasks: 'My tasks',
   agents: 'Agents',
   email: 'New email',
@@ -199,11 +199,11 @@ function DocumentDemo(props: { demo: WorkspaceDemo }) {
   const initialDocument = props.demo.document();
   return (
     <div class="workspace-demo-scroll workspace-demo-document">
-      <h1 class="mb-6 text-2xl font-semibold">Q3 launch plan</h1>
+      <h1 class="mb-6 text-2xl font-semibold">Website launch plan</h1>
       <div
         contentEditable
         role="textbox"
-        aria-label="Q3 launch plan document"
+        aria-label="Website launch plan document"
         aria-multiline="true"
         class="h-auto text-sm outline-none"
         onInput={(event) =>
@@ -378,7 +378,7 @@ function AgentSessionDemo(props: {
                       id: 'read-plan',
                       name: { kind: 'native', name: 'Read' },
                       status: 'completed',
-                      detail: { kind: 'read', paths: ['Q3 launch plan'] },
+                      detail: { kind: 'read', paths: ['Website launch plan'] },
                     },
                     {
                       kind: 'text',

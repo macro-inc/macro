@@ -53,7 +53,6 @@ fn test_move_to_project_schema_validation() {
 fn test_move_to_project_deserializes_entity_types() {
     for (raw, expected) in [
         ("document", MoveableEntityType::Document),
-        ("chat", MoveableEntityType::Chat),
         ("email", MoveableEntityType::Email),
         ("project", MoveableEntityType::Project),
     ] {
@@ -139,7 +138,7 @@ fn test_update_sharing_maps_grants_to_levels() {
     };
 
     let tool = sharing(serde_json::json!({
-        "entityType": "chat",
+        "entityType": "project",
         "entityId": "d50676e2-0a12-4c62-bc07-4b1cb6d8e9bc",
         "linkScope": "team",
         "linkAccess": "comment",

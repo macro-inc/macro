@@ -136,7 +136,7 @@ export function BotInviteSelect(props: {
             <Combobox.Content
               as={Surface}
               depth={3}
-              class="z-action-menu mt-1 w-[var(--kb-popper-anchor-width)] min-w-72 rounded-xl p-1.5 glass bg-menu-glass"
+              class="menu-surface z-action-menu mt-1 w-[var(--kb-popper-anchor-width)] min-w-72 p-1.5"
             >
               <Combobox.Listbox class="peer max-h-64 overflow-y-auto empty:hidden" />
               <div class="hidden px-3 py-5 text-center text-xs text-ink-muted peer-empty:block">

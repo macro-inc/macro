@@ -62,17 +62,6 @@ const FILTER_ICONS = new Map<string, () => JSX.Element>([
     ),
   ],
   [
-    'chats',
-    () => (
-      <EntityIcon
-        targetType="chat"
-        size="xs"
-        theme="monochrome"
-        class="text-ink-muted"
-      />
-    ),
-  ],
-  [
     'agents',
     () => (
       <EntityIcon

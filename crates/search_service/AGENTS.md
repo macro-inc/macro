@@ -14,6 +14,10 @@ per-entity-type search plus a unified search across them — mounted into
   `agent_session.rs`), plus `unified.rs` for cross-type search.
 - `src/api/search/simple/`: a second, simpler request/response shape per type
   used by AI tools — kept in sync with the full one by hand.
+- Name mode sources: chats (`simple/simple_chat.rs`) and channels
+  (`simple/simple_channel.rs`) name-search in Postgres through `name_search`;
+  every other type name-searches in OpenSearch. `simple_unified.rs` merges
+  them and keeps one cursor slot per source.
 - `src/api/context.rs`: `SearchHandlerState`, the shared handler state.
 - `src/outbound.rs` + `src/outbound/agent_session.rs`: the OpenSearch query
   builders.
@@ -45,6 +49,19 @@ per-entity-type search plus a unified search across them — mounted into
 
 - `cargo test -p search_service` (`SQLX_OFFLINE` unset).
 - `SQLX_OFFLINE=true cargo check` (`just check` recipe in `justfile`).
+
+## Gotchas
+
+- Every whitespace-split term is ANDed, so a term the standard tokenizer
+  analyzes to nothing (`-`, `@`) matches no document and empties the search.
+  `terms::drop_wordless_terms` removes such terms for exact and partial
+  queries; run new term handling through it.
+- Calendar events have two scopes (`calendar_event_scope` on the unified
+  request): `own` matches the caller's own and delegated calendars by
+  owner and inbox link; `shared_with_you` resolves the events shared with the
+  caller's channels in Postgres and searches by id, leaving out meetings the
+  caller holds a copy of. Enrichment re-checks every hit against the event's
+  access rule and withholds a share's join link.
 
 ## Related
 

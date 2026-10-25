@@ -1,0 +1,3 @@
+Pass task to receive every SDK entity reference relevant to it in one call; do this before writing ExecuteCode. entities are most relevant first; omitted lists relevant entities left out for size, which you can request by name. A status other than selected means nothing was chosen automatically: pick entities from the catalog and request them by name. Request up to five exact entity names together for full declarations. Topics search and ai return workflow examples. Declarations are documentation; programs are plain JavaScript.
+
+ExecuteCode runs an ES module exporting async main({macro}). macro is a real SDK client. Methods return their documented promises or async iterators. Return {data:<JSON>}; fetch fields on entities rather than serializing handles.

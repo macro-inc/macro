@@ -177,6 +177,7 @@ function ChannelWorkPane(props: {
 export function ChannelWorkSurface(props: {
   workspace: DummyWorkspace;
   renderMessageDetails?: (message: WorkspaceComment) => JSX.Element;
+  onReady?: (reset: () => void) => void;
 }) {
   const w = props.workspace;
   let root!: HTMLDivElement;
@@ -185,6 +186,12 @@ export function ChannelWorkSurface(props: {
   const [active, setActive] = createSignal<string>();
   const closeButtons = new Map<string, HTMLButtonElement>();
   const triggers = new Map<string, HTMLElement>();
+  props.onReady?.(() => {
+    setPanes([]);
+    setActive(undefined);
+    closeButtons.clear();
+    triggers.clear();
+  });
   const narrow = () => width() < 480 || width() / (panes().length + 1) < 240;
   const navigate = (view: WorkspaceView, id?: string) => {
     if (view === 'messages' || view === 'home') {

@@ -11,6 +11,7 @@ const result: SettingsSearchResult = {
   target: 'signatures',
   keywords: '',
   page: { tab: 'Email', label: 'Email', keywords: [], icon: () => null },
+  group: 'Blocks',
 };
 afterEach(cleanup);
 describe('settings search navigation', () => {

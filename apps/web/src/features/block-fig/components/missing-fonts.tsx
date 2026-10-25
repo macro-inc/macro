@@ -21,7 +21,7 @@ export function MissingFonts(props: {
   return (
     <Show when={open()}>
       <div
-        class="absolute right-3 bottom-14 z-30 flex w-64 flex-col gap-1.5 rounded-xl border border-edge-muted bg-menu p-3 text-xs shadow-xl"
+        class="menu-surface absolute right-3 bottom-14 z-30 flex w-64 flex-col gap-1.5 p-3 text-xs"
         data-testid="fig-missing-fonts"
         onPointerDown={(e) => e.stopPropagation()}
       >

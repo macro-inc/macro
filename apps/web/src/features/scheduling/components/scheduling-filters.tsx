@@ -2,7 +2,7 @@ import { MobileFilterDrawer } from '@app/components/view-shell/MobileFilterDrawe
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { Accordion } from '@kobalte/core/accordion';
 import { Popover } from '@kobalte/core/popover';
-import Funnel from '@phosphor/funnel.svg';
+import Funnel from '@phosphor/funnel-simple.svg';
 import { Button } from '@ui';
 import { createSignal, type JSX, Show } from 'solid-js';
 
@@ -24,11 +24,16 @@ export function SchedulingFilters(props: {
             as={Button}
             ref={setTrigger}
             type="button"
-            variant="outline"
-            size="md"
+            variant="ghost"
+            size={props.activeCount > 0 ? 'md' : 'icon-md'}
+            label={props.title}
           >
-            <Funnel aria-hidden="true" class="size-4" />
-            Filters
+            <Funnel aria-hidden="true" />
+            <Show when={props.activeCount > 0}>
+              <span class="flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-xxs font-medium leading-none text-surface">
+                {props.activeCount}
+              </span>
+            </Show>
           </Popover.Trigger>
           <Popover.Portal
             mount={

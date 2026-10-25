@@ -1,3 +1,4 @@
+import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
 import { ManageMeetingsDialog } from '@app/features/meetings/manage-meetings-dialog';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import PhoneIcon from '@phosphor/phone.svg';
@@ -8,6 +9,7 @@ import { createSignal, Show } from 'solid-js';
 import { useQuickCallsFlag } from '../../meetings/use-quick-calls-flag';
 
 type NewMeetingActions = {
+  presentation?: 'sidebar' | 'toolbar';
   /** Opens the recipient picker for a channel or direct-message call. */
   onChannelCall: () => void;
   /** Opens instant call setup; only offered when quick calls are enabled. */
@@ -20,15 +22,27 @@ export function NewMeetingButton(props: NewMeetingActions) {
     <Show
       when={!flag().loading && flag().enabled}
       fallback={
-        <Button variant="accent" size="sm" onClick={props.onChannelCall}>
-          <VideoCameraIcon class="size-3.5" />
-          New call
-        </Button>
+        <Show
+          when={props.presentation}
+          fallback={
+            <Button variant="accent" size="sm" onClick={props.onChannelCall}>
+              <VideoCameraIcon class="size-3.5" />
+              New call
+            </Button>
+          }
+        >
+          <ViewCreateButton
+            presentation={props.presentation}
+            aria-label="New call"
+            onClick={props.onChannelCall}
+          />
+        </Show>
       }
     >
       <NewMeetingMenu
         onChannelCall={props.onChannelCall}
         onInstantCall={props.onInstantCall}
+        presentation={props.presentation}
       />
     </Show>
   );
@@ -38,17 +52,34 @@ function NewMeetingMenu(props: NewMeetingActions) {
   const [managing, setManaging] = createSignal(false);
   return (
     <>
-      <Dropdown placement="bottom-end" modal={false}>
-        <Dropdown.Trigger
-          variant="accent"
-          size="sm"
-          class="gap-1.5 px-2"
-          label="New call"
+      <Dropdown
+        placement={
+          props.presentation === 'sidebar' ? 'bottom-start' : 'bottom-end'
+        }
+        modal={false}
+      >
+        <Show
+          when={props.presentation}
+          fallback={
+            <Dropdown.Trigger
+              variant="accent"
+              size="sm"
+              class="gap-1.5 px-2"
+              label="New call"
+            >
+              <VideoCameraIcon class="size-3.5" />
+              <span>New call</span>
+              <CaretDownIcon class="size-3" />
+            </Dropdown.Trigger>
+          }
         >
-          <VideoCameraIcon class="size-3.5" />
-          <span>New call</span>
-          <CaretDownIcon class="size-3" />
-        </Dropdown.Trigger>
+          <Dropdown.Trigger
+            as={ViewCreateButton}
+            presentation={props.presentation}
+            aria-label="New call"
+            menu
+          />
+        </Show>
         <Dropdown.Content class="min-w-60" blockingBackdrop>
           <Dropdown.Group>
             <Dropdown.Item closeOnSelect onSelect={props.onInstantCall}>

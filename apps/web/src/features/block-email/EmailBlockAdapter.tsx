@@ -128,6 +128,7 @@ export function EmailBlockAdapter(props: {
       source={props.source}
       threadTransport={props.threadTransport}
       host={host}
+      sidePanelHeaderToggle={isTouchDevice()}
       topBar={({ createTask }) => (
         <TopBar
           id={props.threadId()}

@@ -193,7 +193,11 @@ function PopoverSplitModal(props: {
           >
             <MobileDrawer.Handle />
             <MobileDrawer.ScrollBody>
-              <Content />
+              {/* As in Dialog's drawer: at its natural height the body's
+                  overflow-clip cannot clip the drawer's scroll body. */}
+              <div class="shrink-0">
+                <Content />
+              </div>
             </MobileDrawer.ScrollBody>
           </MobileDrawer.Content>
         </MobileDrawer.Portal>

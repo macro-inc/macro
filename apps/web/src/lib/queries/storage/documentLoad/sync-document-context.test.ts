@@ -37,6 +37,7 @@ vi.mock('@core/auth/push-registration-lifecycle', () => ({
 }));
 vi.mock('@core/context/user-info-gate', () => ({
   enableUserInfoQuery: vi.fn(),
+  shouldQueryUserInfo: () => true,
 }));
 vi.mock('@service-auth/client', () => ({
   authServiceClient: { getLegacyUserPermissions: mocks.userInfo },

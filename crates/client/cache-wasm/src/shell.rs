@@ -253,6 +253,8 @@ struct JsClaimedMutation {
     identity: Option<String>,
     attempt_count: u32,
     server_failure_count: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    enqueued_at_ms: Option<i64>,
 }
 
 impl TryFrom<ClaimedMutation> for JsClaimedMutation {
@@ -265,6 +267,7 @@ impl TryFrom<ClaimedMutation> for JsClaimedMutation {
         )
         .map_err(err_js)?
         .client_metadata;
+        let enqueued_at_ms = claimed.queued.mutation.enqueued_at_ms();
         let request = claimed.queued.mutation.request;
         Ok(Self {
             client_metadata,
@@ -279,6 +282,7 @@ impl TryFrom<ClaimedMutation> for JsClaimedMutation {
             identity: request.identity,
             attempt_count: claimed.queued.mutation.attempt_count,
             server_failure_count: claimed.queued.mutation.server_failure_count,
+            enqueued_at_ms,
         })
     }
 }

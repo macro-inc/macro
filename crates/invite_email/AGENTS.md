@@ -44,6 +44,17 @@ invites, and the colleague-joined email.
 
 - `cargo test -p invite_email`.
 
+## Gotchas
+
+- The team invite email promises what joining gives (`InviteePlan`). The
+  sender, `teams`' `invite_users_to_team`, derives it the way `join_team`
+  grants entitlements: Pro only from an enterprise team or one with a
+  subscription. Never let the copy promise more than the join grants.
+- Metadata is queued and stored as JSON, and the notification service
+  publishes it in its OpenAPI spec. A new field needs `#[serde(default)]` so
+  payloads queued before a deploy still deserialize, and a regenerated web
+  client (`bun run gen-api notification-service` in `apps/web`).
+
 ## Related
 
 - Docs: `packages/email-renderer/README.md` (if rendering in the standalone

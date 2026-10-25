@@ -216,7 +216,10 @@ export function startPendingSession(
           // A warm claim releases its server reservation before creation answers.
           replenishWarmAgentSession(result.value.session.ownerId);
           fireAndForget(
-            refetchSoupEntity(created, 'agentSession', { created: true }),
+            refetchSoupEntity(created, 'agentSession', {
+              created: true,
+              refreshGraphql: true,
+            }),
             'agent-session'
           );
           // The create already starts the session on `modelOverride`, so only

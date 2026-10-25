@@ -125,6 +125,29 @@ async fn accepted_send_does_not_require_a_response_body() {
 }
 
 #[tokio::test]
+async fn bodyless_send_declares_zero_content_length() {
+    let (server, api, token) = setup().await;
+    Mock::given(method("POST"))
+        .and(path("/v1.0/me/messages/draft/send"))
+        .and(header("content-length", "0"))
+        .respond_with(ResponseTemplate::new(202))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/v1.0/me/messages/draft/send"))
+        .respond_with(ResponseTemplate::new(411))
+        .mount(&server)
+        .await;
+    assert_eq!(
+        api.submit_draft(&token, &ProviderId::new("draft").unwrap())
+            .await
+            .unwrap(),
+        SubmissionOutcome::Accepted
+    );
+}
+
+#[tokio::test]
 async fn throttling_respects_provider_retry_after() {
     let (server, api, token) = setup().await;
     Mock::given(method("GET"))

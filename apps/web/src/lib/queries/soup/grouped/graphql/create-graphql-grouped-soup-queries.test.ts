@@ -29,13 +29,8 @@ vi.mock('@queries/soup/grouped/api', () => ({
   }),
 }));
 
-vi.mock('@queries/storage/instructions-md', () => ({
-  useInstructionsMdIdQuery: vi.fn(() => ({})),
-}));
-
 vi.mock('@queries/soup/transform-utils', () => ({
   isDisplayableSoupItem: () => true,
-  isInstructionsMdDoc: () => false,
   mapApiSoupItemToEntity: (item: unknown) => item,
   mapSoupPageToEntityList: (page: { items: unknown[] }) => page.items,
 }));
@@ -195,13 +190,8 @@ function setup() {
     });
 
     grouped = createGraphqlGroupedSoupQueries({
+      groupedPaging: () => parent.groupedPaging,
       initialPage,
-      groupByField: () => ({
-        type: 'property',
-        propertyDefinitionId: 'status-definition',
-      }),
-      soupParams: () => ({ limit: 2, sort_method: 'updated_at' }),
-      soupBody: () => ({}),
       enabled: () => true,
       itemFilter: () => undefined,
     });

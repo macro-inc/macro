@@ -33,6 +33,7 @@ use crate::domain::models::{
     MAX_INITIATIVE_NAME_GRAPHEMES, UpdateInitiativeRepoArgs, UpdateInitiativeRequest,
 };
 use crate::domain::ports::{InitiativeDescriptionSurfaces, InitiativeRepo, InitiativeService};
+use crate::domain::reads::InitiativeRead;
 use crate::domain::resources::InitiativeResources;
 
 /// Concrete initiative service backed by an [`InitiativeRepo`] and the description surface
@@ -133,7 +134,34 @@ where
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> Result<crate::domain::reads::InitiativePageRow, InitiativeError> {
-        self.read_summary(receipt).await
+        let read = self.read(receipt).await?;
+        self.summarize(&read).await
+    }
+
+    #[tracing::instrument(err, skip_all)]
+    async fn read(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<InitiativeRead, InitiativeError> {
+        let id = initiative_id_from_receipt(&receipt)?;
+        let mut detail = self
+            .repo
+            .get_detail(id)
+            .await
+            .map_err(Into::into)?
+            .ok_or(InitiativeError::NotFound)?;
+        detail.user_access_level = receipt_access_level(&receipt)?;
+        let tasks = self
+            .visible_tasks(receipt.auth(), self.resources.project_tasks(id).await?)
+            .await?;
+        Ok(InitiativeRead::new(receipt, detail, tasks))
+    }
+
+    async fn summarize(
+        &self,
+        read: &InitiativeRead,
+    ) -> Result<crate::domain::reads::InitiativePageRow, InitiativeError> {
+        self.read_summary(read).await
     }
 
     async fn page(
@@ -289,18 +317,7 @@ where
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> Result<InitiativeDetail, InitiativeError> {
-        let id = initiative_id_from_receipt(&receipt)?;
-        let mut detail = self
-            .repo
-            .get_detail(id)
-            .await
-            .map_err(Into::into)?
-            .ok_or(InitiativeError::NotFound)?;
-        detail.user_access_level = receipt_access_level(&receipt)?;
-        detail.task_ids = self
-            .visible_tasks(receipt.auth(), self.resources.project_tasks(id).await?)
-            .await?;
-        Ok(detail)
+        Ok(self.read(receipt).await?.into_detail())
     }
 
     #[tracing::instrument(err, skip_all)]
@@ -396,7 +413,10 @@ where
         detail.user_access_level = receipt_access_level(&receipt)?;
         detail.task_ids = self
             .visible_tasks(receipt.auth(), self.resources.project_tasks(id).await?)
-            .await?;
+            .await?
+            .into_iter()
+            .map(|task| task.entity().entity_id.clone())
+            .collect();
         Ok(detail)
     }
 

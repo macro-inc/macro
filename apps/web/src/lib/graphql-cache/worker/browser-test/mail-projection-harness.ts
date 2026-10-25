@@ -190,6 +190,7 @@ document.querySelector('#create-draft')!.addEventListener('click', async () => {
     const now = new Date().toISOString();
     const draft: SaveEmailDraftMutation['saveEmailDraft']['draft'] = {
       __typename: 'GraphqlSoupEmailMessage',
+      draftGeneration: 0,
       operationStatus: null,
       id: id(8001),
       threadId: id(8002),
@@ -206,6 +207,7 @@ document.querySelector('#create-draft')!.addEventListener('click', async () => {
       isDraft: true,
       hasAttachments: false,
       scheduledSendTime: null,
+      scheduledSendStatus: null,
       from: { email: 'sender@example.com', name: null, photoUrl: null },
       to: [{ email: 'recipient@example.com', name: null, photoUrl: null }],
       cc: [],

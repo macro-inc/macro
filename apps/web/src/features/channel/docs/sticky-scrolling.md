@@ -18,6 +18,10 @@ their position. A loose end threshold treats that intermediate
 layout as pinned and applies the estimate-to-measurement delta as a backward scroll.
 ResizeObserver measurements also run in the current frame: delaying them with
 `useAnimationFrameWithResizeObserver` exposes stale row and composer geometry.
+This applies to the list's geometry measurements. The composer's compact versus
+expanded layout decision runs in the next animation frame when triggered by a
+resize, so it cannot resize an already-measured ancestor during observer
+delivery. Draft edits still measure in a microtask before paint.
 
 The list exposes three navigation operations: `scrollToLatest`, `scrollToMessage`,
 and `scrollToElement`. Message navigation can include keyboard intent for pagination.

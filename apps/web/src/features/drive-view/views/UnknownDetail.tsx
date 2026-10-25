@@ -1,13 +1,13 @@
 import { UnknownContent } from '@block-unknown/component/UnknownContent';
 import { getPermissions } from '@core/component/SharePermissions';
-import { toast } from '@core/component/Toast/Toast';
 import { useShareModal } from '@core/component/TopBar/shareModal';
+import { createFileDownload } from '@core/util/createFileDownload';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { downloadFile } from '@filesystem/download';
+import { catchToResult } from '@core/util/result';
+import { getFileDocumentBlob } from '@queries/storage/file-document';
 import type { JSX } from 'solid-js';
 import { FileDetailLayout, FileDetailLoadGate } from '../components/FileDetail';
 import { downloadFileOperation } from '../components/file-detail-operations';
-import { getFileDocumentBlob } from '../queries/file-document';
 import {
   loadUnknownDocument,
   type UnknownDocumentData,
@@ -30,23 +30,24 @@ export function UnknownDetailDocument(props: {
     userPermissions: getPermissions(props.data.userAccessLevel),
     owner: props.data.documentMetadata.owner,
   }));
-  const downloadName = () => documentDownloadName(props.data.documentMetadata);
-
-  const downloadDocument = async () => {
-    try {
-      const file = await getFileDocumentBlob({
-        documentId: props.documentId,
-        documentVersionId: props.data.documentMetadata.documentVersionId,
-      });
-      await downloadFile(file, downloadName());
-    } catch (error) {
-      console.error('error downloading file', error);
-      toast.failure('Error downloading file');
-    }
-  };
+  const download = createFileDownload(() => {
+    const documentId = props.documentId;
+    const metadata = props.data.documentMetadata;
+    return {
+      id: `${documentId}:${metadata.documentVersionId}`,
+      name: documentDownloadName(metadata),
+      load: (options) =>
+        catchToResult(async () => ({
+          blob: await getFileDocumentBlob(
+            { documentId, documentVersionId: metadata.documentVersionId },
+            options
+          ),
+        })),
+    };
+  });
   const operations = [
     downloadFileOperation(() =>
-      fireAndForget(downloadDocument(), 'drive-file-download')
+      fireAndForget(download.start(), 'drive-file-download')
     ),
   ];
 
@@ -62,12 +63,13 @@ export function UnknownDetailDocument(props: {
         documentMetadata: props.data.documentMetadata,
         userAccessLevel: props.data.userAccessLevel,
         operations,
+        download,
       })}
       <UnknownContent
         fileName={props.data.documentMetadata.documentName}
         onShare={openShare}
         onDownload={() =>
-          fireAndForget(downloadDocument(), 'drive-file-download')
+          fireAndForget(download.start(), 'drive-file-download')
         }
       />
     </FileDetailLayout>

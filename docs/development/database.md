@@ -45,6 +45,11 @@ replay used to be nearly all of the Rust test suite's runtime. Run the recipe
 locally only against a Postgres dedicated to one checkout; every database created
 on that server afterwards gets the schema too.
 
+Set `max_locks_per_transaction = 8192` on that dedicated server, as in
+[CI’s PostgreSQL setup](../../tooling/xtask/crates/xtask_workflows/src/workflows/scripts/configure_postgres.sh),
+and restart PostgreSQL before testing; replacing a pre-migrated schema can exceed
+the default lock capacity.
+
 Tests that build their own schema (`#[sqlx::test(migrations = false)]`, or a
 crate's test-only schema fixture) must first run
 `DROP SCHEMA public CASCADE; CREATE SCHEMA public;`, since their database may
@@ -135,6 +140,17 @@ checks (`just rust-check`, `just clippy`) don't compile tests, so test-only quer
 never need `.sqlx` metadata. Prepare with the root `prepare_db` wrapper only. Never
 pass `--tests` to `sqlx::prepare_db` or `cargo sqlx prepare`, and don't commit
 cache entries for test queries.
+
+### Checking query plans
+
+Local Postgres runs with default planner costs. Hosted MacroDB uses the
+parameter group in `infra/stacks/macrodb/index.ts` (`random_page_cost = 1.1`,
+`work_mem = 16MB`, `jit = off`). Plans can differ between the two, so `SET`
+those values in your session before reading `EXPLAIN (ANALYZE, BUFFERS)`
+output. Seed data at realistic volume: an empty table hides missing indexes.
+Local and dev run Postgres 18, but production runs the `engine_version` in
+`infra/stacks/macrodb/Pulumi.prod.yaml`, which is older and lacks skip scans.
+Check that the plans you rely on also hold on that version.
 
 ## Troubleshooting
 

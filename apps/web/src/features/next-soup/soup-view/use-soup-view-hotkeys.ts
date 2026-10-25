@@ -50,6 +50,58 @@ type UseSoupViewHotkeysOptions = {
   fetchNextGroupPage: (groupKey: string) => Promise<void>;
 };
 
+// Escape belongs to the split, not the mounted list. Do not capture view
+// props, virtualizers, or the other view hotkeys in its persistent callbacks.
+function registerSplitEscapeHotkey(
+  scopeId: string,
+  selection: SoupState['selection'],
+  splitHandle: SplitHandle
+) {
+  const splitIsUnifiedList = () => isListViewID(splitHandle.content().id);
+
+  // escape - Multi-purpose: Clear selection / Close spotlight
+  const clearMultiCondition = () =>
+    selection.count() > 0 && splitIsUnifiedList();
+  const closeSpotlightCondition = () => splitHandle.isSpotLight();
+
+  const escapeDescription = () => {
+    if (clearMultiCondition()) {
+      return 'Clear multi selection';
+    }
+    if (closeSpotlightCondition()) {
+      return 'Close spotlight';
+    }
+    return '';
+  };
+
+  // escape - Multi-purpose: Clear selection / Close spotlight
+  // Deliberately outside the group and kept past this view's unmount: the
+  // soup selection and split spotlight it acts on live at the split-panel
+  // level, so escape keeps working after a list entity is opened in place.
+  // The token is required for a persistent registration: same-token override
+  // replacement is what dedupes it when this view remounts on the same split.
+  registerHotkey({
+    hotkey: ['escape'],
+    scopeId,
+    hotkeyToken: TOKENS.soup.dismiss,
+    description: escapeDescription,
+    condition: () => clearMultiCondition() || closeSpotlightCondition(),
+    keyDownHandler: () => {
+      if (clearMultiCondition()) {
+        const length = selection.count();
+        selection.clear();
+        return length > 1;
+      }
+      if (closeSpotlightCondition()) {
+        splitHandle.toggleSpotlight();
+        return true;
+      }
+      return false;
+    },
+    disposeWithOwner: false,
+  });
+}
+
 export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
   const {
     scopeId,
@@ -64,29 +116,13 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
 
   const analytics = useAnalytics();
   const notificationSource = useGlobalNotificationSource();
-
-  const splitIsUnifiedList = () => isListViewID(splitHandle.content().id);
-
-  // escape - Multi-purpose: Clear selection / Close spotlight
-  const clearMultiCondition = () =>
-    soup.selection.count() > 0 && splitIsUnifiedList();
-  const closeSpotlightCondition = () => splitHandle.isSpotLight();
-
-  const escapeDescription = () => {
-    if (clearMultiCondition()) {
-      return 'Clear multi selection';
-    }
-    if (closeSpotlightCondition()) {
-      return 'Close spotlight';
-    }
-    return '';
-  };
+  registerSplitEscapeHotkey(scopeId, soup.selection, splitHandle);
 
   const group = createHotkeyGroup();
 
-  // home - Jump to top of list
+  // home, cmd+arrowup - Jump to top of list
   registerHotkey({
-    hotkey: ['home'],
+    hotkey: ['home', 'cmd+arrowup'],
     scopeId,
     hotkeyToken: TOKENS.entity.jump.home,
     description: 'Go to top of list',
@@ -117,9 +153,9 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     registrationType: 'add',
   }).withGroup(group);
 
-  // shift+g, end - Jump to bottom of list
+  // shift+g, end, cmd+arrowdown - Jump to bottom of list
   registerHotkey({
-    hotkey: ['shift+g', 'end'],
+    hotkey: ['shift+g', 'end', 'cmd+arrowdown'],
     scopeId,
     hotkeyToken: TOKENS.entity.jump.end,
     description: 'Go to bottom of list',
@@ -298,33 +334,6 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     hide: CommandState.isOpen,
     runWithInputFocused: true,
   }).withGroup(group);
-
-  // escape - Multi-purpose: Clear selection / Close spotlight
-  // Deliberately outside the group and kept past this view's unmount: the
-  // soup selection and split spotlight it acts on live at the split-panel
-  // level, so escape keeps working after a list entity is opened in place.
-  // The token is required for a persistent registration: same-token override
-  // replacement is what dedupes it when this view remounts on the same split.
-  registerHotkey({
-    hotkey: ['escape'],
-    scopeId,
-    hotkeyToken: TOKENS.soup.dismiss,
-    description: escapeDescription,
-    condition: () => clearMultiCondition() || closeSpotlightCondition(),
-    keyDownHandler: () => {
-      if (clearMultiCondition()) {
-        const length = soup.selection.count();
-        soup.selection.clear();
-        return length > 1;
-      }
-      if (closeSpotlightCondition()) {
-        splitHandle.toggleSpotlight();
-        return true;
-      }
-      return false;
-    },
-    disposeWithOwner: false,
-  });
 
   // shift+enter - Open in new split
   registerHotkey({

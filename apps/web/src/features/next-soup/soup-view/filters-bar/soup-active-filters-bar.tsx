@@ -19,13 +19,8 @@ interface SoupActiveFiltersBarProps {
  * Contains filter chips on the left, and add/clear buttons on the right.
  */
 const AddFilterButton = () => (
-  <Dropdown.Trigger
-    variant="ghost"
-    size="icon-sm"
-    tooltip="Add filters"
-    class="p-1"
-  >
-    <Plus class="size-3" />
+  <Dropdown.Trigger variant="ghost" size="icon-sm" tooltip="Add filters">
+    <Plus />
   </Dropdown.Trigger>
 );
 
@@ -35,8 +30,9 @@ export function SoupActiveFiltersBar(props: SoupActiveFiltersBarProps) {
   return (
     <Show when={props.filters.length > 0}>
       <Layer depth={0}>
-        <div class={cn('w-full p-2', props.class)}>
-          <div class="flex items-start p-2 border border-edge-muted bg-surface rounded-lg font-medium">
+        {/* Chips sit directly below the header, like Linear's filter row. */}
+        <div class={cn('w-full px-4 py-2', props.class)}>
+          <div class="flex items-start font-medium">
             {/* Filter chips and add button - flex left */}
             <div class="flex items-center gap-2 flex-wrap flex-1 min-w-0">
               <For each={props.filters}>
@@ -54,7 +50,6 @@ export function SoupActiveFiltersBar(props: SoupActiveFiltersBarProps) {
                 onClick={() => props.onClearAll()}
                 variant="outline"
                 size="sm"
-                class="h-7"
                 tooltip="Clear active filters"
               >
                 <XIcon />

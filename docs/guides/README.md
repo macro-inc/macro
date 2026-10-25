@@ -19,3 +19,6 @@ touches, in order, with the existing code to copy.
 | A view's feature tour | [`add-tour` skill](../../.agents/skills/add-tour/SKILL.md) |
 | Collaborative markdown on a feature | [`collab-surface-core` skill](../../.agents/skills/collab-surface-core/SKILL.md) |
 | A feature on shared database storage | [`database-core` skill](../../.agents/skills/database-core/SKILL.md) |
+
+For the single agent backend and retirement of its former ECS services, see
+[Consolidate agent services](consolidate-agent-services.md).

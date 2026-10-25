@@ -6,14 +6,14 @@ mod test;
 use crate::domain::{
     auth::{CrmCompanyReceipt, CrmContactReceipt, CrmTeamReceipt},
     companies_repo::{CompaniesRepository, CrmCompanyListSort, CrmCompanySoupCursor},
-    company_metadata_resolver::CompanyMetadataResolver,
+    company_metadata_resolver::{CompanyMetadataResolver, DomainResolution},
     generic_email_domains::is_generic_email_domain,
     model::{
         CrmCompanyForSoup, CrmCompanyWithContacts, CrmContact, CrmError, CrmScopePrecheck,
         CrmTeamSettings, CrmTeamSettingsPatch, DepopulateContactOutcome,
     },
 };
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, TimeDelta, Utc};
 use entity_access::domain::models::{EditAccessLevel, MemberTeamRole, ViewAccessLevel};
 
 /// The CrmService exposes operations over CRM records (companies, their
@@ -65,10 +65,12 @@ pub trait CrmService: Clone + Send + Sync + 'static {
     /// `crm_domain_directory` has an entry for the email's domain — if
     /// not, it invokes the
     /// [`crate::domain::company_metadata_resolver::CompanyMetadataResolver`]
-    /// and inserts the result (which may be all-NULL on resolver
-    /// failure — that's the negative cache). The directory write is its
-    /// own transaction so the populate tx never holds locks across an
-    /// HTTP fetch.
+    /// and inserts the result (which may be all-NULL when the provider
+    /// knows nothing about the domain — that's the negative cache), or a
+    /// pending entry for [`CrmServiceImpl::enrich_pending_domains`] when
+    /// the resolver is unavailable. The directory write is its own
+    /// transaction so the populate tx never holds locks across an HTTP
+    /// fetch.
     ///
     /// `first_at` / `last_at` are the contact's known activity range
     /// for this populate. Per-message paths pass the message's
@@ -185,7 +187,9 @@ pub trait CrmService: Clone + Send + Sync + 'static {
     /// Like populate, ensures `crm_domain_directory` has an entry for
     /// the domain (resolving via the
     /// [`crate::domain::company_metadata_resolver::CompanyMetadataResolver`]
-    /// on a miss) so the company still picks up icon/description
+    /// on a miss, or leaving it pending for
+    /// [`CrmServiceImpl::enrich_pending_domains`] when the binary has no
+    /// resolver) so the company still picks up icon/description
     /// enrichment; the user's `name` is stored on `crm_companies.custom_name`
     /// (never in the shared directory — it's global across teams) and
     /// overrides the directory name on every read path.
@@ -516,9 +520,10 @@ where
 {
     /// The underlying companies repository
     companies_repository: CR,
-    /// Resolver consulted only when `crm_domain_directory` has no entry
-    /// for a given domain. The resolver itself is best-effort — its
-    /// failures collapse to a negative-cache row in the directory.
+    /// Resolver consulted when `crm_domain_directory` has no entry for a
+    /// given domain, and for pending entries in
+    /// [`CrmServiceImpl::enrich_pending_domains`]. The resolver itself is
+    /// best-effort — when it is unavailable the entry stays pending.
     metadata_resolver: R,
 }
 
@@ -547,7 +552,100 @@ where
             metadata_resolver,
         }
     }
+
+    /// Resolves one batch of pending `crm_domain_directory` entries
+    /// whose domain some team still tracks, and returns how many were
+    /// claimed. Each entry gets at most [`MAX_ENRICHMENT_ATTEMPTS`]
+    /// attempts, spaced [`ENRICHMENT_RETRY_AFTER`] apart; an entry the
+    /// resolver keeps failing on stays pending (read paths show the
+    /// domain) and is not claimed again. Team-scoped
+    /// `crm_companies.custom_name` overrides are never touched — they win
+    /// over the directory name on every read path.
+    ///
+    /// Only meaningful with a real resolver: with
+    /// [`crate::outbound::no_op_resolver::NoOpCompanyMetadataResolver`]
+    /// every claim would burn an attempt.
+    #[tracing::instrument(
+        name = "crm.enrich_pending_domains",
+        skip(self),
+        fields(claimed, resolved),
+        err
+    )]
+    pub async fn enrich_pending_domains(&self) -> Result<usize, CrmError> {
+        let domains = self
+            .companies_repository
+            .claim_pending_domains(
+                ENRICHMENT_BATCH_SIZE,
+                MAX_ENRICHMENT_ATTEMPTS,
+                Utc::now() - ENRICHMENT_RETRY_AFTER,
+            )
+            .await?;
+
+        let mut resolved = 0;
+        for domain in &domains {
+            let DomainResolution::Resolved(metadata) = self.metadata_resolver.resolve(domain).await
+            else {
+                continue;
+            };
+            // One failed write leaves that entry pending for a later
+            // attempt; it must not drop the rest of the batch.
+            if self
+                .companies_repository
+                .upsert_domain_metadata(domain, &metadata)
+                .await
+                .inspect_err(|error| {
+                    tracing::warn!(?error, domain, "failed to store enriched domain metadata")
+                })
+                .is_ok()
+            {
+                resolved += 1;
+            }
+        }
+
+        let span = tracing::Span::current();
+        span.record("claimed", domains.len());
+        span.record("resolved", resolved);
+        Ok(domains.len())
+    }
+
+    /// Ensures `crm_domain_directory` has an entry for `domain`: resolves
+    /// it when the domain has none, storing a pending entry instead when
+    /// the resolver is unavailable.
+    async fn ensure_domain_directory_entry(&self, domain: &str) -> Result<(), CrmError> {
+        if self
+            .companies_repository
+            .lookup_domain_metadata(domain)
+            .await?
+            .is_some()
+        {
+            return Ok(());
+        }
+        match self.metadata_resolver.resolve(domain).await {
+            DomainResolution::Resolved(metadata) => {
+                self.companies_repository
+                    .upsert_domain_metadata(domain, &metadata)
+                    .await
+            }
+            DomainResolution::Unavailable => {
+                self.companies_repository
+                    .insert_pending_domain(domain)
+                    .await
+            }
+        }
+    }
 }
+
+/// Pending directory entries one [`CrmServiceImpl::enrich_pending_domains`]
+/// pass claims. Passes run on a fixed interval, so this caps the resolver
+/// (Apollo) call rate.
+const ENRICHMENT_BATCH_SIZE: i64 = 10;
+
+/// Enrichment attempts after which a pending directory entry is left alone.
+const MAX_ENRICHMENT_ATTEMPTS: i16 = 5;
+
+/// Minimum gap between enrichment attempts for one directory entry; also
+/// how long a claim by a worker that died mid-batch blocks other workers.
+const ENRICHMENT_RETRY_AFTER: TimeDelta = TimeDelta::hours(6);
 
 impl<CR, R> CrmService for CrmServiceImpl<CR, R>
 where
@@ -627,17 +725,8 @@ where
         // directory entry was written when its first sent message
         // populated; if it isn't tracked, this call will no-op in the
         // repo anyway.
-        if is_sent
-            && self
-                .companies_repository
-                .lookup_domain_metadata(domain)
-                .await?
-                .is_none()
-        {
-            let metadata = self.metadata_resolver.resolve(domain).await;
-            self.companies_repository
-                .upsert_domain_metadata(domain, &metadata)
-                .await?;
+        if is_sent {
+            self.ensure_domain_directory_entry(domain).await?;
         }
 
         self.companies_repository
@@ -725,17 +814,7 @@ where
         // domain so icon/description enrichment resolves. The user's
         // name never goes here — the directory is global across teams;
         // it lands on `crm_companies.custom_name` in the repo instead.
-        if self
-            .companies_repository
-            .lookup_domain_metadata(&domain)
-            .await?
-            .is_none()
-        {
-            let metadata = self.metadata_resolver.resolve(&domain).await;
-            self.companies_repository
-                .upsert_domain_metadata(&domain, &metadata)
-                .await?;
-        }
+        self.ensure_domain_directory_entry(&domain).await?;
 
         self.companies_repository
             .create_company_for_team(&access.team_id(), &domain, name, Utc::now())

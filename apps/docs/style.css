@@ -1,0 +1,25 @@
+#content-area h1,
+#content-area h2 {
+  font-family: "Roboto Slab", serif !important;
+  font-weight: 315 !important;
+  letter-spacing: -0.025em;
+}
+
+.card,
+.frame,
+html:not(.dark) .code-block-background {
+  background-color: transparent !important;
+}
+
+.frame > [class*="bg-grid"] {
+  display: none;
+}
+
+html:not(.dark) #pagination {
+  background-color: #ffffff !important;
+}
+
+#content-area h3,
+#content-area h4 {
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif !important;
+}

@@ -42,7 +42,7 @@ export function MainMenu(props: { items: (MenuItem | 'divider')[] }) {
       <Show when={open()}>
         <div
           role="menu"
-          class="absolute top-full left-0 z-50 mt-1 w-64 rounded-lg border border-edge-muted bg-menu p-1 text-xs shadow-lg"
+          class="menu-surface absolute top-full left-0 z-50 mt-1 w-64 p-1 text-xs"
         >
           <MenuItems items={props.items} onDone={() => setOpen(false)} />
         </div>

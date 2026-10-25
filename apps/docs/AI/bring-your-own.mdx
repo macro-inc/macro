@@ -2,25 +2,36 @@
 title: "Bring your own agent"
 sidebarTitle: "Bring your own agent"
 icon: "terminal"
-tag: "Coming soon"
 description: "Bring Claude Code, OpenCode, OpenClaw, or Hermes into your Macro workspace with macrod."
 ---
 
-<Info>
-  Bring Your Own Agent will be available soon.
-</Info>
-
-Use your local coding agent from Macro. `macrod` runs on your computer, connects your agent to Macro, and keeps its sessions available from your workspace.
-
 ## Agents and runtimes
 
-An **agent** combines a name, instructions, a default model, and a runtime. A **runtime** is the harness that powers it: Macro AI, a built-in coding harness, or an agent running on your own machine.
+An **agent** combines a name, instructions, a default model, and a runtime.
+
+A **runtime** is the harness that powers it: Macro AI, a built-in coding harness, or an agent running on your own machine, like your very own Claude Code.
 
 Manage both in **Settings → General → Agents**. Connect your machine in **Runtimes**, then create an agent that uses it in **Agents**.
 
+## On the Macro desktop app
+
+The desktop app bundles `macrod`, so there is nothing to download. Open **Settings → General → Agents → Runtimes** and use the **This computer** card: **Set up** detects the coding agents installed on your machine, you pick one and a workspace folder, and **Start running agents here** configures, pairs, and starts the runtime automatically — no terminal and no pairing code. Keep the app open while agents run.
+
+The manual `macrod` steps below are for machines without the desktop app (servers, a second computer), and both kinds of runtime can be paired to the same account.
+
+## Macro daemon
+
+Use your local coding agent from Macro. `macrod` runs on your computer, connects your agent to Macro, and keeps its sessions available from your workspace.
+
+<Info>
+  Macro Daemon is for advanced users that want to connect agents running in your terminal. For example, if you run Claude Code on your server.
+</Info>
+
+Run the Macro daemon (`macrod`) on your computer or server.
+
 ## Before you start
 
-You need a macOS or Linux computer that can stay online and an installed, authenticated coding agent. `macrod` recognizes Claude Code, Codex, OpenCode, OpenClaw, and Hermes. You can also configure a custom command for an Agent Client Protocol (ACP) agent.
+You need a macOS, Linux, or Windows computer that can stay online and an installed, authenticated coding agent. `macrod` recognizes Claude Code, Codex, OpenCode, OpenClaw, and Hermes. You can also configure a custom command for an Agent Client Protocol (ACP) agent.
 
 `macrod` connects out to Macro. You do not need a public webhook endpoint, port forwarding, or an HTTPS tunnel.
 
@@ -32,16 +43,37 @@ You need a macOS or Linux computer that can stay online and an installed, authen
 
 <Steps>
   <Step title="Install macrod">
-    Download the `macrod` archive for your operating system and architecture from [Macro releases](https://github.com/macro-inc/macro/releases), then extract it.
+    Run the install command for your computer in a terminal:
 
-    Open **Settings → General → Agents → Runtimes → New runtime** in Macro. The page walks you through installation, configuration, and pairing.
+    <Tabs>
+      <Tab title="macOS and Linux">
+        ```bash
+        curl -fsSL https://raw.githubusercontent.com/macro-inc/macro/main/crates/coding_agent_worker/install/install.sh | sh
+        ```
+
+        This installs `macrod` to `~/.local/bin`. If that folder is not on your `PATH`, the installer prints the line to add.
+      </Tab>
+      <Tab title="Windows">
+        In PowerShell:
+
+        ```powershell
+        irm https://raw.githubusercontent.com/macro-inc/macro/main/crates/coding_agent_worker/install/install.ps1 | iex
+        ```
+
+        This installs `macrod.exe` to `%LOCALAPPDATA%\Programs\macrod` and adds it to your `PATH`. Open a new terminal afterwards.
+      </Tab>
+    </Tabs>
+
+    You can also download the archive for your operating system and architecture from [Macro releases](https://github.com/macro-inc/macro/releases) and extract it.
+
+    Open **Settings → Runtimes → New runtime** in Macro. The page walks you through installation, configuration, and pairing.
   </Step>
 
   <Step title="Run macrod">
-    Open a terminal in the extracted folder and run:
+    Open a terminal in the folder where `macrod` should keep its configuration and run:
 
     ```bash
-    ./macrod
+    macrod
     ```
 
     Keep the terminal open while you use your runtime.
@@ -64,7 +96,7 @@ You need a macOS or Linux computer that can stay online and an installed, authen
   <Step title="Enter your pairing code">
     The **Pair macrod** panel shows a device code and a link to Macro. If you are already in the terminal overview, press <kbd>p</kbd> to open pairing. Press <kbd>c</kbd> to copy the code.
 
-    Open the pairing link, or go to **Settings → General → Agents → Runtimes → New runtime**. Enter your code and click **Look up**.
+    Open the pairing link, or go to **Settings → Runtimes → New runtime**. Enter your code and click **Look up**.
 
     <Frame caption="Example only—enter the code from your own macrod terminal.">
       ![The macrod terminal with a device code and approval link in the Pair macrod panel](/images/macrod-pairing-example.png)
@@ -84,9 +116,15 @@ Review sharing and channel access, then save the agent. @mention it in a channel
 
 ## Keep your runtime connected
 
-Leave `macrod` running and your computer awake while you use the runtime. Its terminal shows your sessions, configuration, and logs. You can also check the runtime in **Settings → General → Agents → Runtimes**.
+Leave `macrod` running and your computer awake while you use the runtime. Its terminal shows your sessions, configuration, and logs. You can also check the runtime in **Settings → Runtimes**.
 
 To reconnect later, run `macrod` from the same directory so it loads your saved configuration. If you revoke the runtime, pair it again before using it.
+
+## Update macrod
+
+Run the install command again. It replaces `macrod` with the latest release and keeps your `macrod.toml`. A running `macrod` keeps the old version until you restart it.
+
+To install a specific release instead, set the `MACROD_VERSION` environment variable to its tag, such as `v2026.10.18.0`, before running the install command.
 
 ## Troubleshooting
 

@@ -417,6 +417,7 @@ impl JwtValidator for FakeJwtValidator {
         }
 
         Ok(ValidatedIdentity {
+            agent_id: None,
             user_id: jwt.to_string(),
             fusion_user_id: "fusion-user".to_string(),
             organization_id: None,

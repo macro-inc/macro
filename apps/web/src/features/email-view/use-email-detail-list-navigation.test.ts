@@ -35,11 +35,15 @@ function setup(
   mocks.view.mockReturnValue({
     source: {
       items: () =>
-        rows().map((id) => ({
-          kind: 'entity',
-          id: `row:${id}`,
-          entity: { type: 'email', id, name: id } as EmailEntity,
-        })),
+        rows().map((id) =>
+          id === 'more'
+            ? { kind: 'load-more' }
+            : {
+                kind: 'entity',
+                id: `row:${id}`,
+                entity: { type: 'email', id, name: id } as EmailEntity,
+              }
+        ),
       hasMore,
       loadMore: mocks.loadMore,
       error: () => undefined,
@@ -68,6 +72,42 @@ function setup(
   });
   return { navigation, setRows, setHasMore, setThreadId };
 }
+describe('thread navigation after the open thread leaves the list', () => {
+  it('keeps next and previous on its former neighbours', async () => {
+    const { navigation, setRows } = setup(['a', 'b', 'c']);
+    // Replying in Signal marks the thread done, which removes its row.
+    setRows(['a', 'c']);
+    expect(navigation.canNext()).toBe(true);
+    expect(navigation.canPrevious()).toBe(true);
+    await navigation.navigate(1);
+    expect(mocks.open).toHaveBeenLastCalledWith({ id: 'c', fallbackName: 'c' });
+    await navigation.navigate(-1);
+    expect(mocks.open).toHaveBeenLastCalledWith({ id: 'a', fallbackName: 'a' });
+  });
+  it('steps into a load-more row that followed the removed thread', async () => {
+    const { navigation, setRows } = setup(['a', 'b', 'more', 'c']);
+    setRows(['a', 'more', 'c']);
+    mocks.loadMore.mockImplementation(async () => setRows(['a', 'x', 'c']));
+    await navigation.navigate(1);
+    expect(mocks.loadMore).toHaveBeenCalledOnce();
+    expect(mocks.open).toHaveBeenLastCalledWith({ id: 'x', fallbackName: 'x' });
+  });
+  it('steps from where the thread was opened after it moves', async () => {
+    const { navigation, setRows } = setup(['a', 'b', 'c', 'd']);
+    // A reply draft lifts the open thread to the top of Signal.
+    setRows(['b', 'a', 'c', 'd']);
+    await navigation.navigate(1);
+    expect(mocks.open).toHaveBeenLastCalledWith({ id: 'c', fallbackName: 'c' });
+    await navigation.navigate(-1);
+    expect(mocks.open).toHaveBeenLastCalledWith({ id: 'a', fallbackName: 'a' });
+  });
+  it('has no previous when the removed thread was first', () => {
+    const { navigation, setRows } = setup(['a', 'b', 'c'], 'a');
+    setRows(['b', 'c']);
+    expect(navigation.canPrevious()).toBe(false);
+    expect(navigation.canNext()).toBe(true);
+  });
+});
 describe('email reminder navigation', () => {
   it('advances after the server event removes the saved row', async () => {
     const { navigation, setRows } = setup(['a', 'b', 'c']);

@@ -781,13 +781,11 @@ export function CommandMenuInner(props: {
             when={isEntityActionMode()}
             fallback={
               <Tabs
-                list={categoryTabs()}
+                aria-label="Result categories"
+                size="sm"
+                options={categoryTabs()}
                 value={categoryFilter()}
-                onChange={(value) => {
-                  if (value) {
-                    CommandState.setCategoryFilter(value as CategoryFilter);
-                  }
-                }}
+                onChange={CommandState.setCategoryFilter}
               />
             }
           >

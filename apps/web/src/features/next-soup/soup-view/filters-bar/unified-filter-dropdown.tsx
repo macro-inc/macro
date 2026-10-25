@@ -716,8 +716,8 @@ export const UnifiedFilterDropdown = (
               <Tooltip label="Filter" hotkey={TOKENS.soup.filter}>
                 <Dropdown.Trigger
                   variant={props.variant ?? 'outline'}
+                  size={props.hideLabel ? 'icon-md' : 'sm'}
                   depth={2}
-                  class={props.variant === 'ghost' ? undefined : 'bg-surface'}
                   aria-label={props.hideLabel ? 'Filter' : undefined}
                 >
                   <FilterIcon />

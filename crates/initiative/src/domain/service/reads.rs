@@ -14,7 +14,7 @@ use crate::domain::{
     models::{InitiativeError, InitiativeId},
     ports::{InitiativeDescriptionSurfaces, InitiativeRepo, InitiativeService},
     reads::{
-        InitiativePage, InitiativePageRequest, InitiativePageRow, InitiativeSort,
+        InitiativePage, InitiativePageRequest, InitiativePageRow, InitiativeRead, InitiativeSort,
         InitiativeTasksPage, InitiativeTasksRequest, MAX_CURSOR_LENGTH, page_size as limit,
     },
 };
@@ -138,30 +138,21 @@ fn order(left: &Position, right: &Position, sort: InitiativeSort, descending: bo
 impl<R: InitiativeRepo, S: InitiativeDescriptionSurfaces> InitiativeServiceImpl<R, S> {
     pub(super) async fn read_summary(
         &self,
-        receipt: EntityAccessReceipt<ViewAccessLevel>,
+        read: &InitiativeRead,
     ) -> Result<InitiativePageRow, InitiativeError> {
-        let detail = self.get(receipt.clone()).await?;
-        let mut receipts = vec![receipt.clone()];
-        for task_id in &detail.task_ids {
-            if let Some(task_receipt) = self
-                .resources
-                .view(
-                    receipt.auth().clone(),
-                    Entity {
-                        entity_id: task_id.clone(),
-                        entity_type: EntityType::Document,
-                    },
-                )
-                .await?
-            {
-                receipts.push(task_receipt);
-            }
-        }
-        let mut properties = self.resources.properties(receipts.clone()).await?;
-        let task_count = receipts.len().saturating_sub(1);
-        let completed_task_count = receipts
+        let detail = read.detail();
+        let tasks = read.task_receipts();
+        let mut properties = self
+            .resources
+            .properties(
+                std::iter::once(read.receipt())
+                    .chain(tasks)
+                    .cloned()
+                    .collect(),
+            )
+            .await?;
+        let completed_task_count = tasks
             .iter()
-            .skip(1)
             .filter(|task| {
                 properties
                     .get(&task.entity().entity_id)
@@ -171,14 +162,14 @@ impl<R: InitiativeRepo, S: InitiativeDescriptionSurfaces> InitiativeServiceImpl<
         Ok(InitiativePageRow {
             initiative: crate::domain::models::InitiativeSummary {
                 id: detail.id,
-                name: detail.name,
+                name: detail.name.clone(),
                 updated_at: detail.updated_at,
             },
             user_access_level: detail.user_access_level,
             properties: properties
                 .remove(&detail.id.to_string())
                 .unwrap_or_default(),
-            task_count: u32::try_from(task_count).unwrap_or(u32::MAX),
+            task_count: u32::try_from(tasks.len()).unwrap_or(u32::MAX),
             completed_task_count: u32::try_from(completed_task_count).unwrap_or(u32::MAX),
         })
     }
@@ -187,22 +178,21 @@ impl<R: InitiativeRepo, S: InitiativeDescriptionSurfaces> InitiativeServiceImpl<
         &self,
         auth: &EntityAccessAuth,
         ids: Vec<String>,
-    ) -> Result<Vec<String>, InitiativeError> {
+    ) -> Result<Vec<EntityAccessReceipt<ViewAccessLevel>>, InitiativeError> {
         let mut visible = Vec::new();
         for id in ids {
-            if self
+            if let Some(receipt) = self
                 .resources
                 .view(
                     auth.clone(),
                     Entity {
-                        entity_id: id.clone(),
+                        entity_id: id,
                         entity_type: EntityType::Document,
                     },
                 )
                 .await?
-                .is_some()
             {
-                visible.push(id);
+                visible.push(receipt);
             }
         }
         Ok(visible)

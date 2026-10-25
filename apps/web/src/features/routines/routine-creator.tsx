@@ -1,7 +1,8 @@
 import { openAgentsPage } from '@app/features/agents-view/primitives/open-page';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { DEFAULT_MODEL } from '@core/component/AI/constant';
+import { useHasPaidAccess } from '@core/auth/license';
+import { defaultModelForPlan } from '@core/component/AI/constant';
 import {
   clearRoutineComposerDraft,
   loadRoutineComposerDraft,
@@ -20,10 +21,11 @@ export function RoutineCreator(
   const panel = useSplitPanelOrThrow();
   const layout = useSplitLayout();
   const source = createRoutineCreatorSource();
+  const hasPaidAccess = useHasPaidAccess();
   return (
     <RoutineCreatorView
       source={source}
-      defaultModel={DEFAULT_MODEL}
+      defaultModel={defaultModelForPlan(hasPaidAccess())}
       storage={{
         load: loadRoutineComposerDraft,
         save: saveRoutineComposerDraft,

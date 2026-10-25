@@ -88,8 +88,8 @@ migrations, the SQLx cache, and tests.
 - **Grant cleanup trigger:** `entity_access`, `entity_properties`, `favorite`, and
   collab surfaces have no foreign key to your table. Add an `AFTER DELETE` trigger
   that deletes the kind's `entity_access` rows, as `database_entities`,
-  `crm_pipeline_entities`, and `forms` do. Initiatives lack one, so deleting an
-  owner's account can orphan their grants.
+  `crm_pipeline_entities`, `calendar_events`, and `forms` do. Initiatives lack
+  one, so deleting an owner's account can orphan their grants.
 - **Enum values get their own migration.** `ALTER TYPE ... ADD VALUE` cannot be
   used in the transaction that adds it, and SQLx runs each file in one
   transaction. Add the value in one migration and backfill in the next (see
@@ -378,8 +378,8 @@ the skill doesn't cover:
   host-specific branches of `tools_for`), eager or deferred.
 - Give its context to every place `ToolServiceContext` is built:
   `crates/ai_tools/src/build_context.rs`,
-  `services/document_cognition_service/src/server.rs` and its
-  `services/document_cognition_service/src/api/context/test.rs`, and `services/mcp_service/src/context.rs`. Add it to
+  `services/agent_harness_service/src/cognition/server.rs` and its
+  `services/agent_harness_service/src/cognition/api/context/test.rs`, and `services/agent_harness_service/src/public_mcp/context.rs`. Add it to
   `with_actor` in `crates/ai_tools/src/tool_context.rs`, or agent writes are
   attributed to the default bot. Add a test in `crates/ai_tools/src/test.rs` that
   the tools resolve on every host; hosts have shipped with tools unwired.
@@ -411,8 +411,11 @@ adapter translates legacy block state into feature context (FE-34).
 `rules/ast-grep/{ts,tsx}-feature-*.yml` files.
 
 **Exhaustiveness.** New branches on a kind use `match().exhaustive()` or a
-`Record<Kind, ...>`, never `.otherwise`, `P._`, `default`, or `switch`. Never cast
-a string to `ItemType`; parse it with `stringToItemType` (FE-31, enforced by
+`Record<Kind, ...>`, never `.otherwise`, `P._`, `default`, or `switch`. Where the
+kind arrives from the wire (queries, service clients, workers, SDK hydrators),
+pass a fallback, `.exhaustive((unknown) => fallback)`, so older clients survive
+the new kind (FE-35). Never cast a string to `ItemType` or an `EntityType`; parse
+it with `stringToItemType` or `parseEntityType` (FE-31, enforced by
 `rules/ast-grep/ts-no-item-type-cast.yml`). Existing catch-alls hide the new kind,
 so grep for the sibling kind.
 

@@ -6,6 +6,7 @@ import {
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
 import { ChatInputProvider } from '@core/component/AI/context';
+import { ComposerGreeting } from '@core/component/ComposerGreeting';
 import { enableChatV3Agents } from '@core/constant/featureFlags';
 import { Show } from 'solid-js';
 import { HomeChatInput } from '../home-chat-input';
@@ -54,9 +55,11 @@ export function HomeChatStart() {
           >
             <div class="self-end">
               <Show when={!agents().enabled}>
-                <h1 class="mb-6 min-h-0 min-w-0 self-end text-center text-2xl font-normal leading-[42px] text-ink">
-                  What should we get done in Macro?
-                </h1>
+                <div class="mb-6 min-h-0 min-w-0">
+                  <ComposerGreeting as="h1">
+                    What should we get done in Macro?
+                  </ComposerGreeting>
+                </div>
               </Show>
             </div>
             <HomeChatInput

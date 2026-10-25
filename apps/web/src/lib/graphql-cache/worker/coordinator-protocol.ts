@@ -1379,7 +1379,7 @@ export function tabIdFromLivenessLockName(
  */
 export const CACHE_STORAGE_VERSION = {
   schemaCompatibilityEpoch: 4,
-  formatVersion: 3,
+  formatVersion: 4,
   storageSchemaVersion: 11,
 } as const;
 

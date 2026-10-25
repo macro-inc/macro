@@ -1,3 +1,4 @@
+import { reloadApp } from '@app/observability/reload';
 /**
  * The `.ai` block: app chrome (header, file menu, sharing) around the
  * Illustrator editor, wired to the worker engine, document storage, and
@@ -108,7 +109,7 @@ function AiHost(props: {
           message:
             'This file was replaced by a newer version (an upload or an AI edit). Reload to edit the latest version.',
           action: 'Reload',
-          onAction: () => window.location.reload(),
+          onAction: () => reloadApp('user_recovery'),
         }
       : props.notice;
   onMount(() => {

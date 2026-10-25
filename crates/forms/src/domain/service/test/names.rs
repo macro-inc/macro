@@ -24,7 +24,9 @@ async fn create_standalone(world: &Shared) -> (FormId, DatabaseId) {
             viewer(OWNER),
             CreateFormCommand {
                 name: "Offsite RSVP".into(),
-                source: CreateSource::NewDatabase,
+                source: CreateSource::NewDatabase {
+                    is_hidden_in_drive: false,
+                },
             },
         )
         .await
@@ -128,6 +130,7 @@ async fn which_name_a_new_form_goes_by_is_recorded_from_where_it_was_created() {
                 confirmation_message: "".into(),
                 created_at: start_of_tests(),
                 updated_at: start_of_tests(),
+                is_hidden_in_drive: false,
             },
             trashed_at: None,
             name_follows_database: true,

@@ -1,0 +1,131 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            event.title,\n            event.description,\n            event.location,\n            event.visibility,\n            event.starts_at,\n            event.ends_at,\n            event.start_date,\n            event.end_date,\n            event.time_zone,\n            event.recurrence_lines,\n            event.conference_url IS NOT NULL AS \"has_conference!\",\n            $2::text IS NOT NULL AS \"has_occurrence!\",\n            override.title AS override_title,\n            override.description AS override_description,\n            override.location AS override_location,\n            CASE WHEN occurrence.event_id IS NULL THEN override.starts_at\n                 ELSE occurrence.starts_at END AS occurrence_starts_at,\n            CASE WHEN occurrence.event_id IS NULL THEN override.ends_at\n                 ELSE occurrence.ends_at END AS occurrence_ends_at,\n            CASE WHEN occurrence.event_id IS NULL THEN override.start_date\n                 ELSE occurrence.start_date END AS occurrence_start_date,\n            CASE WHEN occurrence.event_id IS NULL THEN override.end_date\n                 ELSE occurrence.end_date END AS occurrence_end_date\n        FROM calendar_events event\n        LEFT JOIN calendar_event_occurrences occurrence\n            ON occurrence.event_id = event.id\n           AND occurrence.occurrence_key = $2\n        LEFT JOIN calendar_event_overrides override\n            ON override.event_id = event.id\n           AND override.recurrence_id = $2\n        WHERE event.id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "location",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "visibility",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "starts_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "ends_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "start_date",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 7,
+        "name": "end_date",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 8,
+        "name": "time_zone",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "recurrence_lines",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 10,
+        "name": "has_conference!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 11,
+        "name": "has_occurrence!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 12,
+        "name": "override_title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "override_description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "override_location",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 15,
+        "name": "occurrence_starts_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 16,
+        "name": "occurrence_ends_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 17,
+        "name": "occurrence_start_date",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 18,
+        "name": "occurrence_end_date",
+        "type_info": "Date"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      null,
+      null,
+      true,
+      true,
+      true,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "95334b207fad665ea24c0fb939d2d2e5a07fc60882998c178a8071cad66ee81a"
+}

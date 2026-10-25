@@ -90,7 +90,7 @@ export function FlyoutMenu(props: {
                       if (r.right > window.innerWidth - 8) setFlip(true);
                     })
                   }
-                  class="absolute -top-2 z-10 w-max rounded-xl border border-edge bg-menu p-2 text-ink text-xs shadow-xl"
+                  class="menu-surface absolute -top-2 z-10 w-max p-2 text-xs"
                   classList={{
                     'left-full ml-2': !flip(),
                     'right-full mr-2': flip(),

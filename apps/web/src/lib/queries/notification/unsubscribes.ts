@@ -3,6 +3,7 @@ import { throwOnErr } from '@core/util/result';
 import { notificationServiceClient } from '@service-notification/client';
 import type { UserUnsubscribe } from '@service-notification/generated/schemas/userUnsubscribe';
 import { useMutation, useQuery } from '@tanstack/solid-query';
+import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
 import { notificationKeys } from './keys';
 
@@ -26,13 +27,17 @@ async function fetchUnsubscribes() {
   return response.value.data;
 }
 
-export function useMutedEntitiesQuery(args?: { limit?: number }) {
+export function useMutedEntitiesQuery(
+  args?: { limit?: number },
+  enabled: Accessor<boolean> = () => true
+) {
   const limit =
     args?.limit && args.limit > 0 && args.limit <= 500 ? args.limit : 20;
 
   return useQuery(() => ({
     queryKey: notificationKeys.unsubscribes.queryKey,
     queryFn: fetchUnsubscribes,
+    enabled: enabled(),
     initialPageParam: { limit },
     staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 10,

@@ -1,0 +1,33 @@
+---
+title: "Skills"
+icon: "graduation-cap"
+description: "Saved instructions agents follow."
+---
+
+A skill is a saved set of instructions an [agent](/product/agents) follows, for example a release notes format or a contract review checklist.
+
+> To create a skill use shortcut <kbd>c</kbd> \+ <kbd>k</kbd>.
+
+## Creating a skill
+
+Press <kbd>c</kbd> \+ <kbd>k</kbd> or choose **Skill** from the **Create** menu. Enter a name and instructions, then click **Create Skill**. **New skill** is also available from the `/` menu in an agent composer.
+
+Skills are documents. They are stored in [Drive](/product/drive) and shared like other documents. Agents use the current version of a skill.
+
+## Using a skill
+
+Type `/` in an agent composer to open the skills menu and attach a skill to the message. Skills can also be @mentioned.
+
+Agents search your skills by name and use a matching skill without it being attached.
+
+## Built-in skills
+
+- **Catch Me Up**: summary of activity since you were last active
+- **What I Did Yesterday**: summary of your activity from the previous day
+- **Configure Agent**: changes an agent's instructions or settings
+
+Built-in skills cannot be edited or deleted.
+
+## MCP
+
+Agents and [MCP clients](/AI/mcp/overview) access skills with [`ListSkills`](/AI/mcp/tools/list-skills), [`SearchSkills`](/AI/mcp/tools/search-skills), and [`ReadSkill`](/AI/mcp/tools/read-skill).

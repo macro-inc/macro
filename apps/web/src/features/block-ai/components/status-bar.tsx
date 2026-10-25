@@ -78,7 +78,7 @@ export function StatusBar(props: {
   const mod = () => (props.mac ? '⌘' : 'Ctrl+');
   return (
     <div
-      class="-translate-x-1/2 absolute bottom-3 left-1/2 z-10 flex items-center gap-0.5 rounded-xl border border-edge-muted bg-menu p-1 shadow-lg"
+      class="menu-surface -translate-x-1/2 absolute bottom-3 left-1/2 z-10 flex items-center gap-0.5 p-1"
       data-testid="ai-status-bar"
       onPointerDown={(e) => e.stopPropagation()}
     >
@@ -150,7 +150,7 @@ export function StatusBar(props: {
         <Show when={open()}>
           <div
             role="menu"
-            class="absolute right-0 bottom-full z-50 mb-2 w-60 rounded-lg border border-edge-muted bg-menu p-1 text-xs shadow-lg"
+            class="menu-surface absolute right-0 bottom-full z-50 mb-2 w-60 p-1 text-xs"
           >
             <MenuItems items={props.zoomItems} onDone={() => setOpen(false)} />
           </div>

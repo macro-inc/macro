@@ -1,6 +1,5 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import { Tabs } from '@kobalte/core/tabs';
 import ArrowLeftIcon from '@phosphor/arrow-left.svg';
 import ArrowRightIcon from '@phosphor/arrow-right.svg';
 import TableIcon from '@phosphor/table.svg';
@@ -224,7 +223,7 @@ export function TableNavigation(props: {
               axis="x"
               onCancel={tabReorder.cancel}
             />
-            <Tabs
+            <TabSelector.Root
               value={props.activeTableId ?? ''}
               onChange={props.onSelect}
               activationMode="manual"
@@ -325,7 +324,7 @@ export function TableNavigation(props: {
                           readOnly={tableRename.pending()}
                           onFocusIn={(event) => event.stopPropagation()}
                           onMouseDown={(event) => event.stopPropagation()}
-                          class="h-8 w-full min-w-0 rounded-md border border-ink/40 bg-input px-2 text-xs text-ink outline-none"
+                          class="h-8 w-full min-w-0 rounded-full border border-ink/40 bg-input px-3 text-xs text-ink outline-none not-touch:text-sm"
                           onInput={(event) =>
                             tableRename.setDraft(event.currentTarget.value)
                           }
@@ -371,7 +370,7 @@ export function TableNavigation(props: {
                   )}
                 </Show>
               </TabSelector.List>
-            </Tabs>
+            </TabSelector.Root>
             <DragOverlay
               class="pointer-events-none select-none rounded-md bg-panel shadow-md"
               style={{ 'z-index': 1000 }}

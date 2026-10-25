@@ -56,12 +56,7 @@ export function FindBar(props: FindBarProps) {
     <FindBarContext.Provider
       value={{ controller: props.controller, direction }}
     >
-      <div
-        class={cn(
-          'flex items-center gap-1 rounded-md border border-edge bg-surface p-1 shadow-md focus-within:border-accent',
-          props.class
-        )}
-      >
+      <div class={cn('menu-surface flex items-center gap-1 p-1', props.class)}>
         <Show
           when={props.children}
           fallback={

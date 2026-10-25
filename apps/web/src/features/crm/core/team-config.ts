@@ -25,13 +25,6 @@ export type TeamCrmSavedView = {
 
 export type TeamCrmConfig = {
   permissions?: CrmPermissions;
-  /**
-   * Stage option ids that count as "closed" deals (used by the
-   * move-closed-deals permission). When unset, stages labeled like
-   * closed/won/lost states are treated as closed; an empty list means
-   * none are.
-   */
-  closedStageIds?: string[];
   /** System stage option id to team stage option id for seeded stages. */
   legacyStageIds?: Record<string, string>;
   teamViews?: TeamCrmSavedView[];
@@ -41,16 +34,14 @@ export type TeamCrmConfig = {
 
 /**
  * Field-wise partial update of the shared config. Omitted fields keep
- * their current values; `null` clears `closedStageIds` /
- * `defaultTeamViewId`; `teamViews` replaces the whole list. Pass a
- * function for `teamViews` to derive the new list from the latest
- * cached value at execution time — mutations are serialized (shared
- * scope), so queued updates see the previous write instead of a stale
- * snapshot.
+ * their current values; `null` clears `defaultTeamViewId`; `teamViews`
+ * replaces the whole list. Pass a function for `teamViews` to derive the
+ * new list from the latest cached value at execution time — mutations are
+ * serialized (shared scope), so queued updates see the previous write
+ * instead of a stale snapshot.
  */
 export type TeamCrmConfigPatch = {
   permissions?: Partial<CrmPermissions>;
-  closedStageIds?: string[] | null;
   teamViews?:
     | TeamCrmSavedView[]
     | ((current: TeamCrmSavedView[]) => TeamCrmSavedView[]);
@@ -63,9 +54,6 @@ export const DEFAULT_CRM_PERMISSIONS: CrmPermissions = {
   deleteRecords: 'admin',
 };
 
-/** Labels treated as closed when no explicit closed set is configured. */
-const DEFAULT_CLOSED_STAGE_LABEL = /customer|churned|closed|won|lost/i;
-
 export type CrmTeamRole = 'owner' | 'admin' | 'member';
 
 export function roleSatisfies(
@@ -74,16 +62,4 @@ export function roleSatisfies(
 ): boolean {
   if (role === 'owner') return true;
   return role === 'admin' && required === 'admin';
-}
-
-export function closedStageIds(
-  stages: readonly { id: string; label: string }[],
-  explicit?: readonly string[]
-): Set<string> {
-  return new Set(
-    explicit ??
-      stages
-        .filter((stage) => DEFAULT_CLOSED_STAGE_LABEL.test(stage.label))
-        .map((stage) => stage.id)
-  );
 }

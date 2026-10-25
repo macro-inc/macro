@@ -270,11 +270,12 @@ export function getNotificationActionText(n: Notification): string {
     .with('call_started', () => 'called')
     .with('reminder', () => 'reminder')
     .with('calendar_event_reminder', () => 'starting soon')
+    .with('calendar_event_join_request', () => 'asked to join')
     .with('inbox_reauth_required', () => 'needs reconnection')
     .with('agent_session_settled', () => 'finished')
     .with('agent_session_waiting_for_input', () => 'asked')
     .with('agent_session_mentioned', () => 'mentioned')
-    .exhaustive();
+    .exhaustive(() => 'notified');
 }
 
 export function extractMessageContent(notification: Notification): string {
@@ -346,6 +347,7 @@ export function extractMessageContent(notification: Notification): string {
     .with({ tag: 'call_started' }, (m) => m.content.channel_name ?? '')
     .with({ tag: 'reminder' }, (m) => m.content.description)
     .with({ tag: 'calendar_event_reminder' }, (m) => m.content.title || '')
+    .with({ tag: 'calendar_event_join_request' }, (m) => m.content.title || '')
     .with({ tag: 'inbox_reauth_required' }, (m) => m.content.emailAddress || '')
     .with(
       { tag: 'agent_session_settled' },
@@ -353,7 +355,7 @@ export function extractMessageContent(notification: Notification): string {
     )
     .with({ tag: 'agent_session_waiting_for_input' }, (m) => m.content.question)
     .with({ tag: 'agent_session_mentioned' }, (m) => m.content.sessionName)
-    .exhaustive();
+    .exhaustive(() => '');
 }
 
 /**

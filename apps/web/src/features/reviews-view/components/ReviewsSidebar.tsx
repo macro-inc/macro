@@ -4,6 +4,7 @@ import {
   useViewTabHotkeys,
   ViewSidebar,
 } from '@app/components/view-shell';
+import { ViewCreateMenu } from '@app/features/command/view-create-menu';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { PrOriginIcon } from '@block-pr/component/PrLinks';
 import { PrStatusIcon } from '@block-pr/component/PrStatus';
@@ -15,7 +16,6 @@ import {
 import { prDisplayName } from '@block-pr/util/prKey';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
-import { TabsInset } from '@core/component/TabsInset';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { githubLabelColor } from '@entity/components/GithubLabelPill';
 import type { GithubPullRequestLabel } from '@entity/types/entity';
@@ -39,10 +39,10 @@ import { TagDot } from '@ui';
 import { type Component, createMemo, createSignal, For, Show } from 'solid-js';
 import {
   REVIEWS_SCOPES,
-  type ReviewsLayout,
   type ReviewsScope,
   type ReviewsStatusTabId,
 } from '../reviews-types';
+import { RepositoriesPromotion } from './RepositoriesPromotion';
 import { ReviewsStatusTabs } from './ReviewsStatusTabs';
 
 const SCOPE_ITEMS: Record<
@@ -261,8 +261,6 @@ function ReviewAgents(props: {
 export function ReviewsSidebar(props: {
   search: string;
   onSearchChange: (search: string) => void;
-  layout: ReviewsLayout;
-  onLayoutChange: (layout: ReviewsLayout) => void;
   /** The status toggle; omitted when the status selection is custom or the board shows. */
   status?: {
     value: ReviewsStatusTabId | undefined;
@@ -291,48 +289,50 @@ export function ReviewsSidebar(props: {
 
   return (
     <ViewSidebar.Root aria-label="Reviews navigation">
-      <ViewSidebar.Header>
+      <ViewSidebar.Header
+        searchLabel="Search reviews"
+        search={() => (
+          <SearchBar
+            label="Search reviews"
+            placeholder="Search reviews"
+            autocomplete="off"
+            value={props.search}
+            onValueChange={props.onSearchChange}
+            onEscape={() => props.onSearchChange('')}
+          />
+        )}
+      >
         <div class="flex min-w-0 items-center gap-1">
           <ViewSidebar.CloseButton />
           <ViewSidebar.Title>Reviews</ViewSidebar.Title>
         </div>
       </ViewSidebar.Header>
-      <ViewSidebar.Primary class="flex flex-col gap-2">
-        <SearchBar
-          label="Search reviews"
-          placeholder="Search reviews"
-          autocomplete="off"
-          value={props.search}
-          onValueChange={props.onSearchChange}
-          class="border-0 bg-ink/5 shadow-none"
-          onEscape={() => props.onSearchChange('')}
-        />
-        {/* Touch layouts list pull requests; the board needs a pointer to drag. */}
-        <Show when={!isTouchDevice()}>
-          <TabsInset
-            aria-label="Pull request layout"
-            fullWidth
-            class="h-auto"
-            labelClass="py-1.5"
-            list={[
-              { value: 'board', label: 'Board' },
-              { value: 'list', label: 'List' },
-            ]}
-            value={props.layout}
-            onChange={(layout) =>
-              props.onLayoutChange(layout === 'board' ? 'board' : 'list')
-            }
+      <Show when={!isTouchDevice()}>
+        <ViewSidebar.Primary>
+          <ViewCreateMenu presentation="sidebar" />
+        </ViewSidebar.Primary>
+      </Show>
+      <Show when={isTouchDevice()}>
+        <ViewSidebar.Primary class="flex flex-col gap-2">
+          <SearchBar
+            label="Search reviews"
+            placeholder="Search reviews"
+            autocomplete="off"
+            value={props.search}
+            onValueChange={props.onSearchChange}
+            class="border-0 bg-ink/5 shadow-none"
+            onEscape={() => props.onSearchChange('')}
           />
-        </Show>
-        <Show when={props.status}>
-          {(status) => (
-            <ReviewsStatusTabs
-              value={status().value}
-              onChange={status().onChange}
-            />
-          )}
-        </Show>
-      </ViewSidebar.Primary>
+          <Show when={props.status}>
+            {(status) => (
+              <ReviewsStatusTabs
+                value={status().value}
+                onChange={status().onChange}
+              />
+            )}
+          </Show>
+        </ViewSidebar.Primary>
+      </Show>
       <ViewSidebar.Content>
         <ViewSidebar.Nav aria-label="Pull request views">
           <For each={REVIEWS_SCOPES}>
@@ -366,6 +366,7 @@ export function ReviewsSidebar(props: {
           activeLabels={props.activeLabels}
           onActiveLabelsChange={props.onActiveLabelsChange}
         />
+        <RepositoriesPromotion class="mt-auto" />
       </ViewSidebar.Content>
     </ViewSidebar.Root>
   );

@@ -31,7 +31,7 @@ top of it.
 - Used by: `crates/entity_access_management`, `crates/entity_registry/entity_registry_db_utils`,
   and most domain crates that grant access as part of a write
   (`channels`, `projects`, `teams`, `crm`, `call`, `chat`, `documents`,
-  `macro_db_client`, `services/scheduled_action`).
+  `macro_db_client`, `crates/scheduled_action`).
 
 ## Recipes
 

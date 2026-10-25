@@ -403,7 +403,7 @@ export function GithubPullRequestChecksIndicator(props: {
           onClick={(event) => event.stopPropagation()}
         >
           <Surface
-            class="flex items-stretch justify-start rounded-xl w-full glass bg-menu-glass"
+            class="menu-surface flex items-stretch justify-start w-full"
             depth={3}
             hideBorder
           >

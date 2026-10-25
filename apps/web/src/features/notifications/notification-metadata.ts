@@ -63,6 +63,7 @@ export function getNotificationAction(n: UnifiedNotification): string {
       .with('reminder', () => 'Reminder')
       // Same shape: no actor, reads "Upcoming event · <event title>".
       .with('calendar_event_reminder', () => 'Upcoming event')
+      .with('calendar_event_join_request', () => 'asked to join')
       .with('github_pr_status_changed', () => 'updated a pull request')
       .with('github_pr_check_run', () => {
         const meta = n.notification_metadata;
@@ -84,7 +85,7 @@ export function getNotificationAction(n: UnifiedNotification): string {
       .with('agent_session_settled', () => 'finished')
       .with('agent_session_waiting_for_input', () => 'needs your answer in')
       .with('agent_session_mentioned', () => 'mentioned you in')
-      .exhaustive()
+      .exhaustive(() => 'notified you about')
   );
 }
 
@@ -128,7 +129,12 @@ export function getNotificationTargetName(
       // not carried in the metadata.
       .with({ tag: 'reminder' }, () => undefined)
       .with(
-        { tag: 'calendar_event_reminder' },
+        {
+          tag: P.union(
+            'calendar_event_reminder',
+            'calendar_event_join_request'
+          ),
+        },
         (m) => m.content.title || '(No title)'
       )
       .with({ tag: 'inbox_reauth_required' }, () => undefined)
@@ -142,7 +148,7 @@ export function getNotificationTargetName(
         },
         (m) => m.content.sessionName
       )
-      .exhaustive()
+      .exhaustive(() => undefined)
   );
 }
 
@@ -205,6 +211,7 @@ export function getNotificationContent(
       .with({ tag: 'calendar_event_reminder' }, (m) =>
         formatCalendarReminderTime(m.content)
       )
+      .with({ tag: 'calendar_event_join_request' }, () => undefined)
       .with({ tag: 'inbox_reauth_required' }, (m) => m.content.emailAddress)
       .with(
         { tag: 'agent_session_settled' },
@@ -215,7 +222,7 @@ export function getNotificationContent(
         (m) => m.content.question
       )
       .with({ tag: 'agent_session_mentioned' }, () => undefined)
-      .exhaustive()
+      .exhaustive(() => undefined)
   );
 }
 
@@ -278,6 +285,7 @@ export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
       // reminder resolves to no target name and renders without one anyway.
       .with({ tag: 'reminder' }, () => true)
       .with({ tag: 'calendar_event_reminder' }, () => true)
+      .with({ tag: 'calendar_event_join_request' }, () => true)
       .with({ tag: 'inbox_reauth_required' }, () => false)
       .with(
         {
@@ -289,6 +297,6 @@ export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
         },
         () => true
       )
-      .exhaustive()
+      .exhaustive(() => true)
   );
 }

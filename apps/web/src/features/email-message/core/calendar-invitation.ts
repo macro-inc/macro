@@ -45,7 +45,8 @@ export type CalendarInvitationActions = {
   notice?: string;
   retryCalendar?: () => void;
   respond?: (response: InvitationResponse) => void;
-  openCalendar?: () => void;
+  /** Shift-click asks for a new split, as other app links do. */
+  openCalendar?: (options: { openInNewSplit: boolean }) => void;
   openExternal?: (url: string) => void;
   connectCalendar?: () => void;
   showDay?: () => void;

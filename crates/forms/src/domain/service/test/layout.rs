@@ -26,6 +26,7 @@ fn respondent_details_withhold_the_booking_destination() {
         confirmation_message: "Thank you".into(),
         created_at: start_of_tests(),
         updated_at: start_of_tests(),
+        is_hidden_in_drive: false,
     };
     let layout = FormLayout {
         sections: vec![FormSection::Booking {
@@ -50,7 +51,7 @@ fn respondent_details_withhold_the_booking_destination() {
 }
 
 #[tokio::test]
-async fn booking_must_follow_every_question_and_screener() {
+async fn booking_must_follow_every_question_and_gate() {
     let world = world();
     seed_rsvp(&world, Audience::Public);
     let booking = FormSection::Booking {

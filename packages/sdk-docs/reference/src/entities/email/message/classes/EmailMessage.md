@@ -7,6 +7,10 @@ record loads lazily on first field access.
 
 - [`MacroEntity`](../../../entity/classes/MacroEntity.md)\<[`EmailMessageData`](../type-aliases/EmailMessageData.md)\>
 
+## Extended by
+
+- [`EmailDraft`](../../draft/classes/EmailDraft.md)
+
 ## Properties
 
 | Property | Modifier | Type | Description | Inherited from |
@@ -44,15 +48,16 @@ Add a label to this message.
 
 ### completeDraftAttachment()
 
-> **completeDraftAttachment**(`attachmentId`): `Promise`\<`void`\>
+> **completeDraftAttachment**(`attachmentId`, `draftGeneration?`): `Promise`\<`void`\>
 
-Verify an uploaded draft attachment before it can be sent.
+Verify an uploaded attachment using the draft generation captured when its upload began.
 
 #### Parameters
 
-| Parameter | Type |
-| ------ | ------ |
-| `attachmentId` | `string` |
+| Parameter | Type | Default value |
+| ------ | ------ | ------ |
+| `attachmentId` | `string` | `undefined` |
+| `draftGeneration?` | `number` | `0` |
 
 #### Returns
 

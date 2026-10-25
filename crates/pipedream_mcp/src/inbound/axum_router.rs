@@ -24,13 +24,6 @@ use utoipa::{IntoParams, ToSchema};
 #[cfg(test)]
 mod test;
 
-/// Hook invoked after a connect flow completes and the record is saved.
-/// Hosts use this to react to a connection the moment it exists (e.g. start
-/// import gather jobs); implementations must be quick or spawn.
-pub type PipedreamAuthCompletedHook = Arc<
-    dyn Fn(PipedreamConnection) -> std::pin::Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync,
->;
-
 /// Shared state for the MCP router.
 ///
 /// `pipedream` is the single connect path. When it is `None` (deployment not
@@ -40,7 +33,6 @@ pub struct PipedreamRouterState<S, P, Auth> {
     store: Arc<S>,
     pipedream: Option<Arc<P>>,
     authorization_state: MacroAuthorizationState<Auth>,
-    on_auth_completed: Option<PipedreamAuthCompletedHook>,
 }
 
 impl<S, P, Auth> Clone for PipedreamRouterState<S, P, Auth> {
@@ -49,7 +41,6 @@ impl<S, P, Auth> Clone for PipedreamRouterState<S, P, Auth> {
             store: self.store.clone(),
             pipedream: self.pipedream.clone(),
             authorization_state: self.authorization_state.clone(),
-            on_auth_completed: self.on_auth_completed.clone(),
         }
     }
 }
@@ -78,15 +69,7 @@ where
             store: Arc::new(store),
             pipedream,
             authorization_state,
-            on_auth_completed: None,
         }
-    }
-
-    /// Invoke `hook` whenever a connect flow completes (see
-    /// [`PipedreamAuthCompletedHook`]).
-    pub fn with_auth_completed_hook(mut self, hook: PipedreamAuthCompletedHook) -> Self {
-        self.on_auth_completed = Some(hook);
-        self
     }
 
     /// Access the underlying server store.
@@ -313,6 +296,9 @@ pub struct PipedreamCatalogEntryResponse {
     description: Option<String>,
     /// URL of the app's icon, when available.
     icon_url: Option<String>,
+    /// Categories assigned by Pipedream.
+    #[serde(default)]
+    categories: Vec<String>,
 }
 
 impl From<CatalogEntry> for PipedreamCatalogEntryResponse {
@@ -322,6 +308,7 @@ impl From<CatalogEntry> for PipedreamCatalogEntryResponse {
             display_name: entry.display_name,
             description: entry.description,
             icon_url: entry.icon_url,
+            categories: entry.categories,
         }
     }
 }
@@ -583,10 +570,6 @@ where
         body.server_name.as_deref(),
     )
     .await?;
-
-    if let Some(hook) = &state.on_auth_completed {
-        hook(record.clone()).await;
-    }
 
     Ok(Json(PipedreamConnectionResponse::from_record(&record)))
 }

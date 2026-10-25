@@ -1,3 +1,4 @@
+import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { usePreference } from '@app/preferences/use-preference';
 import { useMaybeBlockAliasedName } from '@core/block';
 import { Resize, ResizeZoneContext } from '@core/component/Resize/Resize';
@@ -31,6 +32,7 @@ import {
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { Transition } from 'solid-transition-group';
+import { HeaderActionGroup } from '../HeaderActionGroup';
 import { MobileDrawer } from '../mobile/MobileDrawer';
 import { HeaderIsland } from '../split-layout/components/HeaderIsland';
 import { SplitHeaderRight } from '../split-layout/components/SplitHeader';
@@ -408,45 +410,50 @@ function Toggle() {
 
   return (
     <Show when={ctx.hasSections()}>
-      <Button
-        depth={2}
-        variant="ghost"
-        size="icon-md"
-        class={cn(
-          isTouchDevice() &&
-            'border-0 hover:bg-transparent! active:bg-transparent! focus-visible:bg-transparent! active:text-accent',
-          isTouchDevice() && ctx.isOpen() && 'text-accent'
-        )}
-        tooltip={
-          isTouchDevice()
-            ? ctx.isOpen()
-              ? 'Hide details'
-              : 'Show details'
-            : ctx.isOpen()
-              ? 'Hide Side Panel'
-              : 'Show Side Panel'
-        }
-        aria-haspopup={isTouchDevice() ? 'dialog' : undefined}
-        aria-expanded={ctx.isOpen()}
-        hotkey={TOKENS.block.toggleSidePanel}
-        onClick={() => ctx.toggle()}
-      >
-        <Show
-          when={isTouchDevice()}
-          fallback={
-            <SidePanelIcon
-              class={cn('rotate-180', ctx.isOpen() && 'text-accent')}
-            />
+      <HeaderActionGroup label="Details">
+        <Button
+          depth={2}
+          variant="ghost"
+          size="icon-md"
+          class={cn(
+            isTouchDevice() &&
+              'border-0 hover:bg-transparent! active:bg-transparent! focus-visible:bg-transparent! active:text-accent',
+            isTouchDevice() && ctx.isOpen() && 'text-accent'
+          )}
+          tooltip={
+            isTouchDevice()
+              ? ctx.isOpen()
+                ? 'Hide details'
+                : 'Show details'
+              : ctx.isOpen()
+                ? 'Hide Side Panel'
+                : 'Show Side Panel'
           }
+          aria-haspopup={isTouchDevice() ? 'dialog' : undefined}
+          aria-expanded={ctx.isOpen()}
+          hotkey={TOKENS.block.toggleSidePanel}
+          onClick={() => ctx.toggle()}
         >
-          <InfoIcon class={cn(ctx.isOpen() && 'text-accent')} />
-        </Show>
-      </Button>
+          <Show
+            when={isTouchDevice()}
+            fallback={
+              <SidePanelIcon
+                class={cn('rotate-180', ctx.isOpen() && 'text-accent')}
+              />
+            }
+          >
+            <InfoIcon class={cn(ctx.isOpen() && 'text-accent')} />
+          </Show>
+        </Button>
+      </HeaderActionGroup>
     </Show>
   );
 }
 
-/** Keeps action state in the owning block while rendering it before Share. */
+/**
+ * Keeps action state in the owning block while rendering it before Share.
+ * Wrap the actions in `HeaderActionGroup` islands; a split button keeps its own frame.
+ */
 function HeaderActions(props: ParentProps) {
   const ctx = useContext(SidePanelContext);
   return (
@@ -464,7 +471,7 @@ function HeaderActionsOutlet() {
       <div
         ref={ctx?.setHeaderActionsMount}
         data-side-panel-header-actions
-        class="flex shrink-0 items-center gap-1 empty:hidden [&>div]:contents"
+        class="flex shrink-0 items-center gap-2 touch:gap-1 empty:hidden [&>div]:contents"
       />
     </Show>
   );
@@ -780,7 +787,7 @@ function EmptyPill(props: { label?: JSX.Element } = {}) {
 function Loading() {
   return (
     <div class="flex items-center justify-center p-2">
-      <div class="animate-pulse text-ink-muted rounded-full h-2 w-full bg-skeleton"></div>
+      <ListSkeleton.Bar class="h-2 w-full" />
     </div>
   );
 }

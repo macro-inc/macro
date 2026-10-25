@@ -4,6 +4,7 @@
  * authentication_service
  * OpenAPI spec version: 0.1.0
  */
+import type { EmailConnectionProvidersOutlookAdminConsentUrl } from './emailConnectionProvidersOutlookAdminConsentUrl';
 
 /**
  * Actual deployment availability for the provider selector.
@@ -11,4 +12,8 @@
 export interface EmailConnectionProviders {
   gmail: boolean;
   outlook: boolean;
+  /** Where a Microsoft 365 administrator approves Macro for their whole
+directory. Present when Outlook is configured and the request named an
+`original_url` for the administrator's browser to return to. */
+  outlook_admin_consent_url?: EmailConnectionProvidersOutlookAdminConsentUrl;
 }

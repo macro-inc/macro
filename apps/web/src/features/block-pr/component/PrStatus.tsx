@@ -7,12 +7,14 @@ const STATUS_ICON_CLASS: Record<string, string> = {
   open: 'text-success',
   merged: 'text-note',
   closed: 'text-failure',
+  draft: 'text-ink-muted',
 };
 
 const STATUS_TEXT_CLASS: Record<string, string> = {
   open: 'text-success',
   merged: 'text-note',
   closed: 'text-failure',
+  draft: 'text-ink-muted',
 };
 
 function capitalize(value: string): string {

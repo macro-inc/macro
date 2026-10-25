@@ -1,3 +1,4 @@
+import { reloadApp } from '@app/observability/reload';
 /**
  * The `.fig` block: app chrome (header, file menu, sharing) around the
  * viewer, wired to the worker engine and document storage.
@@ -129,7 +130,7 @@ function FigHost(props: {
           message:
             'This design was replaced by a newer file (an upload or an AI edit). Reload to edit the latest version.',
           action: 'Reload',
-          onAction: () => window.location.reload(),
+          onAction: () => reloadApp('user_recovery'),
         }
       : props.notice;
   onMount(() => {

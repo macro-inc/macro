@@ -129,6 +129,10 @@ pub struct RequestedExternalSession {
     pub model: Option<String>,
     /// Remote repository selected for this external coding session.
     pub repo_url: Option<String>,
+    /// Who is starting the session.
+    pub source: SessionSource,
+    /// Whether a routine run is listed; a person's session always is.
+    pub visibility: SessionVisibility,
 }
 
 /// Validate the base branch supported by external repository provisioning.
@@ -324,6 +328,10 @@ pub struct OpenManagedSession {
     /// Model to run on instead of the persona's own. The session's model from
     /// creation, so its runtime starts on it and nothing is sent to change it.
     pub model: Option<String>,
+    /// Who is starting the session.
+    pub source: SessionSource,
+    /// Whether a routine run is listed; a person's session always is.
+    pub visibility: SessionVisibility,
 }
 
 /// Opens sessions, however they are served. Implemented by the harness, which
@@ -487,7 +495,8 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
     /// stop rendering because its agent was removed.
     fn session_bot(&self, id: BotId) -> impl Future<Output = Result<SessionBot>> + Send;
 
-    /// Persist the agent-assigned ACP session id without replacing other session fields.
+    /// Persist the agent-assigned ACP session id without replacing other
+    /// session fields or reordering the session list.
     fn set_acp_session_id(
         &self,
         id: AgentSessionId,
@@ -511,6 +520,15 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
     /// Persist the model the session is running on. Idempotent.
     fn set_model(&self, id: AgentSessionId, model: &str)
     -> impl Future<Output = Result<()>> + Send;
+
+    /// Record who started the session and where it is shown, for a session
+    /// whose runtime created the row without knowing either. Idempotent.
+    fn set_origin(
+        &self,
+        id: AgentSessionId,
+        source: SessionSource,
+        visibility: SessionVisibility,
+    ) -> impl Future<Output = Result<()>> + Send;
 
     /// Persist the user-facing session name. Idempotent.
     fn set_name(&self, id: AgentSessionId, name: &str) -> impl Future<Output = Result<()>> + Send;
@@ -642,9 +660,11 @@ pub const REPLICA_STALE_AFTER: std::time::Duration = std::time::Duration::from_s
 /// Claiming is a single conditional update (compare-and-swap): it succeeds
 /// when the session is unmanaged, already ours, or held by a replica whose
 /// heartbeat has gone stale, and every success increments the session's
-/// fence. There are deliberately no explicit locks anywhere in the contract -
-/// see [`ManagerFence`](super::model::ManagerFence) for why a fence, not a
-/// lock, is what neutralizes a stale holder.
+/// fence. Lease changes must not bump list recency: a reclaim, release, or
+/// stale takeover is not the conversation being used. There are deliberately
+/// no explicit locks anywhere in the contract - see
+/// [`ManagerFence`](super::model::ManagerFence) for why a fence, not a lock,
+/// is what neutralizes a stale holder.
 pub trait SessionOwnership: Send + Sync + 'static {
     /// Claim live management of a session for `replica`, registering the
     /// replica's heartbeat as a side effect so a claim can never dangle on a
@@ -766,6 +786,16 @@ pub trait AgentSessionLogRepo: Send + Sync + 'static {
     fn list_by_session(
         &self,
         agent_session_id: AgentSessionId,
+    ) -> impl Future<Output = Result<Vec<StoredAgentSessionLog>>> + Send;
+
+    /// A single snapshot of durable history when the action was prompted,
+    /// or an empty snapshot when absent. Includes frames
+    /// before a successful load. Internal action recovery needs their original
+    /// request IDs, which replayed display history does not preserve.
+    fn list_action_history(
+        &self,
+        agent_session_id: AgentSessionId,
+        action: agent_runtime_protocol::domain::action::AgentActionId,
     ) -> impl Future<Output = Result<Vec<StoredAgentSessionLog>>> + Send;
 
     /// Every user the log has attributed a frame to: whoever prompted,

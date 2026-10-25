@@ -1,5 +1,4 @@
 import { InviteOfferPanel } from '@app/features/gtm-invite/InviteOfferPanel';
-import { useImportQuery } from '@queries/import';
 import { useNavigate, useSearchParams } from '@solidjs/router';
 import type { JSX } from 'solid-js';
 import { OnboardingProvider } from './context/onboarding-context';
@@ -13,14 +12,6 @@ export function Onboarding() {
   const context = createAppOnboardingContext();
   const navigate = useNavigate();
   const [params] = useSearchParams();
-  // Polling the import state keeps gather runs starting while the user is in
-  // the flow; the steps themselves never read it.
-  useImportQuery({
-    enabled: () => {
-      const viewer = context.viewer();
-      return viewer.t === 'signed-in' && !viewer.viewer.tutorialComplete;
-    },
-  });
   return (
     <OnboardingProvider value={context}>
       <OnboardingFlowView

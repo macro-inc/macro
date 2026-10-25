@@ -351,7 +351,7 @@ function BuilderCanvas(
       .with({ kind: 'question' }, ({ id }) => `question “${questionTitle(id)}”`)
       .with({ kind: 'section' }, ({ id }) => `“${sectionName(layout(), id)}”`)
       .with({ kind: 'new-section' }, ({ id }) =>
-        id === 'gate' ? 'screener' : 'section'
+        id === 'gate' ? 'gate' : 'section'
       )
       .with(
         { kind: 'new-question' },
@@ -715,7 +715,7 @@ function BuilderCanvas(
                       }
                       deleteLabel={
                         section()?.kind === 'gate'
-                          ? 'Delete screener'
+                          ? 'Delete gate'
                           : 'Delete section'
                       }
                       onMoveUp={() =>
@@ -775,7 +775,7 @@ function BuilderCanvas(
                             <Match when={current().kind === 'gate'}>
                               <GateCard
                                 sectionId={sectionId}
-                                eyebrow={`Screener ${sectionPosition(layout(), sectionId)}`}
+                                eyebrow={`Gate ${sectionPosition(layout(), sectionId)}`}
                                 title={current().title}
                                 sentence={rulesSentence(
                                   current().gateRules,

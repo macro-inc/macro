@@ -19,7 +19,7 @@ export function ConfirmDrawer(props: ConfirmDialogProps) {
       open={props.open}
       onOpenChange={(open) => !open && close()}
       onFinalFocus={props.onCloseAutoFocus}
-      restoreFocus={!!props.onCloseAutoFocus}
+      restoreFocus={!!props.mobileHero || !!props.onCloseAutoFocus}
       closeOnOutsidePointer={!props.pending}
       closeOnEscapeKeyDown={!props.pending}
     >
@@ -31,55 +31,104 @@ export function ConfirmDrawer(props: ConfirmDialogProps) {
           class="overflow-hidden"
         >
           <MobileDrawer.Handle class="pb-1" />
-          <div class="flex shrink-0 items-center justify-between gap-3 px-6 pb-4">
-            <h2
-              id={titleId}
-              class="text-[18px] leading-6 font-semibold text-ink"
-            >
-              {props.title}
-            </h2>
-            <Button
-              variant="ghost"
-              size="icon-lg"
-              aria-label="Close confirmation"
-              class="bg-ink/6"
-              disabled={props.pending}
-              onClick={close}
-            >
-              <CloseIcon class="size-5" />
-            </Button>
-          </div>
-          <MobileDrawer.ScrollBody>
-            <div
-              id={descriptionId}
-              class="px-6 pb-6 text-sm leading-5 text-ink-muted"
-            >
-              {props.body ?? props.children}
+          <Show
+            when={props.mobileHero}
+            fallback={
+              <>
+                <div class="flex shrink-0 items-center justify-between gap-3 px-6 pb-4">
+                  <h2
+                    id={titleId}
+                    class="text-[18px] leading-6 font-semibold text-ink"
+                  >
+                    {props.title}
+                  </h2>
+                  <Button
+                    variant="ghost"
+                    size="icon-lg"
+                    aria-label="Close confirmation"
+                    class="bg-ink/6"
+                    disabled={props.pending}
+                    onClick={close}
+                  >
+                    <CloseIcon class="size-5" />
+                  </Button>
+                </div>
+                <MobileDrawer.ScrollBody>
+                  <div
+                    id={descriptionId}
+                    class="px-6 pb-6 text-sm leading-5 text-ink-muted"
+                  >
+                    {props.body ?? props.children}
+                  </div>
+                </MobileDrawer.ScrollBody>
+                <ActionDialogShell.Footer class="gap-3">
+                  <Button
+                    variant="ghost"
+                    size="xl"
+                    class="min-w-0 flex-1"
+                    disabled={props.pending}
+                    onClick={close}
+                  >
+                    {props.cancelLabel ?? 'Cancel'}
+                  </Button>
+                  <Button
+                    variant="strong"
+                    size="xl"
+                    class="min-w-0 flex-1"
+                    disabled={props.pending}
+                    onClick={() => !props.pending && props.onConfirm()}
+                  >
+                    <Show when={props.pending}>
+                      <SpinnerIcon class="size-4 animate-spin" />
+                    </Show>
+                    {props.confirmLabel ?? 'Confirm'}
+                  </Button>
+                </ActionDialogShell.Footer>
+              </>
+            }
+          >
+            <MobileDrawer.ScrollBody class="pb-0">
+              <div class="flex flex-col items-center px-6 pt-6 pb-8 text-center">
+                <div
+                  class="mb-6 flex items-center justify-center gap-3"
+                  aria-hidden="true"
+                >
+                  {props.mobileHero}
+                </div>
+                <h2
+                  id={titleId}
+                  class="text-xl leading-7 font-semibold text-ink break-words max-w-full"
+                >
+                  {props.title}
+                </h2>
+                <div
+                  id={descriptionId}
+                  class="mt-2 text-base leading-6 text-ink-muted"
+                >
+                  {props.body ?? props.children}
+                </div>
+              </div>
+            </MobileDrawer.ScrollBody>
+            <div class="shrink-0 px-4 pb-[max(24px,var(--mobile-sheet-safe-padding))]">
+              <Button
+                variant="cta"
+                size="xl"
+                fullWidth
+                glass={false}
+                class="h-12 rounded-2xl"
+                classList={{
+                  'bg-success text-surface': props.tone === 'success',
+                }}
+                disabled={props.pending}
+                onClick={() => !props.pending && props.onConfirm()}
+              >
+                <Show when={props.pending}>
+                  <SpinnerIcon class="size-4 animate-spin" />
+                </Show>
+                {props.confirmLabel ?? 'Confirm'}
+              </Button>
             </div>
-          </MobileDrawer.ScrollBody>
-          <ActionDialogShell.Footer class="gap-3">
-            <Button
-              variant="ghost"
-              size="xl"
-              class="min-w-0 flex-1"
-              disabled={props.pending}
-              onClick={close}
-            >
-              {props.cancelLabel ?? 'Cancel'}
-            </Button>
-            <Button
-              variant="strong"
-              size="xl"
-              class="min-w-0 flex-1"
-              disabled={props.pending}
-              onClick={() => !props.pending && props.onConfirm()}
-            >
-              <Show when={props.pending}>
-                <SpinnerIcon class="size-4 animate-spin" />
-              </Show>
-              {props.confirmLabel ?? 'Confirm'}
-            </Button>
-          </ActionDialogShell.Footer>
+          </Show>
         </MobileDrawer.Content>
       </MobileDrawer.Portal>
     </MobileDrawer>

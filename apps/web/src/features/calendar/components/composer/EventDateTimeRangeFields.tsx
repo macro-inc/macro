@@ -97,7 +97,7 @@ function EventDateTimeDropdown(props: EventDateTimeDropdownProps) {
         aria-invalid={props.invalid || undefined}
         aria-describedby={props.describedBy}
         class={cn(
-          'group inline-flex h-7 w-fit max-w-48 min-w-0 items-center justify-between gap-1.5 rounded-lg border border-edge-muted bg-control px-2 py-1 text-left text-xs leading-tight text-ink-muted hover:bg-hover hover:text-ink focus-visible:bg-active focus-visible:text-ink focus-visible:ring-accent/10 data-expanded:bg-hover data-expanded:text-ink',
+          'group inline-flex h-7 w-fit max-w-48 min-w-0 items-center justify-between gap-1.5 rounded-lg border border-edge-muted bg-control px-2 py-1 text-left text-xs leading-tight text-ink-muted hover:bg-hover hover:text-ink focus-visible:bg-active focus-visible:text-ink focus-visible:ring-accent/10 data-expanded:bg-hover data-expanded:text-ink disabled:pointer-events-none disabled:opacity-50',
           open() && 'bg-hover text-ink',
           props.invalid &&
             'border-failure text-failure hover:text-failure focus-visible:text-failure data-expanded:text-failure'
@@ -125,7 +125,7 @@ function EventDateTimeDropdown(props: EventDateTimeDropdownProps) {
       <EventComposerPopoverPortal>
         <Layer depth={3}>
           <Popover.Content
-            class="portal-scope z-action-menu w-72 max-w-[calc(100vw-1rem)] rounded-xl border border-edge bg-menu-glass glass menu-open-animation"
+            class="menu-surface portal-scope z-action-menu w-72 max-w-[calc(100vw-1rem)] menu-open-animation"
             on:keydown={(event: KeyboardEvent) => {
               if (event.key !== 'Escape') return;
               event.preventDefault();

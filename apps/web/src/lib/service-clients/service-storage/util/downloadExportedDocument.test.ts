@@ -1,3 +1,4 @@
+import { ThrownResultError } from '@core/util/result';
 import { err, ok } from 'neverthrow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { downloadExportedDocument } from './downloadExportedDocument';
@@ -42,7 +43,9 @@ describe('downloadExportedDocument', () => {
     );
     await expect(
       downloadExportedDocument({ documentId: 'doc' })
-    ).rejects.toThrow('Unable to export the document.');
+    ).rejects.toMatchObject({
+      errors: [{ code: 'SERVER_ERROR', message: 'boom' }],
+    });
     mocks.exportDocument.mockResolvedValueOnce(
       ok({ presigned_url: 'https://bucket/export.docx' })
     );
@@ -52,5 +55,19 @@ describe('downloadExportedDocument', () => {
     await expect(
       downloadExportedDocument({ documentId: 'doc' })
     ).rejects.toThrow('Unable to download the exported document');
+  });
+
+  it('identifies a processing response without downloading or caching an empty file', async () => {
+    mocks.exportDocument.mockResolvedValue(
+      err([{ code: 'CONFLICT', message: 'Resource conflict' }])
+    );
+    await expect(
+      downloadExportedDocument({ documentId: 'doc' })
+    ).rejects.toEqual(
+      new ThrownResultError([
+        { code: 'CONFLICT', message: 'Resource conflict' },
+      ])
+    );
+    expect(mocks.platformFetch).not.toHaveBeenCalled();
   });
 });

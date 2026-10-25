@@ -692,7 +692,7 @@ function TagPickerBody(props: {
     <Popover.Portal>
       <Layer depth={3}>
         <Popover.Content
-          class="z-modal w-96 max-w-[min(24rem,calc(100vw-1.5rem))] rounded-xl glass bg-menu-glass text-sm menu-open-animation"
+          class="menu-surface z-modal w-96 max-w-[min(24rem,calc(100vw-1.5rem))] text-sm menu-open-animation"
           onCloseAutoFocus={(event) => event.preventDefault()}
           onFocusOutside={(event) => {
             if (shouldIgnoreOutsideEvent()) event.preventDefault();

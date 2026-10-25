@@ -205,9 +205,15 @@ pub enum SharingError {
     /// Share links are not supported for databases.
     #[error("Databases cannot be shared by link yet.")]
     LinkShare,
-    /// Team shares are not supported for databases.
-    #[error("Databases cannot be shared with a team yet.")]
-    TeamShare,
+    /// The owner is not on a team to share with.
+    #[error("Join a team to share this database with it.")]
+    NoTeam,
+    /// A team share must grant view, comment, or edit access.
+    #[error("Share with your team for view, comment, or edit access.")]
+    InvalidTeamLevel,
+    /// Ownership, team membership, or the team share changed meanwhile.
+    #[error("This database's sharing changed. Refresh and try again.")]
+    Changed,
     /// A request changes more channel grants than any may.
     #[error("Share with at most {max} channels at a time.")]
     TooManyChannels {

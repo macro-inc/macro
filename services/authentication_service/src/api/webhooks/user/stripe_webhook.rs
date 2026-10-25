@@ -384,6 +384,7 @@ async fn handle_payment_event(
                 currency: subscription_currency,
                 status: subscription_status.to_string(),
                 is_new: false,
+                team_id: Some(team_id),
             },
         )
         .await;
@@ -603,6 +604,7 @@ async fn handle_customer_subscription_event(
                 currency: subscription_currency,
                 status: subscription_status.to_string(),
                 is_new: is_new_subscription,
+                team_id: Some(team_id),
             },
         )
         .await;
@@ -729,6 +731,7 @@ async fn handle_customer_subscription_event(
             currency: subscription_currency,
             status: subscription_status.to_string(),
             is_new: is_new_subscription,
+            team_id: None,
         },
     );
 
@@ -892,6 +895,24 @@ struct SubscriptionEvent {
     currency: String,
 }
 
+/// PostHog properties for a subscription event. GA and Meta get the bare
+/// [`SubscriptionEvent`]; only PostHog receives the team and its group.
+#[derive(Debug, Serialize)]
+struct PostHogSubscriptionEvent<'a> {
+    #[serde(flatten)]
+    event: &'a SubscriptionEvent,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    team_id: Option<uuid::Uuid>,
+    #[serde(rename = "$groups", skip_serializing_if = "Option::is_none")]
+    groups: Option<PostHogTeamGroup>,
+}
+
+/// Attributes the event to the team in PostHog group analytics.
+#[derive(Debug, Serialize)]
+struct PostHogTeamGroup {
+    team: uuid::Uuid,
+}
+
 #[derive(Debug, Clone)]
 struct SubscriptionTrackingData {
     ga_client_id: Option<String>,
@@ -902,6 +923,8 @@ struct SubscriptionTrackingData {
     currency: Option<String>,
     status: String,
     is_new: bool,
+    /// Set for team subscriptions (the `team_id` subscription metadata).
+    team_id: Option<uuid::Uuid>,
 }
 
 /// Tracks a Stripe subscription event to GA and Meta (fire-and-forget).
@@ -950,6 +973,11 @@ fn track_stripe_subscription(
                 ..MetaUserData::default()
             };
             let event_id = Some(subscription_id.as_str());
+            let posthog_event = PostHogSubscriptionEvent {
+                event: &event,
+                team_id: data.team_id,
+                groups: data.team_id.map(|team| PostHogTeamGroup { team }),
+            };
             // PostHog distinct id must be the "macro|{email}" id the app
             // identifies with; a bare email lands events on orphaned person
             // profiles disconnected from product usage. This only links to the
@@ -992,7 +1020,7 @@ fn track_stripe_subscription(
                         .inspect_err(|e| tracing::warn!(error = ?e, "failed to track Meta purchase event"));
 
                     let _ = client
-                        .track_posthog(&posthog_distinct_id, "subscription_created", &event)
+                        .track_posthog(&posthog_distinct_id, "subscription_created", &posthog_event)
                         .await
                         .inspect_err(|e| tracing::warn!(error = ?e, "failed to track PostHog subscription_created event"));
                 }
@@ -1017,7 +1045,7 @@ fn track_stripe_subscription(
                         .inspect_err(|e| tracing::warn!(error = ?e, "failed to track Meta cancel event"));
 
                     let _ = client
-                        .track_posthog(&posthog_distinct_id, "subscription_canceled", &event)
+                        .track_posthog(&posthog_distinct_id, "subscription_canceled", &posthog_event)
                         .await
                         .inspect_err(|e| tracing::warn!(error = ?e, "failed to track PostHog subscription_canceled event"));
                 }

@@ -40,9 +40,8 @@ export type AgentCommandItem = {
   inputHint: string | null;
 };
 
-const TYPE_AGENT_COMMAND_SYMBOL_COMMAND: LexicalCommand<void> = createCommand(
-  'AGENT_COMMAND_SYMBOL_COMMAND'
-);
+export const TYPE_AGENT_COMMAND_SYMBOL_COMMAND: LexicalCommand<void> =
+  createCommand('AGENT_COMMAND_SYMBOL_COMMAND');
 
 export const CLOSE_AGENT_COMMAND_SEARCH_COMMAND: LexicalCommand<void> =
   createCommand('CLOSE_AGENT_COMMAND_SEARCH_COMMAND');

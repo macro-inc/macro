@@ -1,5 +1,6 @@
 import type { ListView } from '@app/constants/list-views';
 import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
+import type { MobileSearchRouteState } from '@app/features/command/mobile/mobile-search-route-state';
 import {
   reviewsTabSearch,
   reviewsTabSearchCodec,
@@ -87,7 +88,9 @@ export function useMobileNavNavigate(): (id: MobileDockNavId) => void {
     }
     const content = mobileNavContent(id);
     if (isNativeMobilePlatform()) {
-      replaceAllSplits(content);
+      const routeState: MobileSearchRouteState | undefined =
+        id === 'search' ? { sessionId: crypto.randomUUID() } : undefined;
+      replaceAllSplits(content, { routeState });
       return;
     }
     const fgContent = globalSplitManager()?.activeSplit()?.content();

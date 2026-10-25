@@ -6,7 +6,8 @@ use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-pub use super::acting::ActorInboxes;
+pub use super::acting::{ActorInboxes, OwnedInbox};
+pub use super::capabilities::{GuestPolicy, ViewerCapabilities};
 
 /// Read and write events on every calendar the user can access. Covers the
 /// event list, get, instances, insert, patch, and watch calls.
@@ -668,6 +669,23 @@ pub struct CalendarEvent {
     /// compare equal.
     #[serde(default, skip_serializing_if = "EventReminders::is_default")]
     pub reminders: EventReminders,
+    /// What the organizer lets guests do: the canonical copy's values, or
+    /// Google's defaults for an event synced before the policy was modeled.
+    #[serde(default)]
+    #[cfg_attr(feature = "schema", schema(required = true))]
+    pub guest_policy: GuestPolicy,
+    /// Whether this is a snapshot of a meeting shared with the owner, which
+    /// Macro added to their calendar as a private copy: the meeting's changes
+    /// never reach it, and nothing done to it reaches the meeting.
+    #[serde(default)]
+    #[cfg_attr(feature = "schema", schema(required = true))]
+    pub is_snapshot: bool,
+    /// What the viewing requester may do with the event. Resolved only on
+    /// the read path, alongside each attendee's `is_self`; nothing when no
+    /// viewer is known. Source projections never store it.
+    #[serde(default)]
+    #[cfg_attr(feature = "schema", schema(required = true))]
+    pub viewer_can: ViewerCapabilities,
     /// Entity creation time.
     pub created_at: DateTime<Utc>,
     /// Entity update time.
@@ -984,6 +1002,10 @@ pub struct CalendarMentionEvent {
     /// they see it only because it was shared with one of their channels:
     /// that preview is read-only and there is no event of theirs to open.
     pub viewer_event_id: Option<Uuid>,
+    /// How the requester holds the meeting through `viewer_event_id`; absent
+    /// exactly when that is.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub viewer_copy: Option<CalendarMentionViewerCopy>,
     /// Display title.
     pub title: String,
     /// Provider description, plain text or HTML, truncated for the preview.
@@ -1008,6 +1030,43 @@ pub struct CalendarMentionEvent {
     pub attendee_count: usize,
     /// Entity update time of the previewed copy.
     pub updated_at: DateTime<Utc>,
+    /// For a channel-shared preview, whether the person who shared it can
+    /// add the requester as a guest. Always false for the requester's own
+    /// copy.
+    #[serde(default)]
+    pub can_request_to_join: bool,
+    /// For a channel-shared preview, the requester's request to join, if any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub join_request_status: Option<super::join_requests::CalendarJoinRequestStatus>,
+}
+
+/// How a requester holds a mentioned meeting on their own calendar, decided
+/// by the copy's own inbox, the way viewer capabilities decide organizer and
+/// guest.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum CalendarMentionViewerCopy {
+    /// A snapshot of a shared meeting: a private copy that does not update.
+    Snapshot,
+    /// A real invitation: the copy's inbox is a guest, not the organizer.
+    Invitation,
+    /// Any other copy, such as one the requester organizes or a delegated
+    /// inbox's.
+    Event,
+}
+
+impl CalendarMentionViewerCopy {
+    /// Classify a copy from what its row says about the copy's own inbox.
+    pub fn classify(is_snapshot: bool, inbox_organizes: bool, inbox_attends: bool) -> Self {
+        if is_snapshot {
+            Self::Snapshot
+        } else if inbox_attends && !inbox_organizes {
+            Self::Invitation
+        } else {
+            Self::Event
+        }
+    }
 }
 
 /// Inclusive/exclusive viewport range for occurrence queries.
@@ -1277,6 +1336,8 @@ pub struct CalendarEventDraft {
     /// out-of-office status event (primary calendar only, timed, no
     /// attendees); `None` creates a regular event.
     pub out_of_office: Option<OutOfOfficeProperties>,
+    /// What guests may do. `None` keeps Google's defaults.
+    pub guest_policy: Option<GuestPolicy>,
 }
 
 /// User-supplied changes to an existing provider event. `None` fields are
@@ -1307,6 +1368,9 @@ pub struct CalendarEventPatch {
     /// already out-of-office — the provider event type is immutable. `None`
     /// leaves them untouched.
     pub out_of_office: Option<OutOfOfficeProperties>,
+    /// Replacement guest policy; only the organizer of a Google event may
+    /// change it.
+    pub guest_policy: Option<GuestPolicy>,
 }
 
 impl CalendarEventPatch {
@@ -1314,6 +1378,56 @@ impl CalendarEventPatch {
     pub fn is_empty(&self) -> bool {
         self == &Self::default()
     }
+
+    /// Whether the patch changes the meeting itself rather than only what
+    /// the provider keeps on each copy: reminders and availability.
+    pub fn reaches_meeting(&self) -> bool {
+        let Self {
+            title,
+            description,
+            location,
+            time,
+            attendees,
+            recurrence_lines,
+            visibility,
+            transparency: _,
+            reminders: _,
+            conference,
+            out_of_office,
+            guest_policy,
+        } = self;
+        title.is_some()
+            || description.is_some()
+            || location.is_some()
+            || time.is_some()
+            || attendees.is_some()
+            || recurrence_lines.is_some()
+            || visibility.is_some()
+            || conference.is_some()
+            || out_of_office.is_some()
+            || guest_policy.is_some()
+    }
+}
+
+/// The stored details of an event or one of its occurrences: what every
+/// guest shares and only those who may modify the event change.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EventDetails {
+    /// Display title.
+    pub title: String,
+    /// Event body.
+    pub description: Option<String>,
+    /// Location label.
+    pub location: Option<String>,
+    /// Event visibility.
+    pub visibility: EventVisibility,
+    /// Timed or all-day shape. `None` for an occurrence whose time is not
+    /// stored, outside the materialized window.
+    pub time: Option<EventTime>,
+    /// Raw RFC 5545 recurrence properties of the series.
+    pub recurrence_lines: Vec<String>,
+    /// Whether a conference is attached.
+    pub has_conference: bool,
 }
 
 /// OAuth identity used to mint an access token for a connected inbox.
@@ -1368,9 +1482,23 @@ pub struct CalendarEventMutationTarget {
     pub token_identity: CalendarLinkTokenIdentity,
     /// The clicker's owned inboxes. `None` when they own none.
     pub actor: Option<ActorInboxes>,
+    /// Organizer email stored on the entity.
+    pub organizer_email: Option<String>,
+    /// What the organizer lets guests do, as stored on the entity.
+    pub guest_policy: GuestPolicy,
+    /// Whether the entity is a snapshot of a shared meeting.
+    pub is_snapshot: bool,
 }
 
 impl CalendarEventMutationTarget {
+    /// The actor's inbox the addressed copy syncs through: every write to the
+    /// copy goes out through its grant, so the actor organizes or attends the
+    /// copy only as this inbox. `None` when the actor does not own it, as for
+    /// a delegate.
+    pub fn copy_inbox(&self) -> Option<&OwnedInbox> {
+        self.actor.as_ref()?.inbox(self.email_link_id)
+    }
+
     /// Provider identifier the mutation must address: the recurring master
     /// when the stored source is an expanded instance acting as canonical.
     pub fn master_provider_event_id(&self) -> &str {
@@ -1394,6 +1522,20 @@ impl CalendarEventMutationTarget {
             range,
         }
     }
+}
+
+/// One of the requester's own copies of a meeting: the event held through
+/// one of their inboxes under the meeting's iCalendar UID.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MeetingCopy {
+    /// The copy's event id.
+    pub event_id: Uuid,
+    /// Address of the inbox holding the copy.
+    pub inbox: String,
+    /// Whether that inbox organizes the meeting.
+    pub organizes: bool,
+    /// Whether that inbox is on the meeting's guest list.
+    pub attends: bool,
 }
 
 /// A calendar visible to a requester, listed for pickers and filters.
@@ -1463,6 +1605,8 @@ pub struct CalendarCapabilities {
     pub custom_recurrence: bool,
     /// Whether an attendee can reset their RSVP to unanswered.
     pub reset_rsvp: bool,
+    /// Whether the organizer can set what guests may do.
+    pub guest_policy: bool,
 }
 impl CalendarCapabilities {
     /// Google Calendar's established editor capabilities.
@@ -1474,6 +1618,7 @@ impl CalendarCapabilities {
             email_reminders: true,
             custom_recurrence: true,
             reset_rsvp: true,
+            guest_policy: true,
         }
     }
     /// Outlook capabilities depend on the calendar's conferencing entitlement.
@@ -1485,6 +1630,7 @@ impl CalendarCapabilities {
             email_reminders: true,
             custom_recurrence: false,
             reset_rsvp: false,
+            guest_policy: false,
         }
     }
 }

@@ -236,12 +236,7 @@ impl StreamBridge {
 /// structured JSON on success, so a JSON content block yields its value and
 /// plain text is tried as JSON for compatibility.
 fn presentation_json(presentation: &ToolOutput) -> Option<serde_json::Value> {
-    if let Some(json) = presentation.as_json() {
-        return Some(json.clone());
-    }
-    presentation
-        .as_text()
-        .and_then(|text| serde_json::from_str(text).ok())
+    crate::tool_media::result_json(presentation)
 }
 
 /// Whether a tool's JSON result is a user tool's unfinished answer.

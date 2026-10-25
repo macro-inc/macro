@@ -22,18 +22,16 @@ where
     }
 
     /// Lists mailbox changes following `cursor`.
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip(self), fields(retry_count = 0))]
     pub async fn list_changes(
         &self,
         link_id: Uuid,
         cursor: &SyncCursor,
     ) -> Result<ChangeBatch, EmailApiError> {
-        let access_token = self.prepare(link_id, ApiOperationKind::ListChanges).await?;
-
-        self.repository
-            .list_changes(&access_token, cursor)
-            .await
-            .inspect_err(log_operation_error)
+        self.read_with_token(link_id, ApiOperationKind::ListChanges, |token| async move {
+            self.repository.list_changes(&token, cursor).await
+        })
+        .await
     }
 }
 

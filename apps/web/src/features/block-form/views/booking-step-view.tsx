@@ -47,7 +47,7 @@ export function BookingStepView(props: {
       <Switch
         fallback={
           <div
-            class="h-80 animate-pulse rounded-2xl bg-hover"
+            class="skeleton-shimmer h-80 rounded-2xl bg-skeleton"
             aria-busy="true"
             aria-label="Loading the calendar"
           />

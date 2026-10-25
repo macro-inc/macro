@@ -238,8 +238,7 @@ export function EventTypesPanel(props: {
                     contextEvent.stopPropagation();
                     openDrawer(event, rowButton);
                   }}
-                  class="min-h-10 min-w-0 rounded-xl px-2 py-1 transition-opacity hover:bg-list-hover focus-within:bg-list-hover"
-                  classList={{ 'opacity-50': !event.enabled }}
+                  class="min-h-10 min-w-0 rounded-xl px-2 py-1 hover:bg-list-hover focus-within:bg-list-hover"
                 >
                   <div class="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-2 not-touch:@min-[36rem]/booking-links:grid-cols-[auto_minmax(0,1fr)_auto]">
                     <ToggleSwitch
@@ -286,7 +285,8 @@ export function EventTypesPanel(props: {
                       onClick={(click) =>
                         props.onView(event, click.currentTarget)
                       }
-                      class="flex min-w-0 items-center gap-2 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                      class="flex min-w-0 items-center gap-2 rounded-sm text-left outline-none transition-opacity focus-visible:ring-2 focus-visible:ring-accent"
+                      classList={{ 'opacity-50': !event.enabled }}
                     >
                       <Link
                         aria-hidden="true"
@@ -301,7 +301,10 @@ export function EventTypesPanel(props: {
                         </p>
                       </Show>
                     </button>
-                    <div class="col-start-2 flex min-w-0 flex-wrap items-center justify-end gap-2 touch:justify-start touch:pl-6 not-touch:@min-[36rem]/booking-links:col-start-auto">
+                    <div
+                      class="col-start-2 flex min-w-0 flex-wrap items-center justify-end gap-2 transition-opacity touch:justify-start touch:pl-6 not-touch:@min-[36rem]/booking-links:col-start-auto"
+                      classList={{ 'opacity-50': !event.enabled }}
+                    >
                       <Dropdown>
                         <Dropdown.Trigger
                           as="button"
@@ -384,7 +387,7 @@ export function EventTypesPanel(props: {
                               Round robin
                             </>
                           ))
-                          .exhaustive()}
+                          .exhaustive(() => null)}
                       </Badge>
                       <Dropdown>
                         <Dropdown.Trigger

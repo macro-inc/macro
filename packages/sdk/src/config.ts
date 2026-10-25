@@ -66,11 +66,11 @@ export const HOSTS: Record<Env, Record<ServiceName, string>> = {
     // root; the `/calendar` segment keeps local paths identical to the
     // gateway's. Mirrors apps/web servers.ts.
     calendar: 'http://localhost:8088/calendar',
-    cognition: 'http://localhost:8085',
+    cognition: 'http://localhost:8101/cognition',
     notification: 'http://localhost:8089',
     properties: 'http://localhost:8086',
     search: 'http://localhost:8086',
-    'scheduled-action': 'http://localhost:8099',
+    'scheduled-action': 'http://localhost:8101/scheduled-action',
     'static-files': 'http://localhost:8100',
     connection: 'http://localhost:8082',
     contacts: 'http://localhost:8083',

@@ -39,11 +39,10 @@ export function ConnectionMore(props: {
         <Dropdown.Trigger
           aria-label="More"
           variant="ghost"
-          size="icon-sm"
-          depth={3}
-          class="text-ink-muted hover:text-ink"
+          size="icon-md"
+          class="text-ink-muted hover:text-ink touch:min-h-11 touch:min-w-11"
         >
-          <DotsThreeIcon class="size-4" />
+          <DotsThreeIcon class="size-5" />
         </Dropdown.Trigger>
         <Dropdown.Content class="w-48">
           <Dropdown.Group>

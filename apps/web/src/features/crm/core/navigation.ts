@@ -4,6 +4,19 @@ export const CRM_RECORDS = [
   { id: 'people', label: 'People' },
 ] as const;
 
+/** Workspace feeds scoped to CRM-linked content, rather than one record. */
+export const CRM_ACTIVITY_TABS = [
+  { id: 'tasks', label: 'Tasks' },
+  { id: 'email', label: 'Email' },
+  { id: 'notes', label: 'Notes' },
+  { id: 'calls', label: 'Calls' },
+] as const;
+
+export type CrmActivityTab = (typeof CRM_ACTIVITY_TABS)[number]['id'];
+
+export function isCrmActivityTab(value: string): value is CrmActivityTab {
+  return CRM_ACTIVITY_TABS.some((tab) => tab.id === value);
+}
 const PIPELINE_TAB_PREFIX = 'pipeline:';
 
 /** The workspace tab that shows a pipeline. */

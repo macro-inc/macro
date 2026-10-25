@@ -36,6 +36,11 @@ export function ConnectedCalendars(props: {
   onAccountColor: (id: string, color: string | undefined) => void;
   onSourceColor: (id: string, color: string | undefined) => void;
 }) {
+  const accountNeedingPermission = () =>
+    props.accounts.length === 1 && props.accounts[0].needsPermission
+      ? props.accounts[0]
+      : undefined;
+  const accountList = () => (accountNeedingPermission() ? [] : props.accounts);
   return (
     <SettingsSection
       title="Connected calendars"
@@ -44,17 +49,38 @@ export function ConnectedCalendars(props: {
       <SettingsCard>
         <SettingsRow
           label="Google Calendar"
-          description="Keep work and personal calendars together."
+          description={
+            <Show
+              when={accountNeedingPermission()}
+              fallback="Keep work and personal calendars together."
+            >
+              {(account) => `Give Macro access to ${account().email}.`}
+            </Show>
+          }
         >
-          <Show when={props.canConnect}>
+          <Show
+            when={accountNeedingPermission()}
+            fallback={
+              <Show when={props.canConnect}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={props.connecting}
+                  onClick={props.onConnect}
+                >
+                  <PlusIcon class="size-4" />
+                  {props.connecting ? 'Connecting…' : 'Connect account'}
+                </Button>
+              </Show>
+            }
+          >
             <Button
               size="sm"
-              variant="outline"
+              variant="cta"
               disabled={props.connecting}
-              onClick={props.onConnect}
+              onClick={props.onEnable}
             >
-              <PlusIcon class="size-4" />
-              {props.connecting ? 'Connecting…' : 'Connect account'}
+              {props.connecting ? 'Connecting…' : 'Connect'}
             </Button>
           </Show>
         </SettingsRow>
@@ -74,7 +100,7 @@ export function ConnectedCalendars(props: {
             </Button>
           </div>
         </Show>
-        <Index each={props.accounts}>
+        <Index each={accountList()}>
           {(account) => {
             const visibleCount = () =>
               account().calendars.filter((c) => props.isVisible(c.id)).length;
@@ -189,10 +215,12 @@ export function ConnectedCalendars(props: {
           }}
         </Index>
       </SettingsCard>
-      <p class="px-6 text-xs text-ink-extra-muted">
-        Visibility and colors are saved in this browser. Hiding a calendar does
-        not disconnect it or change your booking availability.
-      </p>
+      <Show when={props.accounts.some((account) => account.calendars.length)}>
+        <p class="px-6 text-xs text-ink-extra-muted">
+          Visibility and colors are saved in this browser. Hiding a calendar
+          does not disconnect it or change your booking availability.
+        </p>
+      </Show>
     </SettingsSection>
   );
 }

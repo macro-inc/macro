@@ -3,6 +3,11 @@ import type { RichMessage } from '../../mentions';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { PropertiedEntity } from '../entity';
+import {
+  MessageThread,
+  type TimelineOptions,
+  timeline,
+} from '../messages/thread';
 import { entitySearch } from '../search';
 import { Team } from '../teams/team';
 import {
@@ -18,6 +23,30 @@ type CompanyDetail = GetCompanyResponses[200];
 
 /** A CRM company: an organization the team has interacted with. */
 export class Company extends PropertiedEntity<CompanyDetail> {
+  /** A shared message thread scoped to this resource. */
+  messageThreadById(id: string): MessageThread {
+    return MessageThread.byId(
+      this.client,
+      { type: 'crm_company', entity: this },
+      id,
+    );
+  }
+
+  /** A mixed message and activity timeline page. */
+  timelinePage(selection?: TimelineOptions<CrmComment>) {
+    return timeline(
+      this.client,
+      { type: 'crm_company', entity: this },
+      (record) =>
+        CrmComment.from(
+          this.client,
+          { type: 'crm_company', id: this.id },
+          record,
+        ),
+      selection,
+    );
+  }
+
   /** Favorites identify CRM companies as `crm_company`. */
   readonly entityType = 'crm_company';
 

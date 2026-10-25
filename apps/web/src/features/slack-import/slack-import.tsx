@@ -1,3 +1,4 @@
+import { hideImportPromotion } from '@app/features/connector-import/primitives/promotion';
 import { IntegrationRow } from '@app/features/settings/primitives';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableSlackArchiveImport } from '@core/constant/featureFlags';
@@ -23,7 +24,6 @@ import { uploadSlackImport } from '@service-storage/slack-import-upload';
 import { type JSX, Show, Suspense } from 'solid-js';
 import type { ImportJob } from './context/contracts';
 import { ImportProvider } from './context/import-context';
-import { hideSlackImportPromotion } from './primitives/promotion';
 import {
   createArchiveSource,
   protectImportFile,
@@ -35,6 +35,8 @@ type Props = {
   teamId: string;
   isAdmin: boolean;
   trigger?: ImportDialogTrigger;
+  /** Open straight to the archive upload; the host offers channel picking. */
+  historyOnly?: boolean;
 };
 
 export function SlackImport(props: Props): JSX.Element {
@@ -45,15 +47,23 @@ export function SlackImport(props: Props): JSX.Element {
         {(teamId) => (
           <Suspense
             fallback={
-              <IntegrationRow
-                icon={<SlackIcon />}
-                title="Slack"
-                description="Loading Slack import…"
-                muted
-              />
+              // A host-supplied trigger lives elsewhere (the Chat rail card);
+              // only the Settings row has a loading placeholder.
+              props.trigger ? null : (
+                <IntegrationRow
+                  icon={<SlackIcon />}
+                  title="Slack"
+                  description="Loading Slack import…"
+                  muted
+                />
+              )
             }
           >
-            <SlackImportSettings teamId={teamId} trigger={props.trigger} />
+            <SlackImportSettings
+              teamId={teamId}
+              trigger={props.trigger}
+              historyOnly={props.historyOnly}
+            />
           </Suspense>
         )}
       </Show>
@@ -64,6 +74,7 @@ export function SlackImport(props: Props): JSX.Element {
 function SlackImportSettings(props: {
   teamId: string;
   trigger?: ImportDialogTrigger;
+  historyOnly?: boolean;
 }): JSX.Element {
   const channels = useListChannelsQuery();
   const userId = useUserId();
@@ -72,7 +83,7 @@ function SlackImportSettings(props: {
   const { openSettings } = useSettingsState();
   const connectSlack = () => {
     requestConnectApp(SLACK_CONNECT_SLUG, 'import-slack-channels');
-    openSettings('Connections');
+    openSettings('Connected');
   };
   function channelHref(id: string): string | undefined {
     if (
@@ -90,7 +101,7 @@ function SlackImportSettings(props: {
           (conversation) => conversation.status === 'completed'
         ))
     ) {
-      hideSlackImportPromotion(userId(), job.teamId);
+      hideImportPromotion(userId(), 'channels');
     }
     invalidateAllSoup();
     await Promise.all([
@@ -119,7 +130,9 @@ function SlackImportSettings(props: {
       <ImportDialog
         teamId={props.teamId}
         trigger={props.trigger}
-        onConnect={pipedreamEnabled() ? connectSlack : undefined}
+        onConnect={
+          pipedreamEnabled() && !props.historyOnly ? connectSlack : undefined
+        }
         onCompleted={onCompleted}
         channelHref={channelHref}
       />

@@ -115,6 +115,7 @@ import { CHANNEL_TOUR } from '../tour';
 import { isUnifiedInputMode } from '../unified-input-mode';
 import { ActiveCallMessage } from './ActiveCallMessage';
 import { ChannelDropZone } from './ChannelDropZone';
+import { ChannelLoading } from './ChannelLoading';
 import { createChannelDragState } from './create-channel-drag-state';
 import { createChannelFindBar } from './create-channel-find-bar';
 import { createChannelHotkeys } from './create-channel-hotkeys';
@@ -171,7 +172,7 @@ export type MessageTimelineStateSnapshot = {
 
 export type ChannelHandle = {
   goToMessage: TargetMessageController['goToMessage'];
-  goToLatest: () => void;
+  goToLatest: (behavior?: ScrollBehavior) => void;
   getMessagesStateSnapshot: () => MessageTimelineStateSnapshot | undefined;
 };
 
@@ -580,7 +581,9 @@ export function Channel(props: ChannelProps) {
 
   // A latest request waits for both the query and the rendered list. Keeping
   // its identity prevents a late response from overriding newer navigation.
-  let pendingLatest: { phase: 'loading' | 'waiting-for-layout' } | undefined;
+  let pendingLatest:
+    | { phase: 'loading' | 'waiting-for-layout'; behavior?: ScrollBehavior }
+    | undefined;
   const cancelLatestNavigation = () => {
     pendingLatest = undefined;
   };
@@ -599,13 +602,16 @@ export function Channel(props: ChannelProps) {
     if (
       latestEntry !== undefined &&
       messageIndex.entryKeys.at(-1) === timelineEntryKey(latestEntry) &&
-      threadListNavigation()?.scrollToLatest()
+      threadListNavigation()?.scrollToLatest(pendingLatest.behavior)
     )
       cancelLatestNavigation();
   };
 
-  const goToLatest: ChannelHandle['goToLatest'] = async () => {
-    const request: NonNullable<typeof pendingLatest> = { phase: 'loading' };
+  const goToLatest: ChannelHandle['goToLatest'] = async (behavior) => {
+    const request: NonNullable<typeof pendingLatest> = {
+      phase: 'loading',
+      behavior,
+    };
     pendingLatest = request;
     try {
       const needsLatestPage =
@@ -726,10 +732,11 @@ export function Channel(props: ChannelProps) {
     >
       <EntityLoadGate
         result={messagesLoadResult}
+        loadingFallback={<ChannelLoading />}
         loadErrorTitle="Unable to load this channel"
         onRetry={() => fireAndForget(messagesQuery.refetch(), 'channel')}
       >
-        <DebugSuspense name="Channel.root">
+        <DebugSuspense name="Channel.root" fallback={<ChannelLoading />}>
           <deleteConfirmation.ConfirmationDialog />
           <StaticMarkdownContext host="channel">
             <SearchHighlightTermsProvider
@@ -991,7 +998,6 @@ export function Channel(props: ChannelProps) {
                               <ScrollToBottomOverlay
                                 scrollState={threadListScrollState}
                                 onScrollToBottom={goToLatest}
-                                class="touch:top-[calc(var(--mobile-content-inset-top,0)+1rem)]"
                               />
                             </Show>
                           </Show>

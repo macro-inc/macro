@@ -12,10 +12,7 @@
 .feature-page-eyebrow { color: var(--color-ink-subtle); font-size: 12px; line-height: 1.6; }
 .feature-page-hero h1 { margin: 18px 0 24px; font: calc(315 + var(--cream-slab-weight-increase, 0)) clamp(40px, 5.4vw, 68px)/1.12 'Roboto Slab Variable', display, serif; letter-spacing: -.035em; text-wrap: balance; }
 .feature-page-hero > p:not(.feature-page-eyebrow) { max-width: 460px; color: var(--color-ink-muted); font-size: 16px; line-height: 1.8; text-wrap: balance; }
-.feature-page-cta { display: inline-flex; align-items: center; justify-content: center; gap: 24px; min-height: 52px; padding: 14px 25px; border-radius: 999px; background: #fafafa; color: #080808; font-size: 15px; font-weight: 500; line-height: 24px; text-decoration: none; transition: background 180ms; }
-.feature-page .feature-page-cta { color: #080808; }
-.feature-page-cta svg { width: 21px; height: 21px; }
-.feature-page-cta:hover { background: #ddd; }
+.feature-page .feature-page-cta { color: #1d1c1a; }
 .feature-page-hero .feature-page-cta { margin-top: 32px; }
 .feature-page-hero > small { display: block; margin-top: 18px; color: var(--color-ink-subtle); font-size: 11px; }
 .feature-page-jump-links { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; padding: 28px 0 32px; border-block: 1px solid color-mix(in srgb, var(--color-ink) 10%, transparent); }

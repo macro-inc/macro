@@ -1,12 +1,17 @@
+import { useViewControlHotkeys } from '@app/components/view-shell';
 import { openChatWithInput } from '@app/features/chat/ChatWithAgentButton';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { createSearchParams, useBeforeLeave } from '@app/lib/split-router';
-import { useSplitDisplayName } from '@components/app/split-layout/layoutUtils';
+import {
+  useSplitDisplayName,
+  useSplitPanelOrThrow,
+} from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { toast } from '@core/component/Toast/Toast';
 import { enableCalendarScheduling } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserContext } from '@core/context/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getDisplayName, macroIdToEmail, tryMacroId } from '@core/user';
 import { writeClipboardData } from '@core/util/dataTransfer';
 import { getWebOrigin } from '@core/util/webOrigin';
@@ -119,6 +124,16 @@ function SchedulingHost(props: ParentProps) {
 }
 
 export function BookingLinksWorkspace() {
+  const panel = useSplitPanelOrThrow();
+  let focusSearch: (() => boolean) | undefined;
+  useViewControlHotkeys({
+    scopeId: panel.splitHotkeyScope,
+    enabled: () => panel.isPanelActive() && !isTouchDevice(),
+    search: {
+      description: 'Search scheduling',
+      run: () => focusSearch?.() ?? false,
+    },
+  });
   const flag = useFeatureFlag(enableCalendarScheduling);
   const [search, setSearch] = createSearchParams(bookingLinksSearch);
   useSplitDisplayName(() => 'Scheduling');
@@ -148,6 +163,7 @@ export function BookingLinksWorkspace() {
           >
             <SchedulingHost>
               <BookingWorkspaceView
+                registerSearchFocus={(focus) => (focusSearch = focus)}
                 search={search}
                 onSearchChange={(patch) => setSearch(patch)}
                 registerBeforeLeave={(guard) => {

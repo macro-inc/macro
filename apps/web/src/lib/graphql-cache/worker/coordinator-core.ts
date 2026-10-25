@@ -193,6 +193,14 @@ export class CoordinatorCore {
         },
       ];
     }
+    if (this.stateValue.kind === 'failed' && this.stateValue.storageUntouched) {
+      // A fresh host may retry asset bootstrap, but never reopen a database
+      // whose recovery required a reset. Failed hosts stay excluded below.
+      this.stateValue = {
+        kind: 'waiting-for-tab',
+        nextDatabaseAction: 'open-existing',
+      };
+    }
     if (this.stateValue.kind === 'failed') {
       return [
         {
@@ -484,7 +492,7 @@ export class CoordinatorCore {
     return actions;
   }
 
-  /** Stops owner recovery and fails every current or future page connection. */
+  /** Stops this recovery cycle. Only untouched storage permits a new host to retry. */
   terminalFailure(reason: string): CoordinatorAction[] {
     if (this.stateValue.kind === 'failed') return [];
     const storageUntouched =
@@ -492,6 +500,7 @@ export class CoordinatorCore {
       this.stateValue.databaseAction === 'open-existing';
     this.queuedRequests.length = 0;
     this.inFlight.clear();
+    for (const tabId of this.tabs) this.unavailableTabs.set(tabId, reason);
     this.stateValue = {
       kind: 'failed',
       reason,

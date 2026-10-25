@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE import_run\n            SET status = 'failed',\n                error = 'discovery was interrupted — try again',\n                updated_at = NOW()\n            WHERE user_id = $1 AND status IN ('running', 'importing') AND source <> 'notion'\n              AND updated_at < NOW() - ($2::double precision * interval '1 second')\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Float8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e529e3d4409b2205dcf28984af197d715c9f713b5ae43b6e7de87d5f54c3b852"
+}

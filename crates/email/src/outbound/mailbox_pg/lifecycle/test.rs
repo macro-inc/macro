@@ -66,6 +66,16 @@ async fn leaving_shared_custodian_rebinds_work_and_rejects_old_health_even_with_
     db: PgPool,
 ) {
     let (repo, link, replacement) = shared(&db).await;
+    let command = macro_uuid::generate_uuid_v7();
+    sqlx::query!(
+        r#"INSERT INTO email_mailbox_commands(id,link_id,generation,actor_id,intent,status)
+        VALUES ($1,$2,1,'macro|shared@example.com','{"kind":"read","value":true}','confirming')"#,
+        command,
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
     let service = InboxLifecycleService::new(repo.clone(), Effects);
     service.remove(&actor("leaving"), link).await.unwrap();
     let row=sqlx::query!("SELECT macro_id,is_sync_active,needs_reauth,grant_id,grant_generation,sync_generation,fusionauth_user_id FROM email_links WHERE id = $1",link).fetch_one(&db).await.unwrap();
@@ -76,6 +86,18 @@ async fn leaving_shared_custodian_rebinds_work_and_rejects_old_health_even_with_
     assert_eq!(row.grant_generation, 1);
     assert_eq!(row.sync_generation, 2);
     assert_eq!(row.fusionauth_user_id, "remaining-owner");
+    let rebound = sqlx::query!(
+        "SELECT status,generation FROM email_mailbox_commands WHERE id = $1",
+        command
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert_eq!(
+        (rebound.status.as_str(), rebound.generation),
+        ("pending", 2),
+        "a confirming command is never claimed, so it must resume as pending"
+    );
     assert!(matches!(
         repo.record(
             MailboxAccess {

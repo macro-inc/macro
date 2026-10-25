@@ -43,7 +43,7 @@ export function CrmEmptyState() {
             isTeamAdmin()
               ? {
                   label: 'Open CRM settings',
-                  onClick: () => host.openSettings(),
+                  onClick: () => host.settings.open(),
                 }
               : undefined
           }

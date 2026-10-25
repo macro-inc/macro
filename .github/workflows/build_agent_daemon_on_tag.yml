@@ -174,7 +174,11 @@ jobs:
         # exactly the failure this whole pipeline exists to prevent, so it is checked
         # here rather than assumed.
 
-        binary="target/$TARGET/release/macrod"
+        case "$TARGET" in
+          *-windows-*) executable="macrod.exe" ;;
+          *) executable="macrod" ;;
+        esac
+        binary="target/$TARGET/release/$executable"
         if [ ! -x "$binary" ]; then
           echo "no daemon binary at $binary" >&2
           exit 1
@@ -203,6 +207,19 @@ jobs:
               exit 1
             fi
             ;;
+          *-windows-msvc)
+            # Every DLL must come from Windows itself. Git Bash's ldd resolves the
+            # imports; one found outside C:\Windows (a vcruntime, a build-tool DLL)
+            # will not be on a user's machine.
+            imports=$(ldd "$binary")
+            strays=$(printf '%s\n' "$imports" | awk '$2 == "=>" { print $3 }' \
+              | grep -Eiv '^(/c/windows/|\?\?\?$)' || true)
+            if [ -n "$strays" ]; then
+              echo "daemon links DLLs that will not exist on a user's PC:" >&2
+              echo "$strays" >&2
+              exit 1
+            fi
+            ;;
           *)
             echo "no self-containment check defined for $TARGET" >&2
             exit 1
@@ -220,23 +237,37 @@ jobs:
         fi
 
         mkdir -p artifacts
-        name="macrod-${SAFE_TAG}-${SLUG}"
         stage=$(mktemp -d)
-        install -m 755 "$binary" "$stage/macrod"
-        tar -czf "artifacts/${name}.tar.gz" -C "$stage" macrod
+        install -m 755 "$binary" "$stage/$executable"
+
+        # Every archive is published twice: under the tag, and under a name without
+        # it, which `releases/latest/download/<name>` serves — the URL the install
+        # scripts download from.
+        for name in "macrod-${SAFE_TAG}-${SLUG}" "macrod-${SLUG}"; do
+          case "$TARGET" in
+            *-windows-*)
+              archive="${name}.zip"
+              powershell.exe -NoProfile -NonInteractive -Command \
+                "Compress-Archive -Path '$(cygpath -w "$stage/$executable")' -DestinationPath '$(cygpath -w "artifacts/$archive")'"
+              ;;
+            *)
+              archive="${name}.tar.gz"
+              tar -czf "artifacts/$archive" -C "$stage" "$executable"
+              ;;
+          esac
+
+          # coreutils on Linux and Git Bash, BSD/perl on macOS.
+          (
+            cd artifacts
+            if command -v sha256sum >/dev/null 2>&1; then
+              sha256sum "$archive" >"$archive.sha256"
+            else
+              shasum -a 256 "$archive" >"$archive.sha256"
+            fi
+          )
+          echo "packaged $archive"
+        done
         rm -rf "$stage"
-
-        # coreutils on Linux, BSD/perl on macOS.
-        (
-          cd artifacts
-          if command -v sha256sum >/dev/null 2>&1; then
-            sha256sum "${name}.tar.gz" >"${name}.tar.gz.sha256"
-          else
-            shasum -a 256 "${name}.tar.gz" >"${name}.tar.gz.sha256"
-          fi
-        )
-
-        echo "packaged ${name}.tar.gz"
       shell: bash
       env:
         TARGET: x86_64-unknown-linux-musl
@@ -358,7 +389,11 @@ jobs:
         # exactly the failure this whole pipeline exists to prevent, so it is checked
         # here rather than assumed.
 
-        binary="target/$TARGET/release/macrod"
+        case "$TARGET" in
+          *-windows-*) executable="macrod.exe" ;;
+          *) executable="macrod" ;;
+        esac
+        binary="target/$TARGET/release/$executable"
         if [ ! -x "$binary" ]; then
           echo "no daemon binary at $binary" >&2
           exit 1
@@ -387,6 +422,19 @@ jobs:
               exit 1
             fi
             ;;
+          *-windows-msvc)
+            # Every DLL must come from Windows itself. Git Bash's ldd resolves the
+            # imports; one found outside C:\Windows (a vcruntime, a build-tool DLL)
+            # will not be on a user's machine.
+            imports=$(ldd "$binary")
+            strays=$(printf '%s\n' "$imports" | awk '$2 == "=>" { print $3 }' \
+              | grep -Eiv '^(/c/windows/|\?\?\?$)' || true)
+            if [ -n "$strays" ]; then
+              echo "daemon links DLLs that will not exist on a user's PC:" >&2
+              echo "$strays" >&2
+              exit 1
+            fi
+            ;;
           *)
             echo "no self-containment check defined for $TARGET" >&2
             exit 1
@@ -404,23 +452,37 @@ jobs:
         fi
 
         mkdir -p artifacts
-        name="macrod-${SAFE_TAG}-${SLUG}"
         stage=$(mktemp -d)
-        install -m 755 "$binary" "$stage/macrod"
-        tar -czf "artifacts/${name}.tar.gz" -C "$stage" macrod
+        install -m 755 "$binary" "$stage/$executable"
+
+        # Every archive is published twice: under the tag, and under a name without
+        # it, which `releases/latest/download/<name>` serves — the URL the install
+        # scripts download from.
+        for name in "macrod-${SAFE_TAG}-${SLUG}" "macrod-${SLUG}"; do
+          case "$TARGET" in
+            *-windows-*)
+              archive="${name}.zip"
+              powershell.exe -NoProfile -NonInteractive -Command \
+                "Compress-Archive -Path '$(cygpath -w "$stage/$executable")' -DestinationPath '$(cygpath -w "artifacts/$archive")'"
+              ;;
+            *)
+              archive="${name}.tar.gz"
+              tar -czf "artifacts/$archive" -C "$stage" "$executable"
+              ;;
+          esac
+
+          # coreutils on Linux and Git Bash, BSD/perl on macOS.
+          (
+            cd artifacts
+            if command -v sha256sum >/dev/null 2>&1; then
+              sha256sum "$archive" >"$archive.sha256"
+            else
+              shasum -a 256 "$archive" >"$archive.sha256"
+            fi
+          )
+          echo "packaged $archive"
+        done
         rm -rf "$stage"
-
-        # coreutils on Linux, BSD/perl on macOS.
-        (
-          cd artifacts
-          if command -v sha256sum >/dev/null 2>&1; then
-            sha256sum "${name}.tar.gz" >"${name}.tar.gz.sha256"
-          else
-            shasum -a 256 "${name}.tar.gz" >"${name}.tar.gz.sha256"
-          fi
-        )
-
-        echo "packaged ${name}.tar.gz"
       shell: bash
       env:
         TARGET: aarch64-unknown-linux-musl
@@ -502,7 +564,11 @@ jobs:
         # exactly the failure this whole pipeline exists to prevent, so it is checked
         # here rather than assumed.
 
-        binary="target/$TARGET/release/macrod"
+        case "$TARGET" in
+          *-windows-*) executable="macrod.exe" ;;
+          *) executable="macrod" ;;
+        esac
+        binary="target/$TARGET/release/$executable"
         if [ ! -x "$binary" ]; then
           echo "no daemon binary at $binary" >&2
           exit 1
@@ -531,6 +597,19 @@ jobs:
               exit 1
             fi
             ;;
+          *-windows-msvc)
+            # Every DLL must come from Windows itself. Git Bash's ldd resolves the
+            # imports; one found outside C:\Windows (a vcruntime, a build-tool DLL)
+            # will not be on a user's machine.
+            imports=$(ldd "$binary")
+            strays=$(printf '%s\n' "$imports" | awk '$2 == "=>" { print $3 }' \
+              | grep -Eiv '^(/c/windows/|\?\?\?$)' || true)
+            if [ -n "$strays" ]; then
+              echo "daemon links DLLs that will not exist on a user's PC:" >&2
+              echo "$strays" >&2
+              exit 1
+            fi
+            ;;
           *)
             echo "no self-containment check defined for $TARGET" >&2
             exit 1
@@ -548,23 +627,37 @@ jobs:
         fi
 
         mkdir -p artifacts
-        name="macrod-${SAFE_TAG}-${SLUG}"
         stage=$(mktemp -d)
-        install -m 755 "$binary" "$stage/macrod"
-        tar -czf "artifacts/${name}.tar.gz" -C "$stage" macrod
+        install -m 755 "$binary" "$stage/$executable"
+
+        # Every archive is published twice: under the tag, and under a name without
+        # it, which `releases/latest/download/<name>` serves — the URL the install
+        # scripts download from.
+        for name in "macrod-${SAFE_TAG}-${SLUG}" "macrod-${SLUG}"; do
+          case "$TARGET" in
+            *-windows-*)
+              archive="${name}.zip"
+              powershell.exe -NoProfile -NonInteractive -Command \
+                "Compress-Archive -Path '$(cygpath -w "$stage/$executable")' -DestinationPath '$(cygpath -w "artifacts/$archive")'"
+              ;;
+            *)
+              archive="${name}.tar.gz"
+              tar -czf "artifacts/$archive" -C "$stage" "$executable"
+              ;;
+          esac
+
+          # coreutils on Linux and Git Bash, BSD/perl on macOS.
+          (
+            cd artifacts
+            if command -v sha256sum >/dev/null 2>&1; then
+              sha256sum "$archive" >"$archive.sha256"
+            else
+              shasum -a 256 "$archive" >"$archive.sha256"
+            fi
+          )
+          echo "packaged $archive"
+        done
         rm -rf "$stage"
-
-        # coreutils on Linux, BSD/perl on macOS.
-        (
-          cd artifacts
-          if command -v sha256sum >/dev/null 2>&1; then
-            sha256sum "${name}.tar.gz" >"${name}.tar.gz.sha256"
-          else
-            shasum -a 256 "${name}.tar.gz" >"${name}.tar.gz.sha256"
-          fi
-        )
-
-        echo "packaged ${name}.tar.gz"
       shell: bash
       env:
         TARGET: aarch64-apple-darwin
@@ -643,7 +736,11 @@ jobs:
         # exactly the failure this whole pipeline exists to prevent, so it is checked
         # here rather than assumed.
 
-        binary="target/$TARGET/release/macrod"
+        case "$TARGET" in
+          *-windows-*) executable="macrod.exe" ;;
+          *) executable="macrod" ;;
+        esac
+        binary="target/$TARGET/release/$executable"
         if [ ! -x "$binary" ]; then
           echo "no daemon binary at $binary" >&2
           exit 1
@@ -672,6 +769,19 @@ jobs:
               exit 1
             fi
             ;;
+          *-windows-msvc)
+            # Every DLL must come from Windows itself. Git Bash's ldd resolves the
+            # imports; one found outside C:\Windows (a vcruntime, a build-tool DLL)
+            # will not be on a user's machine.
+            imports=$(ldd "$binary")
+            strays=$(printf '%s\n' "$imports" | awk '$2 == "=>" { print $3 }' \
+              | grep -Eiv '^(/c/windows/|\?\?\?$)' || true)
+            if [ -n "$strays" ]; then
+              echo "daemon links DLLs that will not exist on a user's PC:" >&2
+              echo "$strays" >&2
+              exit 1
+            fi
+            ;;
           *)
             echo "no self-containment check defined for $TARGET" >&2
             exit 1
@@ -689,23 +799,37 @@ jobs:
         fi
 
         mkdir -p artifacts
-        name="macrod-${SAFE_TAG}-${SLUG}"
         stage=$(mktemp -d)
-        install -m 755 "$binary" "$stage/macrod"
-        tar -czf "artifacts/${name}.tar.gz" -C "$stage" macrod
+        install -m 755 "$binary" "$stage/$executable"
+
+        # Every archive is published twice: under the tag, and under a name without
+        # it, which `releases/latest/download/<name>` serves — the URL the install
+        # scripts download from.
+        for name in "macrod-${SAFE_TAG}-${SLUG}" "macrod-${SLUG}"; do
+          case "$TARGET" in
+            *-windows-*)
+              archive="${name}.zip"
+              powershell.exe -NoProfile -NonInteractive -Command \
+                "Compress-Archive -Path '$(cygpath -w "$stage/$executable")' -DestinationPath '$(cygpath -w "artifacts/$archive")'"
+              ;;
+            *)
+              archive="${name}.tar.gz"
+              tar -czf "artifacts/$archive" -C "$stage" "$executable"
+              ;;
+          esac
+
+          # coreutils on Linux and Git Bash, BSD/perl on macOS.
+          (
+            cd artifacts
+            if command -v sha256sum >/dev/null 2>&1; then
+              sha256sum "$archive" >"$archive.sha256"
+            else
+              shasum -a 256 "$archive" >"$archive.sha256"
+            fi
+          )
+          echo "packaged $archive"
+        done
         rm -rf "$stage"
-
-        # coreutils on Linux, BSD/perl on macOS.
-        (
-          cd artifacts
-          if command -v sha256sum >/dev/null 2>&1; then
-            sha256sum "${name}.tar.gz" >"${name}.tar.gz.sha256"
-          else
-            shasum -a 256 "${name}.tar.gz" >"${name}.tar.gz.sha256"
-          fi
-        )
-
-        echo "packaged ${name}.tar.gz"
       shell: bash
       env:
         TARGET: x86_64-apple-darwin
@@ -719,6 +843,184 @@ jobs:
         path: artifacts/*
         if-no-files-found: error
         retention-days: '30'
+  build-daemon-windows-x86-64:
+    needs:
+    - resolve-ref
+    name: Build daemon (windows-x86_64)
+    runs-on: nscloud-windows-2022-amd64-8x16
+    steps:
+    - name: Checkout Repo
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      with:
+        ref: ${{ needs.resolve-ref.outputs.ref }}
+        persist-credentials: 'false'
+    - name: Setup Rust
+      uses: './.github/actions/setup-rust'
+      with:
+        sccache: 'false'
+        rust-cache: 'false'
+    - id: metadata
+      name: Derive artifact metadata
+      run: |
+        set -euo pipefail
+        tag="${RAW_REF#refs/tags/}"
+        if [ -z "$tag" ]; then
+          tag="${GITHUB_REF_NAME:-untagged}"
+        fi
+        safe_tag=$(printf '%s' "$tag" | sed 's#[/\\:*?"<>|]#-#g' | tr -d '\r\n')
+        echo "tag=$tag" >> "$GITHUB_OUTPUT"
+        echo "safe_tag=$safe_tag" >> "$GITHUB_OUTPUT"
+      shell: bash
+      env:
+        RAW_REF: ${{ needs.resolve-ref.outputs.ref }}
+    - name: Build daemon
+      run: |
+        set -euo pipefail
+
+        # Windows build of the self-hosted coding-agent daemon, with the runner's MSVC
+        # toolchain.
+        #
+        # See build_agent_daemon_linux.sh for why sqlx runs offline.
+        export SQLX_OFFLINE=true
+
+        # Link the C runtime into the binary. Without this, macrod.exe needs the Visual
+        # C++ redistributable's vcruntime DLLs, which a user's machine may not have.
+        # With an explicit --target, RUSTFLAGS reach only target code, and the cc and
+        # cmake builds of the C dependencies follow it to the static runtime.
+        export RUSTFLAGS="-C target-feature=+crt-static"
+
+        # aws-lc-sys assembles its x86_64 crypto with NASM; it ships those objects
+        # pre-assembled, which saves installing NASM on the runner.
+        export AWS_LC_SYS_PREBUILT_NASM=1
+
+        rustup target add "$TARGET"
+
+        if ! command -v cmake >/dev/null 2>&1; then
+          choco install cmake --installargs 'ADD_CMAKE_TO_PATH=System' --no-progress -y
+          export PATH="/c/Program Files/CMake/bin:$PATH"
+        fi
+
+        cargo build --release --package coding_agent_worker --target "$TARGET"
+      shell: bash
+      env:
+        TARGET: x86_64-pc-windows-msvc
+    - name: Package daemon
+      run: |
+        set -euo pipefail
+
+        # Package one built daemon binary as a release asset — and prove it is as
+        # self-contained as its platform allows before it ships. A binary that resolves
+        # a library at startup on the build runner and not on a user's machine is
+        # exactly the failure this whole pipeline exists to prevent, so it is checked
+        # here rather than assumed.
+
+        case "$TARGET" in
+          *-windows-*) executable="macrod.exe" ;;
+          *) executable="macrod" ;;
+        esac
+        binary="target/$TARGET/release/$executable"
+        if [ ! -x "$binary" ]; then
+          echo "no daemon binary at $binary" >&2
+          exit 1
+        fi
+
+        case "$TARGET" in
+          *-linux-musl)
+            # Statically linked: nothing may be left to resolve at run time. `ldd`
+            # exits non-zero with "not a dynamic executable" for a static binary, so
+            # a successful ldd that names shared objects is the failure case.
+            if ldd "$binary" 2>/dev/null | grep -q '=>'; then
+              echo "expected a static binary, but $binary still links:" >&2
+              ldd "$binary" >&2
+              exit 1
+            fi
+            ;;
+          *-apple-darwin)
+            # macOS has no static libSystem, so "self-contained" means nothing from
+            # outside the OS: a Homebrew or Nix-store path is one that will not exist
+            # on the machine that downloads this.
+            strays=$(otool -L "$binary" | tail -n +2 | awk '{ print $1 }' \
+              | grep -Ev '^(/usr/lib/|/System/Library/)' || true)
+            if [ -n "$strays" ]; then
+              echo "daemon links libraries that will not exist on a user's Mac:" >&2
+              echo "$strays" >&2
+              exit 1
+            fi
+            ;;
+          *-windows-msvc)
+            # Every DLL must come from Windows itself. Git Bash's ldd resolves the
+            # imports; one found outside C:\Windows (a vcruntime, a build-tool DLL)
+            # will not be on a user's machine.
+            imports=$(ldd "$binary")
+            strays=$(printf '%s\n' "$imports" | awk '$2 == "=>" { print $3 }' \
+              | grep -Eiv '^(/c/windows/|\?\?\?$)' || true)
+            if [ -n "$strays" ]; then
+              echo "daemon links DLLs that will not exist on a user's PC:" >&2
+              echo "$strays" >&2
+              exit 1
+            fi
+            ;;
+          *)
+            echo "no self-containment check defined for $TARGET" >&2
+            exit 1
+            ;;
+        esac
+
+        # It has to actually run, too — a binary that links cleanly and dies on its
+        # first instruction still ships broken. `--version` is the cheapest end-to-end
+        # proof, and the caller says whether this runner can execute this slice: the
+        # cross-built ones (aarch64 anywhere, x86_64 on an Apple Silicon runner) cannot.
+        if [ "$SMOKE_RUN" = "1" ]; then
+          "$binary" --version
+        else
+          echo "skipping smoke run: $TARGET does not execute on this runner"
+        fi
+
+        mkdir -p artifacts
+        stage=$(mktemp -d)
+        install -m 755 "$binary" "$stage/$executable"
+
+        # Every archive is published twice: under the tag, and under a name without
+        # it, which `releases/latest/download/<name>` serves — the URL the install
+        # scripts download from.
+        for name in "macrod-${SAFE_TAG}-${SLUG}" "macrod-${SLUG}"; do
+          case "$TARGET" in
+            *-windows-*)
+              archive="${name}.zip"
+              powershell.exe -NoProfile -NonInteractive -Command \
+                "Compress-Archive -Path '$(cygpath -w "$stage/$executable")' -DestinationPath '$(cygpath -w "artifacts/$archive")'"
+              ;;
+            *)
+              archive="${name}.tar.gz"
+              tar -czf "artifacts/$archive" -C "$stage" "$executable"
+              ;;
+          esac
+
+          # coreutils on Linux and Git Bash, BSD/perl on macOS.
+          (
+            cd artifacts
+            if command -v sha256sum >/dev/null 2>&1; then
+              sha256sum "$archive" >"$archive.sha256"
+            else
+              shasum -a 256 "$archive" >"$archive.sha256"
+            fi
+          )
+          echo "packaged $archive"
+        done
+        rm -rf "$stage"
+      shell: bash
+      env:
+        TARGET: x86_64-pc-windows-msvc
+        SLUG: windows-x86_64
+        SAFE_TAG: ${{ steps.metadata.outputs.safe_tag }}
+        SMOKE_RUN: '1'
+    - name: Upload macrod-windows-x86_64-${{ steps.metadata.outputs.safe_tag }} artifact
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: macrod-windows-x86_64-${{ steps.metadata.outputs.safe_tag }}
+        path: artifacts/*
+        if-no-files-found: error
+        retention-days: '30'
   publish-daemon:
     needs:
     - resolve-ref
@@ -726,7 +1028,8 @@ jobs:
     - build-daemon-linux-aarch64
     - build-daemon-macos-aarch64
     - build-daemon-macos-x86-64
-    if: '!cancelled() && needs.resolve-ref.result == ''success'' && (needs.build-daemon-linux-x86-64.result == ''success'' || needs.build-daemon-linux-aarch64.result == ''success'' || needs.build-daemon-macos-aarch64.result == ''success'' || needs.build-daemon-macos-x86-64.result == ''success'')'
+    - build-daemon-windows-x86-64
+    if: '!cancelled() && needs.resolve-ref.result == ''success'' && (needs.build-daemon-linux-x86-64.result == ''success'' || needs.build-daemon-linux-aarch64.result == ''success'' || needs.build-daemon-macos-aarch64.result == ''success'' || needs.build-daemon-macos-x86-64.result == ''success'' || needs.build-daemon-windows-x86-64.result == ''success'')'
     name: Upload Release Artifacts
     runs-on: ubuntu-latest
     permissions:

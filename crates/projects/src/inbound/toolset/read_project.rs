@@ -11,7 +11,7 @@ use model_entity::EntityType;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use super::{ChatCapabilities, DocumentCapabilities, ProjectCapabilities, ProjectToolContext};
+use super::{DocumentCapabilities, ProjectCapabilities, ProjectToolContext};
 
 /// The kind of an item inside a project.
 #[derive(Debug, Serialize, JsonSchema, Clone, Copy, PartialEq, Eq)]
@@ -19,8 +19,6 @@ use super::{ChatCapabilities, DocumentCapabilities, ProjectCapabilities, Project
 pub enum ProjectItemType {
     /// A document (includes tasks).
     Document,
-    /// An AI chat conversation.
-    Chat,
     /// A nested project.
     Project,
 }
@@ -43,9 +41,9 @@ pub struct ProjectItem {
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-impl From<Item> for ProjectItem {
-    fn from(item: Item) -> Self {
-        match item {
+impl ProjectItem {
+    fn from_item(item: Item) -> Option<Self> {
+        Some(match item {
             Item::Document(document) => Self {
                 id: document.document_id,
                 item_type: ProjectItemType::Document,
@@ -53,13 +51,7 @@ impl From<Item> for ProjectItem {
                 file_type: document.file_type,
                 updated_at: document.updated_at,
             },
-            Item::Chat(chat) => Self {
-                id: chat.id,
-                item_type: ProjectItemType::Chat,
-                name: chat.name,
-                file_type: None,
-                updated_at: chat.updated_at,
-            },
+            Item::Chat(_) => return None,
             Item::Project(project) => Self {
                 id: project.id,
                 item_type: ProjectItemType::Project,
@@ -67,7 +59,7 @@ impl From<Item> for ProjectItem {
                 file_type: None,
                 updated_at: project.updated_at,
             },
-        }
+        })
     }
 }
 
@@ -91,7 +83,7 @@ pub struct ReadProjectResponse {
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "ReadProject",
-    description = "List the direct contents of a project (shown as a folder in the app UI): its documents, AI chats, and nested projects. Requires view access to the project. Email threads filed into the project are not included."
+    description = "List the direct contents of a project (shown as a folder in the app UI): its documents and nested projects. Requires view access to the project. Email threads filed into the project are not included."
 )]
 pub struct ReadProject {
     /// The id of the project to read.
@@ -104,13 +96,11 @@ impl ToolAnnotated for ReadProject {
 }
 
 #[async_trait]
-impl<PSvc, ESvc, DSvc, CSvc, EmSvc> AsyncTool<ProjectToolContext<PSvc, ESvc, DSvc, CSvc, EmSvc>>
-    for ReadProject
+impl<PSvc, ESvc, DSvc, EmSvc> AsyncTool<ProjectToolContext<PSvc, ESvc, DSvc, EmSvc>> for ReadProject
 where
     PSvc: ProjectCapabilities,
     ESvc: EntityAccessService,
     DSvc: DocumentCapabilities,
-    CSvc: ChatCapabilities,
     EmSvc: MoveEntity + Send + Sync + 'static,
 {
     type Output = ReadProjectResponse;
@@ -118,7 +108,7 @@ where
     #[tracing::instrument(skip_all, fields(user_id=?request_context.user_id, project_id=?self.project_id), err)]
     async fn call(
         &self,
-        service_context: ServiceContext<ProjectToolContext<PSvc, ESvc, DSvc, CSvc, EmSvc>>,
+        service_context: ServiceContext<ProjectToolContext<PSvc, ESvc, DSvc, EmSvc>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         tracing::info!(params=?self, "Read project");
@@ -172,7 +162,7 @@ where
             parent_project_id: project.parent_id,
             items: items
                 .into_iter()
-                .map(|item| ProjectItem::from(item.item))
+                .filter_map(|item| ProjectItem::from_item(item.item))
                 .collect(),
         })
     }

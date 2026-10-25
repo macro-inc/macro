@@ -37,19 +37,17 @@ describe('sectionName', () => {
   it('numbers question sections and gates separately, as their cards do', () => {
     expect(sectionName(layout, 'about')).toBe('About you');
     expect(sectionName(layout, 'logistics')).toBe('Section 2');
-    expect(sectionName(layout, 'first-gate')).toBe('Screener 1');
-    expect(sectionName(layout, 'second-gate')).toBe('Screener 2');
+    expect(sectionName(layout, 'first-gate')).toBe('Gate 1');
+    expect(sectionName(layout, 'second-gate')).toBe('Gate 2');
   });
 });
 
 describe('routingLine', () => {
   it('names the gates checked on the way, and a trailing gate before submitting', () => {
     expect(routingLine(layout, 'about')).toBe(
-      'Check screener, then continue to section 2'
+      'Check gate, then continue to section 2'
     );
-    expect(routingLine(layout, 'logistics')).toBe(
-      'Check screener, then submit'
-    );
+    expect(routingLine(layout, 'logistics')).toBe('Check gate, then submit');
     expect(
       routingLine({ sections: [section('only', 'questions')] }, 'only')
     ).toBe('Submit form');
@@ -82,7 +80,7 @@ describe('booking step', () => {
   it('is named Booking until titled, and the last section submits then books', () => {
     expect(sectionName(booked, 'call')).toBe('Booking');
     expect(routingLine(booked, 'about')).toBe(
-      'Check screener, then submit and book a time'
+      'Check gate, then submit and book a time'
     );
     expect(
       routingLine(
@@ -108,7 +106,7 @@ describe('booking step', () => {
         names
       )
     ).toBe(
-      'The booking step comes last, after every question and screener. Move “Booking” to the end.'
+      'The booking step comes last, after every question and gate. Move “Booking” to the end.'
     );
     expect(
       layoutRefusalMessage(

@@ -4,6 +4,8 @@ import { err, ok } from 'neverthrow';
 import { createEffect, createSignal, on, Show } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
+vi.mock('@core/context/user', () => ({ useIsAuthenticated: () => () => true }));
+
 vi.mock('@core/block', () => ({
   createBlockSignal<T>() {
     const signal = createSignal<T>();

@@ -388,8 +388,16 @@ async fn rebind_work(
         SELECT link_id,$3,provider_id,is_import FROM email_message_reconciliation WHERE link_id = $1 AND generation = $2 ON CONFLICT DO NOTHING"#,link,old,new).execute(&mut **tx).await.map_err(failed)?;
     sqlx::query!(r#"UPDATE email_mailbox_drafts SET generation = $3,lease_id = NULL,lease_until = NULL,
         state = CASE WHEN state = 'running' THEN 'pending' ELSE state END,available_at = now(),updated_at = now() WHERE link_id = $1 AND generation = $2"#,link,old,new).execute(&mut **tx).await.map_err(failed)?;
-    sqlx::query!(r#"UPDATE email_mailbox_commands SET generation = $3,lease_id = NULL,lease_until = NULL,
-        status = CASE WHEN status = 'running' THEN 'pending' ELSE status END,available_at = now(),updated_at = now()
-        WHERE link_id = $1 AND generation = $2 AND status IN ('pending','running','confirming')"#,link,old,new).execute(&mut **tx).await.map_err(failed)?;
+    sqlx::query!(
+        r#"UPDATE email_mailbox_commands SET generation = $3,lease_id = NULL,lease_until = NULL,
+        status = 'pending',available_at = now(),updated_at = now()
+        WHERE link_id = $1 AND generation = $2 AND status IN ('pending','running','confirming')"#,
+        link,
+        old,
+        new
+    )
+    .execute(&mut **tx)
+    .await
+    .map_err(failed)?;
     Ok(())
 }

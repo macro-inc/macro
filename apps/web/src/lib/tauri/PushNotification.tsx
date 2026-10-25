@@ -5,15 +5,16 @@ import {
 } from '@core/auth/push-registration-lifecycle';
 import { hasLoginCookie } from '@core/util/cookies';
 import { fireAndForget } from '@core/util/fireAndForget';
-import type {
-  NotificationEvent,
-  NotificationRegistrationResult,
-} from '@inkibra/tauri-plugins/packages/tauri-plugin-notifications';
+import type { NotificationRegistrationResult } from '@inkibra/tauri-plugins/packages/tauri-plugin-notifications';
 import {
   type PlatformNotificationInterface,
   PlatformNotificationProvider,
-  triggerNotificationNavigation,
 } from '@notifications';
+import {
+  receiveNotificationTap,
+  setPendingNotificationNavigationId,
+} from '@notifications/notification-navigation-intent';
+import { endNotificationOpen } from '@notifications/notification-open-trace';
 import {
   fetchPushRecipient,
   registerPushDevice,
@@ -30,17 +31,19 @@ import {
   onCleanup,
 } from 'solid-js';
 import { createTauriNotificationInterface } from './notification';
-import { createPushApi, type PushEvent } from './push-api';
+import {
+  createPushApi,
+  type PushEvent,
+  releaseNotificationCover,
+} from './push-api';
 import { useExpectTauri } from './TauriProvider';
-
-function getNotificationId(payload: Record<string, unknown>) {
-  const value = payload.notificationId;
-  return typeof value === 'string' && value.length > 0 ? value : undefined;
-}
 
 function usePushNotifications(
   deviceType: 'android' | 'ios',
-  onPushNotification?: (event: NotificationEvent) => void
+  onPushNotification?: (
+    event: PushEvent,
+    acknowledge: (deliveryId: string) => Promise<void>
+  ) => boolean
 ) {
   const api = createPushApi(deviceType);
   // Bumped by every registration-changing action so an in-flight one can
@@ -139,10 +142,8 @@ function usePushNotifications(
     if (res.isErr()) throw new Error('failed to unregister device for push');
   }
 
-  // The native receiver only displays pushes addressed to this account, so
-  // Android needs the user id before it can be armed. iOS has no such gate.
+  // Bind both native receivers to the account that owns the registration.
   async function fetchRecipient(): Promise<string | null | undefined> {
-    if (deviceType !== 'android') return null;
     try {
       return await fetchPushRecipient();
     } catch (error) {
@@ -261,11 +262,14 @@ function usePushNotifications(
   }
 
   async function unregisterForLogout() {
+    setPendingNotificationNavigationId(undefined);
+    endNotificationOpen('logout');
     // The logged-out account's already-delivered notifications must not
     // linger in the system notification center for the next account to see.
     await Promise.all([
       clearDisplayedNotifications(),
       unregisterPushNotifications(false),
+      api.clearPending(),
     ]);
   }
 
@@ -306,7 +310,13 @@ function usePushNotifications(
   async function reconcileOnLaunch() {
     const epoch = registrationEpoch;
     try {
-      if (!hasLoginCookie() || pushDisabledByUser()) {
+      if (!hasLoginCookie()) {
+        // A tapped destination may still be awaiting sign-in. Explicit logout
+        // clears it through unregisterForLogout; startup must not discard it.
+        setPermission(undefined);
+        return;
+      }
+      if (pushDisabledByUser()) {
         setPermission(undefined);
         await configureRecipient(null, epoch);
         return;
@@ -355,14 +365,20 @@ function usePushNotifications(
   }
 
   async function handlePushEvent(event: PushEvent) {
-    if (disposed || !hasLoginCookie()) return;
+    if (disposed) return;
     try {
+      if (!hasLoginCookie()) {
+        onPushNotification?.(event, api.acknowledge);
+        await releaseNotificationCover();
+        return;
+      }
       if (event.type === 'TOKEN_REFRESH' || event.type === 'RESUME') {
         await syncPushRegistrations('resume');
         return;
       }
-      onPushNotification?.(event);
-      if (event.deliveryId) await api.acknowledge(event.deliveryId);
+      const pendingNavigation = onPushNotification?.(event, api.acknowledge);
+      if (event.deliveryId && !pendingNavigation)
+        await api.acknowledge(event.deliveryId);
     } catch (error) {
       console.error('push event handling failed', error);
     }
@@ -401,18 +417,7 @@ export function MaybePushNotificationRegistration(props: {
     );
   }
 
-  const push = usePushNotifications(os, (event) => {
-    const notificationId = getNotificationId(event.payload);
-
-    const tapped =
-      event.type === 'BACKGROUND_TAP' || event.type === 'FOREGROUND_TAP';
-
-    // Only navigate on explicit user interaction.
-    if (!tapped) return;
-    if (!notificationId) return;
-
-    triggerNotificationNavigation(notificationId);
-  });
+  const push = usePushNotifications(os, receiveNotificationTap);
 
   // now we compose the standard tauri notif plugin with the push notification plugin
   function curriedTauriPushNotification(

@@ -130,6 +130,7 @@ export const CACHE_OWNER_EVENTS = [
   'graceful-drain-started',
   'graceful-drain-completed',
   'navigation-departure',
+  'coordinator-restarted',
   'abrupt-loss',
   'replacement',
   'multiple-owner-detected',
@@ -530,7 +531,7 @@ export function operationCategoryForRequest(
       'inspect-mutations',
       () => 'lifecycle' as const
     )
-    .exhaustive();
+    .exhaustive(() => 'lifecycle' as const);
 }
 
 export function isStorageTransactionRequest(

@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   revision: 0,
   connect: vi.fn(),
   issue: vi.fn(),
+  reportConnected: vi.fn(),
   notify: vi.fn(),
 }));
 vi.mock('@queries/pipedream-connectors', () => ({
@@ -25,8 +26,8 @@ vi.mock('@queries/pipedream-connectors', () => ({
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { alert: mocks.notify },
 }));
-vi.mock('./prompt-action', () => ({
-  promptActionOf: (prompt: string) => ({ type: 'prompt', prompt }),
+vi.mock('@queries/agent-session/app-connections', () => ({
+  reportAgentSessionAppConnected: mocks.reportConnected,
 }));
 vi.mock('../context/AgentSessionContext', () => ({
   useAgentSession: () => ({
@@ -58,11 +59,11 @@ beforeEach(() => {
   mocks.viewer = 'owner';
   mocks.turn = 'idle';
   mocks.revision = 0;
-  mocks.issue.mockResolvedValue({ isErr: () => false });
+  mocks.reportConnected.mockResolvedValue({ isErr: () => false });
 });
 afterEach(cleanup);
 
-it('registers then issues exactly one agent prompt without touching the composer', async () => {
+it('reports the connection once, without prompting or touching the composer', async () => {
   mocks.connect.mockResolvedValue('connected');
   render(() => (
     <AgentConnections>
@@ -75,12 +76,12 @@ it('registers then issues exactly one agent prompt without touching the composer
   });
   fireEvent.click(screen.getByRole('button'));
   await waitFor(() =>
-    expect(mocks.issue).toHaveBeenCalledExactlyOnceWith({
-      type: 'prompt',
-      prompt:
-        'I connected Notion. Continue my previous request using the newly available tools.',
-    })
+    expect(mocks.reportConnected).toHaveBeenCalledExactlyOnceWith(
+      'agent-session',
+      'notion'
+    )
   );
+  expect(mocks.issue).not.toHaveBeenCalled();
   expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe(
     'unsent draft'
   );
@@ -98,7 +99,7 @@ it('cancellation never prompts the agent', async () => {
       false
     )
   );
-  expect(mocks.issue).not.toHaveBeenCalled();
+  expect(mocks.reportConnected).not.toHaveBeenCalled();
 });
 it('collaborators cannot connect their account on behalf of the session owner', () => {
   mocks.viewer = 'collaborator';
@@ -111,7 +112,7 @@ it('collaborators cannot connect their account on behalf of the session owner', 
 });
 it('surfaces a rejected continuation', async () => {
   mocks.connect.mockResolvedValue('connected');
-  mocks.issue.mockResolvedValue({ isErr: () => true });
+  mocks.reportConnected.mockResolvedValue({ isErr: () => true });
   render(() => (
     <AgentConnections>
       <Button />

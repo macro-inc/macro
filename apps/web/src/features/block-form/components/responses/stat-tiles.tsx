@@ -17,7 +17,7 @@ export function StatTiles(props: {
               <Show
                 when={!props.loading}
                 fallback={
-                  <span class="inline-block h-6 w-10 animate-pulse rounded bg-hover" />
+                  <span class="skeleton-shimmer inline-block h-6 w-10 rounded-full bg-skeleton" />
                 }
               >
                 {tile.value}

@@ -980,11 +980,11 @@ type ComposeFrame = {
 
 const COMPOSE_RECIPIENT: ComposePill = {
   kind: 'person',
-  label: 'Dana Whitfield',
-  initials: 'DW',
+  label: 'Valentina',
+  initials: 'V',
 };
 const COMPOSE_PDF: ComposePill = { kind: 'doc', label: 'Pitch memo.pdf' };
-const COMPOSE_DOC: ComposePill = { kind: 'ref', label: 'Q3 launch plan' };
+const COMPOSE_DOC: ComposePill = { kind: 'ref', label: 'Website launch plan' };
 
 // The app's per-kind object hues (--color-note / --color-pdf in the editor):
 // the accent with its lightness and chroma kept, rotated to violet for a
@@ -1629,7 +1629,7 @@ export function ComposeMentionGraphic() {
     <div
       ref={frameEl}
       role="img"
-      aria-label="A Macro email being composed: typing an @mention adds Dana Whitfield to the recipients, and two more @mentions attach a document and a PDF inline, before the message is sent."
+      aria-label="A Macro email being composed: typing an @mention adds Valentina to the recipients, and two more @mentions attach a document and a PDF inline, before the message is sent."
     >
       <ComposeMentionScene t={t} />
     </div>
@@ -2468,7 +2468,7 @@ const inboxItems: InboxItem[] = [
       unread: true,
       primary: 'Owen Bales',
       lead: 'mentioned you in',
-      boldSecondary: 'Q3 launch plan',
+      boldSecondary: 'Website launch plan',
       time: '9:14',
     },
   },
@@ -2765,7 +2765,7 @@ const unifiedItems: UItem[] = [
   {
     kind: 'row',
     type: 'pr',
-    who: 'Dana Whitfield',
+    who: 'Valentina',
     subject: 'Adapt dark theme and input focus styling for mobile #4158',
     preview:
       'adapts the dark-theme tokens and input focus rings so they hold up on smaller screens',
@@ -3520,7 +3520,11 @@ const kbRows: {
   },
   { who: 'Marcus Lee', subject: 'Re: Q3 roadmap draft', time: 'Jun 15' },
   { who: 'Mom', subject: 'dinner sunday?', time: 'Jun 14', unread: true },
-  { who: 'Dana Whitfield', subject: 'Contract countersigned', time: 'Jun 9' },
+  {
+    who: 'Valentina',
+    subject: 'Contract countersigned',
+    time: 'Jun 9',
+  },
   { who: 'Rachel Beckerman', subject: 'Letters to the kids', time: 'Jun 8' },
 ];
 

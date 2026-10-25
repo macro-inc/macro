@@ -20,7 +20,10 @@ use crate::domain::models::{
 #[derive(Debug, Clone)]
 pub enum CreateSource {
     /// A new database for the caller.
-    NewDatabase,
+    NewDatabase {
+        /// Keep the form, and the database made for it, out of Drive.
+        is_hidden_in_drive: bool,
+    },
     /// An existing table of the database the receipt names. Attaching a
     /// form to an existing table takes the database's Owner: the form's
     /// editors gain Edit on the database through it, which only the

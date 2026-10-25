@@ -17,6 +17,8 @@ DMs, and the shared message store other domains discuss things on.
 - `src/inbound/toolset.rs`: AI tools over channels (feature `ai_tools`).
 - `src/outbound/pg_channels_repo.rs`, `src/outbound/connection_gateway_realtime.rs`:
   storage and realtime delivery adapters.
+- `src/outbound/channel_name.rs`: the viewer-dependent channel naming rule —
+  batch name resolution and the SQL name search behind `name_search`.
 
 ## Scope
 
@@ -42,9 +44,15 @@ DMs, and the shared message store other domains discuss things on.
   `src/outbound/connection_gateway_realtime.rs`.
 - Add a channel-message AI tool: `src/inbound/toolset.rs` (feature `ai_tools`).
 
+## Tool contracts
+
+- `ShareWithChannel` exposes agent sessions and omits legacy chat targets; the domain retains historical entity support.
+- The channel read tools return `senderName` beside `senderId`: the name the app shows (imported author, bot, call guest, or the person's profile name from `get_user_display_names`). One lookup per call; a failed lookup omits names instead of failing the read.
+
 ## Checks
 
-- `cargo test -p channels` (`SQLX_OFFLINE` unset).
+- `cargo test -p channels --all-features` (`SQLX_OFFLINE` unset); the
+  repository tests are feature-gated and skipped without it.
 
 ## Gotchas
 
@@ -52,6 +60,14 @@ DMs, and the shared message store other domains discuss things on.
   don't collapse the two email templates.
 - Legacy document/CRM/channel message paths were removed (#6732); don't
   reintroduce a parallel message path outside this crate's domain service.
+- Attachment references from comments (messages on documents, initiatives, CRM
+  records, calls) are authorized in `ChannelServiceImpl::get_attachment_references`
+  through the `CommentParentAccess` port; the repo returns every parent. A
+  service built without `with_comment_parent_access` withholds them.
+- The channel list's unseen/seen filter matches a set built once from the
+  user's notifications (`= ANY(ARRAY(...))`). A per-channel `EXISTS` or plain
+  `IN` walks every candidate channel's notification history; that was ~24% of
+  the prod read replica's buffer hits.
 
 ## Related
 

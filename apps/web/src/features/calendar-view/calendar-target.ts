@@ -1,5 +1,9 @@
 import { parseLocalDate } from '@app/features/calendar/utils/calendar-date';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { Telemetry } from '@macro-inc/observability';
+import { syncCalendarOccurrences } from '@queries/calendar/occurrences';
 import type { CalendarOccurrenceItem } from '@service-storage/generated/schemas/calendarOccurrenceItem';
+import { type Accessor, createEffect, createMemo } from 'solid-js';
 import type { CalendarFocusTarget } from './calendar-focus-target';
 import type { CalendarFocusRequest } from './types';
 
@@ -39,4 +43,55 @@ export function resolveCalendarTarget(
     requestId: request.requestId,
     requestedAt: request.requestedAt,
   };
+}
+
+/** The locator occurrence query, as far as target resolution reads it. */
+interface CalendarLocatorQuery {
+  readonly isSuccess: boolean;
+  readonly data?: { items: CalendarOccurrenceItem[] };
+}
+
+/**
+ * The occurrence the calendar is aimed at, resolved from the locator query
+ * over the request's range.
+ *
+ * The tab's calendar data can predate the target: a copy just added from a
+ * shared-event card while no calendar was open reaches a cached week only on
+ * a later sync, long after the request has expired. When the locator answers
+ * without the event, the calendar data is brought forward once per request
+ * (a delta sync, waiting for a cache that is still starting, then a refetch),
+ * so the target can still land.
+ */
+export function createCalendarFocusTarget(
+  request: Accessor<CalendarFocusRequest | undefined>,
+  locator: CalendarLocatorQuery,
+  refreshCalendar: () => Promise<unknown> = syncCalendarOccurrences
+): Accessor<CalendarFocusTarget | undefined> {
+  // A cold `.data` read suspends the nearest <Suspense>, which is the one
+  // wrapping each calendar page: the first aim of a session enables this
+  // query, so reading it unguarded blanks the whole grid for the length of
+  // the fetch and remounts it. There is no target to resolve until the
+  // occurrences land anyway.
+  const target = createMemo(() => {
+    const current = request();
+    if (!current || !locator.isSuccess) return undefined;
+    return resolveCalendarTarget(locator.data?.items ?? [], current);
+  });
+
+  let refreshedRequestId: number | undefined;
+  createEffect(() => {
+    const current = request();
+    if (!current || !locator.isSuccess || target()) return;
+    if (refreshedRequestId === current.requestId) return;
+    refreshedRequestId = current.requestId;
+    fireAndForget(
+      Telemetry.span('calendar.focus_target_refresh', async (span) => {
+        span.setAttr('calendar.event_id', current.eventId);
+        await refreshCalendar();
+      }),
+      'calendar-target'
+    );
+  });
+
+  return target;
 }

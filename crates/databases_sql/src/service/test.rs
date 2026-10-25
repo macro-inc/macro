@@ -622,6 +622,7 @@ async fn a_read_answers_typed_cells_with_what_renders_them() {
     assert_eq!(
         outcome.result.as_ref().unwrap(),
         &ResultSet {
+            source_table: Some(GUESTS),
             columns: vec![
                 ResultColumn {
                     name: "Name".into(),
@@ -1281,3 +1282,8 @@ async fn schema_version_conflicts_keep_the_retry_signal() {
 }
 
 mod scopes;
+
+#[cfg(feature = "inbound")]
+mod http;
+
+mod query_contract;

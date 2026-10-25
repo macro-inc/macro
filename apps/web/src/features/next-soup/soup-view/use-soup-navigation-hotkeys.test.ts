@@ -337,6 +337,39 @@ describe('useSoupNavigationHotkeys', () => {
     dispose();
   });
 
+  it('keeps detail navigation without reading the unmounted list virtualizer', () => {
+    const virtualizer = vi.fn(() => undefined);
+    const { soup, dispose, disposeView } = createRoot((dispose) => {
+      const slots = createOwnedSlots();
+      vi.mocked(withSplitPanelOwner).mockImplementation(slots.replace);
+      const soup = createSoupState();
+      setGroupedRows(soup);
+      const disposeView = createRoot((disposeView) => {
+        useSoupNavigationHotkeys({
+          scopeId: 'test-scope',
+          soup,
+          splitHandle: createSplitHandleStub(),
+          virtualizerHandle: virtualizer,
+        });
+        return disposeView;
+      });
+      return { soup, dispose, disposeView };
+    });
+    try {
+      handlerFor('j')();
+      expect(virtualizer).toHaveBeenCalled();
+      disposeView();
+      virtualizer.mockClear();
+      handlerFor('j')();
+      expect(soup.focus.id()).toBe('a2');
+      handlerFor('k')();
+      expect(soup.focus.id()).toBe('a1');
+      expect(virtualizer).not.toHaveBeenCalled();
+    } finally {
+      dispose();
+    }
+  });
+
   it('arrow keys share the header-skipping navigation', () => {
     const { soup, dispose } = setupHotkeys();
     soup.focus.set('a2');

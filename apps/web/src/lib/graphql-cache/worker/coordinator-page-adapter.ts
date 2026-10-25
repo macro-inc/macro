@@ -24,6 +24,7 @@ import {
 import {
   createEffectWorkerTransport,
   type EffectWorkerTransport,
+  WorkerRestartedError,
 } from './effect-worker-transport';
 import {
   listOpfsRootNames,
@@ -471,7 +472,11 @@ export class CacheCoordinatorPageAdapter {
         },
         onError: (error) => {
           this.failTerminal(
-            new Error(`coordinator Effect transport failed: ${error.message}`)
+            error instanceof WorkerRestartedError
+              ? error
+              : new Error(
+                  `coordinator Effect transport failed: ${error.message}`
+                )
           );
         },
         closeEndpoint: () => this.closePort(worker.port),

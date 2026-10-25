@@ -209,6 +209,19 @@ describe('makeGraphqlSoupInput', () => {
     });
   });
 
+  it('groups by entity type when a newer build saved a grouping this one does not know', () => {
+    const fromNewerBuild = JSON.parse('{"type":"assignee"}');
+    const input = makeGraphqlGroupedSoupInput({
+      params: { limit: 100, sort_method: 'updated_at' },
+      body: compileToAst(queryStateFrom({ include: { documentDone: false } })),
+      groupBy: fromNewerBuild,
+    });
+
+    expect(input).toMatchObject({
+      initial: { groupBy: { field: 'ENTITY_TYPE' } },
+    });
+  });
+
   it('maps grouped cursor continuations to GraphQL input', () => {
     expect(
       makeGraphqlGroupedSoupContinuationInput({
@@ -413,6 +426,51 @@ describe('makeGraphqlSoupInput', () => {
     expect(() =>
       makeInput({ include: { fileAssoc: ['assoc:unknown'] } })
     ).toThrow('unknown file association');
+  });
+
+  it('balances clause chains the server would reject as too deep', () => {
+    // Mirrors graphql_soup_filter_input::validate_json_bounds: the filters
+    // value is level 1 and every nested value, scalars included, adds one.
+    const serverDepth = (value: unknown): number =>
+      value && typeof value === 'object'
+        ? 1 + Math.max(0, ...Object.values(value).map(serverDepth))
+        : 1;
+    const channelIds = (input: ReturnType<typeof makeInput>) =>
+      [...JSON.stringify(input).matchAll(/"channelId":"([^"]+)"/g)].map(
+        (found) => found[1]
+      );
+
+    for (const count of [31, 32, 500]) {
+      const ids = Array.from(
+        { length: count },
+        (_, index) => `channel-${index}`
+      );
+      const input = makeInput({ include: { channelId: ids } });
+      expect(serverDepth(input.initial?.filters)).toBeLessThanOrEqual(64);
+      expect(channelIds(input)).toEqual(ids);
+    }
+  });
+
+  it('keeps the shape of clause chains that already fit the depth limit', () => {
+    expect(
+      makeInput({ include: { channelId: ['first', 'second', 'third'] } })
+    ).toMatchObject({
+      initial: {
+        filters: {
+          channelFilter: {
+            or: {
+              left: { literal: { channelId: 'first' } },
+              right: {
+                or: {
+                  left: { literal: { channelId: 'second' } },
+                  right: { literal: { channelId: 'third' } },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
   });
 
   it('preserves the stable favorites constraint without expanding entity IDs', () => {

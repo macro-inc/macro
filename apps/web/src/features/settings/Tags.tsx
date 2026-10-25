@@ -22,7 +22,7 @@ import { parseTagNameConflict } from '@service-properties/client';
 import type { PropertyOptionResponse } from '@service-properties/generated/schemas/propertyOptionResponse';
 import type { TagScope } from '@service-properties/generated/schemas/tagScope';
 import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
-import { Button, Dialog, Panel, Tooltip } from '@ui';
+import { Button, Dialog, Panel } from '@ui';
 import { createMemo, createSignal, For, type JSX, Show } from 'solid-js';
 import { SettingsCard, SettingsPage, SettingsSection } from './primitives';
 
@@ -114,49 +114,46 @@ function TagListSection(props: {
                       <div class="flex shrink-0 items-center gap-1">
                         <Show when={props.onShare}>
                           {(onShare) => (
-                            <Tooltip label="Share with team">
-                              <button
-                                type="button"
-                                aria-label={`Share ${optionLabel(option)} with team`}
-                                class="flex size-7 shrink-0 items-center justify-center rounded-md text-ink-extra-muted outline-none hover:bg-hover hover:text-ink focus-visible:border focus-visible:border-accent disabled:opacity-30"
-                                disabled={
-                                  props.deleting ||
-                                  props.sharingOptionId !== undefined
-                                }
-                                onClick={() => onShare()(tag())}
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              label={`Share ${optionLabel(option)} with team`}
+                              tooltip="Share with team"
+                              disabled={
+                                props.deleting ||
+                                props.sharingOptionId !== undefined
+                              }
+                              onClick={() => onShare()(tag())}
+                            >
+                              <Show
+                                when={props.sharingOptionId === option.id}
+                                fallback={<UsersIcon class="size-4" />}
                               >
-                                <Show
-                                  when={props.sharingOptionId === option.id}
-                                  fallback={<UsersIcon class="size-4" />}
-                                >
-                                  <SpinnerIcon class="size-4 animate-spin" />
-                                </Show>
-                              </button>
-                            </Tooltip>
+                                <SpinnerIcon class="size-4 animate-spin" />
+                              </Show>
+                            </Button>
                           )}
                         </Show>
-                        <Tooltip label="Edit tag">
-                          <button
-                            type="button"
-                            aria-label={`Edit ${optionLabel(option)}`}
-                            class="flex size-7 shrink-0 items-center justify-center rounded-md text-ink-extra-muted outline-none hover:bg-hover hover:text-ink focus-visible:border focus-visible:border-accent"
-                            disabled={props.deleting}
-                            onClick={() => props.onEdit(tag())}
-                          >
-                            <PencilIcon class="size-4" />
-                          </button>
-                        </Tooltip>
-                        <Tooltip label="Delete tag">
-                          <button
-                            type="button"
-                            aria-label={`Delete ${optionLabel(option)}`}
-                            class="flex size-7 shrink-0 items-center justify-center rounded-md text-ink-extra-muted outline-none hover:bg-failure/10 hover:text-failure focus-visible:border focus-visible:border-failure disabled:opacity-30"
-                            disabled={props.deleting}
-                            onClick={() => props.onDelete(tag())}
-                          >
-                            <TrashIcon class="size-4" />
-                          </button>
-                        </Tooltip>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          label={`Edit ${optionLabel(option)}`}
+                          tooltip="Edit tag"
+                          disabled={props.deleting}
+                          onClick={() => props.onEdit(tag())}
+                        >
+                          <PencilIcon class="size-3.5 touch:size-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          label={`Delete ${optionLabel(option)}`}
+                          tooltip="Delete tag"
+                          disabled={props.deleting}
+                          onClick={() => props.onDelete(tag())}
+                        >
+                          <TrashIcon class="size-3.5 touch:size-4" />
+                        </Button>
                       </div>
                     );
                   }}

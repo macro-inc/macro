@@ -2,4 +2,4 @@
 
 > **ReviewItemStatus** = `"pending"` \| `"submitting"` \| `"completed"` \| `"dismissed"` \| `"unknown"`
 
-A review item never retries an ambiguous external result automatically.
+Review item state, shared with notification consumers.

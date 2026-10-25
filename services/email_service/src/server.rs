@@ -317,6 +317,12 @@ pub async fn run() -> anyhow::Result<()> {
             redis_client.as_ref().clone(),
             sqs_client.as_ref().clone(),
             macro_event_broker.clone(),
+            std::sync::Arc::new(contacts::domain::service::SqsContactsIngress {
+                queue: contacts::outbound::ingress::SqsContactsQueue::new(
+                    aws_sdk_sqs::Client::new(&aws_config),
+                    macro_queues::ContactsQueue::new().to_string(),
+                ),
+            }),
         )),
         attachment_reads: Arc::new(email::domain::attachment_access::AttachmentReadService {
             repository: EmailPgRepo::new(db.clone()),

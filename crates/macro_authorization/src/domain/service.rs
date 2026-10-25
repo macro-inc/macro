@@ -11,7 +11,7 @@ use tracing::Level;
 use super::{
     models::{
         BotActingUserClaims, BotAuthentication, BotScope, HarnessAuthentication,
-        InternalAuthConfig, InternalIdentityClaims, MacroAuthorizationError,
+        InternalAuthConfig, InternalIdentityClaims, MacroAuthorizationError, ValidatedIdentity,
     },
     ports::{
         BotAuthorizer, HarnessAuthorizer, JwtValidator, MacroAuthorizationService,
@@ -153,6 +153,14 @@ where
             permissions: identity.permissions,
             organization_id: identity.organization_id,
         })
+    }
+
+    #[tracing::instrument(skip_all, err(level = Level::DEBUG))]
+    async fn authorize_identity(
+        &self,
+        jwt: &str,
+    ) -> Result<ValidatedIdentity, Report<MacroAuthorizationError>> {
+        self.validator.validate(jwt)
     }
 
     #[tracing::instrument(

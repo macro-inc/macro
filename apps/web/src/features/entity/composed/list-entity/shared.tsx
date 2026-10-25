@@ -129,6 +129,8 @@ const ListLayoutContext = createContext<ListLayoutContextValue>();
 export function ListLayoutProvider(props: {
   ref: Accessor<HTMLElement | undefined>;
   narrowLayout?: NarrowLayoutVariant;
+  /** Responsive rows have a nonzero width and their layout can be restored. */
+  onMeasured?: () => void;
   children: JSX.Element;
 }) {
   const [isWide, setIsWide] = createSignal(true);
@@ -137,7 +139,9 @@ export function ListLayoutProvider(props: {
     const el = props.ref();
     if (!el) return;
     const observer = new ResizeObserver((entries) => {
-      setIsWide((entries[0]?.contentRect.width ?? 0) >= WIDE_BREAKPOINT);
+      const width = entries[0]?.contentRect.width ?? 0;
+      setIsWide(width >= WIDE_BREAKPOINT);
+      if (width > 0) props.onMeasured?.();
     });
     observer.observe(el);
     onCleanup(() => observer.disconnect());

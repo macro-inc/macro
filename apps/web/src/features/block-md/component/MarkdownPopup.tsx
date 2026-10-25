@@ -54,6 +54,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { getScrollParentElement } from '@core/util/scrollParent';
 import type { NodeIdMappings } from '@macro-inc/lexical-core';
 import { $getId } from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
+import { Telemetry } from '@macro-inc/observability';
 import ChatTeardrop from '@phosphor/chat-teardrop.svg';
 import GridIcon from '@phosphor/grid-four.svg';
 import CheckIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid';
@@ -414,7 +415,13 @@ export function MarkdownPopup(props: {
   const handleShare = async () => {
     const location = editor.read(() => $getLocationUrl('md', blockId));
     if (!location) return;
-    await navigator.clipboard.writeText(location);
+    try {
+      await navigator.clipboard.writeText(location);
+    } catch (error) {
+      Telemetry.error(error, { surface: 'markdown-editor' });
+      toast.failure('Could not copy link');
+      return;
+    }
     // Desktop gets the inline check-icon flip; on touch the toolbar is
     // small and easily dismissed, so confirm with a toast as well.
     if (isTouchDevice()) toast.success('Link copied to clipboard');
@@ -599,7 +606,7 @@ export function MarkdownPopup(props: {
             <Toolbar.Button
               size="icon-sm"
               depth={3}
-              onClick={() => fireAndForget(handleShare(), 'block-md')}
+              onClick={() => fireAndForget(handleShare(), 'markdown-editor')}
               tooltip="Copy link to snippet"
               label="Copy link to snippet"
             >
@@ -729,9 +736,9 @@ export function MarkdownPopup(props: {
             onConvertToTasks={handleConvertToTasks}
             onConvertListToTable={handleConvertListToTable}
             onOpenComment={handleShowComment}
-            onShare={() => fireAndForget(handleShare(), 'block-md')}
+            onShare={() => fireAndForget(handleShare(), 'markdown-editor')}
             onInsertComment={handleInsertComment}
-            onPaste={() => fireAndForget(handlePaste(), 'block-md')}
+            onPaste={() => fireAndForget(handlePaste(), 'markdown-editor')}
             onEditWithAi={handleOpenAiEditDrawer}
           />
         </GeneralizedPopup>

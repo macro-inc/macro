@@ -335,7 +335,8 @@ export interface BlockComponentProps extends Record<BlockName, ObjectLike> {
 }
 
 interface BlockComponentLoadData extends Record<BlockName, ObjectLike> {
-  canvas: DocumentBlockData & DssFileData;
+  canvas: DocumentBlockData &
+    ({ shared: true; dssFile?: never } | (DssFileData & { shared?: false }));
   pdf: DocumentBlockData;
   video: DocumentBlockData;
   md: DocumentBlockData &

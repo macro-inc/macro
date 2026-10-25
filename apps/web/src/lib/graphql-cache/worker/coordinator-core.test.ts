@@ -738,6 +738,35 @@ describe('CoordinatorCore', () => {
     ]);
   });
 
+  it('retries exhausted asset bootstrap from a new host without resetting persisted writes', () => {
+    const core = new CoordinatorCore('scope');
+    core.registerTab('failed-host');
+    core.ownerLost('failed-host', 1, 'Failed to fetch');
+    expect(core.terminalFailure('bootstrap exhausted')).toEqual([
+      {
+        kind: 'terminal-failure',
+        error: 'bootstrap exhausted',
+        storageUntouched: true,
+      },
+    ]);
+    expect(core.registerTab('replacement')).toEqual([
+      {
+        kind: 'elect-owner',
+        tabId: 'replacement',
+        ownerEpoch: 2,
+        databaseAction: 'open-existing',
+      },
+    ]);
+    ready(core, 'replacement', 2, 'opened-existing');
+    expect(core.request('failed-host', { id: 7, kind: 'clear' })).toEqual([
+      expect.objectContaining({
+        kind: 'reject-request',
+        errorCode: 'owner-lock-unavailable',
+      }),
+    ]);
+    expect(core.snapshot().activeOwnerCount).toBe(1);
+  });
+
   it('makes retry exhaustion terminal for current and future tabs', () => {
     const core = new CoordinatorCore('scope');
     core.registerTab('tab-a');

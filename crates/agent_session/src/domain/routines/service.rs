@@ -141,6 +141,8 @@ where
                         profile: Some(profile),
                         instructions: None,
                         model: selection.model.clone(),
+                        source: command.source,
+                        visibility: command.visibility,
                     })
                     .await
             }
@@ -152,6 +154,8 @@ where
                         owner: selection.owner,
                         repo_url: None,
                         model: selection.model.clone(),
+                        source: command.source,
+                        visibility: command.visibility,
                     })
                     .await
             }

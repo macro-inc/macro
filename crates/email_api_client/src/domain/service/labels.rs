@@ -12,14 +12,12 @@ where
     L: ProviderRateLimiter,
 {
     /// Lists all labels for a linked mailbox.
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip(self), fields(retry_count = 0))]
     pub async fn list_labels(&self, link_id: Uuid) -> Result<Vec<Label>, EmailApiError> {
-        let access_token = self.prepare(link_id, ApiOperationKind::ListLabels).await?;
-
-        self.repository
-            .list_labels(&access_token, link_id)
-            .await
-            .inspect_err(log_operation_error)
+        self.read_with_token(link_id, ApiOperationKind::ListLabels, |token| async move {
+            self.repository.list_labels(&token, link_id).await
+        })
+        .await
     }
 
     /// Creates a user label.

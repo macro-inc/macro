@@ -58,7 +58,7 @@ export function answerProblem(
       { type: 'relation' },
       () => false
     )
-    .exhaustive();
+    .exhaustive(() => false);
   return match(value)
     .with({ type: 'number' }, ({ value: number }) =>
       Number.isFinite(number) ? undefined : 'Enter a number.'
@@ -97,7 +97,7 @@ export function answerProblem(
       { type: 'clear' },
       () => undefined
     )
-    .exhaustive();
+    .exhaustive(() => 'Update Macro to answer this question.');
 }
 
 /** Every problem with a section's answers, in question order. */

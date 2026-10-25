@@ -1,5 +1,6 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableGraphqlSoup } from '@core/constant/featureFlags';
+import { useIsAuthenticated } from '@core/context/user';
 import { catchToResult, throwOnErr } from '@core/util/result';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import {
@@ -126,10 +127,12 @@ const restHistoryQueryOptions = {
 };
 
 export function useHistoryQuery() {
+  const authenticated = useIsAuthenticated();
   const graphqlSoupFlag = useFeatureFlag(enableGraphqlSoup);
   const activeQueryClient = useQueryClient();
   const graphqlCacheHost = () => {
-    if (!graphqlSoupFlag().enabled) return undefined;
+    if (authenticated() !== true || !graphqlSoupFlag().enabled)
+      return undefined;
     const cacheHost = getGraphqlSoupCacheHost();
     return cacheHost?.disabled ? undefined : cacheHost;
   };
@@ -157,9 +160,12 @@ export function useHistoryQuery() {
     HistoryQueryKey
   >(() => {
     const cacheHost = graphqlCacheHost();
-    return cacheHost
-      ? cachedGraphqlHistoryQueryOptions(cacheHost)
-      : restHistoryQueryOptions;
+    return {
+      ...(cacheHost
+        ? cachedGraphqlHistoryQueryOptions(cacheHost)
+        : restHistoryQueryOptions),
+      enabled: authenticated() === true,
+    };
   });
 }
 

@@ -22,6 +22,15 @@ const callRecordingBucket = createBucket({
   bucketName: `macro-call-recording-${stack}`,
   transferAcceleration: stack === 'prod',
   enableVersioning: false,
+  lifecycleRules: [
+    {
+      id: `intelligent-tiering-${stack}`,
+      enabled: true,
+      transitions: [{ days: 0, storageClass: 'INTELLIGENT_TIERING' }],
+      // LiveKit egress uploads multipart and can die mid-recording
+      abortIncompleteMultipartUploadDays: 3,
+    },
+  ],
   exposeHeaders: ['Content-Length', 'Content-Range'],
   tags,
 });

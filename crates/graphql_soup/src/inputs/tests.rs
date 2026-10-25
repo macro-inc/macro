@@ -68,6 +68,79 @@ fn maps_soup_cursor_continuation() {
 }
 
 #[test]
+fn maps_notified_at_to_notified_soup_request() {
+    let request = SoupInput::Initial(Box::new(SoupInitialInput {
+        limit: Some(500),
+        expand: None,
+        sort_method: Some(GraphqlSimpleSortMethod::NotifiedAt),
+        email_view: None,
+        filters: None,
+        sort_direction: None,
+    }))
+    .into_request(test_macro_user_id(), vec![])
+    .unwrap();
+
+    assert_eq!(request.limit, 500);
+    assert!(matches!(request.cursor, SoupQuery::Notified(_)));
+}
+
+#[test]
+fn continues_a_notified_cursor_as_a_notified_request() {
+    let cursor = Base64Str::encode_json(CursorWithValAndFilter {
+        id: "00000000-0000-0000-0000-000000000001".to_owned(),
+        limit: 500,
+        val: CursorVal {
+            sort_type: NotifiedAt,
+            last_val: chrono::DateTime::default(),
+        },
+        filter: item_filters::ast::EntityFilterAst::default(),
+    });
+    let request = SoupInput::Continuation(SoupContinuationInput {
+        cursor: cursor.to_string(),
+        expand: None,
+        email_view: None,
+        sort_direction: None,
+    })
+    .into_request(test_macro_user_id(), vec![])
+    .unwrap();
+
+    assert_eq!(request.limit, 500);
+    assert!(matches!(request.cursor, SoupQuery::Notified(_)));
+}
+
+#[test]
+fn rejects_ascending_notified_at() {
+    let result = SoupInput::Initial(Box::new(SoupInitialInput {
+        limit: None,
+        expand: None,
+        sort_method: Some(GraphqlSimpleSortMethod::NotifiedAt),
+        email_view: None,
+        filters: None,
+        sort_direction: Some(GraphqlSortDirection::Asc),
+    }))
+    .into_request(test_macro_user_id(), vec![]);
+
+    assert!(result.is_err());
+}
+
+#[test]
+fn rejects_grouped_notified_at() {
+    let result = GroupedSoupInput::Initial(Box::new(GroupedSoupInitialInput {
+        group_by: GraphqlGroupByInput {
+            field: GraphqlGroupByField::EntityType,
+            property_definition_id: None,
+            entity_type: None,
+        },
+        limit: None,
+        sort_method: Some(GraphqlSimpleSortMethod::NotifiedAt),
+        filters: None,
+    }))
+    .into_request(test_macro_user_id());
+
+    assert!(result.is_err());
+}
+
+#[test]
 fn maps_initial_grouped_input() {
     let request = GroupedSoupInput::Initial(Box::new(GroupedSoupInitialInput {
         group_by: GraphqlGroupByInput {

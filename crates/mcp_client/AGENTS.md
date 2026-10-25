@@ -48,7 +48,7 @@ through `rmcp`, returning the result to the caller's tool-calling loop.
 ## Gotchas
 
 - MCP tool names reaching this crate from a provider can be mangled;
-  `mcp_service` sanitizes them for provider matching — new
+  `agent_harness_service::public_mcp` sanitizes them for provider matching — new
   provider integrations should go through the existing registry pattern, not
   a second ad hoc name-matching path.
 - OAuth state lives in Redis (`redis_state_store.rs`) separately from the

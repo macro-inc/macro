@@ -34,6 +34,6 @@ export function generateDatabaseQuery(
         .with({ status: 'interrupted' }, ({ reason }) =>
           err({ kind: 'interrupted', reason })
         )
-        .exhaustive()
+        .exhaustive(() => err({ kind: 'interrupted', reason: 'unknown' }))
     );
 }

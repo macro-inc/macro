@@ -15,6 +15,7 @@ import { ChannelTopIcon } from '@channel/components/ChannelTopIcon';
 import { DebugSuspense } from '@channel/DebugSuspense';
 import { ChannelParticipantsTab } from '@channel/Participants/ChannelParticipantsTab';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import {
   createPriorityCollapseController,
   PriorityCollapseOverflowSensor,
@@ -25,7 +26,6 @@ import {
   useSplitPanelOrThrow,
 } from '@components/app/split-layout/layoutUtils';
 import type { PriorityCollapser } from '@components/app/split-layout/utils/createPriorityCollapser';
-import { TabsInset } from '@core/component/TabsInset';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import {
   useChannel,
@@ -34,7 +34,9 @@ import {
   useChannelType,
 } from '@core/context/channels';
 import { createMethodRegistration } from '@core/orchestrator';
+import { lazyNamed } from '@core/util/lazyNamed';
 import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
+import { Tabs } from '@ui';
 import {
   type Accessor,
   children,
@@ -47,6 +49,7 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import { ChannelLoading } from './ChannelLoading';
 import {
   ChannelMessages,
   ChannelSurface,
@@ -54,7 +57,7 @@ import {
 } from './ChannelSurface';
 import { ChannelTabProvider, useChannelTab } from './ChannelTabContext';
 import { ChannelLiveIndicators } from './ChannelTopBarLiveIndicators';
-import { toIconTabItems } from './channel-tab-icons';
+import { withChannelTabIcons } from './channel-tab-icons';
 import { type ChannelTabId, DEFAULT_CHANNEL_TAB } from './channel-tabs';
 import {
   isJoinCallRequested,
@@ -118,6 +121,13 @@ export function ChannelDetailTitle(props: ChannelDetailHeaderProps) {
   );
 }
 
+// Every channel host composes the top bar, so the menu's entity-action graph
+// is a chunk of its own rather than weight in each of them.
+const ChannelTitleMenu = lazyNamed(
+  () => import('./ChannelTitleMenu'),
+  'ChannelTitleMenu'
+);
+
 /**
  * The channel's tab strip. Given the top bar's `collapser`, the strip
  * registers as its first item to give up space, dropping text labels for
@@ -137,11 +147,14 @@ export function ChannelDetailTabs(props: {
     : () => false;
 
   return (
-    <TabsInset
+    <Tabs
+      aria-label="Channel sections"
+      touch="inset"
       class="shrink-0"
-      list={isCollapsed() ? toIconTabItems(tabs()) : tabs()}
+      options={isCollapsed() ? withChannelTabIcons(tabs()) : tabs()}
+      iconOnly={isCollapsed()}
       value={activeTab()}
-      onChange={(value) => setActiveTab(value as ChannelTabId)}
+      onChange={setActiveTab}
     />
   );
 }
@@ -165,10 +178,26 @@ export function ChannelDetailActions(props: ChannelDetailHeaderProps) {
   };
 
   return (
-    <div class="header-actions ml-auto flex shrink-0 items-center gap-1">
+    <div class="header-actions ml-auto flex shrink-0 items-center gap-2 touch:gap-1">
       <DebugSuspense name="ChannelDetail.live-indicators">
         <ChannelLiveIndicators channelId={props.channelId} />
       </DebugSuspense>
+      <HeaderActionGroup label="Conversation actions">
+        <Show
+          when={ENABLE_CALLS && !channel()?.agent_dm && !call.isInThisChannel()}
+        >
+          <DebugSuspense name="ChannelDetail.call-button">
+            <ChannelCallButton channelId={props.channelId} />
+          </DebugSuspense>
+        </Show>
+        <Show when={askMacroEntity()}>
+          {(entity) => (
+            <DebugSuspense name="ChannelDetail.ask-macro">
+              <ChatWithAgentButton entity={entity()} label="Ask Macro" />
+            </DebugSuspense>
+          )}
+        </Show>
+      </HeaderActionGroup>
       <DebugSuspense name="ChannelDetail.invite">
         <ChannelInviteButton
           channelId={props.channelId}
@@ -176,20 +205,6 @@ export function ChannelDetailActions(props: ChannelDetailHeaderProps) {
           channelType={channelType()}
         />
       </DebugSuspense>
-      <Show
-        when={ENABLE_CALLS && !channel()?.agent_dm && !call.isInThisChannel()}
-      >
-        <DebugSuspense name="ChannelDetail.call-button">
-          <ChannelCallButton channelId={props.channelId} />
-        </DebugSuspense>
-      </Show>
-      <Show when={askMacroEntity()}>
-        {(entity) => (
-          <DebugSuspense name="ChannelDetail.ask-macro">
-            <ChatWithAgentButton entity={entity()} label="Ask Macro" />
-          </DebugSuspense>
-        )}
-      </Show>
     </div>
   );
 }
@@ -197,7 +212,8 @@ export function ChannelDetailActions(props: ChannelDetailHeaderProps) {
 /**
  * Channel top bar: leading content and tabs share one priority-collapse row
  * so a narrow pane shrinks the tabs to icons before the title truncates.
- * `leading` replaces the default title (a host's breadcrumbs, say).
+ * `leading` replaces the default title (a host's breadcrumbs, say); the title
+ * menu, tabs, and actions are the bar's own, identical for every host.
  */
 export function ChannelDetailTopBar(
   props: ChannelDetailHeaderProps & { leading?: JSX.Element }
@@ -212,19 +228,24 @@ export function ChannelDetailTopBar(
         class="relative h-full min-w-0 shrink overflow-hidden"
         contentClass="flex h-full items-center gap-3"
       >
-        <DebugSuspense name="ChannelDetail.title">
-          <Show
-            when={props.leading}
-            fallback={
-              <ChannelDetailTitle
-                channelId={props.channelId}
-                fallbackName={props.fallbackName}
-              />
-            }
-          >
-            {props.leading}
-          </Show>
-        </DebugSuspense>
+        <div class="flex min-w-0 shrink items-center gap-1">
+          <DebugSuspense name="ChannelDetail.title">
+            <Show
+              when={props.leading}
+              fallback={
+                <ChannelDetailTitle
+                  channelId={props.channelId}
+                  fallbackName={props.fallbackName}
+                />
+              }
+            >
+              {props.leading}
+            </Show>
+          </DebugSuspense>
+          <DebugSuspense name="ChannelDetail.title-menu">
+            <ChannelTitleMenu channelId={props.channelId} />
+          </DebugSuspense>
+        </div>
         <DebugSuspense name="ChannelDetail.tab-strip">
           <ChannelDetailTabs
             channelId={props.channelId}
@@ -395,7 +416,10 @@ function ChannelDetailContent(props: ChannelDetailProps) {
           >
             <Switch>
               <Match when={activeTab() === 'messages'}>
-                <DebugSuspense name="ChannelDetail.messages">
+                <DebugSuspense
+                  name="ChannelDetail.messages"
+                  fallback={<ChannelLoading />}
+                >
                   <ChannelMessages autofocus={props.autofocus ?? false} />
                 </DebugSuspense>
               </Match>

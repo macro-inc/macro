@@ -1,4 +1,3 @@
-import ClaudeIcon from '@icon/wide-claude.svg';
 import CodexIcon from '@icon/wide-codex-ide.svg';
 import CursorIcon from '@icon/wide-cursor-ide.svg';
 import PlugsIcon from '@phosphor/plugs.svg';
@@ -10,7 +9,6 @@ export function HarnessIcon(props: { harness: string; class?: string }) {
   const icon = () =>
     match(props.harness)
       .with('cursor', () => CursorIcon)
-      .with('claude-cloud', () => ClaudeIcon)
       .with('codex-cloud', () => CodexIcon)
       .otherwise(() => PlugsIcon);
 

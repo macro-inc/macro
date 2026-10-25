@@ -1,3 +1,4 @@
+import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowLeft from '@phosphor/arrow-left.svg';
 import ArrowRight from '@phosphor/arrow-right.svg';
@@ -254,8 +255,8 @@ export function RespondView(props: {
               aria-busy="true"
               aria-label="Loading"
             >
-              <div class="h-24 animate-pulse rounded-xl bg-hover" />
-              <div class="h-24 animate-pulse rounded-xl bg-hover" />
+              <ListSkeleton.Bar class="h-24 w-full rounded-xl" />
+              <ListSkeleton.Bar class="h-24 w-full rounded-xl" />
             </div>
           </Match>
           <Match

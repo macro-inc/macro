@@ -3,6 +3,7 @@ import CaretDown from '@phosphor/caret-left.svg';
 import CaretRight from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
+import SquaresFour from '@phosphor/squares-four.svg';
 import { cn, Dropdown } from '@ui';
 import {
   type Component,
@@ -18,30 +19,30 @@ import { ModelIcon } from '../ProviderIcon';
 import {
   buildModelCatalog,
   type CatalogModelOption,
-  MAX_RECOMMENDED_MODELS,
-  type ModelFamily,
   matchesModelQuery,
-  modelFamilyHint,
-  moreModelFamilies,
+  modelProviderLabel,
 } from './modelCatalog';
 
 type ModelCatalogPickerProps = {
   value: string | null;
-  /** Model to feature first without marking it selected. */
-  recommendedId?: string | null;
   options: CatalogModelOption[];
   onSelect: (id: string) => void;
+  onCloseAutoFocus?: (event: Event) => void;
   modelRow?: Component<ModelRowProps>;
   disabled?: boolean;
   pending?: boolean;
   triggerLabel?: JSX.Element;
   children?: JSX.Element;
+  /** Optional overview that can reveal the complete catalog. */
+  menu?: (catalog: JSX.Element) => JSX.Element;
   emptyMessage?: string;
   triggerClass?: string;
   contentClass?: string;
   placeholder?: string;
   searchPlaceholder?: string;
   ariaLabel?: string;
+  getAnchorRect?: (anchor?: HTMLElement) => DOMRect | undefined;
+  gutter?: number;
   placement?: 'top-start' | 'top-end' | 'bottom-start' | 'bottom-end';
 };
 
@@ -76,9 +77,11 @@ export function ModelRow(props: ModelRowProps) {
   );
 }
 
-/** The remaining families, grouped, for the More models screen. */
-function FamilyList(props: {
-  families: ModelFamily[];
+/** One model section, shared by the frontier shortlist and provider groups. */
+function ModelList(props: {
+  label: string;
+  hideLabel?: boolean;
+  options: CatalogModelOption[];
   value: string | null;
   disabled?: boolean;
   onSelect: (id: string) => void;
@@ -87,26 +90,27 @@ function FamilyList(props: {
 }) {
   const Row = props.row;
   return (
-    <For each={props.families}>
-      {(family) => (
-        <>
-          <Show when={family.label}>
-            <Dropdown.GroupLabel>{family.label}</Dropdown.GroupLabel>
-          </Show>
-          <For each={family.options}>
-            {(option) => (
-              <Row
-                option={option}
-                onClose={props.onClose}
-                selected={option.id === props.value}
-                disabled={props.disabled}
-                onSelect={() => props.onSelect(option.id)}
-              />
-            )}
-          </For>
-        </>
-      )}
-    </For>
+    <Dropdown.Group
+      class="bg-transparent py-0"
+      aria-label={props.hideLabel ? props.label : undefined}
+    >
+      <Show when={!props.hideLabel}>
+        <Dropdown.GroupLabel class="h-6 font-medium text-ink-muted">
+          {props.label}
+        </Dropdown.GroupLabel>
+      </Show>
+      <For each={props.options}>
+        {(option) => (
+          <Row
+            option={option}
+            onClose={props.onClose}
+            selected={option.id === props.value}
+            disabled={props.disabled}
+            onSelect={() => props.onSelect(option.id)}
+          />
+        )}
+      </For>
+    </Dropdown.Group>
   );
 }
 
@@ -144,7 +148,7 @@ function keepSearchFocused(input: () => HTMLInputElement | undefined) {
   const onNavigate = (event: Event) => {
     if (
       event.target instanceof Element &&
-      event.target.closest('[role="menuitem"]')
+      event.target.closest('[role="menuitem"], input[type="range"]')
     ) {
       navigating = true;
     }
@@ -185,12 +189,35 @@ export function ModelCatalogPicker(props: ModelCatalogPickerProps) {
   const selected = () =>
     props.options.find((option) => option.id === props.value) ?? null;
   const displayValue = () => selected()?.label ?? props.placeholder ?? 'Model';
+  const catalog = () => (
+    <ModelCatalogMenu
+      value={props.value}
+      options={props.options}
+      disabled={props.disabled || props.pending}
+      onSelect={(id) => {
+        props.onSelect(id);
+        setOpen(false);
+      }}
+      onClose={() => setOpen(false)}
+      modelRow={props.modelRow}
+      emptyMessage={props.emptyMessage}
+      searchPlaceholder={props.searchPlaceholder}
+      autoFocusSearch
+      searchRef={(element) => {
+        searchRef = element;
+      }}
+    >
+      {props.children}
+    </ModelCatalogMenu>
+  );
 
   return (
     <Dropdown
       open={open()}
       onOpenChange={setOpen}
       placement={props.placement ?? 'top-start'}
+      getAnchorRect={props.getAnchorRect}
+      gutter={props.gutter ?? 4}
     >
       <Dropdown.Trigger
         variant="ghost"
@@ -215,6 +242,7 @@ export function ModelCatalogPicker(props: ModelCatalogPickerProps) {
         <CaretDown class="size-3.5 shrink-0 rotate-[-90deg] opacity-70" />
       </Dropdown.Trigger>
       <Dropdown.Content
+        onCloseAutoFocus={props.onCloseAutoFocus}
         onPointerDown={(event: PointerEvent) => event.stopPropagation()}
         onMouseDown={(event: MouseEvent) => event.stopPropagation()}
         class={cn(
@@ -226,25 +254,7 @@ export function ModelCatalogPicker(props: ModelCatalogPickerProps) {
           focusSearchAfterMenuOpen(() => searchRef);
         }}
       >
-        <ModelCatalogMenu
-          value={props.value}
-          recommendedId={props.recommendedId}
-          options={props.options}
-          disabled={props.disabled || props.pending}
-          onSelect={(id) => {
-            props.onSelect(id);
-            setOpen(false);
-          }}
-          onClose={() => setOpen(false)}
-          modelRow={props.modelRow}
-          emptyMessage={props.emptyMessage}
-          searchPlaceholder={props.searchPlaceholder}
-          searchRef={(element) => {
-            searchRef = element;
-          }}
-        >
-          {props.children}
-        </ModelCatalogMenu>
+        {props.menu ? props.menu(catalog()) : catalog()}
       </Dropdown.Content>
     </Dropdown>
   );
@@ -256,7 +266,6 @@ export function ModelCatalogMenu(
     ModelCatalogPickerProps,
     | 'modelRow'
     | 'value'
-    | 'recommendedId'
     | 'options'
     | 'onSelect'
     | 'disabled'
@@ -266,22 +275,24 @@ export function ModelCatalogMenu(
   > & {
     searchRef?: (element: HTMLInputElement) => void;
     /**
-     * Focus search when this catalog mounts — used by hover-opened agent
-     * submenus, which never fire the root menu's `onOpenAutoFocus`.
+     * Focus search when this catalog mounts, including root agent pickers
+     * and hover-opened submenus without their own autofocus handler.
      */
     autoFocusSearch?: boolean;
+    fullCatalog?: boolean;
+    suggestedFirst?: boolean;
+    searchable?: boolean;
     onClose?: () => void;
   }
 ) {
   let searchEl: HTMLInputElement | undefined;
   const Row = props.modelRow ?? ModelRow;
   const [query, setQuery] = createSignal('');
+  const [showAll, setShowAll] = createSignal(false);
   onMount(() => {
-    if (props.autoFocusSearch) keepSearchFocused(() => searchEl);
+    if (props.autoFocusSearch && props.searchable !== false)
+      keepSearchFocused(() => searchEl);
   });
-  // A submenu needs a second menu's width beside the first, which a phone
-  // does not have: there, More models replaces the list in place instead.
-  const [showingMore, setShowingMore] = createSignal(false);
   const normalizedQuery = () => query().trim().toLowerCase();
   const filtered = createMemo(() => {
     const currentQuery = normalizedQuery();
@@ -290,48 +301,39 @@ export function ModelCatalogMenu(
       matchesModelQuery(option, currentQuery)
     );
   });
-  const catalog = createMemo(() =>
-    props.options.length <= MAX_RECOMMENDED_MODELS
-      ? { recommended: props.options, families: [] }
-      : buildModelCatalog(
-          props.options,
-          props.value ?? props.recommendedId ?? undefined
-        )
-  );
-  const extraFamilies = createMemo(() => moreModelFamilies(catalog()));
-  const extraCount = createMemo(() =>
-    extraFamilies().reduce((count, family) => count + family.options.length, 0)
-  );
+  const catalog = createMemo(() => buildModelCatalog(props.options, true));
 
   return (
     <>
-      <div class="bg-menu p-1.5">
-        <div class="flex items-center gap-2 px-2">
-          <MagnifyingGlassIcon
-            aria-hidden="true"
-            class="size-4 shrink-0 text-ink-extra-muted"
-          />
-          <input
-            ref={(element) => {
-              searchEl = element;
-              props.searchRef?.(element);
-            }}
-            aria-label={props.searchPlaceholder ?? 'Search models'}
-            placeholder={props.searchPlaceholder ?? 'Search models'}
-            value={query()}
-            onInput={(event) => setQuery(event.currentTarget.value)}
-            onMouseDown={(event: MouseEvent) => event.stopPropagation()}
-            onClick={(event) => event.stopPropagation()}
-            onKeyDown={(event) => {
-              if (event.key !== 'Escape') event.stopPropagation();
-            }}
-            onKeyUp={(event) => {
-              if (event.key !== 'Escape') event.stopPropagation();
-            }}
-            class="min-w-0 w-full border-0 bg-transparent py-2 text-sm text-ink outline-none placeholder:text-ink-extra-muted"
-          />
+      <Show when={props.searchable !== false}>
+        <div class="sticky top-0 z-10 bg-menu py-1">
+          <div class="flex h-8 items-center gap-2 px-3">
+            <MagnifyingGlassIcon
+              aria-hidden="true"
+              class="size-4 shrink-0 text-ink-extra-muted"
+            />
+            <input
+              ref={(element) => {
+                searchEl = element;
+                props.searchRef?.(element);
+              }}
+              aria-label={props.searchPlaceholder ?? 'Search models'}
+              placeholder={props.searchPlaceholder ?? 'Search models'}
+              value={query()}
+              onInput={(event) => setQuery(event.currentTarget.value)}
+              onMouseDown={(event: MouseEvent) => event.stopPropagation()}
+              onClick={(event) => event.stopPropagation()}
+              onKeyDown={(event) => {
+                if (event.key !== 'Escape') event.stopPropagation();
+              }}
+              onKeyUp={(event) => {
+                if (event.key !== 'Escape') event.stopPropagation();
+              }}
+              class="min-w-0 h-full w-full border-0 bg-transparent p-0 text-sm text-ink outline-none placeholder:text-ink-extra-muted"
+            />
+          </div>
         </div>
-      </div>
+      </Show>
 
       {props.children}
       <Show when={props.options.length === 0}>
@@ -342,100 +344,112 @@ export function ModelCatalogMenu(
       <Show
         when={normalizedQuery().length > 0}
         fallback={
-          <Show
-            when={!(isMobileWidth() && showingMore())}
-            fallback={
-              <Dropdown.Group class="max-h-72 overflow-y-auto overscroll-contain">
+          <div class="space-y-1">
+            <Show
+              when={
+                (!props.fullCatalog || props.suggestedFirst) &&
+                !showAll() &&
+                catalog().frontier.length > 0
+              }
+            >
+              <ModelList
+                label="Suggested"
+                hideLabel={props.suggestedFirst}
+                options={catalog().frontier}
+                value={props.value}
+                disabled={props.disabled}
+                onSelect={props.onSelect}
+                row={Row}
+                onClose={props.onClose}
+              />
+            </Show>
+            <Show
+              when={
+                props.fullCatalog ||
+                showAll() ||
+                catalog().frontier.length === 0
+              }
+              fallback={
+                <div class="px-1.5 pb-1">
+                  <Show
+                    when={isMobileWidth()}
+                    fallback={
+                      <Dropdown.Sub>
+                        <Dropdown.SubTrigger class="h-8 gap-2">
+                          <SquaresFour class="size-4 shrink-0 text-ink-muted" />
+                          <span class="flex-1">More models</span>
+                          <CaretRight class="size-3.5" />
+                        </Dropdown.SubTrigger>
+                        <Dropdown.SubContent
+                          aria-label="All models"
+                          class="w-72 max-w-[calc(100vw-1rem)] max-h-[min(28rem,var(--kb-popper-content-available-height))] overflow-y-auto overscroll-contain"
+                          onOpenAutoFocus={(event: Event) =>
+                            event.preventDefault()
+                          }
+                          onPointerDown={(event: PointerEvent) =>
+                            event.stopPropagation()
+                          }
+                          onMouseDown={(event: MouseEvent) =>
+                            event.stopPropagation()
+                          }
+                        >
+                          <ModelCatalogMenu
+                            fullCatalog
+                            autoFocusSearch
+                            value={props.value}
+                            options={props.options}
+                            disabled={props.disabled}
+                            onSelect={props.onSelect}
+                            modelRow={Row}
+                            onClose={props.onClose}
+                          />
+                        </Dropdown.SubContent>
+                      </Dropdown.Sub>
+                    }
+                  >
+                    <Dropdown.Item
+                      class="h-8 gap-2"
+                      closeOnSelect={false}
+                      onSelect={() => {
+                        setShowAll(true);
+                        searchEl?.focus();
+                      }}
+                    >
+                      <SquaresFour class="size-4 shrink-0 text-ink-muted" />
+                      <span class="flex-1">More models</span>
+                      <CaretRight class="size-3.5" />
+                    </Dropdown.Item>
+                  </Show>
+                </div>
+              }
+            >
+              <Show when={showAll()}>
                 <Dropdown.Item
                   closeOnSelect={false}
-                  class="h-8 gap-2 text-ink-muted"
-                  onSelect={() => setShowingMore(false)}
+                  onSelect={() => {
+                    setShowAll(false);
+                    setQuery('');
+                    searchEl?.focus();
+                  }}
                 >
-                  <CaretRight class="size-3 shrink-0 rotate-180" />
-                  <span class="min-w-0 flex-1 truncate text-sm">
-                    Recommended
-                  </span>
+                  Back to Suggested
                 </Dropdown.Item>
-                <FamilyList
-                  families={extraFamilies()}
-                  value={props.value}
-                  disabled={props.disabled}
-                  onSelect={props.onSelect}
-                  row={Row}
-                  onClose={props.onClose}
-                />
-              </Dropdown.Group>
-            }
-          >
-            <Show when={catalog().recommended.length > 0}>
-              <Dropdown.Group>
-                <Dropdown.GroupLabel>Recommended</Dropdown.GroupLabel>
-                <For each={catalog().recommended}>
-                  {(option) => (
-                    <Row
-                      option={option}
-                      onClose={props.onClose}
-                      hint={modelFamilyHint(option)}
-                      selected={option.id === props.value}
-                      disabled={props.disabled}
-                      onSelect={() => props.onSelect(option.id)}
-                    />
-                  )}
-                </For>
-              </Dropdown.Group>
+              </Show>
+              <For each={catalog().providers}>
+                {(provider) => (
+                  <ModelList
+                    label={provider.label}
+                    options={provider.options}
+                    value={props.value}
+                    disabled={props.disabled}
+                    onSelect={props.onSelect}
+                    row={Row}
+                    onClose={props.onClose}
+                  />
+                )}
+              </For>
             </Show>
-
-            <Show when={extraCount() > 0}>
-              <Dropdown.Group>
-                <Show
-                  when={!isMobileWidth()}
-                  fallback={
-                    <Dropdown.Item
-                      closeOnSelect={false}
-                      class="justify-between"
-                      onSelect={() => setShowingMore(true)}
-                    >
-                      <span class="truncate">More models</span>
-                      <span class="flex shrink-0 items-center gap-1 text-xs text-ink-extra-muted">
-                        {extraCount()}
-                        <CaretRight class="size-3" />
-                      </span>
-                    </Dropdown.Item>
-                  }
-                >
-                  <Dropdown.Sub overlap>
-                    <Dropdown.SubTrigger>
-                      <span class="truncate">More models</span>
-                      <span class="flex shrink-0 items-center gap-1 text-xs text-ink-extra-muted">
-                        {extraCount()}
-                        <CaretRight class="size-3" />
-                      </span>
-                    </Dropdown.SubTrigger>
-                    <Dropdown.SubContent
-                      onPointerDown={(event: PointerEvent) =>
-                        event.stopPropagation()
-                      }
-                      onMouseDown={(event: MouseEvent) =>
-                        event.stopPropagation()
-                      }
-                      class="w-72 max-w-[calc(100vw-1rem)] max-h-[var(--kb-popper-content-available-height)] overflow-y-auto overscroll-contain"
-                    >
-                      <Dropdown.Group class="max-h-72 overflow-y-auto overscroll-contain">
-                        <FamilyList
-                          families={extraFamilies()}
-                          value={props.value}
-                          disabled={props.disabled}
-                          onSelect={props.onSelect}
-                          row={Row}
-                          onClose={props.onClose}
-                        />
-                      </Dropdown.Group>
-                    </Dropdown.SubContent>
-                  </Dropdown.Sub>
-                </Show>
-              </Dropdown.Group>
-            </Show>
-          </Show>
+          </div>
         }
       >
         <Dropdown.Group class="max-h-72 overflow-y-auto overscroll-contain">
@@ -449,7 +463,7 @@ export function ModelCatalogMenu(
               <Row
                 option={option}
                 onClose={props.onClose}
-                hint={modelFamilyHint(option)}
+                hint={modelProviderLabel(option)}
                 selected={option.id === props.value}
                 disabled={props.disabled}
                 onSelect={() => props.onSelect(option.id)}

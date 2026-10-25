@@ -1,7 +1,8 @@
+import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { Popover } from '@kobalte/core/popover';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
-import FolderIcon from '@phosphor/folder-simple.svg';
 import GitBranchIcon from '@phosphor/git-branch.svg';
 import GithubIcon from '@phosphor/github-logo.svg';
 import { Button, createCommandListController } from '@ui';
@@ -10,6 +11,7 @@ import {
   createSignal,
   createUniqueId,
   For,
+  type JSX,
   Match,
   Show,
   Switch,
@@ -181,7 +183,7 @@ export function RepositoryPicker(props: {
     !branchSearch().trim();
   return (
     <div class="flex min-w-0 w-full items-center gap-2">
-      <Popover
+      <RepositoryPickerMenu
         open={repoOpen()}
         onOpenChange={(open) => {
           setRepoOpen(open);
@@ -191,144 +193,134 @@ export function RepositoryPicker(props: {
             list.setSelectedIndex(0);
           }
         }}
-        placement="top-start"
-        gutter={8}
+        label="Repository"
+        triggerClass="pill min-w-0 max-w-full text-ink"
+        trigger={
+          <>
+            <GithubIcon class="size-4 shrink-0" />
+            <span class="truncate">
+              {props.repoUrl
+                ? repositoryLabel(props.repoUrl)
+                : 'Choose automatically'}
+            </span>
+            <CaretDownIcon class="size-3 shrink-0" />
+          </>
+        }
       >
-        <Popover.Trigger
-          class="pill min-w-0 max-w-full text-ink"
-          aria-label="Repository"
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            submitRepository();
+          }}
+          class="flex flex-col gap-2"
         >
-          <FolderIcon class="size-4 shrink-0" />
-          <span class="truncate">
-            {props.repoUrl
-              ? repositoryLabel(props.repoUrl)
-              : 'Choose repository'}
-          </span>
-          <CaretDownIcon class="size-3 shrink-0" />
-        </Popover.Trigger>
-        <Popover.Portal>
-          <Popover.Content class="menu-surface z-action-menu w-80 max-w-[calc(100vw-1rem)] p-3 text-sm">
-            <Popover.Title class="mb-2 font-medium">Repository</Popover.Title>
-            <form
-              onSubmit={(event) => {
+          <input
+            role="combobox"
+            aria-label="Search repositories"
+            aria-expanded="true"
+            aria-controls={listId}
+            aria-activedescendant={highlightedId()}
+            aria-autocomplete="list"
+            autocomplete="off"
+            placeholder="Search, or paste owner/repo"
+            value={search()}
+            onInput={(event) => {
+              setSearch(event.currentTarget.value);
+              setError('');
+              list.setSelectedIndex(0);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'ArrowDown') {
                 event.preventDefault();
-                submitRepository();
-              }}
-              class="flex flex-col gap-2"
-            >
-              <input
-                role="combobox"
-                aria-label="Search repositories"
-                aria-expanded="true"
-                aria-controls={listId}
-                aria-activedescendant={highlightedId()}
-                aria-autocomplete="list"
-                autocomplete="off"
-                placeholder="Search, or paste owner/repo"
-                value={search()}
-                onInput={(event) => {
-                  setSearch(event.currentTarget.value);
-                  setError('');
-                  list.setSelectedIndex(0);
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === 'ArrowDown') {
-                    event.preventDefault();
-                    list.selectNext();
-                    scrollHighlightedIntoView();
-                  } else if (event.key === 'ArrowUp') {
-                    event.preventDefault();
-                    list.selectPrevious();
-                    scrollHighlightedIntoView();
-                  }
-                }}
-                class="w-full rounded-lg border border-edge-muted bg-input px-3 py-2 outline-none focus:border-accent"
-              />
-              <Show when={error()}>
-                <p role="alert" class="text-xs text-failure">
-                  {error()}
-                </p>
-              </Show>
-            </form>
-            <div
-              id={listId}
-              role="listbox"
-              aria-label="Repositories"
-              class="mt-2 max-h-56 overflow-y-auto"
-            >
-              <For each={choices()}>
-                {(choice, index) => (
-                  <button
-                    type="button"
-                    role="option"
-                    id={`${listId}-${index()}`}
-                    aria-selected={list.isSelected(index())}
-                    class="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left hover:bg-hover aria-selected:bg-active"
-                    onClick={() => choose(choice)}
-                    onMouseMove={() =>
-                      list.setSelectedIndexFromPointer(index())
-                    }
-                  >
-                    <Show when={choice.kind !== 'automatic'}>
-                      <GithubIcon class="size-4 shrink-0" />
-                    </Show>
-                    <span class="truncate">{rowLabel(choice)}</span>
-                    <Show when={chosen(choice)}>
-                      <CheckIcon class="ml-auto size-4 shrink-0" />
-                    </Show>
-                  </button>
-                )}
-              </For>
-              <Switch>
-                <Match when={props.repositoriesError}>
-                  <div class="flex items-center justify-between gap-2 px-2 py-2 text-xs text-ink-muted">
-                    Couldn't load your repositories.
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      depth={3}
-                      onClick={() => props.onRetryRepositories()}
-                    >
-                      Retry
-                    </Button>
-                  </div>
-                </Match>
-                <Match
-                  when={props.repositoriesLoading && offered().length === 0}
+                list.selectNext();
+                scrollHighlightedIntoView();
+              } else if (event.key === 'ArrowUp') {
+                event.preventDefault();
+                list.selectPrevious();
+                scrollHighlightedIntoView();
+              }
+            }}
+            class="w-full rounded-lg border border-edge-muted bg-input px-3 py-2 outline-none focus:border-accent"
+          />
+          <Show when={error()}>
+            <p role="alert" class="text-xs text-failure">
+              {error()}
+            </p>
+          </Show>
+        </form>
+        <div
+          id={listId}
+          role="listbox"
+          aria-label="Repositories"
+          class="mt-2 max-h-56 overflow-y-auto"
+        >
+          <For each={choices()}>
+            {(choice, index) => (
+              <button
+                type="button"
+                role="option"
+                id={`${listId}-${index()}`}
+                aria-selected={list.isSelected(index())}
+                class="flex w-full touch:min-h-11 items-center gap-2 rounded-lg px-2 py-2 text-left not-touch:hover:bg-hover aria-selected:bg-active"
+                onClick={() => choose(choice)}
+                onMouseMove={() => list.setSelectedIndexFromPointer(index())}
+              >
+                <Show when={choice.kind !== 'automatic'}>
+                  <GithubIcon class="size-4 shrink-0" />
+                </Show>
+                <span class="truncate">{rowLabel(choice)}</span>
+                <Show when={chosen(choice)}>
+                  <CheckIcon class="ml-auto size-4 shrink-0" />
+                </Show>
+              </button>
+            )}
+          </For>
+          <Switch>
+            <Match when={props.repositoriesError}>
+              <div class="flex items-center justify-between gap-2 px-2 py-2 text-xs text-ink-muted">
+                Couldn't load your repositories.
+                <Button
+                  variant="outline"
+                  size="sm"
+                  depth={3}
+                  onClick={() => props.onRetryRepositories()}
                 >
-                  <div class="px-2 py-2 text-xs text-ink-muted">
-                    Loading your repositories…
-                  </div>
-                </Match>
-                <Match when={nothingReachable()}>
-                  <div class="flex flex-col gap-2 px-2 py-2 text-xs text-ink-muted">
-                    No repositories yet. Give Macro's GitHub App access to the
-                    repositories your coders should work on.
-                    <Show when={props.onConnectGitHub}>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        depth={3}
-                        class="self-start"
-                        onClick={() => props.onConnectGitHub?.()}
-                      >
-                        Connect GitHub
-                      </Button>
-                    </Show>
-                  </div>
-                </Match>
-                <Match when={choices().length === 0}>
-                  <div class="px-2 py-2 text-xs text-ink-muted">
-                    No repositories match “{search().trim()}”.
-                  </div>
-                </Match>
-              </Switch>
-            </div>
-          </Popover.Content>
-        </Popover.Portal>
-      </Popover>
+                  Retry
+                </Button>
+              </div>
+            </Match>
+            <Match when={props.repositoriesLoading && offered().length === 0}>
+              <div class="px-2 py-2 text-xs text-ink-muted">
+                Loading your repositories…
+              </div>
+            </Match>
+            <Match when={nothingReachable()}>
+              <div class="flex flex-col gap-2 px-2 py-2 text-xs text-ink-muted">
+                No repositories yet. Give Macro's GitHub App access to the
+                repositories your coders should work on.
+                <Show when={props.onConnectGitHub}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    depth={3}
+                    class="self-start"
+                    onClick={() => props.onConnectGitHub?.()}
+                  >
+                    Connect GitHub
+                  </Button>
+                </Show>
+              </div>
+            </Match>
+            <Match when={choices().length === 0}>
+              <div class="px-2 py-2 text-xs text-ink-muted">
+                No repositories match “{search().trim()}”.
+              </div>
+            </Match>
+          </Switch>
+        </div>
+      </RepositoryPickerMenu>
       <Show when={props.repoUrl}>
-        <Popover
+        <RepositoryPickerMenu
           open={branchOpen()}
           onOpenChange={(open) => {
             setBranchOpen(open && !props.branchLocked);
@@ -339,144 +331,211 @@ export function RepositoryPicker(props: {
               branchList.setSelectedIndex(selected >= 0 ? selected : 0);
             }
           }}
+          label="Starting branch"
+          triggerLabel="Branch"
+          triggerClass="pill min-w-0 max-w-[45%] text-ink"
+          disabled={props.branchLocked}
+          title={
+            props.branchLocked
+              ? 'New local sessions start from main'
+              : undefined
+          }
+          trigger={
+            <>
+              <GitBranchIcon class="size-4 shrink-0" />
+              <span class="truncate">{props.branch}</span>
+              <Show when={!props.branchLocked}>
+                <CaretDownIcon class="size-3 shrink-0" />
+              </Show>
+            </>
+          }
+        >
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              submitBranch();
+            }}
+            class="flex flex-col gap-2"
+          >
+            <input
+              role="combobox"
+              aria-label="Search branches"
+              aria-expanded="true"
+              aria-controls={branchListId}
+              aria-activedescendant={highlightedBranchId()}
+              aria-autocomplete="list"
+              autocomplete="off"
+              placeholder="Search, or type a branch name"
+              value={branchSearch()}
+              onInput={(event) => {
+                setBranchSearch(event.currentTarget.value);
+                setError('');
+                branchList.setSelectedIndex(0);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'ArrowDown') {
+                  event.preventDefault();
+                  branchList.selectNext();
+                  scrollHighlightedBranchIntoView();
+                } else if (event.key === 'ArrowUp') {
+                  event.preventDefault();
+                  branchList.selectPrevious();
+                  scrollHighlightedBranchIntoView();
+                }
+              }}
+              class="w-full rounded-lg border border-edge-muted bg-input px-3 py-2 outline-none focus:border-accent"
+            />
+            <Show when={error()}>
+              <p role="alert" class="text-xs text-failure">
+                {error()}
+              </p>
+            </Show>
+          </form>
+          <div
+            id={branchListId}
+            role="listbox"
+            aria-label="Branches"
+            class="mt-2 max-h-56 overflow-y-auto"
+          >
+            <For each={branchChoices()}>
+              {(choice, index) => (
+                <button
+                  type="button"
+                  role="option"
+                  id={`${branchListId}-${index()}`}
+                  aria-selected={branchList.isSelected(index())}
+                  class="flex w-full touch:min-h-11 items-center gap-2 rounded-lg px-2 py-2 text-left not-touch:hover:bg-hover aria-selected:bg-active"
+                  onClick={() => chooseBranch(choice)}
+                  onMouseMove={() =>
+                    branchList.setSelectedIndexFromPointer(index())
+                  }
+                >
+                  <GitBranchIcon class="size-4 shrink-0" />
+                  <span class="min-w-0 truncate">
+                    {choice.kind === 'typed'
+                      ? `Use ${choice.name}`
+                      : choice.name}
+                  </span>
+                  <Show when={choice.name === defaultBranch()}>
+                    <span class="shrink-0 text-xs text-ink-muted">
+                      {` (default)`}
+                    </span>
+                  </Show>
+                  <Show when={choice.name === props.branch}>
+                    <CheckIcon class="ml-auto size-4 shrink-0" />
+                  </Show>
+                </button>
+              )}
+            </For>
+            <Switch>
+              <Match when={props.branchesError}>
+                <div class="flex items-center justify-between gap-2 px-2 py-2 text-xs text-ink-muted">
+                  Couldn't load this repository's branches.
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    depth={3}
+                    onClick={() => props.onRetryBranches()}
+                  >
+                    Retry
+                  </Button>
+                </div>
+              </Match>
+              <Match
+                when={props.branchesLoading && props.branches.length === 0}
+              >
+                <div class="px-2 py-2 text-xs text-ink-muted">
+                  Loading branches…
+                </div>
+              </Match>
+              <Match when={nothingListed()}>
+                <div class="px-2 py-2 text-xs text-ink-muted">
+                  No branches yet. Type a starting branch to use.
+                </div>
+              </Match>
+              <Match when={branchChoices().length === 0}>
+                <div class="px-2 py-2 text-xs text-ink-muted">
+                  No branches match “{branchSearch().trim()}”.
+                </div>
+              </Match>
+            </Switch>
+          </div>
+        </RepositoryPickerMenu>
+      </Show>
+    </div>
+  );
+}
+
+/** Keep repository and branch pickers in the platform's standard overlay. */
+function RepositoryPickerMenu(props: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  label: string;
+  triggerLabel?: string;
+  triggerClass: string;
+  disabled?: boolean;
+  title?: string;
+  trigger: JSX.Element;
+  children: JSX.Element;
+}) {
+  return (
+    <Show
+      when={isTouchDevice()}
+      fallback={
+        <Popover
+          open={props.open}
+          onOpenChange={props.onOpenChange}
           placement="top-start"
           gutter={8}
         >
           <Popover.Trigger
-            class="pill min-w-0 max-w-[45%] text-ink"
-            aria-label="Branch"
-            disabled={props.branchLocked}
-            title={
-              props.branchLocked
-                ? 'New local sessions start from main'
-                : undefined
-            }
+            class={props.triggerClass}
+            aria-label={props.triggerLabel ?? props.label}
+            disabled={props.disabled}
+            title={props.title}
           >
-            <GitBranchIcon class="size-4 shrink-0" />
-            <span class="truncate">{props.branch}</span>
-            <Show when={!props.branchLocked}>
-              <CaretDownIcon class="size-3 shrink-0" />
-            </Show>
+            {props.trigger}
           </Popover.Trigger>
           <Popover.Portal>
             <Popover.Content class="menu-surface z-action-menu w-80 max-w-[calc(100vw-1rem)] p-3 text-sm">
               <Popover.Title class="mb-2 font-medium">
-                Starting branch
+                {props.label}
               </Popover.Title>
-              <form
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  submitBranch();
-                }}
-                class="flex flex-col gap-2"
-              >
-                <input
-                  role="combobox"
-                  aria-label="Search branches"
-                  aria-expanded="true"
-                  aria-controls={branchListId}
-                  aria-activedescendant={highlightedBranchId()}
-                  aria-autocomplete="list"
-                  autocomplete="off"
-                  placeholder="Search, or type a branch name"
-                  value={branchSearch()}
-                  onInput={(event) => {
-                    setBranchSearch(event.currentTarget.value);
-                    setError('');
-                    branchList.setSelectedIndex(0);
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key === 'ArrowDown') {
-                      event.preventDefault();
-                      branchList.selectNext();
-                      scrollHighlightedBranchIntoView();
-                    } else if (event.key === 'ArrowUp') {
-                      event.preventDefault();
-                      branchList.selectPrevious();
-                      scrollHighlightedBranchIntoView();
-                    }
-                  }}
-                  class="w-full rounded-lg border border-edge-muted bg-input px-3 py-2 outline-none focus:border-accent"
-                />
-                <Show when={error()}>
-                  <p role="alert" class="text-xs text-failure">
-                    {error()}
-                  </p>
-                </Show>
-              </form>
-              <div
-                id={branchListId}
-                role="listbox"
-                aria-label="Branches"
-                class="mt-2 max-h-56 overflow-y-auto"
-              >
-                <For each={branchChoices()}>
-                  {(choice, index) => (
-                    <button
-                      type="button"
-                      role="option"
-                      id={`${branchListId}-${index()}`}
-                      aria-selected={branchList.isSelected(index())}
-                      class="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left hover:bg-hover aria-selected:bg-active"
-                      onClick={() => chooseBranch(choice)}
-                      onMouseMove={() =>
-                        branchList.setSelectedIndexFromPointer(index())
-                      }
-                    >
-                      <GitBranchIcon class="size-4 shrink-0" />
-                      <span class="min-w-0 truncate">
-                        {choice.kind === 'typed'
-                          ? `Use ${choice.name}`
-                          : choice.name}
-                      </span>
-                      <Show when={choice.name === defaultBranch()}>
-                        <span class="shrink-0 text-xs text-ink-muted">
-                          {` (default)`}
-                        </span>
-                      </Show>
-                      <Show when={choice.name === props.branch}>
-                        <CheckIcon class="ml-auto size-4 shrink-0" />
-                      </Show>
-                    </button>
-                  )}
-                </For>
-                <Switch>
-                  <Match when={props.branchesError}>
-                    <div class="flex items-center justify-between gap-2 px-2 py-2 text-xs text-ink-muted">
-                      Couldn't load this repository's branches.
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        depth={3}
-                        onClick={() => props.onRetryBranches()}
-                      >
-                        Retry
-                      </Button>
-                    </div>
-                  </Match>
-                  <Match
-                    when={props.branchesLoading && props.branches.length === 0}
-                  >
-                    <div class="px-2 py-2 text-xs text-ink-muted">
-                      Loading branches…
-                    </div>
-                  </Match>
-                  <Match when={nothingListed()}>
-                    <div class="px-2 py-2 text-xs text-ink-muted">
-                      No branches yet. Type a starting branch to use.
-                    </div>
-                  </Match>
-                  <Match when={branchChoices().length === 0}>
-                    <div class="px-2 py-2 text-xs text-ink-muted">
-                      No branches match “{branchSearch().trim()}”.
-                    </div>
-                  </Match>
-                </Switch>
-              </div>
+              {props.children}
             </Popover.Content>
           </Popover.Portal>
         </Popover>
-      </Show>
-    </div>
+      }
+    >
+      <MobileDrawer
+        side="bottom"
+        open={props.open}
+        onOpenChange={props.onOpenChange}
+        restoreFocus
+      >
+        <MobileDrawer.Trigger
+          class={props.triggerClass}
+          aria-label={props.triggerLabel ?? props.label}
+          disabled={props.disabled}
+          title={props.title}
+          onPointerDown={(event: PointerEvent) => event.preventDefault()}
+          onMouseDown={(event: MouseEvent) => event.preventDefault()}
+        >
+          {props.trigger}
+        </MobileDrawer.Trigger>
+        <MobileDrawer.Portal>
+          <MobileDrawer.Overlay />
+          <MobileDrawer.Content>
+            <MobileDrawer.Handle />
+            <MobileDrawer.Title class="px-4 pb-3 font-medium">
+              {props.label}
+            </MobileDrawer.Title>
+            <MobileDrawer.ScrollBody>
+              <MobileDrawer.Section>{props.children}</MobileDrawer.Section>
+            </MobileDrawer.ScrollBody>
+          </MobileDrawer.Content>
+        </MobileDrawer.Portal>
+      </MobileDrawer>
+    </Show>
   );
 }

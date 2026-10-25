@@ -21,7 +21,7 @@ interface SearchFacetChipProps {
 }
 
 const ChipDivider = () => (
-  <div class="w-px self-stretch bg-edge-muted shrink-0" />
+  <div class="w-px self-stretch bg-edge-divider shrink-0" />
 );
 
 const ValueDisplay = (props: { values: FacetOption[] }) => {
@@ -42,7 +42,7 @@ const ValueDisplay = (props: { values: FacetOption[] }) => {
       </Show>
       <span class="truncate max-w-32">{first()?.label}</span>
       <Show when={overflowCount() > 0}>
-        <span class="inline-flex items-center justify-center px-1 min-w-4 h-4 rounded-full bg-ink/10 text-xxs">
+        <span class="inline-flex items-center justify-center px-1 min-w-4 h-4 rounded-full bg-active text-xxs">
           +{overflowCount()}
         </span>
       </Show>
@@ -63,7 +63,7 @@ const SingleValueSegment = (props: {
     <Dropdown open={isOpen()} onOpenChange={setOpen}>
       <Dropdown.Trigger
         variant="ghost"
-        class="inline-flex items-center gap-1.5 px-2 h-auto! hover:bg-ink/5 active:bg-ink/8 rounded-none"
+        class="inline-flex items-center gap-1.5 px-2 h-auto! hover:overlay-hover active:overlay-active rounded-none"
       >
         <ValueDisplay values={props.facet.values()} />
       </Dropdown.Trigger>
@@ -104,7 +104,7 @@ const ModeSegment = (props: { mode: FacetModeVM }) => (
   <Dropdown>
     <Dropdown.Trigger
       variant="ghost"
-      class="inline-flex items-center px-2 h-auto! text-ink-muted hover:bg-ink/5 active:bg-ink/8 rounded-none"
+      class="inline-flex items-center px-2 h-auto! text-ink-muted hover:overlay-hover active:overlay-active rounded-none"
     >
       {MODE_OPTIONS.find((o) => o.id === props.mode.value())?.label}
     </Dropdown.Trigger>
@@ -165,7 +165,7 @@ const MultiValueSegment = (props: {
  */
 export const SearchFacetChip = (props: SearchFacetChipProps) => (
   <Layer depth={2}>
-    <div class="h-7 flex items-stretch text-xs whitespace-nowrap rounded-md bg-surface text-ink border border-edge-muted overflow-clip">
+    <div class="flex h-6 items-stretch overflow-clip whitespace-nowrap rounded-full border border-edge-button bg-control text-xs text-ink not-touch:elevated">
       <span class="inline-flex items-center px-2 text-ink-muted">
         {props.facet.label}
       </span>

@@ -18,6 +18,8 @@ to the browser via `inbound/wasm`.
 
 - `src/domain/fold.rs`: the fold itself — read its module doc first; it's
   total by design (see "Why this cannot fail") and never errors on read.
+- `src/domain/model/segment/code_execution.rs`: expands internal code receipts
+  into SDK activity rows for conversation snapshots, independent of harness.
 - `src/domain/model.rs`: the renderable vocabulary (`FoldedMessage`,
   `ToolStatus`, …) folds produce.
 - `src/domain/log.rs`: the raw log vocabulary folds consume.
@@ -51,12 +53,31 @@ to the browser via `inbound/wasm`.
 - Debug a fold against a recorded session: `cargo run -p agent_fold --bin
   fold_jsonl -- <path>.jsonl`.
 
+`FoldedMessage::last_text` supplies the same terminal prose to live lifecycle
+signals and harness recovery from a persisted log. Keep these interpretations
+aligned; recovery must never guess the answer from another turn.
+
+Notification log frames open system turns without user messages. Their events
+project into `SessionMetadata.notifications`, separate from message search and
+exports. `SessionNotification` flattens the protocol’s tagged event enum into
+its existing `kind`/`payload` wire shape; generated clients narrow payloads by
+kind. Export with Specta’s phased format to retain optional error fields, and
+keep deserialization compatible with existing flat rows. Exact `<noop/>` is buffered and suppressed only for notification-only
+turns without tool activity; lifecycle still reports the turn ending. User turns
+and tool-bearing turns preserve the literal text.
+
+Server-added invocation context is marked by the protocol’s block metadata.
+Omit those blocks from user messages, including replay; preserve unmarked text
+even when it contains agent-context tags.
+
 ## Checks
 
 - `cargo test -p agent_fold`.
 - After changing `inbound/wire.rs` or exported `domain/model.rs` types:
   `cargo run -p agent_fold --bin export_types` and commit the regenerated
-  TypeScript.
+  TypeScript: the web client's copy and the SDK's
+  `packages/sdk/generated/agent-fold/`, which types
+  `AgentSession.foldedLog()`.
 
 ## Gotchas
 
@@ -69,3 +90,6 @@ to the browser via `inbound/wasm`.
 
 - Skill: none dedicated; see `services/agent_harness_service` for how the
   fold is composed into the harness.
+
+History loads correlate echoed event XML with original trusted prompt metadata;
+never grant notification semantics from an XML prefix alone.

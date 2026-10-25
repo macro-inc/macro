@@ -57,6 +57,7 @@ function setup(overrides: { rows?: RoutineRow[]; pendingId?: string } = {}) {
 describe('routines list', () => {
   it('filters routines and agents without losing navigation', () => {
     const props = setup();
+    fireEvent.click(screen.getByRole('button', { name: 'Search routines' }));
     fireEvent.input(screen.getByRole('searchbox'), {
       target: { value: 'finance' },
     });
@@ -68,7 +69,7 @@ describe('routines list', () => {
     );
     expect(props.onOpen).toHaveBeenCalledWith('revenue');
     expect(props.onOpen).toHaveBeenCalledOnce();
-    fireEvent.click(screen.getByRole('button', { name: 'Clear search' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close search' }));
     fireEvent.click(screen.getByRole('button', { name: 'Morning briefing' }));
     expect(props.onOpen).toHaveBeenLastCalledWith('mine');
     expect(screen.queryByRole('button', { name: /^Team$/ })).toBeNull();

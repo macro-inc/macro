@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT root_folder_id FROM import_run WHERE user_id = $1 AND source = 'notion'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "root_folder_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "90d114a94cf73a9961b7feb439f9768d44e230ffd1dec01305b78fe87829875b"
+}

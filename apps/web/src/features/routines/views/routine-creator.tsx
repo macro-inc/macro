@@ -3,11 +3,13 @@ import ClockIcon from '@phosphor/clock.svg';
 import XIcon from '@phosphor/x.svg';
 import { Button, EntityComposer, ToggleSwitch } from '@ui';
 import { Show } from 'solid-js';
+import { RoutineRunVisibility } from '../components/routine-run-visibility';
 import type { RoutineEditorSlots } from '../context/routine-slots';
 import type {
   RoutineCreatorSource,
   RoutineDraftStorage,
 } from '../context/routine-sources';
+import { DEFAULT_RUN_VISIBILITY } from '../core/draft';
 import { validateRoutineDraft } from '../core/routine-draft';
 import { createRoutineComposer } from '../primitives/routine-composer';
 
@@ -83,6 +85,12 @@ export function RoutineCreatorView(props: {
               triggers={draft().triggers ?? []}
               onChange={(triggers) =>
                 change((draft) => ({ ...draft, triggers }))
+              }
+            />
+            <RoutineRunVisibility
+              value={draft().runVisibility ?? DEFAULT_RUN_VISIBILITY}
+              onChange={(runVisibility) =>
+                change((draft) => ({ ...draft, runVisibility }))
               }
             />
           </EntityComposer.Properties>

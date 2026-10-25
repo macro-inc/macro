@@ -1,19 +1,57 @@
 import type {
   GetChatHistoryHandlerResponses,
   GetChatResponses,
+  HttpSendChatMessageRequest,
 } from '../../../generated/cognition/types.gen';
 import { type Mentionable, type MentionPart, wrapXml } from '../../mentions';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { PropertiedEntity } from '../entity';
 import { Project } from '../projects/project';
+import type { EntityReference } from '../reference';
 import { entitySearch } from '../search';
+import { EntityAccess } from '../sharing/access';
+import { ChatGeneration, ChatMessage } from './generation';
 
 type ChatDetail = GetChatResponses[200]['chat'];
+
 type ChatHistory = GetChatHistoryHandlerResponses[200]['conversation'];
 
 /** A Macro AI chat. */
 export class Chat extends PropertiedEntity<ChatDetail> implements Mentionable {
+  /** Send a message and start a background generation. Tools may perform writes. */
+  async send(
+    options: Omit<
+      HttpSendChatMessageRequest,
+      'chat_id' | 'attachments' | 'additional_instructions'
+    > & { attachments?: EntityReference[]; additionalInstructions?: string },
+  ): Promise<ChatGeneration> {
+    const { attachments, additionalInstructions, ...rest } = options;
+    const result = await this.mutate((c) =>
+      c.cognition.sendChatMessage({
+        body: {
+          ...rest,
+          chat_id: this.id,
+          additional_instructions: additionalInstructions,
+          attachments: attachments?.map((a) => ({
+            entity_id: a.entity.id,
+            entity_type: a.type,
+          })),
+        },
+      }),
+    );
+    const chat = Chat.byId(this.client, result.chat_id);
+    return ChatGeneration.byId(
+      this.client,
+      chat,
+      result.stream_id,
+      ChatMessage.byId(this.client, chat, result.message_id),
+    );
+  }
+
+  /** Access requests and direct user grants. */
+  readonly access = new EntityAccess(this.client, 'chat', this);
+
   /** Favorites identify chats as `chat`. */
   readonly entityType = 'chat';
 

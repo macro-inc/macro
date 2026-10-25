@@ -27,6 +27,72 @@ pub type PluginService = Service<FileSystem>;
 const EVENT_NAME: &str = "bundle-update-status";
 const WIFI_RETRY_INTERVAL: Duration = Duration::from_secs(30);
 
+#[test]
+fn diagnostic_wire_types() {
+    let generated = specta_typescript::Typescript::default()
+        .export(
+            &specta::Types::default().register::<BundleReloadDiagnostics>(),
+            specta_serde::Format,
+        )
+        .expect("export bundle reload types");
+    let generated = generated
+        .lines()
+        .map(str::trim_end)
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n";
+    let output = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../src/observability/generated/bundle-reloads.ts");
+    if std::env::var_os("UPDATE_NATIVE_DIAGNOSTIC_TYPES").is_some() {
+        std::fs::create_dir_all(output.parent().expect("generated directory"))
+            .expect("create directory");
+        std::fs::write(&output, &generated).expect("write types");
+    }
+    assert_eq!(
+        std::fs::read_to_string(output).expect("generated types"),
+        generated
+    );
+}
+
+/// Launch-scoped reload dispatches, retained across replacement documents.
+#[derive(Clone, Default, Serialize)]
+#[cfg_attr(test, derive(specta::Type))]
+#[serde(rename_all = "camelCase")]
+pub struct BundleReloadDiagnostics {
+    #[cfg_attr(test, specta(type = specta_typescript::Number))]
+    dispatches: u64,
+    last_source: Option<&'static str>,
+    last_reload_id: Option<String>,
+    #[cfg_attr(test, specta(type = Option<specta_typescript::Number>))]
+    last_dispatch_ms: Option<u64>,
+}
+
+/// Read reload evidence without waiting for the updater's async service lock.
+pub fn bundle_reload_diagnostics<R: Runtime>(
+    app: &tauri::AppHandle<R>,
+) -> Option<BundleReloadDiagnostics> {
+    let state = app.try_state::<std::sync::Mutex<BundleReloadDiagnostics>>()?;
+    let diagnostics = state.lock().ok()?;
+    Some(diagnostics.clone())
+}
+
+fn record_reload_dispatch<R: Runtime>(app: &tauri::AppHandle<R>, source: &'static str) {
+    if let Some(state) = app.try_state::<std::sync::Mutex<BundleReloadDiagnostics>>()
+        && let Ok(mut diagnostics) = state.lock()
+    {
+        diagnostics.dispatches += 1;
+        diagnostics.last_source = Some(source);
+        diagnostics.last_reload_id = Some(uuid::Uuid::new_v4().to_string());
+        diagnostics.last_dispatch_ms = Some(
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis() as u64,
+        );
+    }
+    tracing::info!(source, "Dispatching bundle update WebView reload");
+}
+
 /// Serializable event emitted to the frontend via Tauri's event system.
 #[derive(Clone, Serialize)]
 #[serde(tag = "status", content = "data")]
@@ -257,6 +323,7 @@ pub async fn apply_completed_update_from<R: Runtime>(
         // Reload to pick up the new bundle. Using location.reload() instead of
         // navigating to a new URL preserves WKWebView's cookie store.
         if let Some(webview) = app_handle.webview_windows().values().next() {
+            record_reload_dispatch(app_handle, source);
             if let Err(e) = webview.eval("window.location.reload();") {
                 tracing::warn!(
                     source,
@@ -368,6 +435,7 @@ pub async fn clear_bundle<R: Runtime>(
 
     if apply_result == ApplyUpdateResult::ReloadNeeded {
         if let Some(webview) = app_handle.webview_windows().values().next() {
+            record_reload_dispatch(&app_handle, "clear_bundle");
             if let Err(error) = webview.eval("window.location.reload();") {
                 tracing::warn!(error=?error, "[bundle-update] failed to reload after clearing bundle");
                 service.unmark_update_reload_dispatched();
@@ -390,6 +458,7 @@ impl<R: Runtime> Plugin<R> for MacroBundleUpdaterPlugin {
         app: &tauri::AppHandle<R>,
         config: serde_json::Value,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        app.manage(std::sync::Mutex::new(BundleReloadDiagnostics::default()));
         let client = BundleClient::new(self.base_url.clone());
         let fs = FileSystem;
         // Desktop release builds embed their compatibility number in Tauri config.

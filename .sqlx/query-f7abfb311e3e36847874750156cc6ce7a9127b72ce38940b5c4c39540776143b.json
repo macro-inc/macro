@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO agent_preview_credential (hash, kind, preview_id, expires_at) VALUES ($1, 'ssh', $2, $3)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Bytea",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f7abfb311e3e36847874750156cc6ce7a9127b72ce38940b5c4c39540776143b"
+}

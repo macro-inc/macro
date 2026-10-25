@@ -19,7 +19,7 @@ pub use edges::{
     SoupEdges, SoupEmailThreadEdges, agent_session_bot_loader, agent_session_log_loader,
 };
 pub use graphql_activity::{
-    ActivityEdgeKey, ActivityEdgeLoad, ActivityFeedInput, ActivityFeedReader,
+    ActivityEdgeKey, ActivityEdgeLoad, ActivityFeedInput, ActivityFeedReader, ActivityFeedScope,
     ActivityOverviewInput, ActivityPortReader, ActivityReader, EntityActivityLoader,
     GraphqlActivityAction, GraphqlActivityDay, GraphqlActivityEntityRank, GraphqlActivityEvent,
     GraphqlActivityOverview, GraphqlActivityPage, NoOpActivityReader, SoupActivityEdgeReader,

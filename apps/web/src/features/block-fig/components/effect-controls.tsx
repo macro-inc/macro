@@ -54,7 +54,7 @@ function EffectSettings(props: {
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content
-          class="fig-editor-theme z-modal flex w-60 flex-col rounded-xl border border-edge-muted bg-menu text-ink text-xs shadow-xl outline-none"
+          class="menu-surface fig-editor-theme z-modal flex w-60 flex-col text-xs outline-none"
           aria-label="Effect settings"
           data-testid={`fig-effect-${props.index}-popover`}
           onPointerDown={(event) => event.stopPropagation()}

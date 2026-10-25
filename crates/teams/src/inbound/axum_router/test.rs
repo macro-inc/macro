@@ -36,15 +36,16 @@ use tower::ServiceExt;
 
 use crate::domain::{
     model::{
-        CreateTeamError, CustomerError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError,
-        PatchTeamCrmSettingsResponse, PatchTeamRequest, RemoveTeamInviteError,
-        RemoveUserFromTeamError, RestorePermissionsForTeamMembersError,
+        CreateTeamError, CustomerError, DeleteTeamError, InviteUsersToTeamError,
+        JoinTeamByInviteLinkError, JoinTeamByInviteLinkOutcome, JoinTeamDirectlyError,
+        JoinTeamError, ManageTeamInviteLinkError, PatchTeamCrmSettingsResponse, PatchTeamRequest,
+        RemoveTeamInviteError, RemoveUserFromTeamError, RestorePermissionsForTeamMembersError,
         RevokePermissionsForTeamMembersError, SeatPlan, SetTeamMemberPlanError, Team, TeamError,
-        TeamInvite, TeamInviteDetails, TeamMember, TeamWithMembers, ToggleAutoJoinDomainError,
-        TryJoinTeamByDomainError,
+        TeamInvite, TeamInviteDetails, TeamInviteLinkTeam, TeamInviteLinkToken, TeamMember,
+        TeamWithMembers, ToggleAutoJoinDomainError,
     },
     owned_entity_cleanup::OwnedEntityCleanupError,
-    team_repo::TeamService,
+    team_repo::{TeamInviteLinkService, TeamService},
 };
 
 use super::{
@@ -78,6 +79,41 @@ async fn assert_customer_error_is_obfuscated(error: impl IntoResponse) {
     assert_eq!(body_text, r#"{"message":"internal server error"}"#);
     assert_eq!(body_json, json!({ "message": "internal server error" }));
     assert!(!body_text.contains(CUSTOMER_ERROR_SENTINEL));
+}
+
+#[tokio::test]
+async fn invite_link_errors_map_to_their_statuses() {
+    for (error, status) in [
+        (
+            ManageTeamInviteLinkError::NonAdminInvitesDisabled.into_response(),
+            StatusCode::FORBIDDEN,
+        ),
+        (
+            ManageTeamInviteLinkError::ResetRequiresAdmin.into_response(),
+            StatusCode::FORBIDDEN,
+        ),
+        (
+            JoinTeamByInviteLinkError::LinkNotFound.into_response(),
+            StatusCode::NOT_FOUND,
+        ),
+        (
+            JoinTeamByInviteLinkError::AlreadyInAnotherTeam.into_response(),
+            StatusCode::CONFLICT,
+        ),
+        (
+            JoinTeamByInviteLinkError::JoinError(JoinTeamDirectlyError::JoinTeamError(
+                JoinTeamError::CustomerError(customer_error()),
+            ))
+            .into_response(),
+            StatusCode::INTERNAL_SERVER_ERROR,
+        ),
+    ] {
+        assert_eq!(error.status(), status);
+    }
+    assert_customer_error_is_obfuscated(JoinTeamByInviteLinkError::JoinError(
+        JoinTeamDirectlyError::JoinTeamError(JoinTeamError::CustomerError(customer_error())),
+    ))
+    .await;
 }
 
 #[tokio::test]
@@ -457,8 +493,46 @@ impl TeamService for FakeTeamService {
     async fn try_join_team_by_domain(
         &self,
         _user_id: &MacroUserIdStr<'_>,
-    ) -> Result<Option<TeamMember<'static>>, TryJoinTeamByDomainError> {
+    ) -> Result<Option<TeamMember<'static>>, JoinTeamDirectlyError> {
         panic!("unexpected try_join_team_by_domain call")
+    }
+}
+
+impl TeamInviteLinkService for FakeTeamService {
+    async fn get_team_invite_link(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<MemberTeamRole>,
+    ) -> Result<Option<TeamInviteLinkToken>, ManageTeamInviteLinkError> {
+        panic!("unexpected get_team_invite_link call")
+    }
+
+    async fn create_team_invite_link(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<MemberTeamRole>,
+    ) -> Result<TeamInviteLinkToken, ManageTeamInviteLinkError> {
+        panic!("unexpected create_team_invite_link call")
+    }
+
+    async fn delete_team_invite_link(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
+    ) -> Result<(), TeamError> {
+        panic!("unexpected delete_team_invite_link call")
+    }
+
+    async fn get_team_by_invite_link(
+        &self,
+        _token: &TeamInviteLinkToken,
+    ) -> Result<TeamInviteLinkTeam, JoinTeamByInviteLinkError> {
+        panic!("unexpected get_team_by_invite_link call")
+    }
+
+    async fn join_team_by_invite_link(
+        &self,
+        _token: &TeamInviteLinkToken,
+        _user_id: &MacroUserIdStr<'_>,
+    ) -> Result<JoinTeamByInviteLinkOutcome, JoinTeamByInviteLinkError> {
+        panic!("unexpected join_team_by_invite_link call")
     }
 }
 

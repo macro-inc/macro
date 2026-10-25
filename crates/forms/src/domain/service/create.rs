@@ -33,6 +33,16 @@ pub(super) const SUBMITTED_COLUMN: &str = "Submitted";
 /// The person column each signed-in submission names its respondent in.
 pub(super) const RESPONDENT_COLUMN: &str = "Respondent";
 
+/// Where a new form's table came from.
+#[derive(Clone, Copy)]
+enum Provenance {
+    /// A database made for the form, which goes by its name and may stay
+    /// out of Drive with it.
+    OwnDatabase { is_hidden_in_drive: bool },
+    /// A table of a database the creator already had.
+    ExistingTable,
+}
+
 /// A column the form writes itself: one the table already has, reused, or
 /// one to create.
 pub(super) enum ManagedColumn {
@@ -146,8 +156,8 @@ where
         };
         let name = validated_name(&command.name)?;
         match command.source {
-            CreateSource::NewDatabase => {
-                self.create_over_new_database(creator, name, id, status, policy)
+            CreateSource::NewDatabase { is_hidden_in_drive } => {
+                self.create_over_new_database(creator, name, is_hidden_in_drive, id, status, policy)
                     .await
             }
             CreateSource::Table { receipt, table_id } => {
@@ -164,6 +174,7 @@ where
         &self,
         creator: Viewer,
         name: String,
+        is_hidden_in_drive: bool,
         id: FormId,
         status: FormStatus,
         policy: CreationPolicy,
@@ -178,7 +189,15 @@ where
             .await
             .map_err(database_error)?;
         match self
-            .attach_to_new_database(&creator, database.name, database.id, id, status, policy)
+            .attach_to_new_database(
+                &creator,
+                database.name,
+                database.id,
+                is_hidden_in_drive,
+                id,
+                status,
+                policy,
+            )
             .await
         {
             Ok(detail) => Ok(detail),
@@ -195,11 +214,16 @@ where
         }
     }
 
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "Attaching carries the new form's identity, status and Drive visibility"
+    )]
     async fn attach_to_new_database(
         &self,
         creator: &Viewer,
         name: String,
         database_id: DatabaseId,
+        is_hidden_in_drive: bool,
         id: FormId,
         status: FormStatus,
         policy: CreationPolicy,
@@ -291,7 +315,7 @@ where
             (submitted.id(), respondent.id()),
             layout,
             &table,
-            true,
+            Provenance::OwnDatabase { is_hidden_in_drive },
             id,
             status,
         )
@@ -397,7 +421,7 @@ where
             (submitted.id(), respondent.id()),
             layout,
             &table,
-            false,
+            Provenance::ExistingTable,
             id,
             status,
         )
@@ -418,7 +442,7 @@ where
         (submitted, respondent): (ColumnId, ColumnId),
         layout: FormLayout,
         table: &TableDetail,
-        name_follows_database: bool,
+        provenance: Provenance,
         id: FormId,
         status: FormStatus,
     ) -> Result<FormDetail, FormError> {
@@ -440,10 +464,20 @@ where
             confirmation_message: String::new(),
             created_at: now,
             updated_at: now,
+            is_hidden_in_drive: matches!(
+                provenance,
+                Provenance::OwnDatabase {
+                    is_hidden_in_drive: true
+                }
+            ),
         };
         match self
             .repository
-            .create_form(&form, &layout, name_follows_database)
+            .create_form(
+                &form,
+                &layout,
+                matches!(provenance, Provenance::OwnDatabase { .. }),
+            )
             .await
             .map_err(repository_error)?
         {

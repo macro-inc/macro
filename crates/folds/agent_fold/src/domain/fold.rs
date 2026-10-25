@@ -258,7 +258,9 @@ impl FoldMachineImpl {
 
 impl FoldMachine for FoldMachineImpl {
     fn push(&mut self, log: AgentSessionLog) -> Vec<FoldEvent<'_>> {
-        let changes = match self.replay.step(&mut self.state, log) {
+        let notification_count = self.state.metadata.notifications.len();
+        let noop_turn = self.state.metadata.noop_turn;
+        let mut changes = match self.replay.step(&mut self.state, log) {
             replay::Outcome::Changes(changes) => changes,
             replay::Outcome::Staged => return Vec::new(),
             replay::Outcome::Replaced => {
@@ -269,6 +271,11 @@ impl FoldMachine for FoldMachineImpl {
                 ];
             }
         };
+        if notification_count != self.state.metadata.notifications.len()
+            || noop_turn != self.state.metadata.noop_turn
+        {
+            changes.push(StepChange::Metadata);
+        }
         self.report(changes)
     }
 }

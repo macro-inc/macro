@@ -45,3 +45,20 @@ pub trait Events: Send + Sync {
         viewers: &[MacroUserIdStr<'static>],
     ) -> Result<(), PreviewError>;
 }
+
+/// Direct byte transport to a registered preview replica, never an arbitrary URL.
+#[async_trait]
+pub trait PeerConnector: Send + Sync {
+    /// Connect to the server-selected peer endpoint with a bounded dial timeout.
+    async fn connect(&self, address: std::net::SocketAddr) -> Result<Stream, PreviewError>;
+}
+
+/// Admitted direct peer stream. Slots live through response bodies and upgrades.
+pub struct PeerConnection {
+    /// Connected byte stream.
+    pub stream: Stream,
+    /// Shared forwarding concurrency slot.
+    pub permit: std::sync::Arc<tokio::sync::OwnedSemaphorePermit>,
+    /// Separate upgraded-stream concurrency slot.
+    pub upgrade_permit: Option<tokio::sync::OwnedSemaphorePermit>,
+}

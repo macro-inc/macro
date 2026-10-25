@@ -209,7 +209,9 @@ const handler = createToolRenderer({
   render: (ctx) => (
     <BaseTool icon={Terminal} renderContext={ctx.renderContext} type="call">
       <div class="flex min-w-0 flex-1 items-center justify-between gap-3 overflow-hidden">
-        <span class="min-w-0 truncate">Uploaded code</span>
+        <span class="min-w-0 truncate">
+          {ctx.response ? 'Uploaded code' : 'Upload code'}
+        </span>
         <Show when={ctx.response}>
           {(response) => (
             <div class="shrink-0">

@@ -146,7 +146,7 @@ export function Toolbar(props: {
                   <Portal>
                     <div
                       ref={list}
-                      class="fixed z-50 w-52 rounded-lg border border-edge-muted bg-menu p-1 text-ink text-xs shadow-lg"
+                      class="menu-surface fixed z-50 w-52 p-1 text-xs"
                       style={{
                         left: `${open().at.right + 4}px`,
                         top: `${open().at.top}px`,

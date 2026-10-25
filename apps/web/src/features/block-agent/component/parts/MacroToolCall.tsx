@@ -3,7 +3,11 @@
  * server, or called natively by Macro's own agent.
  *
  * Successful calls reuse their registered result renderer and its disclosure.
- * Running, stopped, failed, and unsupported calls keep a summary-only row.
+ * Running, failed, and stopped calls reuse the same renderer without a result,
+ * so they keep the tool's own label and icon: a running row shimmers, a failed
+ * one offers the tool's reason, and a stopped one says so.
+ * Calls whose arguments do not fit the tool, or that have no renderer, keep a
+ * summary-only row.
  * Only registered result renderers supply disclosures; raw payloads stay hidden.
  */
 
@@ -27,7 +31,7 @@ import {
 } from '@service-cognition/generated/tools/tool';
 import { createMemo, ErrorBoundary, type JSX, Show, Suspense } from 'solid-js';
 import { match } from 'ts-pattern';
-import { ToolCard } from '../../ui';
+import { isToolActive, ToolCard } from '../../ui';
 import type { ToolCallCommon, ToolCallContext } from './shared';
 
 type MacroDetail = Extract<ToolDetail, { kind: 'macro' }>;
@@ -56,6 +60,10 @@ export function MacroToolCall(props: {
       json: props.detail.input,
     }).unwrapOr(undefined)
   );
+  // The renderer parses its arguments once; a running call's can still be
+  // replaced (a harness may send `{}` before the real input), so it remounts
+  // when their content changes.
+  const inputKey = createMemo(() => JSON.stringify(props.detail.input));
   const subtitle = () => {
     const input = call()?.data;
     if (input && 'query' in input && typeof input.query === 'string') {
@@ -85,7 +93,7 @@ export function MacroToolCall(props: {
     return undefined;
   };
   const error = () => props.detail.error ?? responseError(response());
-  const failure = () => error() != null;
+  const failure = () => props.common.status === 'failed' || error() != null;
 
   const fallback = () => (
     <ToolCard
@@ -109,33 +117,54 @@ export function MacroToolCall(props: {
     !props.common.muted &&
     props.common.trailing == null &&
     !failure() &&
-    call() !== undefined &&
-    (response() !== undefined || legacyImage() !== undefined) &&
-    hasToolRenderer(props.common.label);
+    (response() !== undefined || legacyImage() !== undefined);
+  const canRenderFailure = () =>
+    (props.common.status === 'completed' || props.common.status === 'failed') &&
+    failure();
+  const running = () => isToolActive(props.common.status);
+  const showsResult = () => !running() && !props.common.stopped && !failure();
 
   return (
-    <Show when={canRenderResults()} fallback={fallback()}>
-      <ErrorBoundary fallback={fallback()}>
-        <Suspense fallback={fallback()}>
-          <RenderTool
-            tool_id={props.common.id}
-            name={props.common.label}
-            json={props.detail.input}
-            response={{ json: props.detail.output, name: props.common.label }}
-            chat_id={props.context.sessionId}
-            message_id={props.context.messageId}
-            part_index={props.context.partIndex}
-            isComplete={true}
-            renderContext={{
-              renderContext: {
-                isStreaming: false,
-                grouped: props.grouped ?? true,
-                followedBy: props.context.followedBy,
-              },
-            }}
-          />
-        </Suspense>
-      </ErrorBoundary>
+    <Show
+      when={
+        (canRenderResults() ||
+          canRenderFailure() ||
+          running() ||
+          props.common.stopped) &&
+        call() !== undefined &&
+        hasToolRenderer(props.common.label)
+      }
+      fallback={fallback()}
+    >
+      <Show when={inputKey()} keyed>
+        <ErrorBoundary fallback={fallback()}>
+          <Suspense fallback={fallback()}>
+            <RenderTool
+              tool_id={props.common.id}
+              name={props.common.label}
+              json={props.detail.input}
+              response={
+                showsResult()
+                  ? { json: props.detail.output, name: props.common.label }
+                  : undefined
+              }
+              error={failure() ? error() : undefined}
+              stopped={props.common.stopped}
+              chat_id={props.context.sessionId}
+              message_id={props.context.messageId}
+              part_index={props.context.partIndex}
+              isComplete={!running()}
+              renderContext={{
+                renderContext: {
+                  isStreaming: running(),
+                  grouped: props.grouped ?? true,
+                  followedBy: props.context.followedBy,
+                },
+              }}
+            />
+          </Suspense>
+        </ErrorBoundary>
+      </Show>
     </Show>
   );
 }
@@ -213,12 +242,14 @@ function MacroToolIcon(props: { name: string }): JSX.Element {
       'ReadMetadata',
       'ReadThread',
       'ReadChat',
+      'ReadAgentSession',
       'ReadProject',
       'ReadPresentation',
       'ReadDesign',
       'ReadPhotoshopDocument',
       'ReadIllustratorDocument',
       'ReadWordDocument',
+      'ReadCalendarEvent',
       () => <ReadIcon class="size-4" />
     )
     .with('WebFetch', () => <GlobeIcon class="size-4" />)

@@ -28,7 +28,7 @@ Never send a fragment as the new instructions: it would erase the rest.
 
 Pass only the fields that should change; `ConfigureAgent` keeps the others.
 
-- **Runtime (`harness`)**: `in-memory` is Macro's built-in chat agent; `cursor` and `claude-cloud` run on the user's connected Cursor or Claude account; `macrod` is a self-hosted harness and needs `harnessId`. Model ids are runtime-specific, so when the runtime changes, ask which model to use unless the user named one, and pass `defaultModel` in the same call.
+- **Runtime (`harness`)**: `in-memory` is Macro's built-in chat agent; `cursor` runs on the user's connected Cursor account; `macrod` is a self-hosted harness and needs `harnessId`. Model ids are runtime-specific, so when the runtime changes, ask which model to use unless the user named one, and pass `defaultModel` in the same call.
 - **Model (`defaultModel`)**: pass the id as the runtime names it. If the user gives a family name ("Sonnet", "Opus"), confirm the exact id before applying.
 - **Channels**: `channelScope: "all"` makes the agent mentionable everywhere the owner is; `channelIds` limits it to those channels - the complete list, and the user must belong to each. Resolve channel names to ids first.
 - **Connected apps**: `mcpScope: "owner_connections"` gives sessions whatever apps the person running them has connected; `mcpServers` pins an exact list of Pipedream apps by `appSlug` and `serverName`. `appSlug` must be a real Pipedream app slug, such as `linear` or `google_sheets`. An invented slug is rejected and the agent is left unchanged; if you are not sure of the slug, ask rather than guessing.

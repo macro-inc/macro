@@ -9,7 +9,7 @@ use rootcause::Report;
 use scheduled_action::domain::{
     event_runs::ConfigurationRevision,
     event_trigger::{ActionTrigger, EventFilter, EventFilters, EventName},
-    models::{ActionKind, ScheduledAction},
+    models::{ActionKind, RunVisibility, ScheduledAction},
     ports::ScheduledActionReadService,
 };
 use serde_json::{Value, json};
@@ -133,6 +133,7 @@ fn routine(
         claimed,
         next_run_at,
         enabled,
+        run_visibility: RunVisibility::Unlisted,
     }
 }
 

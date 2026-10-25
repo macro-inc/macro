@@ -15,25 +15,67 @@ import type {
   PropertyApiValues,
   PropertyOption,
 } from '@property/types';
+import { toPropertyDefinitionDomain } from '@property/utils/transforms';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
 import { fetchEntityProperties } from '@queries/properties/entity';
 import { useTagsQuery } from '@queries/properties/tags';
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import type { PropertyDefinitionDetailResponse } from '@service-properties/generated/schemas/propertyDefinitionDetailResponse';
+import type { PropertyDefinitionWithOptions } from '@service-properties/generated/schemas/propertyDefinitionWithOptions';
+import { createSignal } from 'solid-js';
 import { createStore, reconcile, type Store, unwrap } from 'solid-js/store';
 
 /**
  * Props shown in the composer (Linear-style left-to-right order). Project
  * shows only while Projects is enabled.
  */
-const COMPOSER_PROPERTIES = [
+export const DEFAULT_TASK_COMPOSER_PROPERTY_IDS = [
   SYSTEM_PROPERTY_IDS.STATUS,
   SYSTEM_PROPERTY_IDS.PRIORITY,
   SYSTEM_PROPERTY_IDS.ASSIGNEES,
   SYSTEM_PROPERTY_IDS.DUE_DATE,
   SYSTEM_PROPERTY_IDS.PROJECT,
 ];
-const COMPOSER_PROPERTY_SET = new Set<string>(COMPOSER_PROPERTIES);
+const COMPOSER_PROPERTY_SET = new Set<string>(
+  DEFAULT_TASK_COMPOSER_PROPERTY_IDS
+);
+
+/** Exclude definitions that cannot be edited on a task or belong to Tags. */
+export function taskComposerWritableDefinitions(
+  definitions: PropertyDefinition[],
+  tagSetIds: ReadonlySet<string> = new Set()
+): PropertyDefinition[] {
+  return definitions.filter(
+    (definition) =>
+      !definition.is_metadata &&
+      definition.data_type !== 'TAG' &&
+      definition.owner.scope !== 'database' &&
+      !tagSetIds.has(definition.id)
+  );
+}
+
+/** Keep the default order unless a host supplies its own visible property list. */
+export function taskComposerVisiblePropertyIds(
+  requested: readonly string[] | undefined,
+  available: readonly PropertyDefinition[],
+  projectsEnabled: boolean
+): string[] {
+  const ids = new Set(available.map((definition) => definition.id));
+  return [...new Set(requested ?? DEFAULT_TASK_COMPOSER_PROPERTY_IDS)].filter(
+    (id) =>
+      ids.has(id) && (id !== SYSTEM_PROPERTY_IDS.PROJECT || projectsEnabled)
+  );
+}
+
+/** Only Tags owns tag-set values; clearing tags must leave custom selects alone. */
+export function withoutTaskComposerTags(
+  values: Record<string, PropertyApiValues>,
+  tagSetIds: ReadonlySet<string>
+): Record<string, PropertyApiValues> {
+  const next = structuredClone(values);
+  for (const id of tagSetIds) delete next[id];
+  return next;
+}
 
 /** The Project value naming `projectId`. */
 export function taskComposerProjectValue(projectId: string): PropertyApiValues {
@@ -213,34 +255,66 @@ function extractPropertyValue(
  */
 export function createTaskComposerProperties(args: {
   initialValues: Record<string, PropertyApiValues>;
+  initialVisiblePropertyIds?: string[];
+  allDefinitions?: boolean;
 }) {
   const [propertyValues, setPropertyValues] = createStore<
     Record<string, PropertyApiValues>
   >(args.initialValues);
 
+  const [visiblePropertyIds, setVisiblePropertyIds] = createSignal(
+    args.initialVisiblePropertyIds ?? DEFAULT_TASK_COMPOSER_PROPERTY_IDS
+  );
   const systemPropertiesQuery = useListPropertiesQuery(() => ({
-    scope: 'system',
+    scope: args.allDefinitions ? 'all' : 'system',
     includeOptions: true,
+    forEntityType: args.allDefinitions ? 'TASK' : undefined,
   }));
   const tagsQuery = useTagsQuery();
+  const [createdProperties, setCreatedProperties] = createSignal<
+    PropertyDefinitionWithOptions[]
+  >([]);
+  const propertyDefinitions = () => {
+    const fetched = systemPropertiesQuery.isSuccess
+      ? systemPropertiesQuery.data
+      : [];
+    return [
+      ...fetched,
+      ...createdProperties().filter(
+        (created) =>
+          !fetched.some(
+            (item) =>
+              ('definition' in item ? item.definition.id : item.id) ===
+              created.definition.id
+          )
+      ),
+    ];
+  };
 
-  const definitions = () => {
-    if (!systemPropertiesQuery.isSuccess) return new Map();
-    const data = systemPropertiesQuery.data;
-    return new Map(
-      data.map((p) => {
-        const definition = 'definition' in p ? p.definition : p;
-        return [definition.id, definition];
-      })
+  const availableDefinitions = () => {
+    const tagSetIds = new Set(
+      (tagsQuery.isSuccess ? tagsQuery.data : []).flatMap((tagSet) =>
+        tagSet.definition ? [tagSet.definition.id] : []
+      )
+    );
+    return taskComposerWritableDefinitions(
+      propertyDefinitions().map((item) =>
+        'definition' in item ? item.definition : item
+      ),
+      tagSetIds
     );
   };
+  const definitions = () =>
+    new Map(
+      availableDefinitions().map((definition) => [definition.id, definition])
+    );
 
   const createDefinitions = () => {
     const map = new Map<
       PropertyDefinition['id'],
       PropertyDefinition | PropertyDefinitionDetailResponse
     >(definitions());
-    for (const tagSet of tagsQuery.data ?? []) {
+    for (const tagSet of tagsQuery.isSuccess ? tagsQuery.data : []) {
       if (tagSet.definition) {
         map.set(tagSet.definition.id, tagSet.definition);
       }
@@ -249,8 +323,7 @@ export function createTaskComposerProperties(args: {
   };
 
   const options = () => {
-    if (!systemPropertiesQuery.isSuccess) return new Map();
-    const data = systemPropertiesQuery.data;
+    const data = propertyDefinitions();
     return new Map(
       data.map((p) => {
         const definition = 'definition' in p ? p.definition : p;
@@ -262,9 +335,44 @@ export function createTaskComposerProperties(args: {
 
   const projects = useFeatureFlag(enableProjects);
 
+  const visibleIds = () =>
+    taskComposerVisiblePropertyIds(
+      visiblePropertyIds(),
+      availableDefinitions(),
+      projects().enabled
+    );
+  const addableDefinitions = () =>
+    availableDefinitions().filter(
+      (definition) =>
+        !visibleIds().includes(definition.id) &&
+        (definition.id !== SYSTEM_PROPERTY_IDS.PROJECT || projects().enabled)
+    );
+  const addProperty = async (
+    id: string,
+    created?: PropertyDefinitionWithOptions
+  ) => {
+    if (created) {
+      setCreatedProperties((current) => [
+        ...current.filter((property) => property.definition.id !== id),
+        created,
+      ]);
+    }
+    if (!addableDefinitions().some((definition) => definition.id === id))
+      return;
+    setVisiblePropertyIds((current) => [...current, id]);
+  };
+  const availableProperties = () =>
+    availableDefinitions()
+      .filter(
+        (definition) =>
+          definition.id !== SYSTEM_PROPERTY_IDS.PROJECT || projects().enabled
+      )
+      .map((definition) =>
+        toPropertyDefinitionDomain(definition, options().get(definition.id))
+      );
+
   const properties = (): Property[] => {
-    return filterMap(COMPOSER_PROPERTIES, (id) => {
-      if (id === SYSTEM_PROPERTY_IDS.PROJECT && !projects().enabled) return;
+    return filterMap(visibleIds(), (id) => {
       const definition = definitions().get(id);
       if (!definition) return;
       return {
@@ -310,24 +418,26 @@ export function createTaskComposerProperties(args: {
     }
   );
 
-  /** Drops every applied tag value, keeping the composer's system props. */
+  /** Drops applied tags without clearing other select properties. */
   const clearComposerTags = () => {
-    const next = structuredClone(unwrap(propertyValues));
-    for (const [definitionId, value] of Object.entries(next)) {
-      if (
-        value.valueType === 'SELECT_STRING' &&
-        !COMPOSER_PROPERTY_SET.has(definitionId)
-      ) {
-        delete next[definitionId];
-      }
-    }
-    setPropertyValues(reconcile(next));
+    const tagSetIds = new Set(
+      (tagsQuery.isSuccess ? tagsQuery.data : []).flatMap((tagSet) =>
+        tagSet.definition ? [tagSet.definition.id] : []
+      )
+    );
+    setPropertyValues(
+      reconcile(withoutTaskComposerTags(unwrap(propertyValues), tagSetIds))
+    );
   };
 
   return {
     propertyValues,
     setPropertyValues,
     properties,
+    visiblePropertyIds,
+    setVisiblePropertyIds,
+    availableProperties,
+    addProperty,
     saveHandler,
     composerTags,
     clearComposerTags,

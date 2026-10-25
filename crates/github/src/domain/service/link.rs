@@ -9,12 +9,12 @@ use macro_user_id::{
 
 use crate::domain::{
     models::{
-        EnrichedGithubPullRequest, GithubAccessToken, GithubDraftOutcome, GithubError, GithubLink,
-        GithubLinkStatus, GithubMergeMethod, GithubMergeOutcome, GithubMergeRejection,
-        GithubPullRequestMergeabilityEntry, GithubPullRequestMergeabilityRequest,
-        GithubPullRequestNumber, GithubPullRequestRef, MergeGithubPullRequestRequest,
-        MergeGithubPullRequestResponse, SetGithubPullRequestDraftRequest,
-        SetGithubPullRequestDraftResponse,
+        EnrichedGithubPullRequest, GithubAccessToken, GithubDraftOutcome, GithubError,
+        GithubGrantLinkOutcome, GithubLink, GithubLinkStatus, GithubMergeMethod,
+        GithubMergeOutcome, GithubMergeRejection, GithubPullRequestMergeabilityEntry,
+        GithubPullRequestMergeabilityRequest, GithubPullRequestNumber, GithubPullRequestRef,
+        MergeGithubPullRequestRequest, MergeGithubPullRequestResponse,
+        SetGithubPullRequestDraftRequest, SetGithubPullRequestDraftResponse,
     },
     ports::{Auth, GithubLinkService, GithubOauth, GithubRepo},
 };
@@ -92,9 +92,14 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService>
     ) -> Result<GithubAccessToken, GithubError> {
         let access_token = self
             .auth
-            .retreive_access_token(&link.fusionauth_user_id, &self.config.idp_id)
+            .retreive_access_token(
+                &link.fusionauth_user_id,
+                &self.config.idp_id,
+                &link.github_user_id,
+            )
             .await
-            .map_err(|e| GithubError::Internal(e.into()))?;
+            .map_err(|e| GithubError::Internal(e.into()))?
+            .ok_or(GithubError::ReauthenticationRequired)?;
 
         let token_is_expired = self
             .oauth
@@ -376,10 +381,25 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService> Github
         &self,
         macro_user_id: &MacroUserId<Lowercase<'static>>,
     ) -> Result<(), GithubError> {
+        let mut user_guard = self
+            .repo
+            .lock_user_link(macro_user_id.as_ref())
+            .await
+            .map_err(|e| GithubError::Internal(e.into()))?;
         let Some(link) = self.find_user_link(macro_user_id).await? else {
             tracing::trace!("no github link found for user");
             return Ok(());
         };
+
+        self.repo
+            .lock_github_account(&mut user_guard, &link.github_user_id)
+            .await
+            .map_err(|e| GithubError::Internal(e.into()))?;
+        // A different sharer may have repaired the owner while we waited.
+        let link = self
+            .find_user_link(macro_user_id)
+            .await?
+            .ok_or(GithubError::NoLinkFound)?;
 
         // Count how many Macro users share this GitHub account. The FusionAuth
         // IdP link + token live on the owner's row and are reused by every
@@ -417,7 +437,7 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService> Github
         Ok(())
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, user_id, code, redirect_uri), err)]
     async fn link_user(
         &self,
         user_id: &MacroUserId<Lowercase<'static>>,
@@ -443,30 +463,28 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService> Github
             .await
             .map_err(|e| GithubError::Internal(e.into()))?;
 
-        tracing::trace!(user_info=?user_info, "got user info");
+        tracing::trace!(github_user_id = user_info.id, "got github user identity");
 
         let gh_id = user_info.id.to_string();
 
+        let mut user_guard = self
+            .repo
+            .lock_user_link(user_id.as_ref())
+            .await
+            .map_err(|e| GithubError::Internal(e.into()))?;
         // 1. Does THIS user already have a link, and to which account?
         let this_user_link = self.find_user_link(user_id).await?;
 
         if let Some(existing) = &this_user_link
-            && existing.github_user_id == gh_id
+            && existing.github_user_id != gh_id
         {
-            // Idempotent re-link of the SAME account by the SAME user: skip auth + skip
-            // insert (avoids violating the new (macro_id, github_user_id) unique). Still
-            // clean up the in-progress link, then return the existing link.
-            let _ = self
-                .repo
-                .delete_in_progress_user_link(in_progess_link_id)
-                .await
-                .inspect_err(|e| tracing::error!(error=?e, "unable to delete in progress link id"));
-            return Ok(existing.clone());
+            return Err(GithubError::AccountMismatch);
         }
-        // else: user previously linked a DIFFERENT github account; fall through and link
-        // the new one (frontend is single-valued; not enforced here — matches prior
-        // behavior).
 
+        self.repo
+            .lock_github_account(&mut user_guard, &gh_id)
+            .await
+            .map_err(|e| GithubError::Internal(e.into()))?;
         // 2. Does anyone already OWN this github account? (owner row = earliest row)
         let account_owner = self
             .repo
@@ -476,17 +494,56 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService> Github
 
         let row_fusionauth_user_id = match &account_owner {
             Some(owner) => {
-                // SHARER: reuse the owner's shared FusionAuth grant. Do NOT call auth.link_user.
-                tracing::debug!(
-                    owner_fa_id=%owner.fusionauth_user_id,
-                    github_user_id=%gh_id,
-                    "linking additional macro user as github account sharer"
-                );
-                owner.fusionauth_user_id
+                let result = self
+                    .auth
+                    .link_user(
+                        &owner.fusionauth_user_id,
+                        &self.config.idp_id,
+                        &gh_id,
+                        &user_info.login,
+                        &tokens.access_token,
+                    )
+                    .await
+                    .map_err(|e| GithubError::Internal(e.into()))?;
+                if result == GithubGrantLinkOutcome::IdentityMissing {
+                    // OAuth verified this GitHub account; migrate every sharer
+                    // only after storing the grant on the current identity.
+                    let result = self
+                        .auth
+                        .link_user(
+                            fusionauth_user_id,
+                            &self.config.idp_id,
+                            &gh_id,
+                            &user_info.login,
+                            &tokens.access_token,
+                        )
+                        .await
+                        .map_err(|e| GithubError::Internal(e.into()))?;
+                    if result == GithubGrantLinkOutcome::IdentityMissing {
+                        return Err(GithubError::ReauthenticationRequired);
+                    }
+                    self.repo
+                        .reassign_github_grant(
+                            &gh_id,
+                            &owner.fusionauth_user_id,
+                            fusionauth_user_id,
+                        )
+                        .await
+                        .map_err(|e| GithubError::Internal(e.into()))?;
+                }
+                // Re-read after compare-and-swap so a concurrent repair cannot leave
+                // a new sharer pointing at the grant we originally observed.
+                self.repo
+                    .get_github_link_by_github_user_id(&gh_id)
+                    .await
+                    .map_err(|e| GithubError::Internal(e.into()))?
+                    .ok_or(GithubError::NoLinkFound)?
+                    .fusionauth_user_id
             }
             None => {
                 // OWNER (first linker): create the FusionAuth IdP link/token as before.
-                self.auth
+                let result = self
+                    .auth
                     .link_user(
                         fusionauth_user_id,
                         &self.config.idp_id,
@@ -497,11 +554,29 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService> Github
                     .await
                     .map_err(|e| GithubError::Internal(e.into()))?;
 
+                if result == GithubGrantLinkOutcome::IdentityMissing {
+                    return Err(GithubError::ReauthenticationRequired);
+                }
                 tracing::trace!("linked auth user");
 
                 *fusionauth_user_id
             }
         };
+
+        if let Some(existing) = this_user_link
+            && existing.github_user_id == gh_id
+        {
+            let link = self
+                .find_user_link(user_id)
+                .await?
+                .ok_or(GithubError::NoLinkFound)?;
+            let _ = self
+                .repo
+                .delete_in_progress_user_link(in_progess_link_id)
+                .await
+                .inspect_err(|e| tracing::error!(error=?e, "unable to delete in progress link id"));
+            return Ok(link);
+        }
 
         // create github link
         let link = GithubLink {
@@ -517,7 +592,6 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService> Github
         tracing::debug!(
             fusionauth_user_id=%fusionauth_user_id,
             github_user_id=%user_info.id,
-            github_username=%user_info.login,
             "creating github_links record"
         );
 

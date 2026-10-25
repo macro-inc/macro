@@ -17,7 +17,6 @@ import {
   useSplitDisplayName,
   useSplitPanelOrThrow,
 } from '@components/app/split-layout/layoutUtils';
-import { TabsInset } from '@core/component/TabsInset';
 import { toast } from '@core/component/Toast/Toast';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -25,8 +24,9 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import StackIcon from '@phosphor/stack.svg';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { Property } from '@property/types';
-import { Button } from '@ui';
+import { Button, Tabs } from '@ui';
 import { createSignal, Match, Show, Suspense, Switch } from 'solid-js';
+import type { TaskCreateOptions } from '../tasks-view/types';
 import { DeleteProjectsDialog } from './components/delete-projects-dialog';
 import { ProjectMenuDropdown } from './components/project-row-menu';
 import { ProjectContentSkeleton } from './components/project-skeletons';
@@ -218,7 +218,7 @@ function ProjectDetailHost(props: ProjectDetailProps) {
       route: projectDetailRoute,
       params: { projectId: props.route.id, section },
     });
-  const createTask = (dueDate?: Date) => {
+  const createTask = (options?: TaskCreateOptions) => {
     const projectId = props.route.id;
     layout.popoverSplit({
       type: 'component',
@@ -228,7 +228,8 @@ function ProjectDetailHost(props: ProjectDetailProps) {
           ...args: Parameters<NonNullable<ComposeTaskProps['createTask']>>
         ) => commands.createTask(projectId, ...args),
         initialProjectId: projectId,
-        initialDueDate: dueDate,
+        initialDueDate: options?.dueDate,
+        composerContext: options?.composerContext,
         onSuccess: () => section('tasks'),
       },
     });
@@ -257,15 +258,16 @@ function ProjectDetailHost(props: ProjectDetailProps) {
           </Show>
         }
         navigation={
-          <TabsInset
-            list={[
+          <Tabs
+            aria-label="Project sections"
+            touch="inset"
+            class="shrink-0"
+            options={[
               { value: 'overview', label: 'Overview' },
               { value: 'tasks', label: 'Tasks' },
             ]}
             value={props.route.section}
-            onChange={(value) => section(value as ProjectSection)}
-            aria-label="Project sections"
-            class="shrink-0 whitespace-nowrap"
+            onChange={section}
           />
         }
       >
@@ -280,7 +282,7 @@ function ProjectDetailHost(props: ProjectDetailProps) {
           )}
         </Show>
       </EntityDetailTopBar>
-      <div class="relative min-h-0 min-w-0 flex-1">
+      <div class="relative min-h-0 min-w-0 flex-1 touch:[--mobile-content-inset-top:0px]">
         <Suspense
           fallback={<ProjectContentSkeleton section={props.route.section} />}
         >

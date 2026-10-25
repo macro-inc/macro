@@ -3,6 +3,7 @@ import type { EmailMessage } from '@app/features/email-message/core/email-messag
 import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
 import { inboxIconProps } from '@core/component/inboxIcon';
 import { UserIcon } from '@core/component/UserIcon';
+import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowBendUpLeft from '@phosphor/arrow-bend-up-left.svg';
 import ArrowBendUpRight from '@phosphor/arrow-bend-up-right.svg';
 import ArrowDown from '@phosphor/arrow-down.svg';
@@ -27,17 +28,15 @@ function ReplyActionButton(props: {
   const viewContext = useEmailThreadViewContext();
   return (
     <Button
-      // Button wraps itself in Layer depth={0} by default; in the floating
-      // accessory region, match the chrome's depth so the island surface
-      // matches the dock buttons. (The region host's Layer can't help —
-      // Button's own Layer would reset it.)
+      // Button owns its Layer; floating actions use the dock's chrome depth.
       depth={viewContext.thread.isTouch() ? 3 : undefined}
       variant="outline"
+      glass={false}
       aria-label={props.ariaLabel}
       disabled={props.disabled}
       class={cn(
         // Island pills when floating in the mobile/tablet accessory region.
-        'touch:island touch:h-8 touch:border-0',
+        'touch:island touch:bg-chrome touch:text-ink touch:h-8 touch:border-0',
         !props.label && 'touch:w-9 touch:p-0'
       )}
       onClick={props.onClick}
@@ -88,7 +87,10 @@ export function BottomReplyButtons(props: {
     if (isDone()) {
       ctx.markThreadNotDone();
     } else if (props.navigation) {
-      props.navigation.markDone(ctx.archiveThread);
+      fireAndForget(
+        props.navigation.markDone(ctx.archiveThread),
+        'email-thread'
+      );
     } else {
       ctx.archiveThread();
     }

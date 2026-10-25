@@ -1,3 +1,6 @@
+import { ENABLE_MENTION_TRACKING } from '@core/constant/featureFlags';
+import { useUserId } from '@core/context/user';
+import { getDisplayName, tryMacroId } from '@core/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { GraphicsEditor } from '@macro-inc/graphics';
 import { debounce } from '@solid-primitives/scheduled';
@@ -5,21 +8,27 @@ import {
   createEffect,
   createResource,
   createSignal,
+  Match,
   onCleanup,
   Show,
+  Switch,
   useContext,
 } from 'solid-js';
 import { CanvasNextEditor } from './canvas-next';
 import type { CanvasDocumentProps } from './component/CanvasDocument';
+import { Loading } from './component/Loading';
 import { CanvasAncestry } from './context/canvas-ancestry';
+import { readSharedCanvas } from './core/collaboration';
 import type { CanvasFile } from './core/document-format';
 import { createNumericParser } from './core/parse';
-import { createDocumentPersistence } from './primitives/create-document-persistence';
+import { createSharedReferenceTracking } from './primitives/create-shared-reference-tracking';
 import {
   fetchCanvasViewLocation,
   saveCanvasViewLocation,
 } from './queries/canvas-document';
-import { canvasDocumentSource } from './queries/document';
+import { createCanvasSession } from './queries/canvas-session';
+import { canvasSyncSource } from './queries/canvas-sync';
+import { canvasReferenceSource } from './queries/references';
 
 const parseLocation = createNumericParser<{
   x?: number;
@@ -34,13 +43,51 @@ const parseLocation = createNumericParser<{
 export default function CanvasNextDocument(
   props: CanvasDocumentProps & { initial: CanvasFile }
 ) {
+  const [attempt, setAttempt] = createSignal(1);
+  return (
+    <Show when={attempt()} keyed>
+      {(_attempt) => (
+        <CanvasDocumentSession
+          {...props}
+          retry={() => setAttempt((value) => value + 1)}
+        />
+      )}
+    </Show>
+  );
+}
+
+function CanvasDocumentSession(
+  props: CanvasDocumentProps & { initial: CanvasFile; retry: () => void }
+) {
   const ancestors = useContext(CanvasAncestry);
   const documentId = props.documentId;
   const initial = props.initial;
-  const canEdit = () => props.canEdit && !props.isNested;
   const activePointers = new Set<number>();
-  const [persistence, setPersistence] =
-    createSignal<ReturnType<typeof createDocumentPersistence>>();
+  const userId = useUserId();
+  const openedBy = userId();
+  const sync = canvasSyncSource(documentId, userId);
+  const canEdit = () =>
+    props.canEdit &&
+    !props.isNested &&
+    userId() === openedBy &&
+    sync.canWrite();
+  const session = createCanvasSession({
+    documentId,
+    initial,
+    requireShared: props.shared,
+    userId: userId(),
+    canEdit,
+    ...sync,
+  });
+  const sharedDoc = () => {
+    const state = session.state();
+    return state.t === 'ready' ? state.doc : undefined;
+  };
+  const error = () => {
+    const state = session.state();
+    return state.t === 'error' ? state.message : session.failure();
+  };
+  const [revision, setRevision] = createSignal(0);
   const [editor, setEditor] = createSignal<GraphicsEditor>();
   const [savedLocation] = createResource(async () =>
     props.isNested || props.view ? null : fetchCanvasViewLocation(documentId)
@@ -73,7 +120,7 @@ export default function CanvasNextDocument(
       s: Math.round(camera.scale * 100),
     };
   };
-  const content = (
+  const renderEditor = (doc?: import('loro-crdt').LoroDoc) => (
     <div
       class="relative flex size-full min-h-0 flex-col"
       on:pointerdown={(event) => activePointers.add(event.pointerId)}
@@ -83,21 +130,41 @@ export default function CanvasNextDocument(
           <CanvasNextEditor
             documentId={documentId}
             initial={initial}
-            canEdit={props.canEdit}
+            doc={doc}
+            session={doc ? session : undefined}
+            displayName={(userId) =>
+              getDisplayName(tryMacroId(userId ?? ''), {
+                emailFallback: 'local-part',
+              }) || 'Someone'
+            }
+            canEdit={!!doc && canEdit()}
             isEmbedded={props.isNested}
             fitOnLoad={!location()}
             onReady={(current, finishText) => {
               setEditor(current);
-              const saving = createDocumentPersistence(
-                current,
-                initial,
-                canvasDocumentSource(documentId, canEdit, initial)
+              if (doc)
+                session.finishEditing(() => {
+                  if (canEdit()) finishText();
+                });
+              const detachDocument = current.subscribeDocument(() =>
+                setRevision((value) => value + 1)
               );
-              setPersistence(saving);
+              if (doc && ENABLE_MENTION_TRACKING)
+                createSharedReferenceTracking(
+                  doc,
+                  documentId,
+                  canEdit,
+                  session.flush,
+                  canvasReferenceSource(documentId)
+                );
               props.registerMethods?.({
                 exportCanvas: async () => {
+                  if (props.shared && !doc)
+                    throw new Error('Shared Canvas content is not loaded');
                   if (canEdit()) finishText();
-                  return { ...initial, document: current.document };
+                  return doc
+                    ? readSharedCanvas(doc, documentId)
+                    : { ...initial, document: current.document };
                 },
                 goToLocationFromParams: (params) =>
                   applyLocation(parseLocation(params)),
@@ -141,11 +208,11 @@ export default function CanvasNextDocument(
               });
               const flush = () => {
                 if (canEdit()) finishText();
-                fireAndForget(saving.flush(), 'canvas-persistence');
+                if (doc) fireAndForget(session.flush(), 'canvas-session');
               };
               const beforeUnload = (event: BeforeUnloadEvent) => {
                 flush();
-                if (saving.dirty()) {
+                if (session.pending() || session.failure()) {
                   event.preventDefault();
                   event.returnValue = '';
                 }
@@ -154,7 +221,7 @@ export default function CanvasNextDocument(
               window.addEventListener('beforeunload', beforeUnload);
               onCleanup(() => {
                 flush();
-                saving.dispose();
+                detachDocument();
                 unsubscribe();
                 notifyLocation.clear();
                 window.removeEventListener('pointerup', pointerEnd, true);
@@ -169,9 +236,72 @@ export default function CanvasNextDocument(
       </Show>
     </div>
   );
+  const content = (
+    <div class="relative size-full min-h-0">
+      <Show when={error()}>
+        {(message) => (
+          <div
+            role="alert"
+            class="absolute top-2 left-2 z-50 rounded border border-edge-muted bg-panel p-2 text-sm"
+          >
+            {message()}{' '}
+            <Show
+              when={session.state().t === 'error'}
+              fallback={
+                <button
+                  type="button"
+                  class="underline"
+                  onClick={() =>
+                    fireAndForget(session.retrySave(), 'canvas-session')
+                  }
+                >
+                  Retry saving
+                </button>
+              }
+            >
+              <button type="button" class="underline" onClick={props.retry}>
+                Retry
+              </button>
+            </Show>
+          </div>
+        )}
+      </Show>
+      <Switch>
+        <Match when={sharedDoc()} keyed>
+          {(doc) => renderEditor(doc)}
+        </Match>
+        <Match
+          when={
+            session.state().t === 'unshared' || session.state().t === 'error'
+          }
+        >
+          {renderEditor()}
+        </Match>
+        <Match when={session.state().t === 'loading'}>
+          <Loading />
+        </Match>
+      </Switch>
+    </div>
+  );
   return props.children
     ? props.children(content, {
-        savedFile: () => persistence()?.savedFile(),
+        savedFile: () => {
+          revision();
+          const current = editor();
+          if (!current) return;
+          const doc = sharedDoc();
+          if (props.shared && !doc) return;
+          return new Blob(
+            [
+              JSON.stringify(
+                doc
+                  ? readSharedCanvas(doc, documentId)
+                  : { ...initial, document: current.document }
+              ),
+            ],
+            { type: 'application/x-macro-canvas' }
+          );
+        },
         location: currentLocation,
       })
     : content;

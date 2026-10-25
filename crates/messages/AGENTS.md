@@ -15,6 +15,16 @@ they need.
 - `src/domain/api.rs`: `MessageServiceApi`, the boundary HTTP/agents/channel
   adapters call through.
 - `src/inbound/axum_router.rs`: the HTTP surface (feature `inbound`).
+- `src/inbound/toolset.rs`: the AI tools for any entity's Discussion
+  (`ReadDiscussion`, `Comment`, `EditComment`, `DeleteComment`,
+  `ResolveComment`; feature `ai_tools`), addressed by parent kind and id or by
+  a thread or comment id alone. `DiscussionParentType::from_parent` is
+  exhaustive: a new `MessageParent` variant decides there whether the tools
+  address it.
+- `src/domain/discussions.rs`: a parent's live threads with all replies, the
+  read both `ReadDiscussion` and the document comment reader share.
+- `src/domain/service/guest_chat.rs` + `src/inbound/guest_chat.rs`: live guest
+  call discussions; the call domain verifies RTC credentials and membership.
 - `src/outbound/pg_message_repo.rs` + `pg_discussion_context.rs`: Postgres
   adapters (feature `outbound`).
 - `src/outbound/connection_gateway.rs`, `notification_sender.rs`, `broker.rs`:
@@ -49,10 +59,14 @@ they need.
 
 - `cargo test -p messages --all-features` (`SQLX_OFFLINE` unset).
 
+New posts use the message sender receipt to retain signed code-mode agent
+attribution. All other operations use the caller receipt so attribution cannot
+grant users another agent invocation's edit, deletion, or reaction authority.
+
 ## Gotchas
 
-- Most modules are feature-gated (`annotations`, `broker`, `delivery`,
-  `inbound`, `outbound`, `ports`, `schema`); a caller enabling the wrong
+- Most modules are feature-gated (`ai_tools`, `annotations`, `broker`,
+  `delivery`, `inbound`, `outbound`, `ports`, `schema`); a caller enabling the wrong
   combination gets a missing-module compile error, not a runtime one — check
   `Cargo.toml`'s `[features]` table before adding a dependency edge.
 

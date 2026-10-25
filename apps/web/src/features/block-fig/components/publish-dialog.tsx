@@ -35,7 +35,7 @@ function ChangeBadge(props: { change: AssetChange['change'] }) {
         .with('NEW', () => 'New')
         .with('CHANGED', () => 'Changed')
         .with('REMOVED', () => 'Removed')
-        .exhaustive()}
+        .exhaustive(() => 'Changed')}
     </span>
   );
 }

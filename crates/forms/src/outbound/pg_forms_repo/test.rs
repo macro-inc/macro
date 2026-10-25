@@ -172,6 +172,7 @@ fn form_over(table: &Table) -> Form {
         confirmation_message: "".into(),
         created_at: at(9),
         updated_at: at(9),
+        is_hidden_in_drive: false,
     }
 }
 
@@ -249,6 +250,30 @@ async fn a_created_form_reads_back_with_its_layout_and_owner_grant(pool: PgPool)
         repo.forms_by_ids(&[form.id, FormId::new()]).await.unwrap(),
         vec![form]
     );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_form_hidden_in_drive_stays_hidden_through_a_rename(pool: PgPool) {
+    let table = insert_table(&pool).await;
+    let repo = PgFormsRepo::new(pool.clone());
+    let form = Form {
+        is_hidden_in_drive: true,
+        ..form_over(&table)
+    };
+    repo.create_form(&form, &layout_over(&table), true)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        repo.forms_by_ids(&[form.id]).await.unwrap(),
+        vec![form.clone()]
+    );
+    let renamed = repo
+        .rename_form(form.id, "Lunch?", at(12))
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(renamed.is_hidden_in_drive);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

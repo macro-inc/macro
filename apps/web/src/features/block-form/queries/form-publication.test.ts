@@ -19,6 +19,7 @@ const detail: FormCollaboration['detail'] = {
     confirmationMessage: 'Thank you',
     createdAt: '2026-10-05T09:00:00Z',
     updatedAt: '2026-10-05T09:00:00Z',
+    isHiddenInDrive: false,
   },
   access: 'edit',
   tableGone: false,
@@ -45,7 +46,7 @@ const detail: FormCollaboration['detail'] = {
 };
 
 describe('publicationMessage', () => {
-  it('names the affected question and uses screener wording', () => {
+  it('names the affected question and uses gate wording', () => {
     expect(
       publicationMessage({
         detail,
@@ -54,7 +55,7 @@ describe('publicationMessage', () => {
           problem: { kind: 'gateNamesLaterColumn', column: 'column' },
         },
       })
-    ).toBe('“Name” must come before the screener that checks it.');
+    ).toBe('“Name” must come before the gate that checks it.');
     expect(
       publicationMessage({
         detail,
@@ -76,5 +77,22 @@ describe('publicationMessage', () => {
       'This draft couldn’t be read. Your published form is still available.'
     );
     expect(publicationMessage({ detail })).toBeUndefined();
+  });
+
+  it('gives generic copy for problems from a newer server instead of throwing', () => {
+    expect(
+      publicationMessage({
+        detail,
+        publicationError: JSON.parse('{"kind":"quotaExceeded"}'),
+      })
+    ).toBe('Your draft is saved, but it couldn’t be published yet.');
+    expect(
+      publicationMessage({
+        detail,
+        publicationError: JSON.parse(
+          '{"kind":"layout","problem":{"kind":"tooManySections"}}'
+        ),
+      })
+    ).toBe('Your draft is saved, but it couldn’t be published yet.');
   });
 });

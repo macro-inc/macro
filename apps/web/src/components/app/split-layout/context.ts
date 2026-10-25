@@ -6,6 +6,7 @@ import {
   createContext,
   type JSX,
   type Setter,
+  type Signal,
 } from 'solid-js';
 import type { SplitHandle, SplitManager } from './layoutManager';
 import type { ReplaceOwnedSlot } from './utils/createOwnedSlots';
@@ -89,6 +90,11 @@ export type SplitPanelContextType = {
   panelSize: NullableSize;
   contentOffsetTop: Accessor<number>;
   setContentOffsetTop: Setter<number>;
+  /**
+   * Whether workspace navigation is hidden in a split other than the first.
+   * Owned by the split, so it carries across the views the split shows.
+   */
+  navigationCollapsed?: Signal<boolean>;
   bottomPanel: Accessor<SplitBottomPanelRegistration | undefined>;
   registerBottomPanel: (panel: SplitBottomPanelRegistration) => () => void;
   layoutRefs: {

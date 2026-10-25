@@ -58,6 +58,7 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
             <Button
               variant="ghost"
               size="icon-sm"
+              label="Show quoted text"
               onClick={() => setShowFullHTML(true)}
               class={cn(
                 'text-ink-extra-muted hover:text-ink-muted',

@@ -1,0 +1,48 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT d.id, d.name, team.id AS \"team_id?\", team.name AS \"team_name?\",\n                d.owner = $1 AS \"can_manage!\"\n            FROM calendar_event_notes note\n            JOIN calendar_events event ON event.id = note.event_id\n            JOIN calendar_events requested ON requested.id = $2\n              AND requested.ical_uid = event.ical_uid\n              AND lower(requested.organizer_email) IS NOT DISTINCT FROM lower(event.organizer_email)\n            JOIN \"Document\" d ON d.id = note.document_id AND d.\"deletedAt\" IS NULL AND d.\"fileType\" = 'md'\n            LEFT JOIN team ON team.id = note.team_id\n            WHERE note.occurrence_key = calendar_note_link_key($2, $3) AND event.status <> 'cancelled'\n              AND calendar_note_event_visible($1, note.event_id, note.occurrence_key)\n              AND calendar_note_copies_match(requested.id, note.event_id, calendar_note_link_key($2, $3))\n            ORDER BY note.created_at, d.id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "team_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "team_name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "can_manage!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "718a734ca1b531d26b2ff84915e9633359af1b17a7b0c3fc5026a61fd0549047"
+}

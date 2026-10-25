@@ -1797,3 +1797,43 @@ fn crm_associations_deduplicate_repeated_records() {
     assert_eq!(ast.crm_associations(), vec![company]);
     assert!(EntityFilterAst::default().crm_associations().is_empty());
 }
+
+#[test]
+fn agent_session_source_literals_use_the_column_values() {
+    use crate::ast::agent_session::{AgentSessionLiteral, AgentSessionSource};
+
+    let tree: Expr<AgentSessionLiteral> =
+        serde_json::from_value(json!({ "!": { "l": { "src": "routine" } } })).unwrap();
+    assert_matches!(&tree, Expr::Not(inner) => {
+        assert_matches!(
+            **inner,
+            Expr::Literal(AgentSessionLiteral::Source(AgentSessionSource::Routine))
+        );
+    });
+    assert_eq!(
+        serde_json::to_value(&tree).unwrap(),
+        json!({ "!": { "l": { "src": "routine" } } })
+    );
+    assert_eq!(<&str>::from(AgentSessionSource::User), "user");
+    assert_eq!("routine".parse(), Ok(AgentSessionSource::Routine));
+}
+
+#[test]
+fn agent_session_visibility_literals_use_the_column_values() {
+    use crate::ast::agent_session::{AgentSessionLiteral, AgentSessionVisibility};
+
+    let tree: Expr<AgentSessionLiteral> =
+        serde_json::from_value(json!({ "!": { "l": { "vis": "unlisted" } } })).unwrap();
+    assert_matches!(&tree, Expr::Not(inner) => {
+        assert_matches!(
+            **inner,
+            Expr::Literal(AgentSessionLiteral::Visibility(AgentSessionVisibility::Unlisted))
+        );
+    });
+    assert_eq!(
+        serde_json::to_value(&tree).unwrap(),
+        json!({ "!": { "l": { "vis": "unlisted" } } })
+    );
+    assert_eq!(<&str>::from(AgentSessionVisibility::Listed), "listed");
+    assert_eq!("unlisted".parse(), Ok(AgentSessionVisibility::Unlisted));
+}

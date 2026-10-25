@@ -1,7 +1,12 @@
 use roles_and_permissions::domain::model::SubscriptionStatus;
 use stripe_webhook::EventType;
 
-use super::{PaymentEventOutcome, is_active_subscription_except_current};
+use serde_json::json;
+
+use super::{
+    PaymentEventOutcome, PostHogSubscriptionEvent, PostHogTeamGroup, SubscriptionEvent,
+    is_active_subscription_except_current,
+};
 
 #[test]
 fn invoice_payment_failed_maps_to_revoke_outcome() {
@@ -73,4 +78,57 @@ fn invoice_payment_active_subscription_check_excludes_current_subscription() {
         &stripe::SubscriptionStatus::PastDue,
         current_subscription_id,
     ));
+}
+
+#[test]
+fn posthog_team_subscription_event_carries_team_id_and_group() {
+    let team_id = uuid::Uuid::from_u128(1);
+    let event = SubscriptionEvent {
+        transaction_id: "sub_123".to_string(),
+        value: 20.0,
+        currency: "USD".to_string(),
+    };
+
+    let properties = serde_json::to_value(PostHogSubscriptionEvent {
+        event: &event,
+        team_id: Some(team_id),
+        groups: Some(PostHogTeamGroup { team: team_id }),
+    })
+    .unwrap();
+
+    assert_eq!(
+        properties,
+        json!({
+            "transaction_id": "sub_123",
+            "value": 20.0,
+            "currency": "USD",
+            "team_id": "00000000-0000-0000-0000-000000000001",
+            "$groups": { "team": "00000000-0000-0000-0000-000000000001" },
+        })
+    );
+}
+
+#[test]
+fn posthog_personal_subscription_event_has_no_team() {
+    let event = SubscriptionEvent {
+        transaction_id: "sub_123".to_string(),
+        value: 20.0,
+        currency: "USD".to_string(),
+    };
+
+    let properties = serde_json::to_value(PostHogSubscriptionEvent {
+        event: &event,
+        team_id: None,
+        groups: None,
+    })
+    .unwrap();
+
+    assert_eq!(
+        properties,
+        json!({
+            "transaction_id": "sub_123",
+            "value": 20.0,
+            "currency": "USD",
+        })
+    );
 }

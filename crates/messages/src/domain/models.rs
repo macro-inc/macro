@@ -447,6 +447,9 @@ pub struct Message {
     #[cfg_attr(feature = "schema", schema(value_type = String))]
     #[cfg_attr(feature = "json-schema", schemars(with = "String"))]
     pub sender_id: ChannelSender<'static>,
+    /// Display name of a verified call guest, retained after the call ends.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub guest_name: Option<String>,
     /// Original external author, when imported.
     pub imported_author: Option<ImportedAuthor>,
     /// Public bot name and avatar for rendering shared message authors.

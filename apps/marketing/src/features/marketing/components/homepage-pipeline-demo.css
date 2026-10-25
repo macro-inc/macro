@@ -1,0 +1,26 @@
+.homepage-pipeline-demo {
+  height: 500px;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--color-edge);
+  border-radius: 12px;
+  background: var(--color-panel);
+  box-shadow: 0 12px 36px #00000024;
+  text-align: left;
+}
+.homepage-pipeline-demo > .homepage-crm-scene { height: 100%; flex-direction: row; }
+@media (max-width: 650px) {
+  .homepage-pipeline-demo { height: 480px; }
+}
+
+.homepage-pipeline-demo .homepage-pipeline-board {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding: 16px;
+}
+.homepage-pipeline-demo .homepage-pipeline-board > section { width: auto; min-width: 0; }
+.homepage-pipeline-demo .homepage-pipeline-company { font-size: 13px; }
+@media (max-width: 699px) {
+  .homepage-pipeline-demo .homepage-pipeline-board { grid-template-columns: repeat(3, 220px); }
+}

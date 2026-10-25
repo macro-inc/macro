@@ -5,8 +5,8 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
+genai_telemetry = { path = "../genai_telemetry" }
 ai_billing = { path = "../ai_billing" }
-claude_cloud_agents = { path = "../claude_cloud_agents" }
 async-trait = { workspace = true }
 codex_cloud_agents = { path = "../codex_cloud_agents", features = ["postgres"] }
 codex_connection = { path = "../codex_connection" }

@@ -1,31 +1,56 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { isPlatform } from '@core/util/platform';
 
 const GROUP =
   '[data-mobile-dock-island], [data-header-island], [data-slot="button-group"].glass';
 const CONTROL =
   'button, a, [role="button"], [role="tab"], [data-header-island]';
+const INPUT = '[data-glass-input], [data-input] [data-composer-collapsed]';
 const DISABLED = ':disabled, [data-disabled], [aria-disabled="true"]';
 
-/** Round controls retain their 20% press; wide surfaces grow at most 3px per edge. */
+/** Round controls grow 28%; wide surfaces expand their paint by up to 6px per edge. */
 export function glassPressGeometry(width: number, height: number) {
-  const outset = Math.min(3, width * 0.15, height * 0.15);
+  const outset = Math.min(6, width * 0.15, height * 0.15);
   return {
     outset,
     round: width <= height * 1.15,
-    scale: 1.2,
+    scale: 1.28,
   };
 }
 
 /**
- * Automatically animate glass/island controls and their enclosing groups,
+ * Animate native iOS glass/island controls, channel inputs and enclosing groups,
  * including controls rendered through portals. CSS owns the persistent paint
  * layers and their release transitions; controls own action timing.
  */
 export function installGlassPress() {
   let pressed:
-    | { element: HTMLElement; pointerId: number; bounds: DOMRect }
+    | {
+        element: HTMLElement;
+        pointerId: number;
+        bounds: DOMRect;
+        width: number;
+        height: number;
+        x: number;
+        y: number;
+      }
     | undefined;
+  let frame: number | undefined;
+  const positionHighlight = (bounds: DOMRect) => {
+    if (!pressed || !bounds.width || !bounds.height) return;
+    const { element, width, height, x, y } = pressed;
+    element.style.setProperty(
+      '--press-x',
+      `${Math.max(0, Math.min(width, ((x - bounds.left) * width) / bounds.width))}px`
+    );
+    element.style.setProperty(
+      '--press-y',
+      `${Math.max(0, Math.min(height, ((y - bounds.top) * height) / bounds.height))}px`
+    );
+  };
   const release = () => {
+    if (frame !== undefined) cancelAnimationFrame(frame);
+    frame = undefined;
     if (!pressed) return;
     pressed.element.removeAttribute('data-glass-press');
     // Keep the last tap geometry for the fading shimmer. These values belong
@@ -33,39 +58,55 @@ export function installGlassPress() {
     pressed = undefined;
   };
   const down = (event: PointerEvent) => {
-    if (!isTouchDevice() || !event.isPrimary || event.button !== 0) return;
+    if (
+      !isPlatform('ios') ||
+      !isTouchDevice() ||
+      !event.isPrimary ||
+      event.button !== 0
+    )
+      return;
     if (!(event.target instanceof Element)) return;
     const control = event.target.closest<HTMLElement>(CONTROL);
-    if (!control || control.closest(DISABLED)) return;
-    const group = control.closest<HTMLElement>(GROUP);
-    if (!group && !control.matches('.glass, .island, [class~="touch:island"]'))
-      return;
+    if (event.target.closest(DISABLED)) return;
+    const input = event.target.closest<HTMLElement>(INPUT);
+    const element =
+      input ??
+      control?.closest<HTMLElement>(GROUP) ??
+      (control?.matches('.glass, .island, [class~="touch:island"]')
+        ? control
+        : undefined);
+    if (!element) return;
     release();
-    const element = group ?? control;
     const bounds = element.getBoundingClientRect();
     if (!bounds.width || !bounds.height) return;
     const width = element.offsetWidth;
     const height = element.offsetHeight;
     if (!width || !height) return;
+    pressed = {
+      element,
+      pointerId: event.pointerId,
+      bounds,
+      width,
+      height,
+      x: event.clientX,
+      y: event.clientY,
+    };
     const geometry = glassPressGeometry(width, height);
     element.style.setProperty('--press-outset', `${geometry.outset}px`);
     element.style.setProperty('--press-scale', String(geometry.scale));
     // Convert the tap into local coordinates, including a partially scaled
     // round control when a second press interrupts its release.
-    element.style.setProperty(
-      '--press-x',
-      `${Math.max(0, Math.min(width, ((event.clientX - bounds.left) * width) / bounds.width))}px`
-    );
-    element.style.setProperty(
-      '--press-y',
-      `${Math.max(0, Math.min(height, ((event.clientY - bounds.top) * height) / bounds.height))}px`
-    );
+    positionHighlight(bounds);
     element.style.setProperty(
       '--press-shimmer-size',
-      `${Math.max(100, Math.min(260, height * 3))}px`
+      `${Math.max(140, Math.min(320, height * 4))}px`
     );
-    element.setAttribute('data-glass-press', geometry.round ? 'round' : 'wide');
-    pressed = { element, pointerId: event.pointerId, bounds };
+    // Editors keep their text and caret still, even when a long draft is taller
+    // than the input is wide. Only the enclosing paint should expand.
+    element.setAttribute(
+      'data-glass-press',
+      !input && geometry.round ? 'round' : 'wide'
+    );
   };
   const up = (event: PointerEvent) => {
     if (event.pointerId === pressed?.pointerId) release();
@@ -78,8 +119,19 @@ export function installGlassPress() {
       event.clientX > bounds.right ||
       event.clientY < bounds.top ||
       event.clientY > bounds.bottom
-    )
+    ) {
       release();
+      return;
+    }
+    pressed.x = event.clientX;
+    pressed.y = event.clientY;
+    if (frame !== undefined) return;
+    // Coalesce moves into one paint per frame. Read the current bounds once
+    // so the spotlight stays under the finger while round controls scale.
+    frame = requestAnimationFrame(() => {
+      frame = undefined;
+      if (pressed) positionHighlight(pressed.element.getBoundingClientRect());
+    });
   };
   document.addEventListener('pointerdown', down, true);
   document.addEventListener('pointerup', up, true);

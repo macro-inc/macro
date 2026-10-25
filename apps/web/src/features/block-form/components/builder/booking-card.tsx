@@ -138,7 +138,7 @@ export type BookingLinkState =
 
 /**
  * The booking step: always last, shown to respondents only after their
- * response is saved and has passed every screener.
+ * response is saved and has passed every gate.
  */
 export function BookingCard(props: {
   sectionId: string;
@@ -236,9 +236,8 @@ export function BookingCard(props: {
         </div>
         <p class="text-[11px] text-ink-muted">
           Respondents see this calendar only after their response is saved and
-          passes every screener. Anyone who already has the booking link can
-          still book it directly. Removing this step keeps the link and its
-          bookings.
+          passes every gate. Anyone who already has the booking link can still
+          book it directly. Removing this step keeps the link and its bookings.
         </p>
       </div>
     </section>

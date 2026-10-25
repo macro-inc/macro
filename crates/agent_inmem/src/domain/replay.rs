@@ -79,7 +79,8 @@ pub fn replay_history(frames: impl IntoIterator<Item = Message>) -> Vec<HistoryE
 
     for frame in frames {
         match frame {
-            Message::ToRuntime(ToRuntimeMessage::Acp(acp)) => {
+            Message::ToRuntime(ToRuntimeMessage::Acp(acp))
+            | Message::Notification(ToRuntimeMessage::Acp(acp)) => {
                 let RawJsonRpcMessage::Request(request) = &acp.0 else {
                     continue;
                 };

@@ -28,7 +28,7 @@ export const demoMentions: DemoMention[] = [
       shortName: homepagePeople[id].shortName,
     })
   ),
-  { id: 'plan', label: 'Q3 launch plan', kind: 'document' },
+  { id: 'plan', label: 'Website launch plan', kind: 'document' },
   {
     id: 'announcement',
     label: 'Write the launch announcement',
@@ -43,7 +43,7 @@ export const demoMentions: DemoMention[] = [
     kind: 'task',
     status: 'Not Started',
   },
-  { id: 'claude', label: 'Claude', kind: 'agent' },
+  { id: 'claude', label: 'Claude', kind: 'person' },
   { id: 'notes', label: 'Demo call notes', kind: 'document' },
   {
     id: 'deploy',

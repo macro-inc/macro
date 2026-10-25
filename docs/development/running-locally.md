@@ -85,6 +85,14 @@ local stack's internal Vite server keep using HTTP automatically; the stack
 provides HTTPS through its proxy. Builds and preview servers are unchanged.
 `MACRO_DEV_PROXY=false` opts out of the hosted API proxy.
 
+The dev server speaks HTTP/2, gzips module responses, and links each module's
+source map (`/@macro-sourcemap/<hash>.map`) instead of inlining it; browsers only
+fetch maps while DevTools is open. On a slow link this is the difference between
+~100 MB and ~13 MB per load. Trust the CA rather than clicking through the
+certificate warning: Chrome caches nothing from a site with a certificate error.
+`MACRO_DEV_COMPRESSION=false` and `MACRO_DEV_INLINE_SOURCEMAPS=true` restore
+Vite's defaults.
+
 ## Run the local stack
 
 The local stack runs without Doppler. It runs Postgres, Redis, LocalStack, OpenSearch, Kafka, and FusionAuth in Docker, with dummy AWS credentials and fixed test secrets.

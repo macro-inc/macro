@@ -707,12 +707,15 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
         }
         Ok(record)
     }
-    /// Return replacement slots while excluding this booking's own reservation and calendar event.
+    /// Return slots on the visitor's date, excluding this booking's reservation and calendar event.
+    /// Omitting the visitor zone preserves host-date semantics for existing clients.
+    #[tracing::instrument(skip_all, fields(booking_id = %id, %date, time_zone = ?zone), err)]
     pub async fn replacement_slots(
         &self,
         id: Uuid,
         token: Uuid,
         date: NaiveDate,
+        zone: Option<chrono_tz::Tz>,
     ) -> Result<Vec<Slot>, Error> {
         let record = self.receipt(id, token).await?;
         self.repository
@@ -738,14 +741,20 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
         };
         // Current membership is authoritative even when the original link was removed.
         self.validate_booking_hosts(&owner, &event.hosts).await?;
-        let (start, end) = day_bounds(&record.schedule, date)?;
+        let viewer_schedule = Schedule {
+            time_zone: zone.unwrap_or(record.schedule.time_zone),
+            ..record.schedule.clone()
+        };
+        let (start, end) = day_bounds(&viewer_schedule, date)?;
         if start > Utc::now() + Duration::days(i64::from(event.horizon_days) + 1)
             || end < Utc::now()
         {
             return Ok(vec![]);
         }
         let occupied_start = start - Duration::minutes(i64::from(event.before_minutes));
-        let occupied_end = end + Duration::minutes(i64::from(event.after_minutes));
+        // A slot starting before visitor midnight may finish on their next day.
+        let occupied_end = end
+            + Duration::minutes(i64::from(event.duration_minutes) + i64::from(event.after_minutes));
         let mut busy = self
             .calendars
             .busy(
@@ -760,12 +769,22 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
                 .busy(&event.hosts, occupied_start, occupied_end, Some(id))
                 .await?,
         );
-        self.respect_host_hours(
-            &owner,
-            &event,
-            slots_for_date(&event, &record.schedule, date, Utc::now(), &busy)?,
-        )
-        .await
+        let mut host_date = start.with_timezone(&record.schedule.time_zone).date_naive();
+        let last = (end - Duration::seconds(1))
+            .with_timezone(&record.schedule.time_zone)
+            .date_naive();
+        let mut slots = vec![];
+        let now = Utc::now();
+        while host_date <= last {
+            slots.extend(
+                slots_for_date(&event, &record.schedule, host_date, now, &busy)?
+                    .into_iter()
+                    .filter(|s| s.starts_at >= start && s.starts_at < end),
+            );
+            host_date = host_date.succ_opt().ok_or(Error::Conflict)?;
+        }
+        slots.sort_by_key(|s| s.starts_at);
+        self.respect_host_hours(&owner, &event, slots).await
     }
     /// Move a booking while retaining both reservations until the calendar accepts the change.
     pub async fn reschedule(
@@ -780,7 +799,7 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
             .with_timezone(&record.schedule.time_zone)
             .date_naive();
         let slot = self
-            .replacement_slots(id, token, date)
+            .replacement_slots(id, token, date, None)
             .await?
             .into_iter()
             .find(|s| s.starts_at == starts_at)

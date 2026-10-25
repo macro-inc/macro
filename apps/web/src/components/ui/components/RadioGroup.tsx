@@ -72,7 +72,7 @@ function RadioGroupItemLabel(props: ItemLabelProps) {
  * @dont Do not add `RadioGroup.ItemInput` yourself; `RadioGroup.ItemControl`
  *   already renders one.
  * @dont Do not use a radio group for two mutually exclusive actions inline —
- *   that is a SegmentedControl.
+ *   that is `Tabs`.
  */
 export const RadioGroup = Object.assign(
   (props: RadioGroupProps) => {

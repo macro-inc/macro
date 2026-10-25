@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT record AS \"record: Json<ReviewRecord>\" FROM agent_session_review WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "record: Json<ReviewRecord>",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "eba1acf141a51c1e9ba85101b866d8207933d3e393bad2a7bad7b6bd453b7709"
+}

@@ -59,7 +59,7 @@ function ModifierToggle(props: {
   return (
     <Button
       size="icon-sm"
-      variant={props.active ? 'accent' : 'ghost'}
+      variant="ghost"
       tooltip={props.label}
       aria-pressed={props.active}
       onClick={props.onToggle}

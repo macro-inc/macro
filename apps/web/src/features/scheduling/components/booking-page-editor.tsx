@@ -1,6 +1,8 @@
+import { ListHeader } from '@app/components/view-shell/ListHeader';
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { Button, Tabs } from '@ui';
-import { createSignal, Show } from 'solid-js';
+import { createSignal, type JSX, Show } from 'solid-js';
 import type { PublicProfile } from '../core/types';
 import { Field, TextArea, TextInput } from './fields';
 import {
@@ -10,6 +12,8 @@ import {
 import { PublicBookingProfile } from './public-booking-profile';
 
 export function BookingPageEditor(props: {
+  headerTitle?: JSX.Element;
+  shareAction?: JSX.Element;
   profile: PublicProfile;
   canEdit: boolean;
   saving: boolean;
@@ -20,39 +24,24 @@ export function BookingPageEditor(props: {
   onRevert: () => void;
 }) {
   const [mode, setMode] = createSignal<'edit' | 'preview'>('edit');
-  return (
-    <form
-      aria-label="Booking page details"
-      aria-busy={props.saving}
-      class="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-edge-muted bg-panel"
-      onSubmit={(event) => {
-        event.preventDefault();
-        if (
-          mode() !== 'edit' ||
-          !props.canEdit ||
-          props.saving ||
-          !props.hasChanges
-        )
-          return;
-        props.onSave();
-      }}
-    >
-      <div class="pointer-events-none absolute inset-x-4 top-3 z-10 flex items-center justify-between gap-2">
-        <div class="pointer-events-auto rounded-full bg-panel">
-          <Tabs
-            aria-label="Booking page mode"
-            list={[
-              { value: 'edit', label: 'Edit' },
-              { value: 'preview', label: 'Preview' },
-            ]}
-            value={mode()}
-            onChange={(value) => {
-              if (value === 'edit' || value === 'preview') setMode(value);
-            }}
-          />
-        </div>
-        <Show when={mode() === 'edit'}>
-          <div class="pointer-events-auto flex items-center gap-2 rounded-lg bg-panel">
+  const modeTabs = () => (
+    <div class="pointer-events-auto rounded-full touch:bg-panel">
+      <Tabs
+        aria-label="Booking page mode"
+        options={[
+          { value: 'edit', label: 'Edit' },
+          { value: 'preview', label: 'Preview' },
+        ]}
+        value={mode()}
+        onChange={setMode}
+      />
+    </div>
+  );
+  const actions = () => (
+    <>
+      <Show when={mode() === 'edit'}>
+        <div class="pointer-events-auto flex items-center gap-2 touch:rounded-lg touch:bg-panel">
+          <HeaderActionGroup label="Booking page changes">
             <Show when={props.canEdit && props.hasChanges}>
               <Button
                 type="button"
@@ -66,7 +55,7 @@ export function BookingPageEditor(props: {
             </Show>
             <Button
               type="submit"
-              variant="cta"
+              variant="strong"
               aria-label={
                 props.saving ? 'Saving booking page' : 'Save booking page'
               }
@@ -74,9 +63,57 @@ export function BookingPageEditor(props: {
             >
               {props.saving ? 'Saving…' : 'Save'}
             </Button>
+          </HeaderActionGroup>
+        </div>
+      </Show>
+      <Show when={props.shareAction}>
+        <HeaderActionGroup label="Sharing">
+          {props.shareAction}
+        </HeaderActionGroup>
+      </Show>
+    </>
+  );
+  return (
+    <form
+      aria-label="Booking page details"
+      aria-busy={props.saving}
+      class={
+        props.headerTitle
+          ? 'relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden'
+          : 'relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-edge-muted bg-panel'
+      }
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (
+          mode() !== 'edit' ||
+          !props.canEdit ||
+          props.saving ||
+          !props.hasChanges
+        )
+          return;
+        props.onSave();
+      }}
+    >
+      <Show
+        when={props.headerTitle}
+        fallback={
+          <div class="pointer-events-none absolute inset-x-4 top-3 z-10 flex items-center justify-between gap-2">
+            {modeTabs()}
+            {actions()}
           </div>
-        </Show>
-      </div>
+        }
+      >
+        <ListHeader
+          title={
+            <div class="flex min-w-0 items-center gap-3">
+              {props.headerTitle}
+              {modeTabs()}
+            </div>
+          }
+        >
+          {actions()}
+        </ListHeader>
+      </Show>
       <Show when={props.hasChanges}>
         <span role="status" class="sr-only">
           Unsaved changes
@@ -84,7 +121,11 @@ export function BookingPageEditor(props: {
       </Show>
       <section
         aria-label="Booking page preview"
-        class="flex min-h-0 flex-1 flex-col"
+        class={
+          props.headerTitle
+            ? 'mx-4 mb-4 flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-edge-muted bg-panel'
+            : 'flex min-h-0 flex-1 flex-col'
+        }
       >
         <div class="min-h-0 flex-1 overflow-y-auto">
           <PublicBookingLayout

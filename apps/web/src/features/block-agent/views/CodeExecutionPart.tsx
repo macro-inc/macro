@@ -7,11 +7,7 @@ import type {
   ToolCallContext,
   ToolUsePart,
 } from '../component/parts/shared';
-
-// Rust accepts UUIDs with reserved versions/variants too. Model-selected IDs
-// still identify real records; keep their document cards and failure status.
-const isExecutionId = (value: string) =>
-  /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i.test(value);
+import { codeExecutionInput, isExecutionId } from '../state/code-execution';
 
 /** Production wiring; the result components receive only data and context. */
 export function CodeExecutionPart(props: {
@@ -32,18 +28,8 @@ export function CodeExecutionPart(props: {
       ? parsed.data
       : undefined;
   });
-  const input = () =>
-    'input' in props.part.detail ? props.part.detail.input : undefined;
-  const requestedExecutionId = () => {
-    const value = input();
-    return typeof value === 'object' &&
-      value !== null &&
-      'execution_id' in value &&
-      typeof value.execution_id === 'string' &&
-      isExecutionId(value.execution_id)
-      ? value.execution_id
-      : undefined;
-  };
+  const requestedExecutionId = () =>
+    codeExecutionInput(props.part)?.executionId;
   const executionId = () => {
     const saved = receipt()?.executionId;
     if (saved) return saved;
@@ -53,16 +39,7 @@ export function CodeExecutionPart(props: {
     () => props.context.sessionId,
     executionId
   );
-  const source = () => {
-    const detail = props.part.detail;
-    const input = 'input' in detail ? detail.input : undefined;
-    return typeof input === 'object' &&
-      input !== null &&
-      'source' in input &&
-      typeof input.source === 'string'
-      ? input.source
-      : undefined;
-  };
+  const source = () => codeExecutionInput(props.part)?.source;
 
   if (import.meta.env.DEV) {
     let loggedCall: string | undefined;

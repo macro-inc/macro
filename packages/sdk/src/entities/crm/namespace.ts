@@ -9,9 +9,15 @@ import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { Company } from './company';
 import { Contact } from './contact';
+import { PipelineNamespace } from './pipelines';
 
 export class CrmNamespace {
-  constructor(private readonly client: MacroClient) {}
+  /** Pipelines, their records and sharing settings. */
+  readonly pipelines: PipelineNamespace;
+
+  constructor(private readonly client: MacroClient) {
+    this.pipelines = new PipelineNamespace(client);
+  }
 
   /** A handle to a CRM company by id. */
   companyById(id: string): Company {
@@ -28,7 +34,7 @@ export class CrmNamespace {
     const { contact } = unwrap(
       await this.client.storage.getContactByEmail({
         query: { email },
-      })
+      }),
     );
     return contact ? Contact.from(this.client, contact) : undefined;
   }
@@ -42,12 +48,12 @@ export class CrmNamespace {
    */
   async searchContacts(
     query: string,
-    opts: { limit?: number } = {}
+    opts: { limit?: number } = {},
   ): Promise<Contact[]> {
     const { contacts } = unwrap(
       await this.client.storage.searchContacts({
         query: { query, limit: opts.limit },
-      })
+      }),
     );
     return contacts.map((contact) => Contact.from(this.client, contact));
   }
@@ -56,7 +62,7 @@ export class CrmNamespace {
   async createCompany(opts: CreateCrmCompanyRequest): Promise<Company> {
     return Company.from(
       this.client,
-      unwrap(await this.client.storage.createCrmCompany({ body: opts }))
+      unwrap(await this.client.storage.createCrmCompany({ body: opts })),
     );
   }
 
@@ -67,10 +73,10 @@ export class CrmNamespace {
 
   /** Partially update the caller's current team's CRM settings. */
   async updateSettings(
-    settings: UpdateCrmTeamSettingsRequest
+    settings: UpdateCrmTeamSettingsRequest,
   ): Promise<CrmTeamSettingsResponse> {
     return unwrap(
-      await this.client.storage.putCrmTeamSettings({ body: settings })
+      await this.client.storage.putCrmTeamSettings({ body: settings }),
     );
   }
 

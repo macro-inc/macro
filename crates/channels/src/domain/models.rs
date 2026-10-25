@@ -292,6 +292,28 @@ pub struct AttachmentChannelReference {
     pub attachment_created_at: DateTime<Utc>,
 }
 
+/// A reference to an attachment entity from a comment: a message on a
+/// document, initiative, CRM record, or call rather than on a channel.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AttachmentCommentReference {
+    /// Stored type of the entity the comment belongs to.
+    pub parent_entity_type: String,
+    /// Id of the entity the comment belongs to.
+    pub parent_entity_id: String,
+    /// Message that contains the reference.
+    pub message_id: Uuid,
+    /// If the message belongs to a thread this is the parent id.
+    pub thread_id: Option<Uuid>,
+    /// Sender of the message.
+    pub sender_id: String,
+    /// Full message content (might be used for preview/snippet).
+    pub message_content: String,
+    /// When the message itself was created.
+    pub message_created_at: DateTime<Utc>,
+    /// When the mention or attachment row was created.
+    pub attachment_created_at: DateTime<Utc>,
+}
+
 /// A reference to an attachment entity from any non-message source entity.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AttachmentGenericReference {
@@ -314,6 +336,8 @@ pub struct AttachmentGenericReference {
 pub enum AttachmentEntityReference {
     /// Referenced from a channel message.
     Channel(AttachmentChannelReference),
+    /// Referenced from a comment on a non-channel entity.
+    Comment(AttachmentCommentReference),
     /// Referenced from any non-message source entity.
     Generic(AttachmentGenericReference),
 }
@@ -374,7 +398,9 @@ pub struct ThreadReplyRow {
 }
 
 /// Type of channel.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, strum::Display, strum::EnumString,
+)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "outbound", derive(sqlx::Type))]
 #[cfg_attr(
@@ -382,6 +408,7 @@ pub struct ThreadReplyRow {
     sqlx(type_name = "comms_channel_type", rename_all = "snake_case")
 )]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum ChannelType {
     /// Public channel.
     Public,
@@ -391,17 +418,6 @@ pub enum ChannelType {
     DirectMessage,
     /// Team channel.
     Team,
-}
-
-impl std::fmt::Display for ChannelType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ChannelType::Public => f.write_str("public"),
-            ChannelType::Private => f.write_str("private"),
-            ChannelType::DirectMessage => f.write_str("direct_message"),
-            ChannelType::Team => f.write_str("team"),
-        }
-    }
 }
 
 /// Request to add a user to all organization channels.

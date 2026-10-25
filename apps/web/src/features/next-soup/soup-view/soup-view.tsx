@@ -1,3 +1,4 @@
+import { ListHeaderSearch } from '@app/components/view-shell/ListHeader';
 import { LIST_VIEW_DOCS_URL } from '@app/constants/docs-links';
 import { isListViewID, type ListView } from '@app/constants/list-views';
 import { SoupChatInput } from '@app/features/chat/SoupChatInput';
@@ -21,7 +22,10 @@ import {
 } from '@app/features/next-soup/soup-view/empty-states';
 import { InboxSelector } from '@app/features/next-soup/soup-view/filters-bar/inbox-selector';
 import { SoupFiltersBar } from '@app/features/next-soup/soup-view/filters-bar/soup-filters-bar';
+import { SoupViewContextGroup } from '@app/features/next-soup/soup-view/filters-bar/soup-view-context-group';
+import { SoupViewContextSort } from '@app/features/next-soup/soup-view/filters-bar/soup-view-context-sort';
 import { SoupSearchbar } from '@app/features/next-soup/soup-view/filters-bar/soup-view-search-bar';
+import { UnifiedFilterDropdown } from '@app/features/next-soup/soup-view/filters-bar/unified-filter-dropdown';
 import { useFilterRefinements } from '@app/features/next-soup/soup-view/filters-bar/use-filter-refinements';
 import { SoupSectionHeader } from '@app/features/next-soup/soup-view/section-header';
 import {
@@ -57,6 +61,7 @@ import {
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { usePreference } from '@app/preferences/use-preference';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { PullToRefresh } from '@components/app/mobile/PullToRefresh';
 import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
 import { CollapsibleHeaderItem } from '@components/app/split-layout/components/CollapsibleItem';
@@ -96,11 +101,10 @@ import CaretDownIcon from '@phosphor/caret-down.svg';
 import ChevronRightIcon from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
 import InfoIcon from '@phosphor/info.svg';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
 import Spinner from '@phosphor/spinner.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { debounce } from '@solid-primitives/scheduled';
-import { Button, cn, Layer, Tooltip } from '@ui';
+import { Button, cn, Layer } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import {
   type Accessor,
@@ -368,8 +372,8 @@ export const SoupView = (props: SoupViewProps) => {
     return view ? LIST_VIEW_DOCS_URL[view] : undefined;
   });
 
-  const [narrowSearchExpanded, setNarrowSearchExpanded] = createSignal(false);
-  const [searchIsCollapsed, setSearchIsCollapsed] = createSignal(false);
+  const [filterOpen, setFilterOpen] = createSignal(false);
+  let focusSearch: (() => void) | undefined;
 
   registerHotkey({
     hotkey: 'cmd+f',
@@ -378,8 +382,9 @@ export const SoupView = (props: SoupViewProps) => {
     registrationType: 'add',
     description: 'Search',
     keyDownHandler: () => {
-      if (narrowSearchExpanded() || !searchIsCollapsed()) return false;
-      setNarrowSearchExpanded(true);
+      // The Search view's own field owns the shortcut.
+      if (isTouchDevice() || isComponentListView('search')) return false;
+      focusSearch?.();
       return true;
     },
   });
@@ -396,8 +401,7 @@ export const SoupView = (props: SoupViewProps) => {
               class={cn(
                 'h-full flex gap-3 @max-[380px]/split-header:gap-2 items-center',
                 {
-                  'shrink-0': !isTouchDevice() && !narrowSearchExpanded(),
-                  'flex-1 min-w-0': !isTouchDevice() && narrowSearchExpanded(),
+                  'shrink-0': !isTouchDevice(),
                   'w-full flex-1 min-w-0': isTouchDevice(),
                 }
               )}
@@ -408,27 +412,25 @@ export const SoupView = (props: SoupViewProps) => {
               <Show when={isTouchDevice()}>
                 <MobileSoupViewTabs />
               </Show>
-              <Show when={!isTouchDevice() && !narrowSearchExpanded()}>
+              <Show when={!isTouchDevice()}>
                 <div class="flex items-center gap-1">
                   <span class="text-sm font-semibold">{props.viewName}</span>
                   <Show when={docsUrl()}>
                     {(url) => (
                       <Button
-                        size="icon-md"
+                        size="icon-sm"
                         variant="ghost"
-                        class="p-0.5 text-ink-extra-muted hover:text-ink-muted @max-[380px]/split-header:hidden"
+                        class="@max-[380px]/split-header:hidden"
                         label="View documentation"
                         onClick={() => openExternalUrl(url())}
                       >
-                        <InfoIcon class="size-3.5" />
+                        <InfoIcon />
                       </Button>
                     )}
                   </Show>
                 </div>
               </Show>
-              <Show
-                when={!narrowSearchExpanded() && !isComponentListView('search')}
-              >
+              <Show when={!isComponentListView('search')}>
                 <Show when={!isTouchDevice()}>
                   <CollapsibleHeaderItem
                     id="tabs"
@@ -446,40 +448,13 @@ export const SoupView = (props: SoupViewProps) => {
                   </CollapsibleHeaderItem>
                 </Show>
               </Show>
-              <Show
-                when={
-                  !isTouchDevice() &&
-                  !narrowSearchExpanded() &&
-                  isComponentListView('mail')
-                }
-              >
+              <Show when={!isTouchDevice() && isComponentListView('mail')}>
                 <InboxSelector />
               </Show>
             </div>
           </SplitHeaderLeft>
           <Show when={!isTouchDevice()}>
             <SplitHeaderRight>
-              <Show
-                when={
-                  !narrowSearchExpanded() &&
-                  !isComponentListView('search') &&
-                  props.showCreateButton !== false
-                }
-              >
-                <SoupViewCreateButton />
-              </Show>
-              <Show when={narrowSearchExpanded()}>
-                <Layer depth={2}>
-                  <div class="flex-1 min-w-0">
-                    <SoupSearchbar
-                      variant="secondary"
-                      autoFocus
-                      initialValue={props.initialSearchText}
-                      onDismiss={() => setNarrowSearchExpanded(false)}
-                    />
-                  </div>
-                </Layer>
-              </Show>
               <Show
                 when={!isComponentListView('search')}
                 fallback={
@@ -497,47 +472,32 @@ export const SoupView = (props: SoupViewProps) => {
                   </>
                 }
               >
-                <Show when={!narrowSearchExpanded()}>
-                  <CollapsibleHeaderItem
-                    id="search"
-                    priority={0}
-                    onCollapsedChange={(isCollapsed) => {
-                      setSearchIsCollapsed(isCollapsed);
-                      if (!isCollapsed) setNarrowSearchExpanded(false);
-                    }}
-                  >
-                    {(isCollapsed) => (
-                      <Show
-                        when={!isCollapsed()}
-                        fallback={
-                          <Tooltip
-                            label="Search"
-                            hotkey={TOKENS.soup.openSearch}
-                          >
-                            <Button
-                              size="icon-md"
-                              variant="outline"
-                              class="p-1 size-7 ml-2"
-                              onClick={() => setNarrowSearchExpanded(true)}
-                              depth={2}
-                            >
-                              <SearchIcon class="size-4 touch:size-6" />
-                            </Button>
-                          </Tooltip>
-                        }
-                      >
-                        <Layer depth={2}>
-                          <div class="w-60 ml-2">
-                            <SoupSearchbar
-                              variant="secondary"
-                              initialValue={props.initialSearchText}
-                            />
-                          </div>
-                        </Layer>
-                      </Show>
-                    )}
-                  </CollapsibleHeaderItem>
+                <Show when={props.filterBarVariant !== 'tag'}>
+                  <HeaderActionGroup label="Filters">
+                    <UnifiedFilterDropdown
+                      hideLabel
+                      variant="ghost"
+                      open={filterOpen}
+                      onOpenChange={setFilterOpen}
+                    />
+                  </HeaderActionGroup>
                 </Show>
+                <HeaderActionGroup label="View options">
+                  <Show when={!isComponentListView('home')}>
+                    <SoupViewContextSort />
+                  </Show>
+                  <SoupViewContextGroup hideLabel variant="ghost" />
+                </HeaderActionGroup>
+                <Show when={props.showCreateButton !== false}>
+                  <SoupViewCreateButton />
+                </Show>
+                <ListHeaderSearch
+                  label={`Search ${props.viewName}`}
+                  value={soupView.searchText()}
+                  onValueChange={soupView.setSearchText}
+                  onEscape={() => panel.panelRef()?.focus()}
+                  registerFocus={(focus) => (focusSearch = focus)}
+                />
               </Show>
             </SplitHeaderRight>
           </Show>
@@ -561,7 +521,8 @@ export const SoupView = (props: SoupViewProps) => {
             !isTouchDevice() &&
             ENABLE_UNIFIED_LIST_AI_INPUT &&
             !isHomeView() &&
-            !isComponentListView('search')
+            !isComponentListView('search') &&
+            !isComponentListView('calls')
           }
         >
           <div class="absolute bottom-0 inset-x-px pb-2.5 px-2 flex justify-center pointer-events-none">

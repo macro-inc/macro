@@ -50,9 +50,15 @@ async fn upload_reservations_are_idempotent_and_never_send_unverified_bytes(db: 
     let mut file = upload(draft, 120_000_000);
     file.upload_pending = true;
     for _ in 0..2 {
-        repo.commit_attachment_change(ACTOR, link, draft, AttachmentChange::Upload(file.clone()))
-            .await
-            .unwrap();
+        repo.commit_attachment_change(
+            ACTOR,
+            link,
+            draft,
+            AttachmentChange::Upload(file.clone()),
+            0,
+        )
+        .await
+        .unwrap();
     }
     let content = sqlx::query_scalar!(
         "SELECT desired_content FROM email_mailbox_drafts WHERE message_id=$1",
@@ -72,7 +78,7 @@ async fn upload_reservations_are_idempotent_and_never_send_unverified_bytes(db: 
     let mut wrong = file.clone();
     wrong.sha = "b".repeat(64);
     assert!(
-        repo.commit_attachment_change(ACTOR, link, draft, AttachmentChange::Upload(wrong))
+        repo.commit_attachment_change(ACTOR, link, draft, AttachmentChange::Upload(wrong), 0)
             .await
             .is_err()
     );
@@ -81,7 +87,8 @@ async fn upload_reservations_are_idempotent_and_never_send_unverified_bytes(db: 
             "macro|other@example.com",
             link,
             draft,
-            AttachmentChange::CompleteUpload(file.clone())
+            AttachmentChange::CompleteUpload(file.clone()),
+            0
         )
         .await,
         Err(AttachmentError::Forbidden)
@@ -91,6 +98,7 @@ async fn upload_reservations_are_idempotent_and_never_send_unverified_bytes(db: 
         link,
         draft,
         AttachmentChange::CompleteUpload(file.clone()),
+        0,
     )
     .await
     .unwrap();
@@ -99,6 +107,7 @@ async fn upload_reservations_are_idempotent_and_never_send_unverified_bytes(db: 
         link,
         draft,
         AttachmentChange::CompleteUpload(file.clone()),
+        0,
     )
     .await
     .unwrap();
@@ -123,6 +132,7 @@ async fn upload_reservations_are_idempotent_and_never_send_unverified_bytes(db: 
             attachment_id: file.id,
             kind: RemovalKind::UploadedOrNative,
         },
+        0,
     )
     .await
     .unwrap();
@@ -131,13 +141,14 @@ async fn upload_reservations_are_idempotent_and_never_send_unverified_bytes(db: 
             ACTOR,
             link,
             draft,
-            AttachmentChange::CompleteUpload(file.clone())
+            AttachmentChange::CompleteUpload(file.clone()),
+            0
         )
         .await
         .is_err()
     );
     assert!(
-        repo.commit_attachment_change(ACTOR, link, draft, AttachmentChange::Upload(file))
+        repo.commit_attachment_change(ACTOR, link, draft, AttachmentChange::Upload(file), 0)
             .await
             .is_err()
     );
@@ -148,35 +159,60 @@ async fn an_expired_upload_requires_an_explicit_reservation_retry(db: PgPool) {
     let (repo, link, draft) = fixture(&db).await;
     let mut file = upload(draft, 123);
     file.upload_pending = true;
-    repo.commit_attachment_change(ACTOR, link, draft, AttachmentChange::Upload(file.clone()))
-        .await
-        .unwrap();
+    repo.commit_attachment_change(
+        ACTOR,
+        link,
+        draft,
+        AttachmentChange::Upload(file.clone()),
+        0,
+    )
+    .await
+    .unwrap();
     sqlx::query!("UPDATE email_attachments_drafts SET upload_expires_at=now()-interval '1 second' WHERE id=$1",file.id).execute(&db).await.unwrap();
     assert!(
         repo.commit_attachment_change(
             ACTOR,
             link,
             draft,
-            AttachmentChange::CompleteUpload(file.clone())
+            AttachmentChange::CompleteUpload(file.clone()),
+            0
         )
         .await
         .is_err()
     );
-    repo.commit_attachment_change(ACTOR, link, draft, AttachmentChange::Upload(file.clone()))
-        .await
-        .unwrap();
-    repo.commit_attachment_change(ACTOR, link, draft, AttachmentChange::CompleteUpload(file))
-        .await
-        .unwrap();
+    repo.commit_attachment_change(
+        ACTOR,
+        link,
+        draft,
+        AttachmentChange::Upload(file.clone()),
+        0,
+    )
+    .await
+    .unwrap();
+    repo.commit_attachment_change(
+        ACTOR,
+        link,
+        draft,
+        AttachmentChange::CompleteUpload(file),
+        0,
+    )
+    .await
+    .unwrap();
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn file_changes_commit_with_frozen_revision_and_defer_byte_cleanup(db: PgPool) {
     let (repo, link, draft) = fixture(&db).await;
     let file = upload(draft, 123);
-    repo.commit_attachment_change(ACTOR, link, draft, AttachmentChange::Upload(file.clone()))
-        .await
-        .unwrap();
+    repo.commit_attachment_change(
+        ACTOR,
+        link,
+        draft,
+        AttachmentChange::Upload(file.clone()),
+        0,
+    )
+    .await
+    .unwrap();
     let before = sqlx::query!(
         "SELECT revision,desired_content FROM email_mailbox_drafts WHERE message_id = $1",
         draft
@@ -197,6 +233,7 @@ async fn file_changes_commit_with_frozen_revision_and_defer_byte_cleanup(db: PgP
             attachment_id: file.id,
             kind: RemovalKind::UploadedOrNative,
         },
+        0,
     )
     .await
     .unwrap();
@@ -248,7 +285,8 @@ async fn send_and_attachment_edits_share_the_same_transaction_boundary(db: PgPoo
             ACTOR,
             link,
             draft,
-            AttachmentChange::Upload(upload(draft, 123))
+            AttachmentChange::Upload(upload(draft, 123)),
+            0
         )
         .await,
         Err(AttachmentError::DeliveryConflict)
@@ -268,7 +306,8 @@ async fn send_and_attachment_edits_share_the_same_transaction_boundary(db: PgPoo
             "macro|intruder@example.com",
             link,
             draft,
-            AttachmentChange::Upload(upload(draft, 123))
+            AttachmentChange::Upload(upload(draft, 123)),
+            0
         )
         .await,
         Err(AttachmentError::Forbidden)
@@ -283,13 +322,15 @@ async fn concurrent_additions_cannot_overrun_the_aggregate_limit(db: PgPool) {
             ACTOR,
             link,
             draft,
-            AttachmentChange::Upload(upload(draft, 100_000_000))
+            AttachmentChange::Upload(upload(draft, 100_000_000)),
+            0
         ),
         repo.commit_attachment_change(
             ACTOR,
             link,
             draft,
-            AttachmentChange::Upload(upload(draft, 100_000_000))
+            AttachmentChange::Upload(upload(draft, 100_000_000)),
+            0
         )
     );
     assert_ne!(one.is_ok(), two.is_ok());
@@ -313,9 +354,15 @@ async fn cleanup_retains_active_claims_and_recovery_checkpoints(db: PgPool) {
     };
     let (repo, link, draft) = fixture(&db).await;
     let file = upload(draft, 123);
-    repo.commit_attachment_change(ACTOR, link, draft, AttachmentChange::Upload(file.clone()))
-        .await
-        .unwrap();
+    repo.commit_attachment_change(
+        ACTOR,
+        link,
+        draft,
+        AttachmentChange::Upload(file.clone()),
+        0,
+    )
+    .await
+    .unwrap();
     let sync = crate::outbound::mailbox_pg::PgMailboxSync::new(db.clone());
     let _lease = sync
         .claim_draft(
@@ -333,6 +380,7 @@ async fn cleanup_retains_active_claims_and_recovery_checkpoints(db: PgPool) {
             attachment_id: file.id,
             kind: RemovalKind::UploadedOrNative,
         },
+        0,
     )
     .await
     .unwrap();
@@ -389,6 +437,7 @@ async fn transferred_upload_provider_echo_does_not_consume_quota_twice(db: PgPoo
         link,
         draft,
         AttachmentChange::Upload(original.clone()),
+        0,
     )
     .await
     .unwrap();
@@ -398,7 +447,7 @@ async fn transferred_upload_provider_echo_does_not_consume_quota_twice(db: PgPoo
     let source_id = Uuid::new_v4();
     sqlx::query!("INSERT INTO email_attachments(id,message_id,provider_attachment_id,filename,mime_type,size_bytes,content_id) VALUES($1,$2,'original-forward','notes.pdf','application/pdf',50000000,'forwarded@cid')",source_id,source_message).execute(&db).await.unwrap();
     let forwarded = repo.attachment_reference(source_id).await.unwrap().unwrap();
-    repo.commit_attachment_change(ACTOR, link, draft, AttachmentChange::Forward(forwarded))
+    repo.commit_attachment_change(ACTOR, link, draft, AttachmentChange::Forward(forwarded), 0)
         .await
         .unwrap();
     sqlx::query!("INSERT INTO email_attachments(id,message_id,provider_attachment_id,filename,mime_type,size_bytes,content_id) VALUES($1,$2,'forward-echo','notes.pdf','application/pdf',50000000,'<forwarded@cid>')",Uuid::new_v4(),draft).execute(&db).await.unwrap();
@@ -407,6 +456,7 @@ async fn transferred_upload_provider_echo_does_not_consume_quota_twice(db: PgPoo
         link,
         draft,
         AttachmentChange::Upload(upload(draft, 100)),
+        0,
     )
     .await
     .unwrap();
@@ -426,6 +476,7 @@ async fn transferred_upload_provider_echo_does_not_consume_quota_twice(db: PgPoo
                 attachment_id,
                 kind,
             },
+            0,
         )
         .await
         .unwrap();
@@ -442,6 +493,7 @@ async fn transferred_upload_provider_echo_does_not_consume_quota_twice(db: PgPoo
         link,
         draft,
         AttachmentChange::Upload(upload(draft, 149_000_000)),
+        0,
     )
     .await
     .unwrap();

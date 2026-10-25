@@ -959,6 +959,162 @@
         }
       }
     },
+    "/calendar-events/{event_id}/ics": {
+      "get": {
+        "tags": ["calendar_events"],
+        "summary": "Export an event the requester can see — their own, or one shared with a\nchannel they belong to — as an iCalendar file named after its title.",
+        "operationId": "event_ics",
+        "parameters": [
+          {
+            "name": "event_id",
+            "in": "path",
+            "description": "Calendar event entity id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The event as an iCalendar document",
+            "content": {
+              "text/calendar": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "404": {
+            "description": "Event not found or not visible to the requester"
+          },
+          "500": {
+            "description": "Calendar query failed"
+          }
+        }
+      }
+    },
+    "/calendar-events/{event_id}/join-requests": {
+      "get": {
+        "tags": ["calendar_events"],
+        "summary": "List pending requests to join an event the requester can change.",
+        "operationId": "list_join_requests",
+        "parameters": [
+          {
+            "name": "event_id",
+            "in": "path",
+            "description": "Calendar event entity id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Pending join requests, oldest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarJoinRequestsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "404": {
+            "description": "Event not found or not editable by the requester",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarJoinRequestApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Listing failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarJoinRequestApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["calendar_events"],
+        "summary": "Ask the person who shared an event with one of the requester's channels\nto add them as a guest. Asking again while the request is pending or\naccepted changes nothing; a declined request stands, so asking after a\ndecline is refused with `request_declined`.",
+        "operationId": "request_to_join",
+        "parameters": [
+          {
+            "name": "event_id",
+            "in": "path",
+            "description": "Shared calendar event entity id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The requester's join request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarJoinRequest"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "404": {
+            "description": "Event not found or not shared with the requester",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarJoinRequestApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Already on the requester's calendar, the sharer cannot add guests, or the sharer declined the requester's earlier request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarJoinRequestApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Join request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarJoinRequestApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/call/active": {
       "get": {
         "tags": ["call::inbound::axum_router"],
@@ -995,6 +1151,80 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/call/guest-chat/{call_id}": {
+      "get": {
+        "tags": ["messages::inbound::guest_chat"],
+        "summary": "Read the live call discussion as a verified guest.",
+        "operationId": "guest_call_chat_read",
+        "parameters": [
+          {
+            "name": "call_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuestChatPage"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": ""
+          }
+        }
+      },
+      "post": {
+        "tags": ["messages::inbound::guest_chat"],
+        "summary": "Append text to the same saved discussion used by account participants.",
+        "operationId": "guest_call_chat_post",
+        "parameters": [
+          {
+            "name": "call_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GuestChatPost"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuestChatMessage"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": ""
           }
         }
       }
@@ -7026,6 +7256,95 @@
         }
       }
     },
+    "/databases/query": {
+      "post": {
+        "tags": ["databases"],
+        "summary": "Run one statement as the authenticated user. The viewer's catalog authorizes reads;\nthe SQL domain service obtains an edit receipt for every written database.",
+        "operationId": "query_databases",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DatabaseQueryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SqlOutcome"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/databases/starter": {
       "post": {
         "tags": ["databases"],
@@ -7550,7 +7869,7 @@
     "/databases/{id}/permissions": {
       "get": {
         "tags": ["databases"],
-        "summary": "Read recipients for a database owned by the caller. Link and team\nsharing are always `null`: databases do not support them yet.",
+        "summary": "Read recipients and the team share for a database owned by the caller.\nLink sharing is always `null`: databases do not support it.",
         "operationId": "get_database_permissions",
         "parameters": [
           {
@@ -7618,7 +7937,7 @@
       },
       "patch": {
         "tags": ["databases"],
-        "summary": "Update channel recipients after proving database ownership. Turning on\nlink or team sharing is refused; ownership cannot be changed here.",
+        "summary": "Update channel recipients and the team share after proving database\nownership. Turning on link sharing is refused; ownership cannot be\nchanged here. Only the actual owner may change the team share, and a 409\nmeans sharing changed since the request was authorized.",
         "operationId": "update_database_permissions",
         "parameters": [
           {
@@ -7683,6 +8002,16 @@
             }
           },
           "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
             "description": "",
             "content": {
               "application/json": {
@@ -8784,6 +9113,91 @@
           },
           "422": {
             "description": "Document name exceeds the maximum length",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/create_canvas": {
+      "post": {
+        "tags": ["document"],
+        "summary": "Creates and initializes a Canvas in one backend-owned lifecycle.",
+        "operationId": "create_canvas_handler",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCanvasDocumentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Response for creating a native Canvas.",
+                  "required": ["documentId", "documentMetadata", "token"],
+                  "properties": {
+                    "documentId": {
+                      "type": "string",
+                      "description": "The document ID of the created native Canvas"
+                    },
+                    "documentMetadata": {
+                      "$ref": "#/components/schemas/DocumentResponseMetadata",
+                      "description": "Metadata for the created document"
+                    },
+                    "token": {
+                      "type": "string",
+                      "description": "A pre-generated permission token that you can use for SS"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -10155,6 +10569,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "DOCX upload is still processing; retry the export.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -19060,6 +19484,16 @@
         ],
         "description": "Events publishable to [`MacroAgentSessionLifecycleTopic`].\n\nThe serde tag and [`AgentSessionLifecycleEventName`] spell the same wire\nnames: subscribers filter on them, so they are API. The\n`event_names_match_the_wire` test holds the two in step. Exhaustive on\npurpose: a consumer's match should break when a variant is added."
       },
+      "AgentSessionSource": {
+        "type": "string",
+        "description": "Who started an agent session. The string form is the\n`agent_session.source` column's.",
+        "enum": ["user", "agent", "routine"]
+      },
+      "AgentSessionVisibility": {
+        "type": "string",
+        "description": "Where an agent session is shown. The string form is the\n`agent_session.visibility` column's.",
+        "enum": ["listed", "unlisted", "hidden"]
+      },
       "AgentTyping": {
         "type": "object",
         "description": "An agent session typing through its bot.",
@@ -19308,6 +19742,57 @@
           }
         }
       },
+      "ApiAttachmentCommentReference": {
+        "type": "object",
+        "description": "A reference to an attachment entity from a comment on a non-channel entity.",
+        "required": [
+          "parent_entity_type",
+          "parent_entity_id",
+          "message_id",
+          "sender_id",
+          "message_content",
+          "message_created_at",
+          "attachment_created_at"
+        ],
+        "properties": {
+          "attachment_created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the mention or attachment row was created."
+          },
+          "message_content": {
+            "type": "string",
+            "description": "Full message content (might be used for preview/snippet)."
+          },
+          "message_created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the message itself was created."
+          },
+          "message_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Message that contains the reference."
+          },
+          "parent_entity_id": {
+            "type": "string",
+            "description": "Id of the entity the comment belongs to."
+          },
+          "parent_entity_type": {
+            "type": "string",
+            "description": "Stored type of the entity the comment belongs to\n(`document`, `initiative`, `crm_company`, `crm_contact`, or `call`)."
+          },
+          "sender_id": {
+            "type": "string",
+            "description": "Sender of the message."
+          },
+          "thread_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "If the message belongs to a thread this is the parent id."
+          }
+        }
+      },
       "ApiAttachmentEntityReference": {
         "oneOf": [
           {
@@ -19328,6 +19813,25 @@
               }
             ],
             "description": "Referenced from a channel message."
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ApiAttachmentCommentReference",
+                "description": "Referenced from a comment on a document, initiative, CRM record, or call."
+              },
+              {
+                "type": "object",
+                "required": ["reference_type"],
+                "properties": {
+                  "reference_type": {
+                    "type": "string",
+                    "enum": ["comment"]
+                  }
+                }
+              }
+            ],
+            "description": "Referenced from a comment on a document, initiative, CRM record, or call."
           },
           {
             "allOf": [
@@ -20673,6 +21177,9 @@
           "sequence",
           "isReadOnly",
           "attendees",
+          "guestPolicy",
+          "isSnapshot",
+          "viewerCan",
           "createdAt",
           "updatedAt"
         ],
@@ -20725,6 +21232,10 @@
             "$ref": "#/components/schemas/EventType",
             "description": "Provider event type. Skipped when it is the regular type so\nprojections stored before event types were modeled still compare\nequal."
           },
+          "guestPolicy": {
+            "$ref": "#/components/schemas/GuestPolicy",
+            "description": "What the organizer lets guests do: the canonical copy's values, or\nGoogle's defaults for an event synced before the policy was modeled."
+          },
           "icalUid": {
             "type": "string",
             "description": "RFC 5545 UID used to reconcile provider and email sources."
@@ -20737,6 +21248,10 @@
           "isReadOnly": {
             "type": "boolean",
             "description": "Whether the canonical source's calendar prohibits editing it."
+          },
+          "isSnapshot": {
+            "type": "boolean",
+            "description": "Whether this is a snapshot of a meeting shared with the owner, which\nMacro added to their calendar as a private copy: the meeting's changes\nnever reach it, and nothing done to it reaches the meeting."
           },
           "location": {
             "type": ["string", "null"],
@@ -20798,6 +21313,10 @@
             "type": "string",
             "format": "date-time",
             "description": "Entity update time."
+          },
+          "viewerCan": {
+            "$ref": "#/components/schemas/ViewerCapabilities",
+            "description": "What the viewing requester may do with the event. Resolved only on\nthe read path, alongside each attendee's `is_self`; nothing when no\nviewer is known. Source projections never store it."
           },
           "visibility": {
             "$ref": "#/components/schemas/EventVisibility",
@@ -20909,6 +21428,92 @@
           }
         }
       },
+      "CalendarJoinRequest": {
+        "type": "object",
+        "description": "A channel member's request to be added as a guest of an event they see\nonly through a channel share.",
+        "required": [
+          "id",
+          "eventId",
+          "requesterId",
+          "requesterEmail",
+          "status",
+          "createdAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the request was made."
+          },
+          "eventId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The sharer's event entity that was shared with the channel."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Request identifier."
+          },
+          "requesterEmail": {
+            "type": "string",
+            "description": "Address the sharer invites when accepting."
+          },
+          "requesterId": {
+            "type": "string",
+            "description": "Macro user asking to join."
+          },
+          "status": {
+            "$ref": "#/components/schemas/CalendarJoinRequestStatus",
+            "description": "Where the request stands."
+          }
+        }
+      },
+      "CalendarJoinRequestApiError": {
+        "type": "object",
+        "description": "HTTP error body returned by join-request endpoints.",
+        "required": ["code", "message"],
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/CalendarJoinRequestErrorCode",
+            "description": "Machine-readable failure category."
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable failure description."
+          }
+        }
+      },
+      "CalendarJoinRequestErrorCode": {
+        "type": "string",
+        "description": "Machine-readable join-request failure category.",
+        "enum": [
+          "not_found",
+          "already_on_calendar",
+          "sharer_cannot_invite",
+          "request_declined",
+          "internal"
+        ]
+      },
+      "CalendarJoinRequestStatus": {
+        "type": "string",
+        "description": "Lifecycle of a request to be added as a guest of a shared event.",
+        "enum": ["pending", "accepted", "declined"]
+      },
+      "CalendarJoinRequestsResponse": {
+        "type": "object",
+        "description": "Pending requests to join one event.",
+        "required": ["requests"],
+        "properties": {
+          "requests": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CalendarJoinRequest"
+            },
+            "description": "Oldest first."
+          }
+        }
+      },
       "CalendarMentionEvent": {
         "type": "object",
         "description": "Meeting-level fields shown in a calendar event mention preview, taken from\nthe requester's own projection of the meeting, or — when the requester has\nnone — from the mentioned projection a channel they belong to was given.",
@@ -20925,6 +21530,10 @@
             "description": "Number of attendees on the previewed copy.",
             "minimum": 0
           },
+          "canRequestToJoin": {
+            "type": "boolean",
+            "description": "For a channel-shared preview, whether the person who shared it can\nadd the requester as a guest. Always false for the requester's own\ncopy."
+          },
           "description": {
             "type": ["string", "null"],
             "description": "Provider description, plain text or HTML, truncated for the preview.\nClients must sanitize it before rendering."
@@ -20932,6 +21541,17 @@
           "isRecurring": {
             "type": "boolean",
             "description": "Whether the event repeats."
+          },
+          "joinRequestStatus": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CalendarJoinRequestStatus",
+                "description": "For a channel-shared preview, the requester's request to join, if any."
+              }
+            ]
           },
           "location": {
             "type": ["string", "null"],
@@ -20961,6 +21581,17 @@
             "type": "string",
             "format": "date-time",
             "description": "Entity update time of the previewed copy."
+          },
+          "viewerCopy": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CalendarMentionViewerCopy",
+                "description": "How the requester holds the meeting through `viewer_event_id`; absent\nexactly when that is."
+              }
+            ]
           },
           "viewerEventId": {
             "type": ["string", "null"],
@@ -21043,6 +21674,11 @@
             }
           }
         }
+      },
+      "CalendarMentionViewerCopy": {
+        "type": "string",
+        "description": "How a requester holds a mentioned meeting on their own calendar, decided\nby the copy's own inbox, the way viewer capabilities decide organizer and\nguest.",
+        "enum": ["snapshot", "invitation", "event"]
       },
       "CalendarOccurrence": {
         "type": "object",
@@ -21181,12 +21817,16 @@
           }
         }
       },
+      "CallProvider": {
+        "type": "string",
+        "description": "Supported call and transcript providers. Add variants as integrations grow.",
+        "enum": ["macro", "granola"]
+      },
       "CallRecord": {
         "type": "object",
         "description": "Full record of a call, unifying rows from `calls` (active) and\n`call_records` (archived) into a single response shape.",
         "required": [
           "callId",
-          "roomName",
           "createdBy",
           "startedAt",
           "shareWithTeam",
@@ -21264,12 +21904,23 @@
             "description": "Presigned URL for the call recording, if available."
           },
           "roomName": {
-            "type": "string",
-            "description": "The RTC room name."
+            "type": ["string", "null"],
+            "description": "The RTC room name. `None` for imported calls, which never had a room."
           },
           "shareWithTeam": {
             "type": "boolean",
             "description": "Whether the call is shared with the creator's team. While the call is\nlive this is the pending toggle applied at archive; afterwards it\nmirrors `team_share_access_level`."
+          },
+          "source": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CallRecordSource",
+                "description": "External provenance for calls imported from another provider; `None`\nfor calls recorded in Macro."
+              }
+            ]
           },
           "startedAt": {
             "type": "string",
@@ -21447,6 +22098,21 @@
             "type": "string",
             "format": "date-time",
             "description": "When the call started (created_at for active, started_at for archived)."
+          }
+        }
+      },
+      "CallRecordSource": {
+        "type": "object",
+        "description": "Where an imported call came from.",
+        "required": ["provider"],
+        "properties": {
+          "externalUrl": {
+            "type": ["string", "null"],
+            "description": "Link to the call in the provider's app, if it has one."
+          },
+          "provider": {
+            "$ref": "#/components/schemas/CallProvider",
+            "description": "Provider that supplied the call."
           }
         }
       },
@@ -23217,6 +23883,11 @@
           }
         }
       },
+      "ColumnId": {
+        "type": "string",
+        "format": "uuid",
+        "description": "Identifier of a column placement within a table."
+      },
       "ColumnKind": {
         "oneOf": [
           {
@@ -24017,6 +24688,41 @@
           "success": {
             "type": "boolean",
             "description": "Indicates if the document was created successfully"
+          }
+        }
+      },
+      "CreateCanvasDocumentRequest": {
+        "type": "object",
+        "description": "Request for a backend-initialized native Canvas.",
+        "required": ["documentName"],
+        "properties": {
+          "documentName": {
+            "type": "string",
+            "description": "Canvas name."
+          },
+          "projectId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Optional parent project."
+          }
+        }
+      },
+      "CreateCanvasDocumentResponse": {
+        "type": "object",
+        "description": "Response for creating a native Canvas.",
+        "required": ["documentId", "documentMetadata", "token"],
+        "properties": {
+          "documentId": {
+            "type": "string",
+            "description": "The document ID of the created native Canvas"
+          },
+          "documentMetadata": {
+            "$ref": "#/components/schemas/DocumentResponseMetadata",
+            "description": "Metadata for the created document"
+          },
+          "token": {
+            "type": "string",
+            "description": "A pre-generated permission token that you can use for SS"
           }
         }
       },
@@ -25409,6 +26115,11 @@
           }
         }
       },
+      "DatabaseId": {
+        "type": "string",
+        "format": "uuid",
+        "description": "Identifier of reusable database storage. Its optional Macro entity uses\nthe same identity, so existing routes and grants keep their IDs."
+      },
       "DatabaseOp": {
         "oneOf": [
           {
@@ -25522,6 +26233,40 @@
           }
         ],
         "description": "One write to a database: its tables, columns, options, rows or views,\ngrouped by the resource it changes. A request's ops apply in order and\ntogether, or not at all, and every op names a table of the database the\nrequest is for (or, creating one, adds it there)."
+      },
+      "DatabaseQueryRequest": {
+        "type": "object",
+        "description": "One SQL statement with an optional default database and optimistic write guards.",
+        "required": ["sql"],
+        "properties": {
+          "baseVersions": {
+            "type": "object",
+            "description": "Expected version for each table a subsequent statement writes.",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/TableVersion"
+            },
+            "propertyNames": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Identifier of one table (tab) within a database."
+            }
+          },
+          "databaseId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DatabaseId",
+                "description": "Default database for resolving unqualified table names; other visible databases remain joinable."
+              }
+            ]
+          },
+          "sql": {
+            "type": "string",
+            "description": "One supported SQL statement. Writes execute once, without automatic retries."
+          }
+        }
       },
       "DatabaseView": {
         "type": "object",
@@ -28796,7 +29541,8 @@
           "closesAt",
           "confirmationMessage",
           "createdAt",
-          "updatedAt"
+          "updatedAt",
+          "isHiddenInDrive"
         ],
         "properties": {
           "audience": {
@@ -28830,6 +29576,10 @@
             "type": "string",
             "format": "uuid",
             "description": "The form."
+          },
+          "isHiddenInDrive": {
+            "type": "boolean",
+            "description": "Whether Drive leaves it, and the database behind it, out of its\nlistings, as for a channel poll."
           },
           "name": {
             "type": "string",
@@ -29342,7 +30092,7 @@
           },
           {
             "type": "object",
-            "description": "A booking step. Its destination is withheld from respondents until\ntheir response has passed every screener and been accepted.",
+            "description": "A booking step. Its destination is withheld from respondents until\ntheir response has passed every gate and been accepted.",
             "required": ["id", "title", "description", "kind"],
             "properties": {
               "description": {
@@ -29378,6 +30128,10 @@
             "description": "A new database named like the form, whose one table, \"Responses\",\nstarts with only the form's own columns.",
             "required": ["kind"],
             "properties": {
+              "isHiddenInDrive": {
+                "type": "boolean",
+                "description": "Keep the form, and the database made for it, out of Drive, as\nfor a channel poll."
+              },
               "kind": {
                 "type": "string",
                 "enum": ["new"]
@@ -30648,6 +31402,70 @@
         "description": "Sort method for grouped queries (frecency not supported).",
         "enum": ["viewed_at", "created_at", "updated_at", "viewed_updated"]
       },
+      "GuestChatMessage": {
+        "type": "object",
+        "description": "Guest-safe message projection: no account identities, attachments, or entity grants.",
+        "required": ["id", "name", "guest", "is_you", "content", "created_at"],
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "Message body."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation time."
+          },
+          "guest": {
+            "type": "boolean",
+            "description": "Whether the author is a guest."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Persisted message identity."
+          },
+          "is_you": {
+            "type": "boolean",
+            "description": "Whether this session authored the message."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display-only author name."
+          }
+        }
+      },
+      "GuestChatPage": {
+        "type": "object",
+        "description": "Messages in the call's one discussion, oldest first.",
+        "required": ["messages"],
+        "properties": {
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GuestChatMessage"
+            },
+            "description": "Visible, nondeleted messages."
+          }
+        }
+      },
+      "GuestChatPost": {
+        "type": "object",
+        "description": "Guests may send text only; attribution and parent are server-owned.",
+        "required": ["id", "content"],
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "Text to append to the call discussion."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "UUIDv7 used to deduplicate retries, including the first message."
+          }
+        },
+        "additionalProperties": false
+      },
       "GuestId": {
         "type": "string",
         "format": "uuid",
@@ -30661,6 +31479,25 @@
           "displayName": {
             "type": "string",
             "description": "Guest's name, displayed to everyone in the room."
+          }
+        }
+      },
+      "GuestPolicy": {
+        "type": "object",
+        "description": "The switches an organizer sets on an event to bound what its guests may\ndo. Google omits a switch from the payload while it holds its default.",
+        "required": ["canModify", "canInviteOthers", "canSeeOtherGuests"],
+        "properties": {
+          "canInviteOthers": {
+            "type": "boolean",
+            "description": "Whether guests may invite others."
+          },
+          "canModify": {
+            "type": "boolean",
+            "description": "Whether guests may change the event, including its guest list."
+          },
+          "canSeeOtherGuests": {
+            "type": "boolean",
+            "description": "Whether guests may see the guest list."
           }
         }
       },
@@ -31632,7 +32469,7 @@
         "oneOf": [
           {
             "type": "object",
-            "description": "A booking step must be unique and follow all questions and screeners.",
+            "description": "A booking step must be unique and follow all questions and gates.",
             "required": ["kind"],
             "properties": {
               "kind": {
@@ -32040,7 +32877,7 @@
       },
       "MeetingToken": {
         "type": "string",
-        "description": "A bearer capability that grants access only to a meeting's RTC room."
+        "description": "An invitation capability for joining a meeting's RTC room. Chat additionally\nrequires the resulting participant credential and current guest membership."
       },
       "MeetingsResponse": {
         "type": "object",
@@ -32107,6 +32944,10 @@
             "type": ["string", "null"],
             "format": "date-time",
             "description": "Last content edit, if any."
+          },
+          "guest_name": {
+            "type": ["string", "null"],
+            "description": "Display name of a verified call guest, retained after the call ends."
           },
           "id": {
             "type": "string",
@@ -33671,6 +34512,11 @@
         "type": "string",
         "description": "An arithmetic operator.",
         "enum": ["add", "subtract", "multiply", "divide"]
+      },
+      "OptionId": {
+        "type": "string",
+        "format": "uuid",
+        "description": "Identifier of an option of a select or tag column."
       },
       "OptionRef": {
         "oneOf": [
@@ -35588,6 +36434,99 @@
           }
         }
       },
+      "ResultColumn": {
+        "type": "object",
+        "description": "One result column, with what its cells mean.",
+        "required": ["name", "kind"],
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/SqlOutcomeKind",
+            "description": "What its cells hold."
+          },
+          "name": {
+            "type": "string",
+            "description": "The name or alias the statement gave it."
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SqlSelectOption"
+            },
+            "description": "For a select column, its options: its cells hold their ids."
+          },
+          "relatedTable": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TableId",
+                "description": "For a relation, the table its rows belong to; for `row_id`, the\ntable read."
+              }
+            ]
+          },
+          "target": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SqlEntityKind",
+                "description": "For an entity column, what its ids point at; `DATABASE_ROW` for a\nrelation, whose ids are rows of another table."
+              }
+            ]
+          }
+        }
+      },
+      "ResultSet": {
+        "type": "object",
+        "description": "A `SELECT`'s rows, as the engine's typed cells.",
+        "required": ["columns", "rows", "rowIds"],
+        "properties": {
+          "columns": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResultColumn"
+            },
+            "description": "The columns, in select-list order."
+          },
+          "rowIds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RowId"
+            },
+            "description": "For a row-shaped result, the id of the row behind each result row;\nempty for an aggregate."
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SqlCell"
+                  }
+                ]
+              }
+            },
+            "description": "One cell per column per row; `null` is an empty cell."
+          },
+          "sourceTable": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TableId",
+                "description": "Table whose rows the result identities refer to; absent for aggregates."
+              }
+            ]
+          }
+        }
+      },
       "RingStatus": {
         "type": "string",
         "description": "Per-user status of an incoming-call ring, as reported by the\nring-status endpoint while a native client is ringing.",
@@ -36168,6 +37107,10 @@
           "session_name": {
             "type": "string",
             "description": "User-facing session name at the time of the event."
+          },
+          "source": {
+            "$ref": "#/components/schemas/SessionSource",
+            "description": "Who started the session. Events from before it was recorded say\nnothing and read as a person."
           }
         }
       },
@@ -36260,6 +37203,11 @@
             ]
           }
         }
+      },
+      "SessionSource": {
+        "type": "string",
+        "description": "Who started a session. Stored on the session and carried by its lifecycle\nevents, so lists and notifications can treat unattended runs differently.",
+        "enum": ["user", "agent", "routine"]
       },
       "SessionStoppedMetadata": {
         "type": "object",
@@ -36872,6 +37820,10 @@
                 "type": ["string", "null"],
                 "description": "The repository the session works with, when one was selected."
               },
+              "source": {
+                "$ref": "#/components/schemas/AgentSessionSource",
+                "description": "Who started the session"
+              },
               "status": {
                 "type": "string",
                 "description": "The session's last known status.\n\n`no_messages` until the first system event arrives, `disconnected` if\nthe connection dropped without a clean close, otherwise the wire name\nof the most recent system event (for example `session/end`)."
@@ -36894,6 +37846,10 @@
                 "type": ["string", "null"],
                 "format": "date-time",
                 "description": "The time the session was last viewed by the requesting user"
+              },
+              "visibility": {
+                "$ref": "#/components/schemas/AgentSessionVisibility",
+                "description": "Where the session is shown"
               },
               "workingBranch": {
                 "type": ["string", "null"],
@@ -38844,6 +39800,378 @@
         ],
         "description": "Source identity supplied when creating a job. One binding per Macro team in v1."
       },
+      "SqlCell": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Text or link.",
+            "required": ["value", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["text"]
+              },
+              "value": {
+                "type": "string",
+                "description": "Text or link."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A number.",
+            "required": ["value", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["number"]
+              },
+              "value": {
+                "type": "number",
+                "format": "double",
+                "description": "A number."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A checkbox.",
+            "required": ["value", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["bool"]
+              },
+              "value": {
+                "type": "boolean",
+                "description": "A checkbox."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A date-time.",
+            "required": ["value", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["date"]
+              },
+              "value": {
+                "type": "string",
+                "format": "date-time",
+                "description": "A date-time."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The selected option ids; one for single-select columns.",
+            "required": ["value", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["options"]
+              },
+              "value": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/OptionId"
+                },
+                "description": "The selected option ids; one for single-select columns."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The referenced entity ids; one for single-valued columns.",
+            "required": ["value", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["entities"]
+              },
+              "value": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "The referenced entity ids; one for single-valued columns."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A table row's own id, the `row_id` column.",
+            "required": ["value", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["row"]
+              },
+              "value": {
+                "$ref": "#/components/schemas/RowId",
+                "description": "A table row's own id, the `row_id` column."
+              }
+            }
+          }
+        ],
+        "description": "A cell as fetched. An absent cell is `NULL`; an absent multi-valued cell\nis the empty set."
+      },
+      "SqlEntityKind": {
+        "type": "string",
+        "description": "What an entity column's references point at: a kind of Macro entity, or\nthe rows of another table for a relation.\n\nSpelled as the properties system spells entity types (`USER`,\n`DATABASE_ROW`), on the wire and in SQL, where it parses\ncase-insensitively.",
+        "enum": [
+          "USER",
+          "DOCUMENT",
+          "TASK",
+          "COMPANY",
+          "CONTACT",
+          "CALL_RECORD",
+          "CHANNEL",
+          "CHAT",
+          "PROJECT",
+          "THREAD",
+          "CALENDAR_EVENT",
+          "INITIATIVE",
+          "DATABASE_ROW"
+        ]
+      },
+      "SqlOutcome": {
+        "type": "object",
+        "description": "The answer to one statement.",
+        "required": [
+          "tableDatabases",
+          "changesApplied",
+          "insertedRowIds",
+          "newVersions",
+          "readVersions",
+          "truncatedTables",
+          "statement"
+        ],
+        "properties": {
+          "changesApplied": {
+            "type": "integer",
+            "description": "How many rows a write changed.",
+            "minimum": 0
+          },
+          "insertedRowIds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RowId"
+            },
+            "description": "The rows an `INSERT` created, in statement order."
+          },
+          "newVersions": {
+            "type": "object",
+            "description": "The new version of every table written.",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/TableVersion"
+            },
+            "propertyNames": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Identifier of one table (tab) within a database."
+            }
+          },
+          "readVersions": {
+            "type": "object",
+            "description": "The version of every table read, for a follow-up write to guard on.",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/TableVersion"
+            },
+            "propertyNames": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Identifier of one table (tab) within a database."
+            }
+          },
+          "result": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ResultSet",
+                "description": "The rows a `SELECT` returned; `None` for a write."
+              }
+            ]
+          },
+          "statement": {
+            "$ref": "#/components/schemas/SqlStatement",
+            "description": "What kind of statement ran, and what it wrote."
+          },
+          "tableDatabases": {
+            "type": "object",
+            "description": "Owning database of each visible table referenced by this outcome.",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/DatabaseId"
+            },
+            "propertyNames": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Identifier of one table (tab) within a database."
+            }
+          },
+          "truncatedTables": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Every table the statement read, when any read hit the engine's row\ncap: the engine reports the cap per statement, so aggregates over any\nof them may be partial."
+          }
+        }
+      },
+      "SqlOutcomeKind": {
+        "type": "string",
+        "description": "The value kind of a result column.",
+        "enum": ["text", "number", "boolean", "date", "select", "entity", "row"]
+      },
+      "SqlSelectOption": {
+        "type": "object",
+        "description": "One option of a select column.",
+        "required": ["id", "label"],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/OptionId",
+            "description": "The option id."
+          },
+          "label": {
+            "type": "string",
+            "description": "The label users type in SQL."
+          }
+        }
+      },
+      "SqlStatement": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A committed schema command. IDs remain available even without a follow-up read.",
+            "required": ["databaseId", "summary", "kind"],
+            "properties": {
+              "databaseId": {
+                "$ref": "#/components/schemas/DatabaseId",
+                "description": "Owning database."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["schema"]
+              },
+              "summary": {
+                "type": "string",
+                "description": "What changed and how to read the resulting schema."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A `SELECT`.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["select"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An `INSERT`.",
+            "required": ["tableId", "tableName", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["insert"]
+              },
+              "tableId": {
+                "$ref": "#/components/schemas/TableId",
+                "description": "The table written."
+              },
+              "tableName": {
+                "type": "string",
+                "description": "Its name."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An `UPDATE`.",
+            "required": ["tableId", "tableName", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["update"]
+              },
+              "tableId": {
+                "$ref": "#/components/schemas/TableId",
+                "description": "The table written."
+              },
+              "tableName": {
+                "type": "string",
+                "description": "Its name."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A `DELETE`.",
+            "required": ["tableId", "tableName", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["delete"]
+              },
+              "tableId": {
+                "$ref": "#/components/schemas/TableId",
+                "description": "The table written."
+              },
+              "tableName": {
+                "type": "string",
+                "description": "Its name."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An `ALTER COLUMN … TYPE`.",
+            "required": [
+              "tableId",
+              "tableName",
+              "columnId",
+              "columnName",
+              "to",
+              "kind"
+            ],
+            "properties": {
+              "columnId": {
+                "$ref": "#/components/schemas/ColumnId",
+                "description": "The column placement; its id survives the change."
+              },
+              "columnName": {
+                "type": "string",
+                "description": "The column's name."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["alterColumnType"]
+              },
+              "tableId": {
+                "$ref": "#/components/schemas/TableId",
+                "description": "The table."
+              },
+              "tableName": {
+                "type": "string",
+                "description": "Its name."
+              },
+              "to": {
+                "type": "string",
+                "description": "The type it became, as SQL spells it, e.g. `select[]`."
+              }
+            }
+          }
+        ],
+        "description": "The statement that ran: a read, or the table (and for a type change, the\ncolumn) it wrote."
+      },
       "StarterDatabase": {
         "type": "object",
         "description": "Starter result. A missing database means the user already started or removed it.",
@@ -39446,6 +40774,11 @@
             "description": "The table's views, in their order."
           }
         }
+      },
+      "TableId": {
+        "type": "string",
+        "format": "uuid",
+        "description": "Identifier of one table (tab) within a database."
       },
       "TableResult": {
         "oneOf": [
@@ -41516,6 +42849,44 @@
           }
         ],
         "description": "What happened to a view."
+      },
+      "ViewerCapabilities": {
+        "type": "object",
+        "description": "What the viewing requester may do with an event.",
+        "required": [
+          "editDetails",
+          "inviteGuests",
+          "removeGuests",
+          "setGuestPolicy",
+          "rsvp",
+          "organize"
+        ],
+        "properties": {
+          "editDetails": {
+            "type": "boolean",
+            "description": "Change the event's details (title, time, description, conference)."
+          },
+          "inviteGuests": {
+            "type": "boolean",
+            "description": "Add guests."
+          },
+          "organize": {
+            "type": "boolean",
+            "description": "Act as the event's organizer: replace its whole guest list and manage\nits conferencing."
+          },
+          "removeGuests": {
+            "type": "boolean",
+            "description": "Remove guests."
+          },
+          "rsvp": {
+            "type": "boolean",
+            "description": "Answer the invitation."
+          },
+          "setGuestPolicy": {
+            "type": "boolean",
+            "description": "Change the event's guest policy, which only Google calendars have."
+          }
+        }
       },
       "ViewsResponse": {
         "type": "object",

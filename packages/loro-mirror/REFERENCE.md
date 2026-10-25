@@ -388,3 +388,57 @@ dispatch.toggleTodo({ id: "123" });
 ## License
 
 MIT
+
+## Native ordered trees
+
+```typescript
+const nodeSchema = schema.LoroMap({
+  id: schema.String({ required: true }),
+  title: schema.String({ required: true }),
+});
+const canvasSchema = schema({
+  scene: schema.LoroTree(nodeSchema, data => data.id),
+});
+const mirror = new Mirror({ doc: loro, schema: canvasSchema });
+mirror.setState({ scene: [
+  { data: { id: 'a', title: 'First' }, children: [
+    { data: { id: 'child', title: 'Child' }, children: [] },
+  ] },
+  { data: { id: 'b', title: 'Second' }, children: [] },
+] });
+mirror.setState(state => {
+  const [child] = state.scene[0].children.splice(0, 1);
+  state.scene[1].children.push(child);
+});
+```
+
+The forest projects an actual `LoroTree`, with each node's `data` stored in its
+native `LoroMap`. The application ID selector must return a nonempty, globally
+unique ID within the tree. Moves between parents or sibling positions preserve
+native node and data-map identities. Changing an application ID represents
+removing one node and creating another. Delete a subtree by removing its node;
+extracting a surviving child in the same proposal moves it before deletion.
+Data maps can contain nested schema containers, including other trees.
+
+`setState` recipes use Immer drafts and may mutate and return the draft, return
+an immutable replacement, or return nothing after mutation. Published state is
+frozen. Invalid trees (duplicate IDs, cycles, malformed data or non-JSON values)
+are rejected before any writes, even with `validateUpdates: false`. Validation outside trees can be disabled; tree structure, node data and
+native-operation safety remain mandatory.
+One proposal becomes one commit and undo step. One native batch produces one
+notification; `UpdateMetadata.changedRoots` identifies affected root fields for
+native batches. Explicit full sync notifications omit that field.
+
+`schema.Value(typeGuard, options?)` declares a JSON value stored atomically in a
+single LWW register, including objects and arrays. It never infers nested CRDT
+containers. Use it for values whose fields must win together, such as a geometry
+and coordinate-frame tuple. Use Map/Text schemas when independent merging is
+wanted. Undefined optional fields are omitted; atomic JSON cannot contain
+undefined, non-finite numbers or cycles. Explicit null must pass the supplied
+guard, including for required nullable values; required rejects absent values.
+
+Root schema option `{ allowUnknown: true }` permits a scene Mirror to coexist
+with unrelated host metadata roots in the same document. Partial updates retain
+those fields. The caller still owns its document lifecycle and must dispose the
+Mirror before freeing the document. Opening a persisted native tree only reads
+it; it does not rewrite or convert existing node data.

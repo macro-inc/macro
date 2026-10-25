@@ -1,0 +1,43 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE import_run\n            SET status = CASE WHEN status = 'dismissed' THEN status\n                              ELSE $2::text::import_run_status END,\n                error = CASE WHEN status = 'dismissed' THEN error ELSE $3 END,\n                updated_at = NOW(), lease_owner = NULL, lease_expires_at = NULL\n            WHERE user_id = $1 AND source = 'notion' AND status::text = ANY($4::text[])\n            RETURNING status::text AS \"status!\", error, review_id, review_session_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "status!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "error",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "review_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "review_session_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "3452a0b8cbc5ff8b2a1373286a080b72d248c2ef74d27233f6ba3033b835bbbc"
+}

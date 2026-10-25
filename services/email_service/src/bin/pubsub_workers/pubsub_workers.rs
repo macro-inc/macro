@@ -371,7 +371,8 @@ async fn main() -> anyhow::Result<()> {
     ));
 
     // The CRM crate's company-metadata resolver is consulted by
-    // `crm_service.populate_contact` only on `crm_domain_directory` misses.
+    // `crm_service.populate_contact` on `crm_domain_directory` misses and by
+    // the enrichment worker for pending entries other binaries leave behind.
     // `USE_APOLLO_CRM_ENRICHMENT` selects Apollo.io vs. the unfurl-backed
     // resolver; we also fall back to unfurl when the Apollo key can't be
     // loaded. The resolver is cheap to clone.
@@ -409,6 +410,10 @@ async fn main() -> anyhow::Result<()> {
         crm::outbound::companies_repo::CompaniesRepositoryImpl::new(db.clone()),
         metadata_resolver.clone(),
     );
+    worker_tracker.spawn(email_service::crm_enrichment_worker::run(
+        crm_service.clone(),
+        worker_cancellation_token.clone(),
+    ));
 
     // Backfill workers run against a dedicated pool to keep their writes
     // off the primary worker pool. CRM writes are part of the backfill
@@ -478,17 +483,16 @@ async fn main() -> anyhow::Result<()> {
             ),
         },
     );
-    if config.outlook_writes_enabled {
-        worker_tracker.spawn(email_service::mailbox_sync_worker::run_transfers(
-            email::domain::draft_transfer::DraftRetirementService {
-                repository: email::outbound::EmailPgRepo::new(db.clone()),
-                gateway: email_service::outbound::email_api::ProviderMailboxGateway(
-                    outlook_api.clone(),
-                ),
-            },
-            worker_cancellation_token.clone(),
-        ));
-    }
+    worker_tracker.spawn(email_service::mailbox_sync_worker::run_transfers(
+        email::domain::draft_transfer::DraftRetirementService {
+            repository: email::outbound::EmailPgRepo::new(db.clone()),
+            gateway: email_service::outbound::email_api::ProviderMailboxGateway(
+                outlook_api.clone(),
+            ),
+            writes_enabled: config.outlook_writes_enabled,
+        },
+        worker_cancellation_token.clone(),
+    ));
     worker_tracker.spawn(email_service::mailbox_sync_worker::run_drafts(
         email::domain::mailbox::drafts::MailboxDraftService::new(
             mailbox_repository.clone(),
@@ -724,6 +728,7 @@ async fn main() -> anyhow::Result<()> {
     let connection_gateway_client_link_manager = connection_gateway_client.clone();
     let notification_ingress_service_link_manager = notification_ingress_service.clone();
     let macro_event_broker_link_manager = macro_event_broker.clone();
+    let contacts_ingress_link_manager = contacts_ingress.clone();
     let cancellation_token = worker_cancellation_token.clone();
     // daily link_manager operations for user contacts and inbox subscriptions
     worker_tracker.spawn(async move {
@@ -738,6 +743,7 @@ async fn main() -> anyhow::Result<()> {
             connection_gateway_client_link_manager,
             notification_ingress_service_link_manager,
             macro_event_broker_link_manager,
+            contacts_ingress_link_manager,
             cancellation_token,
         )
         .await;

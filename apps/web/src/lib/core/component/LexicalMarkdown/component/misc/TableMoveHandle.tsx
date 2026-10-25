@@ -576,7 +576,7 @@ export function TableMoveHandle() {
             </Show>
             <Show when={menuOpen()}>
               <div
-                class="z-30 grid grid-cols-2 gap-1 overflow-y-auto rounded-lg bg-surface p-1.5 shadow-lg ring-1 ring-edge"
+                class="menu-surface z-30 grid grid-cols-2 gap-1 overflow-y-auto p-1.5"
                 style={{
                   width: `${MENU_WIDTH_PX}px`,
                   'max-height': `${MENU_MAX_HEIGHT_PX}px`,

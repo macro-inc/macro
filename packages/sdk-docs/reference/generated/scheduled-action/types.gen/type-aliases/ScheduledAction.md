@@ -1,6 +1,6 @@
 # Type Alias: ScheduledAction
 
-> **ScheduledAction** = \{ `claimed?`: `string` \| `null`; `configuration_revision`: `number`; `created_at`: `string`; `enabled`: `boolean`; `event_activated_at?`: `string` \| `null`; `id?`: `string` \| `null`; `kind`: [`ActionKind`](ActionKind.md); `name`: `string`; `next_run_at?`: `string` \| `null`; `owner`: `string`; `task`: \{\[`key`: `string`\]: `unknown`; \}; `trigger`: [`ActionTrigger`](ActionTrigger.md); `updated_at`: `string`; \}
+> **ScheduledAction** = \{ `claimed?`: `string` \| `null`; `configuration_revision`: `number`; `created_at`: `string`; `enabled`: `boolean`; `event_activated_at?`: `string` \| `null`; `id?`: `string` \| `null`; `kind`: [`ActionKind`](ActionKind.md); `name`: `string`; `next_run_at?`: `string` \| `null`; `owner`: `string`; `run_visibility`: [`RunVisibility`](RunVisibility.md); `task`: \{\[`key`: `string`\]: `unknown`; \}; `trigger`: [`ActionTrigger`](ActionTrigger.md); `updated_at`: `string`; \}
 
 ## Properties
 
@@ -16,6 +16,7 @@
 | <a id="property-name"></a> `name` | `string` | - |
 | <a id="property-next_run_at"></a> `next_run_at?` | `string` \| `null` | Next cron firing, absent for event-triggered actions. |
 | <a id="property-owner"></a> `owner` | `string` | Who the action belongs to. Every action is user-owned today, but the type no longer says so: the principal string on the wire and in the `owner` column is the same, and a bot- or team-owned row decodes rather than failing to parse. |
+| <a id="property-run_visibility"></a> `run_visibility` | [`RunVisibility`](RunVisibility.md) | Whether the action's runs are listed in Home and the Agents list. |
 | <a id="property-task"></a> `task` | \{\[`key`: `string`\]: `unknown`; \} | - |
 | <a id="property-trigger"></a> `trigger` | [`ActionTrigger`](ActionTrigger.md) | - |
 | <a id="property-updated_at"></a> `updated_at` | `string` | - |

@@ -89,7 +89,11 @@ function PrShareModal(props: PrShareModalProps) {
               class="max-w-[calc(100vw-16px)] mt-20 sm:mt-40 mx-auto overflow-y-auto scrollbar-hidden portal-scope isolate flex flex-col gap-2 *:max-h-[75vh]"
               style={{ width: '800px' }}
             >
-              <Panel depth={2} class="rounded-xl bg-dialog">
+              <Panel
+                depth={2}
+                hideBorder
+                class="elevated-surface rounded-[24px] bg-dialog"
+              >
                 <Panel.Header class="px-4">
                   <Dialog.Title class="flex items-center gap-1.5 min-w-0 overflow-hidden whitespace-nowrap w-full text-sm font-medium">
                     <span class="shrink-0">Share:</span>
@@ -105,7 +109,11 @@ function PrShareModal(props: PrShareModalProps) {
                   />
                 </Panel.Body>
               </Panel>
-              <Panel depth={2} class="rounded-xl bg-dialog">
+              <Panel
+                depth={2}
+                hideBorder
+                class="elevated-surface rounded-[24px] bg-dialog"
+              >
                 <Panel.Body>
                   <div class="flex items-center justify-between p-4 text-sm">
                     <span class="text-ink-muted">

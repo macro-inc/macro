@@ -74,46 +74,51 @@ export function RoutineDetailView(props: {
           }
           onChange={setState}
           disabled={!isOwned() || isRunning() || !state()}
-          tab={tab()}
+          tab={isOwned() ? tab() : 'settings'}
+          showHistory={isOwned()}
           onTab={setTab}
           onBack={back}
           enabled={isActive()}
           runActions={
-            <RoutineRunButton
-              enabled={isActive()}
-              runDisabled={runDisabled()}
-              activationDisabled={activationDisabled()}
-              copyDisabled={!state()?.prompt}
-              onRun={runNow}
-              onEnabled={(enabled) => props.source.setEnabled(enabled)}
-              onCopyPrompt={() => fireAndForget(copyPrompt(), 'routines')}
-            />
+            isOwned() && (
+              <RoutineRunButton
+                enabled={isActive()}
+                runDisabled={runDisabled()}
+                activationDisabled={activationDisabled()}
+                copyDisabled={!state()?.prompt}
+                onRun={runNow}
+                onEnabled={(enabled) => props.source.setEnabled(enabled)}
+                onCopyPrompt={() => fireAndForget(copyPrompt(), 'routines')}
+              />
+            )
           }
           actions={
-            <Dropdown placement="bottom-start">
-              <Dropdown.Trigger
-                variant="ghost"
-                size="icon-sm"
-                aria-label="Routine actions"
-              >
-                <DotsIcon class="size-5" />
-              </Dropdown.Trigger>
-              <Dropdown.Content portalScope="local">
-                <Dropdown.Item
-                  disabled={!state() || props.source.duplicationPending()}
-                  onSelect={() => props.source.duplicate()}
+            isOwned() && (
+              <Dropdown placement="bottom-start">
+                <Dropdown.Trigger
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Routine actions"
                 >
-                  <CopyIcon class="size-4" />
-                  Duplicate
-                </Dropdown.Item>
-                <Show when={isOwned()}>
-                  <Dropdown.Item onSelect={props.onDelete}>
-                    <TrashIcon class="size-4" />
-                    Delete
+                  <DotsIcon class="size-5" />
+                </Dropdown.Trigger>
+                <Dropdown.Content portalScope="local">
+                  <Dropdown.Item
+                    disabled={!state() || props.source.duplicationPending()}
+                    onSelect={() => props.source.duplicate()}
+                  >
+                    <CopyIcon class="size-4" />
+                    Duplicate
                   </Dropdown.Item>
-                </Show>
-              </Dropdown.Content>
-            </Dropdown>
+                  <Show when={isOwned()}>
+                    <Dropdown.Item onSelect={props.onDelete}>
+                      <TrashIcon class="size-4" />
+                      Delete
+                    </Dropdown.Item>
+                  </Show>
+                </Dropdown.Content>
+              </Dropdown>
+            )
           }
           nextRun={nextRun()}
           instructions={
@@ -121,6 +126,7 @@ export function RoutineDetailView(props: {
               <Show when={{ version: editorVersion() }} keyed>
                 <props.slots.PromptEditor
                   initialValue={state()?.prompt ?? ''}
+                  disabled={!isOwned() || isRunning()}
                   onChange={(prompt) =>
                     setState((draft) =>
                       draft.prompt === prompt ? draft : { ...draft, prompt }

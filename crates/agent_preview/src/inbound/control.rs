@@ -54,7 +54,7 @@ impl<Access, Auth> FromRef<ControlState<Access, Auth>> for MacroAuthorizationSta
         state.auth.clone()
     }
 }
-/// Current session preview, including the absence of a lease after a gateway restart.
+/// Shared session preview, including offline state when its SSH owner disappears.
 #[derive(serde::Serialize)]
 pub struct PreviewSnapshot {
     /// Current lease, or no preview.
@@ -83,6 +83,7 @@ async fn read<Access: EntityAccessService, Auth: MacroAuthorizationService>(
     state
         .service
         .get(receipt.entity_access_receipt)
+        .await
         .map(|preview| Json(PreviewSnapshot { preview }))
 }
 async fn open<Access: EntityAccessService, Auth: MacroAuthorizationService>(
@@ -92,6 +93,7 @@ async fn open<Access: EntityAccessService, Auth: MacroAuthorizationService>(
     state
         .service
         .launch(receipt.entity_access_receipt)
+        .await
         .map(Json)
 }
 async fn stop<Access: EntityAccessService, Auth: MacroAuthorizationService>(

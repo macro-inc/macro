@@ -1,12 +1,18 @@
 import { analytics } from '@app/lib/analytics';
 import { useChannelTab } from '@channel/Channel/ChannelTabContext';
-import { useChannelName, useChannelType } from '@core/context/channels';
+import {
+  useChannel,
+  useChannelName,
+  useChannelType,
+} from '@core/context/channels';
+import { useUserId } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
 import PhoneIcon from '@phosphor/phone-call.svg';
 import { useActiveCallQuery } from '@queries/call/call';
 import { ChannelTypeEnum } from '@service-storage/client';
 import { confirmDialog } from '@ui';
-import { getOwner } from 'solid-js';
+import { createMemo, getOwner } from 'solid-js';
+import { CallParticipantAvatars } from './CallParticipantAvatars';
 import { getCallJoinTab, getCallLeaveTab } from './call-tabs';
 import { useCall } from './use-call';
 
@@ -23,6 +29,17 @@ export function useStartChannelCall(channelId: () => string) {
 
   const activeCallQuery = useActiveCallQuery(channelId);
   const isCallInProgress = () => !!activeCallQuery.data;
+  const channel = useChannel(channelId());
+  const userId = useUserId();
+  const participantIds = createMemo(() => {
+    const currentUser = userId();
+    return [
+      ...(currentUser ? [currentUser] : []),
+      ...(channel()?.participants ?? [])
+        .filter((participant) => participant.user_id !== currentUser)
+        .map((participant) => participant.user_id),
+    ];
+  });
   const channelName = useChannelName(channelId());
   const channelType = useChannelType(channelId());
   const isDm = () => channelType() === ChannelTypeEnum.DirectMessage;
@@ -34,13 +51,13 @@ export function useStartChannelCall(channelId: () => string) {
   const confirmTitle = () => {
     const name = channelName();
     if (!name) return 'Start a call?';
-    return isDm() ? `Call ${name}?` : `Start a call in ${name}?`;
+    return isDm() ? `Start a call with ${name}` : `Start a call in ${name}`;
   };
 
-  // A DM title ("Call Jane?") already says who rings; the group-channel case
-  // is the one where the blast radius needs spelling out.
   const confirmBody = () =>
-    isDm() ? undefined : 'Everyone in the channel will be notified.';
+    isDm()
+      ? 'They’ll receive a notification to join.'
+      : 'Everyone in the channel will be notified.';
 
   const joinCall = async () => {
     if (call.isJoining()) return;
@@ -77,6 +94,7 @@ export function useStartChannelCall(channelId: () => string) {
           title: confirmTitle(),
           body: confirmBody(),
           tone: 'success' as const,
+          mobileHero: <CallParticipantAvatars ids={participantIds()} />,
           confirmLabel: (
             <>
               <PhoneIcon class="size-5" />

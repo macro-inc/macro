@@ -76,6 +76,19 @@ prompt spans also split `agent.turn.lock_wait_ms`, `agent.turn.admission_wait_ms
 and `agent.turn.first_text_ms`; their legacy `ttft_ms` can include reasoning or
 a tool call, but excludes usage and tool-result events.
 
+### A turn that ended without an answer
+
+In-memory prompt spans record what the turn said: `agent.turn.stop_reason`
+(`end_turn`, `cancelled`, `error`), `agent.turn.text_chars`,
+`agent.turn.tool_calls`, and `agent.turn.replied`, which is false when no text
+followed the last tool call. Such a turn also logs `the turn ended without a
+reply after its last tool call`; query `@agent.turn.replied:false` to find them.
+Then read the turn's last `chat_streaming` span: `gen_ai.response.finish_reasons`
+carries the provider's own stop reason (`end_turn`, `refusal`, `max_tokens`,
+`max_output_tokens`, `SAFETY`, ...), which Rig does not record for streamed
+calls. Each `execute_tool` span carries `macro.genai.tool.result_bytes`, whatever
+the content policy, so a result large enough to crowd the context shows there.
+
 ### From the send click to the first painted text
 
 The web app's `agent.prompt` span (service `web-app`) covers one prompt end to

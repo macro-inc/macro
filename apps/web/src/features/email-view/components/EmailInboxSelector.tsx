@@ -4,13 +4,14 @@ import { inboxIconProps } from '@core/component/inboxIcon';
 import { UserIcon, type UserIconSize } from '@core/component/UserIcon';
 import { enableMultiInbox } from '@core/constant/featureFlags';
 import { useAddInboxFlow } from '@core/email-link';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import TrayIcon from '@phosphor/tray.svg';
 import { useMailAccountsQuery } from '@queries/email/mail-accounts';
-import { cn, Dropdown, pressHandlers } from '@ui';
+import { AvatarGroup, Button, cn, Dropdown, pressHandlers } from '@ui';
 import { createMemo, For, type JSX, Show } from 'solid-js';
 import { fromInboxOptions } from '../../email-compose/core/email-sender';
 import { useEmailView } from '../email-view-context';
@@ -118,81 +119,205 @@ function InboxAvatar(props: {
   );
 }
 
-/**
- * The inbox list at the top of the Email sidebar: `All inboxes` followed by
- * one row per inbox, with a separate action to connect another account.
- * Clicking a row selects that inbox alone; there is no multi-select.
- */
+function AllInboxesAvatar(props: { options: readonly InboxOption[] }) {
+  const inboxes = () =>
+    props.options.filter((option) => !option.aliasAddress).slice(0, 2);
+
+  return (
+    <Show
+      when={!isTouchDevice() && inboxes().length > 0}
+      fallback={<TrayIcon aria-hidden="true" class="size-4 shrink-0" />}
+    >
+      <AvatarGroup size="sm" aria-hidden="true">
+        <For each={inboxes()}>
+          {(option) => <InboxAvatar option={option} size="sm" />}
+        </For>
+      </AvatarGroup>
+    </Show>
+  );
+}
+
+function InboxAccountGroup(props: {
+  selection: ReturnType<typeof useInboxSelection>;
+  class?: string;
+}) {
+  const selection = props.selection;
+  const selectedOption = () =>
+    selection.selectedOption() ??
+    (selection.options().length === 1 && selection.isAll()
+      ? selection.options()[0]
+      : undefined);
+  const label = () =>
+    selectedOption()?.label ??
+    (selection.options().length ? selection.label() : 'No inboxes connected');
+
+  return (
+    <section
+      aria-label="Email accounts"
+      class={cn(
+        'shrink-0 rounded-xl border border-edge-button bg-control not-touch:elevated p-1',
+        props.class
+      )}
+    >
+      <h2 class="px-2 pt-1 pb-1.5 text-xs font-medium text-ink-muted">
+        Accounts
+      </h2>
+      <Dropdown placement="bottom-start">
+        <Dropdown.Trigger
+          variant="ghost"
+          size="md"
+          disabled={selection.options().length === 0}
+          aria-label={`Select inbox: ${label()}`}
+          title={label()}
+          class="w-full min-w-0 justify-start gap-2 rounded-lg px-2 text-ink"
+        >
+          <Show
+            when={selectedOption()}
+            fallback={<AllInboxesAvatar options={selection.options()} />}
+          >
+            {(option) => (
+              <InboxAvatar option={option()} size="sm" class="size-5" />
+            )}
+          </Show>
+          <span class="min-w-0 flex-1 truncate text-left">{label()}</span>
+          <CaretDownIcon aria-hidden="true" class="size-3.5 shrink-0" />
+        </Dropdown.Trigger>
+        <Dropdown.Content class="min-w-[var(--kb-popper-anchor-width)] max-w-80">
+          <Dropdown.Group>
+            <Dropdown.RadioGroup
+              value={
+                selectedOption()?.id ??
+                (selection.isAll() ? ALL_INBOXES_ID : '')
+              }
+              onChange={(value) => {
+                if (value === ALL_INBOXES_ID) selection.selectAll();
+                else selection.select(value);
+              }}
+            >
+              <Show when={selection.hasMultipleInboxes()}>
+                <InboxRadioItem
+                  value={ALL_INBOXES_ID}
+                  icon={<AllInboxesAvatar options={selection.options()} />}
+                >
+                  All inboxes
+                </InboxRadioItem>
+              </Show>
+              <For each={selection.options()}>
+                {(option) => (
+                  <InboxRadioItem
+                    value={option.id}
+                    icon={<InboxAvatar option={option} size="sm" />}
+                  >
+                    {option.label}
+                  </InboxRadioItem>
+                )}
+              </For>
+            </Dropdown.RadioGroup>
+          </Dropdown.Group>
+        </Dropdown.Content>
+      </Dropdown>
+      <Show when={selection.canAddInbox()}>
+        <div class="mt-1 border-t border-edge-divider pt-1">
+          <Button
+            variant="ghost"
+            size="md"
+            class="w-full justify-start gap-2 rounded-lg px-2 text-xs"
+            onClick={selection.addInbox}
+          >
+            <PlusIcon class="size-4" />
+            Connect another account
+          </Button>
+        </div>
+      </Show>
+    </section>
+  );
+}
+
+function InboxAccountList(props: {
+  selection: ReturnType<typeof useInboxSelection>;
+  class?: string;
+}) {
+  const selection = props.selection;
+  return (
+    <div
+      class={cn('flex shrink-0 flex-col gap-(--sidebar-row-gap)', props.class)}
+    >
+      <ViewSidebar.Nav
+        aria-label="Inboxes"
+        class="max-h-[calc(4*var(--sidebar-row-height)+3*var(--sidebar-row-gap))] overflow-y-auto overscroll-none touch:max-h-[calc(11rem+3*var(--sidebar-row-gap))]"
+      >
+        <Show when={selection.hasMultipleInboxes()}>
+          <ViewSidebar.Item
+            active={selection.isAll()}
+            aria-current={selection.isAll() ? 'true' : undefined}
+            {...pressHandlers(selection.selectAll)}
+          >
+            <ViewSidebar.Icon>
+              <Show
+                when={selection.isAll()}
+                fallback={<TrayIcon class="size-4" />}
+              >
+                <CheckIcon class="size-4 text-accent" />
+              </Show>
+            </ViewSidebar.Icon>
+            <span class="truncate">All inboxes</span>
+          </ViewSidebar.Item>
+        </Show>
+        <For each={selection.options()}>
+          {(option) => (
+            <ViewSidebar.Item
+              active={selection.isSelected(option.id)}
+              aria-current={
+                selection.isSelected(option.id) ? 'true' : undefined
+              }
+              {...pressHandlers(() => selection.select(option.id))}
+            >
+              <ViewSidebar.Icon>
+                <Show
+                  when={selection.isSelected(option.id)}
+                  fallback={
+                    <InboxAvatar option={option} size="sm" class="size-5" />
+                  }
+                >
+                  <CheckIcon class="size-4 text-accent" />
+                </Show>
+              </ViewSidebar.Icon>
+              <span
+                class={cn('truncate', option.aliasAddress && 'pl-2')}
+                title={option.label}
+              >
+                {option.label}
+              </span>
+            </ViewSidebar.Item>
+          )}
+        </For>
+      </ViewSidebar.Nav>
+      <Show when={selection.canAddInbox()}>
+        <ViewSidebar.Item {...pressHandlers(selection.addInbox)}>
+          <ViewSidebar.Icon>
+            <PlusIcon class="size-4" />
+          </ViewSidebar.Icon>
+          <span class="truncate">Connect another account</span>
+        </ViewSidebar.Item>
+      </Show>
+    </div>
+  );
+}
+
+/** A contained desktop account selector; touch keeps its existing inbox list. */
 export function EmailInboxList(props: { class?: string }) {
   const selection = useInboxSelection();
 
   return (
     <Show when={selection.visible()}>
-      <div
-        class={cn(
-          'flex shrink-0 flex-col gap-(--sidebar-row-gap)',
-          props.class
-        )}
+      <Show
+        when={!isTouchDevice()}
+        fallback={
+          <InboxAccountList selection={selection} class={props.class} />
+        }
       >
-        <ViewSidebar.Nav
-          aria-label="Inboxes"
-          class="max-h-[calc(4*var(--sidebar-row-height)+3*var(--sidebar-row-gap))] overflow-y-auto overscroll-none touch:max-h-[calc(11rem+3*var(--sidebar-row-gap))]"
-        >
-          <Show when={selection.hasMultipleInboxes()}>
-            <ViewSidebar.Item
-              active={selection.isAll()}
-              aria-current={selection.isAll() ? 'true' : undefined}
-              {...pressHandlers(selection.selectAll)}
-            >
-              <ViewSidebar.Icon>
-                <Show
-                  when={selection.isAll()}
-                  fallback={<TrayIcon class="size-4" />}
-                >
-                  <CheckIcon class="size-4 text-accent" />
-                </Show>
-              </ViewSidebar.Icon>
-              <span class="truncate">All inboxes</span>
-            </ViewSidebar.Item>
-          </Show>
-          <For each={selection.options()}>
-            {(option) => (
-              <ViewSidebar.Item
-                active={selection.isSelected(option.id)}
-                aria-current={
-                  selection.isSelected(option.id) ? 'true' : undefined
-                }
-                {...pressHandlers(() => selection.select(option.id))}
-              >
-                <ViewSidebar.Icon>
-                  <Show
-                    when={selection.isSelected(option.id)}
-                    fallback={
-                      <InboxAvatar option={option} size="sm" class="size-5" />
-                    }
-                  >
-                    <CheckIcon class="size-4 text-accent" />
-                  </Show>
-                </ViewSidebar.Icon>
-                <span
-                  class={cn('truncate', option.aliasAddress && 'pl-2')}
-                  title={option.label}
-                >
-                  {option.label}
-                </span>
-              </ViewSidebar.Item>
-            )}
-          </For>
-        </ViewSidebar.Nav>
-        <Show when={selection.canAddInbox()}>
-          <ViewSidebar.Item {...pressHandlers(selection.addInbox)}>
-            <ViewSidebar.Icon>
-              <PlusIcon class="size-4" />
-            </ViewSidebar.Icon>
-            <span class="truncate">Connect another account</span>
-          </ViewSidebar.Item>
-        </Show>
-      </div>
+        <InboxAccountGroup selection={selection} class={props.class} />
+      </Show>
     </Show>
   );
 }
@@ -232,7 +357,7 @@ export function EmailInboxFilter(props: { class?: string }) {
                 >
                   <InboxRadioItem
                     value={ALL_INBOXES_ID}
-                    icon={<TrayIcon class="size-4" />}
+                    icon={<AllInboxesAvatar options={selection.options()} />}
                   >
                     All inboxes
                   </InboxRadioItem>
@@ -278,16 +403,15 @@ export function EmailInboxMenu(props: { class?: string }) {
       <Dropdown placement="bottom-end">
         <Dropdown.Trigger
           variant="ghost"
-          size="sm"
-          square
+          size="icon-md"
           depth={2}
           aria-label={`Inbox: ${selection.label()}`}
           tooltip={selection.label()}
-          class={cn('size-8 shrink-0', props.class)}
+          class={cn('shrink-0', props.class)}
         >
           <Show
             when={selection.selectedOption()}
-            fallback={<TrayIcon aria-hidden="true" class="size-4 shrink-0" />}
+            fallback={<AllInboxesAvatar options={selection.options()} />}
           >
             {(option) => <InboxAvatar option={option()} size="sm" />}
           </Show>
@@ -297,7 +421,7 @@ export function EmailInboxMenu(props: { class?: string }) {
             <Dropdown.RadioGroup value={radioValue()} onChange={onRadioChange}>
               <InboxRadioItem
                 value={ALL_INBOXES_ID}
-                icon={<TrayIcon class="size-4" />}
+                icon={<AllInboxesAvatar options={selection.options()} />}
               >
                 All inboxes
               </InboxRadioItem>

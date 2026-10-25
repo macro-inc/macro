@@ -113,9 +113,8 @@ function Inbox(props: { signalNoise?: boolean }) {
                       >
                         <option value="all">All inboxes</option>
                         <option value="work">jacob@macro.com</option>
-                        <option value="personal">
-                          jacob.beckerman@gmail.com
-                        </option>
+                        <option value="personal">jacob@gmail.com</option>
+                        <option value="outlook">jacob@outlook.com</option>
                       </select>
                     </label>
                     <div class="mail-mobile-tabs">
@@ -210,11 +209,6 @@ function Inbox(props: { signalNoise?: boolean }) {
               Move Product updates back to Signal
             </Show>
           </Button>
-          <span role="status">
-            {moved()
-              ? 'Product updates is now in Noise.'
-              : 'Switch between Signal and Noise in the sidebar.'}
-          </span>
         </div>
       </Show>
     </div>

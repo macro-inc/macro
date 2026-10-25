@@ -40,7 +40,6 @@ members = [
   "crates/cursor_api_key",
   "crates/cursor_cloud_agents",
   "crates/jev",
-  "crates/claude_cloud_agents",
   "crates/database_sql",
   "crates/database_webhooks",
   "crates/databases",
@@ -85,6 +84,7 @@ members = [
   "crates/harness_token",
   "crates/harnesses",
   "crates/import",
+  "crates/import_notion",
   "crates/initiative",
   "crates/initiative_description",
   "crates/item_filter_index",
@@ -104,6 +104,7 @@ members = [
   "crates/mcp_toolset",
   "crates/notification_state",
   "crates/pipedream_mcp",
+  "crates/granola_sync",
   "crates/onboarding",
   "crates/ai_engine",
   "crates/docx_engine",
@@ -125,13 +126,15 @@ members = [
   "crates/unfurl",
   "crates/user_api_key",
   "crates/webhook_signature",
+  "crates/whatsapp_fake_server",
+  "crates/whatsmeow",
+  "crates/whatsmeow_proto",
+  "crates/whatsmeow_signal",
   "crates/work_feed",
   "crates/worker-rs-otel",
   "crates/workspace-hack",
   "services/agent_harness_service",
-  "services/preview_gateway",
   "services/agent_trigger_service",
-  "services/ai_projections_refresh_handler",
   "services/authentication_service",
   "services/calendar_service",
   "services/call_recording_preview_handler",
@@ -141,8 +144,7 @@ members = [
   "services/dataloss_prevention_handler",
   "services/delete_chat_handler",
   "services/deleted_item_poller",
-  "services/document_cognition_service",
-  "services/document_cognition_service/load-test",
+  "services/agent_harness_service/load-test",
   "services/document_storage_service",
   "services/document_text_extractor",
   "services/document_upload_finalizer_handler",
@@ -155,12 +157,11 @@ members = [
   "services/image_optimizer",
   "services/image_proxy_service",
   "services/mcp_auth_proxy",
-  "services/mcp_service",
   "services/notification_retention_handler",
   "services/notification_service",
   "services/organization_retention_handler",
   "services/organization_retention_trigger",
-  "services/scheduled_action",
+  "crates/scheduled_action",
   "services/search_processing_service",
   "services/search_upload_handler",
   "services/sha_cleanup_worker",
@@ -175,12 +176,14 @@ members = [
   "services/worker_trigger",
   "tooling/native_app_server",
   "tooling/notification_sandbox",
+  "tooling/ai_billing_cli",
   "tooling/seed_cli",
   "tooling/xtask",
   "tooling/xtask/crates/*",
 ]
 
 [workspace.dependencies]
+aes = "0.8.4"
 aes-gcm = { version = "0.10.3", features = ["zeroize"] }
 anyhow = "1.0.100"
 apollo-compiler = "1"
@@ -196,7 +199,8 @@ agent-client-protocol = { git = "https://github.com/agentclientprotocol/rust-sdk
   "unstable_elicitation",
 ] }
 arboard = { version = "3.6.1", default-features = false, features = ["wayland-data-control"] }
-askama = "0.14"
+# Templates use built-in defaults; omit the unused config parser and basic-toml.
+askama = { version = "0.14", default-features = false, features = ["derive", "std", "urlencode"] }
 async-graphql = "7.2.1"
 async-lock = "3"
 async-openai = { version = "0.36.1", features = [
@@ -236,6 +240,7 @@ chrono = { version = "0.4.39", features = ["serde"] }
 chrono-tz = { version = "0.10.4", features = ["serde"] }
 clap = { version = "4.5.20", features = ["derive"] }
 cloudfront_sign = "0.3.0"
+cbc = { version = "0.1.2", features = ["std"] }
 constant_time_eq = "0.3.1"
 console_error_panic_hook = "0.1.7"
 crossterm = "0.28"
@@ -249,6 +254,7 @@ dotenvy = "0.15.7"
 ego-tree = "0.6.2"
 either = "1"
 eventsource-stream = "0.2.3"
+flate2 = "1"
 fractional_index = { version = "2.0.2", default-features = false }
 futures = "0.3.31"
 getrandom = "0.3"
@@ -260,6 +266,7 @@ glob = "0.3.3"
 # hakari release is built against.
 guppy = "0.17.24"
 hex = "0.4.3"
+hkdf = "0.12.4"
 hmac = "0.12.1"
 encoding_rs = "0.8"
 http = "1"
@@ -282,6 +289,8 @@ jsonwebtoken = { git = "https://github.com/whutchinson98/jsonwebtoken", features
 lambda_runtime = "0.13.0"
 lazy-regex = "3.6.1"
 lazy_static = "1.5.0"
+# Signal's curve25519 keys and XEdDSA; see crates/whatsmeow_signal/AGENTS.md.
+libsignal-core = { git = "https://github.com/signalapp/libsignal", tag = "v0.105.2" }
 livekit-api = { version = "0.4.16", default-features = false, features = [
   "access-token",
   "rustls-tls-webpki-roots",
@@ -294,9 +303,11 @@ logos = "0.16"
 lol_html = "2.4.0"
 loro = "1.16.2"
 lru = "0.16"
+md-5 = "0.10.6"
 miniz_oxide = { version = "0.8", features = ["with-alloc"] }
 mockall = "0.13"
 nom = "8"
+openssl-sys = "0.9"
 opus-pure = "0.2.1"
 opentelemetry = { version = "0.31.0", default-features = false }
 opentelemetry-appender-tracing = { version = "0.31.1", default-features = false }
@@ -320,6 +331,9 @@ png = "0.18"
 postcard = { version = "1", features = ["use-std"] }
 pollster = "0.4"
 proptest = { version = "1.11", default-features = false, features = ["std"] }
+prost = "0.14"
+prost-build = "0.14"
+protox = "0.10"
 quote = "1"
 rand = "0.9.0"
 ratatui = "0.29"
@@ -351,7 +365,7 @@ rustix = { version = "1", default-features = false, features = ["process", "std"
 rootcause-tracing = "0.12.1"
 schemars = { version = "1.0.4", features = ["chrono04", "uuid1"] }
 semver = { version = "1", features = ["serde"] }
-ruzstd = { version = "0.9", default-features = false, features = ["std"] }
+ruzstd = { version = "0.9.1", default-features = false, features = ["std"] }
 serde = { version = "1.0.214", features = ["derive"] }
 serde-wasm-bindgen = "0.6"
 serde_dynamo = { version = "4", features = ["aws-sdk-dynamodb+1"] }
@@ -434,7 +448,9 @@ wasm-bindgen-test = "0.3"
 web-sys = "0.3"
 web-time = "1.1.0"
 webbrowser = { version = "=1.2.2", features = ["hardened"] }
+windows-sys = "0.61"
 worker = "0.8.1"
+x25519-dalek = { version = "2.0.1", features = ["static_secrets"] }
 # this is pinned to match axum 0.7.9 dependency requirements
 async-stripe = { version = "0.41", default-features = false, features = [
   "billing",

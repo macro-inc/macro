@@ -6,9 +6,6 @@ import { EmailComposeToolbar } from './compose-toolbar';
 
 const send = vi.hoisted(() => vi.fn());
 vi.mock('@core/directive/fileSelector', () => ({ fileSelector: vi.fn() }));
-vi.mock('@core/mobile/nativeStagedUpload', () => ({
-  getUploadFileSize: (file: File) => file.size,
-}));
 vi.mock('@core/component/LexicalMarkdown/plugins', () => ({
   defaultSelectionData: {},
 }));

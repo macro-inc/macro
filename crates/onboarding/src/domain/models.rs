@@ -65,3 +65,36 @@ pub struct OnboardingState {
     /// would refuse.
     pub suggested_team_domain: Option<String>,
 }
+
+/// A sidebar prompt (setup or import card) the client can dismiss: 1–64
+/// lowercase letters, digits, `:`, `_`, or `-`, starting alphanumerically.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct PromptId(String);
+
+impl PromptId {
+    /// Validate a client-supplied prompt id. `None` when it is malformed.
+    pub fn parse(raw: &str) -> Option<Self> {
+        let mut chars = raw.chars();
+        let valid = raw.len() <= 64
+            && chars
+                .next()
+                .is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
+            && chars.all(|c| {
+                c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, ':' | '_' | '-')
+            });
+        valid.then(|| Self(raw.to_owned()))
+    }
+}
+
+impl AsRef<str> for PromptId {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+/// The prompts the user dismissed, on any device.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+pub struct DismissedPrompts {
+    /// Dismissed prompt ids, oldest dismissal first.
+    pub dismissed: Vec<String>,
+}

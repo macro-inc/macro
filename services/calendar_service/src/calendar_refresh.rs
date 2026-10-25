@@ -66,7 +66,8 @@ impl calendar_events::domain::team::CalendarTeamNotifier for ConnectionGatewayCa
         let user_id = user_id.to_owned();
         tokio::spawn(
             async move {
-                crate::pubsub_util::cg_refresh_team_calendar(&client, &db, &[user_id], true).await;
+                crate::pubsub_util::cg_refresh_team_calendar(&client, &db, &[user_id], true, true)
+                    .await;
             }
             .in_current_span(),
         );

@@ -45,8 +45,13 @@ files; the [style guide](docs/development/style-guide.md) indexes them.
 
 ## Tests
 
-- Every bug fix adds a regression test that fails before the fix and passes
-  after.
+- A bug fix adds a regression test only when the test exercises behavior that
+  could plausibly break again: domain logic, queries and data, state machines,
+  API contracts, or the reproduced bug path. It fails before the fix and
+  doesn't assert UI copy or visibility, restate the implementation's mapping,
+  or mock so heavily it can't catch the real failure.
+- Add no test for small UI changes (copy, labels, showing or hiding elements)
+  unless asked.
 - Test behavior, not names or derive round-trips.
 - Explicit literals, no tiny helpers.
 - No `sleep`, `yield_now`, or polling; use real sync primitives.

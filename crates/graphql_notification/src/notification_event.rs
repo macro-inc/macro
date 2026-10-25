@@ -8,6 +8,10 @@ pub use initiative_discussion::GraphqlInitiativeDiscussionMetadata;
 mod crm_discussion;
 pub use crm_discussion::GraphqlCrmDiscussionMetadata;
 
+/// Request to join a channel-shared calendar event notification metadata.
+mod calendar_join_request;
+pub use calendar_join_request::GraphqlCalendarEventJoinRequestMetadata;
+
 use async_graphql::{Enum, ID, Object, Union};
 use model_notifications::{
     AgentSessionMentionedMetadata, AgentSessionNotificationRef, AgentSessionSettledMetadata,
@@ -1294,6 +1298,8 @@ pub enum GraphqlNotifEvent {
     AgentSessionWaitingForInput(GraphqlAgentSessionWaitingForInputMetadata),
     /// Agent session mention metadata.
     AgentSessionMentioned(GraphqlAgentSessionMentionedMetadata),
+    /// Calendar event join request metadata.
+    CalendarEventJoinRequest(GraphqlCalendarEventJoinRequestMetadata),
 }
 
 impl From<NotifEvent> for GraphqlNotifEvent {
@@ -1326,6 +1332,9 @@ impl From<NotifEvent> for GraphqlNotifEvent {
                 Self::InitiativeDiscussion(metadata.into())
             }
             NotifEvent::CrmDiscussion(metadata) => Self::CrmDiscussion(metadata.into()),
+            NotifEvent::CalendarEventJoinRequest(metadata) => {
+                Self::CalendarEventJoinRequest(metadata.into())
+            }
             NotifEvent::ChannelInvite(metadata) => {
                 Self::ChannelInvite(GraphqlChannelInviteMetadata(metadata))
             }

@@ -1,6 +1,7 @@
 import type { CacheHost } from '@graphql-cache/host/types';
 import { parseCacheRevision } from '@graphql-cache/protocol';
 import {
+  ChannelDetailSoupDocument,
   ChannelListSoupDocument,
   ChannelUnreadCacheWriteDocument,
   ChannelUnreadPresenceDocument,
@@ -240,5 +241,8 @@ describe('websocket channel unread cache writes', () => {
     expect(key).toBeDefined();
     expect(argumentsOf(ChannelListSoupDocument)).toBe(key);
     expect(argumentsOf(ChannelUnreadPresenceDocument)).toBe(key);
+    expect(
+      argumentsOf(ChannelDetailSoupDocument, 'sidebarUnreadNotifications')
+    ).toBe(key);
   });
 });

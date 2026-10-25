@@ -72,7 +72,7 @@ export function UsageSettingsView(props: { context: UsageContext }) {
       </Show>
       <fieldset
         disabled={!props.context.available()}
-        class="flex min-w-0 flex-col gap-12 touch:gap-6"
+        class="flex min-w-0 flex-col gap-6"
         classList={{ 'opacity-50': !props.context.available() }}
       >
         <Show

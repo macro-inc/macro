@@ -43,7 +43,11 @@ export async function loadMarkdownDocument(
       canEdit: false,
       isOwner: false,
     }))
-    .exhaustive();
+    .exhaustive(() => ({
+      canComment: false,
+      canEdit: false,
+      isOwner: false,
+    }));
 
   return {
     ...createSyncServiceSource(documentId, token, authorization),

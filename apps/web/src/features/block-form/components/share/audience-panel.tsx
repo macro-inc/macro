@@ -1,5 +1,5 @@
 import Copy from '@phosphor/copy.svg';
-import { CopyButton, SegmentedControl } from '@ui';
+import { CopyButton, Tabs } from '@ui';
 import { createUniqueId, Show } from 'solid-js';
 import type { FormAudience } from '../../core/form-model';
 
@@ -19,7 +19,8 @@ export function AudiencePanel(props: {
         <h3 id={titleId} class="font-medium text-ink">
           Who can respond
         </h3>
-        <SegmentedControl<FormAudience>
+        <Tabs<FormAudience>
+          touch="segmented"
           aria-label="Who can respond"
           value={props.audience}
           options={[

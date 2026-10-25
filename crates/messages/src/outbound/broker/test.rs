@@ -47,6 +47,7 @@ fn reply(parent: MessageParent, attachments: Vec<MessageAttachment>) -> Message 
         parent,
         thread_id: Some(ROOT),
         sender_id: SENDER.to_owned().try_into().unwrap(),
+        guest_name: None,
         imported_author: None,
         bot_profile: None,
         mentions: vec![],

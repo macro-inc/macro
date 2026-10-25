@@ -39,6 +39,7 @@ function Group(props: { title: string; children: JSX.Element }) {
 function WorkspaceSidebarOther(props: {
   workspace: DummyWorkspace;
   title: string;
+  demoTitle?: string;
   collapse: () => void;
   create: () => void;
   navigate: (view: WorkspaceView, id?: string) => void;
@@ -215,6 +216,14 @@ function WorkspaceSidebarOther(props: {
               </For>
             </ViewSidebar.Nav>
             <Group title="Favorites">
+              <Show when={props.demoTitle}>
+                <ViewSidebar.Item
+                  active={!w.selected()}
+                  onClick={() => props.navigate(w.view())}
+                >
+                  <span class="truncate">{props.demoTitle}</span>
+                </ViewSidebar.Item>
+              </Show>
               <For each={w.data.documents.slice(0, 3)}>
                 {(doc) => (
                   <ViewSidebar.Item
@@ -331,6 +340,14 @@ function WorkspaceSidebarOther(props: {
                   />
                 </Show>
                 <ViewSidebar.Nav aria-label="Recent conversations">
+                  <Show when={props.demoTitle}>
+                    <ViewSidebar.Item
+                      active={!w.selected()}
+                      onClick={() => props.navigate(w.view())}
+                    >
+                      <span class="truncate">{props.demoTitle}</span>
+                    </ViewSidebar.Item>
+                  </Show>
                   <For
                     each={sampleAgentSessions.filter((session) =>
                       session.title
@@ -447,7 +464,7 @@ function WorkspaceSidebarOther(props: {
             <Group title="Calendars">
               <div class="flex items-center gap-2 px-2 py-2 text-sm">
                 <Calendar class="size-4" />
-                jacob@macro.com
+                jacob@coparse.com
               </div>
               <label class="flex items-center gap-2 px-2 text-sm">
                 <input

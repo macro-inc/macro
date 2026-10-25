@@ -15,6 +15,7 @@ import {
 import { Button } from '@ui/components/Button';
 import { DeleteDialog } from '@ui/components/DeleteDialog';
 import { Dropdown } from '@ui/components/Dropdown';
+import { Input } from '@ui/components/Input';
 import { Tooltip } from '@ui/components/Tooltip';
 import type { ResultAsync } from 'neverthrow';
 import { createSignal, For, type JSX, Show } from 'solid-js';
@@ -151,17 +152,17 @@ export function DatabaseToolbar(props: DatabaseToolbarProps) {
           <>
             <div
               ref={viewRail}
-              class="flex min-w-0 items-center gap-0.5 overflow-x-auto"
+              class="-m-1 flex min-w-0 items-center gap-1.5 overflow-x-auto p-1"
               aria-label="Views"
             >
               <Button
                 ref={allRecordsButton}
                 type="button"
-                variant="ghost"
+                variant="outline"
                 size="md"
                 aria-pressed={!props.selectedViewId}
                 onClick={() => props.onSelectView()}
-                class="max-w-40 px-4 aria-pressed:border-edge-frame aria-pressed:bg-active aria-pressed:text-ink"
+                class="max-w-40"
               >
                 <span class="truncate">All records</span>
               </Button>
@@ -223,14 +224,13 @@ export function DatabaseToolbar(props: DatabaseToolbarProps) {
             <Show when={props.canEdit}>
               <Dropdown placement="bottom-start">
                 <Dropdown.Trigger
-                  size="md"
-                  square
+                  size="icon-md"
                   variant="ghost"
                   label="New view"
-                  class="ml-2 shrink-0"
+                  class="ml-1.5 shrink-0"
                   disabled={creating()}
                 >
-                  <PlusIcon class="size-3.5" />
+                  <PlusIcon class="size-4 touch:size-3.5" />
                 </Dropdown.Trigger>
                 <Dropdown.Content class="min-w-40">
                   <Dropdown.Item
@@ -333,13 +333,13 @@ function ViewTab(props: {
               props.onRenameSave(true);
             }}
           >
-            <input
+            <Input
               ref={props.renameInput}
               aria-label="View name"
               maxlength={100}
               value={props.renameDraft}
               readOnly={props.renamePending}
-              class="h-8 w-36 rounded-md border border-ink/40 bg-input px-2 text-sm text-ink outline-none focus:ring-2 focus:ring-ink/10"
+              class="w-36"
               onInput={(event) =>
                 props.onRenameInput(event.currentTarget.value)
               }
@@ -358,7 +358,7 @@ function ViewTab(props: {
           <Tooltip label={props.view.name}>
             <ContextMenu.Trigger
               as={Button}
-              variant="ghost"
+              variant="outline"
               size="md"
               tooltipDisabled
               type="button"
@@ -377,7 +377,7 @@ function ViewTab(props: {
                   props.onRename();
                 }
               }}
-              class="max-w-40 px-4 aria-pressed:border-edge-frame aria-pressed:bg-active aria-pressed:text-ink"
+              class="max-w-40"
             >
               <span class="truncate">{props.view.name}</span>
             </ContextMenu.Trigger>

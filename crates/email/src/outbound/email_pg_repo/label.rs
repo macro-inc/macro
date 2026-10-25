@@ -397,17 +397,34 @@ pub(crate) async fn delete_scheduled_messages_batch(
         return Ok(Vec::new());
     }
 
-    let deleted = sqlx::query_scalar!(
+    let mut tx = pool.begin().await?;
+    // The caller's draft list may predate a concurrent send admission.
+    let drafts = sqlx::query_scalar!(
         r#"
-        DELETE FROM email_scheduled_messages
-        WHERE message_id = ANY($1) AND link_id = $2 AND sent = false
-        RETURNING message_id
+        SELECT id FROM email_messages
+        WHERE id = ANY($1) AND link_id = $2 AND is_draft AND NOT is_sent
+        ORDER BY id FOR UPDATE
         "#,
         message_ids,
         link_id
     )
-    .fetch_all(pool)
+    .fetch_all(&mut *tx)
     .await?;
-
+    let deleted = sqlx::query_scalar!(
+        r#"
+        DELETE FROM email_scheduled_messages
+        WHERE message_id = ANY($1) AND link_id = $2 AND sent = false
+          AND (delivery_status = 'failed' OR
+               (delivery_started_at IS NULL AND delivery_status <> 'unconfirmed'
+                AND (NOT processing OR delivery_claim_id IS NOT NULL)))
+        RETURNING message_id
+        "#,
+        &drafts,
+        link_id
+    )
+    .fetch_all(&mut *tx)
+    .await?;
+    super::send_attempt::cancel_revoked_attempts(&mut tx, &deleted, link_id).await?;
+    tx.commit().await?;
     Ok(deleted)
 }

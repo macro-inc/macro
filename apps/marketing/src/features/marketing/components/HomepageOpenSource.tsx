@@ -2,6 +2,7 @@ import { createMediaQuery } from '@solid-primitives/media';
 import { createSignal, type JSX, onCleanup, onMount, Show } from 'solid-js';
 import { pinnedPalette } from '../../setup/sitePalette';
 import { animateDemoEntrance } from './animateDemoEntrance';
+import { DemoInteractionBoundary } from './DemoInteractionBoundary';
 import { HomepageDemoCarousel } from './HomepageDemoCarousel';
 import { HomepageGithub } from './HomepageGithub';
 import { HomepageMobileOpenSource } from './HomepageMobileOpenSource';
@@ -116,7 +117,10 @@ function DesktopHomepageOpenSource(props: {
         <div class="homepage-embedded-stage">
           <div class="homepage-embedded-wallpaper">
             <div class="homepage-embedded-window">
-              <div class="homepage-embedded-content">
+              <DemoInteractionBoundary
+                label={'Macro sample workspace'}
+                class="homepage-embedded-content"
+              >
                 <Show when={!loaded()}>
                   <div class="homepage-embedded-loading" role="status">
                     Opening your workspace…
@@ -128,7 +132,7 @@ function DesktopHomepageOpenSource(props: {
                   // Ignore the initial about:blank load before src is set.
                   onLoad={() => frame.src && setLoaded(true)}
                 />
-              </div>
+              </DemoInteractionBoundary>
             </div>
           </div>
         </div>
@@ -156,6 +160,8 @@ export function HomepageOpenSource(props: {
   children: JSX.Element;
   showSidebarBreakdown: boolean;
 }) {
+  // CSS applies this same breakpoint to server markup before hydration can
+  // replace it with the mobile story. Keep the two thresholds aligned.
   const desktop = createMediaQuery('(min-width: 800px)', true);
   return (
     <Show

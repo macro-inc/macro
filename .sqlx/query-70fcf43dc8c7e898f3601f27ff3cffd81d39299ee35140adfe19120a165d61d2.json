@@ -1,0 +1,48 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT holder.id, holder.status, holder.entity_id, holder.entity_type,\n                   EXISTS (\n                       SELECT 1 FROM import_run AS run\n                       WHERE run.user_id = holder.user_id AND run.source = 'notion'\n                         AND run.status = 'importing' AND run.lease_expires_at > NOW()\n                   ) AS \"live!\"\n            FROM import_entity AS holder\n            WHERE holder.source = 'notion' AND holder.team_id = $2 AND holder.foreign_id = $3\n              AND holder.status IN ('importing', 'imported') AND holder.user_id <> $1\n            FOR UPDATE OF holder\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "entity_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "entity_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "live!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      null
+    ]
+  },
+  "hash": "70fcf43dc8c7e898f3601f27ff3cffd81d39299ee35140adfe19120a165d61d2"
+}

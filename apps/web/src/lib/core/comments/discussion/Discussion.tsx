@@ -408,6 +408,9 @@ export function DiscussionThreadView(props: {
                             onClose={() => {
                               setIsReplying(false);
                             }}
+                            onEscape={() => {
+                              setIsReplying(false);
+                            }}
                             onReady={(handle) => {
                               replyInputHandle = handle;
                             }}
@@ -501,6 +504,9 @@ function DiscussionMessageView(props: {
                 }}
                 onSend={props.onEditSave}
                 onClose={() => {
+                  props.onEditCancel();
+                }}
+                onEscape={() => {
                   props.onEditCancel();
                 }}
               />

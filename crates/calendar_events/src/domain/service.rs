@@ -9,6 +9,7 @@ use crate::domain::events::{CalendarEventMetadata, CalendarMacroEvent, CalendarT
 use macro_event_broker::MacroEventBroker;
 
 use super::{
+    ics::{CalendarEventIcs, render_event_ics},
     models::{
         ActorInboxes, AppliedGoogleGrant, CalendarBackfillClaim,
         CalendarBackfillFailureDisposition, CalendarBackfillFailureOutcome, CalendarBackfillJobKey,
@@ -106,12 +107,12 @@ where
             .list_occurrences(requester_id, range, cursor, limit)
             .await?;
         if let Some(viewer) =
-            ActorInboxes::from_owned(self.repository.owned_inbox_emails(requester_id).await?)
+            ActorInboxes::from_owned(self.repository.owned_inboxes(requester_id).await?)
         {
             for listing in &mut rows {
-                viewer.mark_attendees(&mut listing.event.attendees);
+                viewer.mark_event(&mut listing.event, listing.link_id);
                 if let Some(attendees) = &mut listing.exception.attendees {
-                    viewer.mark_attendees(attendees);
+                    viewer.mark_attendees(attendees, listing.link_id);
                 }
             }
         }
@@ -186,15 +187,54 @@ where
         if items.is_empty() {
             return Ok(Vec::new());
         }
-        self.repository
-            .mention_previews(requester_id, items, Utc::now())
-            .await
+        let mut previews = self
+            .repository
+            .mention_previews(requester_id, items.clone(), Utc::now())
+            .await?;
+        super::join_requests::annotate_join_state(
+            &self.repository,
+            requester_id,
+            &items,
+            &mut previews,
+        )
+        .await?;
+        Ok(previews)
     }
 
     /// The IANA time zone of the requester's primary calendar.
     #[tracing::instrument(skip(self, requester_id), err)]
     pub async fn primary_time_zone(&self, requester_id: &str) -> Result<Option<String>, Report> {
         self.repository.primary_time_zone(requester_id).await
+    }
+
+    /// Every copy of `event_id`'s meeting the requester holds through one of
+    /// their own inboxes.
+    #[tracing::instrument(skip(self, requester_id), fields(copies), err)]
+    pub async fn meeting_copies(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+    ) -> Result<Vec<super::models::MeetingCopy>, Report> {
+        let copies = self
+            .repository
+            .meeting_copies(requester_id, event_id)
+            .await?;
+        tracing::Span::current().record("copies", copies.len());
+        Ok(copies)
+    }
+
+    /// Export an event the requester can see as an iCalendar document.
+    #[tracing::instrument(skip(self, requester_id), err)]
+    pub async fn event_ics(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+    ) -> Result<Option<CalendarEventIcs>, Report> {
+        let event = self.repository.event_export(requester_id, event_id).await?;
+        Ok(event.map(|event| CalendarEventIcs {
+            document: render_event_ics(&event),
+            title: event.title,
+        }))
     }
 
     /// Re-arm the watched inbox's sync job for a push notification whose
@@ -271,6 +311,22 @@ where
         requester_id: &str,
     ) -> impl Future<Output = Result<Option<String>, Report>> + Send {
         CalendarService::primary_time_zone(self, requester_id)
+    }
+
+    fn meeting_copies(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<super::models::MeetingCopy>, Report>> + Send {
+        CalendarService::meeting_copies(self, requester_id, event_id)
+    }
+
+    fn event_ics(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+    ) -> impl Future<Output = Result<Option<CalendarEventIcs>, Report>> + Send {
+        CalendarService::event_ics(self, requester_id, event_id)
     }
 }
 

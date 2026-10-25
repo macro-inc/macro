@@ -8,7 +8,10 @@ export function BookingReceiptView(props: {
   receipt?: BookingReceipt;
   unavailable: boolean;
   cancel: () => Promise<void>;
-  loadSlots: (date: string) => Promise<{ startsAt: string; endsAt: string }[]>;
+  loadSlots: (
+    date: string,
+    timeZone: string
+  ) => Promise<{ startsAt: string; endsAt: string }[]>;
   reschedule: (start: string) => Promise<void>;
   /** Shown inside another Macro page, which already frames the receipt. */
   embedded?: boolean;

@@ -122,6 +122,71 @@ async fn insert_and_query_roundtrips(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn gemini_3_8_flash_is_priced_like_deepseek_v4p1_flash(pool: PgPool) {
+    let repo = PgUsageRepo::new(pool);
+
+    assert_eq!(
+        repo.get_pricing("google/gemini-3.8-flash").await.unwrap(),
+        Some(ModelPricing::Tokens {
+            input: 0.3,
+            output: 1.2,
+            cache_read: Some(0.03),
+            cache_write: None,
+        })
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn set_pricing_recomputes_existing_rows_at_the_discounted_rate(pool: PgPool) {
+    let repo = PgUsageRepo::new(pool.clone());
+    repo.set_pricing(
+        "discounted-model",
+        ModelPricing::Tokens {
+            input: 2.0,
+            output: 8.0,
+            cache_read: None,
+            cache_write: None,
+        },
+    )
+    .await
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO ai_pricing_discount (model, input_discount_percent, output_discount_percent) VALUES ('discounted-model', 25, 50)"
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    repo.insert_usage(
+        &completion(
+            AiFeature::Automation,
+            "discounted-model",
+            1_000_000,
+            1_000_000,
+        ),
+        true,
+    )
+    .await
+    .unwrap();
+
+    repo.set_pricing(
+        "discounted-model",
+        ModelPricing::Tokens {
+            input: 4.0,
+            output: 8.0,
+            cache_read: None,
+            cache_write: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    let after = repo.query_usage(&UsageApiParams::default()).await.unwrap();
+    let price = after[0].cost.price.as_ref().unwrap();
+    // 1M input * $4/1M * 75% + 1M output * $8/1M * 50% = $3 + $4
+    assert!((price.total - 7.0).abs() < 1e-3);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn set_pricing_recomputes_existing_rows(pool: PgPool) {
     let repo = PgUsageRepo::new(pool);
 

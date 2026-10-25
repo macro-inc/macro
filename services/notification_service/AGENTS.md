@@ -16,6 +16,8 @@ worker that sends email/mobile-push/websocket notifications.
 - `src/api.rs` + `src/api/context.rs`: HTTP routes — `user_notification.rs`
   (list/read), `unsubscribe.rs`, `health.rs`.
 - `src/model/notification.rs`: service-local request/response shapes.
+- Push payload schemas come from `notification::domain::models::apple`; keep the
+  frontend push validators generated from those same OpenAPI components.
 - `README.md`: local DB setup (`sqlx database setup` from
   `crates/notification_db_client`).
 

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM calendar_event_notes note USING calendar_events event, calendar_events requested\n            WHERE note.event_id = event.id AND requested.id = $1\n              AND event.ical_uid = requested.ical_uid\n              AND lower(event.organizer_email) IS NOT DISTINCT FROM lower(requested.organizer_email)\n              AND (note.occurrence_key = $2 OR note.occurrence_key = calendar_note_link_key($1, $2)) AND note.document_id = $3\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ada5231f3d25c542337e68f115f8cc3f13a1340ab17e04bc9d8a5e2ed2f30754"
+}

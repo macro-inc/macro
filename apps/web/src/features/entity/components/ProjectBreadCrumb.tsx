@@ -1,3 +1,4 @@
+import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import FolderIcon from '@phosphor/folder-simple.svg';
 import { useProjectPreviewQuery } from '@queries/storage/project-preview';
 import { cn, Tooltip } from '@ui';
@@ -57,9 +58,7 @@ export function ProjectBreadCrumb(props: {
       })}
     >
       <FolderIcon class="size-[1em]" />
-      <Suspense
-        fallback={<div class="h-1 w-10 bg-ink-placeholder animate-pulse" />}
-      >
+      <Suspense fallback={<ListSkeleton.Bar class="h-2 w-10" />}>
         <Show when={projectQuery.data}>
           {(data) => <Path path={data().path} />}
         </Show>

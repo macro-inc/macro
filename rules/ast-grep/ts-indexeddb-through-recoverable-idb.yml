@@ -1,0 +1,21 @@
+id: ts-indexeddb-through-recoverable-idb
+language: typescript
+severity: error
+message: Open IndexedDB through RecoverableIDB (src/lib/persistence/recoverable-idb.ts), not indexedDB.open.
+note: |-
+  WebKit closes connections and aborts started transactions when an iOS app is
+  backgrounded. RecoverableIDB reopens closed connections, and its `run` method
+  replays a transaction the platform interrupted, so its body must re-read the
+  state it depends on inside the transaction and be safe to repeat. A raw
+  connection held for the page's lifetime fails writes instead.
+files:
+  - apps/web/src/**
+ignores:
+  - apps/web/src/lib/persistence/recoverable-idb.ts
+  - '**/*.test.ts'
+  - '**/browser-test/**'
+rule:
+  any:
+    - pattern: indexedDB.open($$$)
+    - pattern: window.indexedDB.open($$$)
+    - pattern: globalThis.indexedDB.open($$$)

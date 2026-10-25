@@ -98,6 +98,7 @@ channel_labels = { path = "../../crates/channel_labels", features = [
   "postgres",
 ] }
 crm = { path = "../../crates/crm" }
+databases_sql = { path = "../../crates/databases_sql", features = ["inbound"] }
 databases = { path = "../../crates/databases", features = [
   "entity_mutation",
   "gateway",
@@ -231,9 +232,10 @@ reminders = { path = "../../crates/reminders", features = [
 ] }
 reqwest = { workspace = true }
 rootcause = { workspace = true }
+sha2 = { workspace = true }
 s3_key = { path = "../../crates/s3_key" }
 saved_views = { path = "../../crates/saved_views" }
-scheduled_action = { path = "../scheduled_action" }
+scheduled_action = { path = "../../crates/scheduled_action" }
 schemars = { workspace = true }
 search_service = { path = "../../crates/search_service" }
 secretsmanager_client = { path = "../../crates/secretsmanager_client" }

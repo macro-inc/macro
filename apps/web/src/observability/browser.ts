@@ -11,6 +11,10 @@ import {
   desktopResourceAttributes,
   readDesktopDiagnostics,
 } from './desktop';
+import { startDocumentLifecycle } from './document-lifecycle';
+import { frontendInstanceId } from './frontend-instance';
+import { startNativeDiagnostics } from './native-diagnostics';
+import { recordNativeWebviewStart } from './native-lifecycle';
 import { initializeUiOperationTelemetry } from './ui-operation';
 
 async function browserTelemetryEnabled(hasExporter: boolean): Promise<boolean> {
@@ -53,8 +57,12 @@ async function browserTelemetryEnabled(hasExporter: boolean): Promise<boolean> {
 
 /** Initialize browser telemetry and its application-level lifecycle hooks. */
 export async function initializeBrowserObservability(): Promise<void> {
+  const lifecycle = isTauri() ? startDocumentLifecycle() : undefined;
+  import.meta.hot?.dispose(() => lifecycle?.dispose());
   let browserEnabled = false;
   const desktop = await readDesktopDiagnostics();
+  const disposeNativeDiagnostics = startNativeDiagnostics(desktop);
+  import.meta.hot?.dispose(disposeNativeDiagnostics);
   const recording = desktop?.identity.recordingId
     ? createDesktopMemoryRecording(desktop)
     : undefined;
@@ -76,12 +84,17 @@ export async function initializeBrowserObservability(): Promise<void> {
     contextManager: new ZoneContextManager(),
     resourceAttributes: {
       'service.version': import.meta.env.__APP_VERSION__,
+      frontend_instance_id: frontendInstanceId,
       'app.runtime': isTauri() ? 'tauri' : 'browser',
       'app.platform': getPlatform(),
       ...(desktop && desktopResourceAttributes(desktop)),
     },
     recording: Boolean(recording),
-    spanAttributes: recording?.attributes,
+    spanAttributes: () => ({
+      ...recording?.attributes(),
+      frontend_instance_id: frontendInstanceId,
+      native_instance_id: desktop?.identity.instanceId,
+    }),
     enabled: async () => {
       browserEnabled = recording
         ? true
@@ -95,6 +108,7 @@ export async function initializeBrowserObservability(): Promise<void> {
     tracingProvider: (resource, getUserId) =>
       createWebTracingProvider(telemetryConfig, resource, getUserId),
   });
+  if (isTauri()) recordNativeWebviewStart(desktop, lifecycle?.attributes);
   if (recording && desktop) {
     recording.accept(desktop);
     Telemetry.info('Desktop memory recording enabled', {

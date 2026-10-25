@@ -26,6 +26,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { TOKENS } from '@core/hotkey/tokens';
+import { hapticImpact } from '@core/mobile/haptics';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -211,6 +212,7 @@ export function ChatInput(props: ChatInputComponentProps) {
       };
       props.editor.controls.clear();
       attachments.setAttached([]);
+      hapticImpact('light');
       props.onSend(sendInput);
     }
   );

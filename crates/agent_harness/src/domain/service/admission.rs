@@ -189,9 +189,6 @@ fn macro_funded(kind: AgentKind) -> bool {
         AgentKind::InMemory | AgentKind::SandboxedCoder => true,
         // Independently billed tools/helpers have their own admission; runtime
         // execution itself uses the owner's subscription or external provider.
-        AgentKind::Cursor
-        | AgentKind::CodexCloud
-        | AgentKind::ClaudeCloud
-        | AgentKind::External => false,
+        AgentKind::Cursor | AgentKind::CodexCloud | AgentKind::External => false,
     }
 }

@@ -130,7 +130,10 @@ function CustomDatePicker(props: { controls: CalendarPeriodControls }) {
 }
 
 /** Desktop calendar period selector and custom-date dropdown. */
-export function PeriodSelector(props: { isNarrow?: boolean }) {
+export function PeriodSelector(props: {
+  isNarrow?: boolean;
+  compact?: boolean;
+}) {
   const controls = createCalendarPeriodControls();
 
   return (
@@ -142,7 +145,7 @@ export function PeriodSelector(props: { isNarrow?: boolean }) {
       <Dropdown.Trigger
         aria-label="Choose calendar view"
         variant="ghost"
-        size="lg"
+        size={props.compact ? 'md' : 'lg'}
         class="shrink-0 border-transparent bg-transparent text-sm"
       >
         {CALENDAR_VIEWS.find((view) => view.value === controls.activeView())

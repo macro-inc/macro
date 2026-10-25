@@ -24,6 +24,7 @@ async-trait = { workspace = true }
 axum = { workspace = true }
 bot_id = { path = "../bot_id" }
 chat = { path = "../chat", default-features = false }
+cognition = { path = "../cognition" }
 dashmap = { workspace = true }
 futures = { workspace = true }
 feature_flags = { path = "../feature_flags" }
@@ -54,6 +55,7 @@ url = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+rootcause = { workspace = true }
 agent_fold = { path = "../folds/agent_fold" }
 agent_session = { path = "../agent_session", features = ["test-utils"] }
 bot_id = { path = "../bot_id", features = ["test-utils"] }

@@ -94,6 +94,19 @@ vi.mock('@app/components/view-shell', async () => {
   };
 });
 
+vi.mock('@app/components/view-shell/ViewShell', () => ({
+  ViewShell: {
+    TopBar: (props: ParentProps) => <div>{props.children}</div>,
+  },
+}));
+
+vi.mock('@app/components/view-shell/ViewSidebar', () => ({
+  ViewSidebar: {
+    Icon: (props: ParentProps) => <span>{props.children}</span>,
+    Trailing: (props: ParentProps) => <span>{props.children}</span>,
+  },
+}));
+
 beforeEach(() => {
   vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
   vi.stubGlobal('CSS', { escape: (value: string) => value });
@@ -516,6 +529,7 @@ it('searches the selected owner and preserves read-only team access', async () =
       within(team).getByRole('button', { name: 'Team planning' })
     );
   });
+  fireEvent.click(screen.getByRole('button', { name: 'Search booking links' }));
   const search = screen.getByRole('searchbox', {
     name: 'Search booking links',
   });

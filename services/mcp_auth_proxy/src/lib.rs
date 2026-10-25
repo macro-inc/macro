@@ -1,4 +1,4 @@
-//! `mcp_auth_proxy` is the MCP-facing OAuth broker used by the `mcp_service` binary.
+//! `mcp_auth_proxy` is the MCP-facing OAuth broker used by the `agent_harness_service` binary.
 //!
 //! It sits between an MCP client and the upstream OAuth provider so the MCP
 //! server can expose the metadata and loopback-public-client behavior Claude

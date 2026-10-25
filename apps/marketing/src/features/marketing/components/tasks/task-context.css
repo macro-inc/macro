@@ -16,7 +16,7 @@
 .task-context-layout { position:relative; }
 .task-context-share-line { position:relative; min-height:1.8em; }
 .task-context-sharing-editor { min-height:1.8em; outline:none; }
-.task-context-pointer { position:absolute; top:0; left:0; z-index:260; pointer-events:none; transition:transform 550ms ease; }
+.task-context-pointer { position:absolute; top:0; left:0; z-index:260; pointer-events:none; }
 .task-context-sharing-editor[data-typing=true]::after { content: ''; display:inline-block; height:1em; vertical-align:-0.12em; border-right:1px solid currentColor; }
 @media(prefers-reduced-motion:reduce) { .task-context-pointer { display:none; transition:none; } }
 .task-context-picker .demo-mention-menu { background:var(--color-menu); backdrop-filter:blur(16px); }

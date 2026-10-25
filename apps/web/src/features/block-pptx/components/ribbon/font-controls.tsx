@@ -128,7 +128,7 @@ function Combo(props: {
       <Popover.Portal>
         <Popover.Content
           id={`${props.label}-list`}
-          class="z-action-menu max-h-80 overflow-y-auto rounded-xl border border-edge bg-menu p-1 text-ink shadow-xl outline-none"
+          class="menu-surface z-action-menu max-h-80 overflow-y-auto p-1 outline-none"
           onOpenAutoFocus={(e) => e.preventDefault()}
           onCloseAutoFocus={(e) => e.preventDefault()}
         >

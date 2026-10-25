@@ -10,7 +10,7 @@
 //   channel-v-right  right   (right bar separates rightward)
 //
 // Built on `transform` (not `d` morphing), so unlike the old version it animates in
-// Safari/WebKit too (incl. the macOS Tauri WKWebView).
+// Safari/WebKit too (including the iOS Tauri webview).
 
 export const AnimatedChannelIcon = (props: {
   triggerAnimation?: boolean;

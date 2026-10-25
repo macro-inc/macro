@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test';
+import type { FoldedMessage } from '../generated/agent-fold';
 import type {
   AgentSessionChangesResponse,
   AgentSessionResponse,
@@ -411,6 +412,42 @@ describe('AgentSession', () => {
       type: 'prompt',
       prompt: 'Fix the flaky test',
     });
+  });
+
+  test('reads the folded log', async () => {
+    const bot = { id: session.botId, name: 'Agent', handle: 'agent' };
+    const messages: FoldedMessage[] = [
+      {
+        agentSessionId: sessionId,
+        turn: 0,
+        author: { kind: 'agent' },
+        requestId: null,
+        parts: [{ kind: 'text', text: 'Done.' }],
+        stop: null,
+        pending: false,
+        segments: [],
+        phase: null,
+        postedAt: null,
+      },
+    ];
+    let request: Request | undefined;
+    globalThis.fetch = (async (input) => {
+      request = input instanceof Request ? input : new Request(input);
+      return Response.json({ bot, messages }, { status: 200 });
+    }) as typeof fetch;
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { 'agent-harness': 'https://agent.example.test' },
+    });
+
+    await expect(
+      macro.agentSessions.byId(sessionId).foldedLog(),
+    ).resolves.toEqual({ bot, messages });
+
+    expect(request?.method).toBe('GET');
+    expect(request?.url).toBe(
+      `https://agent.example.test/agent-sessions/${sessionId}/log/folded`,
+    );
   });
 
   test('lists the queue and edits, steers, or removes an entry through its handle', async () => {

@@ -1,6 +1,6 @@
 # Type Alias: CalendarEvent
 
-> **CalendarEvent** = \{ `attendees`: [`CalendarAttendee`](CalendarAttendee.md)[]; `calendarId?`: `string` \| `null`; `conferenceProvider?`: `null` \| [`ConferenceProvider`](ConferenceProvider.md); `conferenceUrl?`: `string` \| `null`; `createdAt`: `string`; `creatorEmail?`: `string` \| `null`; `creatorName?`: `string` \| `null`; `description?`: `string` \| `null`; `eventType?`: [`EventType`](EventType.md); `icalUid`: `string`; `id`: `string`; `isReadOnly`: `boolean`; `location?`: `string` \| `null`; `organizerEmail?`: `string` \| `null`; `organizerName?`: `string` \| `null`; `ownerId`: `string`; `recurrenceLines`: `string`[]; `reminders?`: [`EventReminders`](EventReminders.md); `sequence`: `number`; `sources?`: [`CalendarEventSourceContent`](CalendarEventSourceContent.md)[]; `status`: [`EventStatus`](EventStatus.md); `time`: [`EventTime`](EventTime.md); `title`: `string`; `transparency`: [`EventTransparency`](EventTransparency.md); `updatedAt`: `string`; `visibility`: [`EventVisibility`](EventVisibility.md); \}
+> **CalendarEvent** = \{ `attendees`: [`CalendarAttendee`](CalendarAttendee.md)[]; `calendarId?`: `string` \| `null`; `conferenceProvider?`: `null` \| [`ConferenceProvider`](ConferenceProvider.md); `conferenceUrl?`: `string` \| `null`; `createdAt`: `string`; `creatorEmail?`: `string` \| `null`; `creatorName?`: `string` \| `null`; `description?`: `string` \| `null`; `eventType?`: [`EventType`](EventType.md); `guestPolicy`: [`GuestPolicy`](GuestPolicy.md); `icalUid`: `string`; `id`: `string`; `isReadOnly`: `boolean`; `isSnapshot`: `boolean`; `location?`: `string` \| `null`; `organizerEmail?`: `string` \| `null`; `organizerName?`: `string` \| `null`; `ownerId`: `string`; `recurrenceLines`: `string`[]; `reminders?`: [`EventReminders`](EventReminders.md); `sequence`: `number`; `sources?`: [`CalendarEventSourceContent`](CalendarEventSourceContent.md)[]; `status`: [`EventStatus`](EventStatus.md); `time`: [`EventTime`](EventTime.md); `title`: `string`; `transparency`: [`EventTransparency`](EventTransparency.md); `updatedAt`: `string`; `viewerCan`: [`ViewerCapabilities`](ViewerCapabilities.md); `visibility`: [`EventVisibility`](EventVisibility.md); \}
 
 A stable, first-class Macro calendar event entity.
 
@@ -20,9 +20,11 @@ calendar copy when one is synced, else the freshest remaining copy.
 | <a id="property-creatorname"></a> `creatorName?` | `string` \| `null` | Provider-reported creator display name. |
 | <a id="property-description"></a> `description?` | `string` \| `null` | Optional event body. |
 | <a id="property-eventtype"></a> `eventType?` | [`EventType`](EventType.md) | Provider event type. Skipped when it is the regular type so projections stored before event types were modeled still compare equal. |
+| <a id="property-guestpolicy"></a> `guestPolicy` | [`GuestPolicy`](GuestPolicy.md) | What the organizer lets guests do: the canonical copy's values, or Google's defaults for an event synced before the policy was modeled. |
 | <a id="property-icaluid"></a> `icalUid` | `string` | RFC 5545 UID used to reconcile provider and email sources. |
 | <a id="property-id"></a> `id` | `string` | Macro entity identifier. |
 | <a id="property-isreadonly"></a> `isReadOnly` | `boolean` | Whether the canonical source's calendar prohibits editing it. |
+| <a id="property-issnapshot"></a> `isSnapshot` | `boolean` | Whether this is a snapshot of a meeting shared with the owner, which Macro added to their calendar as a private copy: the meeting's changes never reach it, and nothing done to it reaches the meeting. |
 | <a id="property-location"></a> `location?` | `string` \| `null` | Optional physical or virtual location label. |
 | <a id="property-organizeremail"></a> `organizerEmail?` | `string` \| `null` | Organizer email. |
 | <a id="property-organizername"></a> `organizerName?` | `string` \| `null` | Organizer display name. |
@@ -36,4 +38,5 @@ calendar copy when one is synced, else the freshest remaining copy.
 | <a id="property-title"></a> `title` | `string` | Display title. |
 | <a id="property-transparency"></a> `transparency` | [`EventTransparency`](EventTransparency.md) | Availability behavior. |
 | <a id="property-updatedat"></a> `updatedAt` | `string` | Entity update time. |
+| <a id="property-viewercan"></a> `viewerCan` | [`ViewerCapabilities`](ViewerCapabilities.md) | What the viewing requester may do with the event. Resolved only on the read path, alongside each attendee's `is_self`; nothing when no viewer is known. Source projections never store it. |
 | <a id="property-visibility"></a> `visibility` | [`EventVisibility`](EventVisibility.md) | Event visibility. |

@@ -58,7 +58,8 @@ A consuming client can fetch this schema during build time and generate the corr
 
 ## Features
 
-By default `bebop-owned-all`, `alarm-keep-alive` and `create-default-state` are all enabled.
+By default `bebop-owned-all`, `do-sqlite-snapshot-storage` and `search-service` are enabled. `just worker-build`
+adds `create-default-state`; `alarm-keep-alive` is opt-in.
 
 - `bebop-owned-all`: Enables all bebop owned types
 - `create-default-state`: As of writing this there is no mechanism to initialize a document's state 
@@ -175,3 +176,8 @@ best-effort delivery limit, rather than a reason to retry or emit on every batch
 Deploy DSS before Sync to enable Activity hints immediately. If an older DSS
 rejects the optional `editors` field, Sync retries once without it so search
 continues working. Old Sync requests and old Kafka events remain supported.
+
+Active peer queries (`include_ai=false`) exclude both signed agent actors and
+legacy reserved AI peer IDs. Canvas workers use independent full-width random
+Loro peer identities across worker isolates; signed actor claims still supply
+durable provenance. Cursor names remain untrusted ephemeral presentation.

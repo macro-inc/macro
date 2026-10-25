@@ -1,8 +1,10 @@
+import { SearchBar } from '@app/components/view-shell';
 import { SidebarCreateHeader } from '@app/components/view-shell/SidebarCreateButton';
 import { MobileTopEdgeFade } from '@components/app/mobile/MobileEdgeFade';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { tourTarget } from '@ui/components/Tour';
 import { type JSX, type ParentProps, Show } from 'solid-js';
+import { useHomeView } from '../home-view-context';
 import { HOME_TOUR } from '../tour';
 import { HomeFilterDropdown } from './HomeFilters';
 
@@ -18,8 +20,14 @@ function MobileHomeHeader(props: ParentProps) {
 
 /** Keep mobile chrome above a full-height list so rows fade beneath it. */
 export function HomeListLayout(
-  props: ParentProps<{ tabs: JSX.Element; onNewChat: () => void }>
+  props: ParentProps<{
+    tabs: JSX.Element;
+    onNewChat: () => void;
+    /** Below the list on desktop, e.g. the setup prompt. */
+    footer?: JSX.Element;
+  }>
 ) {
+  const { state, setState } = useHomeView();
   return (
     <div
       ref={tourTarget(HOME_TOUR.list)}
@@ -36,12 +44,22 @@ export function HomeListLayout(
             label="New chat"
             onCreate={props.onNewChat}
             titleActions={<HomeFilterDropdown />}
+            searchLabel="Search Home"
+            search={() => (
+              <SearchBar
+                label="Search Home"
+                placeholder="Search Home"
+                value={state.search}
+                onValueChange={(search) => setState('search', search)}
+              />
+            )}
           />
         }
       >
         <MobileHomeHeader>{props.tabs}</MobileHomeHeader>
       </Show>
       {props.children}
+      <Show when={!isTouchDevice()}>{props.footer}</Show>
       <Show when={isTouchDevice()}>
         <MobileTopEdgeFade />
       </Show>

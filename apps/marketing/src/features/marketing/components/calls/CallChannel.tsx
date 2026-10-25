@@ -224,7 +224,7 @@ export function ChannelMessages(props: {
                 <Show when={message.documentId}>
                   <span class="dummy-entity-link">
                     <FileIcon class="size-4 text-note" />
-                    Q3 launch plan
+                    Website launch plan
                   </span>
                 </Show>
               </MessageRow>

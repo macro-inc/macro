@@ -152,6 +152,7 @@ mod tests {
         // worked example for a document.
         assert!(instructions.contains("https://macro.com/app/<type>/<id>"));
         assert!(instructions.contains("[Name](https://macro.com/app/md/<id>)"));
+        assert!(instructions.contains("[Name](https://macro.com/app/routines/<id>)"));
     }
 
     #[test]
@@ -356,6 +357,7 @@ mod tests {
         assert!(instructions.contains("\"blockName\":\"skill\""));
         assert!(instructions.contains("\"blockName\":\"initiative\""));
         assert!(instructions.contains("\"blockName\":\"pipeline\""));
+        assert!(instructions.contains("\"blockName\":\"routine\""));
     }
 
     #[test]

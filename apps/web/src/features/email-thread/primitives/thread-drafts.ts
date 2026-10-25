@@ -48,21 +48,54 @@ export function createThreadDrafts(
   // a fetch that still contains the deleted draft (delete propagation lag)
   // can't resurrect it.
   const [deletedDraftIds, setDeletedDraftIds] = createStore<
-    Record<string, true>
+    Record<string, true | undefined>
+  >({});
+  const [restoredDrafts, setRestoredDrafts] = createStore<
+    Record<
+      string,
+      { draft: EmailMessage; sourceDraftId: string | undefined } | undefined
+    >
   >({});
 
   const deleteDraftForMessage = (messageId: string) => {
     setDeletedDraftIds(messageId, true);
+    setRestoredDrafts(messageId, undefined);
+  };
+
+  const restoreDraftForMessage = (draft: EmailMessage) => {
+    if (!draft.replying_to_id || draft.thread_db_id !== source()?.db_id) return;
+    setRestoredDrafts(draft.replying_to_id, {
+      draft,
+      sourceDraftId: serverDrafts()?.map[draft.replying_to_id]?.db_id,
+    });
+    setDeletedDraftIds(draft.replying_to_id, undefined);
   };
 
   const getDraftForMessage = (messageId: string) => {
     if (deletedDraftIds[messageId]) return undefined;
-    return serverDrafts()?.map[messageId];
+    const current = serverDrafts()?.map[messageId];
+    const restoration = restoredDrafts[messageId];
+    if (!restoration || restoration.draft.thread_db_id !== source()?.db_id)
+      return current;
+    const restored = restoration.draft;
+    // Keep the pre-restoration source behind the explicit snapshot, but adopt a
+    // subsequent canonical identity even when the client's clock is ahead.
+    return current &&
+      (current.db_id !== restoration.sourceDraftId ||
+        (current.db_id === restored.db_id &&
+          new Date(current.updated_at) >= new Date(restored.updated_at)))
+      ? current
+      : restored;
   };
 
   // Drafts derive straight from the query, so "settled" is simply "we have a
   // thread snapshot" — cached or fresh, revalidating or not.
   const initialDraftsSettled = () => serverDrafts() !== undefined;
 
-  return { getDraftForMessage, deleteDraftForMessage, initialDraftsSettled };
+  return {
+    getDraftForMessage,
+    deleteDraftForMessage,
+    restoreDraftForMessage,
+    initialDraftsSettled,
+  };
 }

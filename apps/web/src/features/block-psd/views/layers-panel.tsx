@@ -546,7 +546,7 @@ export function LayersPanel(props: {
   );
 
   async function toggleEffects(id: number) {
-    const info = await editor.engine.layerInfo(id);
+    const info = await editor.enqueue(() => editor.engine.layerInfo(id));
     if (!info?.effects) return;
     await editor.apply([
       {

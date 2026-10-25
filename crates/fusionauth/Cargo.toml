@@ -19,5 +19,5 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["test-util", "net", "io-util", "sync"] }
 wiremock = { workspace = true }

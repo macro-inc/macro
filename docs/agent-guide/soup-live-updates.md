@@ -33,9 +33,35 @@ and preserves already loaded pages.
 Newly loaded server rows join the retained display immediately, without duplicates or
 waiting for local recomputation to succeed. Removing pages from the server baseline
 invalidates overlays built from those pages.
-Changing filters or resetting the cache discards prior reconciliation evidence. Grouped
-lists, unsupported filters/sorts, and non-cache transports keep their existing
+Changing filters or resetting the cache discards prior reconciliation evidence.
+Unsupported filters/sorts and non-cache transports keep their existing
 network behavior.
+
+### Grouped views
+
+With maintained GraphQL cache queries, supported filters and a created/updated
+sort, loaded grouped rows also reconcile locally. Initial and per-group “load
+more” pages share one owner. Property edits (including multiple assignees),
+project changes and UTC date rollover can move loaded rows between bins; proven
+filter nonmatches leave the view. Unknown evidence keeps the previous membership.
+If local selection is incomplete, normalized display-field updates from initial
+and continuation pages remain visible without changing counts or server cursors.
+This is not a complete offline grouping query: uncached/unloaded candidates are
+not added, and counts preserve unseen server rows rather than counting only the
+loaded page. Unsupported sorts/filters retain server membership.
+
+To verify, load a second page in a property group, then edit a property on a row
+from that page. It should appear in its destination once, disappear from its old
+group, and reverse on rollback without a grouped-query network round trip. Check
+multi-value membership and group counts, then load another page: the request must
+use the server continuation cursor. Switch filters or reset the cache during a
+pending local read; its late result must not restore old rows. A server refresh
+rebuilds loaded continuation pages while retaining their rows until replacement
+pages are ready. Delay or fail a continuation response and confirm the list does
+not collapse to its first page; retry and verify fresh rows replace the old ones.
+An in-flight load-more must remain covered by the replacement chain. Refreshes
+emit `graphql_cache.soup_grouped_refresh`; the local phase emits
+`graphql_cache.soup_grouped_local_evaluation`.
 
 For Documents (including Tasks), Projects, Chats, and participating Channels,
 exact `UNSEEN`/`SEEN` notification filters also reconcile locally with

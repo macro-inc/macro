@@ -1,9 +1,11 @@
 import { SplitHeaderContextMenu } from '@components/app/split-layout/components/SplitHeaderContextMenu';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import CaretDownIcon from '@phosphor/caret-down.svg';
+import SearchIcon from '@phosphor/magnifying-glass.svg';
 import { Button, type ButtonProps, cn } from '@ui';
 import { CollapseTransition } from '@ui/components/CollapseTransition';
 import type { JSX } from 'solid-js';
-import { Show, splitProps } from 'solid-js';
+import { createSignal, Show, splitProps } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { ViewSidebarCloseButton, ViewSidebarToggle } from './ViewShell';
 
@@ -23,22 +25,75 @@ function Root(props: JSX.HTMLAttributes<HTMLElement>) {
   );
 }
 
-function Header(props: JSX.HTMLAttributes<HTMLDivElement>) {
-  const [local, rest] = splitProps(props, ['children', 'class']);
+function Header(
+  props: JSX.HTMLAttributes<HTMLDivElement> & {
+    search?: () => JSX.Element;
+    searchLabel?: string;
+    searchOpen?: boolean;
+    onSearchOpenChange?: (open: boolean) => void;
+    collapseControl?: JSX.Element;
+  }
+) {
+  const [local, rest] = splitProps(props, [
+    'children',
+    'class',
+    'search',
+    'searchLabel',
+    'searchOpen',
+    'onSearchOpenChange',
+    'collapseControl',
+  ]);
+  const [open, setOpen] = createSignal(false);
+  const searchOpen = () => local.searchOpen ?? open();
+  let searchArea: HTMLDivElement | undefined;
+  const toggleSearch = () => {
+    const next = !searchOpen();
+    setOpen(next);
+    local.onSearchOpenChange?.(next);
+    if (next)
+      queueMicrotask(() =>
+        searchArea
+          ?.querySelector<HTMLElement>('input, [contenteditable="true"]')
+          ?.focus()
+      );
+  };
   return (
-    <SplitHeaderContextMenu>
-      <div
-        {...rest}
-        class={cn(
-          'flex h-12 min-w-0 shrink-0 items-center justify-between gap-3 py-3 pl-(--sidebar-content-inset) pr-(--sidebar-header-action-inset) [&_[data-split-panel-close]]:ml-(--sidebar-control-overhang)',
-          local.class
-        )}
-        data-view-sidebar-header=""
-      >
-        {local.children}
-        <ViewSidebarToggle action="collapse" />
-      </div>
-    </SplitHeaderContextMenu>
+    <>
+      <SplitHeaderContextMenu>
+        <div
+          {...rest}
+          class={cn(
+            'flex h-12 min-w-0 shrink-0 items-center justify-between gap-3 py-3 pl-(--sidebar-content-inset) pr-(--sidebar-header-action-inset) [&_[data-split-panel-close]]:ml-(--sidebar-control-overhang)',
+            local.class
+          )}
+          data-view-sidebar-header=""
+        >
+          {local.children}
+          <div class="ml-auto flex shrink-0 items-center gap-1">
+            <Show when={!isTouchDevice() && local.search}>
+              <Control
+                label={local.searchLabel ?? 'Search'}
+                aria-expanded={searchOpen()}
+                onClick={toggleSearch}
+              >
+                <SearchIcon class="size-4" />
+              </Control>
+            </Show>
+            {local.collapseControl ?? <ViewSidebarToggle action="collapse" />}
+          </div>
+        </div>
+      </SplitHeaderContextMenu>
+      <Show when={!isTouchDevice() && searchOpen()}>
+        <div
+          ref={searchArea}
+          class="min-w-0 px-(--sidebar-gutter) pt-(--sidebar-gutter)"
+          style={{ '--view-search-height': 'var(--sidebar-row-height)' }}
+          data-sidebar-search=""
+        >
+          {local.search?.()}
+        </div>
+      </Show>
+    </>
   );
 }
 

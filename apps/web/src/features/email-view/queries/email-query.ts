@@ -45,7 +45,7 @@ export const emailViewForTab = (tab: EmailTab): string =>
       'archived',
       () => 'all'
     )
-    .exhaustive();
+    .exhaustive(() => 'all');
 
 const anyThread = (): TargetExpr => clause.not(clause.eq('threadId', NIL_UUID));
 
@@ -101,7 +101,7 @@ function tabClause(context: EmailQueryContext): TargetExpr {
         'reminders',
         anyThread
       )
-      .exhaustive()
+      .exhaustive(anyThread)
   );
 }
 

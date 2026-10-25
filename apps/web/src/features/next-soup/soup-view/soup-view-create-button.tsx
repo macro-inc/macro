@@ -1,14 +1,14 @@
+import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
 import { isListViewID, type ListView } from '@app/constants/list-views';
 import {
   CREATABLE_BLOCKS,
   type CreatableName,
-  runCreateAction,
   useCreatableEnabled,
+  useCreateAction,
 } from '@app/features/command/Launcher';
 import { openCreateCompanyModal } from '@app/features/crm/creation-adapter';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
-import { CollapsibleHeaderItem } from '@components/app/split-layout/components/CollapsibleItem';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import type { BlockName } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
@@ -18,10 +18,8 @@ import {
   openFolderPicker,
 } from '@core/util/upload';
 import BuildingsIcon from '@phosphor/buildings.svg';
-import ChevronDownIcon from '@phosphor/caret-down.svg';
-import PlusCircleIcon from '@phosphor/plus-circle.svg';
 import UploadIcon from '@phosphor/upload-simple.svg';
-import { Button, cn, Dropdown } from '@ui';
+import { Dropdown } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
 import { NewCallButton } from './NewCallButton';
 import { useMaybeSoupView } from './soup-view-context';
@@ -127,6 +125,7 @@ function CreateOptionIcon(props: { id: CreateOption['id'] }) {
 }
 
 export const SoupViewCreateButton = () => {
+  const runCreateAction = useCreateAction();
   const panel = useSplitPanelOrThrow();
   const handleFileUpload = useHandleFileUpload();
   const isCreatableEnabled = useCreatableEnabled();
@@ -183,38 +182,22 @@ export const SoupViewCreateButton = () => {
     runCreateAction(option.id);
   };
 
-  const SingleOptionButton = (props: { hideLabel?: boolean }) => (
-    <Button
-      variant="accent"
-      class={cn(
-        'border-0 px-3 py-2 pl-1 font-semibold',
-        props.hideLabel && 'pr-1'
-      )}
-      size="sm"
+  const SingleOptionButton = () => (
+    <ViewCreateButton
+      presentation="toolbar"
+      aria-label={createLabel()}
       onClick={() => handleSelect(options()[0])}
-    >
-      <PlusCircleIcon class="size-3.5 text-accent" />
-      <Show when={!props.hideLabel}>
-        <span>{createLabel()}</span>
-      </Show>
-    </Button>
+    />
   );
 
-  const MultiOptionButton = (props: { hideLabel?: boolean }) => (
-    <Dropdown placement="bottom-start">
+  const MultiOptionButton = () => (
+    <Dropdown placement="bottom-end">
       <Dropdown.Trigger
-        variant="accent"
-        class={cn(
-          'border-0 px-3 py-2 pl-1 font-semibold',
-          props.hideLabel && 'pr-1'
-        )}
-      >
-        <PlusCircleIcon class="size-3.5" />
-        <Show when={!props.hideLabel}>
-          <span>{createLabel()}</span>
-        </Show>
-        <ChevronDownIcon class="size-2.5" />
-      </Dropdown.Trigger>
+        as={ViewCreateButton}
+        presentation="toolbar"
+        menu
+        aria-label={createLabel()}
+      />
       <Dropdown.Content>
         <Dropdown.Group>
           <For each={options()}>
@@ -238,16 +221,9 @@ export const SoupViewCreateButton = () => {
         <NewCallButton />
       </Show>
       <Show when={options().length > 0}>
-        <CollapsibleHeaderItem id="create-button" priority={2}>
-          {(isCollapsed) => (
-            <Show
-              when={options().length > 1}
-              fallback={<SingleOptionButton hideLabel={isCollapsed()} />}
-            >
-              <MultiOptionButton hideLabel={isCollapsed()} />
-            </Show>
-          )}
-        </CollapsibleHeaderItem>
+        <Show when={options().length > 1} fallback={<SingleOptionButton />}>
+          <MultiOptionButton />
+        </Show>
       </Show>
     </>
   );

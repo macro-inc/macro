@@ -15,6 +15,7 @@ type InlinePropertyValueProps = {
   emptyLabel?: JSX.Element;
   class?: string;
   canManage?: boolean;
+  canRemove?: boolean;
 };
 
 /**
@@ -69,7 +70,10 @@ export const InlinePropertyValue: Component<InlinePropertyValueProps> = (
         <Show
           when={props.canManage && ctx.canEdit && !props.property.isMetadata}
         >
-          <InlinePropertyActions property={props.property} />
+          <InlinePropertyActions
+            property={props.property}
+            canRemove={props.canRemove}
+          />
         </Show>
       }
       entitySelfFilter={{ entityType: ctx.entityType, blockId: props.entityId }}
@@ -77,7 +81,10 @@ export const InlinePropertyValue: Component<InlinePropertyValueProps> = (
   );
 };
 
-function InlinePropertyActions(props: { property: PropertyT }) {
+function InlinePropertyActions(props: {
+  property: PropertyT;
+  canRemove?: boolean;
+}) {
   const ctx = usePropertiesContext();
   const [removing, setRemoving] = createSignal(false);
   const remove = async () => {
@@ -85,7 +92,10 @@ function InlinePropertyActions(props: { property: PropertyT }) {
     setRemoving(true);
     try {
       await ctx.removeProperty(props.property.propertyId);
-      ctx.onPropertyUnpinned?.(props.property.propertyId);
+      ctx.onPropertyUnpinned?.(
+        props.property.propertyId,
+        props.property.propertyDefinitionId
+      );
       ctx.onPropertyDeleted();
     } catch {
       // The shared removal mutation reports the failure and keeps the property.
@@ -99,20 +109,27 @@ function InlinePropertyActions(props: { property: PropertyT }) {
         type="button"
         class="flex w-full min-w-0 items-center gap-2 whitespace-nowrap rounded-md px-2 py-1.5 text-left hover:bg-hover disabled:opacity-50"
         disabled={removing()}
-        onClick={() => ctx.onPropertyUnpinned?.(props.property.propertyId)}
+        onClick={() =>
+          ctx.onPropertyUnpinned?.(
+            props.property.propertyId,
+            props.property.propertyDefinitionId
+          )
+        }
       >
         <PushPinSlashIcon class="size-3.5 shrink-0 text-ink-muted" />
         Unpin
       </button>
-      <button
-        type="button"
-        class="flex w-full min-w-0 items-center gap-2 whitespace-nowrap rounded-md px-2 py-1.5 text-left text-failure-ink hover:bg-hover disabled:opacity-50"
-        disabled={removing()}
-        onClick={remove}
-      >
-        <TrashIcon class="size-3.5 shrink-0" />
-        {removing() ? 'Deleting…' : 'Delete from item'}
-      </button>
+      <Show when={props.canRemove !== false}>
+        <button
+          type="button"
+          class="flex w-full min-w-0 items-center gap-2 whitespace-nowrap rounded-md px-2 py-1.5 text-left text-failure-ink hover:bg-hover disabled:opacity-50"
+          disabled={removing()}
+          onClick={remove}
+        >
+          <TrashIcon class="size-3.5 shrink-0" />
+          {removing() ? 'Deleting…' : 'Delete from item'}
+        </button>
+      </Show>
     </div>
   );
 }

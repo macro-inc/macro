@@ -127,6 +127,7 @@ export type EntityWithValidIcon =
   | 'githubPullRequestOpen'
   | 'githubPullRequestMerged'
   | 'githubPullRequestClosed'
+  | 'githubPullRequestDraft'
   | 'archive'
   | 'files'
   | 'crm_company'
@@ -421,6 +422,13 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     background: 'bg-failure/20',
     prettyName: 'Closed Pull Request',
   },
+  githubPullRequestDraft: {
+    icon: GitPullRequest,
+    boldIcon: GitPullRequestBold,
+    foreground: 'text-ink-muted',
+    background: 'bg-ink-muted/20',
+    prettyName: 'Draft Pull Request',
+  },
   pr: {
     icon: GitPullRequest,
     boldIcon: GitPullRequestBold,
@@ -693,7 +701,10 @@ export function getEntityIconType(entity: EntityIconData): EntityWithValidIcon {
     .with({ type: 'routine' }, () => 'routine')
     .with({ type: 'foreign' }, (e) => {
       if (e.foreignSource !== 'github_pull_request') return 'default';
-      return match<unknown, EntityWithValidIcon>(e.metadata?.status)
+      const status = e.metadata?.status;
+      const isDraft = e.metadata?.draft === true;
+      if (isDraft && status === 'open') return 'githubPullRequestDraft';
+      return match<unknown, EntityWithValidIcon>(status)
         .with('open', () => 'githubPullRequestOpen')
         .with('merged', () => 'githubPullRequestMerged')
         .with('closed', () => 'githubPullRequestClosed')
@@ -703,7 +714,7 @@ export function getEntityIconType(entity: EntityIconData): EntityWithValidIcon {
     .with({ type: 'crm_contact' }, () => 'contact')
     .with({ type: 'database' }, () => 'database')
     .with({ type: 'form' }, () => 'form')
-    .exhaustive();
+    .exhaustive(() => 'default');
 }
 
 export function getEntityIconConfig(

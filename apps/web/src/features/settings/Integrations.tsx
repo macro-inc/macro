@@ -91,7 +91,7 @@ function AddServerForm(props: {
       class="w-100"
     >
       <Panel depth={2} class="rounded-xl">
-        <Panel.Header class="px-6">
+        <Panel.Header class="p-6">
           <span class="text-ink text-sm font-semibold">Add MCP Server</span>
         </Panel.Header>
         <Panel.Body class="p-6 flex flex-col gap-5">

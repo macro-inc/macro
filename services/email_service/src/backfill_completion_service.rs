@@ -1,9 +1,7 @@
 use crate::pubsub::context::PubSubContext;
-use crate::pubsub::util::cg_refresh_email;
-use contacts::domain::models::messages::ContactConnection;
+use crate::pubsub::util::{build_contact_connections, cg_refresh_email};
 use contacts::domain::ports::ContactsIngress;
 use email_db_client::backfill::job::update::BackfillCompletion;
-use macro_user_id::user_id::MacroUserIdStr;
 use models_email::api::refresh::{BackfillStatus, RefreshEmailEvent};
 use models_email::db::address::EmailRecipientType;
 use models_email::service::attachment::{
@@ -258,6 +256,9 @@ async fn finalize_claimed_backfill(
         handle_contacts_sync(ctx, &link)
             .await
             .map_err(completion_effect_retry)?;
+        // Best effort: the mailbox now has sent mail to rank, so open direct
+        // messages with the people the user emails most.
+        crate::util::contact_dms::ensure_top_contact_dms(&ctx.db, &link).await;
         cg_refresh_email(
             &ctx.connection_gateway_client,
             link.macro_id.as_ref(),
@@ -396,19 +397,11 @@ async fn handle_contacts_sync(ctx: &PubSubContext, link: &Link) -> Result<(), Pr
         link.macro_id
     );
 
-    let connections = email_addresses
-        .iter()
-        .map(|email| {
-            MacroUserIdStr::try_from_email(email)
-                .map(|contact| ContactConnection::new(link.macro_id.clone(), contact))
-        })
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| {
-            ProcessingError::NonRetryable(DetailedError {
-                reason: FailureReason::SqsEnqueueFailed,
-                source: anyhow::anyhow!(e).context("invalid user email for contacts"),
-            })
-        })?;
+    let connections = build_contact_connections(
+        &link.macro_id,
+        link.id,
+        email_addresses.iter().map(String::as_str),
+    );
 
     ctx.contacts_ingress
         .enqueue_contact_connections(connections)
@@ -417,8 +410,8 @@ async fn handle_contacts_sync(ctx: &PubSubContext, link: &Link) -> Result<(), Pr
             ProcessingError::NonRetryable(DetailedError {
                 reason: FailureReason::SqsEnqueueFailed,
                 source: anyhow::anyhow!("{e:?}").context(format!(
-                    "Failed to enqueue contacts message for {}",
-                    email_addresses.join(", ")
+                    "Failed to enqueue {length} contact connections for link {}",
+                    link.id
                 )),
             })
         })?;

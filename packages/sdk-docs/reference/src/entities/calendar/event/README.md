@@ -7,5 +7,6 @@
 ## Interfaces
 
 - [DeleteEventOptions](interfaces/DeleteEventOptions.md)
+- [InviteGuestsOptions](interfaces/InviteGuestsOptions.md)
 - [RsvpEventOptions](interfaces/RsvpEventOptions.md)
 - [UpdateEventOptions](interfaces/UpdateEventOptions.md)

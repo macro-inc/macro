@@ -1,5 +1,6 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { refreshSharedAccess } from '@queries/access-requests/requests';
+import { calendarKeys } from '@queries/calendar/keys';
 import { queryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
 import { invalidateEmailLinks } from '@queries/email/link';
@@ -117,6 +118,12 @@ export function handleNotificationUpdate(notification: UnifiedNotification) {
     })
     .with({ tag: 'commented_on_document' }, () => {
       refreshSoupEntity(notification, 'document');
+    })
+    // An open event's details list the new request.
+    .with({ tag: 'calendar_event_join_request' }, ({ content }) => {
+      queryClient.invalidateQueries({
+        queryKey: calendarKeys.joinRequests(content.eventId).queryKey,
+      });
     })
     .with({ tag: 'crm_discussion' }, () => {
       const parent = {

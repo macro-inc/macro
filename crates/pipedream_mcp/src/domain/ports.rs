@@ -3,6 +3,15 @@ use super::models::{
     PipedreamConnection,
 };
 
+/// Cross-user lookup for background integrations that follow a connected app.
+pub trait AppConnections: Send + Sync + 'static {
+    /// Every user's enabled connection to `app_slug`.
+    fn list_enabled_for_app(
+        &self,
+        app_slug: &str,
+    ) -> impl Future<Output = anyhow::Result<Vec<PipedreamConnection>>> + Send;
+}
+
 /// Port for persisting Pipedream-connected apps, keyed by user and app slug.
 pub trait ConnectionStore: Send + Sync + 'static {
     /// Error type for store operations.
@@ -128,4 +137,51 @@ pub trait ConnectorCapabilities: Send + Sync + 'static {
         user_id: &MacroUserIdStr<'static>,
         app_slug: &str,
     ) -> impl Future<Output = anyhow::Result<Vec<super::service::discovery::ConnectorTool>>> + Send;
+}
+
+/// A connected app's answer, relayed through the proxy whatever its status.
+/// Never log the body: some apps return secrets (webhook registration).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ProxyResponse {
+    /// The HTTP status.
+    pub status: http::StatusCode,
+    /// The app's response headers.
+    pub headers: http::HeaderMap,
+    /// The response body.
+    pub body: String,
+}
+
+impl ProxyResponse {
+    /// How long the app asked callers to wait, from a `Retry-After` header
+    /// in seconds.
+    pub fn retry_after(&self) -> Option<std::time::Duration> {
+        self.headers
+            .get(http::header::RETRY_AFTER)?
+            .to_str()
+            .ok()?
+            .trim()
+            .parse()
+            .ok()
+            .map(std::time::Duration::from_secs)
+    }
+}
+
+/// Port for calling a connected app's own API with the account's
+/// credentials, which Pipedream injects server-side.
+pub trait ConnectedAppProxy: Send + Sync + 'static {
+    /// Send a request to the connected app's API on behalf of `connection`'s
+    /// account.
+    ///
+    /// `url` is absolute (e.g. `https://api.notion.com/v1/search`).
+    /// `headers` are upstream headers, never `Authorization`. A non-2xx
+    /// answer from the app is a response, not an error, so callers can read
+    /// its status and back off.
+    fn proxy(
+        &self,
+        connection: &PipedreamConnection,
+        method: http::Method,
+        url: &str,
+        headers: &http::HeaderMap,
+        body: Option<&serde_json::Value>,
+    ) -> impl Future<Output = anyhow::Result<ProxyResponse>> + Send;
 }

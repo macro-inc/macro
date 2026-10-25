@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE import_entity\n            SET status = 'staged',\n                last_error = 'the import was interrupted — select it again to retry',\n                updated_at = NOW()\n            WHERE user_id = $1 AND status = 'importing'\n              AND NOT (source = 'notion' AND metadata->'plan' IS NOT NULL)\n              AND updated_at < NOW() - ($2::double precision * interval '1 second')\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Float8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "30d3dbc58a4bcfd1a5c52c2e37038da0e6470833930700ae06f176d8d449eeb3"
+}

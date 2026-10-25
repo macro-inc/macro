@@ -189,6 +189,6 @@ function referenceCount(type: DatabaseEntityType, count: number): string {
     .with('CALL_RECORD', () => ['call', 'calls'])
     .with('CALENDAR_EVENT', () => ['event', 'events'])
     .with('DATABASE_ROW', () => ['linked record', 'linked records'])
-    .exhaustive();
+    .exhaustive(() => ['item', 'items']);
   return `${count} ${count === 1 ? one : many}`;
 }

@@ -5,12 +5,12 @@ import { SettingsCard, SettingsPage, SettingsRow } from '../primitives';
 export function DesktopAppDownload() {
   return (
     <SettingsPage
-      title="Desktop App"
-      description="Get Macro for your computer."
+      title="Desktop App (Alpha)"
+      description="Get Macro Alpha for your computer."
     >
       <SettingsCard>
         <SettingsRow
-          label="Download Macro"
+          label="Download Macro Alpha"
           description="Get the latest release for macOS or Linux."
           stackOnNarrow
         >
@@ -31,8 +31,8 @@ export function DesktopAppDownload() {
 export function DesktopAppInfo(props: { version: string; buildDate?: Date }) {
   return (
     <SettingsPage
-      title="Desktop App"
-      description="Your installed version of Macro."
+      title="Desktop App (Alpha)"
+      description="Your installed version of Macro Alpha."
     >
       <SettingsCard>
         <SettingsRow label="Version">

@@ -93,7 +93,7 @@ fn emits_required_keys() {
         "FUSIONAUTH_API_KEY_SECRET_KEY",
         "FUSIONAUTH_PUBLIC_URL",
         "FUSIONAUTH_OAUTH_REDIRECT_URI",
-        "MCP_PUBLIC_URL",
+        "OVERRIDE_COGNITION_PUBLIC_URL",
         "JWT_SECRET_KEY",
         // Boot-blocking stubs — service config loaders require these even in a
         // no-doppler stack (see `BootStubEnv`).
@@ -269,7 +269,7 @@ fn emits_in_network_service_url_overrides() {
         ),
         (
             "OVERRIDE_DOCUMENT_COGNITION_SERVICE_URL",
-            "http://document-cognition-service:8080",
+            "http://agent-harness-service:8080/cognition",
         ),
         (
             "OVERRIDE_NOTIFICATION_SERVICE_URL",
@@ -286,7 +286,7 @@ fn emits_in_network_service_url_overrides() {
         ),
         (
             "OVERRIDE_SCHEDULED_ACTION_SERVICE_URL",
-            "http://scheduled-action-service:8080",
+            "http://agent-harness-service:8080/scheduled-action",
         ),
         (
             "OVERRIDE_STATIC_FILE_SERVICE_URL",
@@ -471,7 +471,7 @@ fn local_sandboxes_join_the_instances_compose_network() {
 }
 
 #[test]
-fn mcp_public_url_uses_the_proxy_cognition_route() {
+fn mcp_client_public_url_uses_the_proxy_cognition_route() {
     let default = Instance::derive(None, None).unwrap();
     let named = Instance::derive(Some("2508"), None).unwrap();
     let default_env = LocalEnv::for_instance(Mode::Local, &default, true, Tunnels::default())
@@ -483,11 +483,15 @@ fn mcp_public_url_uses_the_proxy_cognition_route() {
     let named_public_url = format!("https://localhost:{}/cognition", named.port(Port::Proxy));
 
     assert_eq!(
-        default_env.get("MCP_PUBLIC_URL").map(String::as_str),
+        default_env
+            .get("OVERRIDE_COGNITION_PUBLIC_URL")
+            .map(String::as_str),
         Some("https://localhost:8090/cognition")
     );
     assert_eq!(
-        named_env.get("MCP_PUBLIC_URL").map(String::as_str),
+        named_env
+            .get("OVERRIDE_COGNITION_PUBLIC_URL")
+            .map(String::as_str),
         Some(named_public_url.as_str())
     );
 }
@@ -511,19 +515,17 @@ fn frontend_origin_tracks_how_the_app_is_served() {
             for key in [
                 "FRONTEND_ORIGIN",
                 "PIPEDREAM_ALLOWED_ORIGINS",
-                "PREVIEW_APP_ORIGIN",
+                "OVERRIDE_APP_SERVICE_URL",
             ] {
                 assert_eq!(env[key], origin, "{key}");
             }
-            assert_eq!(env["MCP_PUBLIC_URL"], format!("{origin}/cognition"));
+            assert_eq!(
+                env["OVERRIDE_COGNITION_PUBLIC_URL"],
+                format!("{origin}/cognition")
+            );
             assert_eq!(
                 env["OVERRIDE_STATIC_FILE_PUBLIC_URL"],
                 format!("{origin}/static-file")
-            );
-            assert!(
-                env["PREVIEW_CONTROL_HOSTS"]
-                    .split(',')
-                    .any(|host| host == super::super::tls::hostname().unwrap())
             );
         }
     }
@@ -554,7 +556,7 @@ fn the_mcp_service_override_is_an_in_network_base_url() {
     let env = local_env();
     assert_eq!(
         env.get("OVERRIDE_MCP_SERVICE_URL").map(String::as_str),
-        Some("http://mcp-service:8080")
+        Some("http://agent-harness-service:8080")
     );
     assert!(!env.contains_key("MACRO_MCP_URL"));
 }

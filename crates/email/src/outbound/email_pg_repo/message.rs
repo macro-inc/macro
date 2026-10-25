@@ -262,10 +262,10 @@ pub(super) async fn forwarded_attachments_by_message_ids(
 }
 
 #[tracing::instrument(err, skip(pool, message_ids))]
-pub(super) async fn scheduled_send_times_by_message_ids(
+pub(super) async fn scheduled_sends_by_message_ids(
     pool: &PgPool,
     message_ids: &[Uuid],
-) -> Result<HashMap<Uuid, DateTime<Utc>>, sqlx::Error> {
+) -> Result<HashMap<Uuid, crate::domain::models::ScheduledSend>, sqlx::Error> {
     if message_ids.is_empty() {
         return Ok(HashMap::new());
     }
@@ -273,12 +273,17 @@ pub(super) async fn scheduled_send_times_by_message_ids(
     struct DbScheduledRow {
         message_id: Uuid,
         send_time: DateTime<Utc>,
+        delivery_status: String,
+        processing: bool,
+        delivery_claim_id: Option<Uuid>,
+        delivery_started_at: Option<DateTime<Utc>>,
     }
 
     let rows = sqlx::query_as!(
         DbScheduledRow,
         r#"
-        SELECT message_id, send_time
+        SELECT message_id, send_time, delivery_status, processing,
+               delivery_claim_id, delivery_started_at
         FROM email_scheduled_messages
         WHERE message_id = ANY($1) AND sent = false
         "#,
@@ -289,7 +294,26 @@ pub(super) async fn scheduled_send_times_by_message_ids(
 
     Ok(rows
         .into_iter()
-        .map(|r| (r.message_id, r.send_time))
+        .map(|row| {
+            use crate::domain::models::{ScheduledSend, ScheduledSendStatus};
+            let status = match row.delivery_status.as_str() {
+                "failed" => ScheduledSendStatus::Failed,
+                "unconfirmed" => ScheduledSendStatus::Unconfirmed,
+                _ if row.delivery_started_at.is_some()
+                    || (row.processing && row.delivery_claim_id.is_none()) =>
+                {
+                    ScheduledSendStatus::Sending
+                }
+                _ => ScheduledSendStatus::Pending,
+            };
+            (
+                row.message_id,
+                ScheduledSend {
+                    send_time: row.send_time,
+                    status,
+                },
+            )
+        })
         .collect())
 }
 
@@ -383,6 +407,8 @@ pub(crate) async fn delete_draft_message(
     thread_db_id: Uuid,
     link_ids: &[Uuid],
     actor: Option<&str>,
+
+    expected_generation: i32,
 ) -> Result<Option<DraftDeletion>, sqlx::Error> {
     let mut tx = pool.begin().await?;
 
@@ -395,12 +421,18 @@ pub(crate) async fn delete_draft_message(
 
     // Sender migration must not delete a draft whose delivery was committed
     // after the service's initial validation. Match the shared lock order.
-    sqlx::query!(
-        "SELECT id FROM email_messages WHERE id = $1 FOR UPDATE",
+    let locked = sqlx::query!(
+        r#"SELECT id, draft_generation, EXISTS(SELECT 1 FROM email_send_attempts WHERE message_id=$1 AND NOT cancelled AND NOT sent) AS "send_active!" FROM email_messages WHERE id = $1 FOR UPDATE"#,
         message_id
     )
     .fetch_optional(&mut *tx)
     .await?;
+
+    if locked.is_none_or(|message| {
+        message.draft_generation != expected_generation || message.send_active
+    }) {
+        return Ok(None);
+    }
 
     let retired=sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM email_draft_transfers WHERE source_id=$1 AND state<>'preparing') AS "retired!""#,message_id).fetch_one(&mut *tx).await?;
     if retired {
@@ -619,6 +651,26 @@ pub(super) async fn insert_draft_attachment(
     link_id: Uuid,
     attachment: &AttachmentDraft,
 ) -> Result<(), sqlx::Error> {
+    // Match send admission's lock order, then read scheduling in a fresh statement.
+    let mut tx = pool.begin().await?;
+    let state = sqlx::query!(
+        "SELECT is_draft, is_sent FROM email_messages WHERE id = $1 AND link_id = $2 FOR UPDATE",
+        attachment.draft_id,
+        link_id
+    )
+    .fetch_optional(&mut *tx)
+    .await?;
+    if state.is_none_or(|state| !state.is_draft || state.is_sent) {
+        return Err(sqlx::Error::RowNotFound);
+    }
+    let scheduled = sqlx::query_scalar!(
+        r#"SELECT EXISTS(SELECT 1 FROM email_scheduled_messages WHERE message_id = $1 AND link_id = $2) AS "scheduled!""#,
+        attachment.draft_id,
+        link_id
+    ).fetch_one(&mut *tx).await?;
+    if scheduled {
+        return Err(sqlx::Error::RowNotFound);
+    }
     let result = sqlx::query!(
         r#"
         INSERT INTO email_attachments_drafts (
@@ -637,10 +689,11 @@ pub(super) async fn insert_draft_attachment(
         attachment.s3_key,
         link_id,
     )
-    .execute(pool)
+    .execute(&mut *tx)
     .await?;
     if result.rows_affected() == 0 {
         return Err(sqlx::Error::RowNotFound);
     }
+    tx.commit().await?;
     Ok(())
 }

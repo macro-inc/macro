@@ -4,9 +4,12 @@
  * agent_harness_service
  * OpenAPI spec version: 0.1.0
  */
+
 import type { ExecutionActivity } from './executionActivity';
 import type { ExecutionId } from './executionId';
+import type { ExecutionRecordActingAs } from './executionRecordActingAs';
 import type { ExecutionRecordError } from './executionRecordError';
+import type { ExecutionRecordTurnId } from './executionRecordTurnId';
 import type { ExecutionStatus } from './executionStatus';
 import type { RecordedToolCall } from './recordedToolCall';
 
@@ -15,6 +18,7 @@ import type { RecordedToolCall } from './recordedToolCall';
 The full journal is not included in the model's tool result.
  */
 export interface ExecutionRecord {
+  actingAs?: ExecutionRecordActingAs;
   /** Advisory SDK operation activity, without arguments or response contents. */
   activity?: ExecutionActivity[];
   /** Additional request activity was omitted at the bounded observation limit. */
@@ -31,4 +35,6 @@ export interface ExecutionRecord {
   source: string;
   /** Overall execution state. */
   status: ExecutionStatus;
+  /** Original turn, preventing another requester from replaying a saved result. */
+  turnId?: ExecutionRecordTurnId;
 }

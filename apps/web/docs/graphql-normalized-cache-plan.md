@@ -211,6 +211,18 @@ heartbeat without changing epochs or touching storage. A released lock confirms
 silent worker termination and triggers the usual fenced recovery. Read deadlines
 still bound callers waiting on an unresponsive engine.
 
+Safari can recreate the SharedWorker global while retaining a page's MessagePort,
+including when another tab closes. A second Effect ready frame is a transport
+reset, not a duplicate initial handshake: the page retires its orphanable engine
+and connection, then re-registers and initializes against the new coordinator.
+The same host and subscribers survive. Pending operations reject without replay;
+an admitted optimistic enqueue is reported as uncertain so it cannot fall through
+to a second API write. Durable storage and the cache scope are preserved, while
+live-query dependencies and revision checkpoints are invalidated after reconnect.
+Restarted startup is bounded by the registration retry budget; exhaustion uses
+the normal session fallback without quarantining a healthy database. The
+`graphql_cache.owner` event records `ownerEvent: coordinator-restarted`.
+
 Protocol v6 separates startup into asset loading, taking the database owner
 lock, and database opening. The engine loads/compiles WASM without touching OPFS
 and reports `engine-assets-ready`. It then takes the owner lock only if it is
@@ -228,7 +240,13 @@ registration gets sixty seconds per attempt, with three attempts; engine recover
 retains its bounded five retries. Exhausted bootstrap retries preserve the cache
 scope only when the coordinator explicitly proves storage was untouched, not from
 a page's last-seen phase. Missing/broken transports remain conservatively
-uncertain.
+uncertain. Pages retry proven untouched bootstrap and owner-lock failures on reconnect,
+foregrounding, or explicit draft Retry, with jittered exponential backoff capped
+at thirty seconds. A newly registered host restarts an exhausted untouched
+coordinator at a new owner epoch with `open-existing`; failed hosts remain
+excluded. Draft writes stay blocked until the replacement opens and inspects
+the preserved mutation queue. Unknown storage failures still require explicit
+recovery or an update; retry never rotates the scope or clears persisted data.
 
 A build's coordinator has its build time in the SharedWorker name, so builds
 use separate coordinators even when their coordinator script URL is identical.
@@ -310,7 +328,15 @@ paths remain behind the same `CacheHost` interface.
 | Turso over filesystem IO | Tauri native | records, search projection, mutation queue, optimistic layers, and metadata; WAL mode |
 | Turso over OPFS | browser | the same frozen schema behind the OPFS IO adapter and coordinated worker lifecycle |
 
-Normalized records are serialized with `postcard` into `records.value`.
+Normalized records are serialized with `postcard` into `records.value`, behind a
+one-byte encoding tag: records of 256 bytes or more are stored deflated when that
+is smaller, and everything else stays raw. Other persisted payloads (queued
+mutations, optimistic layers, projections) remain plain postcard. A format bump
+that only changes the record encoding carries the previous database forward by
+dropping records, search projections, index facts, and calendar ranges — all
+refetchable — while keeping queued mutations, optimistic layers, and their
+projections. Native storage then compacts the migrated file with `VACUUM INTO`, so
+the upgrade reclaims the space instead of leaving freed pages behind.
 Both hosts use the same `Storage` implementation and compound entity keys.
 Wasm futures are not `Send`, so the `Storage` trait's futures are bound by
 `MaybeSend` (`crates/maybe_send`): `Send` on native targets, where Tauri drives
@@ -584,7 +610,9 @@ const accounts = () => accountQuery.data?.user.emailLinks ?? [];
 identity. `refetch`, request policies, loading/error state and selection functions
 retain the existing urql-solid contract. Existing `createUrqlQuery` and
 `createUrqlInfiniteQuery` consumers use the same live projection path without
-being rewritten; every loaded infinite-query page stays subscribed.
+being rewritten; every loaded infinite-query page stays subscribed. A failed
+refetch reports its error but leaves mounted live data as it was: its partial
+nulls are neither persisted nor reconciled into the objects readers hold.
 
 Mutation predictions are keyed by mutation field and registered once per field,
 alongside domain query definitions. A representative generated document names
@@ -621,6 +649,11 @@ from the prediction keep their cached values on existing entities. Nested
 response keys come from the representative, so a document that selects a field
 under a different alias does not receive that field's predicted value.
 
+Email sends use the independent email working-copy database and fetch-only
+GraphQL client. The cache queue holds draft autosaves and ordinary mutations;
+it does not persist, dispatch, or cancel sends. The email dispatcher owns send
+leases and recovery, including when no composer is mounted.
+
 The durable optimistic queue owns ordering, retries, commit and rollback. The
 query author supplies no optimistic callbacks, result traversal or cache writes.
 Both the list and a detail query for that thread observe the same effective
@@ -651,7 +684,7 @@ Invalidations arriving during a refresh cause a trailing authorized read instead
 of being discarded; simultaneous refresh requests share one read.
 
 [Mutation coverage](../src/lib/queries/mutation-coverage.test.ts) enumerates all
-35 mutation documents and fails when a document has no declared strategy.
+37 mutation documents and fails when a document has no declared strategy.
 Because predictions are keyed by mutation field, it also checks that local
 resolver documents select only resolved fields, and that any other document
 reaching a field resolver is a listed exception the resolver declines.
@@ -663,8 +696,8 @@ every schema argument of its field with the schema's type:
 | Strategy | Operations |
 | --- | --- |
 | Local resolver (7) | MarkEmailThreadSeen, MarkEmailThreadUnread, SetEmailThreadArchived, UpdateNotifications, RenameEntities, UpdateInitiative, DeleteEntityProperty |
-| Existing domain optimistic recipe (11) | SaveEmailDraft, DeleteEmailDraft, SetFavorite, ReorderFavorites, SetEntityProperty, UpdateEntityPropertyOptions, CreateCalendarEvent, UpdateCalendarEvent, DeleteCalendarEvent, RespondToCalendarEvent, MarkWorkFeedItemsDone |
-| Authoritative outcome (10) | CreateInitiative, DeleteInitiative, EnsureInitiativeDescriptionSurface, RenameDatabase, TrashDatabase, RenameForm, TrashForm, RecordChannelActivity, UpdateNotificationsForEntity, UndoWorkFeedItemsDone |
+| Existing domain optimistic recipe (12) | SaveEmailDraft, DeleteEmailDraft, SetFavorite, ReorderFavorites, SetEntityProperty, UpdateEntityPropertyOptions, CreateCalendarEvent, UpdateCalendarEvent, DeleteCalendarEvent, RespondToCalendarEvent, InviteCalendarEventGuests, MarkWorkFeedItemsDone |
+| Authoritative outcome (11) | SendEmailMessage, CreateInitiative, DeleteInitiative, EnsureInitiativeDescriptionSurface, RenameDatabase, TrashDatabase, RenameForm, TrashForm, RecordChannelActivity, UpdateNotificationsForEntity, UndoWorkFeedItemsDone |
 | Document only; no production caller (7) | MoveEntities, UpdateEntitySharePolicies, TrashEntities, RestoreEntities, DeleteEntitiesPermanently, DuplicateEntities, SetEntityFavorite |
 
 The project resolver predicts names and members; sharing waits for the server.
@@ -727,6 +760,81 @@ document would retain its server-provided membership, which is why Soup lists
 use `createSoupLiveQuery`: it adds Soup's local membership, ordering, pagination
 and Mail policy through its predicate adapter. That policy remains outside
 generic cache-core.
+
+Grouped Soup uses `graphql/create-grouped-soup-live-query.ts` to own the initial
+request and every loaded per-bin continuation. With maintained cache queries and
+a supported filter plus created/updated sort, their combined server membership
+is the baseline for the same predicate adapter used by flat Soup. Selected
+normalized rows then derive date, project and property memberships (including
+multi-value and scoped property joins); entity-type bins retain their invariant
+server keys. Missing grouping evidence or an unrecognized grouping field retains
+the old membership. When local selection is
+incomplete, display fields come from current merged server pages before falling
+back to the original evidence; current page fields do not rebase membership or
+count evidence. Unsupported
+filters/sorts or hosts retain the merged live server pages. Cached Mail keeps its
+separate date-grouping policy.
+
+Server membership evidence is captured separately from normalized field/link
+updates, and local evaluation waits for network persistence. Filter/account/cache
+generation changes discard old local evidence and continuation owners. Initial
+network refreshes rebuild each loaded continuation chain from its new cursor,
+retaining the previous owner until all previously loaded pages are ready (or the
+server ends the chain). Failed replacements leave the old rows available and
+report the paging error; explicit refresh waits for these replacements. A group
+whose fresh initial page has no cursor drops obsolete continuations immediately.
+The `graphql_cache.soup_grouped_refresh` span records the loaded page count and
+replacement outcome. Group readers delegate paging
+to this owner, so moving a continuation row cannot leave a second copy behind.
+The initial cursor remains baseline metadata; paging follows the last loaded
+server continuation, never a locally fabricated cursor.
+
+The reconciliation core in `grouped/reconciliation.ts` deliberately ignores
+candidates outside loaded pages: a bounded flat query cannot prove complete bin
+coverage. Counts retain unseen server membership and apply proven deltas, not
+loaded-row totals. Complete prior multi-value membership is necessary to prove
+count increases: a row loaded in A can already belong to an unloaded part of B.
+Restored cached pages cannot prove complete prior property membership: their
+normalized values may be newer than their embedded bins. They use loaded
+membership evidence only, without inferring count increases for existing bins.
+Date rollover uses the original server bin as old membership. The
+`graphql_cache.soup_grouped_local_evaluation` span records grouping field,
+loaded baseline size and resulting bin count.
+
+#### Grouped projection performance
+
+Run `bun scripts/benchmark-grouped-soup.ts /tmp/grouped-soup.json` from
+`apps/web` (set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` for a system Chromium).
+It bundles the production functions into an isolated Chromium page: 20 warmups
+and 100 samples per case, with 100/1,000/5,000 unique loaded rows, property
+(single and three-value), project and date groups. Projection reads real Solid
+store proxies inside a tracked memo and indexes current page items for display
+fallback; deterministic rows move groups or fail the
+filter. Page merging uses ten-row continuations. Flat materialization is a
+comparison, not equivalent grouped behavior.
+
+The measurements isolate main-thread projection and page merging; they exclude
+worker predicate execution, IPC, network, UI mapping and DOM rendering. A 4× CPU
+throttle is a stress case, not a claim about any particular mobile device.
+
+Measured on an Intel Xeon Platinum 8581C with Chromium 155.0.8059.79:
+
+| Loaded rows, three-value properties | Group projection p95 | Flat materialization p95 | Page merge p95, before → after |
+| --- | --- | --- | --- |
+| 100 | 0.8 ms | 0.2 ms | 0.2 → 0.1 ms |
+| 1,000 | 6.0 ms | 0.7 ms | 10.0 → 0.4 ms |
+| 5,000 | 30.8 ms | 3.4 ms | 258.1 → 1.8 ms |
+| 100, 4× throttle | 2.8 ms | 0.8 ms | 0.9 → 0.7 ms |
+| 1,000, 4× throttle | 25.3 ms | 3.0 ms | 41.5 → 1.8 ms |
+| 5,000, 4× throttle | 129.7 ms | 14.0 ms | 1,067.2 → 7.8 ms |
+
+Page merging now accumulates each bin once instead of copying all earlier pages
+for every continuation. The identity-read regression test guards linear work
+without a machine-dependent timing assertion. Small loaded views have modest
+projection cost; the 5,000-row reconciliation ceiling is not a frame-time budget.
+Full property regrouping at that depth still exceeds a 16.7 ms frame, especially
+under throttling, and needs incremental projection before claiming smooth bulk
+updates at the ceiling.
 
 Network responses must provide the schema's identity fields (usually `id`, and
 `__typename` for abstract types) for normalization. They are not automatically

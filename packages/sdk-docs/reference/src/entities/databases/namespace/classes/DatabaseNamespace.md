@@ -67,3 +67,22 @@ The databases the caller can see.
 #### Returns
 
 `Promise`\<[`Database`](../../database/classes/Database.md)[]\>
+
+***
+
+### query()
+
+> **query**(`sql`, `options?`): `Promise`\<[`DatabaseQueryResult`](../../query/interfaces/DatabaseQueryResult.md)\>
+
+Run one SQL statement over the caller's visible databases. Writes execute once.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `sql` | `string` |
+| `options?` | [`DatabaseQueryOptions`](../../query/interfaces/DatabaseQueryOptions.md) |
+
+#### Returns
+
+`Promise`\<[`DatabaseQueryResult`](../../query/interfaces/DatabaseQueryResult.md)\>

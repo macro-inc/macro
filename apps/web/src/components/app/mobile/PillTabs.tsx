@@ -1,4 +1,3 @@
-import { hapticImpact } from '@core/mobile/haptics';
 import DotsThreeIcon from '@phosphor/dots-three.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { cn } from '@ui';
@@ -127,11 +126,7 @@ function PillButton<T extends string>(props: {
       onPointerDown={(e) => {
         e.preventDefault();
       }}
-      // Haptic on activation, not on touch-down: a pan that starts on a pill
-      // never activates it (the pan handler suppresses the click), so it must
-      // not buzz either.
       onClick={() => {
-        hapticImpact('light');
         props.onSelect();
       }}
     >
@@ -491,7 +486,6 @@ function MenuOverflowPillTabs<T extends string>(props: PillTabsProps<T>) {
                               : undefined
                           }
                           onClick={() => {
-                            hapticImpact('light');
                             props.onChange(item.value);
                           }}
                         >
@@ -503,7 +497,6 @@ function MenuOverflowPillTabs<T extends string>(props: PillTabsProps<T>) {
                     <MobileDrawer.Close
                       aria-label="Tabs"
                       class="flex h-9 shrink-0 items-center px-3 text-sm font-medium text-ink-muted"
-                      onClick={() => hapticImpact('light')}
                     >
                       Tabs
                     </MobileDrawer.Close>

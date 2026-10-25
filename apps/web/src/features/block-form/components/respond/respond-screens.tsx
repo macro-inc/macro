@@ -215,7 +215,7 @@ export function AnswerValue(props: {
           {rows.value.length === 1 ? '1 row' : `${rows.value.length} rows`}
         </span>
       ))
-      .exhaustive();
+      .exhaustive(() => null);
   };
   return <>{shown()}</>;
 }

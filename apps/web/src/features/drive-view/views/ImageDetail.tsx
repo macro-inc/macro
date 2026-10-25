@@ -1,6 +1,7 @@
 import { ImageContent } from '@block-image/component/ImageContent';
+import { createFileDownload } from '@core/util/createFileDownload';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { downloadFile } from '@filesystem/download';
+import { ok } from 'neverthrow';
 import type { JSX } from 'solid-js';
 import { FileDetailLayout, FileDetailLoadGate } from '../components/FileDetail';
 import { downloadFileOperation } from '../components/file-detail-operations';
@@ -18,16 +19,15 @@ export function ImageDetailDocument(props: {
   data: ImageDocumentData;
   children?: (context: ImageDetailContext) => JSX.Element;
 }) {
+  const download = createFileDownload(() => ({
+    id: `${props.documentId}:${props.data.documentMetadata.documentVersionId}`,
+    name: documentDownloadName(props.data.documentMetadata),
+    load: async () => ok({ blob: props.data.file }),
+  }));
   const operations = [
-    downloadFileOperation(() => {
-      fireAndForget(
-        downloadFile(
-          props.data.file,
-          documentDownloadName(props.data.documentMetadata)
-        ),
-        'drive-file-download'
-      );
-    }),
+    downloadFileOperation(() =>
+      fireAndForget(download.start(), 'drive-file-download')
+    ),
   ];
 
   return (
@@ -41,6 +41,7 @@ export function ImageDetailDocument(props: {
         documentMetadata: props.data.documentMetadata,
         userAccessLevel: props.data.userAccessLevel,
         operations,
+        download,
       })}
       <ImageContent
         file={props.data.file}

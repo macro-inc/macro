@@ -34,6 +34,7 @@ import {
 import type { EntityData } from '@entity';
 import AtIcon from '@phosphor/at.svg';
 import ChartBarIcon from '@phosphor/chart-bar-horizontal.svg';
+import GifIcon from '@phosphor/gif.svg';
 import PaperclipIcon from '@phosphor/paperclip.svg';
 import PhoneIcon from '@phosphor/phone.svg';
 import type { MessageParent } from '@service-storage/messages';
@@ -422,6 +423,23 @@ export function ChannelInput(props: ChannelInputProps) {
         },
       ];
     };
+    // The picker opens at the caret, so the editor takes focus first.
+    const gif = (): ComposerAddMenuGroup['items'] => {
+      const action = slashAction('gif');
+      if (!action) return [];
+      return [
+        {
+          id: 'gif',
+          label: 'GIF',
+          icon: <GifIcon class="size-3.5" />,
+          onSelect: () =>
+            runInEditor((editor) => action.action(editor, actionContext), {
+              focus: true,
+            }),
+          focusesEditor: true,
+        },
+      ];
+    };
     const macro = macroUser();
     const startCall = props.onStartCall;
     const callInProgress = !!props.callInProgress;
@@ -442,6 +460,7 @@ export function ChannelInput(props: ChannelInputProps) {
             icon: <PaperclipIcon class="size-3.5" />,
             onSelect: () => collapsedInput.attach(),
           },
+          ...gif(),
         ],
       },
       {
@@ -780,6 +799,7 @@ export function ChannelInput(props: ChannelInputProps) {
       </Show>
       <Dynamic
         component={props.flat ? 'div' : ComposerSurface}
+        data-glass-input={props.flat ? undefined : ''}
         onFocusOut={(e: FocusEvent & { currentTarget: HTMLElement }) => {
           const next = e.relatedTarget as Node | null;
           if (next && e.currentTarget.contains(next)) return;

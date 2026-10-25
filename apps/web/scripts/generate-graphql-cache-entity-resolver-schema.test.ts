@@ -95,6 +95,32 @@ describe('GraphQL cache entity resolver schema generator', () => {
     );
   });
 
+  it('wraps target lists that exceed the formatter line width', () => {
+    const output = renderEntityResolverSchema({
+      Root: {
+        short: { targets: ['Entity'], argumentPaths: [['id']] },
+        wide: {
+          targets: [
+            'FirstLongEntityName',
+            'SecondLongEntityName',
+            'ThirdLongEntityName',
+          ],
+          argumentPaths: [['id']],
+        },
+      },
+    });
+    expect(output).toContain("      targets: ['Entity'],\n");
+    expect(output).toContain(
+      [
+        '      targets: [',
+        "        'FirstLongEntityName',",
+        "        'SecondLongEntityName',",
+        "        'ThirdLongEntityName',",
+        '      ],',
+      ].join('\n')
+    );
+  });
+
   it('renders deterministically regardless of SDL declaration order', () => {
     const reordered = `
       type Embedded { name: String }

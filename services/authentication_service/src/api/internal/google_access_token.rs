@@ -13,6 +13,9 @@ use std::sync::Arc;
 
 use crate::api::context::AuthorizationService;
 
+#[cfg(test)]
+mod test;
+
 #[derive(serde::Deserialize, Debug)]
 pub struct GoogleAccessTokenParams {
     fusionauth_user_id: String,
@@ -54,14 +57,7 @@ async fn get_access_token(
             // a 500 would surface as a hard login failure.
             if matches!(e, FusionAuthClientError::NoIdentityProviderFound) {
                 tracing::debug!(error=?e, "no {} identity provider configured", identity_provider_name);
-                return (
-                    StatusCode::NOT_FOUND,
-                    Json(ErrorResponse {
-                        message: format!("No {} link found for this user", identity_provider_name)
-                            .into(),
-                    }),
-                )
-                    .into_response();
+                return no_link_response(identity_provider_name);
             }
             tracing::error!(error=?e, "unable to find idp id for {}", identity_provider_name);
             (
@@ -78,6 +74,15 @@ async fn get_access_token(
         .get_links(fusionauth_user_id, Some(idp_id.clone()))
         .await
         .map_err(|e| {
+            // The grant's FusionAuth user is gone, so there is no grant.
+            if matches!(e, FusionAuthClientError::UserDoesNotExist) {
+                tracing::warn!(
+                    fusionauth_user_id,
+                    "no fusionauth user for {} grant",
+                    identity_provider_name
+                );
+                return no_link_response(identity_provider_name);
+            }
             tracing::error!(error=?e, "error fetching links for userid {} and idp id {}", fusionauth_user_id, idp_id.as_str());
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -101,14 +106,7 @@ async fn get_access_token(
                 fusionauth_user_id,
                 idp_id.as_str()
             );
-            (
-                StatusCode::NOT_FOUND,
-                Json(ErrorResponse {
-                    message: format!("No {} link found for this user", identity_provider_name)
-                        .into(),
-                }),
-            )
-                .into_response()
+            no_link_response(identity_provider_name)
         })?;
 
     // get access token using refresh token
@@ -139,4 +137,15 @@ async fn get_access_token(
         }),
     )
         .into_response())
+}
+
+/// The "no grant" answer: callers treat a 404 as a missing grant, not a fault.
+fn no_link_response(identity_provider_name: &str) -> Response {
+    (
+        StatusCode::NOT_FOUND,
+        Json(ErrorResponse {
+            message: format!("No {} link found for this user", identity_provider_name).into(),
+        }),
+    )
+        .into_response()
 }

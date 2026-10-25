@@ -6,6 +6,7 @@ import type { ItemType } from '@service-storage/client';
 import { Button, cn } from '@ui';
 import { type Component, For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { HeaderActionGroup } from './HeaderActionGroup';
 import { SidePanel } from './side-panel';
 import { HeaderIsland } from './split-layout/components/HeaderIsland';
 import {
@@ -20,7 +21,6 @@ import {
   SplitPermissionsBadge,
   SplitTitleFileMenu,
 } from './split-layout/components/SplitLabel';
-import { SplitToolbarRight } from './split-layout/components/SplitToolbar';
 import type {
   SplitFileMenuAction,
   SplitFileMenuActionGroup,
@@ -55,7 +55,7 @@ export function ToolButton(props: { tool: BlockTool }) {
         'px-1',
         props.tool.isActive?.() && 'bg-accent/20 hover:bg-accent/30 text-accent'
       )}
-      size="icon-sm"
+      size={isTouchDevice() ? 'icon-sm' : 'icon-md'}
     >
       <Dynamic
         component={
@@ -143,7 +143,20 @@ export function ResponsiveBlockToolbar(props: BlockToolbarProps) {
       fallback={
         <>
           <SplitHeaderRight>
-            <div class="order-[1000] flex items-center gap-1">
+            <div class="order-[1000] flex items-center gap-2">
+              <Show when={activeToolbarTools().length > 0}>
+                <HeaderActionGroup label="Document actions">
+                  <For each={activeToolbarTools()}>
+                    {(tool) =>
+                      tool.buttonComponent ? (
+                        <tool.buttonComponent />
+                      ) : (
+                        <ToolButton tool={tool} />
+                      )
+                    }
+                  </For>
+                </HeaderActionGroup>
+              </Show>
               <SidePanel.HeaderActionsOutlet />
               <For each={headerTools()}>
                 {(tool) => (
@@ -171,21 +184,6 @@ export function ResponsiveBlockToolbar(props: BlockToolbarProps) {
               buttonClass="order-first"
             />
           </SplitTitleFileMenu>
-          <Show when={activeToolbarTools().length > 0}>
-            <SplitToolbarRight>
-              <For each={activeToolbarTools()}>
-                {(tool) => (
-                  <>
-                    {tool.buttonComponent ? (
-                      <tool.buttonComponent />
-                    ) : (
-                      <ToolButton tool={tool} />
-                    )}
-                  </>
-                )}
-              </For>
-            </SplitToolbarRight>
-          </Show>
         </>
       }
     >

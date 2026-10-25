@@ -85,7 +85,7 @@ function emailMatchesTab(
         'all',
         () => true
       )
-      .exhaustive()
+      .exhaustive(() => true)
   );
 }
 

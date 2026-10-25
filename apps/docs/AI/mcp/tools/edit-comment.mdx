@@ -1,0 +1,17 @@
+---
+title: EditComment
+description: >-
+  Replace the text of a comment or reply in the Discussion of a document, task,
+  Tasks project, CRM company or CRM contact.
+---
+
+# EditComment
+
+Replace the text of a comment or reply in the Discussion of a document, task, Tasks project, CRM company or CRM contact. Only a comment's author can edit it, so this edits comments the user wrote and comments this assistant wrote for them. A comment id is enough to find its item. Comment ids come from ReadDiscussion, or from ReadContent for a document. Use only when the user asks to edit a comment.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `commentId` | string | Yes | The id of the comment or reply to edit. For the first comment of a thread this is the thread id. |
+| `content` | string | Yes | The full replacement text of the comment, in Macro markdown. |

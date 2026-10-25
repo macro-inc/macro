@@ -11,6 +11,13 @@ use roles_and_permissions::domain::model::{ProductTier, RoleId, UserRolesAndPerm
 
 use crate::domain::owned_entity_cleanup::OwnedEntityCleanupError;
 
+mod invite_link;
+
+pub use invite_link::{
+    JoinTeamByInviteLinkError, JoinTeamByInviteLinkOutcome, ManageTeamInviteLinkError,
+    TeamInviteLinkTeam, TeamInviteLinkToken,
+};
+
 /// Team plans
 #[derive(
     Eq,
@@ -653,8 +660,8 @@ pub enum CreateTeamError {
 /// Errors for inviting users to team
 #[derive(Debug, thiserror::Error)]
 pub enum InviteUsersToTeamError {
-    /// Too many emails were provided
-    #[error("Too many emails were provided")]
+    /// The team has hit its daily limit on new invites
+    #[error("the team has sent too many invites today")]
     TooManyEmails,
     /// The team only allows admins to invite and the caller is not an admin
     #[error("only team admins may invite users to this team")]
@@ -719,7 +726,7 @@ pub enum CustomerError {
     #[error("No stripe customer id")]
     /// The customer does not have a stripe customer id
     NoStripeCustomerId,
-    /// The subscription is not active
+    /// The customer has no active or trialing subscription
     #[error("Subscription is not active")]
     SubscriptionNotActive,
     /// Invalid promotion code
@@ -841,9 +848,10 @@ pub enum ToggleAutoJoinDomainError {
     TeamError(#[from] TeamError),
 }
 
-/// Errors for automatically joining a team by email domain
+/// Errors for adding a user to a team without an email invite: by matching
+/// the team's auto-join domain, or through the team's invite link.
 #[derive(Debug, thiserror::Error)]
-pub enum TryJoinTeamByDomainError {
+pub enum JoinTeamDirectlyError {
     /// Underlying team error
     #[error("Underlying team error {0}")]
     TeamError(#[from] TeamError),

@@ -1,6 +1,8 @@
 use super::*;
 use crate::domain::company_metadata_resolver::CompanyMetadataResolver;
 use serde_json::json;
+use wiremock::matchers::{method, path, query_param};
+use wiremock::{Mock, MockServer, ResponseTemplate};
 
 /// The documented Apollo sample payload maps onto every field, and the
 /// `account` / `account_id` keys are stripped from `raw`.
@@ -115,6 +117,54 @@ fn tolerates_mistyped_and_blank_fields() {
     );
 }
 
+/// Failures that say nothing about the domain stay retryable; only an
+/// answer from Apollo becomes a (possibly empty) directory entry.
+#[tokio::test]
+async fn only_apollo_answers_resolve() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/api/v1/organizations/enrich"))
+        .and(query_param("domain", "unknown.com"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({})))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/api/v1/organizations/enrich"))
+        .and(query_param("domain", "acme.com"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(json!({ "organization": { "name": "Acme Inc." } })),
+        )
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/api/v1/organizations/enrich"))
+        .and(query_param("domain", "busy.com"))
+        .respond_with(ResponseTemplate::new(429))
+        .mount(&server)
+        .await;
+    let resolver = ApolloCompanyMetadataResolver::with_base_url("key".to_string(), server.uri());
+
+    assert_eq!(
+        resolver.resolve("unknown.com").await,
+        DomainResolution::Resolved(Box::default())
+    );
+    let DomainResolution::Resolved(acme) = resolver.resolve("acme.com").await else {
+        panic!("expected acme.com to resolve");
+    };
+    assert_eq!(acme.name.as_deref(), Some("Acme Inc."));
+    assert_eq!(
+        resolver.resolve("busy.com").await,
+        DomainResolution::Unavailable
+    );
+    assert_eq!(
+        ApolloCompanyMetadataResolver::with_base_url(String::new(), server.uri())
+            .resolve("acme.com")
+            .await,
+        DomainResolution::Unavailable
+    );
+}
+
 /// Live smoke test against the real Apollo API. Ignored by default — it
 /// makes a network call and consumes an Apollo credit. Run with:
 ///   APOLLO_API_KEY=<key> cargo test -p crm apollo_live -- --ignored --nocapture
@@ -126,7 +176,9 @@ async fn apollo_live_enrich() {
     let domain = std::env::var("APOLLO_TEST_DOMAIN").unwrap_or_else(|_| "macro.com".to_string());
 
     let resolver = ApolloCompanyMetadataResolver::new(api_key);
-    let md = resolver.resolve(&domain).await;
+    let DomainResolution::Resolved(md) = resolver.resolve(&domain).await else {
+        panic!("Apollo was unavailable for {domain} — check API key and credits");
+    };
 
     println!("DomainMetadata for {domain}:\n{md:#?}");
     assert!(

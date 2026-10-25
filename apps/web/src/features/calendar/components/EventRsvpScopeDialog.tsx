@@ -33,7 +33,13 @@ export function EventRsvpScopeDialog(props: {
         >
           <Panel depth={2} class="max-w-[calc(100vw-2rem)] rounded-xl text-ink">
             <Panel.Header class="gap-1 px-2">
-              <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
+              <Dialog.CloseButton
+                as={Button}
+                aria-label="Close RSVP"
+                tooltip="Close RSVP"
+                variant="ghost"
+                size="icon-sm"
+              >
                 <CloseIcon />
               </Dialog.CloseButton>
               <Dialog.Title as="span" class="m-0 p-0 text-sm font-medium">

@@ -5,18 +5,23 @@
  * OpenAPI spec version: 0.1.0
  */
 import type {
+  AddDraftAttachmentParams,
   AddDraftAttachmentRequest,
   AddDraftAttachmentResponse,
+  AddForwardedAttachmentParams,
   AddForwardedAttachmentRequest,
   AddForwardedAttachmentResponse,
   ApiPaginatedThreadCursor,
   ArchiveThreadRequest,
   BlockSenderRequest,
   CancelBackfillParams,
+  CompleteDraftAttachmentParams,
   CreateDraftRequest,
   CreateDraftResponse,
   CreateLabelRequest,
   CreateLabelResponse,
+  DeleteDraftParams,
+  DeleteScheduledDraftParams,
   EmptyResponse,
   ErrorResponse,
   GetActiveBackfillJobResponse,
@@ -45,6 +50,8 @@ import type {
   PatchSettingsRequest,
   PatchSettingsResponse,
   PreviewsInboxCursorParams,
+  RemoveDraftAttachmentParams,
+  RemoveForwardedAttachmentParams,
   ResolveMessageOperationRequest,
   ResyncResponse,
   SendMessageRequest,
@@ -64,6 +71,7 @@ import type {
   UpdateThreadStateRequest,
   UpsertEmailFilterRequest,
   UpsertEmailFilterResponse,
+  UpsertScheduledMessageParams,
   UpsertScheduledRequest,
   UpsertScheduledResponse,
 } from './schemas';
@@ -976,16 +984,32 @@ export type upsertScheduledMessageResponse =
   | upsertScheduledMessageResponseSuccess
   | upsertScheduledMessageResponseError;
 
-export const getUpsertScheduledMessageUrl = (id: string) => {
-  return `/email/drafts/scheduled/${id}`;
+export const getUpsertScheduledMessageUrl = (
+  id: string,
+  params?: UpsertScheduledMessageParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/email/drafts/scheduled/${id}?${stringifiedParams}`
+    : `/email/drafts/scheduled/${id}`;
 };
 
 export const upsertScheduledMessage = async (
   id: string,
   upsertScheduledRequest: UpsertScheduledRequest,
+  params?: UpsertScheduledMessageParams,
   options?: RequestInit
 ): Promise<upsertScheduledMessageResponse> => {
-  const res = await fetch(getUpsertScheduledMessageUrl(id), {
+  const res = await fetch(getUpsertScheduledMessageUrl(id, params), {
     ...options,
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -1055,15 +1079,31 @@ export type deleteScheduledDraftResponse =
   | deleteScheduledDraftResponseSuccess
   | deleteScheduledDraftResponseError;
 
-export const getDeleteScheduledDraftUrl = (messageId: string) => {
-  return `/email/drafts/scheduled/${messageId}`;
+export const getDeleteScheduledDraftUrl = (
+  messageId: string,
+  params?: DeleteScheduledDraftParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/email/drafts/scheduled/${messageId}?${stringifiedParams}`
+    : `/email/drafts/scheduled/${messageId}`;
 };
 
 export const deleteScheduledDraft = async (
   messageId: string,
+  params?: DeleteScheduledDraftParams,
   options?: RequestInit
 ): Promise<deleteScheduledDraftResponse> => {
-  const res = await fetch(getDeleteScheduledDraftUrl(messageId), {
+  const res = await fetch(getDeleteScheduledDraftUrl(messageId, params), {
     ...options,
     method: 'DELETE',
   });
@@ -1124,15 +1164,28 @@ export type deleteDraftResponse =
   | deleteDraftResponseSuccess
   | deleteDraftResponseError;
 
-export const getDeleteDraftUrl = (id: string) => {
-  return `/email/drafts/${id}`;
+export const getDeleteDraftUrl = (id: string, params?: DeleteDraftParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/email/drafts/${id}?${stringifiedParams}`
+    : `/email/drafts/${id}`;
 };
 
 export const deleteDraft = async (
   id: string,
+  params?: DeleteDraftParams,
   options?: RequestInit
 ): Promise<deleteDraftResponse> => {
-  const res = await fetch(getDeleteDraftUrl(id), {
+  const res = await fetch(getDeleteDraftUrl(id, params), {
     ...options,
     method: 'DELETE',
   });
@@ -1192,16 +1245,32 @@ export type addDraftAttachmentResponse =
   | addDraftAttachmentResponseSuccess
   | addDraftAttachmentResponseError;
 
-export const getAddDraftAttachmentUrl = (id: string) => {
-  return `/email/drafts/${id}/attachments`;
+export const getAddDraftAttachmentUrl = (
+  id: string,
+  params?: AddDraftAttachmentParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/email/drafts/${id}/attachments?${stringifiedParams}`
+    : `/email/drafts/${id}/attachments`;
 };
 
 export const addDraftAttachment = async (
   id: string,
   addDraftAttachmentRequest: AddDraftAttachmentRequest,
+  params?: AddDraftAttachmentParams,
   options?: RequestInit
 ): Promise<addDraftAttachmentResponse> => {
-  const res = await fetch(getAddDraftAttachmentUrl(id), {
+  const res = await fetch(getAddDraftAttachmentUrl(id, params), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -1265,20 +1334,37 @@ export type removeDraftAttachmentResponse =
 
 export const getRemoveDraftAttachmentUrl = (
   id: string,
-  attachmentId: string
+  attachmentId: string,
+  params?: RemoveDraftAttachmentParams
 ) => {
-  return `/email/drafts/${id}/attachments/${attachmentId}`;
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/email/drafts/${id}/attachments/${attachmentId}?${stringifiedParams}`
+    : `/email/drafts/${id}/attachments/${attachmentId}`;
 };
 
 export const removeDraftAttachment = async (
   id: string,
   attachmentId: string,
+  params?: RemoveDraftAttachmentParams,
   options?: RequestInit
 ): Promise<removeDraftAttachmentResponse> => {
-  const res = await fetch(getRemoveDraftAttachmentUrl(id, attachmentId), {
-    ...options,
-    method: 'DELETE',
-  });
+  const res = await fetch(
+    getRemoveDraftAttachmentUrl(id, attachmentId, params),
+    {
+      ...options,
+      method: 'DELETE',
+    }
+  );
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
@@ -1345,20 +1431,37 @@ export type completeDraftAttachmentResponse =
 
 export const getCompleteDraftAttachmentUrl = (
   id: string,
-  attachmentId: string
+  attachmentId: string,
+  params?: CompleteDraftAttachmentParams
 ) => {
-  return `/email/drafts/${id}/attachments/${attachmentId}/complete`;
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/email/drafts/${id}/attachments/${attachmentId}/complete?${stringifiedParams}`
+    : `/email/drafts/${id}/attachments/${attachmentId}/complete`;
 };
 
 export const completeDraftAttachment = async (
   id: string,
   attachmentId: string,
+  params?: CompleteDraftAttachmentParams,
   options?: RequestInit
 ): Promise<completeDraftAttachmentResponse> => {
-  const res = await fetch(getCompleteDraftAttachmentUrl(id, attachmentId), {
-    ...options,
-    method: 'POST',
-  });
+  const res = await fetch(
+    getCompleteDraftAttachmentUrl(id, attachmentId, params),
+    {
+      ...options,
+      method: 'POST',
+    }
+  );
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
@@ -1405,16 +1508,32 @@ export type addForwardedAttachmentResponse =
   | addForwardedAttachmentResponseSuccess
   | addForwardedAttachmentResponseError;
 
-export const getAddForwardedAttachmentUrl = (id: string) => {
-  return `/email/drafts/${id}/forwarded-attachments`;
+export const getAddForwardedAttachmentUrl = (
+  id: string,
+  params?: AddForwardedAttachmentParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/email/drafts/${id}/forwarded-attachments?${stringifiedParams}`
+    : `/email/drafts/${id}/forwarded-attachments`;
 };
 
 export const addForwardedAttachment = async (
   id: string,
   addForwardedAttachmentRequest: AddForwardedAttachmentRequest,
+  params?: AddForwardedAttachmentParams,
   options?: RequestInit
 ): Promise<addForwardedAttachmentResponse> => {
-  const res = await fetch(getAddForwardedAttachmentUrl(id), {
+  const res = await fetch(getAddForwardedAttachmentUrl(id, params), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -1468,20 +1587,37 @@ export type removeForwardedAttachmentResponse =
 
 export const getRemoveForwardedAttachmentUrl = (
   id: string,
-  attachmentId: string
+  attachmentId: string,
+  params?: RemoveForwardedAttachmentParams
 ) => {
-  return `/email/drafts/${id}/forwarded-attachments/${attachmentId}`;
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/email/drafts/${id}/forwarded-attachments/${attachmentId}?${stringifiedParams}`
+    : `/email/drafts/${id}/forwarded-attachments/${attachmentId}`;
 };
 
 export const removeForwardedAttachment = async (
   id: string,
   attachmentId: string,
+  params?: RemoveForwardedAttachmentParams,
   options?: RequestInit
 ): Promise<removeForwardedAttachmentResponse> => {
-  const res = await fetch(getRemoveForwardedAttachmentUrl(id, attachmentId), {
-    ...options,
-    method: 'DELETE',
-  });
+  const res = await fetch(
+    getRemoveForwardedAttachmentUrl(id, attachmentId, params),
+    {
+      ...options,
+      method: 'DELETE',
+    }
+  );
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
@@ -2874,7 +3010,12 @@ export const mailboxSettingsOperations = async (
 };
 
 /**
- * @summary Disables inbox syncing for user.
+ * The inbox is the caller's primary, or the one named by `X-Email-Link-Id`,
+which may be an inbox the caller only reaches through delegation. Removal
+therefore follows the same policy as `DELETE /email/links/{link_id}`: an
+owner's inbox is torn down, while a delegate only loses their
+`macro_user_links` edge and the owner's data stays intact.
+ * @summary Disables inbox syncing for the selected inbox.
  */
 export type disableSyncResponse204 = {
   data: EmptyResponse;
@@ -2891,6 +3032,21 @@ export type disableSyncResponse401 = {
   status: 401;
 };
 
+export type disableSyncResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type disableSyncResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type disableSyncResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
 export type disableSyncResponse500 = {
   data: ErrorResponse;
   status: 500;
@@ -2902,6 +3058,9 @@ export type disableSyncResponseSuccess = disableSyncResponse204 & {
 export type disableSyncResponseError = (
   | disableSyncResponse400
   | disableSyncResponse401
+  | disableSyncResponse403
+  | disableSyncResponse404
+  | disableSyncResponse409
   | disableSyncResponse500
 ) & {
   headers: Headers;

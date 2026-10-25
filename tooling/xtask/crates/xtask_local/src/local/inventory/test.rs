@@ -3,18 +3,15 @@ use super::*;
 #[test]
 fn local_binaries_are_unique_and_complete() {
     let bins = local_binaries();
-    // 19 distinct binaries (the bundled set, including scheduled_action,
-    // calendar_service, preview_gateway, the local-only search_processing_service,
-    // agent harness, mcp_service, and the seed_cli shipped for the
-    // gmail_forwarder sidecar).
-    assert_eq!(bins.len(), 19, "{bins:?}");
+    assert_eq!(bins.len(), 15, "{bins:?}");
     assert!(bins.contains(&"pubsub_workers"));
     assert!(bins.contains(&"seed_cli"));
     assert!(bins.contains(&"document_upload_finalizer_local_worker"));
     assert!(bins.contains(&"search_processing_service"));
-    assert!(bins.contains(&"service"));
+    assert!(!bins.contains(&"service"));
     assert!(bins.contains(&"agent_harness_service"));
-    assert!(bins.contains(&"mcp_service"));
+    assert!(!bins.contains(&"mcp_service"));
+    assert!(!bins.contains(&"document_cognition_service"));
     let mut sorted = bins.clone();
     sorted.dedup();
     assert_eq!(sorted.len(), bins.len(), "binaries must be deduplicated");
@@ -91,10 +88,17 @@ fn dev_mode_excludes_workers_and_optin() {
 }
 
 #[test]
-fn scheduled_action_is_local_only() {
-    let svc = RUST_SERVICES
-        .iter()
-        .find(|s| s.compose_name == "scheduled_action_service")
-        .unwrap();
-    assert_eq!(svc.modes, &[Mode::Local]);
+fn agent_features_share_the_harness_process() {
+    for name in [
+        "scheduled_action_service",
+        "preview_gateway",
+        "document_cognition_service",
+        "mcp_service",
+    ] {
+        assert!(
+            RUST_SERVICES
+                .iter()
+                .all(|service| service.compose_name != name)
+        );
+    }
 }

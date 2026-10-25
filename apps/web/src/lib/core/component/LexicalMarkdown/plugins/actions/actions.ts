@@ -28,6 +28,7 @@ import CodeBlock from '@phosphor/code-block.svg';
 import FileText from '@phosphor/file-text.svg';
 import VideoIcon from '@phosphor/file-video.svg';
 import MathIcon from '@phosphor/function.svg';
+import GifIcon from '@phosphor/gif.svg';
 import TableIcon from '@phosphor/grid-four.svg';
 import ImageIcon from '@phosphor/image.svg';
 import LightningIcon from '@phosphor/lightning.svg';
@@ -49,6 +50,7 @@ import {
   INSERT_AWAIT_NODE_COMMAND,
   REPLACE_AWAIT_NODE_COMMAND,
 } from '../await';
+import { TRY_INSERT_GIF_COMMAND } from '../gif';
 import { TRY_INSERT_EQUATION_COMMAND } from '../katex';
 import { TRY_INSERT_LINK_COMMAND } from '../links';
 import { TRY_INSERT_MEDIA_UPLOAD_COMMAND } from '../media';
@@ -269,6 +271,19 @@ export const ACTIONS: Action[] = [
       });
     },
     dependencies: [ImageNode, VideoNode],
+  },
+  {
+    id: 'gif',
+    name: 'GIF',
+    keywords: ['gif', 'giphy', 'tenor', 'animated', 'meme', 'reaction'],
+    category: ActionCategory.MEDIA,
+    icon: GifIcon,
+    action: (editor: LexicalEditor) => {
+      queueMicrotask(() => {
+        editor.dispatchCommand(TRY_INSERT_GIF_COMMAND, undefined);
+      });
+    },
+    dependencies: [ImageNode],
   },
   {
     id: 'video',

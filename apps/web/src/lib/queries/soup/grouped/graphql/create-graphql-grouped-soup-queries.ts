@@ -1,73 +1,20 @@
-import { createUrqlInfiniteQuery } from '@app/lib/urql-solid';
 import type { EntityData } from '@entity';
-import { createKeyedProjection } from '@queries/soup/create-keyed-projection';
-import {
-  makeGraphqlGroupedSoupContinuationInput,
-  makeGraphqlGroupedSoupInput,
-} from '@queries/soup/graphql/ast';
-import { registerGroupedSoupContinuation } from '@queries/soup/grouped/graphql-operation-registry';
-import type { GroupByField, GroupMeta } from '@queries/soup/grouped/types';
-import type {
-  SoupApiItemFilter,
-  SoupAstBody,
-  SoupAstItemsGroupedPage,
-  SoupParams,
-} from '@queries/soup/items';
-import {
-  isDisplayableSoupItem,
-  isInstructionsMdDoc,
-  mapApiSoupItemToEntity,
-} from '@queries/soup/transform-utils';
-import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
-import {
-  type GroupedSoupInput,
-  GroupSoupDocument,
-  type GroupSoupQuery,
-  type GroupSoupQueryVariables,
-} from '@service-storage/graphql/generated/graphql';
-import {
-  getGraphqlSoupClient,
-  mapGraphqlGroupedSoupPage,
-} from '@service-storage/graphql-soup';
-import {
-  type Accessor,
-  createComputed,
-  createMemo,
-  createRoot,
-  createSignal,
-  on,
-  onCleanup,
-} from 'solid-js';
-
-import { registerGraphqlSoupRevalidations } from '../../graphql/active-queries';
+import { keyArray } from '@solid-primitives/keyed';
+import { type Accessor, createMemo } from 'solid-js';
+import { createKeyedProjection } from '../../create-keyed-projection';
+import type { GroupedSoupPaging } from '../../graphql/create-grouped-soup-live-query';
 import {
   usePendingGraphqlSoupDeleteIds,
   withoutPendingSoupEntities,
 } from '../../graphql/optimistic-deletions';
+import type { SoupApiItemFilter, SoupAstItemsGroupedPage } from '../../items';
+import {
+  isDisplayableSoupItem,
+  mapApiSoupItemToEntity,
+} from '../../transform-utils';
+import type { GroupMeta } from '../types';
 
-export type GroupQueryData = {
-  entities: EntityData[];
-};
-
-type GraphqlGroupConfig = {
-  key: string;
-  group: GroupMeta;
-  field: GroupByField;
-  initialInput: GroupedSoupInput;
-  enabled: boolean;
-  itemFilter: SoupApiItemFilter | undefined;
-};
-
-type GraphqlGroupQuery = {
-  key: string;
-  data: Accessor<GroupQueryData | undefined>;
-  hasNextPage: Accessor<boolean>;
-  isFetchingNextPage: Accessor<boolean>;
-  error: Accessor<Error | null>;
-  fetchNextPage: () => Promise<void>;
-  resetToInitialPage: () => void;
-  dispose: () => void;
-};
+export type GroupQueryData = { entities: EntityData[] };
 
 type GraphqlGroupedInitialPage = {
   cachedMail?: boolean;
@@ -77,395 +24,62 @@ type GraphqlGroupedInitialPage = {
 
 type CreateGraphqlGroupedSoupQueriesArgs = {
   initialPage: Accessor<GraphqlGroupedInitialPage | undefined>;
-  groupByField: Accessor<GroupByField | undefined>;
-  soupParams: Accessor<SoupParams>;
-  soupBody: Accessor<SoupAstBody>;
+  groupedPaging?: Accessor<GroupedSoupPaging | undefined>;
   enabled: Accessor<boolean>;
   itemFilter: Accessor<SoupApiItemFilter | undefined>;
 };
 
-function groupPage(
-  data: GroupSoupQuery,
-  group: GroupMeta
-):
-  | {
-      items: ReturnType<typeof mapGraphqlGroupedSoupPage>['items'];
-      group: GroupMeta;
-    }
-  | undefined {
-  const page = mapGraphqlGroupedSoupPage(data);
-  const bin = page.groups.find((candidate) => candidate.key === group.key);
-  if (!bin) return;
-  return {
-    items: page.items,
-    group: {
-      ...group,
-      totalCount: bin.totalCount,
-      itemIds: bin.itemIds,
-      nextCursor: bin.nextCursor,
-    },
-  };
-}
-
-/** Derives initial bins from the live parent and observes loaded continuations. */
+/** Group readers project the parent's combined pages; they never own a second cursor chain. */
 export function createGraphqlGroupedSoupQueries(
   args: CreateGraphqlGroupedSoupQueriesArgs
-): {
-  list: Accessor<GraphqlGroupQuery[]>;
-  map: Accessor<Map<string, GraphqlGroupQuery>>;
-  resetToInitialPage: () => void;
-} {
-  const instructionsIdQuery = useInstructionsMdIdQuery();
+) {
   const pendingDeleteIds = usePendingGraphqlSoupDeleteIds();
-
-  const mapItems = (
-    items: SoupAstItemsGroupedPage['items'],
-    itemIds: readonly string[],
-    itemFilter: SoupApiItemFilter | undefined
-  ): EntityData[] =>
-    itemIds.flatMap((id) => {
-      const item = items[id];
-      if (!item || !isDisplayableSoupItem(item)) return [];
-      if (itemFilter && !itemFilter(item)) return [];
-      if (isInstructionsMdDoc(item, instructionsIdQuery)) return [];
-      return [mapApiSoupItemToEntity(item)];
-    });
-
-  const initialItems = createKeyedProjection(
+  const rows = createKeyedProjection(
     () => Object.entries(args.initialPage()?.items ?? {}),
     ([id]) => id,
-    ([id, item]) => ({
-      id,
-      entity: mapItems({ [id]: item }, [id], args.itemFilter())[0],
+    ([id, item]) => {
+      const filter = args.itemFilter();
+      const entity =
+        isDisplayableSoupItem(item) && (!filter || filter(item))
+          ? mapApiSoupItemToEntity(item)
+          : undefined;
+      return { id, entity };
+    }
+  );
+  const byId = createMemo(
+    () => new Map(rows().map((row) => [row.id, row.entity]))
+  );
+  const paging = () =>
+    args.initialPage()?.cachedMail ? undefined : args.groupedPaging?.();
+  const list = keyArray(
+    () => args.initialPage()?.groups ?? [],
+    (group) => group.key,
+    (group) => ({
+      key: group().key,
+      data: createMemo(
+        (): GroupQueryData => ({
+          entities: withoutPendingSoupEntities(
+            group().itemIds.flatMap((id) => {
+              const entity = byId().get(id);
+              return entity ? [entity] : [];
+            }),
+            pendingDeleteIds()
+          ),
+        })
+      ),
+      hasNextPage: () => paging()?.hasNextPage(group().key) ?? false,
+      isFetchingNextPage: () =>
+        paging()?.isFetchingNextPage(group().key) ?? false,
+      error: () => paging()?.error(group().key) ?? null,
+      fetchNextPage: async () => {
+        if (args.enabled()) await paging()?.fetchNextPage(group().key);
+      },
+      resetToInitialPage: () => paging()?.resetToInitialPage(),
     })
   );
-  const initialEntities = createMemo(
-    () => new Map(initialItems().map(({ id, entity }) => [id, entity]))
-  );
-
-  const configs = createMemo<GraphqlGroupConfig[]>(() => {
-    const field = args.groupByField();
-    const initialPage = args.initialPage();
-    if (!field || !initialPage) return [];
-
-    let initialInput: GroupedSoupInput;
-    try {
-      initialInput = makeGraphqlGroupedSoupInput({
-        params: args.soupParams(),
-        body: args.soupBody(),
-        groupBy: field,
-      });
-    } catch {
-      return [];
-    }
-
-    const enabled = args.enabled();
-    const itemFilter = args.itemFilter();
-    return initialPage.groups.map((group) => ({
-      key: group.key,
-      group,
-      field,
-      initialInput,
-      enabled,
-      itemFilter,
-    }));
-  });
-
-  const queryByKey = new Map<string, GraphqlGroupQuery>();
-  const [revision, setRevision] = createSignal(0);
-
-  const createGroupQuery = (
-    key: string,
-    initialConfig: GraphqlGroupConfig
-  ): GraphqlGroupQuery => {
-    let dispose: (() => void) | undefined;
-
-    const queryResult = createRoot((rootDispose) => {
-      dispose = rootDispose;
-      const getConfig = createMemo(
-        () => configs().find((config) => config.key === key) ?? initialConfig
-      );
-      const [continuationRevision, setContinuationRevision] = createSignal(0);
-      const [isFetchingFirstPage, setIsFetchingFirstPage] = createSignal(false);
-
-      const createContinuationQuery = (firstCursor: string) => {
-        let continuationDispose: (() => void) | undefined;
-
-        return createRoot((continuationRootDispose) => {
-          continuationDispose = continuationRootDispose;
-          const [activated, setActivated] = createSignal(false);
-          let initialPageDidSettle = false;
-          let settleInitialPage = () => undefined;
-          const initialPageSettled = new Promise<void>((resolve) => {
-            settleInitialPage = () => {
-              if (initialPageDidSettle) return;
-              initialPageDidSettle = true;
-              resolve();
-            };
-          });
-
-          const query = createUrqlInfiniteQuery<
-            GroupSoupQuery,
-            GroupSoupQueryVariables,
-            string,
-            GroupQueryData & { pageParams: readonly string[] }
-          >(() => {
-            const config = getConfig();
-            return {
-              query: GroupSoupDocument,
-              client: getGraphqlSoupClient(),
-              initialPageParam: firstCursor,
-              variables: (cursor) => {
-                const input = makeGraphqlGroupedSoupContinuationInput({
-                  groupBy: config.field,
-                  groupKey: config.key,
-                  cursor,
-                });
-                registerGroupedSoupContinuation(config.initialInput, input);
-                return { input };
-              },
-              getNextPageParam: (lastPage) =>
-                groupPage(lastPage, config.group)?.group.nextCursor,
-              select: ({ pages, pageParams }) => ({
-                pageParams,
-                entities: pages.flatMap((page) => {
-                  const selected = groupPage(page, config.group);
-                  return selected
-                    ? mapItems(
-                        selected.items,
-                        selected.group.itemIds,
-                        config.itemFilter
-                      )
-                    : [];
-                }),
-              }),
-              enabled: activated() && config.enabled,
-              requestPolicy: 'cache-first',
-              keepPreviousData: false,
-            };
-          });
-
-          onCleanup(
-            registerGraphqlSoupRevalidations(() => {
-              if (!query.isEnabled) return [];
-              const config = getConfig();
-              const cursors = new Set([
-                firstCursor,
-                ...(query.data?.pageParams ?? []),
-              ]);
-              return [...cursors].map((cursor) => ({
-                document: GroupSoupDocument,
-                variables: {
-                  input: makeGraphqlGroupedSoupContinuationInput({
-                    groupBy: config.field,
-                    groupKey: config.key,
-                    cursor,
-                  }),
-                },
-              }));
-            })
-          );
-
-          createComputed(() => {
-            if (!activated()) return;
-            if (
-              !getConfig().enabled ||
-              (query.isFetched && !query.isFetching)
-            ) {
-              settleInitialPage();
-            }
-          });
-          onCleanup(settleInitialPage);
-
-          return {
-            firstCursor,
-            query,
-            activate: () => {
-              setActivated(true);
-              return initialPageSettled;
-            },
-            dispose: () => continuationDispose?.(),
-          };
-        });
-      };
-
-      let continuation: ReturnType<typeof createContinuationQuery> | undefined;
-      let firstPagePromise: Promise<void> | undefined;
-
-      const getContinuation = () => {
-        continuationRevision();
-        return continuation;
-      };
-
-      const disposeContinuation = () => {
-        continuation?.dispose();
-        continuation = undefined;
-        firstPagePromise = undefined;
-        setIsFetchingFirstPage(false);
-        setContinuationRevision((value) => value + 1);
-      };
-
-      const cachedMail = createMemo(
-        () => args.initialPage()?.cachedMail === true
-      );
-      const initialData = createMemo<GroupQueryData | undefined>(() => {
-        const config = getConfig();
-        const initialPage = args.initialPage();
-        if (!initialPage) return;
-        const group = initialPage.groups.find(
-          (candidate) => candidate.key === config.key
-        );
-        if (!group) return;
-        return {
-          entities: group.itemIds.flatMap((id) => {
-            const entity = initialEntities().get(id);
-            return entity ? [entity] : [];
-          }),
-        };
-      });
-
-      const data = createMemo<GroupQueryData | undefined>(() => {
-        const initial = initialData();
-        if (!initial) return;
-        const continued = cachedMail()
-          ? undefined
-          : getContinuation()?.query.data;
-        const combined = continued
-          ? { entities: [...initial.entities, ...continued.entities] }
-          : initial;
-        const entities = withoutPendingSoupEntities(
-          combined.entities,
-          pendingDeleteIds()
-        );
-        return entities === combined.entities ? combined : { entities };
-      });
-
-      const trackFirstPage = (action: Promise<unknown>): Promise<void> => {
-        setIsFetchingFirstPage(true);
-        const tracked = action
-          .then(() => undefined)
-          .finally(() => {
-            if (firstPagePromise !== tracked) return;
-            firstPagePromise = undefined;
-            setIsFetchingFirstPage(false);
-          });
-        firstPagePromise = tracked;
-        return tracked;
-      };
-
-      const startContinuation = async (cursor: string): Promise<void> => {
-        continuation = createContinuationQuery(cursor);
-        setContinuationRevision((value) => value + 1);
-        await trackFirstPage(continuation.activate());
-      };
-
-      const fetchNextPage = async (): Promise<void> => {
-        const config = getConfig();
-        if (!config.enabled || cachedMail()) return;
-        if (firstPagePromise) return firstPagePromise;
-
-        let current = getContinuation();
-        if (!current) {
-          const cursor = config.group.nextCursor;
-          if (cursor === null) return;
-          await startContinuation(cursor);
-          return;
-        }
-
-        if (current.query.data === undefined) {
-          const cursor = getConfig().group.nextCursor;
-          if (cursor === null) return;
-          if (cursor !== current.firstCursor) {
-            disposeContinuation();
-            await startContinuation(cursor);
-            return;
-          }
-          await trackFirstPage(current.query.refetch());
-          return;
-        }
-
-        await current.query.fetchNextPage();
-      };
-
-      createComputed(on(cachedMail, () => disposeContinuation()));
-      onCleanup(disposeContinuation);
-
-      return {
-        key,
-        data,
-        error: () => getContinuation()?.query.error ?? null,
-        hasNextPage: () => {
-          if (cachedMail()) return false;
-          const current = getContinuation();
-          return current?.query.data === undefined
-            ? getConfig().group.nextCursor !== null
-            : current.query.hasNextPage;
-        },
-        isFetchingNextPage: () =>
-          isFetchingFirstPage() ||
-          (getContinuation()?.query.isFetchingNextPage ?? false),
-        fetchNextPage,
-        resetToInitialPage: disposeContinuation,
-      };
-    });
-
-    return {
-      ...queryResult,
-      dispose: () => dispose?.(),
-    };
-  };
-
-  createComputed(
-    on(
-      () => configs().map((config) => config.key),
-      (keys) => {
-        const activeKeys = new Set(keys);
-        let changed = false;
-
-        for (const [key, query] of queryByKey) {
-          if (activeKeys.has(key)) continue;
-          query.dispose();
-          queryByKey.delete(key);
-          changed = true;
-        }
-
-        for (const key of keys) {
-          if (queryByKey.has(key)) continue;
-          const config = configs().find((candidate) => candidate.key === key);
-          if (!config) continue;
-          queryByKey.set(key, createGroupQuery(key, config));
-          changed = true;
-        }
-
-        if (changed) setRevision((value) => value + 1);
-      }
-    )
-  );
-
-  onCleanup(() => {
-    for (const query of queryByKey.values()) query.dispose();
-    queryByKey.clear();
-  });
-
-  const list = createMemo(() => {
-    revision();
-    return configs().flatMap((config) => {
-      const query = queryByKey.get(config.key);
-      return query ? [query] : [];
-    });
-  });
-  const map = createMemo(() =>
-    list().reduce((queries, query) => {
-      queries.set(query.key, query);
-      return queries;
-    }, new Map<string, GraphqlGroupQuery>())
-  );
-
   return {
     list,
-    map,
-    resetToInitialPage: () => {
-      for (const query of list()) query.resetToInitialPage();
-    },
+    map: createMemo(() => new Map(list().map((query) => [query.key, query]))),
+    resetToInitialPage: () => paging()?.resetToInitialPage(),
   };
 }

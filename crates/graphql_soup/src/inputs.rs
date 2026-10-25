@@ -4,7 +4,7 @@ use graphql_soup_filter_input::GraphqlEntityFilterAst;
 use item_filters::ast::{EntityFilterAst, properties::PropertyEntityType};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_grouping::{GroupByField, GroupingConfig};
-use models_pagination::{Base64Str, CursorWithValAndFilter, Query, SimpleSortMethod};
+use models_pagination::{Base64Str, CursorWithValAndFilter, NotifiedAt, Query, SimpleSortMethod};
 use soup::domain::models::{
     GroupedSortRequest, SoupQuery, SoupRequest, SoupSortDirection, SoupType,
 };
@@ -132,6 +132,7 @@ impl GroupedSoupInitialInput {
         let sort_method = self
             .sort_method
             .map(GraphqlSimpleSortMethod::into_model)
+            .transpose()?
             .unwrap_or(SimpleSortMethod::ViewedUpdated);
         let limit = self.limit.unwrap_or(20).min(500);
 
@@ -274,16 +275,19 @@ impl SoupInitialInput {
             .map(GraphqlEntityFilterAst::into_ast)
             .transpose()?
             .unwrap_or_default();
-        let sort = self
+        let cursor = match self
             .sort_method
-            .map(GraphqlSimpleSortMethod::into_model)
-            .unwrap_or(SimpleSortMethod::ViewedAt);
+            .unwrap_or(GraphqlSimpleSortMethod::ViewedAt)
+        {
+            GraphqlSimpleSortMethod::NotifiedAt => SoupQuery::new_sort_notified(filter),
+            sort => SoupQuery::new_sort_simple(sort.into_model()?, filter),
+        };
 
         Ok(SoupRequest {
             soup_type: soup_type(self.expand),
             limit: self.limit.unwrap_or(20).min(500),
-            cursor: SoupQuery::new_sort_simple(sort, filter),
-            sort_direction: sort_direction(self.sort_direction),
+            sort_direction: sort_direction(&cursor, self.sort_direction)?,
+            cursor,
             user: macro_user_id,
             email_preview_view: email_preview_view(self.email_view)?,
             link_ids,
@@ -298,18 +302,29 @@ impl SoupContinuationInput {
         macro_user_id: MacroUserIdStr<'static>,
         link_ids: Vec<Uuid>,
     ) -> async_graphql::Result<SoupRequest<EntityFilterAst>> {
-        let cursor = Base64Str::<
-            CursorWithValAndFilter<Uuid, SimpleSortMethod, EntityFilterAst>,
-        >::new_from_string(self.cursor)
-        .decode_json()
-        .map_err(|err| async_graphql::Error::new(format!("invalid cursor: {err}")))?;
-        let limit = u16::try_from(cursor.limit).unwrap_or(500).min(500);
+        // The sort tags never overlap, so at most one of these decodes.
+        let notified = Base64Str::<
+            CursorWithValAndFilter<String, NotifiedAt, EntityFilterAst>,
+        >::new_from_string(self.cursor.clone())
+        .decode_json();
+        let (limit, cursor) = match notified {
+            Ok(cursor) => (cursor.limit, SoupQuery::new_cursor_notified(cursor)),
+            Err(_) => {
+                let cursor = Base64Str::<
+                    CursorWithValAndFilter<Uuid, SimpleSortMethod, EntityFilterAst>,
+                >::new_from_string(self.cursor)
+                .decode_json()
+                .map_err(|err| async_graphql::Error::new(format!("invalid cursor: {err}")))?;
+                (cursor.limit, SoupQuery::new_cursor_simple(cursor))
+            }
+        };
+        let limit = u16::try_from(limit).unwrap_or(500).min(500);
 
         Ok(SoupRequest {
             soup_type: soup_type(self.expand),
             limit,
-            cursor: SoupQuery::new_cursor_simple(cursor),
-            sort_direction: sort_direction(self.sort_direction),
+            sort_direction: sort_direction(&cursor, self.sort_direction)?,
+            cursor,
             user: macro_user_id,
             email_preview_view: email_preview_view(self.email_view)?,
             link_ids,
@@ -318,10 +333,21 @@ impl SoupContinuationInput {
 }
 
 /// Convert the optional GraphQL sort direction into the domain representation.
-fn sort_direction(direction: Option<GraphqlSortDirection>) -> SoupSortDirection {
-    direction
+/// Notified pages are keyset-ordered newest first, so ascending is rejected
+/// rather than silently ignored.
+fn sort_direction(
+    cursor: &SoupQuery<EntityFilterAst>,
+    direction: Option<GraphqlSortDirection>,
+) -> async_graphql::Result<SoupSortDirection> {
+    let direction = direction
         .map(GraphqlSortDirection::into_model)
-        .unwrap_or_default()
+        .unwrap_or_default();
+    if direction == SoupSortDirection::Asc && matches!(cursor, SoupQuery::Notified(_)) {
+        return Err(async_graphql::Error::new(
+            "sortDirection ASC is not supported with NOTIFIED_AT",
+        ));
+    }
+    Ok(direction)
 }
 
 /// Convert the optional GraphQL expansion flag into the domain representation.
@@ -380,7 +406,7 @@ impl GraphqlEmailView {
 // Filter input types and their authoritative materialization live in
 // `graphql_soup_filter_input`, shared with the browser cache composition root.
 
-/// GraphQL representation of supported simple Soup sorts.
+/// GraphQL representation of supported Soup sorts.
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
 pub enum GraphqlSimpleSortMethod {
     /// Sort by most recently viewed.
@@ -391,16 +417,23 @@ pub enum GraphqlSimpleSortMethod {
     UpdatedAt,
     /// Sort by viewed timestamp, falling back to updated timestamp.
     ViewedUpdated,
+    /// Only entities the caller holds a live notification for, most recently
+    /// notified first. Descending `soup` only; not supported by `groupSoup`.
+    NotifiedAt,
 }
 
 impl GraphqlSimpleSortMethod {
-    /// Convert this GraphQL sort method into the Soup-domain model.
-    pub fn into_model(self) -> SimpleSortMethod {
+    /// Convert this GraphQL sort method into a timestamp sort, rejecting
+    /// `NOTIFIED_AT`, which is not one.
+    pub fn into_model(self) -> async_graphql::Result<SimpleSortMethod> {
         match self {
-            Self::ViewedAt => SimpleSortMethod::ViewedAt,
-            Self::CreatedAt => SimpleSortMethod::CreatedAt,
-            Self::UpdatedAt => SimpleSortMethod::UpdatedAt,
-            Self::ViewedUpdated => SimpleSortMethod::ViewedUpdated,
+            Self::ViewedAt => Ok(SimpleSortMethod::ViewedAt),
+            Self::CreatedAt => Ok(SimpleSortMethod::CreatedAt),
+            Self::UpdatedAt => Ok(SimpleSortMethod::UpdatedAt),
+            Self::ViewedUpdated => Ok(SimpleSortMethod::ViewedUpdated),
+            Self::NotifiedAt => Err(async_graphql::Error::new(
+                "NOTIFIED_AT is only supported by soup",
+            )),
         }
     }
 }

@@ -98,6 +98,10 @@ async fn newer_intent_survives_sync_and_ack_of_an_older_command(db: PgPool) {
         false,
         "observed provider state stays separate"
     );
+    let messages = repo
+        .mailbox_action_messages(work.mailbox.link_id, thread)
+        .await
+        .unwrap();
     let second = repo
         .enqueue_mailbox_action(
             work.mailbox.link_id,
@@ -332,6 +336,10 @@ async fn unknown_write_is_confirmed_before_retry_and_revoked_access_stops_execut
         .unwrap(),
         "succeeded"
     );
+    let messages = repo
+        .mailbox_action_messages(work.mailbox.link_id, thread)
+        .await
+        .unwrap();
     let next = repo
         .enqueue_mailbox_action(
             work.mailbox.link_id,
@@ -509,6 +517,10 @@ async fn acceptance_order_wins_over_transaction_start_order(db: PgPool) {
         )
         .await
         .unwrap();
+    let messages = repo
+        .mailbox_action_messages(work.mailbox.link_id, thread)
+        .await
+        .unwrap();
     let second = repo
         .enqueue_mailbox_action(
             work.mailbox.link_id,
@@ -548,4 +560,63 @@ async fn acceptance_order_wins_over_transaction_start_order(db: PgPool) {
         .await
         .unwrap();
     assert_eq!(operations[0].id, second);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn reopening_a_read_thread_queues_no_command(db: PgPool) {
+    let (_, repo, work, thread) = setup(&db).await;
+    let link = work.mailbox.link_id;
+    let messages = repo.mailbox_action_messages(link, thread).await.unwrap();
+    repo.enqueue_mailbox_action(
+        link,
+        owner(),
+        &MailboxAction::Read(true),
+        &MailboxAction::Read(true).targets(&messages),
+    )
+    .await
+    .unwrap();
+    let messages = repo.mailbox_action_messages(link, thread).await.unwrap();
+    assert!(messages[0].is_read, "the accepted intent is the read state");
+    assert!(MailboxAction::Read(true).targets(&messages).is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn unresumable_commands_are_not_reported_as_pending(db: PgPool) {
+    let (sync, repo, work, thread) = setup(&db).await;
+    let link = work.mailbox.link_id;
+    let messages = repo.mailbox_action_messages(link, thread).await.unwrap();
+    repo.enqueue_mailbox_action(
+        link,
+        owner(),
+        &MailboxAction::Read(true),
+        &MailboxAction::Read(true).targets(&messages),
+    )
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE email_mailbox_commands SET status='unknown' WHERE link_id=$1",
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    let operations = repo.thread_mailbox_operations(link, thread).await.unwrap();
+    assert!(matches!(
+        operations[0].state,
+        crate::domain::models::mailbox_action::MailboxOperationState::Cancelled
+    ));
+    sqlx::query!(
+        "UPDATE email_links SET sync_generation=sync_generation+1 WHERE id=$1",
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    assert!(sync.claim_command(Uuid::now_v7()).await.unwrap().is_none());
+    assert!(
+        repo.thread_mailbox_operations(link, thread)
+            .await
+            .unwrap()
+            .is_empty()
+    );
 }

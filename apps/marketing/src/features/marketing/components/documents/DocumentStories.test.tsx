@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, within } from '@solidjs/testing-library';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { DemoInteractionBoundary } from '../DemoInteractionBoundary';
 import { DocumentOrganizationDemo } from './DocumentOrganizationDemo';
 import { DocumentProjectDemo } from './DocumentProjectDemo';
 import {
@@ -56,10 +57,15 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
-function visible(value: boolean) {
+function visible(value: boolean, ratio = 1) {
   for (const callback of intersections)
     callback(
-      [{ isIntersecting: value } as IntersectionObserverEntry],
+      [
+        {
+          isIntersecting: value,
+          intersectionRatio: ratio,
+        } as IntersectionObserverEntry,
+      ],
       {} as IntersectionObserver
     );
 }
@@ -69,6 +75,67 @@ function reduce() {
 }
 const body = (view: ReturnType<typeof render>) =>
   view.getByRole('textbox', { name: 'Document body' });
+
+it('keeps the hero edits near the top and waits until the document is readable', () => {
+  const view = render(() => <DocumentProjectDemo teamEditing />);
+  visible(true, 0.2);
+  vi.advanceTimersByTime(10000);
+  expect(body(view).textContent).not.toContain('Show the product before');
+  visible(true);
+  vi.advanceTimersByTime(4100);
+  const jacob = body(view).querySelector('[data-caret="jacob"]');
+  const julia = body(view).querySelector('[data-caret="julia"]');
+  expect(jacob).toBeTruthy();
+  expect(julia).toBeTruthy();
+  expect(jacob?.closest('p')).toBe(body(view).querySelector('p'));
+  expect(julia?.closest('p')).toBe(jacob?.closest('p'));
+  expect(body(view).querySelector('[data-caret="claude"]')).toBeNull();
+  vi.advanceTimersByTime(10000);
+  expect(body(view).textContent).toContain(
+    'Make the homepage easier to scan on mobile. Show the product before asking people to sign up.'
+  );
+  expect(body(view).querySelector('[data-caret]')).toBeNull();
+});
+
+it('hands the hero to the visitor on activation and preserves typing and formatting', () => {
+  const view = render(() => (
+    <DemoInteractionBoundary label="Docs hero">
+      <DocumentProjectDemo teamEditing />
+    </DemoInteractionBoundary>
+  ));
+  visible(true);
+  vi.advanceTimersByTime(4100);
+  fireEvent.click(
+    view.getByRole('button', { name: /Interact with Docs hero/ })
+  );
+  const editor = body(view);
+  expect(editor.querySelector('[data-caret]')).toBeNull();
+  fireEvent(
+    editor,
+    new InputEvent('beforeinput', {
+      bubbles: true,
+      inputType: 'insertText',
+      data: 'Keep this edit.',
+    })
+  );
+  editor.innerHTML = '<p>Keep this <strong>edit.</strong></p>';
+  fireEvent.input(editor);
+  reduce();
+  vi.advanceTimersByTime(20000);
+  expect(editor.innerHTML).toBe('<p>Keep this <strong>edit.</strong></p>');
+});
+
+it('shows the complete two-person hero for reduced motion', () => {
+  reduced = true;
+  const view = render(() => <DocumentProjectDemo teamEditing />);
+  expect(body(view).textContent).toContain(
+    'Make the homepage easier to scan on mobile. Show the product before asking people to sign up.'
+  );
+  expect(body(view).querySelector('[data-caret]')).toBeNull();
+  visible(true);
+  vi.advanceTimersByTime(20000);
+  expect(body(view).querySelector('[data-caret]')).toBeNull();
+});
 
 it('reads the sources before editing and keeps both collaborators in one paragraph', () => {
   const view = render(() => <DocumentAgentDemo />);
@@ -86,7 +153,7 @@ it('reads the sources before editing and keeps both collaborators in one paragra
   expect(human).toBeTruthy();
   expect(agent?.parentElement).toBe(human?.parentElement);
   expect(view.container.querySelector('[data-search-hit="email"]')).toBe(hit);
-  vi.advanceTimersByTime(20000);
+  vi.advanceTimersByTime(6000);
   expect(body(view).textContent).toContain('Annual plans get two months free');
   expect(body(view).textContent).toContain(
     'Link to the billing FAQ below the table.'
@@ -140,7 +207,7 @@ it('merges an offline edit with the teammate edit on reconnect', () => {
   expect(body(view).textContent).not.toContain('Julia has the email ready');
   vi.advanceTimersByTime(800);
   expect(view.getByRole('status', { name: 'Reconnecting' })).toBeTruthy();
-  vi.advanceTimersByTime(10000);
+  vi.advanceTimersByTime(2000);
   expect(view.queryByRole('status')).toBeNull();
   expect(body(view).textContent).toContain(
     'Julia has the email ready. Send it tomorrow. Add a screenshot'
@@ -186,7 +253,7 @@ it('filters the folder and navigates a nested folder', () => {
 
 it('opens sources beside the doc and restores focus without losing edits', () => {
   vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(1000);
-  const view = render(() => <DocumentProjectDemo />);
+  const view = render(() => <DocumentProjectDemo teamEditing />);
   const editor = body(view);
   fireEvent.pointerDown(editor);
   editor.append(document.createTextNode(' Keep this sentence.'));
@@ -252,7 +319,7 @@ it('keeps source playback stopped after closing a split', () => {
 it('compacts completed tool calls and lets the visitor reopen them', () => {
   const view = render(() => <DocumentAgentDemo />);
   visible(true);
-  vi.advanceTimersByTime(20000);
+  vi.advanceTimersByTime(12000);
   const toggle = view.getByRole('button', { name: 'Called 4 tools' });
   expect(toggle.getAttribute('aria-expanded')).toBe('false');
   fireEvent.click(toggle);

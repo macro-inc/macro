@@ -1,5 +1,6 @@
 import { toast } from '@core/component/Toast/Toast';
 import { useTutorialCompleted } from '@core/context/user';
+import { isMobile } from '@core/mobile/isMobile';
 import { isPlatform } from '@core/util/platform';
 import Bell from '@phosphor/bell.svg';
 import { useIsAuthenticated } from '@queries/auth';
@@ -38,7 +39,9 @@ function NotificationToastTrigger(props: {
   onMount(() => {
     const toastId = toast.custom(
       {
-        title: 'Enable Browser Notifications',
+        title: isPlatform('desktop')
+          ? 'Enable Desktop Notifications'
+          : 'Enable Browser Notifications',
         icon: Bell,
         color: 'var(--color-accent)',
         content: () => (
@@ -67,7 +70,10 @@ function NotificationToastTrigger(props: {
           },
         ],
       },
-      { persistent: true }
+      {
+        persistent: true,
+        region: isMobile() ? 'mobile-prompt-region' : 'prompt-region',
+      }
     );
   });
 

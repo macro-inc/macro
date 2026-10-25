@@ -12,6 +12,14 @@ struct Service {
 }
 
 impl CodingAgentService for Service {
+    fn create(
+        &self,
+        command: DispatchCodingAgentRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<DispatchedCodingAgent, CodingAgentError>> + Send + '_>>
+    {
+        self.dispatch(command)
+    }
+
     fn list(
         &self,
         user_id: MacroUserIdStr<'static>,
@@ -44,6 +52,7 @@ async fn tools_always_use_the_authenticated_request_identity() {
     let service = Arc::new(Service::default());
     let context = ServiceContext(CodingAgentToolContext {
         service: service.clone(),
+        sessions: service.clone(),
     });
     let caller = MacroUserIdStr::try_from("macro|requester@example.com".to_owned()).unwrap();
     let request = RequestContext::new(caller.clone());
@@ -83,4 +92,25 @@ fn tools_reject_an_ai_supplied_user_identity() {
         }))
         .is_err()
     );
+}
+
+impl crate::domain::tool_actions::SessionActions for Service {
+    fn execute(
+        &self,
+        _user: MacroUserIdStr<'static>,
+        _id: Uuid,
+        _action: crate::domain::tool_actions::SessionAction,
+    ) -> Pin<
+        Box<
+            dyn Future<
+                    Output = Result<
+                        crate::domain::tool_actions::SessionActionResult,
+                        crate::domain::tool_actions::SessionActionError,
+                    >,
+                > + Send
+                + '_,
+        >,
+    > {
+        Box::pin(async { panic!("this test must not invoke session management") })
+    }
 }

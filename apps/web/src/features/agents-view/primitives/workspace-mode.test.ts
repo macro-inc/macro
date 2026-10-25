@@ -5,7 +5,7 @@ import { createWorkspaceMode } from './workspace-mode';
 beforeEach(() => window.localStorage.clear());
 
 describe('workspace mode', () => {
-  it('starts in Work and remembers Code per user', () => {
+  it('starts in Chat and remembers Code per user', () => {
     createRoot((dispose) => {
       const workspace = createWorkspaceMode('user-a');
       expect(workspace.mode()).toBe('chat');

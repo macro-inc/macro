@@ -243,8 +243,23 @@ impl MockContainerManager {
     pub async fn first_spawned(&self) -> AgentSessionId {
         loop {
             let waited = self.spawned_signal.notified();
+            tokio::pin!(waited);
+            waited.as_mut().enable();
             if let Some(session) = self.sessions().first().copied() {
                 return session;
+            }
+            waited.await;
+        }
+    }
+
+    /// Wait for one specific session's sandbox without polling.
+    pub async fn wait_for_spawn(&self, session: AgentSessionId) -> ContainerMock {
+        loop {
+            let waited = self.spawned_signal.notified();
+            tokio::pin!(waited);
+            waited.as_mut().enable();
+            if let Some(container) = self.container(session) {
+                return container;
             }
             waited.await;
         }

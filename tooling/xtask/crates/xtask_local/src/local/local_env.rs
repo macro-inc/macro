@@ -47,12 +47,11 @@ pub struct LocalEnv {
     preview_ssh_proxy_host: Option<String>,
     preview_ssh_port: u16,
     preview_https_port: u16,
-    preview_control_hosts: String,
     /// Browser-facing origin for post-login redirects and Pipedream CORS.
     /// Both attached and headless frontends are exposed through HTTPS.
     frontend_origin: String,
     /// Browser-facing route to document cognition's MCP OAuth callback.
-    mcp_public_url: String,
+    mcp_client_public_url: String,
     /// Browser-facing base the static file service stamps into permalinks
     /// and the agent harness recognizes in them, as
     /// `OVERRIDE_STATIC_FILE_PUBLIC_URL`. Callers reach the service itself
@@ -104,13 +103,9 @@ impl LocalEnv {
             environment: mode.environment_var(),
             project_name: instance.project_name().to_string(),
             frontend_port,
-            mcp_public_url: format!("{frontend_origin}/cognition"),
+            mcp_client_public_url: format!("{frontend_origin}/cognition"),
             static_file_public_url: format!("{frontend_origin}/static-file"),
             frontend_origin,
-            preview_control_hosts: format!(
-                "localhost,127.0.0.1,preview-gateway,{}",
-                super::tls::hostname()?
-            ),
             external_egress_url: tunnels.egress.map(str::to_owned).unwrap_or_else(|| {
                 format!(
                     "http://localhost:{}",
@@ -139,7 +134,18 @@ impl LocalEnv {
         env.insert("PORT".into(), "8080".into());
         env.insert("FRONTEND_PORT".into(), self.frontend_port.to_string());
         env.insert("FRONTEND_ORIGIN".into(), self.frontend_origin.clone());
-        env.insert("MCP_PUBLIC_URL".into(), self.mcp_public_url.clone());
+        env.insert("APP_BASE_URL".into(), self.frontend_origin.clone());
+        env.insert(
+            "OVERRIDE_COGNITION_PUBLIC_URL".into(),
+            self.mcp_client_public_url.clone(),
+        );
+        env.insert(
+            "OVERRIDE_MCP_PUBLIC_URL".into(),
+            self.mcp_client_public_url
+                .trim_end_matches("/cognition")
+                .to_owned()
+                + "/mcp",
+        );
         env.insert(
             "OVERRIDE_STATIC_FILE_PUBLIC_URL".into(),
             self.static_file_public_url.clone(),
@@ -161,7 +167,7 @@ impl LocalEnv {
         env.insert("CALENDAR_SEARCH_ENABLED".into(), "true".into());
         env.insert(
             "OVERRIDE_PREVIEW_GATEWAY_URL".into(),
-            "http://preview-gateway:8080".into(),
+            "http://agent-harness-service:8080/preview".into(),
         );
         env.insert(
             "EXTERNAL_EGRESS_BASE_URL".into(),
@@ -183,10 +189,9 @@ impl LocalEnv {
             "PREVIEW_HTTPS_PORT".into(),
             self.preview_https_port.to_string(),
         );
-        env.insert("PREVIEW_APP_ORIGIN".into(), self.frontend_origin.clone());
         env.insert(
-            "PREVIEW_CONTROL_HOSTS".into(),
-            self.preview_control_hosts.clone(),
+            "OVERRIDE_APP_SERVICE_URL".into(),
+            self.frontend_origin.clone(),
         );
         self.infra.write(&mut env);
         self.storage.write(&mut env);
@@ -281,7 +286,7 @@ impl InfraEnv {
         // Shared AI tools call cognition from other service containers.
         env.insert(
             "OVERRIDE_DOCUMENT_COGNITION_SERVICE_URL".into(),
-            "http://document-cognition-service:8080".into(),
+            "http://agent-harness-service:8080/cognition".into(),
         );
         // Historical indexing calls the processing service's scoped backfill API,
         // not the search query service. Both run on the local Compose network.
@@ -309,7 +314,7 @@ impl InfraEnv {
         );
         env.insert(
             "OVERRIDE_SCHEDULED_ACTION_SERVICE_URL".into(),
-            "http://scheduled-action-service:8080".into(),
+            "http://agent-harness-service:8080/scheduled-action".into(),
         );
         // Lexical has the same host-vs-container split. The plain
         // `LEXICAL_SERVICE_URL` value does not affect `LexicalServiceUrl`,
@@ -516,7 +521,7 @@ impl AgentHarnessEnv {
             egress_url: egress_public_url
                 .unwrap_or("http://agent-harness-service:8102")
                 .to_owned(),
-            mcp_service_url: "http://mcp-service:8080",
+            mcp_service_url: "http://agent-harness-service:8080",
         }
     }
 
@@ -690,7 +695,7 @@ impl BootStubEnv {
         );
         // search_processing_service; the local cluster has the security plugin
         // disabled so these are accepted but ignored (same as opensearch.rs).
-        // document_cognition_service mounts the Pipedream webhook when both
+        // the harness cognition module mounts the Pipedream webhook when both
         // values are set. Nothing local can receive Pipedream's callbacks, so
         // these only need to be well-formed: the URI must carry the same
         // secret the route checks against.
@@ -797,17 +802,17 @@ impl BootStubEnv {
             "SNS_FCM_PLATFORM_ARN".into(),
             "arn:aws:sns:us-east-1:000000000000:app/GCM/macro-local".into(),
         );
-        // document_cognition_service's MCP credentials encryption key — must be
+        // the harness cognition module's MCP credentials encryption key — must be
         // a base64-encoded 32-byte AES key (`AesKey::try_from`).
         env.insert(
             "MCP_CREDENTIALS_KEY_SECRET_NAME".into(),
             "VrOPM+uhQKuas1vO8FpyWDc/ZRhLAXYW5lRz8s0yyA4=".into(),
         );
-        // document_cognition_service reads `ANTHROPIC_API_KEY` at boot
+        // the harness cognition module reads `ANTHROPIC_API_KEY` at boot
         // (`anthropic::Config::dangrously_try_from_env`); a dummy satisfies the
         // loader, real model calls just fail.
         env.insert("ANTHROPIC_API_KEY".into(), "local-anthropic-key".into());
-        // document_cognition_service's MCP provider registry requires the
+        // the harness cognition module's MCP provider registry requires the
         // pre-registered OAuth creds (Slack + GitHub) at boot.
         env.insert(
             "SLACK_MCP_CLIENT_ID".into(),

@@ -405,7 +405,9 @@ export class CoordinatorRouter {
       .with({ kind: 'disconnect-tab' }, ({ reason }) => {
         this.loseTab(tabId, reason);
       })
-      .exhaustive();
+      .exhaustive(() =>
+        this.postProtocolError(port, 'unknown coordinator message kind')
+      );
   }
 
   private async register(
@@ -522,6 +524,12 @@ export class CoordinatorRouter {
         tabId: message.tabId,
       })
     );
+    if (
+      this.coreValue.state.kind === 'failed' &&
+      this.coreValue.state.storageUntouched
+    ) {
+      this.resetRecoveryRetries();
+    }
     const actions = this.coreValue.registerTab(message.tabId);
     this.applyActions(actions);
     // Late joiners must use the same startup budget as the elected owner.
@@ -1053,7 +1061,7 @@ export class CoordinatorRouter {
         .with('loading-assets', () => this.assetLoadTimeoutMs)
         .with('awaiting-owner-lock', () => this.ownerLockWaitTimeoutMs)
         .with('opening-database', () => this.activationTimeoutMs)
-        .exhaustive(),
+        .exhaustive(() => this.activationTimeoutMs),
     });
   }
 
@@ -1080,7 +1088,7 @@ export class CoordinatorRouter {
             'opening-database',
             () => 'engine database opening watchdog timed out'
           )
-          .exhaustive()
+          .exhaustive(() => 'engine startup watchdog timed out')
       );
     }, timeoutMs);
   }

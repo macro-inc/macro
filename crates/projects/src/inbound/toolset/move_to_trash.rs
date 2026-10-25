@@ -1,4 +1,4 @@
-//! MoveToTrash tool for deleting documents, AI chats, and projects to the trash.
+//! MoveToTrash tool for deleting documents and projects to the trash.
 
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolResult};
 use ai_toolset::{ToolAnnotated, ToolAnnotations};
@@ -10,7 +10,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use super::entity_receipts::{mutation_failed, user_receipt};
-use super::{ChatCapabilities, DocumentCapabilities, ProjectCapabilities, ProjectToolContext};
+use super::{DocumentCapabilities, ProjectCapabilities, ProjectToolContext};
 
 /// The kind of item to move to the trash.
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, Copy, PartialEq, Eq)]
@@ -18,8 +18,6 @@ use super::{ChatCapabilities, DocumentCapabilities, ProjectCapabilities, Project
 pub enum TrashableEntityType {
     /// A document (includes tasks).
     Document,
-    /// An AI chat conversation.
-    Chat,
     /// A project (folder), with everything inside it.
     Project,
 }
@@ -28,7 +26,6 @@ impl TrashableEntityType {
     fn entity_type(self) -> EntityType {
         match self {
             Self::Document => EntityType::Document,
-            Self::Chat => EntityType::Chat,
             Self::Project => EntityType::Project,
         }
     }
@@ -73,7 +70,7 @@ pub struct MoveToTrashResponse {
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "MoveToTrash",
-    description = "Delete a document (including a task), an AI chat, or a project (folder) by moving it to the trash, as the Delete action in the app does. Trashing a project also trashes everything inside it. Only the item's owner can trash it. Use only when the user explicitly asks to delete an item. Channels, email threads, and calendar events are not deleted with this tool."
+    description = "Delete a document (including a task), or a project (folder) by moving it to the trash, as the Delete action in the app does. Trashing a project also trashes everything inside it. Only the item's owner can trash it. Use only when the user explicitly asks to delete an item. Channels, email threads, and calendar events are not deleted with this tool."
 )]
 pub struct MoveToTrash {
     /// The kind of item to trash.
@@ -91,13 +88,11 @@ impl ToolAnnotated for MoveToTrash {
 }
 
 #[async_trait]
-impl<PSvc, ESvc, DSvc, CSvc, EmSvc> AsyncTool<ProjectToolContext<PSvc, ESvc, DSvc, CSvc, EmSvc>>
-    for MoveToTrash
+impl<PSvc, ESvc, DSvc, EmSvc> AsyncTool<ProjectToolContext<PSvc, ESvc, DSvc, EmSvc>> for MoveToTrash
 where
     PSvc: ProjectCapabilities,
     ESvc: EntityAccessService,
     DSvc: DocumentCapabilities,
-    CSvc: ChatCapabilities,
     EmSvc: MoveEntity + Send + Sync + 'static,
 {
     type Output = MoveToTrashResponse;
@@ -105,7 +100,7 @@ where
     #[tracing::instrument(skip_all, fields(user_id=?request_context.user_id, entity_type=?self.entity_type, entity_id=?self.entity_id), err)]
     async fn call(
         &self,
-        service_context: ServiceContext<ProjectToolContext<PSvc, ESvc, DSvc, CSvc, EmSvc>>,
+        service_context: ServiceContext<ProjectToolContext<PSvc, ESvc, DSvc, EmSvc>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         let entity = self
@@ -117,15 +112,6 @@ where
             TrashableEntityType::Document => {
                 trash_with(
                     &*service_context.document_move_service,
-                    access,
-                    &request_context,
-                    entity,
-                )
-                .await?
-            }
-            TrashableEntityType::Chat => {
-                trash_with(
-                    &*service_context.chat_move_service,
                     access,
                     &request_context,
                     entity,

@@ -1,3 +1,4 @@
+import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 /**
  * App-facing entry for the `form` block. It reads the legacy block state once
  * (id, params, split) and hands identity, capabilities and host actions to
@@ -8,6 +9,7 @@
 
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { HeaderActionButton } from '@components/app/HeaderActionButton';
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { ResponsivePermissionsBadge } from '@components/app/ResponsiveBlockToolbar';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import {
@@ -35,7 +37,6 @@ import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
 import Eye from '@phosphor/eye.svg';
 import PaperPlaneTilt from '@phosphor/paper-plane-tilt.svg';
 import { useFormSharePermissionsQuery } from '@queries/storage/forms';
-import { Button } from '@ui';
 import { createSignal, type JSX, Show } from 'solid-js';
 import type { FormTab } from './components/form-tabs';
 import { FormProvider } from './context/form-context';
@@ -141,10 +142,11 @@ function FormBlockContent(props: {
         />
       }
     >
-      <Button variant="outline" size="sm" onClick={openRespond}>
-        <ArrowSquareOut class="size-3.5" />
-        Open form
-      </Button>
+      <HeaderActionButton
+        label="Open form"
+        icon={<ArrowSquareOut class="size-3.5" />}
+        onClick={openRespond}
+      />
     </Show>
   );
   let respondScroll: HTMLDivElement | undefined;
@@ -164,7 +166,7 @@ function FormBlockContent(props: {
           <BlockLiveIndicators />
         </Show>
         <HeaderIsland>
-          <div class="order-[1000] flex items-center gap-1.5">
+          <div class="order-[1000] flex items-center gap-2 touch:gap-1.5">
             <Show
               when={
                 !props.respondOnly &&
@@ -172,16 +174,15 @@ function FormBlockContent(props: {
                 source.detail()?.access !== 'view'
               }
             >
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={preview.opening()}
-                onClick={() => fireAndForget(preview.open(), 'form-preview')}
-              >
-                <Eye class="size-3.5" />
-                Preview
-              </Button>
-              {primary()}
+              <HeaderActionGroup label="Form actions">
+                <HeaderActionButton
+                  label="Preview"
+                  icon={<Eye class="size-3.5" />}
+                  disabled={preview.opening()}
+                  onClick={() => fireAndForget(preview.open(), 'form-preview')}
+                />
+                {primary()}
+              </HeaderActionGroup>
             </Show>
             <ShareTrigger
               id={formId}
@@ -258,7 +259,7 @@ function FormCardContent() {
         fallback={
           <Show
             when={source.failure()}
-            fallback={<div class="h-24 animate-pulse rounded-lg bg-hover" />}
+            fallback={<ListSkeleton.Bar class="h-24 w-full rounded-xl" />}
           >
             <p class="p-3 text-sm text-ink-muted">This form isn’t available.</p>
           </Show>

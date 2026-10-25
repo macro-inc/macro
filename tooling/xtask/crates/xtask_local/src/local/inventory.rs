@@ -104,17 +104,6 @@ pub const RUST_SERVICES: &[RustService] = &[
         no_default_features: false,
     },
     RustService {
-        compose_name: "preview_gateway",
-        cargo_bin: "preview_gateway",
-        package: "preview_gateway",
-        host_port: Some(Port::PreviewControl),
-        path_prefix: Some("/preview"),
-        is_websocket: false,
-        modes: &[Mode::Local],
-        opt_in: false,
-        no_default_features: false,
-    },
-    RustService {
         compose_name: "authentication-service",
         cargo_bin: "authentication_service",
         package: "authentication_service",
@@ -144,17 +133,6 @@ pub const RUST_SERVICES: &[RustService] = &[
         package: "contacts_service",
         host_port: Some(Port::Contacts),
         path_prefix: Some("/contacts"),
-        is_websocket: false,
-        modes: &[Mode::Local, Mode::Dev],
-        opt_in: false,
-        no_default_features: false,
-    },
-    RustService {
-        compose_name: "document_cognition_service",
-        cargo_bin: "document_cognition_service",
-        package: "document_cognition_service",
-        host_port: Some(Port::DocCognition),
-        path_prefix: Some("/cognition"),
         is_websocket: false,
         modes: &[Mode::Local, Mode::Dev],
         opt_in: false,
@@ -249,20 +227,6 @@ pub const RUST_SERVICES: &[RustService] = &[
         no_default_features: false,
     },
     RustService {
-        compose_name: "scheduled_action_service",
-        cargo_bin: "service",
-        package: "scheduled_action",
-        host_port: Some(Port::ScheduledAction),
-        path_prefix: Some("/scheduled-action"),
-        is_websocket: false,
-        // Local-only: the binary always boots `PgPollingDispatcher`. Running it
-        // under `run-dev` against the shared-dev MacroDB would race the deployed
-        // agent-schedule-dev service for due schedules.
-        modes: &[Mode::Local],
-        opt_in: false,
-        no_default_features: false,
-    },
-    RustService {
         compose_name: "static_file_service",
         cargo_bin: "static_file_service",
         package: "static_file_service",
@@ -322,21 +286,6 @@ pub const RUST_SERVICES: &[RustService] = &[
         // Local stacks default to DEV_DANGEROUS_LOCAL_CONTAINERS, so managed
         // sandboxes run on the host Docker daemon. Daytona is opt-in via
         // DEV_DANGEROUS_LOCAL_CONTAINERS=false DAYTONA_API_KEY=... just run_local.
-        modes: &[Mode::Local],
-        opt_in: false,
-        no_default_features: false,
-    },
-    RustService {
-        compose_name: "mcp_service",
-        cargo_bin: "mcp_service",
-        package: "mcp_service",
-        // No host port and no proxy route: its one local client is the agent
-        // egress proxy, which dials it across the compose network as
-        // `mcp-service`. (Interactive MCP clients like claude.ai only exist
-        // against deployed environments.)
-        host_port: None,
-        path_prefix: None,
-        is_websocket: false,
         modes: &[Mode::Local],
         opt_in: false,
         no_default_features: false,

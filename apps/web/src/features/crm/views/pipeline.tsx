@@ -1,3 +1,4 @@
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -137,7 +138,7 @@ export function PipelineView(props: {
             <Dropdown placement="bottom-start">
               <Dropdown.Trigger
                 variant="ghost"
-                size="icon-sm"
+                size="icon-md"
                 aria-label="Pipeline actions"
                 class="shrink-0"
                 disabled={pending()}
@@ -175,11 +176,13 @@ export function PipelineView(props: {
               </Dropdown.Content>
             </Dropdown>
           </Show>
-          <div class="ml-auto flex shrink-0 items-center gap-1">
-            <props.Sharing
-              pipeline={props.pipeline}
-              onCopyLink={props.onCopyLink}
-            />
+          <div class="ml-auto flex shrink-0 items-center gap-2">
+            <HeaderActionGroup label="Sharing">
+              <props.Sharing
+                pipeline={props.pipeline}
+                onCopyLink={props.onCopyLink}
+              />
+            </HeaderActionGroup>
           </div>
         </div>
       </Show>

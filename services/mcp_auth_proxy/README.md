@@ -21,7 +21,7 @@ A redirect URI is usable when it is either:
   owner's own machine, so it cannot leave the user who authorized it.
 - `https` on a host listed in `MCP_ALLOWED_REDIRECT_HOSTS`, matched exactly.
   When that variable is unset the list falls back to
-  `DEFAULT_MCP_ALLOWED_REDIRECT_HOSTS` in `services/mcp_service/src/config.rs`,
+  `DEFAULT_MCP_ALLOWED_REDIRECT_HOSTS` in `services/agent_harness_service/src/public_mcp.rs`,
   which holds the browser-based MCP clients Macro supports. Subdomains of a
   listed host are not themselves trusted.
 

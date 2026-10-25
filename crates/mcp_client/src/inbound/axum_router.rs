@@ -20,20 +20,12 @@ use utoipa::{IntoParams, ToSchema};
 #[cfg(test)]
 mod test;
 
-/// Hook invoked after an OAuth flow completes and the credentials are saved.
-/// Hosts use this to react to a connection the moment it exists (e.g. start
-/// import gather jobs); implementations must be quick or spawn.
-pub type McpAuthCompletedHook = Arc<
-    dyn Fn(McpServerRecord) -> std::pin::Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync,
->;
-
 /// Shared state for the MCP router.
 pub struct McpRouterState<S, O, Auth> {
     store: Arc<S>,
     oauth: Arc<O>,
     authorization_state: MacroAuthorizationState<Auth>,
     client_metadata: OAuthClientMetadata,
-    on_auth_completed: Option<McpAuthCompletedHook>,
 }
 
 impl<S, O, Auth> Clone for McpRouterState<S, O, Auth> {
@@ -43,7 +35,6 @@ impl<S, O, Auth> Clone for McpRouterState<S, O, Auth> {
             oauth: self.oauth.clone(),
             authorization_state: self.authorization_state.clone(),
             client_metadata: self.client_metadata.clone(),
-            on_auth_completed: self.on_auth_completed.clone(),
         }
     }
 }
@@ -73,15 +64,7 @@ where
             oauth: Arc::new(oauth),
             authorization_state,
             client_metadata,
-            on_auth_completed: None,
         }
-    }
-
-    /// Invoke `hook` whenever an OAuth flow completes (see
-    /// [`McpAuthCompletedHook`]).
-    pub fn with_auth_completed_hook(mut self, hook: McpAuthCompletedHook) -> Self {
-        self.on_auth_completed = Some(hook);
-        self
     }
 
     /// Access the underlying server store.
@@ -529,16 +512,10 @@ where
 {
     let (code, csrf_state) = parse_callback_params(params)?;
 
-    let record = state
+    state
         .oauth
         .exchange_authorization_code(&code, &csrf_state)
         .await?;
-
-    // Let the host react to the brand-new connection (e.g. kick off import
-    // gather jobs) before the user even returns to their original tab.
-    if let Some(hook) = &state.on_auth_completed {
-        hook(record).await;
-    }
 
     Ok("Authorization successful. You can close this tab.".to_string())
 }

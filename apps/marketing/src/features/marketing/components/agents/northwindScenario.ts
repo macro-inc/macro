@@ -139,7 +139,7 @@ export function seedNorthwind(w: DummyWorkspace, completed = true) {
     ...emails,
     {
       id: 'northwind-email',
-      sender: 'Marcus <marcus@northwind.example>',
+      sender: 'Marcus <marcus@coparse.com>',
       subject: 'Northwind rollout requirements',
       snippet:
         'We need 40 seats, and everyone must use single sign-on (SSO) before joining.',

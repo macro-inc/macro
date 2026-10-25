@@ -3,8 +3,9 @@ use crate::domain::{
     model::{
         AcceptedTeamInvite, CreateTeamError, InviteUsersToTeamError, PatchTeamRequest,
         RemoveTeamInviteError, RemoveUserFromTeamError, SeatPlan, Team, TeamError, TeamInvite,
-        TeamInviteDetails, TeamInviteSnapshot, TeamMember, TeamMembers, TeamPlan, TeamRole,
-        TeamWithMembers, ToggleAutoJoinDomainError, is_generic_email_domain, normalize_team_slug,
+        TeamInviteDetails, TeamInviteLinkTeam, TeamInviteLinkToken, TeamInviteSnapshot, TeamMember,
+        TeamMembers, TeamPlan, TeamRole, TeamWithMembers, ToggleAutoJoinDomainError,
+        is_generic_email_domain, normalize_team_slug,
     },
     owned_entity_cleanup::ClearedTeam,
     team_repo::{TeamMembersService, TeamRepository},
@@ -28,6 +29,7 @@ fn type_err<E: std::fmt::Display>(e: E) -> sqlx::Error {
     }
 }
 
+mod invite_link;
 #[cfg(test)]
 mod test;
 
@@ -1522,6 +1524,36 @@ impl TeamRepository for TeamRepositoryImpl {
         transaction.commit().await.map_err(TeamError::from)?;
 
         Ok(new_domain)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_team_invite_link(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> Result<Option<TeamInviteLinkToken>, TeamError> {
+        invite_link::get_team_invite_link(&self.pool, team_id).await
+    }
+
+    #[tracing::instrument(skip(self, token), err)]
+    async fn set_team_invite_link(
+        &self,
+        team_id: &uuid::Uuid,
+        token: &TeamInviteLinkToken,
+    ) -> Result<(), TeamError> {
+        invite_link::set_team_invite_link(&self.pool, team_id, token).await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn delete_team_invite_link(&self, team_id: &uuid::Uuid) -> Result<(), TeamError> {
+        invite_link::delete_team_invite_link(&self.pool, team_id).await
+    }
+
+    #[tracing::instrument(skip(self, token), err)]
+    async fn get_team_by_invite_link(
+        &self,
+        token: &TeamInviteLinkToken,
+    ) -> Result<Option<TeamInviteLinkTeam>, TeamError> {
+        invite_link::get_team_by_invite_link(&self.pool, token).await
     }
 
     #[tracing::instrument(skip(self), err)]

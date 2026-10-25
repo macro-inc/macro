@@ -4,7 +4,10 @@ import { createSignal, Show } from 'solid-js';
 import { Field, SelectInput, TimeZoneInput } from './fields';
 
 export function RescheduleForm(props: {
-  load: (date: string) => Promise<{ startsAt: string; endsAt: string }[]>;
+  load: (
+    date: string,
+    timeZone: string
+  ) => Promise<{ startsAt: string; endsAt: string }[]>;
   submit: (startsAt: string) => Promise<void>;
   onCancel: () => void;
 }) {
@@ -32,7 +35,7 @@ export function RescheduleForm(props: {
     }
     setLoading(true);
     try {
-      const times = await props.load(value);
+      const times = await props.load(value, zone());
       if (current === request) {
         setSlots(times);
         setSelected(times[0]?.startsAt ?? '');
@@ -45,7 +48,7 @@ export function RescheduleForm(props: {
   };
   const save = async (e: SubmitEvent) => {
     e.preventDefault();
-    if (!selected() || saving()) return;
+    if (!date() || !selected() || saving() || loading()) return;
     setError('');
     setSaving(true);
     try {
@@ -69,10 +72,13 @@ export function RescheduleForm(props: {
           value={zone()}
           disabled={saving()}
           onChange={(value) => {
+            request++;
             setZone(value);
             setDate('');
             setSlots([]);
             setSelected('');
+            setLoading(false);
+            setError('');
           }}
         />
       </Field>

@@ -119,6 +119,15 @@ export abstract class FavoritableEntity<Detail>
   /** How the entity-addressed APIs (favorites) identify this entity's type. */
   abstract readonly entityType: MacroEntityType;
 
+  /** Read the caller's effective permission on this entity. */
+  async permission() {
+    return unwrap(
+      await this.client.storage.getEntityPermission({
+        path: { entity_type: this.entityType, entity_id: this.id },
+      }),
+    );
+  }
+
   /**
    * Add this entity to the user's favorites. Returns this handle for chaining.
    * Plain unwrap: favoriting alters the user's favorites collection, not this

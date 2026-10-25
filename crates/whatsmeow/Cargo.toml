@@ -1,0 +1,51 @@
+[package]
+edition = "2024"
+name = "whatsmeow"
+publish = false
+version = "0.1.0"
+license = "MPL-2.0"
+description = "Rust port of the whatsmeow WhatsApp multidevice client library."
+
+[dependencies]
+aes = { workspace = true }
+aes-gcm = { workspace = true }
+async-trait = { workspace = true }
+base64 = { workspace = true }
+cbc = { workspace = true }
+chrono = { workspace = true }
+constant_time_eq = { workspace = true }
+flate2 = { workspace = true }
+futures = { workspace = true }
+hex = { workspace = true }
+hkdf = { workspace = true }
+hmac = { workspace = true }
+lazy-regex = { workspace = true }
+md-5 = { workspace = true }
+miniz_oxide = { workspace = true }
+prost = { workspace = true }
+rand = { workspace = true }
+reqwest = { workspace = true }
+rootcause = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+strum = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["sync", "time"] }
+tokio-tungstenite = { workspace = true }
+tokio-util = { workspace = true, features = ["rt"] }
+tracing = { workspace = true }
+uuid = { workspace = true }
+whatsmeow_proto = { path = "../whatsmeow_proto" }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+x25519-dalek = { workspace = true }
+
+[features]
+# The fake WhatsApp server and fake Signal implementation in `testing`, for
+# other crates' tests.
+testing = []
+
+[dev-dependencies]
+axum = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["io-util", "macros", "net", "rt", "test-util"] }

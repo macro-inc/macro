@@ -6,10 +6,12 @@
 //! own logs - and drives its lifecycle: edit `macrod.toml`, pair (or re-pair,
 //! restarting the core on the new credential), and retire the harness.
 
-mod agent_catalog;
+// `service` reuses agent discovery and the comment-preserving config editor;
+// they live here because the TUI grew them first.
+pub(crate) mod agent_catalog;
 mod api;
 mod app;
-mod config_form;
+pub(crate) mod config_form;
 #[cfg(unix)]
 mod herdr_pane;
 mod input;

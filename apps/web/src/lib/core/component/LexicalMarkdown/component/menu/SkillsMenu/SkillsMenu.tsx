@@ -329,30 +329,39 @@ function SkillsMenuInner(props: SkillsMenuProps) {
     number | undefined
   >(undefined);
 
+  const preferredHeight = () => (props.agentCommands ? 384 : 256);
   const contentMaxHeight = () => {
     const h = menuAvailableHeight();
-    const preferredHeight = props.agentCommands ? 384 : 256;
-    if (h === undefined) return preferredHeight;
-    return Math.min(preferredHeight, Math.max(0, h - PANEL_DECORATION_HEIGHT));
+    if (h === undefined) return preferredHeight();
+    return Math.min(
+      preferredHeight(),
+      Math.max(0, h - PANEL_DECORATION_HEIGHT)
+    );
   };
 
   return (
     <Show when={menuOpen()}>
       <ScopedPortal scope={props.portalScope}>
         <div
+          data-holds-prompts
           class="w-96 max-w-[calc(100cqw-1rem-2px)] cursor-default select-none z-modal-content menu-open-animation"
           use:floatWithSelection={{
             selection: untrack(mountSelection),
             reactiveOnContainer: props.editor.getRootElement(),
             useBlockBoundary: props.useBlockBoundary,
             onAvailableHeight: setMenuAvailableHeight,
+            fullHeight: preferredHeight() + PANEL_DECORATION_HEIGHT,
           }}
           use:clickOutside={() => {
             closeMenu();
           }}
           on:touchstart={(e) => e.stopPropagation()}
         >
-          <Surface depth={2} class="pt-2 pb-1.5 glass bg-menu-glass rounded-xl">
+          <Surface
+            depth={2}
+            hideBorder
+            class="menu-surface rounded-xl pt-2 pb-1.5"
+          >
             <div
               class="overflow-y-auto scrollbar-hidden"
               style={{ 'max-height': `${contentMaxHeight()}px` }}

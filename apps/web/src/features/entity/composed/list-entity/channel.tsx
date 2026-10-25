@@ -77,6 +77,7 @@ function ChannelMessage(props: {
           fallback={<span class="italic">Attached Items</span>}
         >
           <StaticMarkdown
+            inert
             theme={singleLineMarkdownTheme}
             markdown={props.message.content}
             singleLine
@@ -161,6 +162,7 @@ export function ChannelLatestMessageNarrowBody(props: {
           <DisplayName id={props.message.senderId} format="firstName" />:{' '}
         </span>
         <StaticMarkdown
+          inert
           theme={twoLineClampMarkdownTheme}
           markdown={props.message.content.trim()}
           singleLine

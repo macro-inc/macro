@@ -1,10 +1,12 @@
 import { useUrlParams } from '@core/component/ParamsProvider';
+import { useIsAuthenticated } from '@core/context/user';
 import { COMMENT_LINK_PARAM } from '@core/messages/comment-link';
 import { EntityDiscussion } from '@core/messages/EntityDiscussion';
 import {
   useMessageLink,
   useMessageRootsQuery,
 } from '@queries/messages/document-messages';
+import { Match, Switch } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 
 /**
@@ -12,11 +14,27 @@ import { useMarkdownDocument } from '../context/markdown-document-context';
  * touch devices the composer moves to the floating accessory region and the
  * conversation shows only once it has roots, as the editor page does.
  */
-export function DocumentDiscussion(props: {
+type DocumentDiscussionProps = {
   editorHasFocus: boolean;
   label?: string;
-}) {
-  const { documentId, kind, permissions } = useMarkdownDocument();
+};
+
+export function DocumentDiscussion(props: DocumentDiscussionProps) {
+  const authenticated = useIsAuthenticated();
+  return (
+    <Switch>
+      <Match when={authenticated() === true}>
+        <AuthenticatedDocumentDiscussion {...props} />
+      </Match>
+      <Match when={authenticated() === false}>
+        <p class="mt-3 text-xs text-ink-muted">Sign in to view comments.</p>
+      </Match>
+    </Switch>
+  );
+}
+
+function AuthenticatedDocumentDiscussion(props: DocumentDiscussionProps) {
+  const { documentId, kind, permissions, state } = useMarkdownDocument();
   const id = documentId();
   const documentKind = kind();
   const blockName = documentKind === 'document' ? 'md' : documentKind;
@@ -34,6 +52,7 @@ export function DocumentDiscussion(props: {
     <EntityDiscussion
       parent={parent()}
       targetId={discussionTarget()}
+      scrollReady={state.editor.md.locationReady === true}
       canWrite={permissions.canComment()}
       canModerate={permissions.isOwner()}
       link={{ type: blockName, id }}

@@ -58,7 +58,7 @@ export function EquationEditorPanel(props: {
   return (
     <div
       ref={panel}
-      class="absolute top-2 left-1/2 z-20 flex w-[28rem] max-w-[calc(100%-1rem)] -translate-x-1/2 flex-col gap-1.5 rounded-xl border border-edge bg-menu p-2 text-ink shadow-xl"
+      class="menu-surface absolute top-2 left-1/2 z-20 flex w-[28rem] max-w-[calc(100%-1rem)] -translate-x-1/2 flex-col gap-1.5 p-2"
       data-testid="pptx-equation-editor"
       role="dialog"
       aria-label={isNew() ? 'New equation' : 'Edit equation'}

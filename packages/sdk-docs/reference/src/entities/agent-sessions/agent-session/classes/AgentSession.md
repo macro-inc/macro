@@ -10,6 +10,7 @@ A managed or externally hosted coding-agent session.
 
 | Property | Modifier | Type | Description | Inherited from |
 | ------ | ------ | ------ | ------ | ------ |
+| <a id="property-access"></a> `access` | `readonly` | [`EntityAccess`](../../../sharing/access/classes/EntityAccess.md) | Access requests and direct user grants. | - |
 | <a id="property-codeexecutions"></a> `codeExecutions` | `readonly` | \{ `byId`: (`id`) => [`CodeExecution`](../../code-execution/classes/CodeExecution.md); \} | Saved code executions scoped to this session. Handle construction makes no request. | - |
 | `codeExecutions.byId` | `public` | (`id`) => [`CodeExecution`](../../code-execution/classes/CodeExecution.md) | - | - |
 | <a id="property-createdat"></a> `createdAt` | `readonly` | () => `Promise`\<`string`\> | When the session was created. | - |
@@ -98,6 +99,23 @@ Delete this session and any live resources it owns.
 #### Returns
 
 `Promise`\<`void`\>
+
+***
+
+### foldedLog()
+
+> **foldedLog**(): `Promise`\<[`FoldedAgentSessionLog`](../type-aliases/FoldedAgentSessionLog.md)\>
+
+Read this session's whole history as the conversation the app renders:
+each user prompt and agent reply, oldest first, with tool calls and their
+results, plans, permission requests and how each turn ended. Works on any
+session the caller can view, live or finished, so it is the way to read
+what another agent session did. Prefer it to [log](#log), which returns
+raw protocol frames.
+
+#### Returns
+
+`Promise`\<[`FoldedAgentSessionLog`](../type-aliases/FoldedAgentSessionLog.md)\>
 
 ***
 
@@ -229,6 +247,18 @@ Resize this session's sandbox and remember the size as the owner's default.
 
 ***
 
+### sharePermissions()
+
+> **sharePermissions**(): `Promise`\<[`SharePermissionV2`](../../../../../generated/agent-harness/types.gen/type-aliases/SharePermissionV2.md)\>
+
+Sharing configuration.
+
+#### Returns
+
+`Promise`\<[`SharePermissionV2`](../../../../../generated/agent-harness/types.gen/type-aliases/SharePermissionV2.md)\>
+
+***
+
 ### toJSON()
 
 > **toJSON**(): \{ `detail?`: [`AgentSessionResponse`](../../../../../generated/agent-harness/types.gen/type-aliases/AgentSessionResponse.md); `id`: `string`; \}
@@ -245,6 +275,24 @@ Resize this session's sandbox and remember the size as the owner's default.
 #### Inherited from
 
 [`MacroEntity`](../../../entity/classes/MacroEntity.md).[`toJSON`](../../../entity/classes/MacroEntity.md#tojson)
+
+***
+
+### toolApprovalById()
+
+> **toolApprovalById**(`id`): [`ToolApproval`](../../tool-approval/classes/ToolApproval.md)
+
+Construct an approval handle scoped to this session.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `id` | `string` |
+
+#### Returns
+
+[`ToolApproval`](../../tool-approval/classes/ToolApproval.md)
 
 ***
 
@@ -276,6 +324,24 @@ request the session's agent opened stays linked.
 #### Returns
 
 `Promise`\<`void`\>
+
+***
+
+### updateSharePermissions()
+
+> **updateSharePermissions**(`options`): `Promise`\<[`SharePermissionV2`](../../../../../generated/agent-harness/types.gen/type-aliases/SharePermissionV2.md)\>
+
+Replace sharing grants.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `options` | [`SharePermissionOptions`](../../../sharing/permissions/type-aliases/SharePermissionOptions.md) |
+
+#### Returns
+
+`Promise`\<[`SharePermissionV2`](../../../../../generated/agent-harness/types.gen/type-aliases/SharePermissionV2.md)\>
 
 ***
 

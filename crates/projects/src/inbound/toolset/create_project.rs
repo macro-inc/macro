@@ -13,7 +13,7 @@ use model_owner::CreationPrincipal;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use super::{ChatCapabilities, DocumentCapabilities, ProjectCapabilities, ProjectToolContext};
+use super::{DocumentCapabilities, ProjectCapabilities, ProjectToolContext};
 use crate::domain::models::ProjectError;
 
 fn failed_to_create_project(error: ProjectError) -> ToolCallError {
@@ -46,7 +46,7 @@ pub struct CreateProjectResponse {
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "CreateProject",
-    description = "Create a project — shown as a folder in the app UI. Documents, AI chats, email threads, and other projects can be placed inside it."
+    description = "Create a project — shown as a folder in the app UI. Documents, email threads, and other projects can be placed inside it."
 )]
 pub struct CreateProject {
     /// The name of the project.
@@ -66,13 +66,12 @@ impl ToolAnnotated for CreateProject {
 }
 
 #[async_trait]
-impl<PSvc, ESvc, DSvc, CSvc, EmSvc> AsyncTool<ProjectToolContext<PSvc, ESvc, DSvc, CSvc, EmSvc>>
+impl<PSvc, ESvc, DSvc, EmSvc> AsyncTool<ProjectToolContext<PSvc, ESvc, DSvc, EmSvc>>
     for CreateProject
 where
     PSvc: ProjectCapabilities,
     ESvc: EntityAccessService,
     DSvc: DocumentCapabilities,
-    CSvc: ChatCapabilities,
     EmSvc: MoveEntity + Send + Sync + 'static,
 {
     type Output = CreateProjectResponse;
@@ -80,7 +79,7 @@ where
     #[tracing::instrument(skip_all, fields(user_id=?request_context.user_id), err)]
     async fn call(
         &self,
-        service_context: ServiceContext<ProjectToolContext<PSvc, ESvc, DSvc, CSvc, EmSvc>>,
+        service_context: ServiceContext<ProjectToolContext<PSvc, ESvc, DSvc, EmSvc>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         tracing::info!(params=?self, "Create project");

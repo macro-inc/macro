@@ -88,7 +88,7 @@ export function BillingSettingsView(props: {
                       each seat's plan in{' '}
                       <a
                         class="text-link hover:text-link-hover"
-                        href="/app/settings/team"
+                        href="/app/settings/team-members"
                         onClick={props.onTeamSettings}
                       >
                         Team settings
@@ -109,7 +109,7 @@ export function BillingSettingsView(props: {
                       • set each seat's plan in{' '}
                       <a
                         class="text-link hover:text-link-hover"
-                        href="/app/settings/team"
+                        href="/app/settings/team-members"
                         onClick={props.onTeamSettings}
                       >
                         Team settings

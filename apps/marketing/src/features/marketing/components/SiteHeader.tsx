@@ -1,11 +1,5 @@
-import {
-  createSignal,
-  For,
-  type JSX,
-  onCleanup,
-  onMount,
-  Show,
-} from 'solid-js';
+import X from '@phosphor/x.svg';
+import { createSignal, For, onCleanup, onMount, Show } from 'solid-js';
 import {
   DEMO_BOOKING_URL,
   FEATURE_PAGES,
@@ -19,7 +13,7 @@ const EXPLORE_PAGES = [
   { href: '/', label: 'Home' },
   { href: '/pricing', label: 'Pricing' },
   { href: '/partners', label: 'Partners' },
-  { href: DEMO_BOOKING_URL, label: 'Talk to us' },
+  { href: DEMO_BOOKING_URL, label: 'Book a demo' },
 ];
 
 function NavigationGroup(props: {
@@ -49,51 +43,30 @@ function NavigationGroup(props: {
 /** Shared public navigation and app entry. */
 export function SiteHeader(props: { hideOpenApp?: boolean }) {
   let menu!: HTMLDivElement;
-  let trigger!: HTMLButtonElement;
+  let trigger!: HTMLAnchorElement;
+  let menuOpener: HTMLElement | undefined;
   const [open, setOpen] = createSignal(false);
-  let glowFrame = 0;
-  let glowTarget: HTMLAnchorElement | undefined;
-  let pointerX = 0;
-  let pointerY = 0;
-  const moveGlow: JSX.EventHandler<HTMLAnchorElement, PointerEvent> = (
-    event
-  ) => {
-    if (event.pointerType === 'touch') return;
-    glowTarget = event.currentTarget;
-    pointerX = event.clientX;
-    pointerY = event.clientY;
-    if (glowFrame) return;
-    glowFrame = requestAnimationFrame(() => {
-      glowFrame = 0;
-      if (!glowTarget) return;
-      const bounds = glowTarget.getBoundingClientRect();
-      // Percentages also track correctly when Open app scales into the footer.
-      glowTarget.style.setProperty(
-        '--glow-x',
-        `${((pointerX - bounds.left) / bounds.width) * 100}%`
-      );
-      glowTarget.style.setProperty(
-        '--glow-y',
-        `${((pointerY - bounds.top) / bounds.height) * 100}%`
-      );
-    });
+  let closeTimer: ReturnType<typeof setTimeout> | undefined;
+  let pointerInside = false;
+  const cancelClose = () => {
+    clearTimeout(closeTimer);
+    closeTimer = undefined;
   };
-  const stopGlow = () => {
-    if (glowFrame) cancelAnimationFrame(glowFrame);
-    glowFrame = 0;
-    glowTarget = undefined;
+  const closeMenu = () => {
+    cancelClose();
+    setOpen(false);
   };
-  const centerGlow: JSX.EventHandler<HTMLAnchorElement, FocusEvent> = (
-    event
-  ) => {
-    event.currentTarget.style.setProperty('--glow-x', '50%');
-    event.currentTarget.style.setProperty('--glow-y', '50%');
+  const openMenu = () => {
+    cancelClose();
+    setOpen(true);
   };
-  onCleanup(stopGlow);
+  onCleanup(cancelClose);
+  const hasHoverMenu = () =>
+    window.matchMedia('(min-width: 768px) and (hover: hover)').matches;
 
   onMount(() => {
     const outside = (event: PointerEvent) => {
-      if (!menu.contains(event.target as Node)) setOpen(false);
+      if (!menu.contains(event.target as Node)) closeMenu();
     };
     document.addEventListener('pointerdown', outside);
     onCleanup(() => document.removeEventListener('pointerdown', outside));
@@ -104,14 +77,36 @@ export function SiteHeader(props: { hideOpenApp?: boolean }) {
       <div
         ref={menu}
         class="site-menu"
+        onPointerEnter={(event) => {
+          if (event.pointerType === 'mouse' && hasHoverMenu()) {
+            pointerInside = true;
+            menuOpener = trigger;
+            openMenu();
+          }
+        }}
+        onPointerLeave={(event) => {
+          if (event.pointerType !== 'mouse' || !hasHoverMenu()) return;
+          pointerInside = false;
+          cancelClose();
+          closeTimer = setTimeout(() => {
+            closeTimer = undefined;
+            if (
+              !pointerInside &&
+              !menu.querySelector('nav')?.contains(document.activeElement)
+            ) {
+              setOpen(false);
+            }
+          }, 350);
+        }}
         onFocusOut={(event) => {
-          if (!menu.contains(event.relatedTarget as Node)) setOpen(false);
+          if (!pointerInside && !menu.contains(event.relatedTarget as Node))
+            closeMenu();
         }}
         onKeyDown={(event) => {
           if (event.key === 'Escape' && open()) {
             event.preventDefault();
-            setOpen(false);
-            trigger.focus();
+            closeMenu();
+            (menuOpener ?? trigger).focus();
           }
           if (
             event.key === 'Tab' &&
@@ -120,96 +115,132 @@ export function SiteHeader(props: { hideOpenApp?: boolean }) {
           ) {
             const links = menu.querySelectorAll<HTMLAnchorElement>('nav a');
             const last = links[links.length - 1];
-            if (event.shiftKey && document.activeElement === trigger) {
+            if (
+              event.shiftKey &&
+              document.activeElement === (menuOpener ?? trigger)
+            ) {
               event.preventDefault();
               last?.focus();
             } else if (!event.shiftKey && document.activeElement === last) {
               event.preventDefault();
-              trigger.focus();
+              (menuOpener ?? trigger).focus();
             }
           }
         }}
       >
-        <button
+        <a
           ref={trigger}
-          type="button"
-          class="site-menu-trigger"
-          aria-label={open() ? 'Close navigation' : 'Open navigation'}
+          href="/"
+          target="_self"
+          class="site-menu-trigger site-menu-home"
+          aria-label="Macro home"
           aria-expanded={open()}
           aria-controls="site-main-navigation"
-          onClick={() => setOpen(!open())}
+          aria-keyshortcuts="ArrowDown"
+          onClick={closeMenu}
+          onKeyDown={(event) => {
+            if (event.key !== 'ArrowDown') return;
+            event.preventDefault();
+            menuOpener = trigger;
+            openMenu();
+            menu.querySelector<HTMLAnchorElement>('nav a')?.focus();
+          }}
         >
           <span class="site-menu-mark" aria-hidden="true">
             <span />
             <span />
             <span />
           </span>
+        </a>
+        <button
+          type="button"
+          class="site-menu-trigger site-menu-toggle"
+          aria-label={open() ? 'Close navigation' : 'Open navigation'}
+          aria-expanded={open()}
+          aria-controls="site-main-navigation"
+          onClick={(event) => {
+            menuOpener = event.currentTarget;
+            if (open()) closeMenu();
+            else openMenu();
+          }}
+        >
+          <Show
+            when={open()}
+            fallback={
+              <span class="site-menu-mark" aria-hidden="true">
+                <span />
+                <span />
+                <span />
+              </span>
+            }
+          >
+            <X aria-hidden="true" />
+          </Show>
         </button>
         <nav
           id="site-main-navigation"
           class="site-menu-panel"
           hidden={!open()}
           aria-label="Main navigation"
+          onPointerEnter={(event) => {
+            if (event.pointerType === 'mouse' && hasHoverMenu()) {
+              pointerInside = true;
+              cancelClose();
+            }
+          }}
         >
           <NavigationGroup
             label="Features"
             links={FEATURE_PAGES}
-            onNavigate={() => setOpen(false)}
+            onNavigate={closeMenu}
           />
           <NavigationGroup
             label="Resources"
             links={RESOURCE_PAGES}
-            onNavigate={() => setOpen(false)}
+            onNavigate={closeMenu}
           />
           <NavigationGroup
             label="Explore"
             links={EXPLORE_PAGES}
-            onNavigate={() => setOpen(false)}
+            onNavigate={closeMenu}
           />
         </nav>
       </div>
       <div class="site-header-actions">
         <a
           class="site-nav-demo"
-          onPointerEnter={moveGlow}
-          onPointerMove={moveGlow}
-          onPointerLeave={stopGlow}
-          onPointerCancel={stopGlow}
-          onFocus={centerGlow}
           href={DEMO_BOOKING_URL}
           target="_blank"
           rel="noreferrer"
         >
-          Talk to us
+          Book a demo
         </a>
         <Show when={!props.hideOpenApp}>
           <a
-            class="site-nav-start"
+            class="site-nav-start site-nav-open"
             target="_self"
             href="/app/signup"
             onClick={routePhoneToMobileSignup}
-            onPointerEnter={moveGlow}
-            onPointerMove={moveGlow}
-            onPointerLeave={stopGlow}
-            onPointerCancel={stopGlow}
-            onFocus={centerGlow}
           >
-            <span>Open app</span>
-            <svg
-              width="28"
-              height="28"
-              viewBox="0 0 32 32"
-              fill="none"
-              aria-hidden="true"
-            >
-              <path
-                d="M5 16h22M17 6l10 10-10 10"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
+            <span class="site-nav-open-label">Open app</span>
+            <span class="site-nav-open-footer" aria-hidden="true">
+              <span>Open app</span>
+              <svg
+                width="28"
+                height="28"
+                viewBox="0 0 32 32"
+                fill="none"
+                aria-hidden="true"
+              >
+                <path
+                  d="M5 16h22M17 6l10 10-10 10"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            </span>
           </a>
         </Show>
       </div>

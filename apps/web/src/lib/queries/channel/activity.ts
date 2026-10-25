@@ -6,16 +6,20 @@ import type { ActivityType } from '@service-storage/generated/schemas/activityTy
 import type { ApiActivity as ChannelsActivity } from '@service-storage/generated/schemas/apiActivity';
 import { recordChannelActivity } from '@service-storage/graphql-channel-activity';
 import { useMutation, useQuery } from '@tanstack/solid-query';
+import type { Accessor } from 'solid-js';
 import { channelKeys } from './keys';
 
 function fetchChannelsActivity() {
   return throwOnErr(storageServiceClient.getActivity);
 }
 
-export function useChannelsActivityQuery() {
+export function useChannelsActivityQuery(
+  enabled: Accessor<boolean> = () => true
+) {
   return useQuery(() => ({
     queryKey: channelKeys.activity.queryKey,
     queryFn: fetchChannelsActivity,
+    enabled: enabled(),
   }));
 }
 

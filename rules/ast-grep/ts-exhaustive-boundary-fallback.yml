@@ -1,0 +1,33 @@
+id: ts-exhaustive-boundary-fallback
+language: typescript
+# Twin of tsx-exhaustive-boundary-fallback — ast-grep rules are
+# single-language, and `tsx` only scans .tsx files.
+severity: error
+message: Pass a fallback to .exhaustive() in boundary code — `.exhaustive((unknown) => fallback)`; a bare .exhaustive() throws on a variant this build doesn't know.
+note: |-
+  Rule FE-35 in docs/development/style-guide.md. ts-pattern's .exhaustive() is
+  a compile-time completeness check that also throws at runtime ("no pattern
+  matches value X"). Wire adapters, service clients, transports, workers, and
+  event hydrators match on values another service, app version, or native
+  plugin produced, so a new variant crashes every older client.
+  `.exhaustive(fallback)` keeps the compile-time check and returns the fallback
+  instead of throwing. Parse the value into a closed client type first if the
+  match must not fall back.
+files:
+  - apps/web/src/**/queries/**
+  - apps/web/src/**/queries.ts
+  - apps/web/src/lib/service-clients/**
+  - apps/web/src/**/workers/**
+  - apps/web/src/**/worker/**
+  - apps/web/src/**/*.worker.ts
+  - packages/collaboration/src/websocket/**
+  - packages/sdk/src/events/hydrate/**
+ignores:
+  - '**/*.test.ts'
+  - '**/test/**'
+  - '**/tests/**'
+  - '**/browser-test/**'
+  # Being rewritten by the Tauri IPC teardown fix (#8207); drop once it lands.
+  - packages/collaboration/src/websocket/platform/tauri-websocket.ts
+rule:
+  pattern: $MATCH.exhaustive()

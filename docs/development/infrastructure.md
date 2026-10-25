@@ -180,8 +180,25 @@ local resources.
 - Raw `aws.sqs.Queue` instead of `Queue`; `createImage`; `createServiceRole`
   (grants `dynamodb:*`).
 - Lambda env vars holding resolved secret values.
-- `web-app` and `website` pin `@pulumi/aws` v6 and are excluded from `tsc`.
+- `web-app` and `website` pin `@pulumi/aws` v6. `bun run check` checks the
+  web-app in its separate TypeScript project, then runs the backend-free
+  web-delivery regressions in separate Bun processes.
+
+For web bundle publication order, asset/error cache policies, and backend-free
+checks, see [web-app delivery](../../infra/stacks/web-app/README.md) and
+[the website CDN](../../infra/stacks/website/README.md#app-cache-policy).
 
 Stale docs to treat with suspicion: `SLACK_IMPORT_ROLLOUT.md` (the worker is on
-and receives `APP_SECRETS_JSON` now), `web-app/README.md` (`yarn`),
-`fusion-auth/README.md`.
+and receives `APP_SECRETS_JSON` now), `fusion-auth/README.md`.
+
+## Agent backend
+
+`agent-harness-service` is the only ECS agent service. Its process also owns
+chat/completions, workspace MCP/OAuth, preview SSH/HTTP/control, routine cron
+and event workers, and projection refresh sweeps. `preview-gateway` retains
+only networking, and `document-cognition` retains the projection queue and
+public DNS record. `mcp-server` retains its public DNS record. Both hostnames
+point at the shared gateway, preserving public URLs and OAuth callbacks. The
+retired MCP and schedule stack programs contain no compute resources. Follow
+[the cutover guide](../guides/consolidate-agent-services.md) before deployment;
+old listener rules must be retired before the harness claims their priorities.

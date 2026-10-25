@@ -1,12 +1,20 @@
 import type { ChannelEntity } from '@entity/types/entity';
 import type { useSearchSoupQuery } from '@queries/soup/search';
-import { createRoot, createSignal } from 'solid-js';
+import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
+import { type Accessor, createRoot, createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChannelsDataSource, ChannelsSourceScope } from '../queries';
+import { useChannelListSearchPool } from './channel-list-search-pool';
 import { createChannelSearchSource } from './channel-search-source';
 
 const queryMock = vi.hoisted(() => vi.fn());
+const channelList = vi.hoisted(() => ({
+  channels: (): ApiChannelWithLatest[] => [],
+}));
+vi.mock('@core/context/channels', () => ({
+  useChannelsContext: () => ({ channels: () => channelList.channels() }),
+}));
 vi.mock('@queries/soup/search', () => ({
   useSearchSoupQuery: queryMock,
   validateSearchServiceText: (text: string) => text.length >= 3,
@@ -30,9 +38,81 @@ const channel = (id: string, name: string, direct = false): ChannelEntity => ({
 });
 const localChannel = channel('channel', 'Alpha channel');
 const localDm = channel('dm', 'Alpha person', true);
+const supportChannel: ApiChannelWithLatest = {
+  id: 'support-acme',
+  name: 'Macro Support x Acme',
+  channel_type: 'private',
+  owner_id: 'viewer',
+  created_at: '2026-01-01T00:00:00Z',
+  updated_at: '2026-01-01T00:00:00Z',
+  auto_join_team: false,
+  is_participant: true,
+  participants: [
+    {
+      channel_id: 'support-acme',
+      user_id: 'viewer',
+      role: 'owner',
+      joined_at: '2026-01-01T00:00:00Z',
+    },
+    {
+      channel_id: 'support-acme',
+      user_id: 'acme-admin',
+      role: 'member',
+      joined_at: '2026-01-01T00:00:00Z',
+    },
+  ],
+};
+// The list names a DM after the other participant and an agent DM after its persona.
+const personDm: ApiChannelWithLatest = {
+  id: 'dm-ada',
+  name: 'Ada Acme',
+  channel_type: 'direct_message',
+  owner_id: 'viewer',
+  created_at: '2026-01-01T00:00:00Z',
+  updated_at: '2026-01-01T00:00:00Z',
+  auto_join_team: false,
+  is_participant: true,
+  participants: [
+    {
+      channel_id: 'dm-ada',
+      user_id: 'viewer',
+      role: 'owner',
+      joined_at: '2026-01-01T00:00:00Z',
+    },
+    {
+      channel_id: 'dm-ada',
+      user_id: 'ada',
+      role: 'member',
+      joined_at: '2026-01-01T00:00:00Z',
+    },
+  ],
+};
+const personaDm: ApiChannelWithLatest = {
+  id: 'agent-dm',
+  name: 'Archivist',
+  channel_type: 'direct_message',
+  owner_id: 'viewer',
+  created_at: '2026-01-01T00:00:00Z',
+  updated_at: '2026-01-01T00:00:00Z',
+  auto_join_team: false,
+  is_participant: true,
+  agent_dm: { bot_id: 'archivist', name: 'Archivist' },
+  participants: [
+    {
+      channel_id: 'agent-dm',
+      user_id: 'viewer',
+      role: 'owner',
+      joined_at: '2026-01-01T00:00:00Z',
+    },
+  ],
+};
 let dispose: (() => void) | undefined;
 
-function setup(initialText = '', initialScope: ChannelsSourceScope = 'search') {
+function setup(
+  initialText = '',
+  initialScope: ChannelsSourceScope = 'search',
+  pool?: () => Accessor<ChannelEntity[]>
+) {
   return createRoot((cleanup) => {
     dispose = cleanup;
     const [text, setText] = createSignal(initialText);
@@ -115,7 +195,7 @@ function setup(initialText = '', initialScope: ChannelsSourceScope = 'search') {
       scope,
       enabled,
       source: () => local,
-      additionalLocalChannels: extra,
+      additionalLocalChannels: pool?.() ?? extra,
     });
     return {
       source,
@@ -141,29 +221,66 @@ describe('shared channel search source', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.clearAllMocks();
+    channelList.channels = () => [];
   });
   afterEach(() => {
     dispose?.();
     vi.useRealTimers();
   });
 
-  it('finds an agent persona outside the loaded page and keeps it out of channel-only results', async () => {
-    const s = setup('archivist', 'direct_messages');
-    s.setExtra([channel('agent-dm', 'Archivist', true)]);
+  it('finds conversations beyond the loaded page in the complete channel list as it loads', async () => {
+    const [list, setList] = createSignal<ApiChannelWithLatest[]>([]);
+    channelList.channels = list;
+    const s = setup('acme', 'search', useChannelListSearchPool);
+    await vi.advanceTimersByTimeAsync(300);
+    expect(ids(s.source)).toEqual([]);
+    setList([supportChannel, personDm, personaDm]);
+    expect(new Set(ids(s.source))).toEqual(new Set(['support-acme', 'dm-ada']));
+    expect(
+      s.source.items().find((row) => row.id === 'support-acme')
+    ).toMatchObject({
+      name: 'Macro Support x Acme',
+      channelType: 'private',
+      ownerId: 'viewer',
+      isParticipant: true,
+      participantIds: ['viewer', 'acme-admin'],
+    });
+    expect(s.source.items().find((row) => row.id === 'dm-ada')?.name).toBe(
+      'Ada Acme'
+    );
+    s.setScope('channels');
+    expect(ids(s.source)).toEqual(['support-acme']);
+    s.setScope('direct_messages');
+    expect(ids(s.source)).toEqual(['dm-ada']);
+    s.setText('archivist');
     await vi.advanceTimersByTimeAsync(300);
     expect(ids(s.source)).toEqual(['agent-dm']);
     s.setScope('channels');
     expect(ids(s.source)).toEqual([]);
   });
 
-  it('deduplicates a persona already in the visible page before local and remote matching', async () => {
+  it('prefers the loaded row over the complete-list entity for the same channel', async () => {
+    const loadedDm = {
+      ...localDm,
+      unreadNotifications: [
+        { id: 'unread', state: 'unseen' as const, createdAt: '2026-01-01' },
+      ],
+      latestRootMessage: {
+        messageId: 'message',
+        senderId: 'dm',
+        content: 'Hello',
+        mentions: [],
+        createdAt: '2026-09-28T12:00:00Z',
+      },
+    };
     const s = setup('alpha');
+    s.setRows([localChannel, loadedDm]);
     s.setExtra([{ ...localDm, name: 'Alpha persona' }]);
     s.setRemote('data', [localDm]);
     await vi.advanceTimersByTimeAsync(300);
     expect(ids(s.source).filter((id) => id === localDm.id)).toHaveLength(1);
-    expect(s.source.items().find((row) => row.id === localDm.id)?.name).toBe(
-      localDm.name
+    expect(s.source.items().find((row) => row.id === localDm.id)).toMatchObject(
+      loadedDm
     );
   });
 

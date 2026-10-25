@@ -209,7 +209,7 @@ export function SmartArtTextPane(props: {
 
   return (
     <div
-      class="absolute z-20 flex w-60 flex-col rounded-lg border border-edge bg-menu text-ink shadow-xl"
+      class="menu-surface absolute z-20 flex w-60 flex-col"
       style={{
         left: `${props.position.left}px`,
         top: `${props.position.top}px`,

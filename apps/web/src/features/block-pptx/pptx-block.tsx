@@ -1,3 +1,4 @@
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 /**
  * The pptx block: app chrome (header, file menu, sharing) around the
  * presentation editor, wired to the worker engine and document storage.
@@ -298,15 +299,17 @@ export default function PptxBlock(props: { share?: string }) {
         </SplitHeaderRight>
         <SplitHeaderRight>
           <div class="order-[999] flex items-center">
-            <ChatWithAgentButton
-              label="Ask Macro"
-              entity={{
-                type: 'document',
-                id: documentId,
-                name: name(),
-                fileType: 'pptx',
-              }}
-            />
+            <HeaderActionGroup label="Presentation actions">
+              <ChatWithAgentButton
+                label="Ask Macro"
+                entity={{
+                  type: 'document',
+                  id: documentId,
+                  name: name(),
+                  fileType: 'pptx',
+                }}
+              />
+            </HeaderActionGroup>
           </div>
         </SplitHeaderRight>
         <ResponsivePermissionsBadge />

@@ -66,7 +66,7 @@ export function BotSettingsList(props: {
   return (
     <SettingsPage
       title="Bots"
-      description="Create webhook-powered teammates and connect them to channels."
+      description="A bot is an account your program uses to read and send channel messages. Create a bot, add it to channels, then use its token with the Macro SDK to control it."
       actions={
         <Button variant="cta" size="sm" onClick={props.onCreate}>
           <PlusIcon />
@@ -76,7 +76,7 @@ export function BotSettingsList(props: {
     >
       <SettingsSection
         title="Your bots"
-        description="Each bot can join multiple channels. Webhook URLs are scoped to the channel."
+        description="Manage your bots, their channels, and access tokens."
       >
         <SettingsCard>
           <Show
@@ -98,8 +98,8 @@ export function BotSettingsList(props: {
                     Create your first bot
                   </div>
                   <div class="mt-1 max-w-80 text-xs text-ink-muted">
-                    Bots post to channels through a secure webhook and can be
-                    mentioned like any other participant.
+                    Give your program a name and profile in Macro. We’ll
+                    generate a token when you create the bot.
                   </div>
                   <Button
                     class="mt-4"

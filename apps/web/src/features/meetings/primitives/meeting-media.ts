@@ -1,7 +1,15 @@
+import {
+  recordCallMediaFailure,
+  traceCallMedia,
+} from '@channel/Call/call-media-telemetry';
 import type { BackgroundEffect } from '@core/media/background-effect';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import { createSignal, onCleanup } from 'solid-js';
-import type { MeetingLocalTracks } from '../context/meeting-session';
+import type {
+  MeetingLocalTracks,
+  MeetingMediaDiagnostics,
+} from '../context/meeting-session';
 
 export type MeetingMediaAccess = {
   request: (constraints: MediaStreamConstraints) => Promise<MediaStream>;
@@ -65,6 +73,12 @@ export function createMeetingMedia(
 ) {
   type Device = 'microphone' | 'camera';
   const devices: Device[] = ['microphone', 'camera'];
+  const diagnostics: MeetingMediaDiagnostics = {
+    setupId: crypto.randomUUID(),
+    microphone: 'not_requested',
+    camera: 'not_requested',
+  };
+  const captures: Partial<Record<Device, Span>> = {};
   const [microphoneEnabled, setMicrophone] = createSignal(true);
   const [cameraEnabled, setCamera] = createSignal(false);
   const [video, setVideo] = createSignal<MediaStream>();
@@ -108,6 +122,13 @@ export function createMeetingMedia(
   const setDevicePending = (device: Device, value: boolean) =>
     setPending((current) => ({ ...current, [device]: value }));
   const stop = (device: Device) => {
+    const capture = captures[device];
+    if (capture) {
+      capture.setAttr('call.media.outcome', 'cancelled');
+      capture.end();
+      delete captures[device];
+      diagnostics[device] = 'cancelled';
+    }
     generations[device]++;
     streams[device]?.getTracks().forEach((track) => track.stop());
     delete streams[device];
@@ -124,7 +145,14 @@ export function createMeetingMedia(
     if (!access?.enumerate || disposed) return;
     const generation = ++enumerationGeneration;
     try {
-      const devices = await access.enumerate();
+      const enumerate = access.enumerate;
+      const devices = await traceCallMedia(
+        'enumerate',
+        {
+          'meeting.setup.id': diagnostics.setupId,
+        },
+        enumerate
+      );
       if (disposed || generation !== enumerationGeneration) return;
       setAvailableDevices(devices);
       setDeviceError(undefined);
@@ -157,7 +185,16 @@ export function createMeetingMedia(
     try {
       if (!access?.processBackground)
         throw new Error('Background effects are unavailable.');
-      const processed = await access.processBackground(track, effect);
+      const processBackground = access.processBackground;
+      const processed = await traceCallMedia(
+        'background',
+        {
+          'meeting.setup.id': diagnostics.setupId,
+          'call.media.device': 'camera',
+          'call.media.background': effect.type,
+        },
+        () => processBackground(track, effect)
+      );
       if (disposed || generation !== previewGeneration) {
         processed.dispose();
         return;
@@ -233,6 +270,7 @@ export function createMeetingMedia(
     } catch (error) {
       if (!isCurrent() || errorName(error) !== 'OverconstrainedError')
         throw error;
+      captures[device]?.event('call.media.constraints_retry');
       const deviceId = selectedDevices().camera;
       return access.request({
         audio: false,
@@ -256,8 +294,23 @@ export function createMeetingMedia(
     const isCurrent = () => !disposed && generations[device] === generation;
     setDevicePending(device, true);
     setErrors((current) => ({ ...current, [device]: undefined }));
+    const span = Telemetry.span('call.media.capture');
+    span.setAttr('meeting.setup.id', diagnostics.setupId);
+    span.setAttr('call.media.device', device);
+    span.setAttr('call.media.enabled', enabled(device));
+    span.setAttr(
+      'call.media.trigger',
+      requireEnabled ? 'device_control' : 'prepare'
+    );
+    captures[device] = span;
+    diagnostics[device] = 'pending';
     try {
-      const stream = await capture(device, isCurrent);
+      const stream = await span.run(() => capture(device, isCurrent));
+      if (isCurrent()) {
+        diagnostics[device] = 'granted';
+        span.setAttr('call.media.outcome', 'granted');
+        span.setAttr('call.media.retained', enabled(device));
+      }
       if (!isCurrent() || !enabled(device)) {
         stream.getTracks().forEach((track) => track.stop());
         return;
@@ -266,14 +319,19 @@ export function createMeetingMedia(
       fireAndForget(refreshDevices(), 'meeting-media');
     } catch (error) {
       if (!isCurrent()) return;
-      console.warn(`[meeting] ${device} request failed`, error);
+      recordCallMediaFailure(span, error);
       const message = mediaErrorMessage(device, error);
+      diagnostics[device] = message.permission ? 'blocked' : 'failed';
       // Permission is requested for both devices up front, but a hardware
       // problem only matters for a device the user actually turned on.
       if (!enabled(device) && !message.permission) return;
       setEnabled(device, false);
       setErrors((current) => ({ ...current, [device]: message.text }));
     } finally {
+      if (captures[device] === span) {
+        span.end();
+        delete captures[device];
+      }
       if (isCurrent()) setDevicePending(device, false);
     }
   }
@@ -297,6 +355,7 @@ export function createMeetingMedia(
     release();
   });
   return {
+    diagnostics: (): MeetingMediaDiagnostics => ({ ...diagnostics }),
     microphoneEnabled,
     cameraEnabled,
     video,

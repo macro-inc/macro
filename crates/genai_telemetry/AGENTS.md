@@ -14,7 +14,9 @@ agent loop.
   to spans another crate opened).
 - `src/content.rs`: `ContentPolicy`/`Limits` — whether/how much content capture
   is allowed, and the bounding that keeps a 12-turn conversation from
-  re-sending itself on every span.
+  re-sending itself on every span. Explicit `modelMedia` envelopes replace PNG
+  data with byte-count/source metadata before capture, including nested tool
+  results; inline pixels stay excluded even when content capture is enabled.
 - `src/span.rs`: `GenAiSpanExt`, the attribute setters that write to an
   already-open span.
 - `src/messages.rs`: builders for the semconv JSON message/tool-definition shapes.
@@ -30,6 +32,9 @@ agent loop.
 
 - Depends on: `macro_env_var` (reads `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT`).
 - Used by: `agent`, `agent_inmem`, `agent_session`, `ai_toolset`.
+
+`propagation::link` connects delayed outbox delivery to each producer's span
+without replacing the delivery worker's own parent.
 
 ## Checks
 

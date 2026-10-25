@@ -3,6 +3,7 @@ import { expect, type Page, test } from '@playwright/test';
 import { buildSchema, graphql } from 'graphql';
 import type {
   RenameEntitiesMutationVariables,
+  SoupEntityInput,
   SoupInput,
   UpdateEntityPropertyOptionsMutationVariables,
 } from '../../src/lib/service-clients/service-storage/graphql/generated/graphql';
@@ -121,6 +122,8 @@ async function mount(page: Page, mode: CacheMode, initial?: string[]) {
           ),
           nextCursor: null,
         }),
+        soupEntity: ({ input }: { input: SoupEntityInput }) =>
+          items.find(({ id }) => id === input.entityId) ?? null,
         groupSoup: {
           bins: [
             { key: '', totalCount: items.length, items, nextCursor: null },

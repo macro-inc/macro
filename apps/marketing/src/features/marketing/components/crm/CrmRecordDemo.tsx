@@ -1,10 +1,15 @@
-import { createEffect, createSignal, onCleanup, onMount, Show } from 'solid-js';
-import { createDummyWorkspace } from '../../primitives/createDummyWorkspace';
+import { createSignal, Show } from 'solid-js';
+import { createStore } from 'solid-js/store';
+import type { SampleCompany } from '../../core/workspace-fixtures';
+import { createCrmDemoWorkspace } from '../../primitives/createCrmDemoWorkspace';
+import { createDemoPointer } from '../../primitives/createDemoPointer';
 import { createProductWalkthrough } from '../../primitives/createProductWalkthrough';
 import { DemoCursor } from '../DemoCursor';
 import { ProductDemo } from '../product/ProductPage';
 import type { CompanySection } from '../workspace/WorkspaceCompanies';
+import { CompanyPipelineEntry } from './CompanyPipelineEntry';
 import { CrmRecordWorkspace } from './CrmRecordWorkspace';
+import { seedCrmFollowup } from './crm-followup-data';
 
 /** Tab the walkthrough points at, then opens, for each step. */
 const tour: (CompanySection | undefined)[] = [
@@ -13,23 +18,38 @@ const tour: (CompanySection | undefined)[] = [
   'emails',
   'calls',
   'calls',
+  'files',
+  'files',
+  'tasks',
+  'tasks',
   'overview',
   'overview',
 ];
 
-/** The Meadow's record: Emails, then Calls, then back to the Discussion. */
+/** Tour the linked email, calls, files, tasks, and team discussion. */
 export function CrmRecordDemo() {
   let frame!: HTMLDivElement;
-  const w = createDummyWorkspace('crm');
+  const w = createCrmDemoWorkspace();
+  seedCrmFollowup(w);
   w.open('crm', 'meadow');
+  const [deal, setDeal] = createStore<
+    Pick<SampleCompany, 'stage' | 'owner' | 'revenue'>
+  >({ stage: 'Demo', owner: 'jacob', revenue: '18000' });
   const [section, setSection] = createSignal<CompanySection>('overview');
   const [phase, setPhase] = createSignal(0);
   const [automatic, setAutomatic] = createSignal(true);
-  const [pointer, setPointer] = createSignal<{ x: number; y: number }>();
   const playback = createProductWalkthrough({
     root: () => frame,
-    steps: 6,
-    reset: () => {},
+    steps: 10,
+    loop: { hold: 6500 },
+    reset: () => {
+      w.open('crm', 'meadow');
+      setPhase(0);
+      setSection('overview');
+      setAutomatic(true);
+      const scroll = frame.querySelector('.sample-company-scroll');
+      if (scroll) scroll.scrollTop = 0;
+    },
     reduced: () => {
       setAutomatic(false);
       setSection('overview');
@@ -39,7 +59,7 @@ export function CrmRecordDemo() {
       setPhase(step);
       const tab = tour[step];
       if (step % 2 === 0 && tab) setSection(tab);
-      if (step === 6) {
+      if (step === 10) {
         setAutomatic(false);
         // Back on Overview, bring the team's thread into view.
         requestAnimationFrame(() => {
@@ -53,43 +73,25 @@ export function CrmRecordDemo() {
     setAutomatic(false);
     playback.pause();
   };
-  onMount(() => {
-    const position = () => {
+  const pointer = createDemoPointer({
+    frame: () => frame,
+    active: automatic,
+    target: () => {
       const tab = tour[phase()];
-      const target = tab
-        ? frame.querySelector<HTMLElement>(`[data-record-tab="${tab}"]`)
-        : undefined;
-      if (!automatic() || !target) {
-        setPointer(undefined);
-        return;
-      }
-      const bounds = target.getBoundingClientRect();
-      const parent = frame.getBoundingClientRect();
-      setPointer({
-        x: bounds.left - parent.left + bounds.width / 2,
-        y: bounds.top - parent.top + bounds.height * 0.7,
-      });
-    };
-    createEffect(() => {
-      phase();
-      automatic();
-      const timer = requestAnimationFrame(position);
-      onCleanup(() => cancelAnimationFrame(timer));
-    });
-    const resize = new ResizeObserver(position);
-    resize.observe(frame);
-    onCleanup(() => resize.disconnect());
+      return tab ? `[data-record-tab="${tab}"]` : undefined;
+    },
   });
   return (
     <div ref={frame} class="crm-demo-frame" onFocusIn={pause}>
       <ProductDemo
-        label="The Meadow’s emails, calls, and team discussion in one record"
+        label="Parlor Studio’s emails, calls, files, tasks, and team discussion in one record"
         onInteract={pause}
         height={520}
         mobileHeight={600}
       >
         <CrmRecordWorkspace
           workspace={w}
+          pipeline={<CompanyPipelineEntry value={deal} onChange={setDeal} />}
           section={section()}
           onSectionChange={setSection}
         />
@@ -97,7 +99,6 @@ export function CrmRecordDemo() {
       <Show when={automatic() && pointer()}>
         {(p) => (
           <DemoCursor
-            label="Jacob"
             class="crm-demo-pointer"
             clicking={phase() % 2 === 0}
             style={{ transform: `translate(${p().x}px, ${p().y}px)` }}

@@ -14,6 +14,7 @@ loads lazily on first field access and is dropped after any mutation.
 
 | Property | Modifier | Type | Description | Inherited from |
 | ------ | ------ | ------ | ------ | ------ |
+| <a id="property-access"></a> `access` | `readonly` | [`EntityAccess`](../../../sharing/access/classes/EntityAccess.md) | Access requests and direct user grants. | - |
 | <a id="property-createdat"></a> `createdAt` | `readonly` | () => `Promise`\<`string`\> | When the database was created. | - |
 | <a id="property-grant"></a> `grant` | `readonly` | () => `Promise`\<[`AccessLevel`](../../../../../generated/storage/types.gen/type-aliases/AccessLevel.md)\> | The caller's access on the database. | - |
 | <a id="property-id"></a> `id` | `public readonly` | `string` | - | [`MacroEntity`](../../../entity/classes/MacroEntity.md).[`id`](../../../entity/classes/MacroEntity.md#property-id) |
@@ -307,6 +308,25 @@ Adopt a first-value type only while the owned column is empty and inferable.
 #### Returns
 
 `Promise`\<[`InferColumnTypeOutcome`](../../../../../generated/storage/types.gen/type-aliases/InferColumnTypeOutcome.md)\>
+
+***
+
+### query()
+
+> **query**(`sql`, `options?`): `Promise`\<[`DatabaseQueryResult`](../../query/interfaces/DatabaseQueryResult.md)\>
+
+Run one SQL statement with this database as the default name scope.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `sql` | `string` |
+| `options?` | `Omit`\<[`DatabaseQueryOptions`](../../query/interfaces/DatabaseQueryOptions.md), `"database"`\> |
+
+#### Returns
+
+`Promise`\<[`DatabaseQueryResult`](../../query/interfaces/DatabaseQueryResult.md)\>
 
 ***
 

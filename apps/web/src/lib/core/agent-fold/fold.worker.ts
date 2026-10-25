@@ -73,7 +73,10 @@ async function serve(request: FoldRequest): Promise<FoldResponse> {
       streams.delete(sessionId);
       return { id, kind, ok: true as const };
     })
-    .exhaustive();
+    .exhaustive((unknown) => {
+      console.warn('fold worker: unknown request', unknown);
+      return { id: request.id, ok: false as const, error: 'unknown request' };
+    });
 }
 
 scope.addEventListener('message', (event: MessageEvent<FoldRequest>) => {

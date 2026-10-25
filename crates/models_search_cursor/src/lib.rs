@@ -162,6 +162,10 @@ pub struct SearchCursor {
     /// before CRM search existed still decode (defaults to a fresh cursor).
     #[serde(default)]
     pub crm_company_cursor: SearchCursorOption,
+    /// The channel name cursor. `#[serde(default)]` so cursors minted before
+    /// channels were name-searched in Postgres still decode.
+    #[serde(default)]
+    pub channel_name_cursor: SearchCursorOption,
 }
 
 impl SearchCursor {
@@ -186,6 +190,7 @@ impl SearchCursor {
             && self.content_cursor.is_done()
             && self.project_name_cursor.is_done()
             && self.crm_company_cursor.is_done()
+            && self.channel_name_cursor.is_done()
     }
 }
 
@@ -212,6 +217,20 @@ mod test {
         assert!(!cursor.is_exhausted());
     }
 
+    /// A cursor minted before channels were name-searched in Postgres (no
+    /// `channel_name_cursor` field) decodes with a fresh channel cursor, so
+    /// the next page runs the channel search from the start.
+    #[test]
+    fn decodes_legacy_cursor_without_channel_name_field() {
+        let legacy = r#"{"chat_name_cursor":"Done","content_cursor":"Done","project_name_cursor":"Done","crm_company_cursor":"Done"}"#;
+        let encoded = BASE64.encode(legacy);
+
+        let cursor = SearchCursor::decode(&encoded).expect("legacy cursor should decode");
+
+        assert!(cursor.channel_name_cursor.has_more());
+        assert!(!cursor.is_exhausted());
+    }
+
     #[test]
     fn crm_cursor_round_trips() {
         let cursor = SearchCursor {
@@ -223,12 +242,13 @@ mod test {
     }
 
     #[test]
-    fn is_exhausted_requires_crm_done() {
+    fn is_exhausted_requires_every_source_done() {
         let mut cursor = SearchCursor {
             chat_name_cursor: SearchCursorOption::Done,
             content_cursor: SearchCursorOption::Done,
             project_name_cursor: SearchCursorOption::Done,
             crm_company_cursor: SearchCursorOption::Done,
+            channel_name_cursor: SearchCursorOption::Done,
         };
         assert!(cursor.is_exhausted());
 
@@ -236,6 +256,13 @@ mod test {
         assert!(
             !cursor.is_exhausted(),
             "a not-done CRM cursor must keep the aggregate cursor alive"
+        );
+
+        cursor.crm_company_cursor = SearchCursorOption::Done;
+        cursor.channel_name_cursor = SearchCursorOption::NotDone(None);
+        assert!(
+            !cursor.is_exhausted(),
+            "a not-done channel name cursor must keep the aggregate cursor alive"
         );
     }
 }

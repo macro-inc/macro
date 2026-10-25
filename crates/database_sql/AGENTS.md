@@ -9,6 +9,7 @@ uses the wasm build directly).
 
 ## Start here
 
+- `openapi` feature: optional derives for the HTTP result contract; keep native transport dependencies out of the engine.
 - `src/lib.rs`: the pipeline diagram and the public re-exports — read this
   before any other file.
 - `src/parse.rs` / `src/resolve.rs` / `src/split.rs` / `src/engine.rs` /

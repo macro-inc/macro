@@ -2677,3 +2677,22 @@ async fn changing_speed_applies_to_next_turn_and_rejects_unsupported_models() {
     assert_eq!(requests[0].speed, agent::ModelSpeed::Ultrafast);
     assert_eq!(requests[1].speed, agent::ModelSpeed::Standard);
 }
+
+#[test]
+fn a_turn_that_ends_on_a_tool_call_has_not_replied() {
+    let mut output = TurnOutput::default();
+    output.observe(&StreamPart::Content("Let me look.".to_owned()));
+    output.observe(&StreamPart::ToolCall(agent::ToolCall {
+        id: "call-1".to_owned(),
+        name: "ExecuteCode".to_owned(),
+        json: serde_json::json!({}),
+        mcp: None,
+    }));
+    output.observe(&StreamPart::Content("\n\n".to_owned()));
+    assert_eq!(output.text_chars, 14);
+    assert_eq!(output.tool_calls, 1);
+    assert!(!output.replied);
+
+    output.observe(&StreamPart::Content("Found it.".to_owned()));
+    assert!(output.replied);
+}

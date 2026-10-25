@@ -17,6 +17,9 @@ export const emailKeys = createQueryKeys('email', {
   threadMessages: (threadId: string) => ({
     queryKey: ['messages', threadId],
   }),
+  messageInbox: (messageId: string | undefined) => ({
+    queryKey: ['message-inbox', messageId],
+  }),
   composeDraftState: (params: {
     draftId: string;
     threadId: string;

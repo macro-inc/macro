@@ -34,6 +34,7 @@ function thread(scheduled: boolean): ApiThread {
     is_read: true,
     messages: [
       {
+        draft_generation: 0,
         attachments: [],
         attachments_draft: [],
         attachments_forwarded: [],

@@ -184,7 +184,7 @@ pub enum SessionStatus {
 /// editing the agent's selection applies to its next session.
 pub use bots::domain::models::{AgentMcpServer, AgentMcpServers};
 
-/// Why a session is created, independently of whether it appears in broad lists.
+/// Why a session is created, which decides where it is shown.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SessionPurpose {
     /// A regular session opened directly or from a thread mention.
@@ -193,6 +193,15 @@ pub enum SessionPurpose {
     Warm,
     /// Context backing an agent DM; accessed through its conversation.
     AgentDm,
+    /// A session another agent dispatched on its owner's behalf. Listed, and
+    /// it notifies like the owner's own sessions.
+    Dispatched,
+    /// A routine's unattended run. Its successful turns notify nobody, and
+    /// the routine's setting decides whether it is listed.
+    Routine {
+        /// Listed or unlisted, from the routine's setting.
+        visibility: SessionVisibility,
+    },
 }
 
 impl SessionPurpose {
@@ -209,14 +218,95 @@ impl SessionPurpose {
         Ok(if conversation { Self::AgentDm } else { self })
     }
 
-    /// Whether creation should omit the session from broad Agents/Home lists.
-    pub fn list_hidden(self, bot_id: BotId, thread_id: Option<Uuid>, hide_agent_dms: bool) -> bool {
-        match self {
+    /// Where a session created for this purpose is shown. Speculative,
+    /// DM-backing and inline @macro thread sessions are reached through what
+    /// they back, so they are hidden; a routine's run follows its routine.
+    pub fn visibility(
+        self,
+        bot_id: BotId,
+        thread_id: Option<Uuid>,
+        hide_agent_dms: bool,
+    ) -> SessionVisibility {
+        let hidden = match self {
             Self::Warm => true,
             Self::AgentDm => hide_agent_dms,
             Self::Standalone => bot_id == bot_id::MACRO_NEW_BOT_ID && thread_id.is_some(),
+            Self::Dispatched => false,
+            Self::Routine { visibility } => return visibility,
+        };
+        if hidden {
+            SessionVisibility::Hidden
+        } else {
+            SessionVisibility::Listed
         }
     }
+
+    /// Who starts a session created for this purpose.
+    pub fn source(self) -> SessionSource {
+        match self {
+            Self::Dispatched => SessionSource::Agent,
+            Self::Routine { .. } => SessionSource::Routine,
+            Self::Standalone | Self::Warm | Self::AgentDm => SessionSource::User,
+        }
+    }
+}
+
+/// Who started a session. Stored on the session and carried by its lifecycle
+/// events, so lists and notifications can treat unattended runs differently.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Default,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    serde::Deserialize,
+    strum::EnumString,
+    strum::IntoStaticStr,
+)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum SessionSource {
+    /// A person, directly or through something they did: a prompt, a
+    /// mention, or an assignment.
+    #[default]
+    User,
+    /// Another agent, which dispatched the session on its owner's behalf.
+    Agent,
+    /// A routine's unattended run.
+    Routine,
+}
+
+/// Where a session is shown. Stored as `agent_session.visibility`, which
+/// replaces `list_hidden` (`Hidden`); a trigger keeps that column in step until
+/// it is dropped.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Default,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    serde::Deserialize,
+    strum::EnumString,
+    strum::IntoStaticStr,
+)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum SessionVisibility {
+    /// Shown wherever the owner's sessions are.
+    #[default]
+    Listed,
+    /// Left out of Home and the default Agents list, but a filter can still
+    /// ask for it: a routine's run, unless the routine lists its runs.
+    Unlisted,
+    /// Out of every list and search; reachable only by id, through what it
+    /// backs (a thread, a DM) or once a warm claim lists it.
+    Hidden,
 }
 
 /// Caller-provided values required to create an agent session.
@@ -297,6 +387,10 @@ pub struct AgentSession {
     pub pull_request_url: Option<String>,
     /// The Macro task the session was explicitly linked to.
     pub task_id: Option<String>,
+    /// Who started the session.
+    pub source: SessionSource,
+    /// Where the session is shown.
+    pub visibility: SessionVisibility,
     /// Directory the harness runs in, snapshotted at creation. The session
     /// actor sends it as the working directory of `session/new`, and resume
     /// and load re-enter it - the directory the session actually ran in,
@@ -372,25 +466,6 @@ pub struct ExternalSession {
     pub last_run_id: Option<String>,
 }
 
-impl ExternalSession {
-    /// Provider link, including Claude demo mappings created before URLs were saved.
-    pub fn web_url(&self) -> Option<String> {
-        self.external_url.clone().or_else(|| {
-            (self.provider == "claude-cloud"
-                && self.external_id.starts_with("cse_")
-                && self.external_id.len() > 4
-                && self
-                    .external_id
-                    .bytes()
-                    .all(|b| b.is_ascii_alphanumeric() || b == b'_'))
-            .then(|| format!("https://claude.ai/code/{}", self.external_id))
-        })
-    }
-}
-
-#[cfg(test)]
-mod test;
-
 /// The agent behind a session, as much of it as rendering a message needs.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
@@ -407,6 +482,17 @@ pub struct SessionBot {
     pub avatar_url: Option<String>,
 }
 
+/// The authority behind an invocation. System events never borrow owner access.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, strum::AsRefStr)]
+#[strum(serialize_all = "snake_case")]
+pub enum PrompterKind {
+    /// A human or runtime prompt; user identifies any acting human.
+    #[default]
+    User,
+    /// An internal event with no user authority.
+    System,
+}
+
 /// Who prompted the turn a session is running, or last ran.
 ///
 /// Written at dispatch, before the runtime can act on the prompt, so the
@@ -414,10 +500,22 @@ pub struct SessionBot {
 /// prompted from one somebody else did.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TurnPrompter {
+    /// Source of the turn's authority.
+    pub kind: PrompterKind,
     /// The action that opened the turn.
     pub action_id: agent_runtime_protocol::domain::action::AgentActionId,
     /// The user who prompted it, absent when a bot acted on nobody's behalf.
     pub user: Option<MacroUserIdStr<'static>>,
+}
+
+impl TurnPrompter {
+    /// Effective human authority. System turns never act as a user even if
+    /// malformed or old storage includes a user alongside the system kind.
+    pub fn acting_user(&self) -> Option<&MacroUserIdStr<'static>> {
+        (self.kind == PrompterKind::User)
+            .then_some(self.user.as_ref())
+            .flatten()
+    }
 }
 
 /// One waiting action as the session store records it.
@@ -587,10 +685,9 @@ pub struct StoredAgentSessionLog {
 /// With no successful load, history starts at the beginning. Failed attempts
 /// remain in the stream and must be staged/discarded by fold consumers.
 ///
-/// Served rather than the messages it derives: the reader folds it. The web
-/// client runs the same fold compiled to WASM, so a streamed session and a
-/// reloaded one are rendered by one implementation rather than two that have
-/// to be kept agreeing.
+/// The web client folds it itself with the same fold compiled to WASM, so a
+/// streamed session and a reloaded one are rendered by one implementation.
+/// Readers without the fold get [`FoldedSessionLog`] instead.
 #[derive(Debug, Clone)]
 pub struct SessionLog {
     /// The agent whose messages the log derives.
@@ -601,6 +698,16 @@ pub struct SessionLog {
     pub bot: SessionBot,
     /// Every logged frame, oldest first. Folding depends on this order.
     pub entries: Vec<StoredAgentSessionLog>,
+}
+
+/// A session's effective history folded into the messages a reader renders,
+/// oldest first: the same fold the web client runs over [`SessionLog`].
+#[derive(Debug, Clone)]
+pub struct FoldedSessionLog {
+    /// The agent whose messages these are; see [`SessionLog::bot`].
+    pub bot: SessionBot,
+    /// Every message, oldest first.
+    pub messages: Vec<agent_fold::domain::model::FoldedMessage>,
 }
 
 /// How an incoming channel context relates to an agent session.

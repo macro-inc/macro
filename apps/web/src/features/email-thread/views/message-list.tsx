@@ -2,6 +2,7 @@ import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Key } from '@solid-primitives/keyed';
 import { cn, Layer } from '@ui';
+import { CollapseTransition } from '@ui/components/CollapseTransition';
 import {
   createEffect,
   createMemo,
@@ -95,6 +96,12 @@ export function MessageList(props: MessageListProps) {
       class={cn(
         'pt-1 pb-6 w-full flex flex-col items-center gap-2 overflow-y-scroll overflow-x-hidden [overflow-anchor:none] scrollbar-hidden text-sm scroll-pt-4 scroll-pb-4 scroll-smooth motion-reduce:scroll-auto',
         'touch:pt-[calc(var(--mobile-content-inset-top,0)+0.5rem)] mobile:gap-0',
+        // The in-scroll insets only clear the floating chrome at the ends of
+        // the list. Every alignment in between — focusing a card, revealing one
+        // that just grew, keyboard paging — lands against the scrollport edges,
+        // so scroll-padding has to describe the same chrome or a card gets
+        // parked underneath it with its attachments out of reach.
+        'touch:scroll-pt-[calc(var(--mobile-content-inset-top,0px)+1rem)] touch:scroll-pb-[calc(var(--mobile-content-inset-bottom,0px)+1rem)]',
         props.underScrollsBottom &&
           'touch:pb-[calc(var(--mobile-content-inset-bottom,0)+1.5rem)]'
       )}
@@ -204,21 +211,23 @@ export function MessageList(props: MessageListProps) {
 
               return (
                 <>
-                  <Show when={!hideMiddle()}>
-                    <MessageContainer
-                      isFirstMessage={normalizedIndex() === 0}
-                      isLastMessage={isLastMessage()}
-                      isSelected={isSelectedSelector(
-                        message().db_id ?? undefined
-                      )}
-                      allowHover={props.allowRowHover}
-                      message={message()}
-                      isExpanded={isExpanded()}
-                      markdownDomRef={
-                        isLastMessage() ? props.markdownDomRef : undefined
-                      }
-                    />
-                  </Show>
+                  <CollapseTransition open={!hideMiddle()}>
+                    <div class="w-full shrink-0">
+                      <MessageContainer
+                        isFirstMessage={normalizedIndex() === 0}
+                        isLastMessage={isLastMessage()}
+                        isSelected={isSelectedSelector(
+                          message().db_id ?? undefined
+                        )}
+                        allowHover={props.allowRowHover}
+                        message={message()}
+                        isExpanded={isExpanded()}
+                        markdownDomRef={
+                          isLastMessage() ? props.markdownDomRef : undefined
+                        }
+                      />
+                    </div>
+                  </CollapseTransition>
                   <Show
                     when={
                       chronologicalIndex() === 0 &&

@@ -124,7 +124,7 @@ export function cellValue(
         value: [{ entityType, entityId: String(value) }],
       }))
     )
-    .exhaustive();
+    .exhaustive(() => err({ kind: 'read-only-column' }));
 }
 
 /**

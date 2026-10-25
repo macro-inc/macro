@@ -1,6 +1,6 @@
 # Type Alias: FormSource
 
-> **FormSource** = \{ `kind`: `"new"`; \} \| \{ `databaseId`: `string`; `kind`: `"table"`; `tableId`: `string`; \}
+> **FormSource** = \{ `isHiddenInDrive?`: `boolean`; `kind`: `"new"`; \} \| \{ `databaseId`: `string`; `kind`: `"table"`; `tableId`: `string`; \}
 
 Where a new form's responses go.
 
@@ -8,7 +8,12 @@ Where a new form's responses go.
 
 ### Type Literal
 
-\{ `kind`: `"new"`; \}
+\{ `isHiddenInDrive?`: `boolean`; `kind`: `"new"`; \}
+
+| Name | Type | Description |
+| ------ | ------ | ------ |
+| `isHiddenInDrive?` | `boolean` | Keep the form, and the database made for it, out of Drive, as for a channel poll. |
+| `kind` | `"new"` | - |
 
 ***
 

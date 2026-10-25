@@ -1,3 +1,4 @@
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { ReactiveMap } from '@solid-primitives/map';
 import { type Accessor, createEffect, on, onCleanup, untrack } from 'solid-js';
 
@@ -50,16 +51,43 @@ export function messageSendMotion(
           return;
 
         animation?.cancel();
-        animation = element.animate(
-          [
-            { opacity: 0, transform: 'translateY(10px)' },
-            { opacity: 1, transform: 'translateY(0)' },
-          ],
-          {
-            duration: 300,
-            easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
-          }
-        );
+        // Keep the text at its final size and the virtual row at its final
+        // height. Touch sends lift into place, then settle by just one pixel.
+        animation = isTouchDevice()
+          ? element.animate(
+              [
+                {
+                  opacity: 0,
+                  transform: 'translateY(24px)',
+                  offset: 0,
+                  easing: 'cubic-bezier(0.16, 0.8, 0.3, 1)',
+                },
+                {
+                  opacity: 1,
+                  transform: 'translateY(4px)',
+                  offset: 0.4,
+                  easing: 'cubic-bezier(0.2, 0.7, 0.3, 1)',
+                },
+                {
+                  opacity: 1,
+                  transform: 'translateY(-1px)',
+                  offset: 0.75,
+                  easing: 'ease-in-out',
+                },
+                { opacity: 1, transform: 'translateY(0)', offset: 1 },
+              ],
+              { duration: 360, easing: 'linear' }
+            )
+          : element.animate(
+              [
+                { opacity: 0, transform: 'translateY(10px)' },
+                { opacity: 1, transform: 'translateY(0)' },
+              ],
+              {
+                duration: 300,
+                easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+              }
+            );
       }
     )
   );

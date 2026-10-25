@@ -1,5 +1,5 @@
 //! `Build macOS DMG` — reusable workflow that builds the Tauri desktop DMG via
-//! Nix. Called from [`super::build_desktop_on_tag`].
+//! Nix. The release orchestrator also uses its build job directly.
 
 use gh_workflow::{Event, Expression, Job, Run, Step, Workflow, WorkflowCall, WorkflowCallInput};
 
@@ -27,6 +27,33 @@ pub fn build_dmg() -> Workflow {
                 .secrets(build_appimage_on_tag::desktop_build_secrets()),
         ))
         .add_job("build-dmg", build_dmg_job("${{ inputs.ref }}"))
+}
+
+/// Declare every secret referenced by the reusable job in stable YAML order.
+pub fn patch(root: &mut serde_yaml::Value) -> anyhow::Result<()> {
+    let call = root
+        .get_mut("on")
+        .and_then(|on| on.get_mut("workflow_call"))
+        .and_then(serde_yaml::Value::as_mapping_mut)
+        .ok_or_else(|| anyhow::anyhow!("rendered DMG workflow has no workflow_call"))?;
+    call.insert(
+        "secrets".into(),
+        crate::workflows::yaml_fragment(indoc::indoc! {r#"
+            POSTHOG_API_KEY:
+              description: PostHog project API key inlined into the desktop bundle
+              required: true
+            MACOS_DEVELOPER_ID_CERTIFICATE_BASE64:
+              description: Developer ID certificate for signing the macOS app
+              required: true
+            MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD:
+              description: Password for the Developer ID certificate
+              required: true
+            MACOS_RELEASE_DOPPLER_TOKEN:
+              description: Doppler token for notarizing the macOS DMG
+              required: true
+        "#})?,
+    );
+    Ok(())
 }
 
 /// Build the macOS DMG job, checking out and naming artifacts from `ref_expr`.
@@ -59,7 +86,7 @@ pub fn build_dmg_job(ref_expr: &str) -> Job {
         ))
 }
 
-fn assert_arm64() -> Step<Run> {
+pub(super) fn assert_arm64() -> Step<Run> {
     Step::new("Assert arm64 runner")
         .run(indoc::indoc! {r#"
             set -euo pipefail
@@ -83,6 +110,10 @@ fn configure_signing_identity() -> Step<Run> {
             "MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD",
             vars::MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD,
         ))
+        .add_env((
+            "MACOS_DEVELOPER_ID_PROVISIONING_PROFILE_BASE64",
+            vars::MACOS_DEVELOPER_ID_PROVISIONING_PROFILE_BASE64,
+        ))
 }
 
 fn nix_build_dmg() -> Step<Run> {
@@ -92,7 +123,7 @@ fn nix_build_dmg() -> Step<Run> {
         .add_env(("VITE_POSTHOG_API_KEY", vars::POSTHOG_API_KEY))
 }
 
-fn configure_nix_cache() -> Step<Run> {
+pub(super) fn configure_nix_cache() -> Step<Run> {
     Step::new("Configure macOS Nix binary cache")
         .run(include_str!("scripts/configure_macos_nix_cache.sh"))
         .id("nix-cache")
@@ -100,7 +131,7 @@ fn configure_nix_cache() -> Step<Run> {
         .continue_on_error(true)
 }
 
-fn save_nix_cache() -> Step<Run> {
+pub(super) fn save_nix_cache() -> Step<Run> {
     Step::new("Prune and save macOS Nix build dependencies")
         .run(include_str!("scripts/save_macos_nix_cache.sh"))
         .shell("bash")

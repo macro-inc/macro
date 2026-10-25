@@ -30,7 +30,7 @@ export function BookingLinkDialog(props: {
               Choose a booking link
             </Dialog.Title>
             <Dialog.Description class="text-sm text-ink-muted">
-              Respondents can book after passing this form’s screeners.
+              Respondents can book after passing this form’s gates.
             </Dialog.Description>
             <div class="flex max-h-[50dvh] flex-col gap-1 overflow-y-auto">
               <Switch>

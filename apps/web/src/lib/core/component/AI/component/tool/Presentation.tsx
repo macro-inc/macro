@@ -102,7 +102,7 @@ export const editPresentationHandler = createToolRenderer({
     };
     return (
       <PresentationToolRow
-        verb={copy() ? 'Created' : 'Edit'}
+        verb={copy() ? (ctx.response ? 'Created' : 'Create') : 'Edit'}
         documentId={ctx.response?.data.documentId ?? ctx.tool.data.documentId}
         summary={summary()}
         details={ctx.response?.data.changedSlides || undefined}

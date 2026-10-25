@@ -13,10 +13,33 @@ import CaretUp from '@phosphor/caret-up.svg';
 import MagnifyingGlass from '@phosphor/magnifying-glass.svg';
 import X from '@phosphor/x.svg';
 import { createCallback } from '@solid-primitives/rootless';
-import { cn, Panel, Tooltip } from '@ui';
-import type { JSX } from 'solid-js';
+import { Button, cn, Input, Panel, Tooltip } from '@ui';
+import type { Component, JSX } from 'solid-js';
 import { createEffect, createSignal, on, onCleanup, Show } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
+
+// Clicking a control keeps the caret in the find field so Enter still steps.
+const keepInputFocus = (e: MouseEvent) => e.preventDefault();
+
+function FindBarButton(props: {
+  label: string;
+  icon: Component<{ class?: string }>;
+  onClick: () => void;
+}) {
+  return (
+    <Tooltip label={props.label}>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        aria-label={props.label}
+        onMouseDown={keepInputFocus}
+        onClick={() => props.onClick()}
+      >
+        <props.icon />
+      </Button>
+    </Tooltip>
+  );
+}
 
 export function FindAndReplace(props: { hotkeyScope?: string } = {}) {
   const { permissions, state } = useMarkdownDocument();
@@ -310,131 +333,105 @@ export function FindAndReplace(props: { hotkeyScope?: string } = {}) {
     <Show when={findAndReplaceStore.searchIsOpen}>
       <Panel
         depth={3}
-        class="flex items-center justify-start rounded-xl bg-surface p-2 shadow-lg shadow-drop-shadow w-fit"
+        hideBorder
+        class="menu-surface flex w-fit items-start justify-start rounded-xl bg-surface p-2"
       >
-        <div class="flex items-center px-1">
-          <Tooltip
-            label={`${findAndReplaceStore.replaceInputOpen ? 'Collapse' : 'Expand'} Search Bar`}
+        <Tooltip
+          label={`${findAndReplaceStore.replaceInputOpen ? 'Collapse' : 'Expand'} Search Bar`}
+        >
+          <Button
+            variant="ghost"
+            size="sm"
+            class="mx-1"
+            aria-label={`${findAndReplaceStore.replaceInputOpen ? 'Collapse' : 'Expand'} search bar`}
+            onMouseDown={keepInputFocus}
+            onClick={toggleReplaceInput}
           >
-            <div
-              class="flex items-center w-8 h-6 justify-center rounded-md hover:bg-hover hover-transition-bg"
-              onMouseDown={toggleReplaceInput}
-            >
-              <Show when={canEdit()}>
-                {findAndReplaceStore.replaceInputOpen ? (
-                  <CaretDown class="size-3" />
-                ) : (
-                  <CaretRight class="size-3" />
-                )}
-              </Show>
-              <MagnifyingGlass
-                class={cn(
-                  'size-4',
-                  findAndReplaceStore.isSearching
-                    ? 'animate-pulse text-accent'
-                    : 'text-ink'
-                )}
-              />
-            </div>
-          </Tooltip>
-        </div>
+            <Show when={canEdit()}>
+              {findAndReplaceStore.replaceInputOpen ? (
+                <CaretDown class="size-3" />
+              ) : (
+                <CaretRight class="size-3" />
+              )}
+            </Show>
+            <MagnifyingGlass
+              class={cn(
+                'size-4',
+                findAndReplaceStore.isSearching
+                  ? 'animate-pulse text-accent'
+                  : 'text-ink'
+              )}
+            />
+          </Button>
+        </Tooltip>
 
-        <div class="flex flex-col w-fit">
-          <div class="flex items-center px-1">
-            <div class="flex rounded-md border bg-surface border-edge px-1 mx-1 w-58">
-              <input
-                class="mx-0.5 flex-1 h-6 border-0 text-sm text-ink focus:outline-none focus:ring-0"
-                type="text"
-                placeholder="Find..."
-                ref={inputRef}
-                value={findAndReplaceStore.searchInputText}
-                onInput={(e) => {
-                  setFindAndReplaceStore('searchInputText', e.target.value);
-                  performSearch(true, true);
-                }}
-                onKeyDown={inputKeyDownHandler}
+        <div class="flex w-fit flex-col gap-1">
+          <div class="flex items-center gap-2 px-1">
+            <Input
+              size="sm"
+              class="w-58"
+              type="text"
+              placeholder="Find..."
+              ref={inputRef}
+              value={findAndReplaceStore.searchInputText}
+              onInput={(e) => {
+                setFindAndReplaceStore('searchInputText', e.target.value);
+                performSearch(true, true);
+              }}
+              onKeyDown={inputKeyDownHandler}
+            />
+            <p class="text-xs text-ink whitespace-nowrap">
+              {findAndReplaceStore.isSearching
+                ? 'searching...'
+                : findAndReplaceStore.matches > 0
+                  ? `${findAndReplaceStore.currentMatch === -1 ? '?' : findAndReplaceStore.currentMatch + 1} of ${findAndReplaceStore.matches}` +
+                    ` match${findAndReplaceStore.matches === 1 ? '' : 'es'}`
+                  : 'no matches'}
+            </p>
+            <div class="ml-2 flex items-center">
+              <FindBarButton
+                label="Previous Match"
+                icon={CaretUp}
+                onClick={() => jumpTo('prev')}
               />
-            </div>
-            <div class="flex ml-2">
-              <div class="flex items-center justify-start">
-                <p class="text-xs text-ink whitespace-nowrap">
-                  {findAndReplaceStore.isSearching
-                    ? 'searching...'
-                    : findAndReplaceStore.matches > 0
-                      ? `${findAndReplaceStore.currentMatch === -1 ? '?' : findAndReplaceStore.currentMatch + 1} of ${findAndReplaceStore.matches}` +
-                        ` match${findAndReplaceStore.matches === 1 ? '' : 'es'}`
-                      : 'no matches'}
-                </p>
-              </div>
-              <div class="ml-4 flex justify-end items-center">
-                <Tooltip label={`Previous Match`}>
-                  <div
-                    class="flex items-center px-1 size-6 justify-center rounded-md hover:bg-hover hover-transition-bg"
-                    onMouseDown={() => {
-                      jumpTo('prev');
-                    }}
-                  >
-                    <CaretUp />
-                  </div>
-                </Tooltip>
-                <Tooltip label={`Next Match`}>
-                  <div
-                    class="flex items-center px-1 size-6 justify-center rounded-md hover:bg-hover hover-transition-bg"
-                    onMouseDown={() => {
-                      jumpTo('next');
-                    }}
-                  >
-                    <CaretDown />
-                  </div>
-                </Tooltip>
-                <Tooltip label={`Close Search Bar`}>
-                  <div
-                    class="flex items-center px-1 size-6 justify-center rounded-md hover:bg-hover hover-transition-bg"
-                    onMouseDown={closeSearch}
-                  >
-                    <X />
-                  </div>
-                </Tooltip>
-              </div>
+              <FindBarButton
+                label="Next Match"
+                icon={CaretDown}
+                onClick={() => jumpTo('next')}
+              />
+              <FindBarButton
+                label="Close Search Bar"
+                icon={X}
+                onClick={closeSearch}
+              />
             </div>
           </div>
 
           <Show when={findAndReplaceStore.replaceInputOpen && canEdit()}>
-            <div class="flex items-center px-1">
-              <div class="flex rounded-md border bg-surface border-edge px-1 mx-1 mt-1 w-58">
-                <input
-                  class="mx-0.5 flex-1 h-6 border-0 text-sm text-ink focus:outline-none focus:ring-0"
-                  type="text"
-                  placeholder="Replace with..."
-                  ref={inputReplaceRef}
-                  value={findAndReplaceStore.replaceInputText}
-                  onInput={(e) =>
-                    setFindAndReplaceStore('replaceInputText', e.target.value)
-                  }
-                  onKeyDown={replaceKeyDownHandler}
+            <div class="flex items-center gap-2 px-1">
+              <Input
+                size="sm"
+                class="w-58"
+                type="text"
+                placeholder="Replace with..."
+                ref={inputReplaceRef}
+                value={findAndReplaceStore.replaceInputText}
+                onInput={(e) =>
+                  setFindAndReplaceStore('replaceInputText', e.target.value)
+                }
+                onKeyDown={replaceKeyDownHandler}
+              />
+              <div class="flex grow justify-center">
+                <FindBarButton
+                  label="Replace"
+                  icon={Replace}
+                  onClick={() => replaceTextAtIndex()}
                 />
-              </div>
-              <div class="flex grow justify-center ml-2">
-                <Tooltip label={`Replace`}>
-                  <div
-                    class="flex items-center px-1 size-6 justify-center rounded-md hover:bg-hover hover-transition-bg"
-                    onMouseDown={() => {
-                      replaceTextAtIndex();
-                    }}
-                  >
-                    <Replace />
-                  </div>
-                </Tooltip>
-                <Tooltip label={`Replace All`}>
-                  <div
-                    class="flex items-center px-1 size-6 justify-center rounded-md hover:bg-hover hover-transition-bg"
-                    onMouseDown={() => {
-                      replaceTextAll();
-                    }}
-                  >
-                    <ReplaceAll />
-                  </div>
-                </Tooltip>
+                <FindBarButton
+                  label="Replace All"
+                  icon={ReplaceAll}
+                  onClick={() => replaceTextAll()}
+                />
               </div>
             </div>
           </Show>

@@ -13,11 +13,16 @@ import Plus from '@phosphor/plus.svg';
 import Sidebar from '@phosphor/sidebar-simple.svg';
 import Sparkle from '@phosphor/sparkle.svg';
 import Star from '@phosphor/star.svg';
+import Tray from '@phosphor/tray.svg';
 import Users from '@phosphor/users-three.svg';
 import Signal from '@phosphor/wave-sine.svg';
 import Noise from '@phosphor/waveform.svg';
 import { For, type JSX, Show } from 'solid-js';
-import { type EmailTagId, emailTags } from '../../../core/demo-email';
+import {
+  demoMailAccounts,
+  type EmailTagId,
+  emailTags,
+} from '../../../core/demo-email';
 import { homepagePeople } from '../../../core/homepage-demo-people';
 import { ViewSidebar } from '../../DemoViewSidebar';
 
@@ -76,6 +81,9 @@ export function EmailSidebar(props: {
   onAccount: (account: string) => void;
   onCompose: () => void;
   onToggleNavigation?: () => void;
+  accounts?: readonly { id: string; label: string }[];
+  onConnect?: () => void;
+  connecting?: boolean;
   tag?: EmailTagId;
   onTag?: (tag: EmailTagId) => void;
 }) {
@@ -86,49 +94,77 @@ export function EmailSidebar(props: {
           <h3 class="text-sm font-semibold tracking-[-0.03em] text-ink">
             Email
           </h3>
-          <ViewSidebar.Control
-            label="Collapse email navigation"
-            onClick={props.onToggleNavigation}
-          >
-            <Sidebar class="size-4 text-ink-muted" />
-          </ViewSidebar.Control>
+          <Show when={props.onToggleNavigation}>
+            <ViewSidebar.Control
+              label="Collapse email navigation"
+              onClick={props.onToggleNavigation}
+            >
+              <Sidebar class="size-4 text-ink-muted" />
+            </ViewSidebar.Control>
+          </Show>
         </ViewSidebar.Header>
       </header>
       <ViewSidebar.Content class="overflow-visible">
-        <ViewSidebar.Nav aria-label="Inboxes">
-          <ViewSidebar.Item
-            active={props.account === 'all'}
-            onClick={() => props.onAccount('all')}
-          >
-            <ViewSidebar.Icon>
-              <Check class="text-accent" />
-            </ViewSidebar.Icon>
-            <span class="truncate">All inboxes</span>
-          </ViewSidebar.Item>
-          <For
-            each={[
-              { id: 'personal', label: 'jacob.beckerman@gmail.com' },
-              { id: 'work', label: 'jacob@macro.com' },
-            ]}
-          >
-            {(account) => (
+        <div class="flex flex-col gap-(--sidebar-row-gap)">
+          <ViewSidebar.Nav aria-label="Inboxes">
+            <Show when={(props.accounts ?? demoMailAccounts).length > 1}>
               <ViewSidebar.Item
-                active={props.account === account.id}
-                onClick={() => props.onAccount(account.id)}
-                title={account.label}
+                active={props.account === 'all'}
+                aria-current={props.account === 'all' ? 'true' : undefined}
+                onClick={() => props.onAccount('all')}
+                data-email-account="all"
               >
                 <ViewSidebar.Icon>
-                  <img
-                    class="size-5 rounded-full"
-                    src={homepagePeople.jacob.photo}
-                    alt=""
-                  />
+                  <Show when={props.account === 'all'} fallback={<Tray />}>
+                    <Check class="text-accent" />
+                  </Show>
                 </ViewSidebar.Icon>
-                <span class="truncate">{account.label}</span>
+                <span class="truncate">All inboxes</span>
               </ViewSidebar.Item>
-            )}
-          </For>
-        </ViewSidebar.Nav>
+            </Show>
+            <For each={props.accounts ?? demoMailAccounts}>
+              {(account) => (
+                <ViewSidebar.Item
+                  active={props.account === account.id}
+                  aria-current={
+                    props.account === account.id ? 'true' : undefined
+                  }
+                  onClick={() => props.onAccount(account.id)}
+                  data-email-account={account.id}
+                  title={account.label}
+                >
+                  <ViewSidebar.Icon>
+                    <Show
+                      when={props.account === account.id}
+                      fallback={
+                        <img
+                          class="size-5 rounded-full"
+                          src={homepagePeople.jacob.photo}
+                          alt=""
+                        />
+                      }
+                    >
+                      <Check class="text-accent" />
+                    </Show>
+                  </ViewSidebar.Icon>
+                  <span class="truncate">{account.label}</span>
+                </ViewSidebar.Item>
+              )}
+            </For>
+          </ViewSidebar.Nav>
+          <Show when={props.onConnect}>
+            <ViewSidebar.Item
+              onClick={props.onConnect}
+              data-email-connect
+              data-connecting={props.connecting}
+            >
+              <ViewSidebar.Icon>
+                <Plus />
+              </ViewSidebar.Icon>
+              <span>Connect another account</span>
+            </ViewSidebar.Item>
+          </Show>
+        </div>
         <div>
           <ViewSidebar.Action onClick={props.onCompose}>
             <ViewSidebar.Icon>
@@ -180,6 +216,7 @@ export function EmailShell(props: {
   children: JSX.Element;
   sidebar?: JSX.Element;
   channel?: boolean;
+  showRail?: boolean;
   label: string;
   class?: string;
 }) {
@@ -190,7 +227,9 @@ export function EmailShell(props: {
       role="group"
       aria-label={props.label}
     >
-      <MailAppRail channel={props.channel} />
+      <Show when={props.showRail !== false}>
+        <MailAppRail channel={props.channel} />
+      </Show>
       <Show when={props.sidebar}>{props.sidebar}</Show>
       <div class="mail-main">{props.children}</div>
     </div>

@@ -49,7 +49,9 @@ async fn a_form_over_a_new_database_writes_a_passing_response_as_a_row_and_stops
             viewer(OWNER),
             CreateFormCommand {
                 name: "Q4 offsite RSVP".into(),
-                source: CreateSource::NewDatabase,
+                source: CreateSource::NewDatabase {
+                    is_hidden_in_drive: false,
+                },
             },
         )
         .await
@@ -79,6 +81,7 @@ async fn a_form_over_a_new_database_writes_a_passing_response_as_a_row_and_stops
                 confirmation_message: "".into(),
                 created_at: Utc.with_ymd_and_hms(2026, 9, 1, 9, 0, 0).unwrap(),
                 updated_at: Utc.with_ymd_and_hms(2026, 9, 1, 9, 0, 0).unwrap(),
+                is_hidden_in_drive: false,
             },
             access: FormAccess::Owner,
             table_gone: false,

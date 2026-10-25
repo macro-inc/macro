@@ -1,6 +1,8 @@
+import { ListHeader } from '@app/components/view-shell/ListHeader';
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import DownloadIcon from '@phosphor/download-simple.svg';
 import InfoIcon from '@phosphor/info.svg';
-import { Button, Tooltip } from '@ui';
+import { Button, cn, Tooltip } from '@ui';
 import { createMemo, createSignal, For, type JSX, Show } from 'solid-js';
 import {
   type InsightHostOption,
@@ -352,6 +354,8 @@ export function InsightsPanel(props: {
   onRangeChange: (from: string, to: string) => void;
   onRetry: () => void;
   scopeSelector?: JSX.Element;
+  /** Desktop: render the controls in a ListHeader with this title. */
+  headerTitle?: JSX.Element;
   renderHostAvatar?: (host: InsightHostOption) => JSX.Element;
 }) {
   const [eventId, setEventId] = createSignal('all');
@@ -410,247 +414,270 @@ export function InsightsPanel(props: {
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
-  return (
-    <div
-      class="@container/insights flex w-full min-w-0 flex-col gap-5"
-      aria-busy={props.loading}
+  const canDownload = () =>
+    !props.loading && !props.error && current().bookings.length > 0;
+  const filters = () => (
+    <SchedulingFilters
+      title="Insights filters"
+      activeCount={Number(eventId() !== 'all') + Number(hostId() !== 'all')}
+      onClear={() => {
+        setEventId('all');
+        setHostId('all');
+      }}
+      mobileChildren={
+        <>
+          <SchedulingFilterSection
+            value="booking-links"
+            label="Booking links"
+            selected={eventId()}
+            options={eventOptions()}
+            onChange={setEventId}
+          />
+          <SchedulingFilterSection
+            value="hosts"
+            label="Hosts"
+            selected={hostId()}
+            options={
+              hostOptions().some((option) => option.value === hostId())
+                ? hostOptions()
+                : [
+                    ...hostOptions(),
+                    insightHostSelection(hostOptions(), hostId()),
+                  ]
+            }
+            onChange={setHostId}
+            renderIcon={(option) =>
+              props.renderHostAvatar?.(option) ?? (
+                <InsightHostAvatar host={option} />
+              )
+            }
+          />
+          <InsightsRangeSelector
+            inline
+            from={props.from}
+            to={props.to}
+            timeZone={props.timeZone}
+            now={now}
+            onChange={props.onRangeChange}
+          />
+        </>
+      }
     >
-      <div class="flex min-w-0 flex-wrap items-center gap-2">
-        {props.scopeSelector}
-        <div class="ml-auto flex min-w-0 items-center gap-2">
-          <Button
-            variant="outline"
-            onClick={download}
-            disabled={
-              props.loading || !!props.error || !current().bookings.length
-            }
-          >
-            <DownloadIcon class="size-4" />
-            Download
-          </Button>
-          <SchedulingFilters
-            title="Insights filters"
-            activeCount={
-              Number(eventId() !== 'all') + Number(hostId() !== 'all')
-            }
-            onClear={() => {
-              setEventId('all');
-              setHostId('all');
-            }}
-            mobileChildren={
-              <>
-                <SchedulingFilterSection
-                  value="booking-links"
-                  label="Booking links"
-                  selected={eventId()}
-                  options={eventOptions()}
-                  onChange={setEventId}
-                />
-                <SchedulingFilterSection
-                  value="hosts"
-                  label="Hosts"
-                  selected={hostId()}
-                  options={
-                    hostOptions().some((option) => option.value === hostId())
-                      ? hostOptions()
-                      : [
-                          ...hostOptions(),
-                          insightHostSelection(hostOptions(), hostId()),
-                        ]
-                  }
-                  onChange={setHostId}
-                  renderIcon={(option) =>
-                    props.renderHostAvatar?.(option) ?? (
-                      <InsightHostAvatar host={option} />
-                    )
-                  }
-                />
-                <InsightsRangeSelector
-                  inline
-                  from={props.from}
-                  to={props.to}
-                  timeZone={props.timeZone}
-                  now={now}
-                  onChange={props.onRangeChange}
-                />
-              </>
-            }
-          >
-            <SelectInput
-              label="Filter event types"
-              class="w-full text-sm touch:h-9"
-              value={eventId()}
-              options={eventOptions()}
-              onChange={setEventId}
-            />
-            <InsightsHostFilter
-              value={hostId()}
-              options={hostOptions()}
-              onChange={setHostId}
-              renderAvatar={props.renderHostAvatar}
-            />
-            <InsightsRangeSelector
-              from={props.from}
-              to={props.to}
-              timeZone={props.timeZone}
-              now={now}
-              onChange={props.onRangeChange}
-            />
-          </SchedulingFilters>
-        </div>
-      </div>
-      <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-ink-muted">
-        <p>
-          {formatDate(props.from)} – {formatDate(props.to)} ·{' '}
-          {props.timeZone.replaceAll('_', ' ')}
-        </p>
-        <Show when={eventId() !== 'all' || hostId() !== 'all'}>
-          <button
-            type="button"
-            class="underline underline-offset-2"
-            onClick={() => {
-              setEventId('all');
-              setHostId('all');
-            }}
-          >
-            Clear filters
-          </button>
-        </Show>
-      </div>
-      <Show when={props.error}>
-        <div
-          role="alert"
-          class="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-edge-muted p-5"
-        >
-          <p class="text-sm">{props.error}</p>
-          <Button variant="outline" onClick={props.onRetry}>
-            Try again
-          </Button>
-        </div>
+      <SelectInput
+        label="Filter event types"
+        class="w-full text-sm touch:h-9"
+        value={eventId()}
+        options={eventOptions()}
+        onChange={setEventId}
+      />
+      <InsightsHostFilter
+        value={hostId()}
+        options={hostOptions()}
+        onChange={setHostId}
+        renderAvatar={props.renderHostAvatar}
+      />
+      <InsightsRangeSelector
+        from={props.from}
+        to={props.to}
+        timeZone={props.timeZone}
+        now={now}
+        onChange={props.onRangeChange}
+      />
+    </SchedulingFilters>
+  );
+  return (
+    <>
+      <Show when={props.headerTitle}>
+        <ListHeader title={props.headerTitle}>
+          <HeaderActionGroup label="Insights actions">
+            <Button
+              size="icon-md"
+              label="Download CSV"
+              onClick={download}
+              disabled={!canDownload()}
+            >
+              <DownloadIcon />
+            </Button>
+            {filters()}
+          </HeaderActionGroup>
+        </ListHeader>
       </Show>
-      <Show when={props.loading}>
-        <p role="status" class="text-sm text-ink-muted">
-          Loading booking insights…
-        </p>
-      </Show>
-      <Show when={!props.error}>
-        <div
-          class="grid min-w-0 grid-cols-1 items-start gap-5 @min-[1000px]/insights:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]"
-          classList={{ 'opacity-50': props.loading }}
-        >
-          <div class="@container/insight-main flex min-w-0 flex-col gap-5">
-            <InsightSection title="Events">
-              <EventOutcomesChart rows={outcomes()} />
-              <div class="grid grid-cols-1 divide-y divide-edge-muted @sm/insight-main:grid-cols-2 @3xl/insight-main:grid-cols-4 @3xl/insight-main:divide-x @3xl/insight-main:divide-y-0">
-                <Metric
-                  label="Total events"
-                  definition="Bookings starting in this period, including pending and cancelled bookings. Failed and processing requests are excluded."
-                  value={current().counts.total}
-                  previous={previous().counts.total}
-                />
-                <Metric
-                  label="Events completed"
-                  definition="Confirmed bookings that have ended, excluding marked no-shows. This does not imply attendance was recorded."
-                  value={current().counts.completed}
-                  previous={previous().counts.completed}
-                />
-                <Metric
-                  label="Events rescheduled"
-                  definition="Bookings starting in this period with at least one recorded reschedule. Each booking is counted once."
-                  value={current().counts.rescheduled}
-                  previous={previous().counts.rescheduled}
-                />
-                <Metric
-                  label="Events cancelled"
-                  definition="Cancelled bookings with a scheduled start in this period."
-                  value={current().counts.cancelled}
-                  previous={previous().counts.cancelled}
-                  lowerIsBetter
-                />
-              </div>
-            </InsightSection>
-            <InsightSection title="Performance">
-              <div class="grid grid-cols-1 divide-y divide-edge-muted @sm/insight-main:grid-cols-2 @3xl/insight-main:grid-cols-4 @3xl/insight-main:divide-x @3xl/insight-main:divide-y-0">
-                <Metric
-                  label="Hours in meetings"
-                  definition="Total scheduled duration of completed events. Actual call duration is not tracked."
-                  value={current().meetingMinutes / 60}
-                  previous={previous().meetingMinutes / 60}
-                  unit="hrs"
-                />
-                <Metric
-                  label="Average duration"
-                  definition="Average scheduled duration of confirmed bookings starting in this period, in minutes."
-                  value={current().averageMinutes}
-                  previous={previous().averageMinutes}
-                  unit="min"
-                />
-                <Metric
-                  label="No-show (host)"
-                  definition="Bookings explicitly marked as a host no-show. Unrecorded attendance is not treated as a no-show."
-                  value={current().counts.hostNoShow}
-                  previous={previous().counts.hostNoShow}
-                  lowerIsBetter
-                />
-                <Metric
-                  label="No-show (guest)"
-                  definition="Bookings explicitly marked as a guest no-show. Unrecorded attendance is not treated as a no-show."
-                  value={current().counts.guestNoShow}
-                  previous={previous().counts.guestNoShow}
-                  lowerIsBetter
-                />
-              </div>
-            </InsightSection>
-            <Show when={!props.loading && !current().bookings.length}>
-              <p class="rounded-lg border border-dashed border-edge-muted px-5 py-4 text-sm text-ink-muted">
-                No bookings match this period and these filters. Try another
-                date range or clear the filters.
-              </p>
-            </Show>
-            <TrendChart days={current().days} />
+      <div
+        class={cn(
+          '@container/insights flex w-full min-w-0 flex-col gap-5',
+          props.headerTitle && 'px-4 pt-3'
+        )}
+        aria-busy={props.loading}
+      >
+        <Show when={!props.headerTitle}>
+          <div class="flex min-w-0 flex-wrap items-center gap-2">
+            {props.scopeSelector}
+            <div class="ml-auto flex min-w-0 items-center gap-2">
+              <Button
+                variant="outline"
+                onClick={download}
+                disabled={!canDownload()}
+              >
+                <DownloadIcon class="size-4" />
+                Download
+              </Button>
+              {filters()}
+            </div>
           </div>
-          <div class="flex min-w-0 flex-col gap-5">
-            <RankedList
-              title="Popular event types"
-              description="Number of bookings by event type"
-              rows={current().eventCounts.map((row) => ({
-                ...row,
-                name:
-                  props.events.find((event) => event.id === row.id)?.title ??
-                  row.name,
-              }))}
-              empty="No event types booked in this period."
-            />
-            <HourChart hours={current().hours} />
-            <Show when={hostOptions().length > 2}>
+        </Show>
+        <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-ink-muted">
+          <p>
+            {formatDate(props.from)} – {formatDate(props.to)} ·{' '}
+            {props.timeZone.replaceAll('_', ' ')}
+          </p>
+          <Show when={eventId() !== 'all' || hostId() !== 'all'}>
+            <button
+              type="button"
+              class="underline underline-offset-2"
+              onClick={() => {
+                setEventId('all');
+                setHostId('all');
+              }}
+            >
+              Clear filters
+            </button>
+          </Show>
+        </div>
+        <Show when={props.error}>
+          <div
+            role="alert"
+            class="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-edge-muted p-5"
+          >
+            <p class="text-sm">{props.error}</p>
+            <Button variant="outline" onClick={props.onRetry}>
+              Try again
+            </Button>
+          </div>
+        </Show>
+        <Show when={props.loading}>
+          <p role="status" class="text-sm text-ink-muted">
+            Loading booking insights…
+          </p>
+        </Show>
+        <Show when={!props.error}>
+          <div
+            class="grid min-w-0 grid-cols-1 items-start gap-5 @min-[1000px]/insights:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]"
+            classList={{ 'opacity-50': props.loading }}
+          >
+            <div class="@container/insight-main flex min-w-0 flex-col gap-5">
+              <InsightSection title="Events">
+                <EventOutcomesChart rows={outcomes()} />
+                <div class="grid grid-cols-1 divide-y divide-edge-muted @sm/insight-main:grid-cols-2 @3xl/insight-main:grid-cols-4 @3xl/insight-main:divide-x @3xl/insight-main:divide-y-0">
+                  <Metric
+                    label="Total events"
+                    definition="Bookings starting in this period, including pending and cancelled bookings. Failed and processing requests are excluded."
+                    value={current().counts.total}
+                    previous={previous().counts.total}
+                  />
+                  <Metric
+                    label="Events completed"
+                    definition="Confirmed bookings that have ended, excluding marked no-shows. This does not imply attendance was recorded."
+                    value={current().counts.completed}
+                    previous={previous().counts.completed}
+                  />
+                  <Metric
+                    label="Events rescheduled"
+                    definition="Bookings starting in this period with at least one recorded reschedule. Each booking is counted once."
+                    value={current().counts.rescheduled}
+                    previous={previous().counts.rescheduled}
+                  />
+                  <Metric
+                    label="Events cancelled"
+                    definition="Cancelled bookings with a scheduled start in this period."
+                    value={current().counts.cancelled}
+                    previous={previous().counts.cancelled}
+                    lowerIsBetter
+                  />
+                </div>
+              </InsightSection>
+              <InsightSection title="Performance">
+                <div class="grid grid-cols-1 divide-y divide-edge-muted @sm/insight-main:grid-cols-2 @3xl/insight-main:grid-cols-4 @3xl/insight-main:divide-x @3xl/insight-main:divide-y-0">
+                  <Metric
+                    label="Hours in meetings"
+                    definition="Total scheduled duration of completed events. Actual call duration is not tracked."
+                    value={current().meetingMinutes / 60}
+                    previous={previous().meetingMinutes / 60}
+                    unit="hrs"
+                  />
+                  <Metric
+                    label="Average duration"
+                    definition="Average scheduled duration of confirmed bookings starting in this period, in minutes."
+                    value={current().averageMinutes}
+                    previous={previous().averageMinutes}
+                    unit="min"
+                  />
+                  <Metric
+                    label="No-show (host)"
+                    definition="Bookings explicitly marked as a host no-show. Unrecorded attendance is not treated as a no-show."
+                    value={current().counts.hostNoShow}
+                    previous={previous().counts.hostNoShow}
+                    lowerIsBetter
+                  />
+                  <Metric
+                    label="No-show (guest)"
+                    definition="Bookings explicitly marked as a guest no-show. Unrecorded attendance is not treated as a no-show."
+                    value={current().counts.guestNoShow}
+                    previous={previous().counts.guestNoShow}
+                    lowerIsBetter
+                  />
+                </div>
+              </InsightSection>
+              <Show when={!props.loading && !current().bookings.length}>
+                <p class="rounded-lg border border-dashed border-edge-muted px-5 py-4 text-sm text-ink-muted">
+                  No bookings match this period and these filters. Try another
+                  date range or clear the filters.
+                </p>
+              </Show>
+              <TrendChart days={current().days} />
+            </div>
+            <div class="flex min-w-0 flex-col gap-5">
               <RankedList
-                title="Bookings by host"
-                description="Collective bookings count toward each participating host"
-                rows={current().hostCounts.map((row) => ({
+                title="Popular event types"
+                description="Number of bookings by event type"
+                rows={current().eventCounts.map((row) => ({
                   ...row,
                   name:
-                    props.members.find((member) => member.id === row.id)
-                      ?.name ?? 'Former member',
+                    props.events.find((event) => event.id === row.id)?.title ??
+                    row.name,
                 }))}
-                empty="No hosts with bookings in this period."
+                empty="No event types booked in this period."
               />
-            </Show>
+              <HourChart hours={current().hours} />
+              <Show when={hostOptions().length > 2}>
+                <RankedList
+                  title="Bookings by host"
+                  description="Collective bookings count toward each participating host"
+                  rows={current().hostCounts.map((row) => ({
+                    ...row,
+                    name:
+                      props.members.find((member) => member.id === row.id)
+                        ?.name ?? 'Former member',
+                  }))}
+                  empty="No hosts with bookings in this period."
+                />
+              </Show>
+            </div>
+            <p class="col-span-full text-xs leading-relaxed text-ink-muted">
+              Compared with{' '}
+              {formatDate(
+                previousInsightRange({ from: props.from, to: props.to }).from
+              )}{' '}
+              –{' '}
+              {formatDate(
+                previousInsightRange({ from: props.from, to: props.to }).to
+              )}
+              . All charts use the booking’s current start date in{' '}
+              {props.timeZone.replaceAll('_', ' ')}. A booking can be both
+              rescheduled and completed or cancelled.
+            </p>
           </div>
-          <p class="col-span-full text-xs leading-relaxed text-ink-muted">
-            Compared with{' '}
-            {formatDate(
-              previousInsightRange({ from: props.from, to: props.to }).from
-            )}{' '}
-            –{' '}
-            {formatDate(
-              previousInsightRange({ from: props.from, to: props.to }).to
-            )}
-            . All charts use the booking’s current start date in{' '}
-            {props.timeZone.replaceAll('_', ' ')}. A booking can be both
-            rescheduled and completed or cancelled.
-          </p>
-        </div>
-      </Show>
-    </div>
+        </Show>
+      </div>
+    </>
   );
 }

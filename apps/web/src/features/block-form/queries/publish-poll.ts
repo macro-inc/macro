@@ -38,11 +38,14 @@ export function publishPoll(
   if (!question) return errAsync({ message: 'Ask a question.' });
   if (labels.length < 2)
     return errAsync({ message: 'Give at least two options.' });
-  return createForm({ name: question, source: { kind: 'new' } }, 'poll')
+  return createForm(
+    { name: question, source: { kind: 'new', isHiddenInDrive: true } },
+    'poll'
+  )
     .mapErr(writeFailureOf)
     .andThen((detail) => {
       const { databaseId, tableId, id: formId } = detail.form;
-      // A step refused after the form exists leaves nothing behind in Drive.
+      // A step refused after the form exists leaves nothing behind.
       const abandon = (failure: FormWriteFailure) =>
         new ResultAsync<never, FormWriteFailure>(
           discard({ formId, databaseId }).match(
@@ -50,7 +53,7 @@ export function publishPoll(
             () =>
               err({
                 ...failure,
-                message: `${failure.message} The unfinished poll is still in Drive.`,
+                message: `${failure.message} The unfinished poll could not be removed.`,
               })
           )
         );

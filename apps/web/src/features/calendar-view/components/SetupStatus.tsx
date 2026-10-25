@@ -1,9 +1,11 @@
 import { useCalendarPager } from '@app/features/calendar/components/CalendarPagerContext';
 import { isCalendarRangeSupported } from '@app/features/calendar/utils/calendar-supported-range';
+import { useUserId } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
 import { useEmailLinksQuery } from '@queries/email/link';
+import type { Link as EmailLink } from '@service-email/generated/schemas';
 import { Button } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
 
@@ -31,6 +33,12 @@ const SETUP_MESSAGES = {
   },
 } as const;
 
+function isWorkingCalendar(link: EmailLink) {
+  return (
+    link.is_sync_active && !link.needs_calendar_permission && !link.needs_reauth
+  );
+}
+
 /** Displays account setup actions above the complete calendar pager. */
 export function SetupStatus() {
   const calendarPager = useCalendarPager();
@@ -42,10 +50,28 @@ export function SetupStatus() {
       : []
   );
   const startAddInbox = useAddInboxFlow();
+  const userId = useUserId();
+
+  // The links list also carries inboxes another Macro user delegated to the
+  // viewer. Whether that user's calendar syncs is theirs to decide, as in the
+  // calendar settings, so setup counts and acts on the viewer's own alone.
+  const ownLinks = () =>
+    linksQuery.isSuccess
+      ? (linksQuery.data?.links ?? []).filter(
+          (link) => link.macro_id === userId()
+        )
+      : [];
 
   const hasEvents = () =>
     (calendarPager.activeData()?.events().length ?? 0) > 0 ||
     calendarPager.activeTeamEvents().length > 0;
+
+  // A working calendar shared with the viewer still fills the grid, so a week
+  // without events is not a sign that nothing is set up: setting up their own
+  // stays on offer without covering the grid.
+  const seesWorkingCalendar = () =>
+    linksQuery.isSuccess &&
+    (linksQuery.data?.links ?? []).some(isWorkingCalendar);
 
   // Existing events are not evidence that setup is complete: a revoked grant
   // or delegated inbox can leave events visible without a working calendar
@@ -57,20 +83,18 @@ export function SetupStatus() {
     const range = activeData?.range();
     if (range && !isCalendarRangeSupported(range)) return undefined;
 
-    if (!linksQuery.isSuccess || !activeData?.occurrencesQuery.isSuccess) {
+    if (
+      !linksQuery.isSuccess ||
+      !activeData?.occurrencesQuery.isSuccess ||
+      userId() === undefined
+    ) {
       return undefined;
     }
 
-    const links = linksQuery.data?.links ?? [];
+    const links = ownLinks();
     if (links.length === 0) return 'connect';
 
-    const hasAvailableCalendar = links.some(
-      (link) =>
-        link.is_sync_active &&
-        !link.needs_calendar_permission &&
-        !link.needs_reauth
-    );
-    if (hasAvailableCalendar) return undefined;
+    if (links.some(isWorkingCalendar)) return undefined;
     if (links.some((link) => link.needs_reauth)) return 'reauth';
     if (links.some((link) => link.needs_calendar_permission)) {
       // A calendar the user turned off is not a missing upgrade; say so, and
@@ -94,7 +118,7 @@ export function SetupStatus() {
   // alone. Connecting and reconnecting need the mailbox scopes alongside it.
   const startSetup = () => {
     const state = setupState();
-    const links = linksQuery.isSuccess ? linksQuery.data.links : [];
+    const links = ownLinks();
     const link =
       state === 'reauth'
         ? links.find((link) => link.needs_reauth)
@@ -131,7 +155,7 @@ export function SetupStatus() {
       </Show>
       <Show when={setupState() !== undefined}>
         <Show
-          when={!hasEvents()}
+          when={!hasEvents() && !seesWorkingCalendar()}
           fallback={
             <div class="absolute right-2 bottom-2 z-20 flex items-center gap-2 rounded-full border border-edge-muted bg-surface py-1 pr-1 pl-2.5 text-xs text-ink-muted shadow-menu">
               <span>{setupMessage().title}</span>

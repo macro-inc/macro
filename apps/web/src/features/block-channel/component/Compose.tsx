@@ -42,6 +42,7 @@ import {
   handleFileFolderDrop,
   uploadFile,
 } from '@core/util/upload';
+import { Telemetry } from '@macro-inc/observability';
 import InfoIcon from '@phosphor/info.svg';
 import { useCreateChannelMutation } from '@queries/channel/channels';
 import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
@@ -214,6 +215,17 @@ export function ChannelCompose() {
     callbacks: { onSend: handleSend },
   });
 
+  const send = async () => {
+    try {
+      await inputState.commands.send();
+    } catch (sendError) {
+      // `handleSend` shows its own failures in the compose error and rethrows.
+      if (error()) return;
+      setError('Failed to send message');
+      Telemetry.error(sendError, { surface: 'channel-compose' });
+    }
+  };
+
   const [scrollContainer, setScrollContainer] = createSignal<HTMLElement>();
 
   const markdownEditor = createConfiguredChannelMarkdownEditor({
@@ -226,17 +238,16 @@ export function ChannelCompose() {
     onChange: (markdown) => inputState.setValue(markdown),
     onEnter: () => {
       if (isTouchDevice()) return false;
-      fireAndForget(inputState.commands.send(), 'block-channel');
+      fireAndForget(send(), 'channel-compose');
       return true;
     },
-    sendMessage: () =>
-      fireAndForget(inputState.commands.send(), 'block-channel'),
+    sendMessage: () => fireAndForget(send(), 'channel-compose'),
     onPasteFilesAndDirs: (files, directories) => {
       fireAndForget(
         handleFileFolderDrop(files, directories, (entries) =>
           inputState.commands.attachFiles(entries.map((e) => e.file))
         ),
-        'block-channel'
+        'channel-compose'
       );
     },
   });

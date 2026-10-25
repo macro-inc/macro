@@ -1,4 +1,3 @@
-import { TabsInset } from '@core/component/TabsInset';
 import TagIcon from '@phosphor/tag-simple.svg';
 import TrashIcon from '@phosphor/trash.svg';
 import XIcon from '@phosphor/x.svg';
@@ -10,7 +9,7 @@ import {
 } from '@queries/properties/tags';
 import type { PropertyOptionResponse } from '@service-properties/generated/schemas/propertyOptionResponse';
 import type { TagScope } from '@service-properties/generated/schemas/tagScope';
-import { Button, CommandMenuShell, Dialog, Hotkey } from '@ui';
+import { Button, CommandMenuShell, Dialog, Hotkey, Tabs } from '@ui';
 import type { JSX } from 'solid-js';
 import { createEffect, createMemo, createSignal, Show } from 'solid-js';
 import { ColorSwatches } from './components/color-swatches';
@@ -228,19 +227,20 @@ export function TagEditorDialog(props: {
 
             <Show when={props.mode?.type === 'create'}>
               <EditorRow label="Sharing">
-                <TabsInset
-                  depth={0}
-                  list={[
-                    { value: 'team', label: 'Team' },
+                <Tabs
+                  aria-label="Sharing"
+                  size="sm"
+                  touch="inset"
+                  options={[
+                    {
+                      value: 'team',
+                      label: 'Team',
+                      disabled: !props.teamAvailable,
+                    },
                     { value: 'user', label: 'Personal' },
                   ]}
                   value={scope()}
-                  onChange={(value) => {
-                    if (value === 'team' && !props.teamAvailable) return;
-                    if (value === 'team' || value === 'user') {
-                      setScope(value);
-                    }
-                  }}
+                  onChange={setScope}
                 />
               </EditorRow>
             </Show>

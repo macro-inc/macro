@@ -22,6 +22,7 @@ import type { ApiMessageProviderHistoryId } from './apiMessageProviderHistoryId'
 import type { ApiMessageProviderId } from './apiMessageProviderId';
 import type { ApiMessageProviderThreadId } from './apiMessageProviderThreadId';
 import type { ApiMessageReplyingToId } from './apiMessageReplyingToId';
+import type { ApiMessageScheduledSendStatus } from './apiMessageScheduledSendStatus';
 import type { ApiMessageScheduledSendTime } from './apiMessageScheduledSendTime';
 import type { ApiMessageSentAt } from './apiMessageSentAt';
 import type { ApiMessageSizeEstimate } from './apiMessageSizeEstimate';
@@ -45,6 +46,8 @@ export interface ApiMessage {
   cc: ApiContactInfo[];
   created_at: string;
   db_id: string;
+  /** Draft edit generation; changes at send and cancellation boundaries. */
+  draft_generation: number;
   from?: ApiMessageFrom;
   global_id?: ApiMessageGlobalId;
   has_attachments: boolean;
@@ -61,6 +64,7 @@ export interface ApiMessage {
   provider_id?: ApiMessageProviderId;
   provider_thread_id?: ApiMessageProviderThreadId;
   replying_to_id?: ApiMessageReplyingToId;
+  scheduled_send_status?: ApiMessageScheduledSendStatus;
   scheduled_send_time?: ApiMessageScheduledSendTime;
   sent_at?: ApiMessageSentAt;
   size_estimate?: ApiMessageSizeEstimate;

@@ -1,6 +1,6 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import UsersThree from '@phosphor/users-three.svg';
-import { Button, ToggleSwitch } from '@ui';
+import { Button, Input, ToggleSwitch } from '@ui';
 import { ResultAsync } from 'neverthrow';
 import { createSignal, Show } from 'solid-js';
 import { AudiencePanel } from '../components/share/audience-panel';
@@ -121,7 +121,7 @@ export function ShareTabView(props: {
               Close automatically
             </span>
             <span class="flex items-center gap-2">
-              <input
+              <Input
                 type="datetime-local"
                 value={
                   form().closesAt
@@ -129,7 +129,6 @@ export function ShareTabView(props: {
                     : ''
                 }
                 disabled={!isOwner() || pending()}
-                class="h-9 rounded-md border border-edge-muted bg-input px-2.5 text-sm text-ink outline-none focus:border-edge-focus disabled:opacity-60"
                 onChange={(event) => {
                   const closesAt = instantFromLocalInput(
                     event.currentTarget.value

@@ -290,7 +290,7 @@ export function useListInteractions<TItem, TMetadata = unknown>(
   }).withGroup(group);
 
   registerHotkey({
-    hotkey: 'home',
+    hotkey: ['home', 'cmd+arrowup'],
     hotkeyToken: TOKENS.entity.jump.home,
     scopeId: options.scopeId,
     description: 'Go to first item',
@@ -311,7 +311,7 @@ export function useListInteractions<TItem, TMetadata = unknown>(
   }).withGroup(group);
 
   registerHotkey({
-    hotkey: ['end', 'shift+g'],
+    hotkey: ['end', 'shift+g', 'cmd+arrowdown'],
     hotkeyToken: TOKENS.entity.jump.end,
     scopeId: options.scopeId,
     description: 'Go to last item',

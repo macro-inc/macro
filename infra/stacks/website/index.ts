@@ -5,6 +5,7 @@ import * as pulumi from '@pulumi/pulumi';
 import { hasItems } from '../../packages/utils';
 
 const config = new pulumi.Config();
+const BASE_NAME = pulumi.getProject();
 
 const certArn = config.require('certArn');
 const domain = config.require('domain');
@@ -148,8 +149,6 @@ const wwwRedirectFn = new aws.cloudfront.Function(
   }
 );
 
-const SHARED_ARRAY_RESPONSE_HEADERS_MAX_AGE_CACHE_CONTROL =
-  '78ba335f-4e54-45a3-85d5-1d9933b1363d';
 const SHARED_ARRAY_RESPONSE_HEADERS_NO_CACHE_CONTROL =
   'c9d6f215-ca3d-4c29-8eb4-41ee30fb2129';
 const CACHING_DISABLED = '4135ea2d-6df8-44a3-9df3-4b5a84be39ad';
@@ -207,22 +206,44 @@ const bookingPageHeadersPolicy = new aws.cloudfront.ResponseHeadersPolicy(
   }
 );
 
+const compressedCacheKey = {
+  enableAcceptEncodingGzip: true,
+  enableAcceptEncodingBrotli: true,
+  cookiesConfig: { cookieBehavior: 'none' },
+  headersConfig: { headerBehavior: 'none' },
+  queryStringsConfig: { queryStringBehavior: 'none' },
+};
+
 const compressibleCachePolicy = new aws.cloudfront.CachePolicy(
   `cache-policy-${stack}`,
+  { parametersInCacheKeyAndForwardedToOrigin: compressedCacheKey }
+);
+
+// Immutable objects carry their lifetime in S3 metadata. Missing objects and
+// mutable entrypoints must never inherit a one-year browser or edge lifetime.
+const appAssetHeadersPolicy = new aws.cloudfront.ResponseHeadersPolicy(
+  `${BASE_NAME}-app-asset-headers-${stack}`,
   {
-    parametersInCacheKeyAndForwardedToOrigin: {
-      enableAcceptEncodingGzip: true,
-      enableAcceptEncodingBrotli: true,
-      cookiesConfig: {
-        cookieBehavior: 'none',
-      },
-      headersConfig: {
-        headerBehavior: 'none',
-      },
-      queryStringsConfig: {
-        queryStringBehavior: 'none',
-      },
+    name: `${BASE_NAME}-app-asset-headers-${stack}`,
+    customHeadersConfig: {
+      items: [
+        {
+          header: 'Cross-Origin-Opener-Policy',
+          value: 'same-origin-allow-popups',
+          override: true,
+        },
+        { header: 'Cache-Control', value: 'no-store', override: false },
+      ],
     },
+  }
+);
+const appAssetCachePolicy = new aws.cloudfront.CachePolicy(
+  `${BASE_NAME}-app-asset-cache-${stack}`,
+  {
+    minTtl: 0,
+    defaultTtl: 0,
+    maxTtl: 31536000,
+    parametersInCacheKeyAndForwardedToOrigin: compressedCacheKey,
   }
 );
 
@@ -334,13 +355,12 @@ const cdn = new aws.cloudfront.Distribution(`cdn-${stack}`, {
     },
     {
       pathPattern: '/app/*.*',
-      responseHeadersPolicyId:
-        SHARED_ARRAY_RESPONSE_HEADERS_MAX_AGE_CACHE_CONTROL,
+      responseHeadersPolicyId: appAssetHeadersPolicy.id,
       targetOriginId: macroWebAppBucketArn,
       viewerProtocolPolicy: 'redirect-to-https',
       allowedMethods: ['GET', 'HEAD', 'OPTIONS'],
       cachedMethods: ['GET', 'HEAD', 'OPTIONS'],
-      cachePolicyId: compressibleCachePolicy.id,
+      cachePolicyId: appAssetCachePolicy.id,
       compress: true,
     },
     ...['/app/book/*', '/app/booking/*'].map((pathPattern) => ({
@@ -393,6 +413,11 @@ const cdn = new aws.cloudfront.Distribution(`cdn-${stack}`, {
       },
     },
   ],
+  // A transient missing upload must not remain an edge error after publication.
+  customErrorResponses: [403, 404, 500, 502, 503, 504].map((errorCode) => ({
+    errorCode,
+    errorCachingMinTtl: 0,
+  })),
   restrictions: {
     geoRestriction: {
       restrictionType: 'none',

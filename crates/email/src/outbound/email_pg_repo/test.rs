@@ -11,13 +11,17 @@ mod project;
 mod project_scope_dynamic_query;
 mod reminder_collection;
 mod scheduled;
+mod scheduled_trash;
+mod send_attempt;
 mod sender_names;
 mod senders;
+mod sending_inbox;
 mod settings;
 mod signal_flag;
 mod thread;
 mod thread_archive;
 mod thread_labels;
+mod thread_redirect;
 mod thread_unread;
 
 use std::sync::Arc;

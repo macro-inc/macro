@@ -784,6 +784,16 @@
         "operationId": "upsert_scheduled_message",
         "parameters": [
           {
+            "name": "draft_generation",
+            "in": "query",
+            "description": "Generation from the last loaded draft. Legacy clients use zero.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
             "name": "id",
             "in": "path",
             "description": "The ID of the draft message to schedule",
@@ -875,6 +885,16 @@
         "operationId": "delete_scheduled_draft",
         "parameters": [
           {
+            "name": "draft_generation",
+            "in": "query",
+            "description": "Generation from the last loaded draft. Legacy clients use zero.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
             "name": "message_id",
             "in": "path",
             "description": "The ID of the draft",
@@ -948,6 +968,16 @@
         "summary": "Delete a draft.",
         "operationId": "delete_draft",
         "parameters": [
+          {
+            "name": "draft_generation",
+            "in": "query",
+            "description": "Generation from the last loaded draft. Legacy clients use zero.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
           {
             "name": "id",
             "in": "path",
@@ -1027,6 +1057,16 @@
             "schema": {
               "type": "string",
               "format": "uuid"
+            }
+          },
+          {
+            "name": "draft_generation",
+            "in": "query",
+            "description": "Generation from the last loaded draft. Legacy clients use zero.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
             }
           }
         ],
@@ -1119,6 +1159,16 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "draft_generation",
+            "in": "query",
+            "description": "Generation from the last loaded draft. Legacy clients use zero.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
           }
         ],
         "responses": {
@@ -1182,6 +1232,16 @@
         "operationId": "complete_draft_attachment",
         "parameters": [
           {
+            "name": "draft_generation",
+            "in": "query",
+            "description": "Generation from the last loaded draft. Legacy clients use zero.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
             "name": "id",
             "in": "path",
             "required": true,
@@ -1236,6 +1296,16 @@
             "schema": {
               "type": "string",
               "format": "uuid"
+            }
+          },
+          {
+            "name": "draft_generation",
+            "in": "query",
+            "description": "Generation from the last loaded draft. Legacy clients use zero.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
             }
           }
         ],
@@ -1307,6 +1377,16 @@
             "schema": {
               "type": "string",
               "format": "uuid"
+            }
+          },
+          {
+            "name": "draft_generation",
+            "in": "query",
+            "description": "Generation from the last loaded draft. Legacy clients use zero.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
             }
           }
         ],
@@ -2642,8 +2722,21 @@
     "/email/sync": {
       "delete": {
         "tags": ["Sync"],
-        "summary": "Disables inbox syncing for user.",
+        "summary": "Disables inbox syncing for the selected inbox.",
+        "description": "The inbox is the caller's primary, or the one named by `X-Email-Link-Id`,\nwhich may be an inbox the caller only reaches through delegation. Removal\ntherefore follows the same policy as `DELETE /email/links/{link_id}`: an\nowner's inbox is torn down, while a delegate only loses their\n`macro_user_links` edge and the owner's data stays intact.",
         "operationId": "disable_sync",
+        "parameters": [
+          {
+            "name": "X-Email-Link-Id",
+            "in": "header",
+            "description": "Inbox link ID to act on instead of the caller's primary inbox; may name a delegated inbox.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"],
+              "format": "uuid"
+            }
+          }
+        ],
         "responses": {
           "204": {
             "description": "",
@@ -2666,6 +2759,36 @@
             }
           },
           "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
             "description": "",
             "content": {
               "application/json": {
@@ -3716,6 +3839,11 @@
             "format": "uuid",
             "description": "Existing message DB ID (for updating an existing draft)."
           },
+          "draft_generation": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Generation from the last loaded draft; legacy clients begin at zero."
+          },
           "headers_json": {
             "oneOf": [
               {
@@ -3765,7 +3893,7 @@
       "ApiDraftOutput": {
         "type": "object",
         "description": "The draft output matching the current `MessageToSend` JSON shape for backward compat.",
-        "required": ["link_id", "subject"],
+        "required": ["draft_generation", "link_id", "subject"],
         "properties": {
           "bcc": {
             "type": ["array", "null"],
@@ -3797,6 +3925,11 @@
             "type": ["string", "null"],
             "format": "uuid",
             "description": "Message DB ID."
+          },
+          "draft_generation": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Generation required for subsequent edits."
           },
           "headers_json": {
             "oneOf": [
@@ -3928,6 +4061,7 @@
         "type": "object",
         "description": "API representation of a fully assembled email message.",
         "required": [
+          "draft_generation",
           "db_id",
           "thread_db_id",
           "link_id",
@@ -4003,6 +4137,11 @@
             "type": "string",
             "format": "uuid"
           },
+          "draft_generation": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Draft edit generation; changes at send and cancellation boundaries."
+          },
           "from": {
             "oneOf": [
               {
@@ -4068,6 +4207,17 @@
           "replying_to_id": {
             "type": ["string", "null"],
             "format": "uuid"
+          },
+          "scheduled_send_status": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ScheduledSendStatus",
+                "description": "Delivery state, including failures and unresolved provider outcomes."
+              }
+            ]
           },
           "scheduled_send_time": {
             "type": ["string", "null"],
@@ -4737,6 +4887,9 @@
           "sequence",
           "isReadOnly",
           "attendees",
+          "guestPolicy",
+          "isSnapshot",
+          "viewerCan",
           "createdAt",
           "updatedAt"
         ],
@@ -4789,6 +4942,10 @@
             "$ref": "#/components/schemas/EventType",
             "description": "Provider event type. Skipped when it is the regular type so\nprojections stored before event types were modeled still compare\nequal."
           },
+          "guestPolicy": {
+            "$ref": "#/components/schemas/GuestPolicy",
+            "description": "What the organizer lets guests do: the canonical copy's values, or\nGoogle's defaults for an event synced before the policy was modeled."
+          },
           "icalUid": {
             "type": "string",
             "description": "RFC 5545 UID used to reconcile provider and email sources."
@@ -4801,6 +4958,10 @@
           "isReadOnly": {
             "type": "boolean",
             "description": "Whether the canonical source's calendar prohibits editing it."
+          },
+          "isSnapshot": {
+            "type": "boolean",
+            "description": "Whether this is a snapshot of a meeting shared with the owner, which\nMacro added to their calendar as a private copy: the meeting's changes\nnever reach it, and nothing done to it reaches the meeting."
           },
           "location": {
             "type": ["string", "null"],
@@ -4862,6 +5023,10 @@
             "type": "string",
             "format": "date-time",
             "description": "Entity update time."
+          },
+          "viewerCan": {
+            "$ref": "#/components/schemas/ViewerCapabilities",
+            "description": "What the viewing requester may do with the event. Resolved only on\nthe read path, alongside each attendee's `is_self`; nothing when no\nviewer is known. Source projections never store it."
           },
           "visibility": {
             "$ref": "#/components/schemas/EventVisibility",
@@ -5421,6 +5586,25 @@
         "properties": {
           "thread": {
             "$ref": "#/components/schemas/ApiThread"
+          }
+        }
+      },
+      "GuestPolicy": {
+        "type": "object",
+        "description": "The switches an organizer sets on an event to bound what its guests may\ndo. Google omits a switch from the payload while it holds its default.",
+        "required": ["canModify", "canInviteOthers", "canSeeOtherGuests"],
+        "properties": {
+          "canInviteOthers": {
+            "type": "boolean",
+            "description": "Whether guests may invite others."
+          },
+          "canModify": {
+            "type": "boolean",
+            "description": "Whether guests may change the event, including its guest list."
+          },
+          "canSeeOtherGuests": {
+            "type": "boolean",
+            "description": "Whether guests may see the guest list."
           }
         }
       },
@@ -6268,6 +6452,11 @@
             "type": "string",
             "format": "uuid"
           },
+          "draft_generation": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Draft edit generation captured with this message snapshot."
+          },
           "from": {
             "oneOf": [
               {
@@ -6523,6 +6712,11 @@
           }
         }
       },
+      "ScheduledSendStatus": {
+        "type": "string",
+        "description": "The user-visible delivery state of an unsent scheduled message.",
+        "enum": ["pending", "sending", "failed", "unconfirmed"]
+      },
       "SendMessageRequest": {
         "type": "object",
         "description": "Request body for sending a message (backward-compatible with `{ message: MessageToSend }`).",
@@ -6764,6 +6958,11 @@
           "destination_link_id": {
             "type": "string",
             "format": "uuid"
+          },
+          "draft_generation": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Generation captured with the source draft."
           },
           "operation_id": {
             "type": "string",
@@ -7022,7 +7221,45 @@
         "type": "string",
         "enum": ["GMAIL", "OUTLOOK"]
       },
-      "Value": {}
+      "Value": {},
+      "ViewerCapabilities": {
+        "type": "object",
+        "description": "What the viewing requester may do with an event.",
+        "required": [
+          "editDetails",
+          "inviteGuests",
+          "removeGuests",
+          "setGuestPolicy",
+          "rsvp",
+          "organize"
+        ],
+        "properties": {
+          "editDetails": {
+            "type": "boolean",
+            "description": "Change the event's details (title, time, description, conference)."
+          },
+          "inviteGuests": {
+            "type": "boolean",
+            "description": "Add guests."
+          },
+          "organize": {
+            "type": "boolean",
+            "description": "Act as the event's organizer: replace its whole guest list and manage\nits conferencing."
+          },
+          "removeGuests": {
+            "type": "boolean",
+            "description": "Remove guests."
+          },
+          "rsvp": {
+            "type": "boolean",
+            "description": "Answer the invitation."
+          },
+          "setGuestPolicy": {
+            "type": "boolean",
+            "description": "Change the event's guest policy, which only Google calendars have."
+          }
+        }
+      }
     }
   },
   "tags": [

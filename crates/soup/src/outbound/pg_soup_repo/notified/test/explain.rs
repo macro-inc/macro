@@ -9,6 +9,10 @@ const PAGE_SIZE: i64 = 100;
 
 // Both alternatives use the production query's bindings and access scopes.
 // The SQL is generated from AST gates, so this cannot use a static SQLx macro.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "binds SQL generated from AST gates"
+)]
 fn bind_query(sql: &str) -> Query<'_, Postgres, PgArguments> {
     let links = vec![Uuid::parse_str(LINK_1).unwrap()];
     let sources = sources();

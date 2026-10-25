@@ -1,4 +1,7 @@
-import type { EmailScheduleState } from '@app/features/email-compose/primitives/email-send-schedule';
+import {
+  type EmailScheduleState,
+  scheduleTimeLocked,
+} from '@app/features/email-compose/primitives/email-send-schedule';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ClockIcon from '@phosphor/clock.svg';
 import { buttonClasses, cn, Tooltip } from '@ui';
@@ -37,6 +40,8 @@ export const EmailDateSelector: VoidComponent<EmailDateSelectorProps> = (
   const hasProposal = () =>
     props.state.type === 'scheduled' && !!props.state.proposedTime;
   const accessibleLabel = () => {
+    if (scheduleTimeLocked(props.state))
+      return 'Send time cannot be changed during delivery or recovery.';
     const label = formattedDate();
     if (!label) return 'Choose send time';
     if (!isConfirmed()) return `Send time set to ${label}. Open to change it.`;
@@ -60,7 +65,7 @@ export const EmailDateSelector: VoidComponent<EmailDateSelectorProps> = (
         <DateSelector
           selectedDate={props.selectedTime}
           onSelectDate={props.onSelectTime}
-          disabled={props.disabled}
+          disabled={props.disabled || scheduleTimeLocked(props.state)}
           disablePriorToDate={new Date()}
           disableAfterDate={addYears(new Date(), 1)}
           disablePortal={props.disablePortal}
@@ -76,7 +81,13 @@ export const EmailDateSelector: VoidComponent<EmailDateSelectorProps> = (
                 : undefined
           }
           footer={
-            <Show when={props.mobile && isConfirmed()}>
+            <Show
+              when={
+                props.mobile &&
+                isConfirmed() &&
+                !scheduleTimeLocked(props.state)
+              }
+            >
               <div class="flex flex-col gap-2">
                 <p class="px-1 text-xs text-ink-muted">
                   {hasProposal()
@@ -100,7 +111,7 @@ export const EmailDateSelector: VoidComponent<EmailDateSelectorProps> = (
             </Show>
           }
           triggerClass={cn(
-            buttonClasses({ size: 'icon-composer' }),
+            buttonClasses({ size: props.mobile ? 'icon-sm' : 'icon-composer' }),
             props.selectedTime &&
               !isCompact() &&
               'min-w-0 max-w-full shrink gap-1 aspect-auto! bg-accent/20 text-accent hover:bg-accent/15! hover:text-accent! not-touch:min-w-[33.75px] not-touch:w-auto! not-touch:px-2'
@@ -121,7 +132,12 @@ export const EmailDateSelector: VoidComponent<EmailDateSelectorProps> = (
 
             return (
               <div class="flex min-w-0 items-center gap-1">
-                <ClockIcon class={props.selectedTime ? 'text-accent' : ''} />
+                <ClockIcon
+                  class={cn(
+                    'touch:size-6',
+                    props.selectedTime && 'text-accent'
+                  )}
+                />
                 <Show when={showExpanded()}>
                   <span class="min-w-0 truncate text-sm">
                     {selectedLabel()}

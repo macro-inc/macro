@@ -40,10 +40,7 @@ export function MenuList(props: {
   return (
     <div
       role="menu"
-      class={cn(
-        'z-50 w-60 rounded-lg border border-edge-muted bg-menu p-1 text-ink text-xs shadow-lg',
-        props.class
-      )}
+      class={cn('menu-surface z-50 w-60 p-1 text-xs', props.class)}
     >
       {/* By position: the entries are rebuilt as the editor changes, and
           the rows (and the focus in them) stay. */}

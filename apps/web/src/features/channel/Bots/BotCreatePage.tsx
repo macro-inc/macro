@@ -16,6 +16,7 @@ import type { Bot } from '@service-storage/generated/schemas/bot';
 import { Button, ToggleSwitch } from '@ui';
 import { createMemo, createSignal, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
+import { BotAdvancedSection } from './BotAdvancedSection';
 import { BotAgentSection } from './BotAgentSection';
 import { BotCreationResult } from './BotCreationResult';
 import { BotFormSection } from './BotFormSection';
@@ -198,7 +199,9 @@ export function BotCreate(props: { channelId?: string; onBack: () => void }) {
                 Create a bot
               </h1>
               <p class="mt-0.5 text-sm text-ink-muted">
-                Give an integration a profile and a secure channel webhook.
+                A bot is an account your program uses to read and send channel
+                messages. Create one, add it to channels, then use the token we
+                give you with the Macro SDK.
               </p>
             </div>
           </header>
@@ -243,44 +246,9 @@ export function BotCreate(props: { channelId?: string; onBack: () => void }) {
               />
             </BotFormSection>
 
-            <BotAgentSection
-              checked={form.hasAgent}
-              disabled={pending()}
-              onChange={(checked) => setForm('hasAgent', checked)}
-            />
-
-            <BotFormSection
-              title="Ownership"
-              description="Bots are personal by default."
-            >
-              <div class="flex items-center justify-between gap-4">
-                <div class="min-w-0">
-                  <div class="text-sm font-medium text-ink">Team bot</div>
-                  <p class="mt-0.5 text-xs text-ink-muted">
-                    Share this bot with your team and let it use team scope.
-                  </p>
-                </div>
-                <ToggleSwitch
-                  size="md"
-                  checked={teamOwned()}
-                  disabled={currentTeamQuery.isLoading || !canCreateTeamBot()}
-                  onChange={setTeamOwned}
-                  label={<span>Create as a team bot</span>}
-                  labelClass="sr-only"
-                />
-              </div>
-              <Show when={!currentTeamQuery.isLoading && !canCreateTeamBot()}>
-                <p class="mt-3 border-t border-edge-muted pt-3 text-xs text-ink-extra-muted">
-                  {currentTeam()
-                    ? 'Only team admins and owners can create team bots.'
-                    : 'Join or create a team to create a team bot.'}
-                </p>
-              </Show>
-            </BotFormSection>
-
             <BotFormSection
               title="Channels"
-              description="Add the bot now to get ready-to-use webhook URLs."
+              description="Choose the channels your program can access as this bot."
             >
               <label class="mb-1.5 block text-xs font-medium">
                 Add to channels <span class="text-ink-muted">· optional</span>
@@ -295,9 +263,46 @@ export function BotCreate(props: { channelId?: string; onBack: () => void }) {
               </p>
             </BotFormSection>
 
+            <BotAdvancedSection>
+              <BotAgentSection
+                checked={form.hasAgent}
+                disabled={pending()}
+                onChange={(checked) => setForm('hasAgent', checked)}
+              />
+
+              <BotFormSection
+                title="Ownership"
+                description="You own the bot by default. Enable Mentionable to make it a team-owned bot."
+              >
+                <div class="flex items-center justify-between gap-4">
+                  <div class="min-w-0">
+                    <div class="text-sm font-medium text-ink">Mentionable</div>
+                    <p class="mt-0.5 text-xs text-ink-muted">
+                      Let teammates find and @mention this bot in channels.
+                    </p>
+                  </div>
+                  <ToggleSwitch
+                    size="md"
+                    checked={teamOwned()}
+                    disabled={currentTeamQuery.isLoading || !canCreateTeamBot()}
+                    onChange={setTeamOwned}
+                    label={<span>Mentionable</span>}
+                    labelClass="sr-only"
+                  />
+                </div>
+                <Show when={!currentTeamQuery.isLoading && !canCreateTeamBot()}>
+                  <p class="mt-3 border-t border-edge-muted pt-3 text-xs text-ink-extra-muted">
+                    {currentTeam()
+                      ? 'Only team admins and owners can create team bots.'
+                      : 'Join or create a team to create a team bot.'}
+                  </p>
+                </Show>
+              </BotFormSection>
+            </BotAdvancedSection>
+
             <div class="flex items-center justify-between gap-4 pt-1">
               <p class="text-xs text-ink-muted">
-                A webhook token is generated automatically.
+                You’ll get a bot token after creation.
               </p>
               <div class="flex shrink-0 gap-2">
                 <Button type="button" variant="ghost" size="sm" onClick={leave}>
@@ -317,7 +322,7 @@ export function BotCreate(props: { channelId?: string; onBack: () => void }) {
             <div>
               <div class="text-sm font-medium">Creating your bot…</div>
               <div class="mt-1 text-xs text-ink-muted">
-                Setting up its profile, channels, and webhook token.
+                Setting up its profile, channels, and token.
               </div>
             </div>
           </div>

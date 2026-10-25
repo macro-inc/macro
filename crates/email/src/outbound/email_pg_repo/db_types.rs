@@ -206,6 +206,8 @@ impl From<DbThreadRow> for ThreadRow {
 /// DB row for a message record.
 #[derive(sqlx::FromRow)]
 pub struct DbMessageRow {
+    /// Draft edit generation; changes at send and cancellation boundaries.
+    pub draft_generation: i32,
     pub id: uuid::Uuid,
     pub provider_id: Option<String>,
     pub thread_id: uuid::Uuid,
@@ -235,6 +237,7 @@ pub struct DbMessageRow {
 impl From<DbMessageRow> for MessageRow {
     fn from(row: DbMessageRow) -> Self {
         Self {
+            draft_generation: row.draft_generation,
             db_id: row.id,
             provider_id: row.provider_id,
             thread_db_id: row.thread_id,

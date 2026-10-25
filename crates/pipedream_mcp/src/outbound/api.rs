@@ -2,8 +2,12 @@ use crate::domain::models::{
     CatalogEntry, CatalogPage, ConnectToken, McpServer, PipedreamAccount, PipedreamConnection,
     client_info,
 };
-use crate::domain::ports::{ConnectorDirectory, McpConnection, PipedreamConnect};
+use crate::domain::ports::{
+    ConnectedAppProxy, ConnectorDirectory, McpConnection, PipedreamConnect, ProxyResponse,
+};
 use anyhow::Context;
+use base64::Engine;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use reqwest::header::{HeaderMap, HeaderValue};
 use rmcp::service::ServiceExt;
 use rmcp::transport::StreamableHttpClientTransport;
@@ -325,6 +329,7 @@ impl ConnectorDirectory for PipedreamClient {
             // Apps without an auth flow have nothing to connect.
             .filter(|app| app.auth_type.as_deref() != Some("none"))
             .map(|app| CatalogEntry {
+                categories: app.categories,
                 app_slug: app.name_slug,
                 display_name: app.name,
                 description: app.description.filter(|d| !d.is_empty()),
@@ -427,6 +432,55 @@ impl McpConnection for PipedreamClient {
     }
 }
 
+/// The prefix Pipedream's Connect proxy strips to find upstream headers.
+const PROXY_HEADER_PREFIX: &str = "x-pd-proxy-";
+
+impl ConnectedAppProxy for PipedreamClient {
+    #[tracing::instrument(skip_all, err, fields(app = %connection.app_slug, user_id = %connection.user_id, method = ?method))]
+    async fn proxy(
+        &self,
+        connection: &PipedreamConnection,
+        method: http::Method,
+        url: &str,
+        headers: &http::HeaderMap,
+        body: Option<&serde_json::Value>,
+    ) -> anyhow::Result<ProxyResponse> {
+        if headers.contains_key(http::header::AUTHORIZATION) {
+            anyhow::bail!("the Connect proxy injects Authorization; callers may not set it");
+        }
+        let endpoint = self.connect_api(&format!("/proxy/{}", URL_SAFE_NO_PAD.encode(url)));
+        let mut request = self
+            .authed(self.http.request(method, endpoint))
+            .await?
+            .query(&[
+                ("external_user_id", connection.user_id.as_ref()),
+                ("account_id", connection.account_id.as_str()),
+            ]);
+        for (name, value) in headers {
+            request = request.header(format!("{PROXY_HEADER_PREFIX}{name}"), value);
+        }
+        if let Some(body) = body {
+            request = request.json(body);
+        }
+
+        let response = request
+            .send()
+            .await
+            .context("calling the Pipedream Connect proxy")?;
+        let status = response.status();
+        let headers = response.headers().clone();
+        let body = response
+            .text()
+            .await
+            .context("reading the Pipedream Connect proxy response")?;
+        Ok(ProxyResponse {
+            status,
+            headers,
+            body,
+        })
+    }
+}
+
 /// The charset a Pipedream app slug may use. A segment outside it could never
 /// name an app, and must not be placed in a request path.
 fn is_app_slug(slug: &str) -> bool {
@@ -443,6 +497,7 @@ fn connectable_catalog_entry(requested_slug: &str, app: AppResponse) -> Option<C
         return None;
     }
     Some(CatalogEntry {
+        categories: app.categories,
         app_slug: app.name_slug,
         display_name: app.name,
         description: app
@@ -515,4 +570,6 @@ struct AppResponse {
     auth_type: Option<String>,
     #[serde(default)]
     img_src: String,
+    #[serde(default)]
+    categories: Vec<String>,
 }

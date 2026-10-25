@@ -28,7 +28,7 @@ import { type Accessor, createMemo } from 'solid-js';
 import type { DriveListSource, DriveSelection } from '../context/drive-source';
 import { DRIVE_FACETS } from '../filters/drive-facets';
 import { selectDriveDatabases } from './drive-databases';
-import { selectDriveForms } from './drive-forms';
+import { hiddenFormDatabases, selectDriveForms } from './drive-forms';
 import { buildDriveQuery } from './drive-query';
 import {
   driveEntityMatchesLocation,
@@ -84,10 +84,6 @@ export function createDriveDataSource(options: {
       current.scope !== 'attachments'
     );
   };
-  const databaseEntities = () =>
-    includesDatabases() && !databasesQuery.isPending
-      ? selectDriveDatabases(databasesQuery.data ?? [], selection(), userId())
-      : [];
   const formsQuery = useFormsQuery();
   const includesForms = () => {
     const current = selection();
@@ -98,6 +94,18 @@ export function createDriveDataSource(options: {
       current.scope !== 'attachments'
     );
   };
+  // Wait for the forms list, which names the databases made for polls.
+  const databaseEntities = () =>
+    includesDatabases() &&
+    !databasesQuery.isPending &&
+    !(includesForms() && formsQuery.isPending)
+      ? selectDriveDatabases(
+          databasesQuery.data ?? [],
+          selection(),
+          userId(),
+          hiddenFormDatabases(formsQuery.data ?? [])
+        )
+      : [];
   const formEntities = () =>
     includesForms() && formsQuery.isSuccess
       ? selectDriveForms(formsQuery.data, selection(), userId())

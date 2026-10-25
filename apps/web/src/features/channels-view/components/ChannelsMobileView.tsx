@@ -1,26 +1,35 @@
 import { createListController } from '@app/components/list';
 import { toEntityActionListState } from '@app/features/next-soup/actions';
+import {
+  persistSoupNavigationTouchHighlight,
+  soupNavigationTouchHighlight,
+} from '@app/features/next-soup/soup-view/soup-navigation-touch-highlight';
+import {
+  ChannelCardLayout,
+  toInboxCardDisplayItem,
+} from '@app/features/next-soup/soup-view/views/inbox/inbox-card-layouts';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import { SoupEntityContextMenu } from '@app/features/soup';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
+import { CHANNEL_ACTION_VIEW_CONTEXT } from '@channel/Channel/channel-actions';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { PullToRefresh } from '@components/app/mobile/PullToRefresh';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
-import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.svg';
 import type { ChannelEntity } from '@entity';
-import { isMutedItem } from '@entity/utils/notification';
+import { SOUP_ROW_CLASS } from '@entity/composed/list-entity/row-geometry';
+import { InboxDivider } from '@entity/composed/list-entity/shared';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import XIcon from '@phosphor/x.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
-import { Button, EmptyStatePanel } from '@ui';
+import { Button, cn, EmptyStatePanel } from '@ui';
 import {
   createEffect,
   createMemo,
   createSignal,
-  createUniqueId,
+  For,
   Match,
   on,
   onCleanup,
@@ -29,40 +38,60 @@ import {
 } from 'solid-js';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import type { ChannelsDataSource } from '../queries';
-import { channelMentionsUser } from '../utils';
+import { ChannelPin, ChannelPinGrid } from './ChannelPins';
 import { ChannelsEmptyState } from './ChannelsEmptyState';
-import {
-  CHANNEL_ACTION_VIEW_CONTEXT,
-  CONVERSATION_CARD_HEIGHT,
-  ConversationCard,
-} from './rail/ChannelRailItems';
+import { IncomingCallActions } from './rail/ChannelRailItems';
 import { useChannelCalls } from './rail/hooks/useChannelCalls';
 import { useChannelRailActivity } from './rail/hooks/useChannelRailActivity';
 
-const MOBILE_CHANNEL_BUFFER_SIZE = CONVERSATION_CARD_HEIGHT * 6;
+const MOBILE_CHANNEL_ROW_HEIGHT = 72;
+const MOBILE_CHANNEL_BUFFER_SIZE = MOBILE_CHANNEL_ROW_HEIGHT * 6;
 const LOAD_MORE_THRESHOLD = 300;
 
 export function ChannelsMobileView(props: {
   source: ChannelsDataSource;
+  /** Favorited conversations pinned above the list, already capped. */
+  pinned: readonly ChannelEntity[];
   searchQuery: string;
   onClearSearch: () => void;
 }) {
   const panel = useSplitPanelOrThrow();
   const notificationSource = useGlobalNotificationSource();
-  const currentUserId = useUserId();
   const [viewport, setViewport] = createSignal<HTMLDivElement>();
   const [virtualizer, setVirtualizer] = createSignal<VirtualizerHandle>();
-  const [topSpacer, setTopSpacer] = createSignal<HTMLDivElement>();
-  const topSpacerSize = createElementSize(topSpacer);
+  const [listHeader, setListHeader] = createSignal<HTMLDivElement>();
+  const listHeaderSize = createElementSize(listHeader);
   const forceEmptyState = useDebugSetting(
     DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
   );
-  const listId = createUniqueId();
   const channelCalls = useChannelCalls();
-  const visibleChannels = createMemo(() => props.source.items());
-  const channelActivity = useChannelRailActivity(visibleChannels, channelCalls);
+  const pinned = () => (props.searchQuery.trim() ? [] : props.pinned);
+  const pinnedIds = createMemo(
+    () => new Set(pinned().map((channel) => channel.id))
+  );
+  const activityChannels = createMemo(() => [
+    ...pinned(),
+    ...props.source.items().filter((channel) => !pinnedIds().has(channel.id)),
+  ]);
+  const channelActivity = useChannelRailActivity(
+    activityChannels,
+    channelCalls
+  );
+  // Pinned conversations leave the list below, as in iMessage, except while
+  // a call rings: its Join and Decline actions live on the list row.
+  const visibleChannels = createMemo(() =>
+    props.source
+      .items()
+      .filter(
+        (channel) =>
+          !pinnedIds().has(channel.id) ||
+          channelActivity.incomingCallIds().has(channel.id)
+      )
+  );
+  const isUnread = (channel: ChannelEntity) =>
+    channelActivity.unreadChannelIds().has(channel.id);
   const actionController = createListController({
-    items: visibleChannels,
+    items: activityChannels,
     getKey: (channel) => channel.id,
     isSelectable: () => false,
   });
@@ -78,7 +107,7 @@ export function ChannelsMobileView(props: {
     )
   );
 
-  const topInset = () => topSpacerSize.height ?? 0;
+  const topInset = () => listHeaderSize.height ?? 0;
 
   function loadNextPage() {
     if (
@@ -107,8 +136,9 @@ export function ChannelsMobileView(props: {
   onCleanup(() => {
     opening += 1;
   });
-  const openChannel = async (channel: ChannelEntity) => {
+  const openChannel = async (channel: ChannelEntity, event: MouseEvent) => {
     const request = ++opening;
+    const finishTouchHighlight = persistSoupNavigationTouchHighlight(event);
     try {
       await openEntityInSplitFromUnifiedList(channel, {
         splitHandle: panel.handle,
@@ -121,6 +151,8 @@ export function ChannelsMobileView(props: {
       if (request !== opening) return;
       console.error('Failed to open conversation', error);
       toast.failure('Unable to open conversation. Please try again.');
+    } finally {
+      finishTouchHighlight?.();
     }
   };
 
@@ -136,14 +168,53 @@ export function ChannelsMobileView(props: {
         onRefresh={props.source.refresh}
       />
       <div
-        ref={setViewport}
+        ref={(element) => {
+          setViewport(element);
+          soupNavigationTouchHighlight(element);
+        }}
         class="scrollbar-hidden size-full min-h-0 overflow-y-auto overscroll-none"
       >
-        <div
-          ref={setTopSpacer}
-          aria-hidden="true"
-          class="h-[calc(var(--mobile-content-inset-top,0px)+0.75rem)]"
-        />
+        <div ref={setListHeader}>
+          <div
+            aria-hidden="true"
+            class="h-[calc(var(--mobile-content-inset-top,0px)+0.75rem)]"
+          />
+          <Show when={pinned().length > 0}>
+            <ChannelPinGrid>
+              <For each={pinned()}>
+                {(channel) => (
+                  <SoupEntityContextMenu
+                    entity={channel}
+                    list={actionList}
+                    selectedEntities={() => []}
+                    viewContext={CHANNEL_ACTION_VIEW_CONTEXT}
+                    class="block w-1/3 min-w-0"
+                    onOpenChange={(open) => {
+                      if (!open) return;
+                      actionController.focus.set(channel.id, {
+                        reason: 'pointer',
+                        force: true,
+                      });
+                    }}
+                  >
+                    <div data-soup-entity class="rounded-xl py-1">
+                      <ChannelPin
+                        channel={channel}
+                        unread={isUnread(channel)}
+                        onActivate={(event) =>
+                          fireAndForget(
+                            openChannel(channel, event),
+                            'channels-view'
+                          )
+                        }
+                      />
+                    </div>
+                  </SoupEntityContextMenu>
+                )}
+              </For>
+            </ChannelPinGrid>
+          </Show>
+        </div>
         <Switch>
           <Match when={!forceEmptyState() && props.source.isLoading()}>
             <div class="grid min-h-32 place-items-center text-ink-muted">
@@ -173,7 +244,12 @@ export function ChannelsMobileView(props: {
               </Button>
             </div>
           </Match>
-          <Match when={forceEmptyState() || visibleChannels().length === 0}>
+          <Match
+            when={
+              forceEmptyState() ||
+              (visibleChannels().length === 0 && pinned().length === 0)
+            }
+          >
             <Show
               when={props.searchQuery.trim()}
               fallback={<ChannelsEmptyState scope="recents" />}
@@ -205,11 +281,11 @@ export function ChannelsMobileView(props: {
               data={visibleChannels()}
               scrollRef={viewport()}
               startMargin={topInset()}
-              itemSize={CONVERSATION_CARD_HEIGHT}
+              itemSize={MOBILE_CHANNEL_ROW_HEIGHT}
               bufferSize={MOBILE_CHANNEL_BUFFER_SIZE}
               onScroll={checkNearEnd}
             >
-              {(channel) => (
+              {(channel, index) => (
                 <SoupEntityContextMenu
                   entity={channel}
                   list={actionList}
@@ -224,29 +300,37 @@ export function ChannelsMobileView(props: {
                     });
                   }}
                 >
-                  <ConversationCard
-                    id={`${listId}-channel:${channel.id}`}
-                    class="border-b border-edge-muted/50 px-(--mobile-chrome-gutter) touch:pl-6"
-                    channel={channel}
-                    showLatestMessage
-                    senderId={channel.latestRootMessage?.senderId}
-                    mentionedCurrentUser={channelMentionsUser(
-                      channel,
-                      currentUserId()
+                  {/* Home's touch row (InboxListEntity): avatar column,
+                      unread rail, and a divider inset to the content. */}
+                  <div
+                    data-soup-entity
+                    class={cn(
+                      'soup-list-entity relative mx-(--soup-row-gutter)',
+                      SOUP_ROW_CLASS.card
                     )}
-                    unread={channelActivity.unreadChannelIds().has(channel.id)}
-                    muted={isMutedItem(notificationSource.mutedEntities(), {
-                      item_id: channel.id,
-                      item_type: 'channel',
-                    })}
-                    callStatus={channelActivity.callStatuses().get(channel.id)}
-                    incomingCallId={channelActivity
-                      .incomingCallIds()
-                      .get(channel.id)}
-                    selected={false}
-                    focused={false}
-                    onActivate={() => openChannel(channel)}
-                  />
+                  >
+                    <ChannelCardLayout
+                      item={{
+                        ...toInboxCardDisplayItem(channel),
+                        unread: isUnread(channel),
+                      }}
+                      onClick={(event) =>
+                        fireAndForget(
+                          openChannel(channel, event),
+                          'channels-view'
+                        )
+                      }
+                    />
+                    <IncomingCallActions
+                      callId={channelActivity.incomingCallIds().get(channel.id)}
+                      channelId={channel.id}
+                      class="pr-3 pb-3 pl-(--soup-inbox-left-of-content)"
+                      layout="wide"
+                    />
+                    <Show when={index() < visibleChannels().length - 1}>
+                      <InboxDivider />
+                    </Show>
+                  </div>
                 </SoupEntityContextMenu>
               )}
             </Virtualizer>

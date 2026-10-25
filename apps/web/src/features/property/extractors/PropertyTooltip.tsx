@@ -39,9 +39,7 @@ export function PropertyTooltip(props: Props) {
       }
       disabled={ctx?.editorOpen() ?? false}
       placement={hasActions() ? 'bottom-start' : 'bottom'}
-      contentClass={
-        hasActions() ? undefined : 'rounded-xl p-1.5 px-3 glass bg-menu-glass'
-      }
+      contentClass={hasActions() ? undefined : 'menu-surface p-1.5 px-3'}
     >
       {props.children}
     </HoverCard>

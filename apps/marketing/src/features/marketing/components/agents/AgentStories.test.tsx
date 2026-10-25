@@ -360,7 +360,9 @@ it('keeps the created task linked to the same rollout plan and source discussion
   expect(
     pane.getByRole('button', { name: 'Northwind rollout plan' })
   ).toBeTruthy();
-  expect(pane.queryByRole('button', { name: 'Q3 launch plan' })).toBeNull();
+  expect(
+    pane.queryByRole('button', { name: 'Website launch plan' })
+  ).toBeNull();
   fireEvent.click(pane.getByRole('button', { name: 'From customers' }));
   expect(view.getByText(/Northwind now needs 40 seats and SSO/)).toBeTruthy();
 });

@@ -123,7 +123,7 @@ const RECENT_ITEMS: readonly {
     unread: true,
   },
   {
-    label: 'Q3 launch plan',
+    label: 'Website launch plan',
     icon: DocumentIcon,
     kind: 'documents',
   },

@@ -4,12 +4,11 @@ use crate::domain::models::{
     EmailThreadMailProjection, EmailThreadMetadata, EmailThreadPreview, EnrichedEmailThreadPreview,
     GetEmailsRequest, Label, Link, LinkLabel, Message, MessageAttachment, MessageLabel, MessageRow,
     MessageTimestamps, ParsedAddresses, ParsedMessage, ParsedThread, PreviewCursorQuery,
-    RecipientType, ResolvedDraftInput, SavedUserDraft, SenderPolicy, SettledDraftIds,
-    SimpleMessage, SimpleMessageInfo, SourcedAttachment, Thread, ThreadRow,
-    UpdateThreadLabelsResult, UpsertEmailFilterInput, UpsertedContacts, UserEmailLink,
-    UserProvider,
+    RecipientType, ResolvedDraftInput, ResolvedSendingInbox, SavedUserDraft, SenderPolicy,
+    SendingInboxRequest, SettledDraftIds, SimpleMessage, SimpleMessageInfo, SourcedAttachment,
+    Thread, ThreadRow, UpdateThreadLabelsResult, UpsertEmailFilterInput, UpsertedContacts,
+    UserEmailLink, UserProvider,
 };
-use chrono::{DateTime, Utc};
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, ViewAccessLevel};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{PaginatedCursor, SimpleSortMethod};
@@ -183,11 +182,6 @@ pub trait EmailRepo: Send + Sync + 'static {
         provider: UserProvider,
     ) -> impl Future<Output = Result<Option<Link>, Self::Err>> + Send;
 
-    fn link_by_macro_id(
-        &self,
-        macro_id: MacroUserIdStr<'_>,
-    ) -> impl Future<Output = Result<Option<Link>, Self::Err>> + Send;
-
     /// Resolve the inbox owning a thread, only when that inbox belongs to the
     /// given fusionauth user.
     fn owned_link_for_thread(
@@ -300,12 +294,13 @@ pub trait EmailRepo: Send + Sync + 'static {
         message_ids: &[Uuid],
     ) -> impl Future<Output = Result<HashMap<Uuid, Vec<AttachmentForwarded>>, Self::Err>> + Send;
 
-    /// Fetch scheduled send times for a set of message IDs, keyed by message ID.
+    /// Fetch schedule times and delivery states, keyed by message ID.
     /// Only returns entries for unsent scheduled messages.
-    fn scheduled_send_times_by_message_ids(
+    fn scheduled_sends_by_message_ids(
         &self,
         message_ids: &[Uuid],
-    ) -> impl Future<Output = Result<HashMap<Uuid, DateTime<Utc>>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<HashMap<Uuid, crate::domain::models::ScheduledSend>, Self::Err>>
+    + Send;
 
     /// Fetch a simplified message by its DB ID, scoped to a set of accessible
     /// inbox link IDs (for validation across own + delegated inboxes).
@@ -332,6 +327,14 @@ pub trait EmailRepo: Send + Sync + 'static {
         link_ids: &[Uuid],
     ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
 
+    /// Resolve an empty server thread to its same-inbox canonical conversation.
+    /// Both identities must belong to an inbox in the caller's accessible set.
+    fn redirected_thread_id(
+        &self,
+        thread_id: Uuid,
+        link_ids: &[Uuid],
+    ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
+
     /// Find an existing draft that replies to the given message ID.
     fn get_draft_replying_to(
         &self,
@@ -355,6 +358,8 @@ pub trait EmailRepo: Send + Sync + 'static {
         thread_db_id: Uuid,
         link_ids: &[Uuid],
         actor: Option<&str>,
+
+        expected_generation: i32,
     ) -> impl Future<Output = Result<Option<DraftDeletion>, Self::Err>> + Send;
 
     /// Upsert contacts from the parsed addresses. Must be called outside a transaction
@@ -472,8 +477,12 @@ pub trait EmailRepo: Send + Sync + 'static {
         link_id: Uuid,
     ) -> impl Future<Output = Result<Vec<LinkLabel>, Self::Err>> + Send;
 
-    /// Delete unsent scheduled messages for a batch of draft message IDs.
-    /// Returns the message ids that actually had a pending scheduled send.
+    /// Cancel scheduled deliveries for currently unsent drafts under the
+    /// message -> schedule lock order. Preserve submitted, unconfirmed and
+    /// ambiguous legacy claims; managed preparation may be revoked before
+    /// submission. Atomically retire the revoked sends' attempts so a delayed
+    /// cancellation cannot affect a replacement send. Returns only the message
+    /// IDs actually cancelled.
     fn delete_scheduled_messages_batch(
         &self,
         message_ids: &[Uuid],
@@ -724,18 +733,25 @@ pub trait EmailService: Send + Sync + 'static {
         macro_id: MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Option<Link>, EmailErr>> + Send;
 
-    /// Fetch the email link for a user by their macro ID only.
-    fn get_link_by_macro_id(
-        &self,
-        macro_id: MacroUserIdStr<'_>,
-    ) -> impl Future<Output = Result<Option<Link>, EmailErr>> + Send;
-
     /// Fetch every inbox the caller can read — their own email_links rows plus
     /// any rows reachable via a `macro_user_links` edge (narrow-graph multi-inbox).
     fn get_inboxes_for_macro_id(
         &self,
         macro_id: MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Vec<Link>, EmailErr>> + Send;
+
+    /// Resolve which inbox a composed email is sent from, for a transport
+    /// that carries the inbox by value instead of out of band: the address
+    /// the caller named, else the inbox that received the message being
+    /// replied to, else the caller's default inbox. Returns the whole
+    /// accessible set alongside it, which [`send_message`] needs anyway.
+    ///
+    /// [`send_message`]: EmailService::send_message
+    fn resolve_sending_inbox(
+        &self,
+        macro_id: MacroUserIdStr<'_>,
+        request: SendingInboxRequest<'_>,
+    ) -> impl Future<Output = Result<ResolvedSendingInbox, EmailErr>> + Send;
 
     /// Resolve the inbox owning a thread, scoped to the caller's own and
     /// delegated inboxes. Lets thread-targeted mutations derive the inbox from
@@ -745,6 +761,14 @@ pub trait EmailService: Send + Sync + 'static {
         macro_id: MacroUserIdStr<'_>,
         thread_id: Uuid,
     ) -> impl Future<Output = Result<Option<Link>, EmailErr>> + Send;
+
+    /// Follow an empty thread's canonical alias only within the user's inboxes.
+    /// The returned thread still requires normal entity authorization at the caller.
+    fn resolve_thread_read_id(
+        &self,
+        macro_id: MacroUserIdStr<'_>,
+        thread_id: Uuid,
+    ) -> impl Future<Output = Result<Uuid, EmailErr>> + Send;
 
     /// Fetch a thread with paginated messages, verifying access via the provided receipt.
     fn get_thread_with_messages(
@@ -797,6 +821,8 @@ pub trait EmailService: Send + Sync + 'static {
         &self,
         macro_id: MacroUserIdStr<'_>,
         draft_id: Uuid,
+
+        expected_generation: i32,
     ) -> impl Future<Output = Result<DeletedUserDraft, EmailErr>> + Send;
 
     /// Send a message: persist it and enqueue for scheduled delivery.
@@ -1039,6 +1065,8 @@ pub trait DraftSendService: Send + Sync + 'static {
         &self,
         macro_id: MacroUserIdStr<'_>,
         draft_id: Uuid,
+
+        expected_generation: i32,
     ) -> impl Future<Output = Result<DeletedUserDraft, EmailErr>> + Send;
 }
 
@@ -1065,8 +1093,10 @@ impl<T: EmailService> DraftSendService for T {
         &self,
         macro_id: MacroUserIdStr<'_>,
         draft_id: Uuid,
+
+        expected_generation: i32,
     ) -> impl Future<Output = Result<DeletedUserDraft, EmailErr>> + Send {
-        EmailService::delete_draft_for_user(self, macro_id, draft_id)
+        EmailService::delete_draft_for_user(self, macro_id, draft_id, expected_generation)
     }
 }
 
@@ -1189,6 +1219,14 @@ impl EmailUserService for NoOpEmailService {
 }
 
 impl EmailService for NoOpEmailService {
+    async fn resolve_thread_read_id(
+        &self,
+        _macro_id: MacroUserIdStr<'_>,
+        thread_id: Uuid,
+    ) -> Result<Uuid, EmailErr> {
+        Ok(thread_id)
+    }
+
     async fn resolve_message_operation(
         &self,
         _actor: MacroUserIdStr<'static>,
@@ -1230,17 +1268,18 @@ impl EmailService for NoOpEmailService {
         Err(no_op_email_err())
     }
 
-    async fn get_link_by_macro_id(
-        &self,
-        _macro_id: MacroUserIdStr<'_>,
-    ) -> Result<Option<Link>, EmailErr> {
-        Err(no_op_email_err())
-    }
-
     async fn get_inboxes_for_macro_id(
         &self,
         _macro_id: MacroUserIdStr<'_>,
     ) -> Result<Vec<Link>, EmailErr> {
+        Err(no_op_email_err())
+    }
+
+    async fn resolve_sending_inbox(
+        &self,
+        _macro_id: MacroUserIdStr<'_>,
+        _request: SendingInboxRequest<'_>,
+    ) -> Result<ResolvedSendingInbox, EmailErr> {
         Err(no_op_email_err())
     }
 
@@ -1292,6 +1331,8 @@ impl EmailService for NoOpEmailService {
         &self,
         _macro_id: MacroUserIdStr<'_>,
         _draft_id: Uuid,
+
+        _expected_generation: i32,
     ) -> Result<DeletedUserDraft, EmailErr> {
         Err(no_op_email_err())
     }

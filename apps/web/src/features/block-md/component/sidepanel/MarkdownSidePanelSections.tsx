@@ -6,6 +6,7 @@ import {
 } from '@app/features/property/side-panel/properties';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import {
   GithubPullRequestDetailsRows,
   SidePanel,
@@ -29,6 +30,7 @@ import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler'
 import { buildTaskProjectDefaultProperty } from '@entity/extractors-property';
 import { useNotificationsForEntity } from '@notifications';
 import {
+  getBuiltinPropertyIds,
   getDefaultPinnedProperties,
   SYSTEM_PROPERTY_IDS,
 } from '@property/constants';
@@ -69,14 +71,16 @@ export function MarkdownSidePanelSections() {
           <Show when={isTask() && !isMobile()}>
             <DispatchAgentButton showPrimaryLabel />
           </Show>
-          <AskMacroButton
-            entity={{
-              type: 'document',
-              id: documentId(),
-              name: displayName() ?? '',
-              fileType: 'md',
-            }}
-          />
+          <HeaderActionGroup label="Actions">
+            <AskMacroButton
+              entity={{
+                type: 'document',
+                id: documentId(),
+                name: displayName() ?? '',
+                fileType: 'md',
+              }}
+            />
+          </HeaderActionGroup>
         </div>
       </SidePanel.HeaderActions>
       <SidePanel.Footer>
@@ -200,8 +204,18 @@ function PropertiesSectionContent(props: {
 
   const entityType: PropertiesEntityType = props.isTask ? 'TASK' : 'DOCUMENT';
 
-  const pins = createPinnedProperties(() => mdData.editor);
   const projects = useFeatureFlag(enableProjects);
+  const defaultTitlePropertyDefinitionIds = () =>
+    props.isTask
+      ? [
+          ...getDefaultPinnedProperties('task'),
+          ...(projects().enabled ? [SYSTEM_PROPERTY_IDS.PROJECT] : []),
+        ]
+      : [];
+  const pins = createPinnedProperties(
+    () => mdData.editor,
+    defaultTitlePropertyDefinitionIds
+  );
 
   return (
     <EntityPropertiesSection
@@ -212,8 +226,13 @@ function PropertiesSectionContent(props: {
       defaultPinnedPropertyIds={() =>
         props.isTask ? getDefaultPinnedProperties('task') : []
       }
+      requiredPropertyDefinitionIds={
+        props.isTask ? getBuiltinPropertyIds('task') : undefined
+      }
       pinnedPropertyIds={pins.ids}
+      defaultTitlePropertyDefinitionIds={defaultTitlePropertyDefinitionIds}
       pinnedPropertyDefinitionOrder={PINNED_ORDER}
+      onPropertyPinned={mdData.editor ? pins.pin : undefined}
       onPropertyUnpinned={pins.unpin}
       showTags={false}
       // A task joins a project through its Project property, edited like the others.

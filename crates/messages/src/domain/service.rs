@@ -11,6 +11,9 @@ use uuid::Uuid;
 mod test;
 mod timeline;
 
+/// Call-scoped guest conversation use cases.
+pub mod guest_chat;
+
 /// Minimum view permission for any supported message parent.
 #[derive(Debug, Clone, Copy)]
 pub struct MessageView;
@@ -376,6 +379,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                 canonical_root_id,
                 parent: parent.clone(),
                 actor: actor.clone(),
+                guest_name: None,
                 triggered_by: access
                     .acting_user_id()
                     .filter(|_| {

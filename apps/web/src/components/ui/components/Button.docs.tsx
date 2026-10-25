@@ -195,7 +195,7 @@ export default defineDoc({
       id: 'variants',
       title: 'Variants',
       description:
-        '`ghost` for low-emphasis actions in dense chrome, `outline` for standard actions, `strong` for the same frame with bolder text, `accent` for the primary action in a group, `cta` for the single most important action on a screen. `danger` is reserved for destructive work. Framed variants use glass only on touch by default. `glass={true}` opts in on desktop; `glass={false}` removes it everywhere. Success and danger use colored ink with an unfilled outline frame; icon sizes preserve the same emphasis as text buttons.',
+        '`ghost` for low-emphasis actions in dense chrome, `outline` for standard actions, `strong` for the same frame with bolder text, `accent` for the primary action in a group, `cta` for the single most important action on a screen. `danger` is reserved for destructive work. Framed variants use the shared elevated surface on desktop and glass on touch. `glass={false}` keeps a flat frame. Success and danger use colored ink with an unfilled outline frame; icon sizes preserve the same emphasis as text buttons.',
       render: VariantsDemo,
       fill: true,
     },
@@ -232,7 +232,7 @@ export default defineDoc({
       id: 'tooltip',
       title: 'Tooltips and shortcuts',
       description:
-        '`label` doubles as the tooltip; `tooltip` overrides it when the accessible name and the hint should differ. `hotkey` renders a registered shortcut, `shortcut` a raw string.',
+        '`label` doubles as the tooltip; `tooltip` overrides it when the accessible name and the hint should differ. `hotkey` renders a registered shortcut, `shortcut` a raw string. Tooltips are disabled on touch devices, including when an action receives focus.',
       render: TooltipDemo,
     },
   ],

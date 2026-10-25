@@ -96,6 +96,37 @@ Providers the server currently permits this caller to connect.
 
 ***
 
+### contacts()
+
+> **contacts**(): `Promise`\<\{\[`key`: `string`\]: [`ContactInfoWithInteraction`](../../../../../generated/email/types.gen/type-aliases/ContactInfoWithInteraction.md)[]; \}\>
+
+Address book contacts grouped by the service's interaction buckets.
+
+#### Returns
+
+`Promise`\<\{\[`key`: `string`\]: [`ContactInfoWithInteraction`](../../../../../generated/email/types.gen/type-aliases/ContactInfoWithInteraction.md)[]; \}\>
+
+***
+
+### createDraft()
+
+> **createDraft**(`options`, `inbox?`): `Promise`\<[`EmailDraft`](../../draft/classes/EmailDraft.md)\>
+
+Create a draft without sending it; the inbox defaults to the caller's primary.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `options` | [`DraftOptions`](../../draft/type-aliases/DraftOptions.md) |
+| `inbox?` | [`Link`](../../link/classes/Link.md) |
+
+#### Returns
+
+`Promise`\<[`EmailDraft`](../../draft/classes/EmailDraft.md)\>
+
+***
+
 ### createLabel()
 
 > **createLabel**(`name`): `Promise`\<[`Label`](../../label/classes/Label.md)\>
@@ -129,6 +160,42 @@ Delete a label.
 #### Returns
 
 `Promise`\<`void`\>
+
+***
+
+### draftById()
+
+> **draftById**(`id`): [`EmailDraft`](../../draft/classes/EmailDraft.md)
+
+Construct a lazy draft handle.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `id` | `string` |
+
+#### Returns
+
+[`EmailDraft`](../../draft/classes/EmailDraft.md)
+
+***
+
+### filters()
+
+> **filters**(`inbox?`): `Promise`\<[`EmailFilter`](../../filter/classes/EmailFilter.md)[]\>
+
+Importance filters.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `inbox?` | [`Link`](../../link/classes/Link.md) |
+
+#### Returns
+
+`Promise`\<[`EmailFilter`](../../filter/classes/EmailFilter.md)[]\>
 
 ***
 
@@ -247,6 +314,44 @@ An empty committed result fences the old move so it cannot commit later.
 
 ***
 
+### reminders()
+
+> **reminders**(`options?`): `AsyncGenerator`\<\{ `followup`: [`EmailFollowup`](../../../../../generated/storage/types.gen/type-aliases/EmailFollowup.md); `thread`: [`EmailThread`](../../thread/classes/EmailThread.md); \}, `any`, `any`\>
+
+Follow-up reminders with thread handles, automatically paginated.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `options?` | `Omit`\<\{ `attachments?`: `string`[] \| `null`; `calendar?`: `boolean` \| `null`; `cursor?`: `string` \| `null`; `done?`: `boolean` \| `null`; `inboxIds?`: `string`[] \| `null`; `limit?`: `number` \| `null`; `noInboxes?`: `boolean` \| `null`; `read?`: `boolean` \| `null`; `tags?`: `string`[] \| `null`; \}, `"cursor"` \| `"inboxIds"`\> & \{ `inboxes?`: [`Link`](../../link/classes/Link.md)[]; \} |
+
+#### Returns
+
+`AsyncGenerator`\<\{ `followup`: [`EmailFollowup`](../../../../../generated/storage/types.gen/type-aliases/EmailFollowup.md); `thread`: [`EmailThread`](../../thread/classes/EmailThread.md); \}, `any`, `any`\>
+
+***
+
+### scheduled()
+
+> **scheduled**(`options?`): `AsyncGenerator`\<[`EmailDraft`](../../draft/classes/EmailDraft.md)\>
+
+Scheduled drafts, fetched lazily in bounded pages.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `options?` | \{ `inbox?`: [`Link`](../../link/classes/Link.md); `pageSize?`: `number`; \} |
+| `options.inbox?` | [`Link`](../../link/classes/Link.md) |
+| `options.pageSize?` | `number` |
+
+#### Returns
+
+`AsyncGenerator`\<[`EmailDraft`](../../draft/classes/EmailDraft.md)\>
+
+***
+
 ### search()
 
 > **search**(`query`, `opts?`): `AsyncGenerator`\<[`EmailThread`](../../thread/classes/EmailThread.md)\>
@@ -299,3 +404,22 @@ Unblock a previously blocked sender.
 #### Returns
 
 `Promise`\<`void`\>
+
+***
+
+### upsertFilter()
+
+> **upsertFilter**(`options`, `inbox?`): `Promise`\<[`EmailFilter`](../../filter/classes/EmailFilter.md)\>
+
+Create or replace a filter matching an address or domain.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `options` | [`EmailFilterOptions`](../../filter/interfaces/EmailFilterOptions.md) |
+| `inbox?` | [`Link`](../../link/classes/Link.md) |
+
+#### Returns
+
+`Promise`\<[`EmailFilter`](../../filter/classes/EmailFilter.md)\>

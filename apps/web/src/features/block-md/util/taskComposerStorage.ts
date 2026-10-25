@@ -2,6 +2,13 @@ import type { PropertyApiValues } from '@property/types';
 import type { SerializedEditorState } from 'lexical';
 
 const STORAGE_KEY = 'task-composer-draft';
+
+/** Context drafts use their own key; the global composer retains its original key. */
+export function taskComposerContextStorage(
+  key: string
+): TaskComposerDraftStorage {
+  return { storageKey: `${STORAGE_KEY}:${key}` };
+}
 const EXPIRY_TIME_MS = 2 * 60 * 1000; // 2 minutes
 
 /**
@@ -23,6 +30,7 @@ export interface TaskComposerDraft {
   /** Markdown text fallback (used by older drafts and for the createTask API) */
   content: string;
   propertyValues: Record<string, PropertyApiValues>;
+  visiblePropertyIds?: string[];
   timestamp: number;
 }
 

@@ -11,6 +11,7 @@ import {
   offset,
   type Placement,
   shift,
+  size,
 } from '@floating-ui/dom';
 import { Telemetry } from '@macro-inc/observability';
 import type { Accessor, JSX } from 'solid-js';
@@ -39,6 +40,13 @@ type FloatWithSelectionOptions = {
   floatingOptions?: Partial<ComputePositionConfig>;
   moveWithSelection?: boolean;
   onAvailableHeight?: (height: number) => void;
+  /**
+   * The menu's height with its whole list. It opens below the caret when that
+   * height (or what it renders, if taller) fits there and above when there is
+   * more room above: a list that renders short and then grows would otherwise
+   * stay below the caret and shrink.
+   */
+  fullHeight?: number;
 };
 
 export function floatWithSelection(
@@ -58,6 +66,40 @@ export function floatWithSelection(
     null
   );
   let decidedPlacement: Placement | null = null;
+
+  async function roomOn(
+    anchor: Range | Element,
+    placement: Placement,
+    spacing: number
+  ) {
+    let room = 0;
+    await computePosition(anchor, floatingEl, {
+      placement,
+      middleware: [
+        offset(spacing),
+        size({
+          boundary,
+          padding: iosSafePadding(spacing),
+          apply: ({ availableHeight }) => {
+            room = availableHeight;
+          },
+        }),
+      ],
+    });
+    return room;
+  }
+
+  async function sideWithRoomFor(
+    anchor: Range | Element,
+    fullHeight: number,
+    spacing: number
+  ): Promise<Placement> {
+    const height = Math.max(fullHeight, floatingEl.offsetHeight);
+    const below = await roomOn(anchor, 'bottom-start', spacing);
+    if (below >= height) return 'bottom-start';
+    const above = await roomOn(anchor, 'top-start', spacing);
+    return above > below ? 'top-start' : 'bottom-start';
+  }
 
   async function setInitialFloatingPosition(
     selection: Selection | null | undefined
@@ -81,6 +123,12 @@ export function floatWithSelection(
     if (anchor) {
       setCurrentAnchor(anchor);
       const spacing = accessor()?.spacing ?? DEFAULT_SPACING;
+      const fullHeight = accessor()?.fullHeight;
+      if (fullHeight !== undefined) {
+        decidedPlacement = await sideWithRoomFor(anchor, fullHeight, spacing);
+        await updatePosition();
+        return;
+      }
       const floatingOptions = accessor()?.floatingOptions ?? {};
       const preferredPlacement = floatingOptions.placement ?? 'bottom-start';
       const { placement } = await computePosition(anchor, floatingEl, {

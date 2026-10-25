@@ -110,6 +110,7 @@ fn outcome(
     versions: HashMap<TableId, TableVersion>,
 ) -> SqlOutcome {
     SqlOutcome {
+        table_databases: versions.keys().map(|table| (*table, database_id)).collect(),
         result: None,
         changes_applied: 0,
         inserted_row_ids: Vec::new(),

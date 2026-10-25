@@ -1,5 +1,5 @@
 import type { ListView } from '@app/constants/list-views';
-import type { TabItem } from '@core/component/Tabs';
+import type { TabOption } from '@ui';
 
 /** Views that have tab definitions. Shared between VIEW_TAB_LISTS and VIEW_TAB_PRESETS. */
 export type TabbedListView = Extract<
@@ -15,7 +15,7 @@ export type TabbedListView = Extract<
 >;
 
 /** Tab definitions for each list view. */
-export const VIEW_TAB_LISTS: Record<TabbedListView, TabItem[]> = {
+export const VIEW_TAB_LISTS: Record<TabbedListView, TabOption<string>[]> = {
   home: [
     { value: 'signal', label: 'Signal' },
     { value: 'noise', label: 'Noise' },

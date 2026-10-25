@@ -1,7 +1,18 @@
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReachableRepository } from '../core/repository';
 import { RepositoryPicker } from './RepositoryPicker';
+
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: vi.fn(() => false),
+}));
 
 const macro: ReachableRepository = {
   url: 'https://github.com/macro-inc/macro',
@@ -48,10 +59,60 @@ const optionNames = () =>
     .map((option) => option.textContent?.replace(/\s+/g, ' ').trim());
 
 describe('RepositoryPicker', () => {
-  beforeEach(() => vi.stubGlobal('scrollTo', vi.fn()));
+  beforeEach(() => {
+    vi.mocked(isTouchDevice).mockReturnValue(false);
+    vi.stubGlobal('scrollTo', vi.fn());
+    vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      }
+    );
+  });
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
+  });
+
+  it('searches and selects repositories in the mobile drawer', async () => {
+    vi.mocked(isTouchDevice).mockReturnValue(true);
+    const handlers = picker();
+    openRepositories();
+    expect(
+      await screen.findByRole('dialog', { name: 'Repository' })
+    ).toBeTruthy();
+    const field = await screen.findByRole('combobox', {
+      name: 'Search repositories',
+    });
+    await waitFor(() => expect(document.activeElement).toBe(field));
+    fireEvent.input(field, { target: { value: 'infra' } });
+    expect(optionNames()).toEqual(['macro-inc/infra']);
+    fireEvent.click(screen.getByRole('option', { name: 'macro-inc/infra' }));
+    expect(handlers.onSelectRepository).toHaveBeenCalledExactlyOnceWith(
+      infra.url
+    );
+  });
+
+  it('searches and selects branches in the mobile drawer', async () => {
+    vi.mocked(isTouchDevice).mockReturnValue(true);
+    const handlers = picker({ repoUrl: macro.url });
+    fireEvent.click(screen.getByRole('button', { name: 'Branch' }));
+    expect(
+      await screen.findByRole('dialog', { name: 'Starting branch' })
+    ).toBeTruthy();
+    const field = await screen.findByRole('combobox', {
+      name: 'Search branches',
+    });
+    await waitFor(() => expect(document.activeElement).toBe(field));
+    fireEvent.input(field, { target: { value: 'feature/home' } });
+    expect(optionNames()).toEqual(['feature/home']);
+    fireEvent.click(screen.getByRole('option', { name: 'feature/home' }));
+    expect(handlers.onSelectBranch).toHaveBeenCalledExactlyOnceWith(
+      'feature/home'
+    );
   });
 
   it('keeps a runtime-enforced branch visible without opening the branch menu', () => {

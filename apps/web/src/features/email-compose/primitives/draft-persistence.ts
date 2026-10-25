@@ -50,6 +50,7 @@ export async function deleteDraftForDiscard(
  */
 export function createDraftPersistence(options: {
   session: DraftSession;
+  draftGeneration?: () => number;
   drafts: Pick<
     EmailDraftStorage,
     'saveDraft' | 'deleteDraft' | 'saveLocalDraft' | 'retryDraft' | 'readDraft'
@@ -91,6 +92,15 @@ export function createDraftPersistence(options: {
   };
 
   return {
+    localVersion(): Pick<LocalDraft, 'generation' | 'revision'> | undefined {
+      return localGeneration !== undefined && localRevision !== undefined
+        ? { generation: localGeneration, revision: localRevision }
+        : undefined;
+    },
+    restored(local: Pick<LocalDraft, 'revision' | 'generation'> | undefined) {
+      localRevision = local?.revision;
+      localGeneration = local?.generation;
+    },
     async saveLocally(input: {
       draft: EmailDraft | null;
       inboxId?: string;
@@ -156,6 +166,7 @@ export function createDraftPersistence(options: {
         try {
           await options.drafts.deleteDraft({
             draftId,
+            draftGeneration: options.draftGeneration?.() ?? 0,
             threadId: session.threadId(),
             ...input,
           });

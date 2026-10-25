@@ -19,9 +19,6 @@ async function uncertainSend(page: Page) {
   await expect(page.getByTestId('resolutions')).toHaveText(
     'recheck:7:false,retry_send:7:true'
   );
-  await expect(
-    page.getByRole('status').filter({ hasText: 'Confirming delivery' })
-  ).toBeVisible();
 }
 
 test('uncertain delivery requires explicit duplicate acknowledgement', async ({

@@ -342,6 +342,7 @@ async fn retrying_an_acknowledged_creation_adopts_the_assigned_id_without_reinvi
         reminders: None,
         conference: None,
         out_of_office: None,
+        guest_policy: None,
     };
     let first = api.create_event("token", &target, &draft).await.unwrap();
     let replay = api.create_event("token", &target, &draft).await.unwrap();
@@ -667,5 +668,141 @@ fn occurrence_preferences_override_or_inherit_series_reminders_and_decline_polic
     assert_eq!(
         overridden.source.details().automatic_decline.as_ref(),
         Some(&policy)
+    );
+}
+
+fn guest(email: &str) -> CalendarAttendeeInput {
+    CalendarAttendeeInput {
+        email: email.into(),
+        is_optional: false,
+        response_status: None,
+    }
+}
+
+/// A meeting with Ada, who accepted, on the mailbox's calendar.
+fn meeting(id: &str, is_organizer: bool) -> Value {
+    let mut meeting = event(id);
+    meeting["isOrganizer"] = json!(is_organizer);
+    meeting["organizer"] = json!({"emailAddress":{"address":"olivia@example.com","name":"Olivia"}});
+    meeting["attendees"] = json!([{
+        "emailAddress":{"address":"ada@example.com","name":"Ada"},
+        "type":"required",
+        "status":{"response":"accepted","time":"2026-10-20T10:00:00Z"}
+    }]);
+    meeting
+}
+
+#[tokio::test]
+async fn an_organizer_adds_guests_by_writing_the_whole_attendee_list() {
+    let (server, api) = setup().await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/calendars/calendar/events/event"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(meeting("event", true)))
+        .mount(&server)
+        .await;
+    Mock::given(method("PATCH"))
+        .and(path("/v1.0/me/events/event"))
+        .and(header("if-match", "W/\"1\""))
+        .respond_with(ResponseTemplate::new(200).set_body_json(meeting("event", true)))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let outcome = api
+        .add_calendar_guests(
+            &AccessToken::new("token".to_owned()),
+            &target(),
+            "event",
+            &[
+                guest("bo@example.com"),
+                guest("ADA@example.com"),
+                guest("olivia@example.com"),
+            ],
+            &CalendarUpdateScope::All,
+        )
+        .await
+        .unwrap();
+
+    assert!(matches!(outcome, ProviderInviteOutcome::Applied(_)));
+    let requests = server.received_requests().await.unwrap();
+    let patch = requests
+        .iter()
+        .find(|r| r.method.as_str() == "PATCH")
+        .unwrap();
+    assert_eq!(
+        serde_json::from_slice::<Value>(&patch.body).unwrap(),
+        json!({"attendees":[
+            {
+                "emailAddress":{"address":"ada@example.com","name":"Ada"},
+                "type":"required",
+                "status":{"response":"accepted","time":"2026-10-20T10:00:00Z"}
+            },
+            {"emailAddress":{"address":"bo@example.com"},"type":"required"}
+        ]}),
+        "Ada keeps her answer, and only Bo is new"
+    );
+}
+
+#[tokio::test]
+async fn an_attendee_cannot_add_guests_to_an_outlook_meeting() {
+    let (server, api) = setup().await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/calendars/calendar/events/event"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(meeting("event", false)))
+        .mount(&server)
+        .await;
+
+    let result = api
+        .add_calendar_guests(
+            &AccessToken::new("token".to_owned()),
+            &target(),
+            "event",
+            &[guest("bo@example.com")],
+            &CalendarUpdateScope::All,
+        )
+        .await;
+
+    assert!(
+        matches!(&result, Err(error) if error.kind() == CalendarProviderErrorKind::Permanent),
+        "the refusal stays a typed provider error"
+    );
+    assert!(
+        server
+            .received_requests()
+            .await
+            .unwrap()
+            .iter()
+            .all(|r| r.method.as_str() == "GET")
+    );
+}
+
+#[tokio::test]
+async fn guests_already_on_the_meeting_write_nothing() {
+    let (server, api) = setup().await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/calendars/calendar/events/event"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(meeting("event", true)))
+        .mount(&server)
+        .await;
+
+    let outcome = api
+        .add_calendar_guests(
+            &AccessToken::new("token".to_owned()),
+            &target(),
+            "event",
+            &[guest("ada@example.com")],
+            &CalendarUpdateScope::All,
+        )
+        .await
+        .unwrap();
+
+    assert!(matches!(outcome, ProviderInviteOutcome::Applied(_)));
+    assert!(
+        server
+            .received_requests()
+            .await
+            .unwrap()
+            .iter()
+            .all(|r| r.method.as_str() == "GET")
     );
 }

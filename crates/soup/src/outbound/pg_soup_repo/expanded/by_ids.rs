@@ -54,13 +54,6 @@ async fn expanded_soup_by_ids_hydrated<'a>(
             UNION ALL
             SELECT $1
         ),
-        UserAccessibleItems AS (
-            SELECT DISTINCT
-                ea.entity_id::text as item_id,
-                ea.entity_type as item_type
-            FROM entity_access ea
-            WHERE ea.source_id = ANY(SELECT source_id FROM user_source_ids)
-        ),
         Combined AS (
             SELECT
                 'document' as "item_type!",
@@ -124,9 +117,6 @@ async fn expanded_soup_by_ids_hydrated<'a>(
                 AND ep_status.entity_id = d.id 
                 AND ep_status.entity_type = 'TASK'
                 AND ep_status.property_definition_id = $5
-            INNER JOIN UserAccessibleItems uai 
-                ON uai.item_id = d.id 
-                AND uai.item_type = 'document'
             LEFT JOIN "UserHistory" uh 
                 ON uh."itemId" = d.id 
                 AND uh."itemType" = 'document' 
@@ -147,6 +137,12 @@ async fn expanded_soup_by_ids_hydrated<'a>(
             ) di ON true
             WHERE d."deletedAt" IS NULL
             AND d.id = ANY($2::text[])
+            AND EXISTS (
+                SELECT 1 FROM entity_access ea
+                WHERE ea.entity_id::text = d.id
+                    AND ea.entity_type = 'document'
+                    AND ea.source_id = ANY(ARRAY(SELECT source_id FROM user_source_ids))
+            )
 
             UNION ALL
         
@@ -174,15 +170,18 @@ async fn expanded_soup_by_ids_hydrated<'a>(
                 NULL as "is_completed",
                 c."deletedAt"::timestamptz as "deleted_at"
             FROM "Chat" c
-            INNER JOIN UserAccessibleItems uai
-                ON uai.item_id = c.id
-                AND uai.item_type = 'chat'
             LEFT JOIN "UserHistory" uh
                 ON uh."itemId" = c.id
                 AND uh."itemType" = 'chat'
                 AND uh."userId" = $1
             WHERE c."deletedAt" IS NULL
             AND c.id = ANY($3::text[])
+            AND EXISTS (
+                SELECT 1 FROM entity_access ea
+                WHERE ea.entity_id::text = c.id
+                    AND ea.entity_type = 'chat'
+                    AND ea.source_id = ANY(ARRAY(SELECT source_id FROM user_source_ids))
+            )
         )
         SELECT * 
         FROM Combined

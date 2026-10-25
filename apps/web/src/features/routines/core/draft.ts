@@ -3,10 +3,21 @@ import type { RoutineTriggerDraft } from './routine-triggers';
 
 export type ScheduleFrequency = 'week' | 'month' | 'once';
 
+/**
+ * Whether a routine's runs appear in Home and the Agents list. Unlisted runs
+ * stay in the routine's history, and Agents shows them on request.
+ */
+export type RunVisibility = 'listed' | 'unlisted';
+
+/** Runs start unlisted, so a routine that runs often buries nothing. */
+export const DEFAULT_RUN_VISIBILITY: RunVisibility = 'unlisted';
+
 export type ScheduleDraft = {
   id?: string;
   triggers?: RoutineTriggerDraft[];
   enabled?: boolean;
+  /** Absent from drafts saved before the setting existed. */
+  runVisibility?: RunVisibility;
   name: string;
   prompt: string;
   frequency: ScheduleFrequency;

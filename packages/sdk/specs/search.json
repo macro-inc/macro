@@ -504,6 +504,11 @@
           }
         }
       },
+      "CalendarEventSearchScope": {
+        "type": "string",
+        "description": "Which calendar events a unified search covers.\n\nSharing an event with a channel lets its members see the sharer's copy,\nwhich is on none of their own calendars, so the default scope never finds\nit. Shared events are a separate scope rather than part of the default, so\na caller can list them after the caller's own events without reordering\nthose.",
+        "enum": ["own", "shared_with_you"]
+      },
       "CalendarEventSearchTime": {
         "oneOf": [
           {
@@ -4674,6 +4679,10 @@
         "type": "object",
         "required": ["query", "match_type"],
         "properties": {
+          "calendar_event_scope": {
+            "$ref": "#/components/schemas/CalendarEventSearchScope",
+            "description": "Which calendar events to search. Defaults to `own`: events on the\ncaller's own and delegated calendars. `shared_with_you` searches only\nevents shared with a channel the caller belongs to that are on none of\ntheir calendars."
+          },
           "collapse": {
             "type": ["boolean", "null"]
           },

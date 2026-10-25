@@ -18,6 +18,7 @@ mod test;
 
 mod admission;
 mod deliver;
+mod external_replies;
 mod lifecycle;
 mod lifecycle_events;
 mod open;
@@ -26,7 +27,10 @@ mod queue;
 mod session_mcp;
 mod warm;
 
+use futures::FutureExt as _;
 use std::sync::Arc;
+
+type NotificationDrain = futures::future::Shared<futures::future::BoxFuture<'static, ()>>;
 
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_session::domain::error::AgentSessionError;
@@ -141,6 +145,19 @@ struct AgentHarnessInner<
     coding_agents: Box<dyn ErasedCodingAgentSource>,
     conversations: Option<Arc<dyn crate::domain::conversations::ConversationPolicy>>,
     conversation_turns: Option<Arc<dyn crate::domain::conversation_turns::ConversationTurnStore>>,
+    external_replies: Option<Arc<dyn crate::domain::external_replies::ExternalReplyStore>>,
+    notification_store: Option<Arc<dyn agent_session::domain::notifications::NotificationStore>>,
+    /// Discovery advances past busy or unreachable sessions and wraps each cycle.
+    notification_cursor: tokio::sync::Mutex<Option<AgentSessionId>>,
+    notification_drains:
+        tokio::sync::Mutex<std::collections::HashMap<AgentSessionId, NotificationDrain>>,
+    notification_batches:
+        DashMap<AgentSessionId, agent_session::domain::notifications::NotificationBatch>,
+    notification_completions:
+        DashMap<AgentSessionId, agent_session::domain::notifications::NotificationOutcome>,
+    /// Bounded recent completions suppress duplicate observer callbacks.
+    notification_finished:
+        tokio::sync::Mutex<std::collections::VecDeque<(AgentSessionId, AgentActionId)>>,
     defaults: HarnessDefaults,
     /// Turn-occupying actions waiting for their session's running turn to
     /// end. In-memory working copy; the session store is the durable source.
@@ -360,6 +377,13 @@ where
                 coding_agents: Box::new(coding_agents),
                 conversations,
                 conversation_turns: None,
+                external_replies: None,
+                notification_store: None,
+                notification_cursor: tokio::sync::Mutex::new(None),
+                notification_drains: Default::default(),
+                notification_batches: DashMap::new(),
+                notification_completions: DashMap::new(),
+                notification_finished: Default::default(),
                 defaults: defaults.into(),
                 queues: SessionQueues::new(),
                 hydrated: DashSet::new(),
@@ -388,6 +412,82 @@ where
             .expect("configure journal before cloning the harness")
             .conversation_turns = Some(store);
         self
+    }
+
+    /// Configure durable system-event delivery before cloning the harness.
+    pub fn with_notifications(
+        mut self,
+        store: Arc<dyn agent_session::domain::notifications::NotificationStore>,
+    ) -> Self {
+        Arc::get_mut(&mut self.inner)
+            .expect("configure outbox before cloning harness")
+            .notification_store = Some(store);
+        self
+    }
+
+    /// Reconcile durable events through the same routed worker as user prompts.
+    #[tracing::instrument(skip_all, err)]
+    pub async fn recover_notifications(&self) -> Result<()> {
+        let Some(store) = &self.inner.notification_store else {
+            return Ok(());
+        };
+        let leases: Vec<_> = self
+            .inner
+            .notification_batches
+            .iter()
+            .map(|batch| batch.lease_id)
+            .collect();
+        for lease in leases {
+            if let Err(error) = store.renew(lease).await {
+                tracing::warn!(?error, %lease, "notification lease renewal failed");
+            }
+        }
+        let mut cursor = self.inner.notification_cursor.lock().await;
+        let mut sessions = store.pending_sessions(*cursor).await?;
+        if sessions.is_empty() && cursor.is_some() {
+            sessions = store.pending_sessions(None).await?;
+        }
+        *cursor = sessions.last().copied();
+        drop(cursor);
+        sessions.extend(
+            self.inner
+                .notification_completions
+                .iter()
+                .map(|entry| *entry.key()),
+        );
+        sessions.extend(
+            self.inner
+                .notification_batches
+                .iter()
+                .map(|entry| *entry.key()),
+        );
+        sessions.sort_by_key(AgentSessionId::as_uuid);
+        sessions.dedup();
+        // The command worker keeps running when the recovery budget expires.
+        // Retain its result future so the next tick neither queues a duplicate
+        // nor waits for a slow session before renewing other delivery leases.
+        let mut drains = self.inner.notification_drains.lock().await;
+        drains.retain(|_, drain| drain.peek().is_none());
+        for session in sessions {
+            drains.entry(session).or_insert_with(|| {
+                let drain = self.enqueue(session, HarnessCommand::DrainNotifications, true);
+                async move {
+                    if let Err(error) = drain.await {
+                        tracing::warn!(?error, %session, "system event delivery will retry");
+                    }
+                }
+                .boxed()
+                .shared()
+            });
+        }
+        let pending: Vec<_> = drains.values().cloned().collect();
+        drop(drains);
+        let _ = tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            futures::future::join_all(pending),
+        )
+        .await;
+        Ok(())
     }
 
     /// Save a conversation message before acknowledging its broker event. Returns its
@@ -600,6 +700,12 @@ where
         }
 
         let persona = self.inner.reply_persona(&session).await?;
+        if !persona.is_coding && self.inner.external_replies.is_some() {
+            return self
+                .inner
+                .announce_external_reply(session_id, prompt.origin, prompt.sender)
+                .await;
+        }
         self.inner
             .announcer
             .announce(SessionAnnouncement {

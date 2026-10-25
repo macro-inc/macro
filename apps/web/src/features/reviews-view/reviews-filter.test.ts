@@ -9,6 +9,7 @@ import {
 import {
   EMPTY_REVIEWS_FILTERS,
   type ReviewsFilterSelection,
+  type ReviewsSortId,
 } from './reviews-types';
 
 describe('effective review filters', () => {
@@ -76,10 +77,39 @@ describe('review link filters and priority sort', () => {
     ).toEqual(['urgent', 'low', 'pending', 'none']);
   });
 
-  it('leaves the order alone for other sorts', () => {
+  it('keeps the server order for rows without timestamps', () => {
     expect(
       ids(applyReviewLinks(reviews, linksFor, EMPTY_REVIEWS_FILTERS, 'newest'))
     ).toEqual(['low', 'pending', 'none', 'urgent']);
+  });
+
+  describe('date sorts', () => {
+    const dated = (id: string, updatedAt: string, createdAt: string) =>
+      ({
+        id,
+        updatedAt,
+        createdAt,
+        metadata: { labels: [] },
+      }) as unknown as GithubPullRequestEntity;
+    // `live` was updated after the page loaded, so it arrives in its old slot.
+    const fetched = [
+      dated('a', '2026-10-20T10:00:00Z', '2026-10-01T00:00:00Z'),
+      dated('live', '2026-10-21T16:30:00Z', '2026-10-02T00:00:00Z'),
+      dated('b', '2026-10-19T10:00:00Z', '2026-10-03T00:00:00Z'),
+    ];
+    const sorted = (sort: ReviewsSortId) =>
+      ids(applyReviewLinks(fetched, linksFor, EMPTY_REVIEWS_FILTERS, sort));
+
+    it('orders rows by the timestamp they are sorted on', () => {
+      expect(sorted('recently_updated')).toEqual(['live', 'a', 'b']);
+      expect(sorted('least_recently_updated')).toEqual(['b', 'a', 'live']);
+      expect(sorted('newest')).toEqual(['b', 'live', 'a']);
+      expect(sorted('oldest')).toEqual(['a', 'live', 'b']);
+    });
+
+    it('orders equal priorities by recency', () => {
+      expect(sorted('priority')).toEqual(['live', 'a', 'b']);
+    });
   });
 
   it('matches any selected priority or link and holds back unloaded rows', () => {

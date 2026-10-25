@@ -29,6 +29,7 @@ import {
   enableTasksReviews,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
+import { getRunnableHotkeys } from '@core/hotkey/getCommands';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { clearPressedKeys } from '@core/hotkey/state';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
@@ -261,9 +262,6 @@ export const GoToHotkeys = () => {
     leaderHotkey.dispose();
   });
 
-  const registeredGoToKeys = () =>
-    new Set<ValidHotkey>(links().flatMap((link) => link.hotkey ?? []));
-
   // When the go to command scope is active, we want to prevent
   // other default hotkeys from running. So doing "g" + some key
   // not part of the sidebar hotkeys, won't fire the command
@@ -281,7 +279,8 @@ export const GoToHotkeys = () => {
 
     if (
       context.activeScopeId !== GO_TO_COMMAND_SCOPE ||
-      registeredGoToKeys().has(context.pressedKeysString)
+      // The sidebar's letters and those a focused view adds (Email's g s).
+      getRunnableHotkeys(GO_TO_COMMAND_SCOPE).has(context.pressedKeysString)
     ) {
       return false;
     }
@@ -336,6 +335,9 @@ export const GoToHotkeys = () => {
         description: `Go to ${link.label}`,
         keyDownHandler: openSidebarView,
         icon: link.icon,
+        // Views can claim a letter while focused (Email's g then i). Re-running
+        // this effect when flags load must not eclipse those.
+        registrationType: 'add',
       });
     });
 

@@ -32,6 +32,8 @@ function normalizeLimit(limit?: number): number {
     : DEFAULT_NOTIFICATION_LIMIT;
 }
 
+// NOTIFIED_AT pages through the user's notified entities. A timestamp sort
+// would scan every accessible entity just to read a few notification edges.
 function soupInput(cursor: string | null, limit: number): SoupInput {
   return cursor
     ? { continuation: { cursor, expand: true } }
@@ -39,7 +41,7 @@ function soupInput(cursor: string | null, limit: number): SoupInput {
         initial: {
           expand: true,
           limit,
-          sortMethod: 'UPDATED_AT',
+          sortMethod: 'NOTIFIED_AT',
         },
       };
 }

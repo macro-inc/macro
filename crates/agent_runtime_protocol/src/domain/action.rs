@@ -23,6 +23,9 @@ mod test;
 /// ACP session config option used to select the agent's model.
 pub const MODEL_CONFIG_ID: &str = "model";
 
+/// Marks server-added execution context that runtimes read but transcripts omit.
+pub const INVOCATION_CONTEXT_META: &str = "macro/invocation-context";
+
 /// Identifies one accepted [`AgentAction`] end to end: returned by the
 /// control endpoint, written as the JSON-RPC request id on the action's wire
 /// frame, and read back off that frame as `request_id` on the folded message
@@ -176,11 +179,10 @@ impl PromptAttachment {
 pub struct AgentPromptAction {
     /// What to tell the agent.
     pub prompt: String,
-    /// Internal context persisted in the queue and rendered through the harness
-    /// context block, not chat text. Not accepted from the public control API.
+    /// Trusted system events, authored only by the harness.
     #[cfg_attr(feature = "utoipa", schema(ignore))]
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub private_context: Option<String>,
+    pub notifications: Option<crate::domain::notification::NotificationInput>,
     /// Files the prompt refers to, in the order the user attached them.
     /// Delivered after the text as one `resource_link` block each.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -467,16 +469,19 @@ impl AgentAction {
         Self::Prompt(AgentPromptAction {
             prompt: prompt.into(),
             attachments,
-            private_context: None,
+            notifications: None,
             name_source: None,
         })
     }
 
-    /// Start a normal queued turn with private context and no visible prompt text.
-    pub fn context_prompt(context: impl Into<String>) -> Self {
+    /// Start a system turn from a leased batch of events.
+    pub fn notification(notifications: Vec<crate::domain::notification::Notification>) -> Self {
         let mut action = Self::prompt("");
         if let Self::Prompt(prompt) = &mut action {
-            prompt.private_context = Some(context.into());
+            prompt.notifications = Some(crate::domain::notification::NotificationInput {
+                notifications,
+                system_turn: true,
+            });
         }
         action
     }
@@ -589,8 +594,29 @@ impl AgentAction {
                     )
                     .collect();
                 let payload = PromptRequest::new(session_id.clone(), blocks);
-                let params = serde_json::to_value(&payload)
+                let mut params = serde_json::to_value(&payload)
                     .map_err(|error| ActionError::Acp(error.to_string()))?;
+                if let Some(input) = &action.notifications {
+                    let context =
+                        crate::domain::notification::notification_context(&input.notifications)
+                            .map_err(|error| ActionError::Acp(error.to_string()))?;
+                    params["prompt"]
+                        .as_array_mut()
+                        .ok_or_else(|| ActionError::Acp("missing prompt blocks".into()))?
+                        .insert(0, serde_json::json!({"type":"text", "text":context}));
+                    params["_meta"] =
+                        serde_json::json!({crate::domain::notification::NOTIFICATIONS_META: input});
+                }
+                if let Some(turn) = AgentActionId::from_request_id(&request_id) {
+                    let context = serde_json::json!({
+                        "version": 1,
+                        "text": format!("<invocation turn_id=\"{turn}\">Use this turn_id for ExecuteCode calls originating in this prompt. Never substitute another turn's ID for a stale call.</invocation>")
+                    });
+                    params["prompt"]
+                        .as_array_mut()
+                        .ok_or_else(|| ActionError::Acp("missing prompt blocks".into()))?
+                        .push(serde_json::json!({"type":"text", "text":format!("<m-agent-context>{context}</m-agent-context>"), "_meta": { INVOCATION_CONTEXT_META: true }}));
+                }
                 let frame =
                     RawJsonRpcMessage::request(payload.method().to_owned(), params, request_id)
                         .map_err(|error| ActionError::Acp(error.to_string()))?;
