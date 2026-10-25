@@ -124,8 +124,8 @@ async fn concurrent_claims_never_share_an_address(pool: PgPool) {
     let candidates: Vec<MacroUserIdStr<'static>> = emails.iter().map(|email| user(email)).collect();
 
     let (left, right) = tokio::join!(
-        left_repo.claim(TEAM1, &candidates, 25),
-        right_repo.claim(TEAM1, &candidates, 25)
+        left_repo.claim(TEAM1, &candidates, 100),
+        right_repo.claim(TEAM1, &candidates, 100)
     );
 
     let left: HashSet<String> = left
@@ -187,7 +187,7 @@ async fn people_already_on_macro_are_not_claimed(pool: PgPool) {
     set_auto_join_domain(&pool, "user.com").await;
     let macro_user_id = Uuid::from_u128(0xe1);
     sqlx::query!(
-        r#"INSERT INTO macro_user (id, username, email) VALUES ($1, $2, $2)"#,
+        r#"INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES ($1, $2, $2, 'cus_existing')"#,
         macro_user_id,
         "Existing@user.com",
     )

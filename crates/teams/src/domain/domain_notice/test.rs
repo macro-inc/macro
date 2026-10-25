@@ -81,7 +81,7 @@ async fn only_contacts_on_the_senders_domain_are_announced_to() {
     assert_eq!(request.joined, user("alice@acme.com"));
     assert_eq!(request.joined_name, None);
     let candidates: Vec<&str> = request.candidates.iter().map(|c| c.email_str()).collect();
-    assert_eq!(candidates, vec!["bob@acme.com", "Carol@ACME.com"]);
+    assert_eq!(candidates, vec!["bob@acme.com", "carol@acme.com"]);
 }
 
 #[tokio::test]

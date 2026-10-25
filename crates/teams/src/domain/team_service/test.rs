@@ -2082,7 +2082,8 @@ async fn team_event_create_publishes_actual_domain_and_billing_flags() {
     assert_eq!(metadata["team_id"], team_id.to_string());
     assert_eq!(metadata["enterprise"], true);
     assert_eq!(metadata["paid"], true);
-    assert_eq!(metadata["auto_join_domain"], "example.com");
+    // The owner's own work domain, stored with the team.
+    assert_eq!(metadata["auto_join_domain"], "corporate.test");
 }
 
 #[tokio::test]
