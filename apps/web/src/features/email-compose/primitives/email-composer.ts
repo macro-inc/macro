@@ -1286,6 +1286,15 @@ export function createEmailComposer(props: EmailComposerOptions) {
       autosave.cancel();
     },
   });
+  // The move has committed, so a host that cannot show it must not turn the
+  // switch into a failed inbox change.
+  const showMovedDraft = (moved: { draftId: string; threadId: string }) => {
+    try {
+      props.host?.showMovedDraft?.(moved);
+    } catch (error) {
+      props.notices.reportError(error);
+    }
+  };
   const selectInbox = async (inboxId: string, senderEmail?: string) => {
     if (
       sendLocked() ||
@@ -1322,7 +1331,7 @@ export function createEmailComposer(props: EmailComposerOptions) {
       // The save captures the new sender before the host can unmount this
       // composer to show the moved draft.
       const saved = autosave.save();
-      if (moved) props.host?.showMovedDraft?.(moved);
+      if (moved) showMovedDraft(moved);
       await saved;
     } catch (error) {
       props.notices.reportError(error);
