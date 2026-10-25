@@ -7,6 +7,7 @@ import {
   settledSendAttempt,
   watchEmailSends,
 } from '@queries/email/send-queue';
+import { recordEmailSend } from '@queries/email/send-telemetry';
 import type { EmailSendProgress } from '../context/compose-capabilities';
 
 function emailSendProgress(intent: EmailSendIntent): EmailSendProgress {
@@ -32,6 +33,7 @@ export function watchEmailSendProgress(
   sendAttemptId: string,
   changed: (progress: EmailSendProgress) => void
 ): () => void {
+  const started = performance.now();
   let last: EmailSendProgress | undefined;
   let stopped = false;
   let reading = false;
@@ -50,6 +52,16 @@ export function watchEmailSendProgress(
     const progress = emailSendProgress(intent);
     if (last && deepEqual(last, progress)) return;
     last = progress;
+    if (progress.state !== 'pending' && progress.state !== 'accepted')
+      recordEmailSend(
+        {
+          operation: 'status',
+          outcome: 'observed',
+          status: settledSendAttempt(intent)?.status,
+          durationMs: performance.now() - started,
+        },
+        intent
+      );
     if (
       progress.state === 'sent' ||
       progress.state === 'failed' ||
