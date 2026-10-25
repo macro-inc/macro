@@ -622,6 +622,9 @@ without the forwarded message. A reply quoting a message that was itself
 forwarded stays a reply. Collapsed content is named: **Show forwarded message**
 on a forward, **Show quoted text** on a reply. The toggle beside the editor keeps
 the name `forwarded message` or `quoted text` and reports whether it is pressed.
+With **Add to replies & forwards** on, the **Signature** bar sits between the
+written message and these controls on desktop and mobile, where sending inserts
+the signature above the quoted thread on Gmail and Outlook.
 Check recipient suggestions from a Gmail and an Outlook inbox. Typing a full
 address and pressing Enter commits that address, ahead of longer matches such
 as `teo+123456@macro.com`, whether or not it is a saved contact. A name or
