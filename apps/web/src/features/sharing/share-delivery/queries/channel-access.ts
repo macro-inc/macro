@@ -12,7 +12,6 @@ import { cognitionApiServiceClient } from '@service-cognition/client';
 import { storageServiceClient } from '@service-storage/client';
 import type { UpdateChannelSharePermission } from '@service-storage/generated/schemas/updateChannelSharePermission';
 import { err, type Result, ResultAsync } from 'neverthrow';
-import { match } from 'ts-pattern';
 import type {
   ChannelAccessChange,
   ChannelAccessError,
@@ -82,18 +81,16 @@ function grantClient(kind: ShareKind): ChannelGrantClient | undefined {
     updateEntitySharePolicy(kind, id, { channelSharePermissions: [operation] });
 }
 
-function toOperation(change: ChannelAccessChange) {
-  return match(change)
-    .with({ t: 'set' }, ({ channelId, level }) => ({
-      operation: 'replace' as const,
-      accessLevel: level,
-      channelId,
-    }))
-    .with({ t: 'remove' }, ({ channelId }) => ({
-      operation: 'remove' as const,
-      channelId,
-    }))
-    .exhaustive();
+function toOperation(
+  change: ChannelAccessChange
+): UpdateChannelSharePermission {
+  if (change.t === 'remove')
+    return { operation: 'remove', channelId: change.channelId };
+  return {
+    operation: 'replace',
+    accessLevel: change.level,
+    channelId: change.channelId,
+  };
 }
 
 function refused(errors: readonly ResultError[]) {
