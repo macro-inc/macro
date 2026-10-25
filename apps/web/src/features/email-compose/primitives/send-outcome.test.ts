@@ -90,6 +90,17 @@ function undoOfferEnds(context: EmailComposeContext) {
   return duration === undefined ? undefined : Date.now() + duration;
 }
 
+/** Undo offers still on screen, given notices that return their ids. */
+function openUndoOffers(context: EmailComposeContext) {
+  const { success, dismiss } = vi.mocked(context.notices.feedback);
+  const dismissed = new Set(dismiss.mock.calls.map(([id]) => id));
+  return success.mock.calls.filter(
+    ([, options], index) =>
+      options?.actions?.some((action) => action.label === 'Undo') &&
+      !dismissed.has(success.mock.results[index]?.value)
+  ).length;
+}
+
 it.each(providers)(
   '%s: keeps a delivered reply done and offers Undo until the server deadline',
   async (provider) => {
@@ -211,6 +222,30 @@ it.each(providers)(
       report({ state: 'failed' });
       await vi.advanceTimersByTimeAsync(0);
       expect(cancelled?.()).toBe(true);
+    } finally {
+      reply.dispose();
+    }
+  }
+);
+
+it.each(providers)(
+  '%s: withdraws Undo when the server accepts the send after its deadline',
+  async (provider) => {
+    const { context, report } = outbox(provider);
+    let notice = 0;
+    vi.mocked(context.notices.feedback.success).mockImplementation(
+      () => ++notice
+    );
+    const reply = mountReplyComposer(context);
+    try {
+      await reply.sendEmail();
+      expect(openUndoOffers(context)).toBe(1);
+
+      report({
+        state: 'accepted',
+        undoUntil: new Date(Date.now() - 1_000).toISOString(),
+      });
+      expect(openUndoOffers(context)).toBe(0);
     } finally {
       reply.dispose();
     }
