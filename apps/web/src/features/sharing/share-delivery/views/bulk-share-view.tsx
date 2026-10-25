@@ -174,7 +174,11 @@ export function BulkShareView<Recipient extends PickedRecipient>(props: {
         </>
       }
     >
-      <Panel depth={2} class="rounded-xl bg-dialog">
+      <Panel
+        depth={2}
+        hideBorder
+        class="elevated-surface rounded-[24px] bg-dialog"
+      >
         <Panel.Header class="px-4">
           <Dialog.Title class="min-w-0 truncate text-sm font-medium">
             {title()}
