@@ -192,6 +192,7 @@ export * from './resendFusionauthVerifyUserEmailRequest';
 export * from './savedAgentApiKey';
 export * from './scheduledSeatPlan';
 export * from './seatPlan';
+export * from './sendDomainNoticeResponse';
 export * from './sendInviteBody';
 export * from './sendMobileWelcomeEmailRequest';
 export * from './sendMobileWelcomeEmailResponse';
