@@ -255,10 +255,6 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
   const isMobileCompose = () => props.mobileCompose !== undefined;
   const composePortalScope = () =>
     isMobileCompose() ? ('local' as const) : undefined;
-  const scrollAreaSignatureHtml = () =>
-    isMobileCompose() ? signatureHtml() : undefined;
-  const footerSignatureHtml = () =>
-    isMobileCompose() ? undefined : signatureHtml();
   // File sharing and editor plugin wiring belong to this view. The controller only
   // needs to know when editor content has changed and requires another save.
   const editorConfig = buildConfig('markdown')
@@ -459,6 +455,25 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
         </For>
         <attachmentViewer.Viewer />
       </div>
+    </Show>
+  );
+
+  const SignatureRow = () => (
+    <Show when={signatureHtml()}>
+      {(html) => (
+        <SignaturePreview
+          mobile={composeContext.presentation.isMobile()}
+          prepareLinks={composeContext.presentation.prepareSignatureLinks}
+          html={html()}
+          dismissable={!editingDisabled()}
+          onDismiss={() => {
+            // Dismissal is composer-local state worth keeping — latch
+            // the seed so a draft upgrade can't remount it away.
+            props.onEngaged?.();
+            setIncludeSignature(false);
+          }}
+        />
+      )}
     </Show>
   );
 
@@ -708,26 +723,14 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
             </Show>
             <Show when={isMobileCompose()}>
               <AttachmentsRow />
-            </Show>
-            <Show when={scrollAreaSignatureHtml()}>
-              {(html) => (
-                <SignaturePreview
-                  mobile={composeContext.presentation.isMobile()}
-                  prepareLinks={
-                    composeContext.presentation.prepareSignatureLinks
-                  }
-                  html={html()}
-                  dismissable={!editingDisabled()}
-                  onDismiss={() => {
-                    // Dismissal is composer-local state worth keeping — latch
-                    // the seed so a draft upgrade can't remount it away.
-                    props.onEngaged?.();
-                    setIncludeSignature(false);
-                  }}
-                />
-              )}
+              <SignatureRow />
             </Show>
           </div>
+          {/* Sending inserts the signature above the quoted thread, so the
+            preview stays above the quoted-text controls. */}
+          <Show when={!isMobileCompose()}>
+            <SignatureRow />
+          </Show>
           {/* Quoted-text controls live below the scroll area so they stay
             anchored to the composer bottom instead of scrolling with (and
             floating over) tall content. */}
@@ -779,25 +782,7 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
           <Show when={!isMobileCompose()}>
             {/* Below the scroll area so quoted email content can never overlap it */}
             <AttachmentsRow class="px-4" />
-            <Show when={footerSignatureHtml()}>
-              {(html) => (
-                <SignaturePreview
-                  mobile={composeContext.presentation.isMobile()}
-                  prepareLinks={
-                    composeContext.presentation.prepareSignatureLinks
-                  }
-                  html={html()}
-                  dismissable={!editingDisabled()}
-                  onDismiss={() => {
-                    // Dismissal is composer-local state worth keeping — latch
-                    // the seed so a draft upgrade can't remount it away.
-                    props.onEngaged?.();
-                    setIncludeSignature(false);
-                  }}
-                />
-              )}
-            </Show>
-            {/* Keep the footer intrinsic-height so it cannot overlap the signature. */}
+            {/* Keep the footer intrinsic-height so it cannot overlap the rows above it. */}
             <div
               ref={bottomBarRef}
               class="shrink-0 flex min-w-0 justify-end pt-1.5"
