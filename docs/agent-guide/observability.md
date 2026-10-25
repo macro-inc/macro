@@ -139,7 +139,7 @@ share that sent one message. Each press is one browser trace:
 | `share.target` | One recipient or channel: finding its channel, sending its message, and granting access. |
 | `share.find_channel` | Finding or creating the direct message or group for people, around `http POST /dss/channels/get_or_create_dm` or `get_or_create_private`. |
 | `share.send_message` | One message, around `http POST /dss/messages/channel/<channel.id>`. |
-| `http …` under `share.target` | One channel access grant, such as `http PATCH /dss/documents/<id>`. |
+| `http …` under `share.target` | One channel access grant, such as `http PATCH /dss/documents/<id>`. With `enable-graphql-soup` on, a grant for a document, folder, chat, or email thread is an `entity.update_share_policy` span (`entity.type`, `entity.id`) around the `UpdateEntitySharePolicies` mutation instead. |
 
 Each `http …` span continues into the backend trace. The root records
 `share.location` (`forward_to_channel` for one item's Share dialog, `bulk_share`
