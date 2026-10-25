@@ -190,12 +190,15 @@ export function ComposeLayout(props: {
             when={
               props.header ||
               (!ctx.isMobile() &&
-                (ctx.fromInboxes?.().length || ctx.fromAddress?.()))
+                (ctx.fromInboxes?.().length ||
+                  ctx.fromAddress?.() ||
+                  ctx.inboxesLoading?.()))
             }
           >
             <div
               role="group"
               aria-label="Sending inbox"
+              aria-busy={ctx.inboxesLoading?.() || undefined}
               class="min-h-12 flex items-center gap-2 border-b border-edge-muted"
             >
               <Show
@@ -208,9 +211,16 @@ export function ComposeLayout(props: {
                     <Show
                       when={ctx.fromInboxes?.().length}
                       fallback={
-                        <span class="truncate text-sm">
-                          {ctx.fromAddress?.()}
-                        </span>
+                        <Show
+                          when={ctx.fromAddress?.() || !ctx.inboxesLoading?.()}
+                          fallback={
+                            <span class="h-6 w-40 rounded-full bg-skeleton skeleton-shimmer" />
+                          }
+                        >
+                          <span class="truncate text-sm">
+                            {ctx.fromAddress?.()}
+                          </span>
+                        </Show>
                       }
                     >
                       <FromInboxSelector

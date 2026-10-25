@@ -1536,6 +1536,7 @@ export function createEmailComposer(props: EmailComposerOptions) {
     // Display
     fromAddress: () => form.senderEmail() ?? link()?.email_address,
     fromInboxes: () => fromInboxOptions(props.accounts.inboxes()),
+    inboxesLoading: props.accounts.loading,
     selectedInboxId: () => link()?.id,
     // Persist immediately on a sender switch so the draft moves to the new
     // inbox even without a text edit.
