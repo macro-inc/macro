@@ -70,6 +70,7 @@ function ChipWithUserTooltip(props: {
 function RecipientChip(props: {
   icon?: JSX.Element;
   label: string;
+  address?: string;
   onRemove: () => void;
   draggable?: boolean;
   onDragStart?: (e: DragEvent) => void;
@@ -84,6 +85,9 @@ function RecipientChip(props: {
     >
       <Show when={props.icon}>{props.icon}</Show>
       <p class="text-sm whitespace-nowrap">{truncateString(props.label, 20)}</p>
+      <Show when={props.address}>
+        {(address) => <span class="sr-only">{address()}</span>}
+      </Show>
       <XIcon
         class="size-5 hover:bg-hover hover:text-failure p-1 rounded-full"
         onClick={props.onRemove}
@@ -796,6 +800,11 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                                         />
                                       }
                                       label={displayText() ?? ''}
+                                      address={
+                                        displayText() === email
+                                          ? undefined
+                                          : email
+                                      }
                                       onRemove={() => state.remove(option)}
                                       draggable={!!props.onChipDragStart}
                                       onDragStart={(e) =>
