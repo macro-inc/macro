@@ -21,28 +21,29 @@
 mod config;
 mod process;
 
-use anyhow::Context;
 use macro_entrypoint::MacroEntrypoint;
+use rootcause::prelude::{Report, ResultExt as _};
 use sqlx::postgres::PgPoolOptions;
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    println!("Loading configuration...");
-    MacroEntrypoint::default().init();
-    let config = config::Config::from_env().context("Failed to load configuration")?;
+async fn main() -> Result<(), Report> {
+    let entrypoint = MacroEntrypoint::default().init();
+    let result = run().await;
+    entrypoint.shutdown();
+    result
+}
 
-    println!("Connecting to the database...");
+async fn run() -> Result<(), Report> {
+    let config = config::Config::from_env()?;
     let db_pool = PgPoolOptions::new()
         .min_connections(1)
         .max_connections(config.concurrency as u32)
         .connect(&config.database_url)
         .await
-        .context("Could not connect to db")?;
+        .context("could not connect to the database")?;
 
     let mode = config.mode;
-    let results = process::backfill(&db_pool, config.link_ids, config.concurrency, mode)
-        .await
-        .context("Failed to fetch Outlook links")?;
+    let results = process::backfill(&db_pool, config.link_ids, config.concurrency, mode).await?;
 
     let total: u64 = results.iter().filter_map(|(_, r)| r.as_ref().ok()).sum();
     let failures: Vec<String> = results
@@ -51,20 +52,21 @@ async fn main() -> anyhow::Result<()> {
         .map(|(id, _)| id.to_string())
         .collect();
 
-    println!(
-        "\n=== All links processed: {total} snippets {}, {} failures ===",
-        mode.noun(),
-        failures.len()
+    tracing::info!(
+        ?mode,
+        snippets = total,
+        failures = failures.len(),
+        "all links processed"
     );
     if !failures.is_empty() {
-        anyhow::bail!(
+        rootcause::bail!(
             "{} links failed ({}); rerun with LINK_IDS to retry them",
             failures.len(),
             failures.join(", ")
         );
     }
     if mode == config::Mode::Verify && total > 0 {
-        anyhow::bail!("{total} Outlook snippets are stale; run without VERIFY to repair");
+        rootcause::bail!("{total} Outlook snippets are stale; run without VERIFY to repair");
     }
     Ok(())
 }

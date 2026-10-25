@@ -1,6 +1,7 @@
 use crate::config::Mode;
 use email_utils::body_replyless::reply_snippet;
 use futures::stream::{self, StreamExt};
+use rootcause::Report;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -9,42 +10,34 @@ mod test;
 
 const PAGE_SIZE: i64 = 500;
 
+/// A link and how many of its snippets were stale, or why it failed.
+pub type LinkOutcome = (Uuid, Result<u64, Report>);
+
 /// Backfills each Outlook link among `link_ids` (every Outlook link when
-/// `None`) and returns, per link, how many snippets were stale.
+/// `None`) and returns each link's outcome.
+#[tracing::instrument(
+    name = "email.backfill_outlook_snippets",
+    skip(pool, link_ids),
+    fields(links),
+    err
+)]
 pub async fn backfill(
     pool: &PgPool,
     link_ids: Option<Vec<Uuid>>,
     concurrency: usize,
     mode: Mode,
-) -> anyhow::Result<Vec<(Uuid, anyhow::Result<u64>)>> {
+) -> Result<Vec<LinkOutcome>, Report> {
     let link_ids = sqlx::query_scalar!(
         "SELECT id FROM email_links WHERE provider = 'OUTLOOK' AND ($1::uuid[] IS NULL OR id = ANY($1)) ORDER BY id",
         link_ids.as_deref()
     )
     .fetch_all(pool)
     .await?;
-
-    let total_links = link_ids.len();
-    println!("Processing {total_links} Outlook links with concurrency {concurrency}");
+    tracing::Span::current().record("links", link_ids.len());
 
     Ok(stream::iter(link_ids)
         .map(|link_id| async move { (link_id, backfill_link(pool, link_id, mode).await) })
         .buffer_unordered(concurrency)
-        .enumerate()
-        .map(|(index, (link_id, result))| {
-            match &result {
-                Ok(count) => println!(
-                    "=== Completed {link_id} ({}/{total_links}): {count} snippets {} ===",
-                    index + 1,
-                    mode.noun()
-                ),
-                Err(e) => println!(
-                    "=== Failed {link_id} ({}/{total_links}): {e:?} ===",
-                    index + 1
-                ),
-            }
-            (link_id, result)
-        })
         .collect()
         .await)
 }
@@ -53,8 +46,15 @@ pub async fn backfill(
 /// `(link_id, provider_id)` index serves, and rewrites each snippet that
 /// differs from the one ingest now derives from the same stored bodies. Rows
 /// Outlook never sent (no `provider_id`) are left alone.
-async fn backfill_link(pool: &PgPool, link_id: Uuid, mode: Mode) -> anyhow::Result<u64> {
+#[tracing::instrument(
+    name = "email.backfill_outlook_snippets.link",
+    skip(pool),
+    fields(pages = 0u64, snippets),
+    err
+)]
+async fn backfill_link(pool: &PgPool, link_id: Uuid, mode: Mode) -> Result<u64, Report> {
     let mut after = String::new();
+    let mut pages = 0u64;
     let mut stale = 0;
     loop {
         let page = sqlx::query!(
@@ -72,9 +72,14 @@ async fn backfill_link(pool: &PgPool, link_id: Uuid, mode: Mode) -> anyhow::Resu
         .fetch_all(pool)
         .await?;
         let Some(last) = page.last() else {
+            let span = tracing::Span::current();
+            span.record("pages", pages);
+            span.record("snippets", stale);
+            tracing::info!(snippets = stale, "link done");
             return Ok(stale);
         };
         after = last.provider_id.clone();
+        pages += 1;
 
         let mut ids = Vec::new();
         let mut stored = Vec::new();
