@@ -16,10 +16,7 @@ export class SlackImportQueue extends pulumi.ComponentResource {
 
   constructor(
     name: string,
-    {
-      stagingBucketArn,
-      tags,
-    }: SlackImportQueueArgs,
+    { stagingBucketArn, tags }: SlackImportQueueArgs,
     opts?: pulumi.ComponentResourceOptions
   ) {
     super('my:components:SlackImportQueue', name, {}, opts);
