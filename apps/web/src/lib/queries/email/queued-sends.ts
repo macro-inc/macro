@@ -7,7 +7,7 @@ import {
 } from './send-queue';
 import { emailSendFailureKind, recordEmailSend } from './send-telemetry';
 
-// One snapshot per document: a surface that mounts after Send, such as the
+// One snapshot per document, so a surface that mounts after Send, such as the
 // thread it opens, starts from what earlier surfaces already read.
 const [intents, setIntents] = createSignal<EmailSendIntent[]>([]);
 const [ready, setReady] = createSignal(false);
