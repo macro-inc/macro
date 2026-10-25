@@ -3,6 +3,10 @@ import type { ResultError } from '@core/util/result';
 import { updateAgentSessionSharePermissions } from '@queries/agent-session/share-permissions';
 import { updateInitiativeSharePermissions } from '@queries/initiative/share-permissions';
 import { updateDatabaseSharePermissions } from '@queries/storage/databases';
+import {
+  updateEntitySharePolicy,
+  usesGraphqlSharePolicy,
+} from '@queries/storage/entity-mutations';
 import { updateFormSharePermissions } from '@queries/storage/forms';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { storageServiceClient } from '@service-storage/client';
@@ -69,6 +73,15 @@ const CHANNEL_GRANT_CLIENTS = {
   foreign: undefined,
 } satisfies Record<ShareKind, ChannelGrantClient | undefined>;
 
+// GraphQL replaces the transport, not the policy: a kind without a REST
+// client stays unsupported even though GraphQL can address it.
+function grantClient(kind: ShareKind): ChannelGrantClient | undefined {
+  const client: ChannelGrantClient | undefined = CHANNEL_GRANT_CLIENTS[kind];
+  if (!client || !usesGraphqlSharePolicy(kind)) return client;
+  return (id, operation) =>
+    updateEntitySharePolicy(kind, id, { channelSharePermissions: [operation] });
+}
+
 function toOperation(change: ChannelAccessChange) {
   return match(change)
     .with({ t: 'set' }, ({ channelId, level }) => ({
@@ -105,8 +118,7 @@ export async function changeChannelAccess(
   item: ShareItemRef,
   change: ChannelAccessChange
 ): Promise<Result<void, ChannelAccessError>> {
-  const client: ChannelGrantClient | undefined =
-    CHANNEL_GRANT_CLIENTS[item.kind];
+  const client = grantClient(item.kind);
   if (!client) return err({ kind: 'unsupported' });
 
   return await callClient(client, item.id, toOperation(change)).andThen(
