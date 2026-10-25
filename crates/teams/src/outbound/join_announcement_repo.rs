@@ -50,6 +50,17 @@ impl JoinAnnouncementRepository for JoinAnnouncementRepositoryImpl {
             .iter()
             .map(|candidate| candidate.to_string())
             .collect();
+        let mut transaction = self
+            .pool
+            .begin()
+            .await
+            .context(JoinAnnouncementError::Storage)?;
+        // Serialize claims per team, so concurrent announcements can't each read the same
+        // count and together exceed `team_limit`.
+        sqlx::query!("SELECT id FROM team WHERE id = $1 FOR UPDATE", team_id)
+            .fetch_optional(&mut *transaction)
+            .await
+            .context(JoinAnnouncementError::Storage)?;
         let rows = sqlx::query!(
             r#"
             WITH claimed AS (
@@ -93,9 +104,13 @@ impl JoinAnnouncementRepository for JoinAnnouncementRepositoryImpl {
             &user_ids[..],
             i64::from(team_limit),
         )
-        .fetch_all(&self.pool)
+        .fetch_all(&mut *transaction)
         .await
         .context(JoinAnnouncementError::Storage)?;
+        transaction
+            .commit()
+            .await
+            .context(JoinAnnouncementError::Storage)?;
         Ok(rows
             .into_iter()
             .filter_map(|row| {

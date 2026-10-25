@@ -136,7 +136,7 @@ pub fn sign_unsubscribe_placeholders(
         signed.push_str(&rest[..start]);
         let after = &rest[start + UNSUBSCRIBE_PLACEHOLDER_PREFIX.len()..];
         let type_len = after
-            .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+            .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '-'))
             .unwrap_or(after.len());
         let url = unsubscribe_url(
             notification_service_url.clone(),

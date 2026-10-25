@@ -164,3 +164,17 @@ fn bodies_without_a_placeholder_are_left_alone() {
     let base = Url::parse("https://notifications.example.com").unwrap();
     assert!(sign_unsubscribe_placeholders("<p>hi</p>", &base, "macro|a@b.com", &secret).is_none());
 }
+
+#[test]
+fn hyphenated_type_names_are_signed_whole() {
+    let secret = make_secret(b"test-secret");
+    let base = Url::parse("https://notifications.example.com").unwrap();
+    let body = format!(
+        "<a href=\"{}\">x</a>",
+        unsubscribe_placeholder("email-digest-notification")
+    );
+
+    let signed = sign_unsubscribe_placeholders(&body, &base, "macro|a@b.com", &secret).unwrap();
+
+    assert!(signed.contains("/preferences/email-digest-notification/disable"));
+}

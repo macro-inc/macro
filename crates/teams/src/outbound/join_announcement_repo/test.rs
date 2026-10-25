@@ -239,3 +239,25 @@ async fn claims_stop_at_the_team_limit_across_calls(pool: PgPool) {
         vec!["a@user.com", "b@user.com", "c@user.com"]
     );
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn concurrent_claims_share_the_team_limit(pool: PgPool) {
+    set_auto_join_domain(&pool, "user.com").await;
+    let left_repo = JoinAnnouncementRepositoryImpl::new(pool.clone());
+    let right_repo = JoinAnnouncementRepositoryImpl::new(pool.clone());
+    let left_emails: Vec<String> = (0..20).map(|i| format!("left{i:02}@user.com")).collect();
+    let right_emails: Vec<String> = (0..20).map(|i| format!("right{i:02}@user.com")).collect();
+    let left_candidates: Vec<_> = left_emails.iter().map(|email| user(email)).collect();
+    let right_candidates: Vec<_> = right_emails.iter().map(|email| user(email)).collect();
+
+    let (left, right) = tokio::join!(
+        left_repo.claim(TEAM1, &left_candidates, 25),
+        right_repo.claim(TEAM1, &right_candidates, 25)
+    );
+
+    assert_eq!(left.unwrap().len() + right.unwrap().len(), 25);
+    assert_eq!(ledger(&pool).await.len(), 25);
+}

@@ -1,7 +1,11 @@
 import { toast } from '@core/component/Toast/Toast';
 import { useIsAuthenticated, useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { ThrownResultError, throwOnErr } from '@core/util/result';
+import {
+  catchToResult,
+  ThrownResultError,
+  throwOnErr,
+} from '@core/util/result';
 import {
   authServiceClient,
   type ToggleAutoJoinDomainErrorCode,
@@ -390,7 +394,9 @@ export function useCreateTeamWithInvitesMutation(
       // After the invites, so invitees aren't also sent the notice. The
       // team already exists, so a failed notice doesn't fail creation.
       if (allowDomainJoin === true && team.auto_join_domain) {
-        const notice = await authServiceClient.sendTeamDomainNotice();
+        const notice = await catchToResult(() =>
+          throwOnErr(() => authServiceClient.sendTeamDomainNotice())
+        );
         if (notice.isErr()) {
           console.error('Failed to send team domain notice', notice);
         }
