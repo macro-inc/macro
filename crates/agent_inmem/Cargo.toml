@@ -8,6 +8,7 @@ version = "0.1.0"
 agent_code_mode = { path = "../agent_code_mode" }
 ai_billing = { path = "../ai_billing" }
 agent = { path = "../agent" }
+agent_api_keys = { path = "../agent_api_keys" }
 # The egress proxy's domain service, driven in-process: the same verification,
 # resolution and stamping a sandbox reaches over the wire, minus the wire.
 agent_egress = { path = "../agent_egress" }

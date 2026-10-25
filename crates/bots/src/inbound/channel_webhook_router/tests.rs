@@ -173,6 +173,14 @@ impl BotService for TestBotService {
         unimplemented!()
     }
 
+    async fn manageable_agent(
+        &self,
+        _caller: MacroUserIdStr<'static>,
+        _bot_id: BotId,
+    ) -> Result<Agent, BotError> {
+        unimplemented!()
+    }
+
     async fn patch_agent(
         &self,
         _caller: MacroUserIdStr<'static>,

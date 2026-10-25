@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type {
+  AgentApiKey,
   AiBillingErrorBody,
   AppleLoginRequest,
   ChangePlanRequest,
@@ -76,6 +77,7 @@ import type {
   PostGetNamesRequestBody,
   ProfilePictures,
   PublicGtmInviteLink,
+  PutAgentApiKeyRequest,
   PutCursorApiKeyRequest,
   PutCursorDefaultModelRequest,
   PutProfilePictureParams,
@@ -111,6 +113,200 @@ import type {
   UserQuota,
   UserTokensResponse,
 } from './schemas';
+
+/**
+ * @summary The agent's API key, if it has one, and whether its plan allows one.
+ */
+export type getAgentApiKeyResponse200 = {
+  data: AgentApiKey;
+  status: 200;
+};
+
+export type getAgentApiKeyResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type getAgentApiKeyResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type getAgentApiKeyResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type getAgentApiKeyResponseSuccess = getAgentApiKeyResponse200 & {
+  headers: Headers;
+};
+export type getAgentApiKeyResponseError = (
+  | getAgentApiKeyResponse401
+  | getAgentApiKeyResponse403
+  | getAgentApiKeyResponse404
+) & {
+  headers: Headers;
+};
+
+export type getAgentApiKeyResponse =
+  | getAgentApiKeyResponseSuccess
+  | getAgentApiKeyResponseError;
+
+export const getGetAgentApiKeyUrl = (agentId: string) => {
+  return `/agents/${agentId}/api-key`;
+};
+
+export const getAgentApiKey = async (
+  agentId: string,
+  options?: RequestInit
+): Promise<getAgentApiKeyResponse> => {
+  const res = await fetch(getGetAgentApiKeyUrl(agentId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAgentApiKeyResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getAgentApiKeyResponse;
+};
+
+/**
+ * @summary Registers or replaces the agent's API key, for its model's provider.
+Only in-memory agents on an Anthropic or OpenAI model, on a paid plan.
+ */
+export type putAgentApiKeyResponse200 = {
+  data: AgentApiKey;
+  status: 200;
+};
+
+export type putAgentApiKeyResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type putAgentApiKeyResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type putAgentApiKeyResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type putAgentApiKeyResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type putAgentApiKeyResponseSuccess = putAgentApiKeyResponse200 & {
+  headers: Headers;
+};
+export type putAgentApiKeyResponseError = (
+  | putAgentApiKeyResponse400
+  | putAgentApiKeyResponse401
+  | putAgentApiKeyResponse403
+  | putAgentApiKeyResponse404
+) & {
+  headers: Headers;
+};
+
+export type putAgentApiKeyResponse =
+  | putAgentApiKeyResponseSuccess
+  | putAgentApiKeyResponseError;
+
+export const getPutAgentApiKeyUrl = (agentId: string) => {
+  return `/agents/${agentId}/api-key`;
+};
+
+export const putAgentApiKey = async (
+  agentId: string,
+  putAgentApiKeyRequest: PutAgentApiKeyRequest,
+  options?: RequestInit
+): Promise<putAgentApiKeyResponse> => {
+  const res = await fetch(getPutAgentApiKeyUrl(agentId), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(putAgentApiKeyRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: putAgentApiKeyResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as putAgentApiKeyResponse;
+};
+
+/**
+ * @summary Forgets the agent's API key. Does not revoke it at the provider; succeeds
+when there was none.
+ */
+export type deleteAgentApiKeyResponse200 = {
+  data: AgentApiKey;
+  status: 200;
+};
+
+export type deleteAgentApiKeyResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type deleteAgentApiKeyResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type deleteAgentApiKeyResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type deleteAgentApiKeyResponseSuccess = deleteAgentApiKeyResponse200 & {
+  headers: Headers;
+};
+export type deleteAgentApiKeyResponseError = (
+  | deleteAgentApiKeyResponse401
+  | deleteAgentApiKeyResponse403
+  | deleteAgentApiKeyResponse404
+) & {
+  headers: Headers;
+};
+
+export type deleteAgentApiKeyResponse =
+  | deleteAgentApiKeyResponseSuccess
+  | deleteAgentApiKeyResponseError;
+
+export const getDeleteAgentApiKeyUrl = (agentId: string) => {
+  return `/agents/${agentId}/api-key`;
+};
+
+export const deleteAgentApiKey = async (
+  agentId: string,
+  options?: RequestInit
+): Promise<deleteAgentApiKeyResponse> => {
+  const res = await fetch(getDeleteAgentApiKeyUrl(agentId), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: deleteAgentApiKeyResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as deleteAgentApiKeyResponse;
+};
 
 /**
  * @summary Turn automatic credit reloads on with the given

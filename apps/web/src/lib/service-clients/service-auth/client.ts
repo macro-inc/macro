@@ -45,6 +45,7 @@ import type {
   TrialEligibility,
   UserQuota,
 } from './generated/schemas';
+import type { AgentApiKey } from './generated/schemas/agentApiKey';
 import type { AppleLoginRequest } from './generated/schemas/appleLoginRequest';
 import type { CreatedTeamInviteLinkResponse } from './generated/schemas/createdTeamInviteLinkResponse';
 import type { CreateGtmInviteLinkRequest } from './generated/schemas/createGtmInviteLinkRequest';
@@ -224,6 +225,12 @@ const cursorApiKeyErrorResponseHandler: ErrorResponseHandler<'CURSOR_API_KEY_ERR
       code: 'CURSOR_API_KEY_ERROR',
       message: message ?? `HTTP error! status: ${response.status}`,
     };
+  };
+
+const agentApiKeyErrorResponseHandler: ErrorResponseHandler<'AGENT_API_KEY_ERROR'> =
+  async function handleAgentApiKeyErrorResponse(response) {
+    const { message } = await cursorApiKeyErrorResponseHandler(response);
+    return { code: 'AGENT_API_KEY_ERROR', message };
   };
 
 /**
@@ -906,6 +913,49 @@ export const authServiceClient = {
         {
           method: 'GET',
           errorResponseHandler: cursorApiKeyErrorResponseHandler,
+        }
+      )
+    ).map((result) => result);
+  },
+
+  /**
+   * The agent's own API key, if it has one, and whether its owner's plan
+   * lets it run on one. Never returns a key or any part of one.
+   */
+  async getAgentApiKey(agentId: string) {
+    return (
+      await fetchWithAuth<AgentApiKey, 'AGENT_API_KEY_ERROR'>(
+        `${authHost}/agents/${agentId}/api-key`,
+        {
+          method: 'GET',
+          errorResponseHandler: agentApiKeyErrorResponseHandler,
+        }
+      )
+    ).map((result) => result);
+  },
+
+  /** Stores the agent's own API key, for its model's provider, replacing any. */
+  async putAgentApiKey(agentId: string, apiKey: string) {
+    return (
+      await fetchWithAuth<AgentApiKey, 'AGENT_API_KEY_ERROR'>(
+        `${authHost}/agents/${agentId}/api-key`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({ apiKey }),
+          errorResponseHandler: agentApiKeyErrorResponseHandler,
+        }
+      )
+    ).map((result) => result);
+  },
+
+  /** Forgets the agent's API key. Does not revoke it at the provider. */
+  async deleteAgentApiKey(agentId: string) {
+    return (
+      await fetchWithAuth<AgentApiKey, 'AGENT_API_KEY_ERROR'>(
+        `${authHost}/agents/${agentId}/api-key`,
+        {
+          method: 'DELETE',
+          errorResponseHandler: agentApiKeyErrorResponseHandler,
         }
       )
     ).map((result) => result);

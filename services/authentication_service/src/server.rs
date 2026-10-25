@@ -130,11 +130,14 @@ pub async fn run() -> anyhow::Result<()> {
     // A separate KMS key from the Microsoft one by design: sharing it would
     // grant whatever decrypts Cursor keys access to the key protecting
     // everyone's mailbox credentials.
+    // Agents' own API keys share it: they are read by the same agent harness
+    // and protected by the same IAM grants.
+    let cursor_kms = cursor_api_key::cipher::AwsKmsCiphertexts::new(
+        aws_sdk_kms::Client::new(&aws_config),
+        config.cursor_api_key_kms_key_id()?,
+    );
     let cursor_api_key_cipher = Arc::new(cursor_api_key::cipher::KmsCursorApiKeyCipher::new(
-        cursor_api_key::cipher::AwsKmsCiphertexts::new(
-            aws_sdk_kms::Client::new(&aws_config),
-            config.cursor_api_key_kms_key_id()?,
-        ),
+        cursor_kms.clone(),
     )) as Arc<dyn cursor_api_key::cipher::CursorApiKeyCipher>;
 
     let internal_api_key = config.internal_api_key.clone();
@@ -630,7 +633,7 @@ pub async fn run() -> anyhow::Result<()> {
         team_analytics,
     )
     .with_contacts_enqueuer(contacts_enqueuer)
-    .with_event_broker(macro_event_broker)
+    .with_event_broker(macro_event_broker.clone())
     .with_open_seat_release((*ai_billing_service).clone())
     .with_owned_entity_cleanup(team_owned_entity_cleanup);
     let teams_service = Arc::new(teams_service_impl);
@@ -663,6 +666,23 @@ pub async fn run() -> anyhow::Result<()> {
         }
     });
 
+    let agent_api_keys = Arc::new(agent_api_keys::domain::AgentKeyService::new(
+        agent_api_keys::outbound::PgAgentKeyRepo::new(db.clone()),
+        agent_api_keys::outbound::KmsAgentKeyCipher::new(cursor_kms),
+        agent_api_keys::outbound::EntitlementKeyPlans::new(
+            ai_billing::outbound::RolesTeamsEntitlementSource::new(
+                user_roles_and_permissions_service.clone(),
+                teams_repo_impl.clone(),
+            ),
+        ),
+    ));
+    // Only to authorize changes to an agent's API key, with the agents' own
+    // rule; agents themselves are created and edited in document storage.
+    let bots = Arc::new(bots::domain::service::BotServiceImpl::new(
+        PgBotsRepo::new(db.clone()),
+        macro_event_broker.clone(),
+    ));
+
     let server_result = api::setup_and_serve(
         ApiContext {
             inbox_connections: Arc::new(email::domain::inbox_entitlement::InboxConnectionService(
@@ -673,6 +693,8 @@ pub async fn run() -> anyhow::Result<()> {
             auth_client: Arc::new(auth_client),
             microsoft_auth,
             cursor_api_key_cipher,
+            agent_api_keys,
+            bots,
             codex_connection,
             macro_cache_client: Arc::new(macro_cache_client),
             stripe_client,

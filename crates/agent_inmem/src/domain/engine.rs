@@ -6,6 +6,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use agent::ReasoningEffort;
 use agent::types::ChatMessage;
 use agent::{AgentError, StreamPart};
+use agent_api_keys::domain::UsableAgentKey;
 use ai_tools::user_tool_review::UserToolReviewer;
 use bot_id::BotId;
 use mcp_toolset::RemoteMcpToolSet;
@@ -77,6 +78,10 @@ pub struct TurnRequest {
     /// rejected - before the model reads its result. Absent for the same
     /// reason as `user_input`; a pending call then stays pending.
     pub reviewer: Option<Arc<dyn UserToolReviewer>>,
+    /// The agent's own key the turn's model calls run on instead of Macro's,
+    /// with their usage recorded against it rather than the owner's
+    /// allowance. `None` runs on Macro.
+    pub agent_key: Option<UsableAgentKey>,
 }
 
 /// Whether a model call answers the user or condenses their conversation.

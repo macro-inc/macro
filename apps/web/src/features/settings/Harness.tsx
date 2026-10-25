@@ -17,14 +17,14 @@ import {
 } from '@queries/harnesses/harnesses';
 import type { Harness as RegisteredHarness } from '@service-storage/client';
 import { useSearchParams } from '@solidjs/router';
-import { Button, confirmDialog, Dialog, Panel } from '@ui';
+import { ApiKeyInput, Button, confirmDialog, Dialog, Panel } from '@ui';
 import { createSignal, For, onMount, Show } from 'solid-js';
 import { CodexHarness } from './codex/views/CodexHarness';
 import { CursorDefaultModel } from './components/cursor-default-model';
 import { LocalRuntimeCard } from './components/local-runtime-card';
 import {
   CURSOR_KEY_FORMAT_ERROR,
-  CURSOR_KEY_PLACEHOLDER,
+  CURSOR_KEY_PREFIX,
   isCursorApiKey,
 } from './core/cursor-api-key';
 import { ConnectAction, HarnessIcon, StatusDot } from './integration-ui';
@@ -212,25 +212,19 @@ export function Harness(
                             API key
                           </label>
                           <div class="flex items-center gap-2 mobile:flex-col mobile:items-stretch">
-                            <input
+                            <ApiKeyInput
                               id="cursor-harness-api-key"
-                              type="password"
-                              autocomplete="off"
-                              spellcheck={false}
-                              class="settings-input ph-no-capture min-w-0 flex-1"
-                              placeholder={CURSOR_KEY_PLACEHOLDER}
+                              class="flex-1"
+                              size="sm"
+                              prefix={CURSOR_KEY_PREFIX}
                               value={cursorApiKey()}
-                              onInput={(event) =>
-                                setCursorApiKey(event.currentTarget.value)
+                              onValueChange={setCursorApiKey}
+                              onSubmit={() =>
+                                fireAndForget(
+                                  handleSaveCursorApiKey(),
+                                  'cursor-connect'
+                                )
                               }
-                              onKeyDown={(event) => {
-                                if (event.key === 'Enter') {
-                                  fireAndForget(
-                                    handleSaveCursorApiKey(),
-                                    'cursor-connect'
-                                  );
-                                }
-                              }}
                             />
                             <Button
                               type="button"
