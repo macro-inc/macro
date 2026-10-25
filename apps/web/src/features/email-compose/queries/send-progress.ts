@@ -3,6 +3,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type EmailSendIntent,
   emailSendLocked,
+  fetchEmailSendStatus,
   readEmailSendIntents,
   settledSendAttempt,
   watchEmailSends,
@@ -29,13 +30,27 @@ function emailSendProgress(intent: EmailSendIntent): EmailSendProgress {
   return { state: 'pending' };
 }
 
+/** The outbox drops a send only once it is sent, or when it restores a cancelled one. */
+async function departedSendProgress(
+  seen: EmailSendIntent | undefined
+): Promise<EmailSendProgress> {
+  if (!seen) return { state: 'untracked' };
+  const attempt = await fetchEmailSendStatus(seen);
+  if (attempt?.status === 'SENT') return { state: 'sent' };
+  // A restored send was cancelled, or never reached the server.
+  if (!attempt || attempt.status === 'CANCELLED') return { state: 'cancelled' };
+  return { state: 'untracked' };
+}
+
 export function watchEmailSendProgress(
   sendAttemptId: string,
   changed: (progress: EmailSendProgress) => void
 ): () => void {
   const started = performance.now();
   let last: EmailSendProgress | undefined;
+  let seen: EmailSendIntent | undefined;
   let stopped = false;
+  let disposed = false;
   let reading = false;
   let rerun = false;
   const stop = () => {
@@ -47,8 +62,18 @@ export function watchEmailSendProgress(
       (row) => row.uuid === sendAttemptId
     );
     if (stopped) return;
-    // Retired after delivery or restored after cancellation, possibly by another tab.
-    if (!intent) return stop();
+    // Another tab can retire or restore the send before this one reads it.
+    if (!intent) {
+      stop();
+      let progress: EmailSendProgress = { state: 'untracked' };
+      try {
+        progress = await departedSendProgress(seen);
+      } finally {
+        if (!disposed) changed(progress);
+      }
+      return;
+    }
+    seen = intent;
     const progress = emailSendProgress(intent);
     if (last && deepEqual(last, progress)) return;
     last = progress;
@@ -91,5 +116,8 @@ export function watchEmailSendProgress(
   };
   const unsubscribe = watchEmailSends(refresh);
   refresh();
-  return stop;
+  return () => {
+    disposed = true;
+    stop();
+  };
 }
