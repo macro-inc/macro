@@ -99,6 +99,7 @@ ignore = [
   # 0.26.11 only re-exports webpki-roots 1.x; the bans below require patched roots.
   # Remove this exception when SQLx and the remaining callers stop using the wrapper.
   { id = "RUSTSEC-2026-0381", reason = "webpki-roots 0.26.11 contains no certificates and re-exports patched 1.0.10; bans reject every other version below 1.0.10" },
+  { id = "RUSTSEC-2026-0387", reason = "crypto-bigint 0.5.5 has no patched release; it is reached only through aws-sigv4's optional SigV4a (ECDSA) signing. 0.7 is updated to the patched 0.7.6" },
   #{ id = "RUSTSEC-0000-0000", reason = "you can specify a reason the advisory is ignored" },
   #"a-crate-that-is-yanked@0.1.1", # you can also ignore yanked crate versions if you wish
   #{ crate = "a-crate-that-is-yanked@0.1.1", reason = "you can specify why you are ignoring the yanked crate" },
