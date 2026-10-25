@@ -27,13 +27,14 @@ export type EmailHeaderProps = {
 };
 
 export function EmailViewBreadcrumbItem() {
-  const { state } = useEmailView();
+  const { state, tagViewTitle } = useEmailView();
   const inboxSelected = () =>
     !isTouchDevice() && (state.tab === 'important' || state.tab === 'noise');
   const tabTitle = () =>
-    inboxSelected()
+    tagViewTitle() ??
+    (inboxSelected()
       ? 'Inbox'
-      : (EMAIL_TABS.find((tab) => tab.id === state.tab)?.label ?? 'Email');
+      : (EMAIL_TABS.find((tab) => tab.id === state.tab)?.label ?? 'Email'));
 
   return (
     <ViewBreadcrumbs.Item
@@ -62,16 +63,17 @@ export function EmailViewBreadcrumbItem() {
 export function EmailHeader(props: EmailHeaderProps) {
   const panel = useSplitPanelOrThrow();
   const { openWithSplit } = useSplitLayout();
-  const { state, setState, setTab } = useEmailView();
+  const { state, setState, setTab, tagViewTitle } = useEmailView();
   const [filterOpen, setFilterOpen] = createSignal(false);
   let focusSearch: (() => void) | undefined;
   const searchTarget = tourTarget(EMAIL_TOUR.search);
   const inboxSelected = () =>
     state.tab === 'important' || state.tab === 'noise';
   const selectedTabLabel = () =>
-    inboxSelected()
+    tagViewTitle() ??
+    (inboxSelected()
       ? 'Inbox'
-      : (EMAIL_TABS.find((tab) => tab.id === state.tab)?.label ?? 'Email');
+      : (EMAIL_TABS.find((tab) => tab.id === state.tab)?.label ?? 'Email'));
 
   const runSearch = () => {
     focusSearch?.();

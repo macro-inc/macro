@@ -25,6 +25,9 @@ detail view. See [Email reminders](reminders.md#delivery-and-undo).
 Email's Tags sidebar uses the [nested tag tree](tasks.md#nested-sidebar-tags).
 Carets and folder-only parents expand branches; actual tags select their exact ID
 and switch the mailbox to All. Parent selection does not include descendant tags.
+While tags scope All, the header and breadcrumb show the tag names instead of
+`All`. A narrow pane keeps its short `Email` or `Inbox` breadcrumb label. A tag
+filter on any other tab keeps that tab's title.
 Unlike Calls, it lists only personal tags; team-shared tags are hidden,
 and its `New tag` action creates a personal tag with no Team sharing option.
 
@@ -361,7 +364,9 @@ keyboard back to the list without closing the thread. Narrow email rows here
 stack senders and date, subject, and one preview line beside a slim unread-dot
 gutter (no per-type icon); unread rows are bold, hovering swaps the date for the
 row actions, and hovering the gutter shows the select checkbox. Phones keep
-their own touch email rows, with the sender's picture on the left.
+their own touch email rows, with the sender's picture on the left. Every email
+row titles the thread as its header does: repeated leading `Re:` prefixes are
+dropped, and a blank subject reads `[No subject]`.
 Without room for both (narrow split, collapsed window) the pane folds away and
 a thread replaces the list as usual; the thread remounts, but a reply draft
 survives. The divider can be dragged; the list width is remembered. Verify that
@@ -399,7 +404,10 @@ preserve working menu actions and header controls. Repeatedly navigate forward
 and backward, including after returning to the list: the subject and email body
 should remain visible without reloading.
 Shift-click opens a standalone split at `/app/email/<thread-id>`, which remains
-the destination for direct links and legacy surfaces. Click a message header to
+the destination for direct links and legacy surfaces. **Copy Link** on a
+thread copies `/app/mail/<thread-id>` from a row, the title menu, the Share
+dialog, or a reminder notification. The link opens the thread in Mail and
+pastes as an email mention. Click a message header to
 expand or collapse it; `Show N hidden messages` reveals the collapsed middle of
 a longer conversation. A standalone link with
 `?email_message_id=<message-id>` loads older pages as needed, expands the target,
@@ -474,6 +482,10 @@ view-only links instead. Confirming inserts one link per file at the end of the
 written message, above a reply's quoted thread, and the draft autosaves; Cancel
 adds nothing. Files that fit still attach, and the same check covers files
 dropped onto the body.
+With an Outlook From, a subject over Exchange's 255-character limit stays as
+typed, the field is marked invalid, and a hint under it gives the length. Switching
+From to Outlook flags an existing long subject; Gmail senders show no hint. The
+hint does not block saving or Send.
 To forward from another inbox, open Forward, expand the forwarding envelope on
 desktop, and select a different account in From (already visible on mobile).
 Forwarded files must remain attached after switching to an owned or delegated

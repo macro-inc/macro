@@ -1,6 +1,7 @@
 import { cn } from '@ui';
-import { createSignal, Show } from 'solid-js';
+import { createSignal, createUniqueId, Show } from 'solid-js';
 import { useCompose } from '../context/compose-context';
+import { subjectLimitHint } from '../core/subject-limit';
 
 function autosize(el: HTMLTextAreaElement) {
   el.style.height = 'auto';
@@ -19,6 +20,15 @@ export function ComposeSubject(props: {
 
   const showSummary = () =>
     ctx.isMobile() && !editing() && ctx.subject().length > 0;
+
+  const limitHintId = createUniqueId();
+  const limitHint = () => {
+    const inboxId = ctx.selectedInboxId?.();
+    const sender = ctx
+      .fromInboxes?.()
+      .find((option) => option.inboxId === inboxId);
+    return subjectLimitHint(ctx.subject(), sender?.provider);
+  };
 
   const blurOnEscape = (
     e: KeyboardEvent & { currentTarget: HTMLInputElement }
@@ -56,6 +66,8 @@ export function ComposeSubject(props: {
               onInput={(e) => ctx.setSubject(e.currentTarget.value)}
               onKeyDown={blurOnEscape}
               disabled={ctx.disabled()}
+              aria-invalid={limitHint() ? true : undefined}
+              aria-describedby={limitHint() ? limitHintId : undefined}
             />
           }
         >
@@ -69,6 +81,7 @@ export function ComposeSubject(props: {
                   setEditing(true);
                   requestAnimationFrame(() => textareaRef?.focus());
                 }}
+                aria-describedby={limitHint() ? limitHintId : undefined}
               >
                 <span class="truncate">{ctx.subject()}</span>
               </button>
@@ -101,8 +114,17 @@ export function ComposeSubject(props: {
                 }
               }}
               disabled={ctx.disabled()}
+              aria-invalid={limitHint() ? true : undefined}
+              aria-describedby={limitHint() ? limitHintId : undefined}
             />
           </Show>
+        </Show>
+        <Show when={limitHint()}>
+          {(hint) => (
+            <div id={limitHintId} class="text-failure-ink text-sm mt-1">
+              {hint()}
+            </div>
+          )}
         </Show>
       </div>
       <Show when={ctx.validationError('no_subject')}>

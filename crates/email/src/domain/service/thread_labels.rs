@@ -217,14 +217,21 @@ where
             self.ensure_thread_has_received_messages(thread_id, link.id)
                 .await?;
         }
+        self.set_thread_inbox(&link, thread_id, macro_id, !archived)
+            .await
+    }
+
+    /// Outlook folders have no INBOX label row; only Gmail stores one.
+    pub(super) async fn set_thread_inbox(
+        &self,
+        link: &Link,
+        thread_id: Uuid,
+        actor: macro_user_id::user_id::MacroUserIdStr<'static>,
+        in_inbox: bool,
+    ) -> Result<(), EmailErr> {
         if link.provider == UserProvider::Outlook {
-            self.queue_outlook_action(
-                &link,
-                thread_id,
-                macro_id,
-                MailboxAction::Archived(archived),
-            )
-            .await?;
+            self.queue_outlook_action(link, thread_id, actor, MailboxAction::Archived(!in_inbox))
+                .await?;
             return Ok(());
         }
         let label = self
@@ -235,7 +242,7 @@ where
             .into_iter()
             .find(|label| label.provider_label_id == system_labels::INBOX)
             .ok_or(EmailErr::LabelNotFound)?;
-        self.update_thread_labels_with_actor(&link, thread_id, label.id, !archived, Some(macro_id))
+        self.update_thread_labels_with_actor(link, thread_id, label.id, in_inbox, Some(actor))
             .await?;
         Ok(())
     }

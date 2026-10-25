@@ -136,7 +136,8 @@ export function EmailDetailView(props: {
         displaySubject(
           representativeThreadMessage(thread.messages)?.subject
         )) ||
-      props.thread.fallbackName ||
+      (props.thread.fallbackName &&
+        displaySubject(props.thread.fallbackName)) ||
       'Email'
     );
   };

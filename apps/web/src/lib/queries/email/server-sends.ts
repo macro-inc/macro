@@ -38,6 +38,7 @@ function createServerSendObserver(accountId: string) {
   let disposed = false;
   let pages = 1;
   let running: Promise<void> | undefined;
+  let rerun: Promise<void> | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let controller: AbortController | undefined;
   async function load() {
@@ -72,14 +73,25 @@ function createServerSendObserver(accountId: string) {
       if (!disposed) timer = setTimeout(wake, 10_000);
     }
   }
-  async function refresh() {
-    if (disposed || running) return running;
+  /** Resolves after a read that started after this call, so callers see their change. */
+  async function refresh(): Promise<void> {
+    if (disposed) return;
+    if (running) {
+      rerun ??= (async () => {
+        await running;
+        rerun = undefined;
+        await refresh();
+      })();
+      return rerun;
+    }
     if (timer !== undefined) clearTimeout(timer);
     // Defer load so its synchronous early-return cannot race this assignment.
     running = Promise.resolve().then(load);
     return running;
   }
-  const wake = () => fireAndForget(refresh(), 'email-server-sends');
+  const wake = () => {
+    if (!running) fireAndForget(refresh(), 'email-server-sends');
+  };
   const visible = () => {
     if (document.visibilityState === 'visible') wake();
   };

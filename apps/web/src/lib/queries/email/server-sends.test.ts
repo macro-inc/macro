@@ -44,9 +44,10 @@ afterEach(() => {
 
 it('loads sends from other devices on sign-in without a local send or rollout flag', async () => {
   setServerSendSession('owner');
-  await refreshServerEmailSends();
+  await vi.waitFor(() =>
+    expect(serverEmailSends()).toEqual(pending.pendingEmailSends.attempts)
+  );
   expect(readPendingEmailSends).toHaveBeenCalledTimes(1);
-  expect(serverEmailSends()).toEqual(pending.pendingEmailSends.attempts);
 });
 
 it('waits offline and refreshes server sends on reconnect', async () => {
@@ -58,6 +59,22 @@ it('waits offline and refreshes server sends on reconnect', async () => {
   window.dispatchEvent(new Event('online'));
   await refreshServerEmailSends();
   expect(serverEmailSends()).toEqual(pending.pendingEmailSends.attempts);
+});
+
+it('answers a refresh made during a read with a read that started after it', async () => {
+  const first = Promise.withResolvers<PendingEmailSendsQuery['user']>();
+  vi.mocked(readPendingEmailSends)
+    .mockImplementationOnce(() => first.promise)
+    .mockResolvedValueOnce({
+      ...pending,
+      pendingEmailSends: { nextCursor: null, attempts: [] },
+    });
+  setServerSendSession('owner');
+  const refresh = refreshServerEmailSends();
+  first.resolve(pending);
+  await refresh;
+  expect(readPendingEmailSends).toHaveBeenCalledTimes(2);
+  expect(serverEmailSends()).toEqual([]);
 });
 
 it('discards an in-flight status response after sign-out', async () => {

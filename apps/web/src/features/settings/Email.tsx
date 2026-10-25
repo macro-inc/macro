@@ -35,13 +35,13 @@ import {
 import { useRemoveInboxMutation } from '@queries/email/link';
 import {
   type BackfillJob,
-  BackfillJobStatus,
   type Link as EmailLink,
   SyncStatus,
 } from '@service-email/generated/schemas';
 import { Dialog, Panel, Tooltip, Button as UiButton } from '@ui';
 import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
+import { isInitialSyncComplete } from './core/initial-sync';
 import { InboxSettingsOperations } from './InboxSettingsOperations';
 import { ConnectAction, StatusDot } from './integration-ui';
 import {
@@ -87,8 +87,8 @@ export function EmailCard(
     }
     return latest;
   });
-  const hasCompletedBackfill = (linkId: string): boolean =>
-    latestBackfillByLinkId().get(linkId)?.status === BackfillJobStatus.Complete;
+  const initialSyncComplete = (link: EmailLink): boolean =>
+    isInitialSyncComplete(link, latestBackfillByLinkId().get(link.id));
 
   const removeInboxMutation = useRemoveInboxMutation({
     onSuccess: (_data, linkId) => {
@@ -197,7 +197,7 @@ export function EmailCard(
                 link={primary()}
                 isPrimary
                 isOwn={primary().macro_id === userId()}
-                hasCompletedBackfill={hasCompletedBackfill(primary().id)}
+                initialSyncComplete={initialSyncComplete(primary())}
                 resyncing={resyncingIds().has(primary().id)}
                 onResync={() => handleResyncInbox(primary().id)}
                 onReconnect={() =>
@@ -250,7 +250,7 @@ export function EmailCard(
                 link={link}
                 isPrimary={false}
                 isOwn={link.macro_id === userId()}
-                hasCompletedBackfill={hasCompletedBackfill(link.id)}
+                initialSyncComplete={initialSyncComplete(link)}
                 resyncing={resyncingIds().has(link.id)}
                 onResync={() => handleResyncInbox(link.id)}
                 onReconnect={() =>
@@ -462,7 +462,7 @@ function InboxRow(props: {
   link: EmailLink;
   isPrimary: boolean;
   isOwn: boolean;
-  hasCompletedBackfill: boolean;
+  initialSyncComplete: boolean;
   resyncing: boolean;
   onResync: () => void;
   onReconnect: () => void;
@@ -519,13 +519,7 @@ function InboxRow(props: {
               <Match when={getBackfillProgress(props.link.id)}>
                 {(progress) => <BackfillProgressBar progress={progress()} />}
               </Match>
-              {/* Settled inbox with a completed backfill from the BE list. */}
-              <Match
-                when={
-                  props.link.sync_status === SyncStatus.UP_TO_DATE &&
-                  props.hasCompletedBackfill
-                }
-              >
+              <Match when={props.initialSyncComplete}>
                 <span class="text-xs text-ink-muted">
                   Initial sync complete
                 </span>

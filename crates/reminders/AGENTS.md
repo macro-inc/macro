@@ -37,7 +37,9 @@ follow-up reminders.
 
 ## Checks
 
-- `cargo test -p reminders` (`SQLX_OFFLINE` unset).
+- `cargo test -p reminders --all-features` (`SQLX_OFFLINE` unset). The
+  Postgres tests sit behind the `postgres` feature; the Outlook follow-up tests
+  there run the real `email` service over Postgres.
 
 ## Related
 

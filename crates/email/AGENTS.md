@@ -64,6 +64,9 @@ tools — hexagonal, heavily feature-gated.
   domain service, never an outbound adapter directly from another crate.
 - Sender discovery authorizes the inbox first. Gmail aliases use the sender
   provider; Outlook exposes its verified primary address without a Gmail lookup.
+- Outlook links have no system label rows. Move a thread in or out of the inbox
+  through `set_thread_inbox`, and read Outlook inbox, trash, and junk state from
+  `email_message_mailbox_facts`, never from labels.
 - Outlook organization commands only run in their link's current
   `sync_generation`. Anything that bumps it must rebind unfinished commands as
   `pending`, since claims skip `confirming` ones while those still block later

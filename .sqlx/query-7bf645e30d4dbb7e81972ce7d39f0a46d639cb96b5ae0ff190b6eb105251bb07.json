@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT\n            draft_generation, id, provider_id, thread_id, provider_thread_id, replying_to_id,\n            global_id, link_id, provider_history_id, internal_date_ts, snippet,\n            size_estimate, subject, sent_at, has_attachments, is_read, is_starred,\n            is_sent, is_draft, body_text, body_html_sanitized, body_macro,\n            headers_jsonb, created_at, updated_at\n        FROM email_messages\n        WHERE thread_id = $1\n        ORDER BY COALESCE(internal_date_ts, sent_at, created_at) DESC, id DESC\n        LIMIT $2 OFFSET $3\n        ",
+  "query": "\n        SELECT\n            draft_generation, id, provider_id, thread_id, provider_thread_id, replying_to_id,\n            global_id, link_id, provider_history_id, internal_date_ts, snippet,\n            size_estimate, subject, sent_at, has_attachments, is_read, is_starred,\n            is_sent, is_draft, body_text, body_html_sanitized, body_macro,\n            headers_jsonb, created_at, updated_at\n        FROM email_messages\n        WHERE thread_id = $1\n          AND NOT (is_draft AND COALESCE((mailbox_state->>'provider_missing')::boolean, false))\n        ORDER BY COALESCE(internal_date_ts, sent_at, created_at) DESC, id DESC\n        LIMIT $2 OFFSET $3\n        ",
   "describe": {
     "columns": [
       {
@@ -164,5 +164,5 @@
       false
     ]
   },
-  "hash": "db987b7728fbbda9a755a9b4ddfa98cc493538cd0907c9d5a983ae690516e59a"
+  "hash": "7bf645e30d4dbb7e81972ce7d39f0a46d639cb96b5ae0ff190b6eb105251bb07"
 }
