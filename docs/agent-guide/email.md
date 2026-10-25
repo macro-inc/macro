@@ -617,7 +617,8 @@ local copy, or Undo still reads **Forwarding** with a `Forward — @mention…`
 placeholder: Forward keeps its recipients, and Reply turns it into a reply
 without the forwarded message. A reply quoting a message that was itself
 forwarded stays a reply. Collapsed content is named: **Show forwarded message**
-on a forward, **Show quoted text** on a reply.
+on a forward, **Show quoted text** on a reply. The toggle beside the editor keeps
+the name `forwarded message` or `quoted text` and reports whether it is pressed.
 Check recipient suggestions from a Gmail and an Outlook inbox. Typing a full
 address and pressing Enter commits that address, ahead of longer matches such
 as `teo+123456@macro.com`, whether or not it is a saved contact. A name or

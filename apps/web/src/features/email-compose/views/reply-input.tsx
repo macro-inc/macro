@@ -751,7 +751,7 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
               <Tooltip label={quoteToggleLabel()}>
                 <KToggleButton
                   as={Button}
-                  aria-label={quoteToggleLabel()}
+                  aria-label={quotedContent()}
                   variant="ghost"
                   size="icon-sm"
                   class="size-5 rounded bg-transparent p-0 text-ink-extra-muted hover:text-ink-muted"
