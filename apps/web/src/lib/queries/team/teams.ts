@@ -354,6 +354,10 @@ export function useDeleteTeamMutation(callbacks?: DeleteTeamCallbacks) {
 type CreateTeamWithInvitesArgs = {
   name: string;
   invites?: { email: string }[];
+  /** Whether people on the owner's work domain join automatically. When
+   * explicitly `true`, the owner's same-domain contacts are also told the
+   * team exists. Omitted keeps the server default without the notice. */
+  allowDomainJoin?: boolean;
 };
 type CreateTeamWithInvitesContext = { previousTeams: Team[] | undefined };
 type CreateTeamWithInvitesCallbacks = MutationCallbacks<
@@ -367,13 +371,29 @@ export function useCreateTeamWithInvitesMutation(
   callbacks?: CreateTeamWithInvitesCallbacks
 ) {
   return useMutation(() => ({
-    mutationFn: async ({ name, invites }: CreateTeamWithInvitesArgs) => {
+    mutationFn: async ({
+      name,
+      invites,
+      allowDomainJoin,
+    }: CreateTeamWithInvitesArgs) => {
       const team = await throwOnErr(() =>
-        authServiceClient.createTeam({ name })
+        authServiceClient.createTeam({
+          name,
+          allow_domain_join: allowDomainJoin,
+        })
       );
 
       if (invites && invites.length > 0) {
         await throwOnErr(() => authServiceClient.inviteToTeam({ invites }));
+      }
+
+      // After the invites, so invitees aren't also sent the notice. The
+      // team already exists, so a failed notice doesn't fail creation.
+      if (allowDomainJoin === true && team.auto_join_domain) {
+        const notice = await authServiceClient.sendTeamDomainNotice();
+        if (notice.isErr()) {
+          console.error('Failed to send team domain notice', notice);
+        }
       }
 
       return team;

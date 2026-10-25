@@ -50,6 +50,7 @@ import type { AppleLoginRequest } from './generated/schemas/appleLoginRequest';
 import type { CreatedTeamInviteLinkResponse } from './generated/schemas/createdTeamInviteLinkResponse';
 import type { CreateGtmInviteLinkRequest } from './generated/schemas/createGtmInviteLinkRequest';
 import type { CreateTeamRequest } from './generated/schemas/createTeamRequest';
+import type { SendDomainNoticeResponse } from './generated/schemas/sendDomainNoticeResponse';
 import type { EmptyResponse } from './generated/schemas/emptyResponse';
 import type { GenericSuccessResponse } from './generated/schemas/genericSuccessResponse';
 import type { GetLegacyUserPermissionsResponse } from './generated/schemas/getLegacyUserPermissionsResponse';
@@ -1277,6 +1278,20 @@ export const authServiceClient = {
         body: JSON.stringify(args),
       })
     ).map(() => undefined);
+  },
+
+  /**
+   * Emails the caller's same-domain contacts who aren't on Macro yet that
+   * the caller's team exists. Call it after inviting, so invitees are
+   * skipped. Admin/Owner only; the server caps a team at 25 recipients.
+   */
+  async sendTeamDomainNotice() {
+    return (
+      await fetchWithAuth<SendDomainNoticeResponse>(
+        `${authHost}/team/domain-notice`,
+        { method: 'POST' }
+      )
+    ).map((result) => result);
   },
 
   async inviteToTeam(args: InviteToTeamRequest) {
