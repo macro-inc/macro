@@ -121,6 +121,28 @@ it.each([false, true])(
   }
 );
 
+it('opens a later surface with the sends an earlier surface already read', async () => {
+  mocks.read.mockResolvedValue([]);
+  const disposers: (() => void)[] = [];
+  const mount = () =>
+    createRoot((cleanup) => {
+      disposers.push(cleanup);
+      return useQueuedEmailSends();
+    });
+  try {
+    const composer = mount();
+    await composer.refresh();
+    // Send persists the intent and refreshes before the thread opens.
+    mocks.read.mockResolvedValue([intent]);
+    await composer.refresh();
+    const thread = mount();
+    expect(thread.ready()).toBe(true);
+    expect(thread.intents()).toEqual([intent]);
+  } finally {
+    for (const dispose of disposers) dispose();
+  }
+});
+
 it('ignores a late failed read after a newer journal refresh succeeds', async () => {
   mocks.read.mockResolvedValue([]);
   let dispose = () => {};
