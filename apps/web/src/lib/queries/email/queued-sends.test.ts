@@ -1,6 +1,6 @@
 import { createRoot } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { useQueuedEmailSends } from './queued-sends';
+import { resetQueuedEmailSends, useQueuedEmailSends } from './queued-sends';
 import type { EmailSendIntent } from './send-queue';
 
 const mocks = vi.hoisted(() => ({
@@ -55,6 +55,7 @@ beforeEach(() => {
   mocks.status.mockResolvedValue(null);
   vi.stubGlobal('navigator', { onLine: true });
   vi.stubGlobal('window', { addEventListener() {}, removeEventListener() {} });
+  resetQueuedEmailSends();
 });
 afterEach(() => vi.unstubAllGlobals());
 
@@ -99,27 +100,51 @@ it('reports unavailable storage once until a read succeeds, while preserving rea
   }
 });
 
-it.each([false, true])(
-  'starts and cleans up polling only for an enabled observer: %s',
-  async (enabled) => {
-    const interval = vi.spyOn(globalThis, 'setInterval');
-    const clear = vi.spyOn(globalThis, 'clearInterval');
-    mocks.read.mockResolvedValue([]);
-    let dispose = () => {};
-    createRoot((cleanup) => {
-      dispose = cleanup;
-      useQueuedEmailSends(() => enabled);
+it('polls while any surface is open and stops with the last one', () => {
+  const interval = vi.spyOn(globalThis, 'setInterval');
+  const clear = vi.spyOn(globalThis, 'clearInterval');
+  mocks.read.mockResolvedValue([]);
+  try {
+    const first = createRoot((cleanup) => {
+      useQueuedEmailSends();
+      return cleanup;
     });
-    await Promise.resolve();
-    if (enabled)
-      expect(interval).toHaveBeenCalledWith(expect.any(Function), 5_000);
-    else expect(interval).not.toHaveBeenCalled();
-    dispose();
-    if (enabled) expect(clear).toHaveBeenCalled();
+    const second = createRoot((cleanup) => {
+      useQueuedEmailSends();
+      return cleanup;
+    });
+    expect(interval).toHaveBeenCalledOnce();
+    expect(interval).toHaveBeenCalledWith(expect.any(Function), 5_000);
+    first();
+    expect(clear).not.toHaveBeenCalled();
+    second();
+    expect(clear).toHaveBeenCalledOnce();
+  } finally {
     interval.mockRestore();
     clear.mockRestore();
   }
-);
+});
+
+it('drops the previous account’s sends when the session changes', async () => {
+  mocks.read.mockResolvedValue([intent]);
+  let dispose = () => {};
+  const queue = createRoot((cleanup) => {
+    dispose = cleanup;
+    return useQueuedEmailSends();
+  });
+  try {
+    await queue.refresh();
+    expect(queue.intents()).toEqual([intent]);
+    mocks.read.mockResolvedValue([]);
+    resetQueuedEmailSends();
+    expect(queue.ready()).toBe(false);
+    expect(queue.intents()).toEqual([]);
+    await vi.waitFor(() => expect(queue.ready()).toBe(true));
+    expect(queue.intents()).toEqual([]);
+  } finally {
+    dispose();
+  }
+});
 
 it('opens a later surface with the sends an earlier surface already read', async () => {
   mocks.read.mockResolvedValue([]);
