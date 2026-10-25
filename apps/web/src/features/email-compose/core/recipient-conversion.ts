@@ -26,8 +26,8 @@ export const convertContactInfoToEmailRecipient = (
   return { kind: 'contact', id, data: { ...contact, id, type: 'extracted' } };
 };
 
-// Mailboxes that send delivery failure reports and read no replies. Kept
-// narrow on purpose: a noreply@ address can still belong to a person.
+// Senders of delivery failure reports; a reply there reaches no one on the
+// thread. Kept narrow on purpose: a noreply@ address can still be a person's.
 const BOUNCE_SENDER =
   /^(mailer-daemon|postmaster|microsoftexchange[0-9a-f]{32})@/i;
 const isBounceSender = (email: string | undefined) =>
