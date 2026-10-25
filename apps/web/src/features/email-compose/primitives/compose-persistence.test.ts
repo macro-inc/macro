@@ -687,8 +687,10 @@ it('does not mistake its own in-flight send for a delivery elsewhere', async () 
   expect(composeContext.notices.feedback.alert).not.toHaveBeenCalled();
   expect(composeContext.drafts.saveDraft).toHaveBeenCalledTimes(2);
   expect(composeContext.notices.feedback.success).toHaveBeenCalledWith(
-    'Email sent',
-    expect.anything()
+    expect.any(String),
+    expect.objectContaining({
+      actions: [expect.objectContaining({ label: 'Undo' })],
+    })
   );
   root.dispose();
 });
@@ -721,8 +723,10 @@ it('does not announce a plain send as a scheduled one', async () => {
   );
   expect(composeContext.notices.feedback.alert).not.toHaveBeenCalled();
   expect(composeContext.notices.feedback.success).toHaveBeenCalledWith(
-    'Email sent',
-    expect.anything()
+    expect.any(String),
+    expect.objectContaining({
+      actions: [expect.objectContaining({ label: 'Undo' })],
+    })
   );
   root.dispose();
 });

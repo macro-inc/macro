@@ -235,6 +235,19 @@ export interface OutgoingEmail {
   >;
 }
 
+/**
+ * One queued send as this device's outbox last recorded it. `accepted` is
+ * cancellable until the server's `undoUntil`; `pending` covers waiting,
+ * delivering, and cancellation in progress.
+ */
+export type EmailSendProgress =
+  | { state: 'pending' }
+  | { state: 'accepted'; undoUntil: string }
+  | { state: 'sent' }
+  | { state: 'failed' }
+  | { state: 'cancelled' }
+  | { state: 'unconfirmed' };
+
 export interface EmailDelivery {
   /** Whether sends can be persisted and replayed without connectivity. */
   queueActive?: (inboxId?: string) => boolean;
@@ -242,6 +255,11 @@ export interface EmailDelivery {
   sendLocked?: (draftId: string | undefined) => boolean;
   /** Durable sends on their way; cancelled, failed and scheduled sends are excluded. */
   outgoing?: () => OutgoingEmail[];
+  /** Reports each change until the send is sent, fails, is cancelled, or leaves this device. */
+  watchSend?(
+    sendAttemptId: string,
+    changed: (progress: EmailSendProgress) => void
+  ): () => void;
   sendMessage(input: SendEmailDraft): Promise<PersistedEmailIdentity>;
   unschedule(input: {
     draftGeneration?: number;

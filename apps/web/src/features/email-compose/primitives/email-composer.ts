@@ -79,6 +79,7 @@ import { createDraftSaveNotice } from './draft-save-notice';
 import { createDraftSession } from './draft-session';
 import { createDraftTransfer } from './draft-transfer';
 import { createEmailSendSchedule } from './email-send-schedule';
+import { announceQueuedSend } from './queued-send-notice';
 import {
   pendingInlineMedia,
   refuseSend,
@@ -840,33 +841,22 @@ export function createEmailComposer(props: EmailComposerOptions) {
     // The outbox delivers an online send right away; offline it waits on this device.
     const offline = props.connectivity.looksOffline();
     if (draftId) endUndoSend(draftId);
-    try {
-      const toastId = props.notices.feedback.success(
-        offline ? 'Email queued to send' : 'Email sent',
-        {
-          actions: draftId
-            ? [
-                {
-                  label: 'Undo',
-                  onClick: () => {
-                    if (toastId != null)
-                      props.notices.feedback.dismiss(toastId);
-                    void undoSend(
-                      draftId,
-                      threadId ?? undefined,
-                      inboxId,
-                      identity.sendAttemptId
-                    ).catch(props.notices.reportError);
-                  },
-                },
-              ]
-            : undefined,
-          duration: 5_000,
-        }
-      );
-    } catch (error) {
-      props.notices.reportError(error);
-    }
+    announceQueuedSend({
+      notices: props.notices,
+      delivery: props.delivery,
+      sendAttemptId: identity.sendAttemptId,
+      queuedOffline: offline,
+      undo: draftId
+        ? () => {
+            void undoSend(
+              draftId,
+              threadId ?? undefined,
+              inboxId,
+              identity.sendAttemptId
+            ).catch(props.notices.reportError);
+          }
+        : undefined,
+    });
     try {
       // The server has no thread to show until an offline send goes out.
       if (offline) props.host?.goBack?.();

@@ -80,6 +80,7 @@ import {
   prepareMacroBody,
   TOGGLE_APPEND_EMAIL_THREAD_COMMAND,
 } from './prepare-email-body';
+import { announceQueuedSend } from './queued-send-notice';
 import {
   createReplyComposerFocus,
   takesFocusOnMount,
@@ -154,7 +155,7 @@ export type ReplyComposerOptions = {
     onUndoHandle?: (handle: EmailUndoHandle) => void;
     /** False keeps the view on this thread instead of opening the next one. */
     navigate?: boolean;
-    /** True once the send was undone; marking done may still be pending. */
+    /** True once the send was undone or failed; marking done may still be pending. */
     cancelled?: () => boolean;
   }) => void;
   setShowReply?: Setter<boolean>;
@@ -1361,9 +1362,18 @@ export function createReplyComposer(
       // Each undo action retains this send's inbox, thread and mark-done, even
       // if the composer sends again or navigation disposes the view.
       let markDoneUndoHandle: EmailUndoHandle | undefined;
-      // Advancing may archive after a page loads; an undo before then must
-      // not leave the restored thread marked done.
-      let sendUndone = false;
+      // Advancing may archive after a page loads; an undo or failure before
+      // then must not leave the thread marked done.
+      let returnedToInbox = false;
+      const returnToInbox = async () => {
+        returnedToInbox = true;
+        const doneHandle = markDoneUndoHandle;
+        markDoneUndoHandle = undefined;
+        await doneHandle?.undo({
+          onError: () =>
+            props.notices.feedback.failure('Failed to restore thread to inbox'),
+        });
+      };
       const undoSend = (draftId: string) =>
         props.delivery.undoSend({
           sendAttemptId: result.sendAttemptId,
@@ -1371,47 +1381,30 @@ export function createReplyComposer(
           draftId,
           inboxId,
           onUndone: async (undo) => {
-            sendUndone = true;
+            returnedToInbox = true;
             await restoreAfterUndoSend(
               draftId,
               result.threadId,
               inboxId,
               undo?.draftRestored
             );
-            const doneHandle = markDoneUndoHandle;
-            markDoneUndoHandle = undefined;
-            await doneHandle?.undo({
-              onError: () =>
-                props.notices.feedback.failure(
-                  'Failed to restore thread to inbox'
-                ),
-            });
+            await returnToInbox();
           },
         });
       // The outbox delivers an online send right away; offline it waits on this device.
       const offline = props.connectivity.looksOffline();
-      try {
-        const toastId = props.notices.feedback.success(
-          offline ? 'Email queued to send' : 'Email sent',
-          {
-            actions: draftId
-              ? [
-                  {
-                    label: 'Undo',
-                    onClick: () => {
-                      if (toastId != null)
-                        props.notices.feedback.dismiss(toastId);
-                      void undoSend(draftId).catch(props.notices.reportError);
-                    },
-                  },
-                ]
-              : undefined,
-            duration: 5_000,
-          }
-        );
-      } catch (error) {
-        props.notices.reportError(error);
-      }
+      announceQueuedSend({
+        notices: props.notices,
+        delivery: props.delivery,
+        sendAttemptId: result.sendAttemptId,
+        queuedOffline: offline,
+        undo: draftId
+          ? () => {
+              void undoSend(draftId).catch(props.notices.reportError);
+            }
+          : undefined,
+        onUndelivered: () => fireAndForget(returnToInbox(), 'email-compose'),
+      });
       for (const mention of prepared.mentions) {
         try {
           props.recordMention(sourceEntityId, mention.documentId);
@@ -1427,10 +1420,13 @@ export function createReplyComposer(
             silent: true,
             onUndoHandle: (handle) => {
               markDoneUndoHandle = handle;
+              // Marking done can finish after the send was undone or failed.
+              if (returnedToInbox)
+                fireAndForget(returnToInbox(), 'email-compose');
             },
             navigate: markDone,
             cancelled: () =>
-              sendUndone || sendOperation !== sendOperationVersion,
+              returnedToInbox || sendOperation !== sendOperationVersion,
           });
         } catch (error) {
           props.notices.reportError(error);

@@ -112,6 +112,7 @@ import {
 } from './queries/draft-lifecycle';
 import { createEmailInboxSource } from './queries/inbox-source';
 import { queuedDraftSaveArgs } from './queries/queued-draft';
+import { watchEmailSendProgress } from './queries/send-progress';
 import {
   restoreDraftBodyAfterUndo,
   runQueuedUndoSend,
@@ -573,6 +574,7 @@ export function createEmailComposeContext(
                 emailSendMatchesDraft(intent, draftId) &&
                 emailSendLocked(intent)
             )),
+      watchSend: watchEmailSendProgress,
       async sendMessage({ inboxId, ...input }) {
         if (
           !inboxSource
