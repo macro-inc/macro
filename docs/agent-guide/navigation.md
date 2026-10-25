@@ -1097,16 +1097,20 @@ failed items selected for retry.
 Cancel and Escape dismiss the dialog. Use Cancel when
 reviewing dialogs against hosted data; confirmation performs real mutations.
 
-With two or more rows selected, Share in the row context menu, `Share items` in
-the selection toolbar's `Actions` menu, or `Share items` in the command menu
-opens `Share N items`. One item still opens the full Share dialog. `Share N
-items` takes the Share dialog's place, size, and form: an 800px card near the
-top of the window with the selected items under its title, then the To row, the
-optional message, and Cancel and Share. On phones it is the Share drawer
-instead: the title row ends in Share, the selected items sit under it, and the
-To box wraps its chips, followed by `Send As Group Message`, an `Access:` row,
-and the message. Focus starts in `To: Email or group`, which lists people and
-channels with more than two members. With two or more people and no channel,
+With two or more rows selected, Share in the row context menu (long-press on
+touch), `Share items` in the selection toolbar's `Actions` menu, or `Share
+items` in the command menu opens `Share N items`. Touch devices have no command
+menu, so there `Actions` does nothing; use the long-press menu. One item still
+opens the full Share dialog. `Share N items` takes the Share dialog's place,
+size, and form: an 800px card near the top of the window with the selected
+items under its title, then the To row, the optional message, and Cancel and
+Share. On phones (touch, under 640px wide) it is the Share drawer instead.
+Phone-width rows have no select control, so to see the drawer, select and open
+the share at tablet width and then narrow the window. In the drawer, the title
+row ends in Share, the selected items sit under it, and the To box wraps its
+chips, followed by `Send As Group Message`, an `Access:` row, and the message.
+Focus starts in `To: Email or group`, which lists people and channels with more
+than two members. With two or more people and no channel,
 `Send As Group Message` is on and sends one group message; turned off, each
 person gets their own message. The access selector at the end of the To row
 (`can` and a level once a recipient is picked; the `Access:` row on phones)
