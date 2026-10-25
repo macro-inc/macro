@@ -3,7 +3,7 @@ import { Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import type { DraftSyncViewState } from '../core/local-draft';
 
-/** In-composer banner for draft failures; saving itself stays silent. */
+/** In-composer banner for draft failures and offline edits; saving itself stays silent. */
 export function DraftSyncStatus(props: {
   state?: DraftSyncViewState;
   busy: boolean;
@@ -17,7 +17,7 @@ export function DraftSyncStatus(props: {
       {(state) => (
         <div
           class="flex flex-wrap items-center gap-2 border-b border-edge-muted p-3 text-sm"
-          role="alert"
+          role={state().failed ? 'alert' : 'status'}
         >
           <div class="min-w-0 flex-1">
             <p>{state().message}</p>

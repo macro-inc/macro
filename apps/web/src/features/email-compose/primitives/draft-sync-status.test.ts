@@ -37,6 +37,7 @@ it('offers retry discard when a crash interrupted deletion before admission', as
     disposers.push(dispose);
     return createDraftSyncStatus({
       drafts: context.drafts,
+      connectivity: context.connectivity,
       draftId: () => 'draft',
       localSaveState: () => 'saved',
       retry: vi.fn(),
@@ -62,6 +63,7 @@ it('shows a failed status read without throwing into the composer error boundary
     disposers.push(dispose);
     return createDraftSyncStatus({
       drafts: context.drafts,
+      connectivity: context.connectivity,
       draftId: () => 'draft',
       localSaveState: () => 'saved',
       retry: vi.fn(),
@@ -96,6 +98,7 @@ it('stays silent once a failed save recovers', async () => {
     disposers.push(dispose);
     return createDraftSyncStatus({
       drafts: context.drafts,
+      connectivity: context.connectivity,
       draftId: () => 'draft',
       localSaveState: disk,
       retry,
@@ -125,6 +128,7 @@ it('offers retry for server failures while newer edits remain saved locally', as
     disposers.push(dispose);
     return createDraftSyncStatus({
       drafts: context.drafts,
+      connectivity: context.connectivity,
       draftId: () => 'draft',
       localSaveState: () => 'saving',
       retry: vi.fn(),
@@ -151,6 +155,7 @@ it('keeps local edits visible with an actionable synchronization status during r
     disposers.push(dispose);
     return createDraftSyncStatus({
       drafts: context.drafts,
+      connectivity: context.connectivity,
       draftId: () => 'draft',
       localSaveState: () => 'saved',
       retry: vi.fn(),

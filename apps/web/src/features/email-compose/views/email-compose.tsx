@@ -144,6 +144,7 @@ function LoadedEmailComposeView(
   });
   const sync = createDraftSyncStatus({
     drafts: composeContext.drafts,
+    connectivity: composeContext.connectivity,
     draftId: state.draftId,
     localSaveState: state.localSaveState,
     retry: state.retryDraft,

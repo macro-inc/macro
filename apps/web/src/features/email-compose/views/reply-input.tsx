@@ -170,6 +170,7 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
   );
   const sync = createDraftSyncStatus({
     drafts: composeContext.drafts,
+    connectivity: composeContext.connectivity,
     draftId: state.savedDraftId,
     localSaveState: state.localSaveState,
     retry: state.retryDraft,
