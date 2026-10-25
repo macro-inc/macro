@@ -9,9 +9,11 @@ import {
   type EmailInbox,
   type SaveEmailDraft,
 } from '../context/compose-capabilities';
+import { decodeBase64Utf8 } from '../core/decode-base64';
 import type { EmailRecipient } from '../core/email-recipient';
 import { createComposeContext } from '../tests/capabilities';
 import { mountEmailComposer } from '../tests/composer';
+import { mountReplyComposer } from '../tests/reply';
 
 const network = vi.hoisted(() => ({
   client: undefined as unknown,
@@ -186,11 +188,45 @@ function createQueueContext(inbox: EmailInbox) {
 
 const addressedTo = (save: SaveEmailDraft, email: string) =>
   save.draft.to?.some((contact) => contact.email === email) ?? false;
+const saysIn = (save: SaveEmailDraft, text: string) =>
+  decodeBase64Utf8(save.draft.body_html ?? '').includes(text);
 
-const localSaveFailures = (failure: ReturnType<typeof vi.fn>) =>
-  failure.mock.calls.filter(
-    ([message]) => message === 'Draft could not be saved on this device'
+async function waitForSave(
+  saves: SaveEmailDraft[],
+  matches: (save: SaveEmailDraft) => boolean
+) {
+  return await vi.waitFor(
+    () => {
+      const save = saves.find(matches);
+      expect(save).toBeDefined();
+      return save!;
+    },
+    { timeout: 3_000 }
   );
+}
+
+/** Edits are kept on the device and no local-save failure was shown. */
+async function expectSavedLocally(
+  state: { localSaveState(): 'saving' | 'saved' | 'failed' },
+  failure: ReturnType<typeof vi.fn>
+) {
+  await vi.waitFor(() => expect(state.localSaveState()).toBe('saved'), {
+    timeout: 3_000,
+  });
+  expect(
+    failure.mock.calls.filter(
+      ([message]) => message === 'Draft could not be saved on this device'
+    )
+  ).toEqual([]);
+}
+
+/** A slow delete outlasts the composer's 500 ms autosave debounce. */
+const outlastAutosaveDebounce = () =>
+  new Promise((resolve) => setTimeout(resolve, 700));
+
+const timedOutCacheRead = async () => {
+  throw new Error('cache worker timeout: read-records-by-keys');
+};
 
 /** Type, then clear every field so the composer deletes the draft it saved. */
 async function emptySavedDraft(
@@ -198,9 +234,24 @@ async function emptySavedDraft(
   saves: SaveEmailDraft[]
 ) {
   root.edit('First version', '');
-  await vi.waitFor(() => expect(saves).toHaveLength(1));
+  const first = await waitForSave(saves, (save) =>
+    saysIn(save, 'First version')
+  );
   root.edit('', '');
   root.state.context.setRecipients('to', []);
+  return first.clientHandles!.draftId;
+}
+
+async function emptySavedReply(
+  reply: ReturnType<typeof mountReplyComposer>,
+  saves: SaveEmailDraft[]
+) {
+  reply.edit('First version');
+  const first = await waitForSave(saves, (save) =>
+    saysIn(save, 'First version')
+  );
+  reply.edit('');
+  return first.clientHandles!.draftId;
 }
 
 it.each(providers)(
@@ -210,39 +261,26 @@ it.each(providers)(
       createQueueContext(inbox);
     const root = mountEmailComposer(context);
     try {
-      await emptySavedDraft(root, saves);
+      const emptied = await emptySavedDraft(root, saves);
       await deleteSent;
-
       root.state.context.setRecipients('to', [recipient('new@example.com')]);
-      await root.state.flushLocal().catch(() => {});
-      expect(
-        localSaveFailures(vi.mocked(context.notices.feedback.failure))
-      ).toEqual([]);
-      expect(root.state.localSaveState()).not.toBe('failed');
-
+      await outlastAutosaveDebounce();
       answerDelete();
-      await vi.waitFor(
-        () =>
-          expect(
-            saves.some((save) => addressedTo(save, 'new@example.com'))
-          ).toBe(true),
-        { timeout: 3_000 }
+
+      await expectSavedLocally(
+        root.state,
+        vi.mocked(context.notices.feedback.failure)
       );
-      const saved = saves.find((save) => addressedTo(save, 'new@example.com'))!;
-      expect(saved.clientHandles?.draftId).not.toBe(
-        saves[0].clientHandles?.draftId
+      const saved = await waitForSave(saves, (save) =>
+        addressedTo(save, 'new@example.com')
       );
-      expect(
-        await localDrafts.readLocalDraft(saved.clientHandles!.draftId)
-      ).toMatchObject({
+      const draftId = saved.clientHandles!.draftId;
+      expect(draftId).not.toBe(emptied);
+      expect(await localDrafts.readLocalDraft(draftId)).toMatchObject({
         content: {
           to: [expect.objectContaining({ email: 'new@example.com' })],
         },
       });
-      expect(root.state.localSaveState()).toBe('saved');
-      expect(
-        localSaveFailures(vi.mocked(context.notices.feedback.failure))
-      ).toEqual([]);
     } finally {
       root.dispose();
     }
@@ -253,38 +291,97 @@ it.each(providers)(
   'keeps a recipient added on %s after the emptied draft could not be queued for deletion',
   async (_provider, inbox) => {
     const { context, saves } = createQueueContext(inbox);
-    network.readRecordsByKeys = async () => {
-      throw new Error('cache worker timeout: read-records-by-keys');
-    };
+    network.readRecordsByKeys = timedOutCacheRead;
     const root = mountEmailComposer(context);
     try {
-      await emptySavedDraft(root, saves);
+      const emptied = await emptySavedDraft(root, saves);
       await vi.waitFor(() =>
         expect(context.notices.feedback.failure).toHaveBeenCalledWith(
           'Failed to delete draft'
         )
       );
-
       root.state.context.setRecipients('to', [recipient('new@example.com')]);
-      await vi.waitFor(
-        () =>
-          expect(
-            saves.some((save) => addressedTo(save, 'new@example.com'))
-          ).toBe(true),
-        { timeout: 3_000 }
+
+      await expectSavedLocally(
+        root.state,
+        vi.mocked(context.notices.feedback.failure)
       );
-      const draftId = saves[0].clientHandles!.draftId;
-      expect(await localDrafts.readLocalDraft(draftId)).toMatchObject({
+      const saved = await waitForSave(saves, (save) =>
+        addressedTo(save, 'new@example.com')
+      );
+      expect(saved.clientHandles?.draftId).toBe(emptied);
+      expect(await localDrafts.readLocalDraft(emptied)).toMatchObject({
         content: {
           to: [expect.objectContaining({ email: 'new@example.com' })],
         },
       });
-      expect(root.state.localSaveState()).toBe('saved');
-      expect(
-        localSaveFailures(vi.mocked(context.notices.feedback.failure))
-      ).toEqual([]);
     } finally {
       root.dispose();
+    }
+  }
+);
+
+it.each(providers)(
+  'keeps reply text typed on %s while the emptied reply is still being deleted',
+  async (_provider, inbox) => {
+    const { context, saves, deleteSent, answerDelete } =
+      createQueueContext(inbox);
+    const reply = mountReplyComposer(context);
+    try {
+      const emptied = await emptySavedReply(reply, saves);
+      await deleteSent;
+      reply.edit('Second version');
+      await outlastAutosaveDebounce();
+      answerDelete();
+
+      await expectSavedLocally(
+        reply,
+        vi.mocked(context.notices.feedback.failure)
+      );
+      const saved = await waitForSave(saves, (save) =>
+        saysIn(save, 'Second version')
+      );
+      const draftId = saved.clientHandles!.draftId;
+      expect(draftId).not.toBe(emptied);
+      const local = await localDrafts.readLocalDraft(draftId);
+      expect(decodeBase64Utf8(local?.content.body_html ?? '')).toContain(
+        'Second version'
+      );
+    } finally {
+      reply.dispose();
+    }
+  }
+);
+
+it.each(providers)(
+  'keeps reply text typed on %s after the emptied reply could not be queued for deletion',
+  async (_provider, inbox) => {
+    const { context, saves } = createQueueContext(inbox);
+    network.readRecordsByKeys = timedOutCacheRead;
+    const reply = mountReplyComposer(context);
+    try {
+      const emptied = await emptySavedReply(reply, saves);
+      await vi.waitFor(() =>
+        expect(context.notices.feedback.failure).toHaveBeenCalledWith(
+          'Failed to delete draft'
+        )
+      );
+      reply.edit('Second version');
+
+      await expectSavedLocally(
+        reply,
+        vi.mocked(context.notices.feedback.failure)
+      );
+      const saved = await waitForSave(saves, (save) =>
+        saysIn(save, 'Second version')
+      );
+      expect(saved.clientHandles?.draftId).toBe(emptied);
+      const local = await localDrafts.readLocalDraft(emptied);
+      expect(decodeBase64Utf8(local?.content.body_html ?? '')).toContain(
+        'Second version'
+      );
+    } finally {
+      reply.dispose();
     }
   }
 );
