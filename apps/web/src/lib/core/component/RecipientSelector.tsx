@@ -16,6 +16,7 @@ import {
 } from '@core/user';
 import { useAugmentUserWithDmActivity } from '@core/user/dmActivity';
 import { createFreshSearch, FreshSearchPresets } from '@core/util/freshSort';
+import { isEditableInput } from '@core/util/isEditableInput';
 import { matches } from '@core/util/match';
 import { truncateString } from '@core/util/string';
 import CheckIcon from '@icon/system/regular/check.svg';
@@ -475,7 +476,12 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
 
   if (props.focusOnMount) {
     onMount(() => {
+      const focusedAtMount = document.activeElement;
       setTimeout(() => {
+        // A busy page can run this after the user has moved on to another
+        // field; their typing stays there.
+        const focused = document.activeElement;
+        if (focused !== focusedAtMount && isEditableInput(focused)) return;
         inputRef()?.focus();
       }, 0);
     });
