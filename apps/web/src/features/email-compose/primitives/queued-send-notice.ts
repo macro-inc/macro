@@ -58,6 +58,7 @@ export function announceQueuedSend(options: {
         accepted = true;
         const remaining = Date.parse(undoUntil) - Date.now();
         if (!undoRequested && remaining > 0) offerUndo('Sending…', remaining);
+        else withdrawUndo();
       })
       .with({ state: 'sent' }, () => {
         withdrawUndo();
