@@ -208,7 +208,6 @@ const bulkUploadBucketName = bulkUploadStack
 
 const slackImportQueue = new SlackImportQueue(`slack-import-${stack}`, {
   stagingBucketArn: pulumi.interpolate`arn:aws:s3:::${bulkUploadBucketName}`,
-  notificationIngressQueueArn,
   tags,
 });
 
