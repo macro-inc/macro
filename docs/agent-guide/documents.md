@@ -2368,6 +2368,8 @@ AI text-writing operations require a paragraph/list-item or text-run ID. A
 table, row, cell, or list-container ID is rejected with guidance to choose a
 content block or use `setCell`. Existing stray inline content directly inside
 table cells is preserved in paragraphs when the editor opens the document.
+Bullet, numbered, and check lists stay in table cells; converting a cell
+paragraph to a list keeps the text.
 
 `@` opens the mention menu wherever the caret starts a word, including directly
 in front of existing text — the menu opens empty there instead of searching for
