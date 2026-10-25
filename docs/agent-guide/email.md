@@ -765,7 +765,9 @@ Send and mark done (Shift+Cmd+Enter) and Mark done open the next email, counted
 from where the thread sat when it was opened (a reply draft lifts its thread to
 the top of Signal while it is written). If the user has already moved to
 another thread when the send finishes, the replied thread is marked done
-without navigating; Undo before then leaves it in the inbox.
+without navigating; Undo before then leaves it in the inbox. A delivered send
+keeps the thread done. If the send fails after it was queued, or is cancelled or
+restored, the thread returns to Inbox; verify this for Gmail and Outlook.
 Sending a message shows it in the open thread immediately, while delivery is
 still pending. It stays visible until the thread refresh confirms it, with no
 duplicate message. Failed delivery removes that message and restores the reply
@@ -776,7 +778,7 @@ focus belongs to the sent message card in the same thread pane, even while
 the thread refresh is still pending. Replying again requires clicking Reply
 or using a reply shortcut.
 
-After a successful send, the `Email sent` notice offers `Undo`. Undo restores the
+After a send is queued, its notice offers `Undo`. Undo restores the
 sent envelope and editable content, including when the reply used another inbox;
 a slow background refresh must not keep the restored editor disabled. A rejected
 send reports failure and restores its original reply editor if it is still mounted.
@@ -806,11 +808,15 @@ status panel with **Cancel**.
 
 An authenticated app-level dispatcher submits online immediately and retries the
 same attempt independently of unrelated draft, archive, and property mutations.
-An online send shows **Email sent** with **Undo**: a new message opens its
+An online send shows **Sending…** with **Undo**: a new message opens its
 conversation and a reply closes its composer, and the message appears as sent
-there immediately, before the server or provider confirms it. An offline send
-shows **Email queued to send** and returns to the email list. Routine delivery
-is otherwise silent: the status panel shows a send only while it waits on this
+there immediately, before the server or provider confirms it. Once the server
+accepts the send, **Undo** stays on offer until the server's undo deadline (the
+accepted attempt's `sendTime`), not for a fixed client duration. The notice says
+**Email sent** only after delivery. A send that fails after it was queued shows
+a persistent **Email failed to send**, and **Delivery unconfirmed** reports a
+send the provider did not confirm. An offline send shows **Email queued to
+send** and returns to the email list. The status panel shows a send only while it waits on this
 device (**Queued on this device**), needs attention, or is scheduled
 (**Scheduled**). On phones the panel sits below the safe area and the floating
 header. Only one active send can own a draft across tabs; queued composers
