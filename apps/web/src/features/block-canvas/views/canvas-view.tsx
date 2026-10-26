@@ -1,6 +1,8 @@
 import { useSidePanel } from '@components/app/side-panel';
 import { createImageActions } from '@core/component/Lightbox/createImageActions';
 import { fireAndForget } from '@core/util/fireAndForget';
+import Copy from '@icon/system/regular/copy.svg';
+import DownloadSimple from '@icon/system/regular/download-simple.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import {
   alignCommand,
@@ -23,8 +25,6 @@ import {
   RectangleView,
   TextView,
 } from '@macro-inc/graphics/solid';
-import Copy from '@phosphor/copy.svg';
-import DownloadSimple from '@phosphor/download-simple.svg';
 import { Button, Layer } from '@ui';
 import {
   type Component,

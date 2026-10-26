@@ -1,5 +1,5 @@
-import CheckCircleIcon from '@phosphor/check-circle.svg';
-import SparkleIcon from '@phosphor/sparkle.svg';
+import CheckCircleIcon from '@icon/system/regular/check-circle.svg';
+import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import { Button } from '@ui';
 import { Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -32,6 +32,7 @@ export function ProviderRow(props: {
           {props.provider.name}
           <Show when={props.state === 'connected'}>
             <CheckCircleIcon
+              aria-hidden={false}
               class="size-3.5 text-success"
               aria-label="Connected"
             />

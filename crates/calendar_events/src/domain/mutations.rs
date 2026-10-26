@@ -237,6 +237,11 @@ where
                 .calendar_changed(&outcome.owner_id, email_link_id, outcome.team_ooo_changed)
                 .await;
         }
+        for copy in &outcome.aligned_copies {
+            self.refresh
+                .calendar_changed(&copy.owner_id, copy.email_link_id, false)
+                .await;
+        }
         if let Some(viewer) = viewer {
             viewer.mark_event(&mut event, email_link_id);
         }

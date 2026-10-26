@@ -1,5 +1,5 @@
+import LoadingSpinner from '@icon/system/regular/spinner.svg';
 import { constrainImageDimensions } from '@macro-inc/lexical-core/utils/media';
-import LoadingSpinner from '@phosphor/spinner.svg';
 import { createSignal, Show } from 'solid-js';
 import { createToolRenderer, useToolError } from './ToolRenderer';
 

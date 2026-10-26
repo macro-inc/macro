@@ -1,5 +1,18 @@
 # Onboarding
 
+## Resume link
+
+Lifecycle emails return someone to the step they left with
+`https://macro.com/app/onboarding?step={lastOnboardingStep}`. `step` is one
+of `welcome`, `vision`, `security`, `work`, `personal`, `tools`, `team`, or
+`plan`. Any other value is ignored. A Stripe checkout return still opens the
+plan step, and a Google sign-up return still opens work email. Saved progress
+for this user wins over the link; a first visit with nothing saved opens the
+link, otherwise the flow starts at welcome. The step is stored in
+localStorage for that user and removed from the URL after it is applied, so a
+reload keeps later progress. The app shell and the inbox connection callback
+keep `step` when they send a first-run user into onboarding.
+
 ## Onboarding bypass — `/app/onboarding`
 
 All `@macro.com` accounts see a **Bypass** button on every onboarding step. It

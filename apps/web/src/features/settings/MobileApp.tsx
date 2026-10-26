@@ -1,7 +1,7 @@
 import { useCopyLink } from '@core/util/useCopyLink';
 import AppStoreQr from '@design/app-store.svg';
-import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
-import LinkIcon from '@phosphor/link.svg';
+import ArrowUpRightIcon from '@icon/system/regular/arrow-up-right.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
 import { CopyButton } from '@ui';
 import { SettingsCard, SettingsPage } from './primitives';
 

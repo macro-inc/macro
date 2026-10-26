@@ -1,7 +1,7 @@
 import { useSelectedFirst } from '@core/util/useSelectedFirst';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import type { CollectionNode } from '@kobalte/core';
 import { Combobox, useComboboxContext } from '@kobalte/core/combobox';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
 import { makeEventListener } from '@solid-primitives/event-listener';
 import { cn, Layer } from '@ui';
 import { MultiSelectItemContent } from '@ui/components/MultiSelectItemContent';

@@ -10,12 +10,12 @@ import type {
   SlideOutline,
 } from '@core/pptx-engine/types';
 import { fireAndForget } from '@core/util/fireAndForget';
-import ArrowDown from '@phosphor/arrow-down.svg';
-import ArrowUp from '@phosphor/arrow-up.svg';
-import Clock from '@phosphor/clock.svg';
-import Play from '@phosphor/play.svg';
-import Trash from '@phosphor/trash.svg';
-import X from '@phosphor/x.svg';
+import ArrowDown from '@icon/system/regular/arrow-down.svg';
+import ArrowUp from '@icon/system/regular/arrow-up.svg';
+import Clock from '@icon/system/regular/clock.svg';
+import Play from '@icon/system/regular/play.svg';
+import Trash from '@icon/system/regular/trash.svg';
+import X from '@icon/system/regular/x.svg';
 import { Button } from '@ui/components/Button';
 import { createSignal, For, onCleanup, onMount, Show } from 'solid-js';
 import type { PresentationEngine } from '../context/pptx-editor-context';

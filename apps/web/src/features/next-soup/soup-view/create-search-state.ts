@@ -12,6 +12,8 @@ import { type Accessor, createMemo, type Setter } from 'solid-js';
 import { buildSoupSearchRequest } from './search-request';
 
 interface CreateSearchStateArgs {
+  /** Where the search runs, for analytics. */
+  surface: Accessor<string>;
   soup: SoupState;
   filters: Accessor<QueryState>;
   assignees: Accessor<string[]>;
@@ -26,6 +28,7 @@ interface CreateSearchStateArgs {
 }
 
 export const createSearchState = ({
+  surface,
   soup,
   filters,
   assignees,
@@ -79,6 +82,7 @@ export const createSearchState = ({
   };
 
   const search = createSharedSearchState({
+    surface,
     text: searchText,
     buildRequest: (search) => buildSoupSearchRequest(filters(), search),
     localPool,

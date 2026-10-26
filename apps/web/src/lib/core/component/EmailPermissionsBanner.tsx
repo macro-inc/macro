@@ -1,6 +1,6 @@
 import { useAddInboxFlow } from '@core/email-link';
 import { fireAndForget } from '@core/util/fireAndForget';
-import Caution from '@phosphor/warning.svg';
+import Caution from '@icon/system/regular/warning.svg';
 import { Button } from '@ui';
 
 export function EmailPermissionsBanner() {

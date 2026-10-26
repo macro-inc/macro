@@ -285,7 +285,11 @@ click. A pending webhook shows a retryable confirmation state. If the catalog
 cannot load, Free remains available, Pro still returns to its offer, and
 Max checkout stays disabled until prices can be loaded with the retry action.
 Both completion paths preserve an original `next` destination and otherwise land on Home (`/app/home`). Old saved email,
-connector, building, and summary step names are migrated on resume.
+connector, building, and summary step names are migrated on resume. A lifecycle
+email can open a specific step with `/app/onboarding?step=<step>` (see
+[onboarding](onboarding.md#resume-link)). The step is kept in
+localStorage for that user. A checkout return or an in-progress Google sign-up
+still wins, then saved progress, then the link.
 
 ## Public onboarding preview
 

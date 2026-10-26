@@ -87,7 +87,9 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
    * requester as a guest, no join link, nobody notified. Refused with
    * `invalid_input` for an invitation, which is answered from the calendar
    * instead, `already_on_calendar` when the meeting is already on one of
-   * their calendars, and `copy_refused` when Google will not import it. */
+   * their calendars, whichever calendar is named (it cannot be added to
+   * another of theirs either), and `copy_refused` when Google will not
+   * import it. */
   async addEventToCalendar(
     message: EmailMessage,
     invitation: CalendarInvitation,

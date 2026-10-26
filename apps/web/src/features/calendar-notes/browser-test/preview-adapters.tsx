@@ -1,8 +1,9 @@
-import { Avatar } from '@ui';
+import { Avatar, Button, Dialog } from '@ui';
 import { createContext, type ParentProps, useContext } from 'solid-js';
 import { EventAttendeesSection } from '../../calendar/components/EventDetails';
 import type { CalendarEvent } from '../../calendar/types';
 import type { NotesSource } from '../context/notes-source';
+import { DocumentNotesView } from '../views/document-notes';
 import { MeetingNotesView } from '../views/meeting-notes';
 
 export { sanitizeCalendarDescription } from '../../calendar/utils/calendar-description-sanitizer';
@@ -46,6 +47,53 @@ export function CalendarMeetingNotes(props: {
         props.onOpenDocument(note.documentId);
       }}
       onDialogChange={props.onDialogChange}
+      shareDialog={(note, onClose) => (
+        <Dialog
+          open
+          onOpenChange={(open) => {
+            if (!open) onClose();
+          }}
+          position="center"
+          class="w-[720px]"
+        >
+          <div class="p-4">
+            <Dialog.Title>Share: {note.name}</Dialog.Title>
+            <Dialog.Description class="my-3 text-xs text-ink-muted">
+              Preview of meeting access controls. The app opens the full
+              document Share dialog.
+            </Dialog.Description>
+            <DocumentNotesView
+              source={{
+                links: () => ({
+                  pending: false,
+                  data: source
+                    .notes()
+                    .data?.filter((item) => item.documentId === note.documentId)
+                    .map((item) => ({
+                      eventId: props.event.eventId,
+                      occurrenceKey: props.event.occurrenceKey,
+                      eventTitle: props.event.title,
+                      team: item.team,
+                    })),
+                }),
+                team: () => ({
+                  pending: false,
+                  data: { id: 'macro', name: 'Macro' },
+                }),
+                retry: source.retry,
+                setTeam: (_target, teamId) =>
+                  source.link(note.documentId, teamId),
+                unlink: () => source.unlink(note.documentId),
+              }}
+            />
+            <div class="mt-4 flex justify-end">
+              <Button variant="ghost" onClick={onClose}>
+                Done
+              </Button>
+            </div>
+          </div>
+        </Dialog>
+      )}
     />
   );
 }

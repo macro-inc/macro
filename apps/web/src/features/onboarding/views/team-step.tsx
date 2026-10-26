@@ -1,5 +1,5 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import LinkIcon from '@phosphor/link.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
 import { ToggleSwitch } from '@ui';
 import { createMemo, Match, Show, Switch } from 'solid-js';
 import {

@@ -4,7 +4,7 @@
  * that helps. Presentational.
  */
 
-import WarningCircle from '@phosphor/warning-circle.svg';
+import WarningCircle from '@icon/system/regular/warning-circle.svg';
 import { Button } from '@ui/components/Button';
 
 export function SessionNotice(props: {

@@ -5,8 +5,8 @@ import {
 } from '@app/features/command/Launcher';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
 import EmptyStateChannelsGraphic from '@design/empty-state-channels.svg';
-import BookOpenIcon from '@phosphor/book-open.svg';
-import PlusIcon from '@phosphor/plus.svg';
+import BookOpenIcon from '@icon/system/regular/book-open.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { type EmptyStateAction, EmptyStatePanel } from '@ui';
 import type { ChannelsQueryScope } from '../types';
 

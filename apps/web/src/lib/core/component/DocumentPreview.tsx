@@ -42,24 +42,24 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { matches } from '@core/util/match';
 import { openExternalUrl } from '@core/util/url';
 import MacroEmbed from '@icon/macro-embed.svg';
-import CollapseInlinePreview from '@phosphor/arrows-in-line-horizontal.svg';
-import ExpandInlinePreview from '@phosphor/arrows-out-line-horizontal.svg';
-import CalendarCheckIcon from '@phosphor/calendar-check.svg';
-import MessageIcon from '@phosphor/chat-circle.svg';
-import ThreadIcon from '@phosphor/chats-circle.svg';
-import ClockIcon from '@phosphor/clock.svg';
-import ColumnsPlusRight from '@phosphor/columns-plus-right.svg';
-import DotsThree from '@phosphor/dots-three.svg';
-import EyeIcon from '@phosphor/eye.svg';
-import GitBranchIcon from '@phosphor/git-branch.svg';
-import HighlightIcon from '@phosphor/highlighter-circle.svg';
-import Link from '@phosphor/link.svg';
-import MapPinIcon from '@phosphor/map-pin-simple.svg';
-import SparkleIcon from '@phosphor/sparkle.svg';
-import LoadingSpinner from '@phosphor/spinner.svg';
-import TextAlignLeftIcon from '@phosphor/text-align-left.svg';
-import TrashSimple from '@phosphor/trash-simple.svg';
-import UsersIcon from '@phosphor/users.svg';
+import CollapseInlinePreview from '@icon/system/regular/arrows-in-line-horizontal.svg';
+import ExpandInlinePreview from '@icon/system/regular/arrows-out-line-horizontal.svg';
+import CalendarCheckIcon from '@icon/system/regular/calendar-check.svg';
+import MessageIcon from '@icon/system/regular/chat-circle.svg';
+import ThreadIcon from '@icon/system/regular/chats-circle.svg';
+import ClockIcon from '@icon/system/regular/clock.svg';
+import ColumnsPlusRight from '@icon/system/regular/columns-plus-right.svg';
+import DotsThree from '@icon/system/regular/dots-three.svg';
+import EyeIcon from '@icon/system/regular/eye.svg';
+import GitBranchIcon from '@icon/system/regular/git-branch.svg';
+import HighlightIcon from '@icon/system/regular/highlighter-circle.svg';
+import Link from '@icon/system/regular/link.svg';
+import MapPinIcon from '@icon/system/regular/map-pin-simple.svg';
+import SparkleIcon from '@icon/system/regular/sparkle.svg';
+import LoadingSpinner from '@icon/system/regular/spinner.svg';
+import TextAlignLeftIcon from '@icon/system/regular/text-align-left.svg';
+import TrashSimple from '@icon/system/regular/trash-simple.svg';
+import UsersIcon from '@icon/system/regular/users.svg';
 import {
   isAccessiblePreviewItem,
   isCalendarEventPreviewItem,
@@ -329,7 +329,7 @@ const calendarTimeFormat = new Intl.DateTimeFormat(undefined, {
 
 /** One compact local-time schedule line for a calendar mention preview. */
 export function calendarPreviewSchedule(
-  event: PreviewCalendarEventAccess['event']
+  event: Pick<PreviewCalendarEventAccess['event'], 'time'>
 ): string | undefined {
   if (event.time.kind === 'allDay') {
     const start = parseLocalDate(event.time.startDate);
@@ -364,12 +364,14 @@ function heldOnCalendarLabel(
 }
 
 /** Meeting-level rows of the calendar mention hover card. */
-function CalendarEventPreviewDetails(props: {
-  event: PreviewCalendarEventAccess['event'];
+export function CalendarEventPreviewDetails(props: {
+  event: Omit<PreviewCalendarEventAccess['event'], 'updatedAt'>;
   /** The mentioned event, which a read-only share copies from. */
   mentionedEventId: string;
   /** Opens the viewer's own copy; absent where the card cannot open it. */
   onOpen?: (event: MouseEvent) => void;
+  /** Team-calendar projections have no channel-share mutation capabilities. */
+  sharedActions?: boolean;
 }) {
   const organizer = () =>
     props.event.organizerName ?? props.event.organizerEmail;
@@ -455,7 +457,9 @@ function CalendarEventPreviewDetails(props: {
         </MetadataInfo>
       </Show>
       <Switch>
-        <Match when={!props.event.viewerEventId}>
+        <Match
+          when={!props.event.viewerEventId && props.sharedActions !== false}
+        >
           <SharedEventActions
             eventId={props.mentionedEventId}
             title={props.event.title}

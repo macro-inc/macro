@@ -2,11 +2,11 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { UserIcon } from '@core/component/UserIcon';
 import { hasValidHotkey } from '@core/hotkey/utils';
 import { type CrmContactEntity, Entity, type EntityData } from '@entity';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import WideStar from '@phosphor/sparkle.svg';
-import ProjectIcon from '@phosphor/stack.svg';
-import Terminal from '@phosphor-icons/core/regular/terminal.svg?component-solid';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import WideStar from '@icon/system/regular/sparkle.svg';
+import ProjectIcon from '@icon/system/regular/stack.svg';
+import Terminal from '@icon/system/regular/terminal.svg?component-solid';
 import {
   BULK_DOCUMENT_WAKEUP_FEATURE_FLAG,
   enqueueDocumentWakeup,

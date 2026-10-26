@@ -59,7 +59,9 @@ reminder dispatch, team availability, and provider/Postgres persistence.
 
 - Keep note links separate from sync-owned occurrence rows; require a live
   occurrence and corroborated inbox copies for inherited view access. A document
-  owner can unlink after losing meeting access. See
+  owner can unlink after losing meeting access. Document readers can discover
+  only links whose meeting details they can currently see; owners also retain
+  unavailable links for revocation. See
   [meeting-note access](../../docs/architecture/calendar-meeting-notes.md).
 - `CalendarEvent` is the stable Macro entity; external calendars and email
   invitations are sources feeding it, and recurrence instances are queryable
@@ -92,6 +94,23 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   `InvalidInput`.
   `ViewerCapabilities::set_guest_policy` is therefore Google-only, and
   `organize` is the organizer signal clients read instead.
+- The organizer's own copy decides the guest policy of every Macro-held copy
+  of a Google meeting (`src/outbound/pg/guest_policy.rs`). Google takes 4 to
+  12 seconds to carry an organizer's change to its guests' copies, and a guest
+  invite in that window gets a 200 while Google drops the guest and mails
+  nobody. The organizer's copy is the Google source on the calendar Google
+  names as the organizer (the address for a primary calendar, the calendar id
+  for a secondary one) that its inbox can write: the copy
+  `organizer_copy_calendar_id` routes organizer writes through. Every upsert
+  reads that source's policy and writes it to each entity of the meeting with
+  that organizer (the organizer's own, when its canonical copy is the
+  primary-calendar invitation, included) and to every other Google source's
+  projection, across users, so a guest-side write or an invitation read-back
+  echoing Google's stale switches cannot reopen inviting. Copies pair by
+  `calendar_meeting_uid` and organizer; Outlook copies and snapshots take no
+  part. The aligned copies' inboxes get change-log entries and refresh nudges
+  (`CalendarEventWriteOutcome::aligned_copies`). An organizer whose calendar
+  no Macro inbox writes still reaches guests only through Google's sync.
 - Sharing an event into a channel writes an `entity_access` row on the
   sharer's copy. The `calendar_event_entity_access_cleanup` trigger deletes it
   with the event row, which covers every way a copy goes away: a delete
@@ -160,14 +179,29 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   through the copy on the organizer's calendar
   (`CalendarEventMutationTarget::organizer_copy_calendar_id`,
   `src/domain/mutations/organizer_copy.rs`), then the addressed copy is read
-  back (`CalendarMutationProvider::refresh_event`) so the entity shows the
-  change before sync; reminders, availability and answers stay on the
-  addressed copy. A new event lists the inbox as an accepted guest on its
-  primary calendar and on Outlook, but on another Google calendar only when it
-  has other guests, as Google's own client does, so a solo event is one block.
+  back (`CalendarMutationProvider::refresh_event`); reminders, availability
+  and answers stay on the addressed copy, written before the organizer's
+  copy. Google carries the change to the invitation 15 to 30 seconds later,
+  so the read-back is usually stale: the response takes the meeting from the
+  organizer copy's echo, and the Postgres upsert lets a user edit through the
+  organizer's copy write the meeting's title, description, location and
+  visibility (stamped in `calendar_events.content_updated_at`) and its whole
+  schedule, guests included. The canonical copy retakes that content only
+  once it is at least as fresh, and until then `fetch_source_contents` serves
+  every older copy with it, since the web shows a copy's own title. Only a
+  user edit starts this; a sync of the organizer's copy leaves content to the
+  canonical copy as before. A new event lists the inbox as an accepted guest
+  on its primary calendar and on Outlook, but on another Google calendar only
+  when it has other guests, as Google's own client does, so a solo event is
+  one block.
 - `viewer_can` is viewer-relative, like an attendee's `is_self`: resolve it with
   `ActorInboxes::mark_event` and the copy's source link wherever a read path
-  marks the viewer, and never store it. Each connected inbox gets its own copy
+  marks the viewer, and never store it. Calendar caches refresh only the
+  events the change log lists, so a change to how capabilities are resolved
+  leaves cached events with the old ones until each changes; ship it with a
+  migration that logs an upsert for every event it affects, as
+  `20261026184741_log_events_organized_by_a_writable_calendar.sql` does for
+  events a writable calendar organizes. Each connected inbox gets its own copy
   (entity) of an event, written through that inbox's grant, so the viewer
   organizes or attends a copy only as its inbox: another of their inboxes on the
   same event lends it nothing, and only that inbox's row is `is_self`. Mutations

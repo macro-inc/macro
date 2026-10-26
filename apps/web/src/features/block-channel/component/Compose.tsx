@@ -42,8 +42,8 @@ import {
   handleFileFolderDrop,
   uploadFile,
 } from '@core/util/upload';
+import InfoIcon from '@icon/system/regular/info.svg';
 import { Telemetry } from '@macro-inc/observability';
-import InfoIcon from '@phosphor/info.svg';
 import { useCreateChannelMutation } from '@queries/channel/channels';
 import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
 import { ComposerSurface } from '@ui';

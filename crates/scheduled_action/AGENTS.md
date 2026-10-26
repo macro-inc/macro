@@ -61,6 +61,12 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
 
 ## Gotchas
 
+- A task's `mcp_servers` are apps the routine requires. The owner must have
+  each connected: `TargetValidation` checks on save and
+  `RoutineSessions::prepare` checks again on every run, then adds them to an
+  agent limited to selected apps. An update that omits the key is rejected
+  when the stored task has apps (`require_explicit_selection`).
+
 - `TODO.md` tracks open follow-ups (unified history list, delete schedules,
   sharing/permissions) — check it before assuming a listed gap is unintentional.
 - A new configuration field needs `#[serde(default)]` in `ActionConfiguration`

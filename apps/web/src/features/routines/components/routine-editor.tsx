@@ -2,7 +2,7 @@ import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import ClockIcon from '@phosphor/clock.svg';
+import ClockIcon from '@icon/system/regular/clock.svg';
 import { cn, EntityComposer, Layer, TabSelector } from '@ui';
 import { For, type JSX, Show } from 'solid-js';
 import { DEFAULT_RUN_VISIBILITY, type ScheduleDraft } from '../core/draft';
@@ -20,6 +20,7 @@ export function RoutineEditor(props: {
   runActions?: JSX.Element;
   instructions: JSX.Element;
   executionPicker: JSX.Element;
+  apps?: JSX.Element;
   triggerContent?: JSX.Element;
   nextRun: string;
   history: JSX.Element;
@@ -147,6 +148,7 @@ export function RoutineEditor(props: {
                     props.onChange((draft) => ({ ...draft, runVisibility }))
                   }
                 />
+                {props.apps}
               </EntityComposer.Properties>
             </fieldset>
             <Layer depth={1}>

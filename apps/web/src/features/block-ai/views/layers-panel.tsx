@@ -8,8 +8,8 @@
 
 import { IS_MAC } from '@core/constant/isMac';
 import { fireAndForget } from '@core/util/fireAndForget';
-import Plus from '@phosphor/plus.svg';
-import Trash from '@phosphor/trash.svg';
+import Plus from '@icon/system/regular/plus.svg';
+import Trash from '@icon/system/regular/trash.svg';
 import { Button } from '@ui/components/Button';
 import { createEffect, createMemo, createSignal, on } from 'solid-js';
 import { VList, type VListHandle } from 'virtua/solid';

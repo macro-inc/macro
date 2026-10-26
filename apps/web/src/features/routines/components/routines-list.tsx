@@ -5,7 +5,7 @@ import {
 } from '@app/components/view-shell/ListHeader';
 import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import ClockIcon from '@phosphor/clock-clockwise.svg';
+import ClockIcon from '@icon/system/regular/clock-clockwise.svg';
 import { Button } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import type { RoutineRow } from '../core/types';

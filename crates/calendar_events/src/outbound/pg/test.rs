@@ -7259,6 +7259,7 @@ mod changes;
 mod channel_grants;
 mod details;
 mod export;
+mod guest_policy;
 mod invitations;
 mod join_requests;
 mod meeting_copies;

@@ -1,4 +1,4 @@
-import ChatCircleText from '@phosphor/chat-circle-text.svg';
+import ChatCircleText from '@icon/system/regular/chat-circle-text.svg';
 import { Button } from '@ui';
 import {
   type Accessor,

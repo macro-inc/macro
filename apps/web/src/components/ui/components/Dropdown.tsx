@@ -1,7 +1,7 @@
 import { isModality } from '@core/mobile/inputModality';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import CheckIcon from '@icon/system/regular/check.svg';
 import { DropdownMenu as KobalteDropdownMenu } from '@kobalte/core/dropdown-menu';
-import CheckIcon from '@phosphor/check.svg';
 import {
   type ComponentProps,
   createSignal,

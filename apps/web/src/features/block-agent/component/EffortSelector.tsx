@@ -1,7 +1,7 @@
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { ModelEffortMenu } from '@core/component/AI/component/input/ModelEffortMenu';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import Check from '@phosphor/check.svg';
+import Check from '@icon/system/regular/check.svg';
 import { Button, Dropdown, Tooltip } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import type {

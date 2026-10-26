@@ -24,10 +24,10 @@ import { useOpenEventEmail } from '@app/features/calendar-view/components/use-op
 import { copyGuestEmails } from '@app/features/calendar-view/copy-guest-emails';
 import { isMobile } from '@core/mobile/isMobile';
 import { recipientEntityMapper, useContacts } from '@core/user';
+import CopyIcon from '@icon/system/regular/copy.svg';
+import EnvelopeIcon from '@icon/system/regular/envelope.svg';
+import UserPlusIcon from '@icon/system/regular/user-plus.svg';
 import { Popover } from '@kobalte/core/popover';
-import CopyIcon from '@phosphor/copy.svg';
-import EnvelopeIcon from '@phosphor/envelope.svg';
-import UserPlusIcon from '@phosphor/user-plus.svg';
 import type { CalendarInviteScope } from '@service-email/client';
 import { Button, Checkbox, Dialog, Layer, Tabs } from '@ui';
 import { createMemo, createSignal, Show } from 'solid-js';

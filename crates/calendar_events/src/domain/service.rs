@@ -902,6 +902,7 @@ where
                     .await?;
                 self.publish_write_outcome(&outcome);
                 report.team_ooo_changed |= outcome.team_ooo_changed;
+                report.aligned_copies.extend(outcome.aligned_copies);
                 calendar_count += 1;
             }
             // The upserts above committed individually, so they count even

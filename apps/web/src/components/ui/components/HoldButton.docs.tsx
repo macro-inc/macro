@@ -1,5 +1,5 @@
 import { defineDoc } from '@app/features/ui-gallery/types';
-import TrashIcon from '@phosphor/trash.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
 import { createSignal } from 'solid-js';
 import { HoldButton } from './HoldButton';
 

@@ -1,11 +1,11 @@
-import External from '@phosphor/arrow-square-out.svg';
-import Calendar from '@phosphor/calendar-blank.svg';
-import Clock from '@phosphor/clock.svg';
+import External from '@icon/system/regular/arrow-square-out.svg';
+import Calendar from '@icon/system/regular/calendar-blank.svg';
+import Clock from '@icon/system/regular/clock.svg';
+import MapPin from '@icon/system/regular/map-pin.svg';
+import User from '@icon/system/regular/user.svg';
+import Users from '@icon/system/regular/users.svg';
+import X from '@icon/system/regular/x.svg';
 import Globe from '@phosphor/globe-simple.svg';
-import MapPin from '@phosphor/map-pin.svg';
-import User from '@phosphor/user.svg';
-import Users from '@phosphor/users.svg';
-import X from '@phosphor/x.svg';
 import { Button, Dialog } from '@ui';
 import { ActionDialogShell } from '@ui/components/ActionDialogShell';
 import { buttonClasses } from '@ui/components/Button';

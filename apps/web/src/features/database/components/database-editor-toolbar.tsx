@@ -1,9 +1,9 @@
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
-import CheckIcon from '@phosphor/check.svg';
-import FunnelIcon from '@phosphor/funnel-simple.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import SortAscendingIcon from '@phosphor/sort-ascending.svg';
-import StackIcon from '@phosphor/stack.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import FunnelIcon from '@icon/system/regular/funnel-simple.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import SortAscendingIcon from '@icon/system/regular/sort-ascending.svg';
+import StackIcon from '@icon/system/regular/stack.svg';
 import { Button } from '@ui/components/Button';
 import { Dropdown } from '@ui/components/Dropdown';
 import { For, type JSX, Show } from 'solid-js';

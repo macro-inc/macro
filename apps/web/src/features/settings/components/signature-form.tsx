@@ -1,12 +1,9 @@
-import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
-import DownloadIcon from '@phosphor-icons/core/regular/download-simple.svg?component-solid';
-import SignatureIcon from '@phosphor-icons/core/regular/signature.svg?component-solid';
+import DownloadIcon from '@icon/system/regular/download-simple.svg?component-solid';
 import { ToggleSwitch } from '@ui';
-import { lazy, Show, Suspense } from 'solid-js';
+import { Show } from 'solid-js';
 
 import { SettingsButton as Button } from '../primitives';
-
-const SignatureEditor = lazy(() => import('../SignatureEditor'));
+import { SignatureWorkspace } from './signature-workspace';
 
 export function SignatureForm(props: {
   email: string;
@@ -53,31 +50,14 @@ export function SignatureForm(props: {
           )}
         </Show>
       </div>
-      {/* Editing (Quill) is desktop-only; on mobile the section still offers
-          the replies/forwards toggle and Remove, with a pointer to desktop. */}
-      <Show
-        when={!props.mobile}
-        fallback={
-          <div class="flex flex-col items-center gap-1.5 rounded-lg border border-dashed border-edge-muted px-3 py-6 text-center">
-            <SignatureIcon class="size-5 text-ink-muted" />
-            <p class="text-sm text-ink-muted">
-              Update your signature on desktop.
-            </p>
-          </div>
-        }
-      >
-        <Suspense
-          fallback={<ListSkeleton.Bar class="h-44 w-full rounded-xl" />}
-        >
-          <SignatureEditor
-            label={`Signature for ${props.email}`}
-            value={props.value}
-            disabled={props.pending || props.importing}
-            onInput={props.onInput}
-            onReady={props.onReady}
-          />
-        </Suspense>
-      </Show>
+      <SignatureWorkspace
+        email={props.email}
+        value={props.value}
+        disabled={props.pending || !!props.importing}
+        onInput={props.onInput}
+        onReady={props.onReady}
+        mobile={props.mobile}
+      />
       {/* Stacks on narrow screens so the toggle label and buttons never
           crowd each other onto wrapped lines. */}
       <div class="flex flex-col gap-3 @[520px]/signature:flex-row @[520px]/signature:items-center @[520px]/signature:justify-between">

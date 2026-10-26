@@ -1215,3 +1215,160 @@ async fn automatic_decline_candidates_are_fair_bounded_and_respect_disabled_occu
             .all(|r| first.iter().all(|f| f.invitation_id != r.invitation_id))
     );
 }
+
+/// The migration that stores Outlook organizers, whom Graph lists as not
+/// having answered, as holding their meetings.
+const OUTLOOK_ORGANIZERS_HOLD_THEIR_MEETINGS: &str = include_str!(
+    "../../../../../macro_db_client/migrations/20261026191007_outlook_organizers_hold_their_meetings.sql"
+);
+
+fn unanswered(email: &str, is_organizer: bool) -> CalendarAttendee {
+    CalendarAttendee {
+        email: email.into(),
+        display_name: None,
+        response_status: AttendeeResponseStatus::NeedsAction,
+        is_organizer,
+        is_optional: false,
+        is_self: false,
+        comment: None,
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_organizer_repair_stores_outlook_organizers_as_holding_their_meetings(pool: PgPool) {
+    let (repo, link, _) = mailbox(&pool).await;
+    let lease = calendar(&repo).await;
+    // How sync stored a series Macro created before October 2026: the
+    // organizer unanswered on the series and on its one exception.
+    let mut stored = upsert(&lease, "made-by-macro@example.com");
+    stored.event.organizer_email = Some("owner@example.com".into());
+    let guests = vec![
+        unanswered("owner@example.com", true),
+        unanswered("ada@example.com", false),
+    ];
+    stored.event.attendees = guests.clone();
+    let moved = stored.occurrences[1].clone();
+    let EventTime::Timed {
+        starts_at: moved_start,
+        ..
+    } = moved.time
+    else {
+        panic!("the fixture's occurrences are timed");
+    };
+    stored.overrides = vec![CalendarEventOverride {
+        reminders: None,
+        automatic_decline: None,
+        sequence: None,
+        source_updated_at: None,
+        recurrence_id: moved.occurrence_key.clone(),
+        original_time: EventStart::Timed(moved_start),
+        time: moved.time.clone(),
+        title: Some("Moved".into()),
+        description: None,
+        location: None,
+        status: None,
+        visibility: None,
+        transparency: None,
+        attendees: Some(guests),
+    }];
+    let event_id = repo
+        .upsert_event(CalendarEventWrite::OutlookSync {
+            lease: Box::new(lease.clone()),
+            upsert: stored,
+        })
+        .await
+        .unwrap()
+        .event_id;
+    let counter = || async {
+        sqlx::query_scalar!(
+            "SELECT seq FROM calendar_change_counters WHERE link_id = $1",
+            link,
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap()
+    };
+    let before = counter().await;
+
+    sqlx::raw_sql(OUTLOOK_ORGANIZERS_HOLD_THEIR_MEETINGS)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let rows = sqlx::query!(
+        r#"
+        SELECT email, response_status, 'series' AS "scope!"
+        FROM calendar_event_attendees WHERE event_id = $1
+        UNION ALL
+        SELECT email, response_status, 'exception'
+        FROM calendar_event_override_attendees WHERE event_id = $1
+        ORDER BY 3 DESC, 1
+        "#,
+        event_id,
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap()
+    .into_iter()
+    .map(|row| (row.scope, row.email.unwrap(), row.response_status.unwrap()))
+    .collect::<Vec<_>>();
+    let expected = |scope: &str| {
+        [
+            (
+                scope.to_string(),
+                "ada@example.com".to_string(),
+                "needs_action".to_string(),
+            ),
+            (
+                scope.to_string(),
+                "owner@example.com".to_string(),
+                "accepted".to_string(),
+            ),
+        ]
+    };
+    assert_eq!(rows, [expected("series"), expected("exception")].concat());
+    let payload = sqlx::query_scalar!(
+        "SELECT normalized_payload FROM calendar_event_sources WHERE event_id = $1",
+        event_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    for attendees in [
+        &payload["event"]["attendees"],
+        &payload["overrides"][0]["attendees"],
+    ] {
+        assert_eq!(
+            attendees
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|attendee| attendee["responseStatus"].as_str().unwrap())
+                .collect::<Vec<_>>(),
+            ["accepted", "needs_action"],
+            "the projection a restore would replay agrees: {attendees}"
+        );
+    }
+    let logged = sqlx::query!(
+        "SELECT seq, kind, event_id FROM calendar_change_log WHERE link_id = $1 AND seq > $2",
+        link,
+        before,
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap()
+    .into_iter()
+    .map(|row| (row.seq, row.kind, row.event_id))
+    .collect::<Vec<_>>();
+    assert_eq!(logged, [(before + 1, 1, Some(event_id))]);
+
+    sqlx::raw_sql(OUTLOOK_ORGANIZERS_HOLD_THEIR_MEETINGS)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        counter().await,
+        before + 1,
+        "a rerun finds nothing left to fix"
+    );
+}

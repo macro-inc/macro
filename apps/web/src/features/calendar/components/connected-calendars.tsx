@@ -4,7 +4,7 @@ import {
   SettingsRow,
   SettingsSection,
 } from '@app/features/settings/primitives';
-import PlusIcon from '@phosphor/plus.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { Checkbox } from '@ui';
 import { Index, Show } from 'solid-js';
 import type { CalendarSource } from '../types';

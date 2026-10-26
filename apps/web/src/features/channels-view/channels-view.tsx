@@ -16,7 +16,7 @@ import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component
 import { useIsAuthenticated } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { ListEntityMetadataQueryProvider } from '@entity';
-import SpinnerIcon from '@phosphor/spinner.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { useFavoritesData } from '@queries/favorites/favorites';
 import {
   createContext,
@@ -188,6 +188,7 @@ function ChannelsViewRoot() {
                         name="ChannelsView.rail"
                         fallback={
                           <SpinnerIcon
+                            aria-hidden={false}
                             aria-label="Loading channels"
                             class="size-5 animate-spin"
                           />
@@ -248,6 +249,7 @@ function ChannelsViewRoot() {
                   fallback={
                     <div class="grid size-full place-items-center text-ink-muted">
                       <SpinnerIcon
+                        aria-hidden={false}
                         aria-label="Loading channels"
                         class="size-5 animate-spin"
                       />

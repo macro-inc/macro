@@ -1,4 +1,4 @@
-import CaretDown from '@phosphor/caret-down.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
 import { Dropdown, type DropdownContentProps } from '@ui/components/Dropdown';
 import { For, type JSX, Show } from 'solid-js';
 import { ChoiceChip } from './ChoiceChip';

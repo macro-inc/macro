@@ -4,9 +4,9 @@ import { toast } from '@core/component/Toast/Toast';
 import { isBotPrincipalId } from '@core/constant/macroAgent';
 import { useUserId } from '@core/context/user';
 import { useIsConnectedSecondaryInbox } from '@core/user';
-import WideChat from '@phosphor/chat.svg';
-import CopyIcon from '@phosphor/copy.svg';
-import WideTask from '@phosphor/list-checks.svg';
+import WideChat from '@icon/system/regular/chat.svg';
+import CopyIcon from '@icon/system/regular/copy.svg';
+import WideTask from '@icon/system/regular/list-checks.svg';
 import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
 import {
   type Accessor,

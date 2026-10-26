@@ -1,11 +1,11 @@
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { StaticSplitLabel } from '@components/app/split-layout/components/SplitLabel';
 import { toast } from '@core/component/Toast/Toast';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import ClipboardIcon from '@icon/system/regular/clipboard.svg';
 import type { CollectionNode } from '@kobalte/core';
 import { Select } from '@kobalte/core/select';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CheckIcon from '@phosphor/check.svg';
-import ClipboardIcon from '@phosphor/clipboard.svg';
 import { Button, Layer } from '@ui';
 import { createEffect, createSignal, onMount } from 'solid-js';
 import { DEFAULT_THEMES } from '../constants';

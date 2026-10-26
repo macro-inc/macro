@@ -12,7 +12,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { openExternalUrl } from '@core/util/url';
 import GithubIcon from '@icon/mcp-github.svg';
-import Link from '@phosphor/link.svg';
+import Link from '@icon/system/regular/link.svg';
 import type { GithubPullRequest } from '@service-storage/generated/schemas';
 
 import type { PrRef } from '../util/prKey';

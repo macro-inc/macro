@@ -2,7 +2,6 @@ import type { ListDataSource } from '@app/components/list';
 import type { EmailRowReminder } from '@app/features/reminders/core/email-row-reminder';
 import {
   buildFlatSoupRows,
-  buildGroupedSoupRows,
   createSearchState,
   createSoupLoadMoreRow,
   createSoupRowStore,
@@ -32,7 +31,7 @@ import { EMAIL_FACETS, type EmailFacetContext } from '../filters/email-facets';
 import type { EmailTab, EmailViewState } from '../types';
 import { advanceEmptyAliasPages } from './advance-empty-alias-pages';
 import { buildEmailQuery, type EmailQueryContext } from './email-query';
-import { groupEmailEntitiesByDate } from './email-results';
+import { buildEmailDateRows } from './email-results';
 import { buildEmailSearchRequest } from './email-search';
 import { emailAdmissionBatches, mergeEmailAdmission } from './read-admission';
 import { useReminderEmailSource } from './use-reminder-email-source';
@@ -179,6 +178,7 @@ export function useEmailDataSource(
   // The quick-access pool behind local search holds no email threads, so
   // every search result comes from the search service.
   const search = createSearchState({
+    surface: () => 'email',
     text: () => state.search,
     enabled: () => sourceEnabled() && searchFavoritesReady(),
     disableLocalSearch: () => true,
@@ -448,7 +448,7 @@ export function useEmailDataSource(
     // bucketed by date.
     const result: EmailDataSourceItem[] = search.isSearching()
       ? buildFlatSoupRows(listEntities())
-      : buildGroupedSoupRows(groupEmailEntitiesByDate(listEntities()));
+      : buildEmailDateRows(listEntities());
 
     if (hasMore()) {
       result.push(

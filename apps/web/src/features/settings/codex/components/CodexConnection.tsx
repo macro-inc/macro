@@ -1,6 +1,6 @@
 import OpenAiIcon from '@core/component/AI/assets/openai.svg';
 import { fireAndForget } from '@core/util/fireAndForget';
-import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
+import ArrowUpRightIcon from '@icon/system/regular/arrow-up-right.svg';
 import { Button, confirmDialog } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { SettingsSelect } from '../../components/settings-select';

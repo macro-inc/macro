@@ -19,14 +19,14 @@ import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { githubLabelColor } from '@entity/components/GithubLabelPill';
 import type { GithubPullRequestLabel } from '@entity/types/entity';
+import SplitIcon from '@icon/system/regular/columns.svg';
+import EyeIcon from '@icon/system/regular/eye.svg';
+import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
+import StarIcon from '@icon/system/regular/star.svg';
+import UserIcon from '@icon/system/regular/user.svg';
+import UserCircleCheckIcon from '@icon/system/regular/user-circle-check.svg';
+import UsersThreeIcon from '@icon/system/regular/users-three.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import SplitIcon from '@phosphor/columns.svg';
-import EyeIcon from '@phosphor/eye.svg';
-import GitPullRequestIcon from '@phosphor/git-pull-request.svg';
-import StarIcon from '@phosphor/star.svg';
-import UserIcon from '@phosphor/user.svg';
-import UserCircleCheckIcon from '@phosphor/user-circle-check.svg';
-import UsersThreeIcon from '@phosphor/users-three.svg';
 import { selectSidebarTag } from '@property/tags/SidebarTagsSection';
 import {
   useFavoritesData,

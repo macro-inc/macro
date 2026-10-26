@@ -121,6 +121,7 @@ export function CanvasDetail(props: {
   return (
     <FileDetailLoadGate
       documentId={props.documentId}
+      entityType="canvas"
       label="canvas"
       load={loadCanvasDocument}
     >

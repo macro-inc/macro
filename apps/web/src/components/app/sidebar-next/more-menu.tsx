@@ -5,7 +5,7 @@ import {
   sidebarContent,
 } from '@components/app/app-sidebar/sidebar';
 import { useSplitLayout } from '@components/app/split-layout/layout';
-import DotsThreeIcon from '@phosphor/dots-three.svg';
+import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
 import { Dropdown } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';

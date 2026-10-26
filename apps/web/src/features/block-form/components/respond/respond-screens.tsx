@@ -1,6 +1,6 @@
-import CheckCircle from '@phosphor/check-circle.svg';
-import Lock from '@phosphor/lock.svg';
-import Prohibit from '@phosphor/prohibit.svg';
+import CheckCircle from '@icon/system/regular/check-circle.svg';
+import Lock from '@icon/system/regular/lock.svg';
+import Prohibit from '@icon/system/regular/prohibit.svg';
 import { Button, cn } from '@ui';
 import { For, type JSX, Match, Show, Switch } from 'solid-js';
 import { match } from 'ts-pattern';

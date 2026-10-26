@@ -2,7 +2,7 @@ import { cn } from '@ui';
 import { type Component, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 
-/** Any SVG component — in practice the Phosphor icons `nav-items` imports. */
+/** Any SVG component — the rail uses the original Macro icon family. */
 export type NavIcon = Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
 
 const SWAP = 'absolute inset-0';
@@ -12,9 +12,8 @@ const SWAP = 'absolute inset-0';
  *
  * Both weights are stacked in the same square box and swapped by opacity
  * alone, so neither reflows its button and the outline glyph does not blink out
- * before the filled one arrives. Phosphor glyphs are `fill="currentColor"`, so
- * the caller's text colour — an active nav button's `text-accent` included —
- * carries into both.
+ * before the filled one arrives. Both glyphs inherit currentColor from their
+ * button, and share the same viewBox and optical center.
  */
 export const NavGlyph = (props: {
   icon: NavIcon;
@@ -26,6 +25,7 @@ export const NavGlyph = (props: {
   class: string;
 }) => (
   <div
+    data-icon-motion-target
     class={cn(
       'pointer-events-none relative flex shrink-0 items-center justify-center',
       props.class

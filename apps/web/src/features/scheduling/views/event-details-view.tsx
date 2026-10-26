@@ -1,6 +1,6 @@
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import X from '@phosphor/x.svg';
+import X from '@icon/system/regular/x.svg';
 import { Button, Dialog } from '@ui';
 import { ActionDialogShell } from '@ui/components/ActionDialogShell';
 import { createSignal, Show } from 'solid-js';

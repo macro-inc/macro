@@ -1,7 +1,7 @@
 import { UserIcon } from '@core/component/UserIcon';
 import { getDisplayName, idToEmail, tryMacroId } from '@core/user';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
-import IconX from '@phosphor/x.svg';
+import IconX from '@icon/system/regular/x.svg';
 import type { ChannelParticipant } from '@queries/channel/types';
 import { Badge, Button, Item } from '@ui';
 import { Show } from 'solid-js';

@@ -1,7 +1,7 @@
 import { ViewSidebar } from '@app/components/view-shell';
 import { useUserId } from '@core/context/user';
-import UserPlusIcon from '@phosphor/user-plus.svg';
-import UsersThreeIcon from '@phosphor/users-three.svg';
+import UserPlusIcon from '@icon/system/regular/user-plus.svg';
+import UsersThreeIcon from '@icon/system/regular/users-three.svg';
 import { useTeamQuery, useUserTeamsQuery } from '@queries/team/teams';
 import { pressHandlers } from '@ui';
 import { createSignal, type JSX, Show } from 'solid-js';

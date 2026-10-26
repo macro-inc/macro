@@ -1,10 +1,11 @@
-import PushPinSlashIcon from '@phosphor/push-pin-slash.svg';
-import TrashIcon from '@phosphor/trash.svg';
+import PushPinSlashIcon from '@icon/system/regular/push-pin-slash.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
 import { PropertyValuePill } from '@property/component/PropertyValuePill';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { usePropertiesContext } from '@property/context/PropertiesContext';
 import { openPropertyEditor } from '@property/editor/state/propertyEditor';
 import type { Property as PropertyT } from '@property/types';
+import { Button } from '@ui';
 import { type Component, createSignal, type JSX, Show } from 'solid-js';
 
 type InlinePropertyValueProps = {
@@ -30,6 +31,25 @@ export const InlinePropertyValue: Component<InlinePropertyValueProps> = (
   const ctx = usePropertiesContext();
   const usesInlineEditor = () =>
     ['STRING', 'NUMBER', 'BOOLEAN', 'LINK'].includes(props.property.valueType);
+  const canManage = () =>
+    props.canManage && ctx.canEdit && !props.property.isMetadata;
+  const [removing, setRemoving] = createSignal(false);
+  const remove = async () => {
+    if (!ctx.removeProperty || removing()) return;
+    setRemoving(true);
+    try {
+      await ctx.removeProperty(props.property.propertyId);
+      ctx.onPropertyUnpinned?.(
+        props.property.propertyId,
+        props.property.propertyDefinitionId
+      );
+      ctx.onPropertyDeleted();
+    } catch {
+      // The shared removal mutation reports the failure and keeps the property.
+    } finally {
+      setRemoving(false);
+    }
+  };
 
   return (
     <PropertyValuePill
@@ -66,70 +86,37 @@ export const InlinePropertyValue: Component<InlinePropertyValueProps> = (
       }
       class={props.class}
       emptyLabel={props.emptyLabel}
+      hoverTrailingAction={
+        <Show when={canManage()}>
+          <Button
+            size="icon-sm"
+            label="Unpin"
+            disabled={removing()}
+            onClick={() =>
+              ctx.onPropertyUnpinned?.(
+                props.property.propertyId,
+                props.property.propertyDefinitionId
+              )
+            }
+          >
+            <PushPinSlashIcon />
+          </Button>
+        </Show>
+      }
       hoverActions={
-        <Show
-          when={props.canManage && ctx.canEdit && !props.property.isMetadata}
-        >
-          <InlinePropertyActions
-            property={props.property}
-            canRemove={props.canRemove}
-          />
+        <Show when={canManage() && props.canRemove !== false}>
+          <button
+            type="button"
+            class="flex w-full min-w-0 items-center gap-2 whitespace-nowrap rounded-md px-2 py-1.5 text-left text-failure-ink hover:bg-hover disabled:opacity-50"
+            disabled={removing()}
+            onClick={remove}
+          >
+            <TrashIcon class="size-3.5 shrink-0" />
+            {removing() ? 'Deleting…' : 'Delete from item'}
+          </button>
         </Show>
       }
       entitySelfFilter={{ entityType: ctx.entityType, blockId: props.entityId }}
     />
   );
 };
-
-function InlinePropertyActions(props: {
-  property: PropertyT;
-  canRemove?: boolean;
-}) {
-  const ctx = usePropertiesContext();
-  const [removing, setRemoving] = createSignal(false);
-  const remove = async () => {
-    if (!ctx.removeProperty || removing()) return;
-    setRemoving(true);
-    try {
-      await ctx.removeProperty(props.property.propertyId);
-      ctx.onPropertyUnpinned?.(
-        props.property.propertyId,
-        props.property.propertyDefinitionId
-      );
-      ctx.onPropertyDeleted();
-    } catch {
-      // The shared removal mutation reports the failure and keeps the property.
-    } finally {
-      setRemoving(false);
-    }
-  };
-  return (
-    <div class="flex min-w-40 flex-col gap-0.5 text-ink">
-      <button
-        type="button"
-        class="flex w-full min-w-0 items-center gap-2 whitespace-nowrap rounded-md px-2 py-1.5 text-left hover:bg-hover disabled:opacity-50"
-        disabled={removing()}
-        onClick={() =>
-          ctx.onPropertyUnpinned?.(
-            props.property.propertyId,
-            props.property.propertyDefinitionId
-          )
-        }
-      >
-        <PushPinSlashIcon class="size-3.5 shrink-0 text-ink-muted" />
-        Unpin
-      </button>
-      <Show when={props.canRemove !== false}>
-        <button
-          type="button"
-          class="flex w-full min-w-0 items-center gap-2 whitespace-nowrap rounded-md px-2 py-1.5 text-left text-failure-ink hover:bg-hover disabled:opacity-50"
-          disabled={removing()}
-          onClick={remove}
-        >
-          <TrashIcon class="size-3.5 shrink-0" />
-          {removing() ? 'Deleting…' : 'Delete from item'}
-        </button>
-      </Show>
-    </div>
-  );
-}

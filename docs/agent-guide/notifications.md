@@ -56,6 +56,21 @@ both listener attachment and pending-intent reads, including a tap delivered
 before the pending read stalls. Receiving a push without tapping it must not
 navigate.
 
+On iOS, Macro requests provisional authorization at launch, so
+**Settings → Apps → Macro → Notifications** exists before any prompt, and a
+signed-in device registers for pushes that arrive quietly in Notification
+Center. A quiet push counts as delivered, so those users get no email digest
+for it. The in-app **Mobile notifications** switch and enable prompt stay off
+while delivery is provisional; turning either on shows the system prompt.
+A quiet notification's **Keep → Deliver Immediately** authorizes Macro but
+leaves banners and the Lock Screen off: the switch shows on, iOS never prompts
+again, and only iOS Settings turns banners on.
+Verify on a fresh install: the Settings row appears without a prompt, the in-app
+prompt still appears, and upgrading from Settings or from a quiet notification's
+**Keep → Deliver Immediately** turns the switch on when Macro returns from the
+background. Notification Center pulled down over Macro does not background it,
+so the switch updates only after the next return.
+
 On native Android, enable notifications in Settings while signed in. Android 13+
 also asks for system permission; the system's **Activity** notification channel
 must be enabled. Remote push owns system notification display after registration,

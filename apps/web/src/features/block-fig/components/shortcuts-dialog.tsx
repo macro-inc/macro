@@ -1,6 +1,6 @@
 /** The keyboard shortcuts panel (Ctrl ⇧ ?). */
 
-import XIcon from '@phosphor/x.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { For } from 'solid-js';
 import { SHORTCUT_GROUPS } from '../core/shortcuts';
 

@@ -1,5 +1,8 @@
 import { useOpenAgentDm } from '@app/features/agent-dms/open-agent-dm';
-import { isCoderHarness } from '@app/features/agents-view/core/agent-kind';
+import {
+  type AgentKind,
+  isCoderHarness,
+} from '@app/features/agents-view/core/agent-kind';
 import { AGENTS_TOUR } from '@app/features/agents-view/tour';
 import { ModelCatalogPicker } from '@core/component/AI/component/input/ModelCatalogPicker';
 import { isLargeModelCatalog } from '@core/component/AI/component/input/modelCatalog';
@@ -16,15 +19,15 @@ import { useUserId } from '@core/context/user';
 import { usePipedreamMcpFlag } from '@core/pipedream/flag';
 import { fireAndForget } from '@core/util/fireAndForget';
 import MacroLogo from '@icon/macro-logo.svg';
+import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
+import ChatIcon from '@icon/system/regular/chat-circle.svg';
+import PencilIcon from '@icon/system/regular/pencil-simple.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import AgentIcon from '@icon/system/regular/sparkle.svg';
+import TerminalIcon from '@icon/system/regular/terminal-window.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
+import UploadIcon from '@icon/system/regular/upload-simple.svg';
 import CursorIcon from '@icon/wide-cursor-ide.svg';
-import ArrowLeftIcon from '@phosphor/arrow-left.svg';
-import ChatIcon from '@phosphor/chat-circle.svg';
-import PencilIcon from '@phosphor/pencil-simple.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import AgentIcon from '@phosphor/sparkle.svg';
-import TerminalIcon from '@phosphor/terminal-window.svg';
-import TrashIcon from '@phosphor/trash.svg';
-import UploadIcon from '@phosphor/upload-simple.svg';
 import {
   removeAgentApiKey,
   saveAgentApiKey,
@@ -140,6 +143,8 @@ const MACRO_AGENT: AgentSummary = {
 
 /** Settings page for viewing and creating persistent agents. */
 export function Agents(props: {
+  createKind?: AgentKind;
+  onCloseCreate?: () => void;
   onCursor: () => void;
   onSetUpRuntime: () => void;
   onManageRuntimes: () => void;
@@ -153,6 +158,9 @@ export function Agents(props: {
   const creatingFromLink = () => searchParams.createAgent === 'true';
   const closeCreateAgent = () => {
     setCreating(false);
+    setEditingAgent(undefined);
+    setDeletingAgent(undefined);
+    props.onCloseCreate?.();
     if (creatingFromLink()) {
       setSearchParams({ createAgent: undefined }, { replace: true });
     }
@@ -289,7 +297,14 @@ export function Agents(props: {
 
   return (
     <>
-      <Show when={!creating() && !creatingFromLink() && !editingAgent()}>
+      <Show
+        when={
+          !creating() &&
+          !creatingFromLink() &&
+          !props.createKind &&
+          !editingAgent()
+        }
+      >
         <SettingsPage
           title="Agents"
           description="Custom assistants with their own name, instructions, model, and place to run."
@@ -364,8 +379,9 @@ export function Agents(props: {
         </SettingsPage>
       </Show>
 
-      <Show when={creating() || creatingFromLink()}>
+      <Show keyed when={props.createKind ?? (creating() || creatingFromLink())}>
         <AgentEditorPage
+          initialKind={props.createKind}
           connectedHarnesses={connectedHarnesses()}
           currentTeamId={currentTeamId()}
           canShareWithTeam={canShareWithTeam()}
@@ -375,7 +391,7 @@ export function Agents(props: {
           onSave={createAgent}
         />
       </Show>
-      <Show when={editingAgent()} keyed>
+      <Show when={!props.createKind && editingAgent()} keyed>
         {(agent) => (
           <AgentEditorPage
             agent={agent}
@@ -392,7 +408,7 @@ export function Agents(props: {
           />
         )}
       </Show>
-      <Show when={deletingAgent()} keyed>
+      <Show when={!props.createKind && deletingAgent()} keyed>
         {(agent) => (
           <AgentDeleteDialog
             agentName={agent.bot.name}
@@ -599,6 +615,7 @@ function AgentDeleteDialog(props: {
 }
 
 function AgentEditorPage(props: {
+  initialKind?: AgentKind;
   agent?: AgentWithHarnessId;
   connectedHarnesses: readonly ConnectedHarness[];
   currentTeamId?: string;
@@ -625,6 +642,11 @@ function AgentEditorPage(props: {
   const [harnessId, setHarnessId] = createSignal(
     props.agent?.harness_id ??
       props.agent?.harness ??
+      (props.initialKind === 'coder'
+        ? props.connectedHarnesses.find((harness) =>
+            isCoderHarness(harness.kind === 'macrod' ? 'macrod' : harness.id)
+          )?.id
+        : undefined) ??
       props.connectedHarnesses[0]?.id ??
       ''
   );
@@ -741,7 +763,8 @@ function AgentEditorPage(props: {
   // The saved choice, or none: an agent that never chose follows its
   // harness, so a fresh form and a re-picked runtime both start from there.
   const [codingChoice, setCodingChoice] = createSignal<boolean | undefined>(
-    props.agent?.is_coding ?? undefined
+    props.agent?.is_coding ??
+      (props.initialKind ? props.initialKind === 'coder' : undefined)
   );
   const harnessCodes = () => {
     const harness = selectedHarness();

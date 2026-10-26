@@ -57,7 +57,8 @@ the existing gateway prefixes.
 - Calendar notes accept a document handle and the occurrence returned by calendar
   reads. `CalendarNote` owns optional team sharing and unlinking; clearing its team
   sends explicit null and never changes the document's other permissions.
-  `Document.meetingNotes()` discovers durable grants for revocation after losing
+  `Document.meetingNotes()` discovers visible meeting links for readers and
+  durable grants for owners to revoke after losing
   meeting access.
 - Regenerate Rust OpenAPI and web service clients before `bun run sync-specs &&
   bun run generate`; do not copy deployed schemas over a local API change.

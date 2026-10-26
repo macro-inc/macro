@@ -9,6 +9,7 @@ use crate::domain::{
     },
     owned_entity_cleanup::ClearedTeam,
     team_repo::{TeamMembersService, TeamRepository},
+    team_service::invite_resend_interval,
 };
 use entity_access_db_utils::{EntityAccessSourceType, delete_source_grants, team_share};
 use macro_user_id::{
@@ -449,17 +450,19 @@ impl TeamRepository for TeamRepositoryImpl {
     .fetch_all(&mut *transaction)
     .await?;
 
-        // Also re-send existing invites whose rate limit window has passed
+        // Also re-send existing invites whose email rate limit has passed;
+        // sooner, the email would be dropped while `last_sent_at` moved on.
         let resent_invites: Vec<(uuid::Uuid, uuid::Uuid, String)> = sqlx::query!(
             r#"
             SELECT id, team_id, email
             FROM team_invite
             WHERE team_id = $1
               AND email = ANY($2::text[])
-              AND last_sent_at < NOW() - INTERVAL '5 minutes'
+              AND last_sent_at <= NOW() - make_interval(secs => $3)
             "#,
             team_id,
             &email_strings[..],
+            invite_resend_interval().as_secs_f64(),
         )
         .map(|r| (r.id, r.team_id, r.email))
         .fetch_all(&mut *transaction)

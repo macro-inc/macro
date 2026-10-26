@@ -1,9 +1,9 @@
 import { pickNativePhotoLibraryMedia } from '@core/mobile/nativePhotoLibrary';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { isPlatform } from '@core/util/platform';
-import PaperclipIcon from '@phosphor/paperclip.svg';
-import FormatIcon from '@phosphor/text-aa.svg';
-import TrashIcon from '@phosphor/trash.svg';
+import PaperclipIcon from '@icon/system/regular/paperclip.svg';
+import FormatIcon from '@icon/system/regular/text-aa.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
 import type { JSX } from 'solid-js';
 import { InputActionButton } from './ActionButton';
 import { CHANNEL_FILE_PICKER_ACCEPT } from './accepted-file-types';

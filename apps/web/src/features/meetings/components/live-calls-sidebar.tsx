@@ -1,5 +1,5 @@
 import { ViewSidebar } from '@app/components/view-shell/ViewSidebar';
-import PhoneIncomingIcon from '@phosphor-fill/phone-incoming-fill.svg';
+import PhoneIncomingIcon from '@icon/system/fill/phone-incoming-fill.svg';
 import { Key } from '@solid-primitives/keyed';
 import { Tooltip } from '@ui';
 import { createUniqueId, Show } from 'solid-js';

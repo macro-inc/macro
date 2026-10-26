@@ -795,6 +795,7 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
   });
 
   const search = createSearchState({
+    surface: () => activeListView() ?? 'soup',
     soup,
     filters: () => applyViewFilters(queryFilters.state),
     assignees: assigneeFilter,

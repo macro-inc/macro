@@ -1,4 +1,5 @@
 import { ViewSidebar } from '@app/components/view-shell';
+import { CreateMenuItem } from '@app/components/view-shell/CreateMenuItem';
 import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
 import {
   CREATABLE_BLOCKS,
@@ -7,15 +8,26 @@ import {
   useCreatableEnabled,
 } from '@app/features/command/Launcher';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import FolderIcon from '@phosphor/folder.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import UploadIcon from '@phosphor/upload-simple.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import FileIcon from '@icon/system/regular/file.svg';
+import FolderIcon from '@icon/system/regular/folder.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import UploadIcon from '@icon/system/regular/upload-simple.svg';
 import { Dropdown } from '@ui';
 import { For, Show } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
 import { useDriveView } from './context/drive-context';
 import { driveCreateDestinationLabel } from './core/location-label';
+
+const creationDescriptions: Partial<Record<CreatableName, string>> = {
+  md: 'Write and collaborate on notes, plans, or longer documents.',
+  snippet: 'Save a reusable piece of text or code for later.',
+  spreadsheet: 'Work with tables, formulas, and structured numbers.',
+  canvas: 'Sketch ideas and arrange information on a shared canvas.',
+  code: 'Write and edit code in a dedicated file.',
+  project: 'Keep related files and work together in one place.',
+  database: 'Organize records with custom fields and views.',
+  form: 'Collect structured responses through a shareable form.',
+};
 
 function SidebarTrigger(props: { label: string }) {
   return (
@@ -105,7 +117,7 @@ export function DriveCreateMenu(props: {
           aria-label={label()}
         />
       </Show>
-      <Dropdown.Content class="min-w-48 max-w-72">
+      <Dropdown.Content class="w-80 max-w-[calc(100vw-2rem)] max-h-[70vh] overflow-y-auto">
         <Dropdown.Group>
           <Dropdown.GroupLabel class="min-w-0 gap-1.5">
             <span class="shrink-0">Create in</span>
@@ -116,27 +128,31 @@ export function DriveCreateMenu(props: {
           </Dropdown.GroupLabel>
           <For each={options()}>
             {(option) => (
-              <Dropdown.Item onSelect={() => select(option.blockName)}>
-                <span
-                  aria-hidden="true"
-                  class="flex size-4 shrink-0 items-center justify-center [&_svg]:size-4"
-                >
-                  <Dynamic component={option.icon} />
-                </span>
-                <span>{option.label}</span>
-              </Dropdown.Item>
+              <CreateMenuItem
+                icon={option.icon ?? FileIcon}
+                title={option.label}
+                description={
+                  creationDescriptions[option.blockName] ??
+                  `Create a ${option.label.toLowerCase()} in this folder.`
+                }
+                onSelect={() => select(option.blockName)}
+              />
             )}
           </For>
         </Dropdown.Group>
         <Dropdown.Group>
-          <Dropdown.Item onSelect={actions.uploadFiles}>
-            <UploadIcon aria-hidden="true" class="size-4 shrink-0" />
-            <span>Upload files</span>
-          </Dropdown.Item>
-          <Dropdown.Item onSelect={actions.uploadFolder}>
-            <FolderIcon aria-hidden="true" class="size-4 shrink-0" />
-            <span>Upload folder</span>
-          </Dropdown.Item>
+          <CreateMenuItem
+            icon={UploadIcon}
+            title="Upload files"
+            description="Bring existing files from your computer into this folder."
+            onSelect={actions.uploadFiles}
+          />
+          <CreateMenuItem
+            icon={FolderIcon}
+            title="Upload folder"
+            description="Import a folder and the files inside it."
+            onSelect={actions.uploadFolder}
+          />
         </Dropdown.Group>
       </Dropdown.Content>
     </Dropdown>

@@ -44,7 +44,8 @@ macro_env_var::env_vars!(
 );
 
 macro_env_var::maybe_env_vars!(
-    /// PostHog project token for feature flags; reserved for future MCP analytics. No MCP events are emitted.
+    /// PostHog project token for feature flags and public MCP analytics. When
+    /// unset, both are off.
     pub struct PosthogApiKey;
     /// Regional PostHog ingestion origin; defaults to the US origin.
     pub struct PosthogHost;

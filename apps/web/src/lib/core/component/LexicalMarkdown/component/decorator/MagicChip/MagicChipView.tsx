@@ -1,8 +1,8 @@
-import ArrowUpRight from '@phosphor/arrow-up-right.svg';
-import ArrowsIn from '@phosphor/arrows-in.svg';
-import CheckCircle from '@phosphor-fill/check-circle-fill.svg';
-import QuestionCircle from '@phosphor-fill/question-fill.svg';
-import WarningCircle from '@phosphor-fill/warning-circle-fill.svg';
+import CheckCircle from '@icon/system/fill/check-circle-fill.svg';
+import QuestionCircle from '@icon/system/fill/question-fill.svg';
+import WarningCircle from '@icon/system/fill/warning-circle-fill.svg';
+import ArrowUpRight from '@icon/system/regular/arrow-up-right.svg';
+import ArrowsIn from '@icon/system/regular/arrows-in.svg';
 import { Badge, Button, Card, cn } from '@ui';
 import { match } from 'ts-pattern';
 import './magic-chip-morph.css';

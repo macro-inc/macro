@@ -6,12 +6,12 @@ import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import ArrowLeft from '@icon/system/regular/arrow-left.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
+import CircleDashedEmpty from '@icon/system/regular/circle-dashed.svg';
+import InfoIcon from '@icon/system/regular/info.svg';
+import SidePanelIcon from '@icon/system/regular/sidebar-simple.svg';
 import { Accordion } from '@kobalte/core/accordion';
-import ArrowLeft from '@phosphor/arrow-left.svg';
-import CaretRight from '@phosphor/caret-right.svg';
-import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
-import InfoIcon from '@phosphor/info.svg';
-import SidePanelIcon from '@phosphor/sidebar-simple.svg';
 import { Button, Panel, Scroll } from '@ui';
 import { cn } from '@ui/utils/classname';
 import {

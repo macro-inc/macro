@@ -1,3 +1,5 @@
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import Check from '@icon/system/regular/check.svg';
 import type { CollectionNode } from '@kobalte/core';
 import type { TableCellText } from '@macro-inc/spreadsheet/table-filters';
 import {
@@ -7,8 +9,6 @@ import {
   percentSummary,
   summarize,
 } from '@macro-inc/spreadsheet/table-groups';
-import CaretDown from '@phosphor/caret-down.svg';
-import Check from '@phosphor/check.svg';
 import { Button } from '@ui/components/Button';
 import { Select } from '@ui/components/Select';
 import { For, Show } from 'solid-js';

@@ -375,13 +375,15 @@ not replace it), and that after j/k the grid still has focus: the next Enter
 moves into the reader without opening a reply.
 
 In the new Email view, ordinary row activation opens the thread inside
-`/app/component/mail`; the view breadcrumb (for example Inbox) has a hover
-background and returns to the filtered list. Pressing `Escape` in the open thread
+`/app/component/mail`. On desktop the thread's header has a Back arrow instead
+of breadcrumbs; it returns to the filtered list (hidden in the reading pane,
+where the list is already beside the thread). The subject, tags and
+participants stay put while only the messages scroll. Pressing `Escape` in the open thread
 with focus outside any input does the same once there is nothing left to unwind
 (an open reply, an expanded body, or a focused message each take one `Escape`
-first); the list keeps the row you came from focused. The inline header uses the existing
-email title menu: open the menu button beside the subject for **Ask AI**, **Create a
-Task**, and the other thread actions. On desktop, **Mark as unread**, **Mark done**,
+first); the list keeps the row you came from focused. The `⋯` email title menu
+right after the subject's last word, in place of Copy subject, holds **Ask AI**,
+**Create a Task**, and the other thread actions. On desktop, **Mark as unread**, **Mark done**,
 and reminders share one outlined group at the right of that header. Separate
 groups contain **Previous item** / **Next item**, icon-only **Ask Macro** / **Create
 task**, and the **Share** icon and label / copy-link icon. Mobile keeps its existing
@@ -394,8 +396,9 @@ press: a held key auto-repeats, and those repeats are ignored. Mark as unread (i
 the header or title menu) returns to the originating list with its tab, inbox, and
 filters preserved. Mark as not done and Mark as read
 stay on the current thread.
-Opening a saved draft from **Drafts** keeps the subject breadcrumb, title menu,
-and applicable header controls visible above the composer. Verify these remain
+Opening a saved draft from **Drafts** shows the title menu beside Back, since
+the composer has no subject line above it, and keeps the applicable header
+controls. Verify these remain
 available when returning to Drafts and reopening the draft.
 **Delete** in the title menu moves the thread to Trash and returns to the same
 filtered list. Its toast offers **Undo** to restore the email.
@@ -1083,3 +1086,5 @@ must resume only after the preserved queue is readable. Repeat while another tab
 holds the cache owner lock; recovery must never steal the lock or erase its queue.
 Storage/schema failures that cannot prove preservation show recovery/update
 instructions instead of repeatedly reopening potentially damaged storage.
+
+Date-grouped email lists start directly with today's messages; Today is not shown as a leading group heading. Older date headings remain visible and ordering still uses the server's thread activity timestamp.

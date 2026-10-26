@@ -1,9 +1,9 @@
 import { toast } from '@core/component/Toast/Toast';
 import { useReferralCode } from '@core/context/user';
 import { getWebOrigin } from '@core/util/webOrigin';
+import ClipboardIcon from '@icon/system/regular/clipboard.svg';
+import CloseIcon from '@icon/system/regular/x.svg';
 import { Telemetry } from '@macro-inc/observability';
-import ClipboardIcon from '@phosphor/clipboard.svg';
-import CloseIcon from '@phosphor/x.svg';
 import { useSendReferralInvitesMutation } from '@queries/team/referrals';
 import { Button, Dialog, Input, Panel } from '@ui';
 import { createSignal, Show } from 'solid-js';

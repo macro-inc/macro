@@ -1,4 +1,4 @@
-import ArrowLeft from '@phosphor/arrow-left.svg';
+import ArrowLeft from '@icon/system/regular/arrow-left.svg';
 import { Button } from '@ui';
 import { type JSX, Show } from 'solid-js';
 

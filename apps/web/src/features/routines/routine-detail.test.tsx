@@ -157,6 +157,10 @@ vi.mock('./routine-prompt-editor', () => ({
     );
   },
 }));
+vi.mock('./routine-apps', () => ({
+  RoutineApps: () => null,
+  createRoutineConnectedApps: () => () => new Set(),
+}));
 vi.mock('./routine-execution-picker', () => ({
   RoutineExecutionPicker: (props: {
     target: RoutineTarget;

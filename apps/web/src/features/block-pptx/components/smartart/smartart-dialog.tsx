@@ -9,7 +9,7 @@ import type {
   SmartArtCatalog,
   SmartArtPreviewSpec,
 } from '@core/pptx-engine/types';
-import X from '@phosphor/x.svg';
+import X from '@icon/system/regular/x.svg';
 import { Button } from '@ui/components/Button';
 import { Dialog } from '@ui/components/Dialog';
 import { createSignal, For, Show } from 'solid-js';

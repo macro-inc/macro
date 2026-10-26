@@ -1,3 +1,5 @@
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import Check from '@icon/system/regular/check.svg';
 import type { CollectionNode } from '@kobalte/core';
 import { Popover } from '@kobalte/core/popover';
 import {
@@ -6,8 +8,6 @@ import {
   type TableFilterOperator,
 } from '@macro-inc/spreadsheet/sheet-tables';
 import { TABLE_FILTER_LABELS } from '@macro-inc/spreadsheet/table-filters';
-import CaretDown from '@phosphor/caret-down.svg';
-import Check from '@phosphor/check.svg';
 import { Button } from '@ui/components/Button';
 import { Checkbox } from '@ui/components/Checkbox';
 import { Input } from '@ui/components/Input';

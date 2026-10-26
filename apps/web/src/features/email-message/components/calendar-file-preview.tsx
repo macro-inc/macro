@@ -1,5 +1,5 @@
-import DownloadSimple from '@phosphor/download-simple.svg';
-import X from '@phosphor/x.svg';
+import DownloadSimple from '@icon/system/regular/download-simple.svg';
+import X from '@icon/system/regular/x.svg';
 import { Button, Dialog, Panel } from '@ui';
 import { type JSX, Show } from 'solid-js';
 

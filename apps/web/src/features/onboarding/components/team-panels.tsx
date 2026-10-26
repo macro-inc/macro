@@ -1,5 +1,5 @@
-import CheckIcon from '@phosphor/check.svg';
-import LinkIcon from '@phosphor/link.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
 import { Button } from '@ui';
 import { For } from 'solid-js';
 import type { TeamInvite } from '../context/onboarding-context';

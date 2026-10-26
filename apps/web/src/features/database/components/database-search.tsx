@@ -1,6 +1,6 @@
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
-import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
-import XIcon from '@phosphor/x.svg';
+import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Button } from '@ui/components/Button';
 import { InputGroup } from '@ui/components/InputGroup';
 import {

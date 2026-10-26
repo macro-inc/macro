@@ -33,12 +33,12 @@ import {
   openFilePicker,
   openFolderPicker,
 } from '@core/util/upload';
+import IconGear from '@icon/system/regular/gear.svg';
+import Plus from '@icon/system/regular/plus.svg';
+import LogoutIcon from '@icon/system/regular/sign-out.svg';
+import Upload from '@icon/system/regular/upload.svg';
+import UserIcon from '@icon/system/regular/user.svg';
 import { Telemetry } from '@macro-inc/observability';
-import IconGear from '@phosphor/gear.svg';
-import Plus from '@phosphor/plus.svg';
-import LogoutIcon from '@phosphor/sign-out.svg';
-import Upload from '@phosphor/upload.svg';
-import UserIcon from '@phosphor/user.svg';
 import { useMutationUndoContext } from '@queries/undo';
 import { debounce } from '@solid-primitives/scheduled';
 import { ThemeChips } from '@theme/components/ThemeChips';

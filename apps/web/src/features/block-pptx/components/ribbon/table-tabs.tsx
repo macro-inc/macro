@@ -5,14 +5,14 @@
 
 import type { ShapeOutline, TableStyleInfo } from '@core/pptx-engine/types';
 import { fireAndForget } from '@core/util/fireAndForget';
-import AlignBottom from '@phosphor/align-bottom.svg';
-import AlignCenterVertical from '@phosphor/align-center-vertical.svg';
-import AlignTop from '@phosphor/align-top.svg';
-import PaintBucket from '@phosphor/paint-bucket.svg';
-import TextAlignCenter from '@phosphor/text-align-center.svg';
-import TextAlignLeft from '@phosphor/text-align-left.svg';
-import TextAlignRight from '@phosphor/text-align-right.svg';
-import Trash from '@phosphor/trash.svg';
+import AlignBottom from '@icon/system/regular/align-bottom.svg';
+import AlignCenterVertical from '@icon/system/regular/align-center-vertical.svg';
+import AlignTop from '@icon/system/regular/align-top.svg';
+import PaintBucket from '@icon/system/regular/paint-bucket.svg';
+import TextAlignCenter from '@icon/system/regular/text-align-center.svg';
+import TextAlignLeft from '@icon/system/regular/text-align-left.svg';
+import TextAlignRight from '@icon/system/regular/text-align-right.svg';
+import Trash from '@icon/system/regular/trash.svg';
 import { For, Show } from 'solid-js';
 import {
   ColorPicker,

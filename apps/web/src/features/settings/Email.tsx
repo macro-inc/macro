@@ -21,11 +21,11 @@ import {
   reconnectScopes,
 } from '@core/email-link/consent';
 import { fireAndForget } from '@core/util/fireAndForget';
-import GearIcon from '@phosphor/gear.svg';
-import ArrowsClockwiseIcon from '@phosphor-icons/core/regular/arrows-clockwise.svg?component-solid';
-import CalendarSlashIcon from '@phosphor-icons/core/regular/calendar-slash.svg?component-solid';
-import EnvelopeIcon from '@phosphor-icons/core/regular/envelope.svg?component-solid';
-import PlusIcon from '@phosphor-icons/core/regular/plus.svg?component-solid';
+import ArrowsClockwiseIcon from '@icon/system/regular/arrows-clockwise.svg?component-solid';
+import CalendarSlashIcon from '@icon/system/regular/calendar-slash.svg?component-solid';
+import EnvelopeIcon from '@icon/system/regular/envelope.svg?component-solid';
+import GearIcon from '@icon/system/regular/gear.svg';
+import PlusIcon from '@icon/system/regular/plus.svg?component-solid';
 import {
   type BackfillProgress,
   estimateEtaSeconds,

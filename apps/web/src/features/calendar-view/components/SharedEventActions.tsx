@@ -3,10 +3,10 @@ import { downloadCalendarEventIcs } from '@app/features/calendar-view/download-e
 import { useHoldParentHoverCardOpen } from '@core/component/HoverCard';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
-import CheckIcon from '@phosphor/check.svg';
-import DownloadSimpleIcon from '@phosphor/download-simple.svg';
-import UserPlusIcon from '@phosphor/user-plus.svg';
-import XIcon from '@phosphor/x.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import DownloadSimpleIcon from '@icon/system/regular/download-simple.svg';
+import UserPlusIcon from '@icon/system/regular/user-plus.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { useCopySharedCalendarEventMutation } from '@queries/calendar/copy';
 import {
   isJoinRequestDeclined,

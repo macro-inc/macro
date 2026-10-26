@@ -6,15 +6,15 @@ import {
   enableCrm,
   enableTasksReviews,
 } from '@core/constant/featureFlags';
-import BellIcon from '@phosphor/bell.svg';
-import CalendarCheckIcon from '@phosphor/calendar-check.svg';
-import ChatsCircleIcon from '@phosphor/chats-circle.svg';
-import GitPullRequestIcon from '@phosphor/git-pull-request.svg';
-import BellFillIcon from '@phosphor-fill/bell-fill.svg';
-import CalendarFillIcon from '@phosphor-fill/calendar-fill.svg';
-import ChatsCircleFillIcon from '@phosphor-fill/chats-circle-fill.svg';
-import EmailFillIcon from '@phosphor-fill/envelope-fill.svg';
-import FilesFillIcon from '@phosphor-fill/files-fill.svg';
+import BellFillIcon from '@icon/system/fill/bell-fill.svg';
+import CalendarFillIcon from '@icon/system/fill/calendar-fill.svg';
+import ChatsCircleFillIcon from '@icon/system/fill/chats-circle-fill.svg';
+import EmailFillIcon from '@icon/system/fill/envelope-fill.svg';
+import FilesFillIcon from '@icon/system/fill/files-fill.svg';
+import BellIcon from '@icon/system/regular/bell.svg';
+import CalendarCheckIcon from '@icon/system/regular/calendar-check.svg';
+import ChatsCircleIcon from '@icon/system/regular/chats-circle.svg';
+import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
 import { createMemo } from 'solid-js';
 import type { MobileDockIcon } from './MobileDockButton';
 import type { MobileNavViewId } from './mobile-nav-views';

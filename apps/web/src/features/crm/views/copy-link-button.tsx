@@ -1,4 +1,4 @@
-import LinkIcon from '@phosphor/link.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
 import { CopyButton } from '@ui';
 import { useCrmContext } from '../context/crm-context';
 

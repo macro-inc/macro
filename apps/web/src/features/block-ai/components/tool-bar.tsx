@@ -4,20 +4,20 @@
  * and default (D). Presentational.
  */
 
-import ArrowsDownUp from '@phosphor/arrows-down-up.svg';
-import Circle from '@phosphor/circle.svg';
-import Eyedropper from '@phosphor/eyedropper.svg';
-import FrameCorners from '@phosphor/frame-corners.svg';
-import Hand from '@phosphor/hand.svg';
-import LineSegment from '@phosphor/line-segment.svg';
-import MagnifyingGlass from '@phosphor/magnifying-glass.svg';
-import NavigationArrow from '@phosphor/navigation-arrow.svg';
-import PenNib from '@phosphor/pen-nib.svg';
-import Polygon from '@phosphor/polygon.svg';
-import Rectangle from '@phosphor/rectangle.svg';
-import Star from '@phosphor/star.svg';
-import TextT from '@phosphor/text-t.svg';
-import NavigationArrowFill from '@phosphor-fill/navigation-arrow-fill.svg';
+import NavigationArrowFill from '@icon/system/fill/navigation-arrow-fill.svg';
+import ArrowsDownUp from '@icon/system/regular/arrows-down-up.svg';
+import Circle from '@icon/system/regular/circle.svg';
+import Eyedropper from '@icon/system/regular/eyedropper.svg';
+import FrameCorners from '@icon/system/regular/frame-corners.svg';
+import Hand from '@icon/system/regular/hand.svg';
+import LineSegment from '@icon/system/regular/line-segment.svg';
+import MagnifyingGlass from '@icon/system/regular/magnifying-glass.svg';
+import NavigationArrow from '@icon/system/regular/navigation-arrow.svg';
+import PenNib from '@icon/system/regular/pen-nib.svg';
+import Polygon from '@icon/system/regular/polygon.svg';
+import Rectangle from '@icon/system/regular/rectangle.svg';
+import Star from '@icon/system/regular/star.svg';
+import TextT from '@icon/system/regular/text-t.svg';
 import { Button } from '@ui/components/Button';
 import { type Component, For, type JSX } from 'solid-js';
 import { TOOLS, type Tool } from '../core/tools';

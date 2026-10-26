@@ -1,11 +1,11 @@
 import { fireAndForget } from '@core/util/fireAndForget';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg';
+import PencilSimple from '@icon/system/regular/pencil-simple.svg';
+import Plus from '@icon/system/regular/plus.svg';
+import Trash from '@icon/system/regular/trash.svg';
+import VideoCamera from '@icon/system/regular/video-camera.svg';
+import Warning from '@icon/system/regular/warning.svg';
 import { Popover } from '@kobalte/core/popover';
-import ArrowCounterClockwise from '@phosphor/arrow-counter-clockwise.svg';
-import PencilSimple from '@phosphor/pencil-simple.svg';
-import Plus from '@phosphor/plus.svg';
-import Trash from '@phosphor/trash.svg';
-import VideoCamera from '@phosphor/video-camera.svg';
-import Warning from '@phosphor/warning.svg';
 import { Button, Tabs, ToggleSwitch } from '@ui';
 import { Stepper } from '@ui/components/Stepper';
 import {

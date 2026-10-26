@@ -1,5 +1,5 @@
-import CaretLeft from '@phosphor/caret-left.svg';
-import CaretRight from '@phosphor/caret-right.svg';
+import CaretLeft from '@icon/system/regular/caret-left.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
 import type { SessionConfigOption } from '@service-agent-fold/generated/types';
 import { Dropdown, Slider } from '@ui';
 import { createSignal, For, type JSX, Show } from 'solid-js';

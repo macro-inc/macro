@@ -18,6 +18,11 @@ organizes, and say why. Reminders may go to one copy; name its inbox. Read
 those three methods' documentation before changing a meeting held through
 several inboxes: it says what each change does from each copy.
 
+[CalendarEvent.addToCalendar](../../event/classes/CalendarEvent.md#addtocalendar) adds a shared meeting only while none
+of the user's calendars holds it. Refused with `already_on_calendar`, it is
+refused on every calendar, so tell the user the meeting is already on their
+calendar and never offer to add it to another one.
+
 ## Constructors
 
 ### Constructor

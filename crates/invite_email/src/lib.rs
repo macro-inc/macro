@@ -376,10 +376,11 @@ impl NotificationExtEmail for InviteToTeamMetadata {
     }
 
     fn rate_limit_config() -> RateLimitConfig {
-        const TWO_DAYS: u64 = 24 * 2;
+        // Long enough to stop repeat mail to one address, short enough that an
+        // inviter can resend when someone says the email never came.
         RateLimitConfig {
             max_count: 1,
-            window: Duration::from_hours(TWO_DAYS),
+            window: Duration::from_hours(1),
         }
     }
 

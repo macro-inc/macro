@@ -9,9 +9,9 @@ import type {
   LibraryRef,
   LibraryStatus,
 } from '@core/fig-engine/library-types';
-import BookOpen from '@phosphor/book-open.svg';
-import MagnifyingGlass from '@phosphor/magnifying-glass.svg';
-import XIcon from '@phosphor/x.svg';
+import BookOpen from '@icon/system/regular/book-open.svg';
+import MagnifyingGlass from '@icon/system/regular/magnifying-glass.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Button, Dialog, Panel, ToggleSwitch } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import type { FigLibraryDocument } from '../context/fig-libraries';

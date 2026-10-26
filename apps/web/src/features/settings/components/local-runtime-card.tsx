@@ -1,6 +1,8 @@
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { isDesktopPlatform } from '@core/util/platform';
+import LaptopIcon from '@icon/system/regular/laptop.svg';
+import SpinnerIcon from '@icon/system/regular/spinner-gap.svg';
 import {
   type MacrodDetectedAgent,
   type MacrodStatus as MacrodSnapshot,
@@ -13,8 +15,6 @@ import {
   macrodSupport,
   onMacrodStatus,
 } from '@macro/tauri/macrod';
-import LaptopIcon from '@phosphor/laptop.svg';
-import SpinnerIcon from '@phosphor/spinner-gap.svg';
 import { useApproveHarnessPairingMutation } from '@queries/harnesses/harnesses';
 import type { UnlistenFn } from '@tauri-apps/api/event';
 import { Button } from '@ui';

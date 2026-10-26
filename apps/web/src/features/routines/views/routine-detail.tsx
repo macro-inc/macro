@@ -1,7 +1,7 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import CopyIcon from '@phosphor/copy.svg';
-import DotsIcon from '@phosphor/dots-three.svg';
-import TrashIcon from '@phosphor/trash-simple.svg';
+import CopyIcon from '@icon/system/regular/copy.svg';
+import DotsIcon from '@icon/system/regular/dots-three.svg';
+import TrashIcon from '@icon/system/regular/trash-simple.svg';
 import { Dropdown } from '@ui';
 import { type Accessor, createSignal, Match, Show, Switch } from 'solid-js';
 import { RoutineEditor } from '../components/routine-editor';
@@ -43,7 +43,11 @@ export function RoutineDetailView(props: {
     runDisabled,
     activationDisabled,
     runNow,
-  } = createRoutineDetail(props.source, props);
+  } = createRoutineDetail(props.source, {
+    userId: props.userId,
+    connectedApps: props.slots.createConnectedApps(),
+    onRename: (name) => props.onRename(name),
+  });
   const [tab, setTab] = createSignal(props.initialTab ?? 'settings');
   const back = () => props.onBack();
   const copyPrompt = async () => {
@@ -143,6 +147,18 @@ export function RoutineDetailView(props: {
                   target={draft().target}
                   onChange={(target) =>
                     setState((current) => ({ ...current, target }))
+                  }
+                />
+              )}
+            </Show>
+          }
+          apps={
+            <Show when={state()}>
+              {(draft) => (
+                <props.slots.Apps
+                  apps={draft().apps}
+                  onChange={(apps) =>
+                    setState((current) => ({ ...current, apps }))
                   }
                 />
               )}

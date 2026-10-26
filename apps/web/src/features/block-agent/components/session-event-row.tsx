@@ -1,9 +1,9 @@
 import { formatCompactRelativeTimestamp } from '@entity/utils/timestamp';
-import CheckCircle from '@phosphor/check-circle.svg';
-import ClipboardText from '@phosphor/clipboard-text.svg';
-import DownloadSimple from '@phosphor/download-simple.svg';
-import Info from '@phosphor/info.svg';
-import Plug from '@phosphor/plug.svg';
+import CheckCircle from '@icon/system/regular/check-circle.svg';
+import ClipboardText from '@icon/system/regular/clipboard-text.svg';
+import DownloadSimple from '@icon/system/regular/download-simple.svg';
+import Info from '@icon/system/regular/info.svg';
+import Plug from '@icon/system/regular/plug.svg';
 import type {
   ImportPlan,
   ImportSettlement,

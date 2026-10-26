@@ -59,11 +59,7 @@ draw a full 1px frame edge, menus keep the glass cast shadow, and
 `ComposerSurface` (composers and settings cards) keeps the wide `composer-shadow`
 halo. Touch surfaces retain their existing shadows.
 
-Tabs are separate pills, like Linear's view tabs: unselected pills use the
-outline Button frame, and the selected pill takes the pressed fill, flat, the
-same state as a pressed (`aria-pressed`) Button. There is no track and no
-separate active tint, except the agent composer's Chat/Code switch
-(`variant="track"`). Touch keeps each surface's existing tab treatment.
+Desktop view tabs share one rounded track, with a small inset and a fully rounded selected pill. The selected pill uses the pressed fill and a subtle edge; tabs have no internal dividers. Wrapping preset choices can remain separate pills. Keep the existing touch-specific tab treatment and the agent composer's sliding track.
 
 Reuse `Button`, `Input`, `InputGroup`, `Tabs`, `ComposerSurface`, `menu-surface`, and
 `elevated-surface` instead of introducing one-off surface styling. Every menu,
@@ -170,7 +166,7 @@ contents, with `edge-muted` dividers between sections. Its height is capped at
 the block height with internal scrolling. At every width it starts closed and
 acts as a split-local overlay menu on desktop. The top-right sidebar icon, rotated
 180 degrees, opens it, and clicking outside dismisses it. On touch devices the
-control uses the Phosphor info-circle icon and opens the standard bottom drawer
+control uses the Macro info-circle icon and opens the standard bottom drawer
 with a drag handle, scrollable sections, and safe-area/keyboard-aware spacing.
 Dismiss the drawer by swiping down or tapping its backdrop. Opening is never
 restored from saved preferences or triggered by the global chrome shortcut. The 320px bubble enters
@@ -180,3 +176,18 @@ This applies across Markdown/tasks,
 snippets, email, calls, agents, pull requests, projects, and all file blocks
 including PDFs, images, code, video, canvas, unknown file types, and CRM company
 and contact views (both inside the CRM workspace and in standalone blocks).
+
+## Interface icon review
+
+Interface glyphs use the original Macro SVG family. Open `/app/debug/icon-gallery`
+to review regular, filled, and bold variants at 14/16/20/24 px in light and dark
+themes. The Original icons tab is the default; Legacy animated icons remains
+available. Interactive icons provide brief press feedback and selective mouse
+hover feedback, respecting reduced motion. Control layouts and hit targets are
+independent of glyph geometry. See the [icon guide](../../apps/web/src/components/icon/system/README.md).
+
+![Original icons in the live gallery](images/icon-system.png)
+
+![Joined desktop view tabs](images/joined-view-tabs.png)
+
+On desktop, multiple splits have a small close button nested into each frame’s top-left corner, outside the topbar. A lone detail view keeps its Return to list action, and touch layouts keep header controls.

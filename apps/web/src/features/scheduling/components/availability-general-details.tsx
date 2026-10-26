@@ -1,4 +1,4 @@
-import CalendarBlank from '@phosphor/calendar-blank.svg';
+import CalendarBlank from '@icon/system/regular/calendar-blank.svg';
 import { AvailabilityFieldRow } from './availability-field-row';
 import { TextInput } from './fields';
 

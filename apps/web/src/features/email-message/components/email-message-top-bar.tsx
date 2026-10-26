@@ -1,5 +1,5 @@
 import type { EmailMessage } from '@app/features/email-message/core/email-message';
-import CaretRight from '@phosphor/caret-right.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
 import { Button, cn, Tooltip } from '@ui';
 import {
   type Accessor,

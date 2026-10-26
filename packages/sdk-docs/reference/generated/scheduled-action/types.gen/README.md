@@ -7,6 +7,7 @@
 - [ActionExecutionRecord](type-aliases/ActionExecutionRecord.md)
 - [ActionKind](type-aliases/ActionKind.md)
 - [ActionTrigger](type-aliases/ActionTrigger.md)
+- [AgentMcpServer](type-aliases/AgentMcpServer.md)
 - [AgentTask](type-aliases/AgentTask.md)
 - [AgentTaskAgent](type-aliases/AgentTaskAgent.md)
 - [AiAdmissionErrorBody](type-aliases/AiAdmissionErrorBody.md)

@@ -1,5 +1,5 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import PlusIcon from '@phosphor/plus.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { pressHandlers } from '@ui';
 import { type JSX, Show } from 'solid-js';
 import { ViewCreateButton } from './ViewCreateButton';

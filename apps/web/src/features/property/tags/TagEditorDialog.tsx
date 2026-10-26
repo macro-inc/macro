@@ -1,6 +1,6 @@
-import TagIcon from '@phosphor/tag-simple.svg';
-import TrashIcon from '@phosphor/trash.svg';
-import XIcon from '@phosphor/x.svg';
+import TagIcon from '@icon/system/regular/tag-simple.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import {
   type CreateTagResult,
   useCreateTagMutation,

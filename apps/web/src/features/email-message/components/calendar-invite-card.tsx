@@ -1,14 +1,14 @@
 import { openExternalUrl } from '@core/util/url';
-import CalendarBlank from '@phosphor/calendar-blank.svg';
-import CalendarCheck from '@phosphor/calendar-check.svg';
-import Check from '@phosphor/check.svg';
-import Clock from '@phosphor/clock.svg';
-import Info from '@phosphor/info.svg';
-import MapPin from '@phosphor/map-pin.svg';
-import PauseCircle from '@phosphor/pause-circle.svg';
-import Users from '@phosphor/users.svg';
-import VideoCamera from '@phosphor/video-camera.svg';
-import X from '@phosphor/x.svg';
+import CalendarBlank from '@icon/system/regular/calendar-blank.svg';
+import CalendarCheck from '@icon/system/regular/calendar-check.svg';
+import Check from '@icon/system/regular/check.svg';
+import Clock from '@icon/system/regular/clock.svg';
+import Info from '@icon/system/regular/info.svg';
+import MapPin from '@icon/system/regular/map-pin.svg';
+import PauseCircle from '@icon/system/regular/pause-circle.svg';
+import Users from '@icon/system/regular/users.svg';
+import VideoCamera from '@icon/system/regular/video-camera.svg';
+import X from '@icon/system/regular/x.svg';
 import { Button, Tabs } from '@ui';
 import {
   createMemo,

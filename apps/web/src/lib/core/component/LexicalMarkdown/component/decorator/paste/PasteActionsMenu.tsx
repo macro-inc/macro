@@ -1,9 +1,9 @@
 import { isInBlock } from '@core/block';
 import { blockElementSignal } from '@core/signal/blockElement';
-import Copy from '@phosphor/copy.svg';
-import DotsThree from '@phosphor/list.svg';
-import TextT from '@phosphor/text-t.svg';
-import TrashSimple from '@phosphor/trash-simple.svg';
+import Copy from '@icon/system/regular/copy.svg';
+import DotsThree from '@icon/system/regular/list.svg';
+import TextT from '@icon/system/regular/text-t.svg';
+import TrashSimple from '@icon/system/regular/trash-simple.svg';
 import { Dropdown } from '@ui';
 import { createSignal } from 'solid-js';
 
