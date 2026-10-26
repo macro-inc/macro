@@ -9,7 +9,7 @@ use macro_user_id::{
 };
 use std::future::Future;
 
-use crate::domain::models::{ReferralCode, ReferralError};
+use crate::domain::models::{ReferralCode, ReferralError, TrackedReferral};
 
 /// Repository for accessing referral data from the database.
 ///
@@ -27,12 +27,13 @@ pub trait ReferralRepo: Send + Sync + 'static {
         user_id: &MacroUserId<Lowercase<'a>>,
     ) -> impl Future<Output = Result<ReferralCode, Self::Err>> + Send;
 
-    /// Tracks a referral
+    /// Records that `referral_code` referred the user. Returns `None` when the
+    /// user was already referred, so a referral is only ever recorded once.
     fn track_referral<'a>(
         &self,
         referred_user_id: &MacroUserId<Lowercase<'a>>,
         referral_code: &ReferralCode,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<TrackedReferral>, Self::Err>> + Send;
 
     /// Completes a referral
     fn complete_referral<'a>(
@@ -40,18 +41,6 @@ pub trait ReferralRepo: Send + Sync + 'static {
         referred_user_id: &MacroUserId<Lowercase<'a>>,
         referral_code: &ReferralCode,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
-
-    /// Gets the referral code of the user who referred the given user, if any
-    fn get_referred_by(
-        &self,
-        referred_user_id: &uuid::Uuid,
-    ) -> impl Future<Output = Result<Option<ReferralCode>, Self::Err>> + Send;
-
-    /// Gets the referrs customer id using their code
-    fn get_referrers_customer_id(
-        &self,
-        referral_code: &ReferralCode,
-    ) -> impl Future<Output = Result<String, Self::Err>> + Send;
 
     /// Gets the sender's profile picture URL and display name in a single query.
     /// Returns `(profile_picture_url, display_name)`, either of which may be `None`.
@@ -61,18 +50,17 @@ pub trait ReferralRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(Option<String>, Option<String>), Self::Err>> + Send;
 }
 
-/// Repository to handle applying discounts to the referrer when a referral is
-/// completed
-#[cfg_attr(test, mockall::automock(type Err = anyhow::Error;))]
-pub trait DiscountClient: Send + Sync + 'static {
-    /// The error type returned by repository operations.
-    type Err: Into<anyhow::Error> + Send + std::fmt::Debug;
-
-    /// Applies the discount to the referrer
-    fn apply_discount(
+/// Rewards a referrer when someone signs up through their link.
+#[cfg_attr(test, mockall::automock)]
+pub trait ReferralRewarder: Send + Sync + 'static {
+    /// Rewards `referrer` for `referred`. `event_key` identifies the
+    /// referral, so a retry never pays twice.
+    fn reward_referrer(
         &self,
-        referrer_customer_id: &str,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+        referrer: MacroUserIdStr<'static>,
+        referred: MacroUserIdStr<'static>,
+        event_key: String,
+    ) -> impl Future<Output = Result<(), anyhow::Error>> + Send;
 }
 
 /// Service interface for referral operations.
@@ -85,24 +73,9 @@ pub trait ReferralService: Send + Sync + 'static {
         user_id: &MacroUserId<Lowercase<'a>>,
     ) -> impl Future<Output = Result<ReferralCode, ReferralError>> + Send;
 
-    /// Starts tracking the referral
-    /// The referral is completed when the user pays through stripe
+    /// Records that a new user signed up with `referral_code` and rewards the
+    /// referrer. A user can only be referred once.
     fn track_referral<'a>(
-        &self,
-        referred_user_id: &MacroUserId<Lowercase<'a>>,
-        referral_code: &ReferralCode,
-    ) -> impl Future<Output = Result<(), ReferralError>> + Send;
-
-    /// Gets the referral code of the user who referred the given user, if any
-    fn get_referred_by(
-        &self,
-        referred_user_id: &uuid::Uuid,
-    ) -> impl Future<Output = Result<Option<ReferralCode>, ReferralError>> + Send;
-
-    /// Processes a referral
-    /// - tracks the referral
-    /// - assigns the discount to the referrers' stripe
-    fn process_referral<'a>(
         &self,
         referred_user_id: &MacroUserId<Lowercase<'a>>,
         referral_code: &ReferralCode,

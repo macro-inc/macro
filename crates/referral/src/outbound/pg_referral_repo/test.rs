@@ -8,7 +8,7 @@ use crate::domain::ports::ReferralRepo;
 use crate::outbound::pg_referral_repo::PgReferralRepo;
 
 const REFERRER_UUID: &str = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
-const REFERRER_STRIPE_ID: &str = "cus_referrer";
+const REFERRER_ID: &str = "macro|referrer@test.com";
 
 fn referrer_referral_code() -> ReferralCode {
     let converter = ShortUuidConverter::default();
@@ -55,49 +55,6 @@ async fn test_get_referral_code_for_nonexistent_user(pool: Pool<Postgres>) {
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("referral_users"))
 )]
-async fn test_get_referrers_customer_id(pool: Pool<Postgres>) {
-    let repo = PgReferralRepo::new(pool);
-
-    let code = referrer_referral_code();
-    let customer_id = repo.get_referrers_customer_id(&code).await.unwrap();
-
-    assert_eq!(customer_id, REFERRER_STRIPE_ID);
-}
-
-#[sqlx::test(
-    migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../fixtures", scripts("referral_users"))
-)]
-async fn test_get_referrers_customer_id_invalid_code(pool: Pool<Postgres>) {
-    let repo = PgReferralRepo::new(pool);
-
-    let code = ReferralCode("!!!invalid!!!".to_string());
-    let result = repo.get_referrers_customer_id(&code).await;
-
-    assert!(result.is_err());
-}
-
-#[sqlx::test(
-    migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../fixtures", scripts("referral_users"))
-)]
-async fn test_get_referrers_customer_id_nonexistent_user(pool: Pool<Postgres>) {
-    let repo = PgReferralRepo::new(pool);
-
-    // Valid short UUID format but no matching macro_user row
-    let converter = ShortUuidConverter::default();
-    let fake_uuid = uuid::Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa").unwrap();
-    let code = ReferralCode(converter.from_uuid(&fake_uuid));
-
-    let result = repo.get_referrers_customer_id(&code).await;
-
-    assert!(matches!(result, Err(sqlx::Error::RowNotFound)));
-}
-
-#[sqlx::test(
-    migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../fixtures", scripts("referral_users"))
-)]
 async fn test_track_referral(pool: Pool<Postgres>) {
     let repo = PgReferralRepo::new(pool.clone());
 
@@ -106,9 +63,20 @@ async fn test_track_referral(pool: Pool<Postgres>) {
         .into_owned();
     let code = referrer_referral_code();
 
-    repo.track_referral(&referred_user_id.0, &code)
+    let tracked = repo
+        .track_referral(&referred_user_id.0, &code)
         .await
-        .unwrap();
+        .unwrap()
+        .expect("a first referral is recorded");
+    assert_eq!(tracked.referrer.as_ref(), REFERRER_ID);
+
+    // A second signup or login with a code records nothing.
+    assert_eq!(
+        repo.track_referral(&referred_user_id.0, &code)
+            .await
+            .unwrap(),
+        None
+    );
 
     // Verify a row was inserted into referral_tracking
     let row = sqlx::query!("SELECT referrer_id, referred_id FROM referral_tracking LIMIT 1")
@@ -305,47 +273,4 @@ async fn test_complete_referral_already_complete(pool: Pool<Postgres>) {
     let result = repo.complete_referral(&referred_user_id.0, &code).await;
 
     assert!(matches!(result, Err(sqlx::Error::RowNotFound)));
-}
-
-#[sqlx::test(
-    migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../fixtures", scripts("referral_users"))
-)]
-async fn test_get_referred_by_found(pool: Pool<Postgres>) {
-    let repo = PgReferralRepo::new(pool);
-
-    // First track the referral so there's a row
-    let referred_user_id = MacroUserIdStr::parse_from_str("macro|referred@test.com")
-        .unwrap()
-        .into_owned();
-    let code = referrer_referral_code();
-    repo.track_referral(&referred_user_id.0, &code)
-        .await
-        .unwrap();
-
-    // Now look up who referred this user
-    let referred_uuid = uuid::Uuid::parse_str("cccccccc-cccc-cccc-cccc-cccccccccccc").unwrap();
-    let result = repo.get_referred_by(&referred_uuid).await.unwrap();
-
-    assert!(result.is_some());
-    let returned_code = result.unwrap();
-
-    // The returned code should decode back to the referrer's UUID
-    let converter = ShortUuidConverter::default();
-    let decoded = converter.to_uuid(&returned_code.0).unwrap();
-    assert_eq!(decoded.to_string(), REFERRER_UUID);
-}
-
-#[sqlx::test(
-    migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../fixtures", scripts("referral_users"))
-)]
-async fn test_get_referred_by_not_found(pool: Pool<Postgres>) {
-    let repo = PgReferralRepo::new(pool);
-
-    // Query with a UUID that has no referral_tracking row
-    let unknown_uuid = uuid::Uuid::parse_str("dddddddd-dddd-dddd-dddd-dddddddddddd").unwrap();
-    let result = repo.get_referred_by(&unknown_uuid).await.unwrap();
-
-    assert!(result.is_none());
 }

@@ -46,10 +46,7 @@ use notification::{
     domain::service::SqsNotificationIngress, outbound::rate_limit::RedisRateLimitAdapter,
 };
 use rate_limit::domain::service::RateLimitServiceImpl;
-use referral::{
-    domain::service::ReferralServiceImpl,
-    outbound::{pg_referral_repo::PgReferralRepo, stripe_discount_client::StripeDiscountClient},
-};
+use referral::{domain::service::ReferralServiceImpl, outbound::pg_referral_repo::PgReferralRepo};
 use remote_env_var::LocalOrRemoteSecret;
 use roles_and_permissions::{
     domain::service::UserRolesAndPermissionsServiceImpl, outbound::pgpool::MacroDB,
@@ -135,11 +132,17 @@ pub(crate) type TeamsServiceType = teams::domain::team_service::TeamServiceImpl<
 
 pub(crate) type RateLimiter = RateLimitServiceImpl<RedisRateLimitAdapter<redis::Client>>;
 
-pub(crate) type ReferralServiceType = ReferralServiceImpl<
-    PgReferralRepo,
-    StripeDiscountClient,
-    Arc<SqsNotificationIngress<SqsQueue>>,
+pub(crate) type InviteRewardsType = crate::outbound::invite_rewards::BillingInviteRewards<
+    ai_billing::outbound::RolesTeamsEntitlementSource<
+        UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>,
+        teams::outbound::team_repo::TeamRepositoryImpl,
+    >,
+    ai_billing::outbound::PgCreditGrantRepo,
+    ai_billing::outbound::PgCreditGrantRepo,
 >;
+
+pub(crate) type ReferralServiceType =
+    ReferralServiceImpl<PgReferralRepo, InviteRewardsType, Arc<SqsNotificationIngress<SqsQueue>>>;
 
 pub(crate) type GtmInviteServiceType = GtmInviteServiceImpl<PgGtmInviteRepo>;
 

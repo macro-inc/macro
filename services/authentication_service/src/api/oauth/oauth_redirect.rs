@@ -144,32 +144,30 @@ pub async fn handler(
 
     let decoded_user_id = decode_macro_access_token_allow_expired(&access_token, &ctx.jwt_args);
 
-    if let Some(state) = state.as_ref()
+    let just_signed_up = match decoded_user_id.as_ref() {
+        Ok(user_id) => {
+            append_signed_up_param_if_new_user(
+                &ctx.macro_cache_client,
+                user_id.email_str(),
+                &mut redirect_url,
+            )
+            .await
+        }
+        Err(_) => false,
+    };
+
+    // Only a brand-new account counts as referred: an existing user who signs
+    // in through a referral link earns the referrer nothing.
+    if just_signed_up
+        && let Ok(user_id) = decoded_user_id.as_ref()
+        && let Some(state) = state.as_ref()
         && let Some(referral_code) = state.referral_code.as_ref()
     {
-        let user_id = decoded_user_id.as_ref().map_err(|e| {
-            tracing::error!(
-                auth_handoff_failure = "referral_jwt_decode_failed",
-                error=?e,
-                "unable to decode access token while tracking referral"
-            );
-            InnerErr::InvalidJwtError.into_response()
-        })?;
-
         let _ = ctx
             .referral_service
             .track_referral(user_id, &ReferralCode(referral_code.clone()))
             .await
-            .inspect_err(|e| tracing::error!(error=?e, "unable to complete referral for user"));
-    }
-
-    if let Ok(user_id) = decoded_user_id.as_ref() {
-        append_signed_up_param_if_new_user(
-            &ctx.macro_cache_client,
-            user_id.email_str(),
-            &mut redirect_url,
-        )
-        .await;
+            .inspect_err(|e| tracing::error!(error=?e, "unable to track referral for new user"));
     }
 
     // Set cookies
@@ -185,8 +183,6 @@ pub async fn handler(
 enum InnerErr {
     #[error("{0}")]
     Serde(#[from] serde_json::Error),
-    #[error("invalid jwt")]
-    InvalidJwtError,
     #[error("Macro Cache Err {0}")]
     MacroCacheErr(anyhow::Error),
     #[error("Failed to parse url {0}")]
@@ -198,13 +194,6 @@ enum InnerErr {
 impl IntoResponse for InnerErr {
     fn into_response(self) -> Response {
         match self {
-            InnerErr::InvalidJwtError => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    message: "failed to deserialize jwt".into(),
-                }),
-            )
-                .into_response(),
             InnerErr::Serde(_error) => (
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {

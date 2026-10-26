@@ -3,12 +3,16 @@
 #[cfg(test)]
 mod test;
 
-use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
+use macro_user_id::{
+    cowlike::CowLike,
+    lowercased::Lowercase,
+    user_id::{MacroUserId, MacroUserIdStr},
+};
 use macro_uuid::ShortUuidConverter;
 use sqlx::PgPool;
 
 use crate::domain::{
-    models::{ReferralCode, referral_code_to_uuid},
+    models::{ReferralCode, TrackedReferral, referral_code_to_uuid},
     ports::ReferralRepo,
 };
 
@@ -60,17 +64,20 @@ impl ReferralRepo for PgReferralRepo {
         &self,
         referred_user_id: &MacroUserId<Lowercase<'a>>,
         referral_code: &ReferralCode,
-    ) -> Result<(), Self::Err> {
+    ) -> Result<Option<TrackedReferral>, Self::Err> {
         let referrer_id =
             referral_code_to_uuid(referral_code).map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
 
-        // make sure this user exists
-        sqlx::query!(
-            "SELECT 1 as exists FROM macro_user WHERE id = $1",
+        // The referrer must exist; their Macro id is who earns the reward.
+        let referrer = sqlx::query_scalar!(
+            r#"SELECT id FROM "User" WHERE macro_user_id = $1"#,
             &referrer_id
         )
         .fetch_one(&self.pool)
         .await?;
+        let referrer = MacroUserIdStr::parse_from_str(&referrer)
+            .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
+            .into_owned();
 
         let referred_id = sqlx::query!(
             r#"SELECT macro_user_id FROM "User" WHERE id = $1"#,
@@ -81,25 +88,26 @@ impl ReferralRepo for PgReferralRepo {
         .await?;
 
         let tracking_id = macro_uuid::generate_uuid_v7();
-        sqlx::query!("INSERT INTO referral_tracking (id, referrer_id, referred_id, status, created_at) VALUES ($1, $2, $3, 'incomplete', NOW())", &tracking_id, &referrer_id, &referred_id).execute(&self.pool).await?;
-
-        Ok(())
-    }
-
-    #[tracing::instrument(skip(self), err)]
-    async fn get_referred_by(
-        &self,
-        referred_user_id: &uuid::Uuid,
-    ) -> Result<Option<ReferralCode>, Self::Err> {
-        let referrer_id: Option<uuid::Uuid> = sqlx::query!(
-            "SELECT referrer_id FROM referral_tracking WHERE referred_id = $1",
-            referred_user_id
+        // A user is referred at most once (unique referred_id), so a repeated
+        // signup or login with a code records nothing.
+        let inserted = sqlx::query_scalar!(
+            r#"
+            INSERT INTO referral_tracking (id, referrer_id, referred_id, status, created_at)
+            VALUES ($1, $2, $3, 'incomplete', NOW())
+            ON CONFLICT (referred_id) DO NOTHING
+            RETURNING id
+            "#,
+            &tracking_id,
+            &referrer_id,
+            &referred_id
         )
-        .map(|r| r.referrer_id)
         .fetch_optional(&self.pool)
         .await?;
 
-        Ok(referrer_id.map(|id| ReferralCode(self.short_uuid_converter.from_uuid(&id))))
+        Ok(inserted.map(|tracking_id| TrackedReferral {
+            tracking_id,
+            referrer,
+        }))
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -143,26 +151,6 @@ impl ReferralRepo for PgReferralRepo {
         }
 
         Ok(())
-    }
-
-    #[tracing::instrument(skip(self), err)]
-    async fn get_referrers_customer_id(
-        &self,
-        referral_code: &ReferralCode,
-    ) -> Result<String, Self::Err> {
-        let fusion_user_id =
-            referral_code_to_uuid(referral_code).map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
-
-        sqlx::query!(
-            r#"
-            SELECT stripe_customer_id FROM macro_user
-            WHERE id = $1
-        "#,
-            fusion_user_id,
-        )
-        .map(|s| s.stripe_customer_id)
-        .fetch_one(&self.pool)
-        .await
     }
 
     #[tracing::instrument(skip(self), err)]

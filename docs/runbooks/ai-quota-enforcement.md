@@ -44,7 +44,8 @@ The classification is exhaustive and server-selected, not request-controlled.
 
 Unlimited (enterprise) entitlements are never blocked by this quota policy.
 Free-plan users are hard-capped at `AI_USAGE_FREE_INCLUDED_ALLOWANCE_CENTS` of
-counted usage per UTC calendar month: past it, admission answers
+counted usage per UTC calendar month, plus any bonus earned from team invites and
+referrals (`ai_free_allowance_bonus`, +$10 each, at most +$50): past it, admission answers
 `ai_free_allowance_exhausted` and nothing is settled, since Free has no credits
 or overage. Model-access and resource permissions remain independent. Counting
 eligibility is not a claim that a particular user owes money; it does not
@@ -219,7 +220,7 @@ errors are not permission grants and must not disclose another user's quota.
 | Result | HTTP status | Stable `code` | Retry semantics |
 | --- | --- | --- | --- |
 | Allowance exhausted | 402 | `ai_allowance_exhausted` | Policy/allowance must change; no automatic tight retry |
-| Free monthly cap reached | 402 | `ai_free_allowance_exhausted` | Only an upgrade (or the next calendar month) lifts it |
+| Free monthly cap reached | 402 | `ai_free_allowance_exhausted` | An upgrade, the next calendar month, or an earned invite/referral bonus lifts it |
 | Spending cap reached | 402 | `ai_overage_limit_reached` | Policy/allowance must change |
 | Overage payment failed | 402 | `ai_overage_payment_failed` | Billing problem must be resolved |
 | Could not validate billing | 503 | `ai_billing_unavailable` | Retry later with bounded backoff; never execute on uncertainty |

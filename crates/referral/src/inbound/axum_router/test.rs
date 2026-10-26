@@ -77,23 +77,6 @@ impl ReferralService for MockReferralService {
         Ok(())
     }
 
-    async fn get_referred_by(
-        &self,
-        _referred_user_id: &uuid::Uuid,
-    ) -> Result<Option<ReferralCode>, ReferralError> {
-        Ok(None)
-    }
-
-    async fn process_referral<'a>(
-        &self,
-        _referred_user_id: &macro_user_id::user_id::MacroUserId<
-            macro_user_id::lowercased::Lowercase<'a>,
-        >,
-        _referral_code: &ReferralCode,
-    ) -> Result<(), ReferralError> {
-        Ok(())
-    }
-
     async fn send_referral_invite(
         &self,
         _sending_user: macro_user_id::user_id::MacroUserIdStr<'_>,
