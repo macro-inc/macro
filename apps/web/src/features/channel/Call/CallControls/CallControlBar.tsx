@@ -82,7 +82,7 @@ export function CallControlBar(props: {
 }) {
   return (
     <div data-call-controls class="@container relative z-20 w-full max-w-xl">
-      <div class="mx-auto flex w-fit max-w-full flex-wrap items-center justify-center gap-1 rounded-xl bg-menu-glass p-1 text-ink glass @sm:gap-2 @sm:p-1.5">
+      <div class="mx-auto flex w-fit max-w-full flex-wrap items-center justify-center gap-1 rounded-xl bg-menu-glass p-1.5 text-ink glass @sm:gap-2">
         <MediaSplitButton
           label="Microphone"
           toggleLabel={
