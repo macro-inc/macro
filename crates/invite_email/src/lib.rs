@@ -146,6 +146,13 @@ pub struct ChannelInviteMetadata {
     /// Older notification payloads retain channel-invitation wording.
     #[serde(default)]
     pub is_direct_message: bool,
+    /// Stable DM message identity used while building the email delivery key.
+    /// The serialized email bundle carries the key; notification metadata does not.
+    #[serde(skip)]
+    pub message_id: Option<Uuid>,
+    /// Destination used while building a separate email retry key per recipient.
+    #[serde(skip)]
+    pub email_recipient: Option<MacroUserIdStr<'static>>,
     /// Message content to show in the invite email, when the invite was triggered by a message.
     #[serde(default)]
     pub message_content: Option<String>,
@@ -216,6 +223,14 @@ impl NotificationExtEmail for ChannelInviteMetadata {
     }
 
     fn rate_limit_key(&self) -> RateLimitKey {
+        if self.is_direct_message
+            && let Some(message_id) = self.message_id
+        {
+            return RateLimitKey::builder(&Self::TYPE_NAME)
+                .append(&message_id)
+                .append(&self.email_recipient)
+                .finish();
+        }
         RateLimitKey::builder(&Self::TYPE_NAME)
             .append(&self.invited_by)
             .append(&self.channel_name)
@@ -293,6 +308,10 @@ pub struct InviteToTeamMetadata {
     /// What the invitee gets by joining, as the team stood when the invite was sent.
     #[serde(default, alias = "invitee_plan")]
     pub invitee_plan: InviteePlan,
+
+    /// Whether this email reminds the invitee of an invite they have not answered.
+    #[serde(default)]
+    pub reminder: bool,
 }
 
 /// What a team invitee gets by joining.
@@ -345,7 +364,8 @@ impl NotificationExtEmail for InviteToTeamMetadata {
     fn format_email(&self) -> EmailContent {
         EmailContent {
             subject: format!(
-                "{} invited you to join {} on Macro",
+                "{}{} invited you to join {} on Macro",
+                if self.reminder { "Reminder: " } else { "" },
                 self.inviter(),
                 self.team_name
             ),

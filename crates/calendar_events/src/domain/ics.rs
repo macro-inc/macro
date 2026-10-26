@@ -65,16 +65,58 @@ pub struct CalendarEventExport {
 }
 
 impl CalendarEventExport {
-    /// The description and location without the Macro call join link
+    /// The meeting content a snapshot of this event carries.
+    pub fn snapshot(self) -> EventSnapshot {
+        EventSnapshot {
+            ical_uid: self.ical_uid,
+            sequence: self.sequence,
+            title: self.title,
+            description: self.description,
+            location: self.location,
+            time: self.time,
+            recurrence_lines: self.recurrence_lines,
+            organizer_email: self.organizer_email,
+            organizer_name: self.organizer_name,
+        }
+    }
+}
+
+/// What a snapshot imported onto a requester's calendar carries: the
+/// meeting's identity, revision and series content, from a channel share or
+/// from an event file someone sent them. Guests and the conference link are
+/// left out, so importing it invites no one and opens no way into the call.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EventSnapshot {
+    /// RFC 5545 UID shared by every projection of the meeting.
+    pub ical_uid: String,
+    /// Provider/iCalendar sequence number.
+    pub sequence: u32,
+    /// Display title.
+    pub title: String,
+    /// Description, plain text or HTML.
+    pub description: Option<String>,
+    /// Location label.
+    pub location: Option<String>,
+    /// Series time: the first instance of a recurring event.
+    pub time: EventTime,
+    /// Raw RFC 5545 recurrence properties (`RRULE`, `RDATE`, `EXDATE`).
+    pub recurrence_lines: Vec<String>,
+    /// Organizer email.
+    pub organizer_email: Option<String>,
+    /// Organizer display name.
+    pub organizer_name: Option<String>,
+}
+
+impl EventSnapshot {
+    /// The snapshot without the Macro call join link
     /// [`attach_macro_call`](super::meeting_links::attach_macro_call) wrote
-    /// into them, the way a copy of the meeting carries them: it shares the
-    /// meeting, not a way into its call. A description holding the link is
-    /// reduced to plain text to take its join line out; one without it is
-    /// left as written.
-    pub fn without_macro_call(&self) -> (Option<String>, Option<String>) {
+    /// into its description and location: it shares the meeting, not a way
+    /// into its call. A description holding the link is reduced to plain
+    /// text to take its join line out; one without it is left as written.
+    pub fn without_macro_call(self) -> Self {
         let Some(url) = first_macro_call_url(self.location.as_deref(), self.description.as_deref())
         else {
-            return (self.description.clone(), self.location.clone());
+            return self;
         };
         let description = self
             .description
@@ -86,10 +128,11 @@ impl CalendarEventExport {
             self.location.as_deref().unwrap_or_default(),
             &url,
         );
-        (
-            (!description.is_empty()).then_some(description),
-            (!location.is_empty()).then_some(location),
-        )
+        Self {
+            description: (!description.is_empty()).then_some(description),
+            location: (!location.is_empty()).then_some(location),
+            ..self
+        }
     }
 }
 

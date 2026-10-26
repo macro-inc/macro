@@ -987,8 +987,8 @@ export type CreateReview = {
      * time: {kind: "timed", startsAt: ISO datetime, endsAt: ISO datetime,
      * timeZone?: IANA zone} or {kind: "allDay", startDate: ISO date,
      * endDate: exclusive ISO date}, description?, location?, attendees?:
-     * [{email, isOptional?}]}. Import: exactly one draft {source: "notion"},
-     * presenting the plan ImportFromNotion staged.
+     * [{email, isOptional?}]}. Import: exactly one draft {source: "notion" | "linear" | "jira"},
+     * presenting the plan ImportFromNotion, ImportFromLinear or ImportFromJira staged.
      * Creating any review only presents these drafts; the user acts separately.
      */
     drafts: Array<unknown>;

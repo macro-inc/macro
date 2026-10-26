@@ -525,6 +525,7 @@ describe('coordinator runtime protocol', () => {
       scope: 'scope',
       tabId: 'tab',
       livenessLockName: 'graphql-cache-tab:scope:tab',
+      visible: true,
       buildTime: 1_790_000_000_000,
     },
     {
@@ -777,6 +778,7 @@ describe('coordinator runtime protocol', () => {
         scope: 'scope',
         tabId: 'tab',
         livenessLockName: 'lock',
+        visible: true,
         buildTime: 0,
       }).ok
     ).toBe(false);
@@ -788,6 +790,7 @@ describe('coordinator runtime protocol', () => {
         scope: 'scope',
         tabId: 'tab',
         livenessLockName: 'lock',
+        visible: true,
       }).ok
     ).toBe(false);
     expect(

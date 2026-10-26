@@ -51,6 +51,9 @@ thin binary over `../src-tauri` (`app_lib::run_with`) that selects
   entitlements under the hardened runtime. Calls and dictation need its camera
   and audio-input entitlements, plus the usage descriptions in
   `../src-tauri/icons/macos/Info.plist`; without either, macOS refuses capture.
+- Keep the HTTP/WebSocket fork revision and Nix source hash aligned with the
+  shared native workspace; native cookies use Application Support as documented
+  in `../src-tauri/README.md#native-authentication-cookies`.
 - Keep `tauri.conf.json` aligned with `../src-tauri/tauri.conf.json` and
   `tauri.macos.conf.json`: the CLI bundles from this file, while the app's
   runtime config still comes from `../src-tauri`.

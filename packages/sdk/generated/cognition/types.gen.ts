@@ -815,7 +815,7 @@ export type ImportEntity = {
  * kinds; a Notion database and a Notion page, or a Linear project and a
  * Linear issue, are tracked and deduplicated separately.
  */
-export type ImportKind = 'issue' | 'project' | 'document' | 'page' | 'database' | 'data_source' | 'row' | 'channel';
+export type ImportKind = 'issue' | 'project' | 'document' | 'page' | 'database' | 'data_source' | 'row' | 'jira_issue' | 'jira_project' | 'jira_epic' | 'channel';
 
 /**
  * Discovery-run state for one user × source.
@@ -848,7 +848,7 @@ export type ImportRun = {
 /**
  * External systems items can be imported from.
  */
-export type ImportSource = 'linear' | 'notion' | 'slack';
+export type ImportSource = 'linear' | 'jira' | 'notion' | 'slack';
 
 /**
  * The full import aggregate for a user: discovery runs plus visible ledger
@@ -1095,6 +1095,10 @@ export type NotionImportReport = {
      */
     imported: number;
     /**
+     * Tracker issues in the plan.
+     */
+    issues?: number;
+    /**
      * Whether the user is on a team. Without one, everything the import
      * writes stays visible only to them.
      */
@@ -1103,6 +1107,10 @@ export type NotionImportReport = {
      * Pages in the plan.
      */
     pages: number;
+    /**
+     * Tracker groups written as Macro projects.
+     */
+    projects?: number;
     /**
      * The review the plan is tied to, once presented.
      */
@@ -1134,6 +1142,10 @@ export type NotionImportReport = {
      * for the team; they link to the teammate's copy once it is written.
      */
     waitingOnTeammates?: number;
+    /**
+     * Provider items skipped because they were unreadable, or optional features unavailable.
+     */
+    warnings?: Array<string>;
     /**
      * Plan objects being written now.
      */
@@ -2814,6 +2826,36 @@ export type GetStateHandlerResponses = {
 };
 
 export type GetStateHandlerResponse = GetStateHandlerResponses[keyof GetStateHandlerResponses];
+
+export type WorkspaceReportHandlerData = {
+    body?: never;
+    path: {
+        source: ImportSource;
+    };
+    query?: never;
+    url: '/import/workspaces/{source}';
+};
+
+export type WorkspaceReportHandlerResponses = {
+    200: NotionImportReport;
+};
+
+export type WorkspaceReportHandlerResponse = WorkspaceReportHandlerResponses[keyof WorkspaceReportHandlerResponses];
+
+export type CancelWorkspaceHandlerData = {
+    body?: never;
+    path: {
+        source: ImportSource;
+    };
+    query?: never;
+    url: '/import/workspaces/{source}/cancel';
+};
+
+export type CancelWorkspaceHandlerResponses = {
+    200: NotionImportReport;
+};
+
+export type CancelWorkspaceHandlerResponse = CancelWorkspaceHandlerResponses[keyof CancelWorkspaceHandlerResponses];
 
 export type DeleteMcpServerData = {
     body?: never;

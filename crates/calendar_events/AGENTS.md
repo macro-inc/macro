@@ -126,7 +126,10 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   (`src/inbound/toolset/add_shared_calendar_event.rs`) only while the
   `ENABLE_CALENDAR_ADD_SHARED_EVENT` deployment switch is on (off unless set,
   like the card's `enable-calendar-add-shared-event`); without a `calendarId`
-  it takes the card's only target calendar or asks which one.
+  it takes the card's only target calendar or asks which one. An event file
+  forwarded by email takes the same import through
+  `CalendarSnapshotImporter::import_snapshot`, fed an `EventSnapshot` that
+  `crates/email`'s `invitation_import` builds from the email's saved snapshot.
 - Asking to join a channel-shared event (`src/domain/join_requests.rs`) is a
   Macro-stored request, not an `entity_access` row: the grant is a provider guest
   write. Eligibility is the invite path's own `copy_capabilities` on the
@@ -143,6 +146,25 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   a channel-shared event never grants. The agent reads a mentioned event with
   `ReadCalendarEvent` (`src/inbound/toolset/read_calendar_event.rs`), which goes
   through `mention_previews`: the hover card's visibility and fields.
+- Google names the calendar an event was made on as its organizer, so an
+  event on a secondary calendar has that calendar's id
+  (`…@group.calendar.google.com`) as `organizer_email`; Google's
+  `organizer.self` is not stored. An inbox organizes an event when the
+  organizer is its address or a calendar it can write
+  (`OwnedInbox::organizes`, fed by `owned_inboxes`' `writable_calendar_ids`),
+  as Google allows, and the mention preview's `inbox_organizes` and
+  `meeting_copies` apply the same rule in SQL. When such an event also lists
+  the inbox's address, Google invites its primary calendar too, and both
+  copies share one entity whose canonical copy is that invitation. Changes
+  only the organizer may make (details, guests, guest policy, deleting) go
+  through the copy on the organizer's calendar
+  (`CalendarEventMutationTarget::organizer_copy_calendar_id`,
+  `src/domain/mutations/organizer_copy.rs`), then the addressed copy is read
+  back (`CalendarMutationProvider::refresh_event`) so the entity shows the
+  change before sync; reminders, availability and answers stay on the
+  addressed copy. A new event lists the inbox as an accepted guest on its
+  primary calendar and on Outlook, but on another Google calendar only when it
+  has other guests, as Google's own client does, so a solo event is one block.
 - `viewer_can` is viewer-relative, like an attendee's `is_self`: resolve it with
   `ActorInboxes::mark_event` and the copy's source link wherever a read path
   marks the viewer, and never store it. Each connected inbox gets its own copy

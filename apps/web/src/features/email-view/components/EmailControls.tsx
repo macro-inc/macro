@@ -31,6 +31,7 @@ export function EmailControls(props: EmailControlsProps) {
               onOpenChange={props.onFilterOpenChange}
               groups={filters.groups()}
               isSelected={filters.isSelected}
+              selectedIds={filters.selectedIds}
               onSelectionChange={filters.setSelected}
               onClear={filters.clear}
             />

@@ -62,6 +62,7 @@ use utoipa::OpenApi;
     ),
     paths(
         crate::api::calendar_invitations::handler,
+        crate::api::calendar_invitations::copy_handler,
         health::health_handler,
         email::attachments::get::handler,
         email::attachments::get_document_id::handler,

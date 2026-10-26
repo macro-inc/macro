@@ -48,7 +48,8 @@ export function createSplitRouter(options: SplitRouterOptions) {
   };
 
   const runner = createRunner({
-    phases: (waiting) => createPhaseScopes(phaseOptions, waiting),
+    phases: (waiting, onCommit) =>
+      createPhaseScopes(phaseOptions, waiting, onCommit),
     live: () => untrack(panes.ids),
   });
 

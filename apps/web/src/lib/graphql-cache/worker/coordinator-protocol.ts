@@ -23,7 +23,7 @@ import {
 export { isCachePush, isCacheResponse, isWorkerMessage };
 
 /** Version of the topology envelope and routed cache RPC surface. */
-export const CACHE_COORDINATOR_PROTOCOL_VERSION = 8 as const;
+export const CACHE_COORDINATOR_PROTOCOL_VERSION = 10 as const;
 /**
  * Startup phases in order. The engine may touch storage only in
  * `opening-database`, which begins once it holds the database owner lock. It
@@ -40,6 +40,9 @@ export const ENGINE_STARTUP_PHASES: readonly EngineStartupPhase[] = [
   'awaiting-owner-lock',
   'opening-database',
 ];
+
+/** Waiting queues reads without a deadline; blocked permits read-only fallback. */
+export type CacheReadState = 'ready' | 'waiting' | 'blocked';
 
 export type OwnerEpoch = number;
 export type RouteId = number;
@@ -63,10 +66,17 @@ export type ActivationFailureCode =
 export type TabToCoordinatorEnvelope =
   | {
       coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
+      kind: 'tab-visibility';
+      tabId: string;
+      visible: boolean;
+    }
+  | {
+      coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
       kind: 'register-tab';
       scope: string;
       tabId: string;
       livenessLockName: string;
+      visible: boolean;
       hotCapacity?: number;
       /** When the page's app build was made, in ms since the epoch; 0 if
        * unstamped. A newer build takes the database over from an older one. */
@@ -113,6 +123,13 @@ export type TabToCoordinatorEnvelope =
     };
 
 export type CoordinatorToTabEnvelope =
+  | {
+      coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
+      kind: 'cache-read-availability';
+      /** Zero is valid only for an initially parked scope with no engine yet. */
+      ownerEpoch: OwnerEpoch;
+      state: CacheReadState;
+    }
   | {
       coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
       kind: 'registered';
@@ -832,10 +849,26 @@ export function validateTabToCoordinatorEnvelope(
   if (!isRecord(value) || !hasVersion(value) || !isString(value.kind)) {
     return fail('invalid coordinator envelope header');
   }
-  const base =
-    value.coordinatorVersion === CACHE_COORDINATOR_PROTOCOL_VERSION &&
-    isNonEmptyString(value.tabId);
-  if (!base) return fail('invalid coordinator tab identity');
+  if (
+    value.coordinatorVersion !== CACHE_COORDINATOR_PROTOCOL_VERSION ||
+    !isNonEmptyString(value.tabId)
+  )
+    return fail('invalid coordinator tab identity');
+  if (value.kind === 'tab-visibility') {
+    return hasOnlyKeys(value, [
+      'coordinatorVersion',
+      'kind',
+      'tabId',
+      'visible',
+    ]) && typeof value.visible === 'boolean'
+      ? pass({
+          coordinatorVersion: CACHE_COORDINATOR_PROTOCOL_VERSION,
+          kind: 'tab-visibility',
+          tabId: value.tabId,
+          visible: value.visible,
+        })
+      : fail('invalid tab-visibility coordinator envelope');
+  }
 
   switch (value.kind) {
     case 'register-tab':
@@ -846,11 +879,13 @@ export function validateTabToCoordinatorEnvelope(
           'scope',
           'tabId',
           'livenessLockName',
+          'visible',
           'hotCapacity',
           'buildTime',
         ]) &&
         isNonEmptyString(value.scope) &&
         isNonEmptyString(value.livenessLockName) &&
+        typeof value.visible === 'boolean' &&
         isOptionalPositiveInteger(value.hotCapacity) &&
         isSafeNonNegativeInteger(value.buildTime)
       ) {
@@ -946,6 +981,26 @@ export function validateCoordinatorToTabEnvelope(
 ): EnvelopeValidation<CoordinatorToTabEnvelope> {
   if (!isRecord(value) || !hasVersion(value) || !isString(value.kind)) {
     return fail('invalid coordinator envelope header');
+  }
+  if (value.kind === 'cache-read-availability') {
+    return hasOnlyKeys(value, [
+      'coordinatorVersion',
+      'kind',
+      'ownerEpoch',
+      'state',
+    ]) &&
+      isSafeNonNegativeInteger(value.ownerEpoch) &&
+      (value.state === 'waiting' ||
+        value.state === 'blocked' ||
+        value.state === 'ready') &&
+      (value.ownerEpoch > 0 || value.state === 'waiting')
+      ? pass({
+          coordinatorVersion: CACHE_COORDINATOR_PROTOCOL_VERSION,
+          kind: 'cache-read-availability',
+          ownerEpoch: value.ownerEpoch,
+          state: value.state,
+        })
+      : fail('invalid cache-read-availability coordinator envelope');
   }
   switch (value.kind) {
     case 'registered':

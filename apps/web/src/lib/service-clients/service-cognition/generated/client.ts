@@ -29,6 +29,7 @@ import type {
   GetChatResponse,
   GetChatsForAttachmentResponse,
   HttpSendChatMessageRequest,
+  ImportSource,
   McpAuthCallbackParams,
   MemoryErrorBody,
   MemoryResponse,
@@ -1563,6 +1564,88 @@ export const getStateHandler = async (
     status: res.status,
     headers: res.headers,
   } as getStateHandlerResponse;
+};
+
+/**
+ * @summary Report progress for one reviewed workspace source.
+ */
+export type workspaceReportHandlerResponse200 = {
+  data: NotionImportReport;
+  status: 200;
+};
+
+export type workspaceReportHandlerResponseSuccess =
+  workspaceReportHandlerResponse200 & {
+    headers: Headers;
+  };
+
+export type workspaceReportHandlerResponse =
+  workspaceReportHandlerResponseSuccess;
+
+export const getWorkspaceReportHandlerUrl = (source: ImportSource) => {
+  return `/import/workspaces/${source}`;
+};
+
+export const workspaceReportHandler = async (
+  source: ImportSource,
+  options?: RequestInit
+): Promise<workspaceReportHandlerResponse> => {
+  const res = await fetch(getWorkspaceReportHandlerUrl(source), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: workspaceReportHandlerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as workspaceReportHandlerResponse;
+};
+
+/**
+ * @summary Cancel this source's plan or write, keeping completed entities.
+ */
+export type cancelWorkspaceHandlerResponse200 = {
+  data: NotionImportReport;
+  status: 200;
+};
+
+export type cancelWorkspaceHandlerResponseSuccess =
+  cancelWorkspaceHandlerResponse200 & {
+    headers: Headers;
+  };
+
+export type cancelWorkspaceHandlerResponse =
+  cancelWorkspaceHandlerResponseSuccess;
+
+export const getCancelWorkspaceHandlerUrl = (source: ImportSource) => {
+  return `/import/workspaces/${source}/cancel`;
+};
+
+export const cancelWorkspaceHandler = async (
+  source: ImportSource,
+  options?: RequestInit
+): Promise<cancelWorkspaceHandlerResponse> => {
+  const res = await fetch(getCancelWorkspaceHandlerUrl(source), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: cancelWorkspaceHandlerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as cancelWorkspaceHandlerResponse;
 };
 
 /**

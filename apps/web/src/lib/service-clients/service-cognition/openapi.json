@@ -1286,6 +1286,64 @@
         }
       }
     },
+    "/import/workspaces/{source}": {
+      "get": {
+        "tags": ["import"],
+        "summary": "Report progress for one reviewed workspace source.",
+        "operationId": "workspace_report_handler",
+        "parameters": [
+          {
+            "name": "source",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ImportSource"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotionImportReport"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/import/workspaces/{source}/cancel": {
+      "post": {
+        "tags": ["import"],
+        "summary": "Cancel this source's plan or write, keeping completed entities.",
+        "operationId": "cancel_workspace_handler",
+        "parameters": [
+          {
+            "name": "source",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ImportSource"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotionImportReport"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/mcp/servers": {
       "get": {
         "tags": ["mcp"],
@@ -4053,6 +4111,9 @@
           "database",
           "data_source",
           "row",
+          "jira_issue",
+          "jira_project",
+          "jira_epic",
           "channel"
         ]
       },
@@ -4099,7 +4160,7 @@
       "ImportSource": {
         "type": "string",
         "description": "External systems items can be imported from.",
-        "enum": ["linear", "notion", "slack"]
+        "enum": ["linear", "jira", "notion", "slack"]
       },
       "ImportState": {
         "type": "object",
@@ -4453,6 +4514,12 @@
             "description": "Plan objects already imported.",
             "minimum": 0
           },
+          "issues": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Tracker issues in the plan.",
+            "minimum": 0
+          },
           "onTeam": {
             "type": "boolean",
             "description": "Whether the user is on a team. Without one, everything the import\nwrites stays visible only to them."
@@ -4461,6 +4528,12 @@
             "type": "integer",
             "format": "int32",
             "description": "Pages in the plan.",
+            "minimum": 0
+          },
+          "projects": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Tracker groups written as Macro projects.",
             "minimum": 0
           },
           "reviewId": {
@@ -4525,6 +4598,13 @@
             "format": "int32",
             "description": "Plan objects waiting for a teammate who is writing the same object\nfor the team; they link to the teammate's copy once it is written.",
             "minimum": 0
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Provider items skipped because they were unreadable, or optional features unavailable."
           },
           "writing": {
             "type": "integer",

@@ -586,6 +586,30 @@ impl TeamInvite<'static> {
     }
 }
 
+/// An unanswered team invite whose reminder email is due, claimed by the
+/// reminder sweep. Claiming already counted the reminder as sent.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DueInviteReminder {
+    /// The team invite id
+    pub team_invite_id: uuid::Uuid,
+    /// The team id
+    pub team_id: uuid::Uuid,
+    /// The team name
+    pub team_name: String,
+    /// The invited email
+    pub email: String,
+    /// The user who sent the invitation
+    pub invited_by: String,
+    /// Which reminder this is, starting at 1
+    pub reminder_number: u8,
+    /// Whether the team is an enterprise team
+    pub enterprise: bool,
+    /// Whether the team is in good standing
+    pub paying: bool,
+    /// Whether the team has a subscription
+    pub has_subscription: bool,
+}
+
 /// Snapshot of a team invite before it is accepted.
 #[derive(Debug, Clone)]
 pub struct TeamInviteSnapshot<'a> {

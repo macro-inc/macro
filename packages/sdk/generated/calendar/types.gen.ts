@@ -506,7 +506,7 @@ export type ConferenceChange = 'provider_default' | 'microsoft_teams' | 'google_
 export type ConferenceProvider = 'microsoft_teams' | 'google_meet' | 'other';
 
 /**
- * Request body adding a channel-shared event to the requester's calendar.
+ * Request body adding a shared event to the requester's calendar.
  */
 export type CopyCalendarEventRequest = {
     /**

@@ -68,3 +68,6 @@ longer delivery state.
 - Keep generated discovery topics within the classifier's 32-question limit.
 - Regenerate SDK documentation through `packages/code-mode-sdk`; never edit
   `src/domain/documentation.json` by hand.
+
+Import reviews contain exactly one draft, with source `notion`, `linear`, or
+`jira`. Source selection stays on that draft through presentation and approval.

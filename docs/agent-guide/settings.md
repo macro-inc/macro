@@ -83,16 +83,7 @@ Notifications**. Select **Enable** to request permission through the native
 notification provider; macOS uses its system permission dialog. The web prompt
 continues to say **Enable Browser Notifications** and uses browser permissions.
 Select **Hide** to dismiss the prompt. It waits in the same region as other
-prompts, one card at a time. It steps aside while a popover, dialog, drawer, or
-sheet is open (the calendar event details, for example). It also waits while an
-email thread or the email composer is open, and on touch devices while search
-results are open, since their last controls sit where the prompt would. On
-desktop it waits while a channel, DM or agent conversation shows its composer at
-the bottom of a pane, and while a call is on screen (its controls, Open chat and
-the chat composer sit in that corner). On every device it also waits while a
-composer's `@`, `:` or `/` menu (or its skills, snippets, tags or GIF picker) is
-open, since those open upward over the prompt. It comes back once none of them
-is on screen, for example after you leave the call view or end the call.
+prompts, one card at a time.
 
 ### Notification snoozes
 
@@ -160,6 +151,9 @@ as before. Each email says what joining gives: **Pro is included** when joining
 grants a Pro seat (an enterprise team, or one with a subscription), otherwise
 **Free to join**. Examples: [desktop](media/team-invite-email/desktop.png) and
 [mobile](media/team-invite-email/mobile.png).
+An unanswered invite gets up to two reminder emails, with subjects starting
+**Reminder:**, 3 days after the last email and 4 days after that. Invites more
+than 14 days old, already-members, and invites whose sender left the team get none.
 
 Under **Team → Members** (**Invite settings**), owners/admins can turn
 **Auto-join on domain** off and can restrict invitations to admins with
@@ -559,11 +553,13 @@ Provider Back returns to the combined integrations overview; navigation
 is local to each mounted Integrations page.
 
 Macro agents and external AI clients using Macro's MCP server can run
-`ImportNotionPage` and the shared import ledger tools against the user's
+`ImportNotionPage`, `ImportFromNotion`, `ImportFromLinear`, `ImportFromJira`
+and the shared import ledger tools against the user's
 connections saved in Macro.
 Verify a Notion import returns a document and a repeated import returns the
-existing document; Linear imports recorded with `CreateImportEntity` should
-appear in `ListImportEntities`. These calls must not report that import tracking
+existing document. For Linear/Jira workspace imports, verify planning writes no
+Macro tasks before approval, source-specific reviews show task/project totals,
+and an approved import preserves task fields, comments, labels and relationships. These calls must not report that import tracking
 is unavailable.
 On hosts without Pipedream credentials, saved Pipedream accounts must not hide
 native Notion, Linear, or Slack connections when selecting import tools.

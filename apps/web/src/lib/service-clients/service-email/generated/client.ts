@@ -14,8 +14,11 @@ import type {
   ApiPaginatedThreadCursor,
   ArchiveThreadRequest,
   BlockSenderRequest,
+  CalendarEvent,
+  CalendarMutationApiError,
   CancelBackfillParams,
   CompleteDraftAttachmentParams,
+  CopyCalendarEventRequest,
   CreateDraftRequest,
   CreateDraftResponse,
   CreateLabelRequest,
@@ -3703,6 +3706,105 @@ export const getThreadCalendarInvitations = async (
     status: res.status,
     headers: res.headers,
   } as getThreadCalendarInvitationsResponse;
+};
+
+/**
+ * @summary Add a shared event saved from one of the thread's messages to one of the
+viewer's Google calendars, the way Add to calendar adds a channel-shared
+event: a snapshot under the meeting's iCalendar UID and organizer, with the
+viewer as its only guest and no join link. Nobody is notified. Only a
+published event file (`METHOD:PUBLISH`) can be added; an invitation is
+answered from the calendar it reached.
+ */
+export type copyThreadCalendarInvitationResponse201 = {
+  data: CalendarEvent;
+  status: 201;
+};
+
+export type copyThreadCalendarInvitationResponse400 = {
+  data: CalendarMutationApiError;
+  status: 400;
+};
+
+export type copyThreadCalendarInvitationResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type copyThreadCalendarInvitationResponse403 = {
+  data: CalendarMutationApiError;
+  status: 403;
+};
+
+export type copyThreadCalendarInvitationResponse404 = {
+  data: CalendarMutationApiError;
+  status: 404;
+};
+
+export type copyThreadCalendarInvitationResponse409 = {
+  data: CalendarMutationApiError;
+  status: 409;
+};
+
+export type copyThreadCalendarInvitationResponse503 = {
+  data: CalendarMutationApiError;
+  status: 503;
+};
+
+export type copyThreadCalendarInvitationResponseSuccess =
+  copyThreadCalendarInvitationResponse201 & {
+    headers: Headers;
+  };
+export type copyThreadCalendarInvitationResponseError = (
+  | copyThreadCalendarInvitationResponse400
+  | copyThreadCalendarInvitationResponse401
+  | copyThreadCalendarInvitationResponse403
+  | copyThreadCalendarInvitationResponse404
+  | copyThreadCalendarInvitationResponse409
+  | copyThreadCalendarInvitationResponse503
+) & {
+  headers: Headers;
+};
+
+export type copyThreadCalendarInvitationResponse =
+  | copyThreadCalendarInvitationResponseSuccess
+  | copyThreadCalendarInvitationResponseError;
+
+export const getCopyThreadCalendarInvitationUrl = (
+  threadId: string,
+  messageId: string,
+  invitationId: string
+) => {
+  return `/email/threads/${threadId}/messages/${messageId}/calendar-invitations/${invitationId}/copy`;
+};
+
+export const copyThreadCalendarInvitation = async (
+  threadId: string,
+  messageId: string,
+  invitationId: string,
+  copyCalendarEventRequest: CopyCalendarEventRequest,
+  options?: RequestInit
+): Promise<copyThreadCalendarInvitationResponse> => {
+  const res = await fetch(
+    getCopyThreadCalendarInvitationUrl(threadId, messageId, invitationId),
+    {
+      ...options,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(copyCalendarEventRequest),
+    }
+  );
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: copyThreadCalendarInvitationResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as copyThreadCalendarInvitationResponse;
 };
 
 /**

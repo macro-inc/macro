@@ -178,9 +178,11 @@ export const cognitionExcluded = [
   // Channel discovery shares the app-only import workflow below.
   'discoverHandler',
   'runImportHandler',
-  // The Notion import report and cancel back the in-chat import review card.
+  // Workspace reports and cancel routes back the in-chat import review card.
   'notionReportHandler',
   'cancelNotionHandler',
+  'cancelWorkspaceHandler',
+  'workspaceReportHandler',
   'getStateHandler',
   'getStateHandler2',
   'completeHandler',

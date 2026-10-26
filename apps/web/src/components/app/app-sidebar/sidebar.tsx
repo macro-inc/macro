@@ -148,6 +148,7 @@ const SIDEBAR_LINKS = [
   },
 ] satisfies SidebarItem[];
 
+// Global view switches restore session context; explicit split opens stay fresh.
 type OpenWithSplitFn = ReturnType<typeof useSplitLayout>['openWithSplit'];
 
 export function sidebarContent(
@@ -162,9 +163,8 @@ export function sidebarContent(
 }
 
 /**
- * Navigate to a sidebar view by pushing a fresh entry into the active split.
- * Holding shift opens it in a new split. Use in-app back/forward to return to
- * prior entries.
+ * Navigate through the layout, resuming only views that opted into retention.
+ * Holding shift opens a fresh view in a new split.
  */
 export function navigateToSidebarView(args: {
   viewId: SidebarItem['id'];
@@ -172,14 +172,18 @@ export function navigateToSidebarView(args: {
   shiftKey: boolean;
   openWithSplit: OpenWithSplitFn;
   referredFrom?: ReferredFrom;
+  onApplied?: () => void;
 }): SplitHandle | undefined {
-  const { viewId, params, shiftKey, openWithSplit, referredFrom } = args;
+  const { viewId, params, shiftKey, openWithSplit, referredFrom, onApplied } =
+    args;
 
   return openWithSplit(sidebarContent(viewId, params), {
     preferNewSplit: shiftKey,
+    resume: !shiftKey,
     mergeHistory: false,
     allowDuplicate: viewId !== 'calendar',
     referredFrom,
+    onApplied,
   }).split;
 }
 
@@ -321,6 +325,14 @@ export const GoToHotkeys = () => {
           params: link.params,
           shiftKey: !!e?.shiftKey,
           openWithSplit,
+          onApplied:
+            link.id === 'search'
+              ? () => {
+                  const split = globalSplitManager()?.activeSplit();
+                  if (split?.content().id === 'search')
+                    requestSearchFocus(split.id);
+                }
+              : undefined,
         });
         if (link.id === 'search' && handle) {
           requestSearchFocus(handle.id);

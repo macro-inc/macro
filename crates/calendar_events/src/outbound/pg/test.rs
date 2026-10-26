@@ -1112,8 +1112,7 @@ async fn expired_google_worker_cannot_resurrect_reconciled_provider_data(pool: P
         upsert: google.clone(),
     })
     .await
-    .unwrap()
-    .event_id;
+    .unwrap();
 
     sqlx::query!(
         r#"
@@ -3656,8 +3655,7 @@ async fn removing_a_google_source_restores_the_surviving_calendar_copy(pool: PgP
     });
     repo.upsert_event(CalendarEventWrite::UserMutation(team_copy))
         .await
-        .unwrap()
-        .event_id;
+        .unwrap();
 
     repo.remove_provider_source(account_id, primary_id, "provider-shared-remove@example.com")
         .await
@@ -4353,8 +4351,7 @@ async fn conference_provider_round_trips_through_persistence(pool: PgPool) {
     upsert.event.conference_provider = Some(ConferenceProvider::GoogleMeet);
     repo.upsert_event(CalendarEventWrite::UserMutation(upsert))
         .await
-        .unwrap()
-        .event_id;
+        .unwrap();
 
     let starts_at = Utc.with_ymd_and_hms(2026, 7, 24, 0, 0, 0).unwrap();
     let ends_at = starts_at + Duration::days(2);
@@ -4774,14 +4771,14 @@ async fn mention_previews_resolve_through_the_shared_uid(pool: PgPool) {
 }
 
 async fn share_with_channel(pool: &PgPool, event_id: Uuid, channel_id: Uuid) {
-    sqlx::query(
+    sqlx::query!(
         r#"
         INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
         VALUES ($1, 'calendar_event', $2::uuid::text, 'channel', 'view')
         "#,
+        event_id,
+        channel_id,
     )
-    .bind(event_id)
-    .bind(channel_id)
     .execute(pool)
     .await
     .unwrap();
@@ -4789,20 +4786,20 @@ async fn share_with_channel(pool: &PgPool, event_id: Uuid, channel_id: Uuid) {
 
 async fn insert_channel(pool: &PgPool, owner_id: &str, members: &[&str]) -> Uuid {
     let channel_id = Uuid::now_v7();
-    sqlx::query(
+    sqlx::query!(
         "INSERT INTO comms_channels (id, channel_type, owner_id) VALUES ($1, 'private', $2)",
+        channel_id,
+        owner_id,
     )
-    .bind(channel_id)
-    .bind(owner_id)
     .execute(pool)
     .await
     .unwrap();
     for member in members {
-        sqlx::query(
+        sqlx::query!(
             "INSERT INTO comms_channel_participants (channel_id, user_id, role) VALUES ($1, $2, 'member')",
+            channel_id,
+            *member,
         )
-        .bind(channel_id)
-        .bind(*member)
         .execute(pool)
         .await
         .unwrap();
@@ -4872,11 +4869,11 @@ async fn mention_previews_fall_back_to_a_channel_shared_projection(pool: PgPool)
         &[author_id, attendee_id, member_id, former_id],
     )
     .await;
-    sqlx::query(
+    sqlx::query!(
         "UPDATE comms_channel_participants SET left_at = now() WHERE channel_id = $1 AND user_id = $2",
+        channel_id,
+        former_id,
     )
-    .bind(channel_id)
-    .bind(former_id)
     .execute(&pool)
     .await
     .unwrap();
@@ -4944,11 +4941,13 @@ async fn mention_previews_fall_back_to_a_channel_shared_projection(pool: PgPool)
     }
 
     // A cancelled event no longer previews for anyone.
-    sqlx::query("UPDATE calendar_events SET status = 'cancelled' WHERE id = $1")
-        .bind(shared_event_id)
-        .execute(&pool)
-        .await
-        .unwrap();
+    sqlx::query!(
+        "UPDATE calendar_events SET status = 'cancelled' WHERE id = $1",
+        shared_event_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
     let previews = repo
         .mention_previews(member_id, vec![request(shared_event_id)], now)
         .await
@@ -7266,16 +7265,19 @@ mod meeting_copies;
 mod meeting_uid;
 #[cfg(feature = "notes")]
 mod notes;
+mod organizer_calendar;
 mod source_access;
 
 mod replacement;
 
 async fn link_email(pool: &PgPool, link_id: Uuid) -> String {
-    sqlx::query_scalar("SELECT email_address FROM email_links WHERE id = $1")
-        .bind(link_id)
-        .fetch_one(pool)
-        .await
-        .unwrap()
+    sqlx::query_scalar!(
+        r#"SELECT email_address::text AS "email_address!" FROM email_links WHERE id = $1"#,
+        link_id,
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap()
 }
 
 fn attendee(email: &str, is_organizer: bool) -> CalendarAttendee {

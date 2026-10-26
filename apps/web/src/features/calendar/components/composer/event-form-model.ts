@@ -239,11 +239,16 @@ function initialConferenceChoice(
  * Guest emails an existing event seeds into the editor: every attendee except
  * the viewer when they are a mere guest. The organizer is kept even when it is
  * the viewer, so a replacement attendee list submitted by the organizer never
- * drops them.
+ * drops them. So is the viewer's own row on an event they organize through a
+ * calendar Google names as the organizer, such as their secondary calendar,
+ * which lists them only as a guest.
  */
 export function eventGuestEmails(event: CalendarEvent): string[] {
   return event.attendees
-    .filter((attendee) => attendee.isOrganizer || !attendee.isSelf)
+    .filter(
+      (attendee) =>
+        attendee.isOrganizer || !attendee.isSelf || event.viewerCan.organize
+    )
     .map((attendee) => attendee.email);
 }
 

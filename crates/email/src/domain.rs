@@ -10,6 +10,8 @@ pub mod forwarded_attachments;
 #[cfg(feature = "calendar_invitations")]
 pub mod invitation_extraction;
 #[cfg(feature = "calendar_invitations")]
+pub mod invitation_import;
+#[cfg(feature = "calendar_invitations")]
 pub mod invitation_resolution;
 #[cfg(feature = "mailbox")]
 pub mod mailbox;

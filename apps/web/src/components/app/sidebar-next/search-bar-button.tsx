@@ -2,14 +2,14 @@ import { requestSearchFocus } from '@app/features/next-soup/soup-view/search-con
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { navigateToSidebarView } from '@components/app/app-sidebar/sidebar';
-import { useSplitLayout } from '@components/app/split-layout/layout';
 import { TOKENS } from '@core/hotkey/tokens';
 import { SidebarSearchMenu } from '../app-sidebar/sidebar-search-menu';
+import { useSplitLayout } from '../split-layout/layout';
 
 /** Search and command-menu discovery in the compact rail. */
 export const SearchRailButton = () => {
   const analytics = useAnalytics();
-  const layout = useSplitLayout();
+  const { openWithSplit } = useSplitLayout();
 
   const openSearch = (newSplit: boolean) => {
     analytics.track('sidebar_click', { view: 'search' });
@@ -31,8 +31,12 @@ export const SearchRailButton = () => {
     split = navigateToSidebarView({
       viewId: 'search',
       shiftKey: newSplit,
-      openWithSplit: layout.openWithSplit,
+      openWithSplit,
       referredFrom: 'sidebar',
+      onApplied: () => {
+        const active = globalSplitManager()?.activeSplit();
+        if (active?.content().id === 'search') requestSearchFocus(active.id);
+      },
     });
     if (split) requestSearchFocus(split.id);
     globalSplitManager()?.returnFocus();

@@ -98,6 +98,8 @@ use utoipa::OpenApi;
             import_api::run_import_handler,
             import_api::discover_handler,
             import_api::notion_report_handler,
+            import_api::workspace_report_handler,
+            import_api::cancel_workspace_handler,
             import_api::cancel_notion_handler,
             onboarding_api::get_state_handler,
             onboarding_api::complete_handler,

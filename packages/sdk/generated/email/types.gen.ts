@@ -868,6 +868,12 @@ export type CalendarInvitation = {
      */
     method: InvitationMethod;
     organizer?: null | InvitationParticipant;
+    /**
+     * Raw `RRULE`, `RDATE` and `EXDATE` lines, empty for a single event.
+     * `None` on snapshots saved before recurrence was recorded, where a
+     * series cannot be told apart from a single event.
+     */
+    recurrence?: Array<string> | null;
     recurrence_id?: null | InvitationDateTime;
     /**
      * Original recurrence identifier spelling and parameters.
@@ -891,6 +897,25 @@ export type CalendarInvitation = {
      */
     uid: string;
 };
+
+/**
+ * HTTP error body returned by calendar mutation endpoints.
+ */
+export type CalendarMutationApiError = {
+    /**
+     * Machine-readable failure category.
+     */
+    code: CalendarMutationErrorCode;
+    /**
+     * Human-readable failure description.
+     */
+    message: string;
+};
+
+/**
+ * Machine-readable failure category for calendar mutations.
+ */
+export type CalendarMutationErrorCode = 'not_found' | 'occurrence_not_found' | 'read_only' | 'no_writable_calendar' | 'not_attendee' | 'not_organizer' | 'guests_cannot_invite' | 'guest_list_hidden' | 'guests_cannot_modify' | 'already_on_calendar' | 'join_request_open' | 'copy_refused' | 'snapshot' | 'invalid_input' | 'reauth_required' | 'provider_rejected' | 'retryable' | 'persist_failed' | 'macro_call_failed' | 'copy_choice_required';
 
 /**
  * A materialized recurrence instance optimized for range queries.
@@ -956,6 +981,17 @@ export type ContactInfoLegacy = {
 
 export type ContactInfoWithInteraction = ContactInfoLegacy & {
     last_interaction: string;
+};
+
+/**
+ * Request body adding a shared event to the requester's calendar.
+ */
+export type CopyCalendarEventRequest = {
+    /**
+     * Google calendar to add the copy to; defaults to the requester's
+     * primary inbox's primary calendar.
+     */
+    calendarId?: string | null;
 };
 
 /**
@@ -3283,6 +3319,64 @@ export type GetThreadCalendarInvitationsResponses = {
 };
 
 export type GetThreadCalendarInvitationsResponse = GetThreadCalendarInvitationsResponses[keyof GetThreadCalendarInvitationsResponses];
+
+export type CopyThreadCalendarInvitationData = {
+    body: CopyCalendarEventRequest;
+    path: {
+        /**
+         * Authorized email thread
+         */
+        thread_id: string;
+        /**
+         * Message carrying the event
+         */
+        message_id: string;
+        /**
+         * Saved event within the message
+         */
+        invitation_id: string;
+    };
+    query?: never;
+    url: '/email/threads/{thread_id}/messages/{message_id}/calendar-invitations/{invitation_id}/copy';
+};
+
+export type CopyThreadCalendarInvitationErrors = {
+    /**
+     * The saved event cannot be added, or the calendar is not a Google calendar
+     */
+    400: CalendarMutationApiError;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Calendar is read-only or needs reauthorization
+     */
+    403: CalendarMutationApiError;
+    /**
+     * No such saved event in the thread
+     */
+    404: CalendarMutationApiError;
+    /**
+     * Already on the viewer's calendar, no writable calendar, or the provider refused the copy
+     */
+    409: CalendarMutationApiError;
+    /**
+     * Transient provider failure
+     */
+    503: CalendarMutationApiError;
+};
+
+export type CopyThreadCalendarInvitationError = CopyThreadCalendarInvitationErrors[keyof CopyThreadCalendarInvitationErrors];
+
+export type CopyThreadCalendarInvitationResponses = {
+    /**
+     * The copy on the viewer's calendar
+     */
+    201: CalendarEvent;
+};
+
+export type CopyThreadCalendarInvitationResponse = CopyThreadCalendarInvitationResponses[keyof CopyThreadCalendarInvitationResponses];
 
 export type UpdateThreadProjectData = {
     body: UpdateThreadProjectRequest;

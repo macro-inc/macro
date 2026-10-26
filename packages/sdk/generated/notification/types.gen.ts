@@ -943,6 +943,10 @@ export type InviteToTeamMetadata = {
      */
     inviteePlan?: InviteePlan;
     /**
+     * Whether this email reminds the invitee of an invite they have not answered.
+     */
+    reminder?: boolean;
+    /**
      * Role/permission level in the team
      */
     role?: string | null;

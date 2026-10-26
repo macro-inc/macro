@@ -911,7 +911,7 @@ export const OWNER_EPOCH_LOST_ERROR_CODE: CacheResponseErrorCode =
 export const OWNER_LOCK_UNAVAILABLE_ERROR_CODE: CacheResponseErrorCode =
   'owner-lock-unavailable';
 
-/** An enqueue send was admitted before its unfenced transport became uncertain. */
+/** An admitted enqueue lost its reply and may already be durably queued. */
 export const ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE: CacheResponseErrorCode =
   'admitted-enqueue-uncertain';
 
@@ -987,7 +987,7 @@ export const isOwnerLockUnavailableError = (
   'errorCode' in value &&
   value.errorCode === OWNER_LOCK_UNAVAILABLE_ERROR_CODE;
 
-/** Identifies the host-only uncertainty result for an admitted enqueue send. */
+/** Identifies an admitted enqueue whose durable outcome is unknown. */
 export const isAdmittedEnqueueUncertainError = (
   value: unknown
 ): value is Error & { errorCode: 'admitted-enqueue-uncertain' } =>

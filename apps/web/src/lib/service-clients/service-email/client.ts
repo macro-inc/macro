@@ -177,6 +177,19 @@ export const emailClient = {
       `/email/threads/${threadId}/calendar-invitations`
     );
   },
+  async copyCalendarInvitation(
+    target: { threadId: string; messageId: string; invitationId: string },
+    args: CopyCalendarEventRequest
+  ) {
+    return fetchWithToken<CalendarEvent, CalendarMutationErrorCode>(
+      `${emailHost}/email/threads/${target.threadId}/messages/${target.messageId}/calendar-invitations/${encodeURIComponent(target.invitationId)}/copy`,
+      {
+        method: 'POST',
+        body: JSON.stringify(args),
+        errorResponseHandler: calendarMutationErrorHandler,
+      }
+    );
+  },
   async init(args?: { linkId?: string; forceShare?: boolean }) {
     const params = new URLSearchParams();
     if (args?.linkId) params.set('link_id', args.linkId);

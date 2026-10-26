@@ -746,6 +746,116 @@ describe('createWorkerCacheHost', () => {
     }
   );
 
+  it.each([false, true])(
+    'pauses initialization during a blocked handoff without failing writes (replacement: %s)',
+    async (replacement) => {
+      vi.useFakeTimers();
+      configureAdapter = (fake) => fake.ignoredKinds.add('init');
+      localStorage.setItem('graphql-cache:scope', 'scope-1');
+      const onInitializationError = vi.fn();
+      const host = createWorkerCacheHost({
+        scope: 'scope-1',
+        initializationTimeoutMs: 10,
+        onInitializationError,
+      });
+      const read = host.readQuery({ opKey: 7, query: 'query Read { user }' });
+      const rejected = expect(read).rejects.toThrow('owner handoff timeout');
+      const mutation = host.enqueueOptimisticMutation(
+        {
+          uuid: '00000000-0000-4000-8000-000000000100',
+          query: 'mutation Update { update }',
+          data: { update: true },
+        },
+        { owner: 'runner', nowMs: 1, leaseExpiresAtMs: 101 }
+      );
+      await vi.advanceTimersByTimeAsync(0);
+      const adapter = requireAdapter();
+      adapter.options.onCacheReadAvailabilityChanged?.('blocked');
+      await rejected;
+      await vi.advanceTimersByTimeAsync(60_001);
+      expect(adapter.requests.map(({ kind }) => kind)).toEqual(['init']);
+      expect(onInitializationError).not.toHaveBeenCalled();
+      expect(localStorage.getItem('graphql-cache:scope')).toBe('scope-1');
+      if (replacement) adapter.replace(2);
+      else adapter.options.onCacheReadAvailabilityChanged?.('ready');
+      adapter.respond(1, null);
+      await mutation;
+      expect(adapter.requests.map(({ kind }) => kind)).toEqual([
+        'init',
+        'enqueue-optimistic-mutation',
+      ]);
+      await expect(
+        host.readQuery({ query: 'query Recovered { user }' })
+      ).resolves.toEqual({ kind: 'miss' });
+      host.dispose();
+    }
+  );
+
+  it('queues parked reads, writes, and teardown in call order without background timeouts', async () => {
+    vi.useFakeTimers();
+    const host = createWorkerCacheHost({
+      scope: 'scope-1',
+      requestTimeoutMs: 10,
+    });
+    await host.currentRevision();
+    const adapter = requireAdapter();
+    adapter.ignoredKinds.add('read');
+    adapter.ignoredKinds.add('write');
+    adapter.ignoredKinds.add('teardown');
+    adapter.options.onCacheReadAvailabilityChanged?.('waiting');
+    const read = host.readQuery({ opKey: 7, query: 'query Parked { user }' });
+    const write = host.writeQuery({
+      query: 'query Parked { user }',
+      data: { user: true },
+    });
+    const teardown = host.teardown(7);
+    await vi.advanceTimersByTimeAsync(300_001);
+    const queued = adapter.requests.filter((request) =>
+      ['read', 'write', 'teardown'].includes(request.kind)
+    );
+    expect(queued.map((request) => request.kind)).toEqual([
+      'read',
+      'write',
+      'teardown',
+    ]);
+    adapter.options.onCacheReadAvailabilityChanged?.('ready');
+    for (const request of queued)
+      adapter.respond(request.id, responseFor(request));
+    await Promise.all([read, write, teardown]);
+    host.dispose();
+  });
+
+  it('keeps an initially parked host initializing without failing reads or writes', async () => {
+    vi.useFakeTimers();
+    configureAdapter = (fake) => fake.ignoredKinds.add('init');
+    const onInitializationError = vi.fn();
+    const host = createWorkerCacheHost({
+      scope: 'scope-1',
+      initializationTimeoutMs: 10,
+      onInitializationError,
+    });
+    const read = host.readQuery({ query: 'query Initial { user }' });
+    const write = host.writeQuery({
+      query: 'query Initial { user }',
+      data: { user: true },
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    const adapter = requireAdapter();
+    adapter.options.onCacheReadAvailabilityChanged?.('waiting');
+    await vi.advanceTimersByTimeAsync(300_001);
+    expect(adapter.requests.map((request) => request.kind)).toEqual(['init']);
+    expect(onInitializationError).not.toHaveBeenCalled();
+    adapter.options.onCacheReadAvailabilityChanged?.('ready');
+    adapter.respond(1, null);
+    await Promise.all([read, write]);
+    expect(adapter.requests.map((request) => request.kind)).toEqual([
+      'init',
+      'read',
+      'write',
+    ]);
+    host.dispose();
+  });
+
   it('bounds hung registration/init before admitting reads or mutations', async () => {
     vi.useFakeTimers();
     configureAdapter = (fake) => fake.ignoredKinds.add('init');

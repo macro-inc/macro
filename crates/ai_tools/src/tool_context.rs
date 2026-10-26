@@ -96,7 +96,9 @@ mod forms;
 pub use forms::{FormsToolConfig, ToolFormsToolContext, build_forms_tool_context};
 
 mod initiatives;
-pub use initiatives::{ToolInitiativeToolContext, build_initiative_tool_context};
+pub use initiatives::{
+    ToolInitiativeService, ToolInitiativeToolContext, build_initiative_tool_context,
+};
 
 use activity_metadata::ToolActivityMetadataResolver;
 pub use ai_toolset::RequestContext;
@@ -1505,6 +1507,8 @@ pub struct ToolEntityCreator {
     pub document_properties: ToolDocumentPropertiesApplicator,
     /// Team roster lookups, to resolve source-tool emails to teammates.
     pub team_repository: Arc<ToolTeamService>,
+    /// Project lifecycle for reviewed issue tracker imports.
+    pub initiative_service: Arc<ToolInitiativeService>,
     /// Folder creation for workspace imports (shared with project tools).
     pub project_service: Arc<ToolProjectService>,
     /// Database creation and writes for workspace imports (shared with
@@ -1716,7 +1720,7 @@ impl ToolEntityCreator {
     /// Apply imported task properties best-effort: each one logs and is
     /// skipped on failure so a bad label or unknown assignee never sinks
     /// the import.
-    async fn apply_task_properties(
+    pub(crate) async fn apply_task_properties(
         &self,
         user: &MacroUserIdStr<'static>,
         task_id: &str,

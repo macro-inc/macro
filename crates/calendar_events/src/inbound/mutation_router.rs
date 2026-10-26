@@ -1014,7 +1014,7 @@ where
     Ok(Json(event))
 }
 
-/// Request body adding a channel-shared event to the requester's calendar.
+/// Request body adding a shared event to the requester's calendar.
 #[derive(Debug, Default, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CopyCalendarEventRequest {

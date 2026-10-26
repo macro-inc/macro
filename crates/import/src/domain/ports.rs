@@ -18,6 +18,9 @@ use uuid::Uuid;
 /// Errors surfaced by the import service and repository.
 #[derive(Debug, Error)]
 pub enum ImportError {
+    /// Connected issue tracker read failed.
+    #[error(transparent)]
+    Tracker(#[from] import_tracker::domain::model::TrackerError),
     /// AI work was refused or usage validation is temporarily unavailable.
     #[error(transparent)]
     Admission(#[from] ai_billing::AiAdmissionError),
@@ -556,6 +559,38 @@ pub struct TeamMember {
 /// uses, so permissions, search and sync behave as for anything the user
 /// made by hand.
 pub trait WorkspaceWriter: Send + Sync + 'static {
+    /// Idempotently create a Macro project (initiative) with the ledger's
+    /// stable id and the approved visibility, using attributed creation.
+    fn create_tracker_project(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        id: Uuid,
+        name: &str,
+        markdown: &str,
+        shared: bool,
+    ) -> impl Future<Output = anyhow::Result<Uuid>> + Send;
+
+    /// Idempotently create a task from ordinary markdown, applying normalized
+    /// task properties and approved visibility. Never uses Notion conversion.
+    fn create_tracker_task(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        id: Uuid,
+        name: &str,
+        markdown: &str,
+        properties: &ImportedTaskProperties,
+        shared: bool,
+    ) -> impl Future<Output = anyhow::Result<String>> + Send;
+
+    /// Apply project, parent/subtask relationships and labels after all tasks
+    /// exist. Safe to repeat; never points at a failed or excluded row.
+    fn link_tracker_task(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        id: Uuid,
+        relations: &TrackerTaskRelations,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+
     /// Create a folder, inside `parent` when given. Returns the folder id.
     fn create_folder(
         &self,
@@ -637,6 +672,17 @@ pub trait WorkspaceWriter: Send + Sync + 'static {
         &self,
         user: &MacroUserIdStr<'static>,
     ) -> impl Future<Output = anyhow::Result<Vec<TeamMember>>> + Send;
+}
+
+/// Stable task/project relationships resolved from a reviewed tracker plan.
+#[derive(Debug, Clone, Default)]
+pub struct TrackerTaskRelations {
+    /// Macro project (initiative) containing this task.
+    pub project: Option<Uuid>,
+    /// Macro parent task, if it was imported successfully.
+    pub parent: Option<Uuid>,
+    /// Source labels, mapped to personal tags.
+    pub labels: Vec<String>,
 }
 
 /// One object of a workspace import plan, ready to stage.
@@ -770,6 +816,11 @@ pub trait NotionPlanRepo: Send + Sync + 'static {
 /// while it works. Once a lease lapses (a crash or a deploy) any process may
 /// adopt the run and resume the job recorded on it.
 pub trait NotionRunRepo: Send + Sync + 'static {
+    /// Scope leases, team claims and root folders to one workspace source.
+    fn for_source(&self, source: ImportSource) -> Self
+    where
+        Self: Sized;
+
     /// Take the user's Notion run for `owner` until `lease` from now and
     /// record `job` on it. Only a run that just started (`running` or
     /// `importing`, held by nobody) can be taken. Returns whether it was.

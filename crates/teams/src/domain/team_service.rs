@@ -1,6 +1,8 @@
 //! Contains the service logic for teams
 
 mod invite_link;
+#[cfg(feature = "ports")]
+pub mod invite_reminders;
 #[cfg(test)]
 mod test;
 
@@ -1601,6 +1603,7 @@ where
                             role: None,
                             sender_profile_picture_url: None,
                             invitee_plan,
+                            reminder: false,
                         },
                     )
                     .await

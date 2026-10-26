@@ -293,3 +293,88 @@ async fn cancelling_a_notion_import_cancels_it_for_the_caller_and_reports_where_
     assert_eq!(report["status"], "dismissed");
     assert_eq!(report["imported"], 3);
 }
+
+impl WorkspaceImporter for FakeImportService {
+    async fn prepare_workspace_import(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: ImportSource,
+        _: Option<crate::domain::models::NotionSharing>,
+        _: std::time::Duration,
+    ) -> Result<NotionImportReport> {
+        unreachable!("routes do not plan")
+    }
+    async fn workspace_import_report(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        source: ImportSource,
+    ) -> Result<NotionImportReport> {
+        self.calls.lock().unwrap().push((user.clone(), source));
+        self.notion_import_report(user).await
+    }
+    async fn attach_workspace_review(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: ImportSource,
+        _: Uuid,
+        _: agent_session::domain::model::AgentSessionId,
+    ) -> Result<u64> {
+        unreachable!()
+    }
+    async fn start_workspace_write(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: ImportSource,
+        _: Uuid,
+        _: crate::domain::models::NotionWriteChoices,
+    ) -> Result<NotionImportReport> {
+        unreachable!()
+    }
+    async fn cancel_workspace_import(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        source: ImportSource,
+    ) -> Result<bool> {
+        self.calls.lock().unwrap().push((user.clone(), source));
+        self.cancel_notion_import(user).await
+    }
+}
+
+#[tokio::test]
+async fn workspace_routes_authorize_and_forward_the_exact_source() {
+    for source in ["notion", "linear", "jira"] {
+        for (method, suffix, expected_calls) in [("GET", "", 1), ("POST", "/cancel", 2)] {
+            let (router, service) = discovery_router(Ok(true));
+            let response = router
+                .oneshot(
+                    Request::builder()
+                        .method(method)
+                        .uri(format!("/import/workspaces/{source}{suffix}"))
+                        .header("authorization", "Bearer valid")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+            let calls = service.calls.lock().unwrap();
+            assert_eq!(calls.len(), expected_calls);
+            assert!(calls.iter().all(
+                |(user, forwarded)| user.as_ref() == TEST_USER && forwarded.as_ref() == source
+            ));
+            let (router, service) = discovery_router(Ok(true));
+            let response = router
+                .oneshot(
+                    Request::builder()
+                        .method(method)
+                        .uri(format!("/import/workspaces/{source}{suffix}"))
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+            assert!(service.calls.lock().unwrap().is_empty());
+        }
+    }
+}

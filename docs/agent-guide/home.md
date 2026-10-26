@@ -57,7 +57,9 @@ completing the channel leaves the thread.
 The menu shares the legacy compact submenus: **Status** offers **Unread**, **Read**,
 and **All** as single-select radio items with a checkmark on the right of the selected
 option, and **Type** contains the entity checkboxes. Status closes the menu
-after selection; type selections leave it open. Press **f** to open the menu.
+after selection. Type uses the [shared multiselect dropdown pattern](ui-conventions.md#multiselect-dropdowns):
+checkboxes toggle without closing, rows add and close, and Shift/Only selects just
+one type without closing. Press **f** to open the menu.
 Entity type checkboxes start checked. Unchecking **Email** hides received
 and sent mail. **Channels** controls
 both channels and reply threads; **Chats** and **Agents** have separate toggles.

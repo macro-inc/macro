@@ -135,10 +135,11 @@ attachments. Options within a group match any selected option; different groups
 combine to narrow the results. Created by is hidden while My Files
 is restricted to your own files. Recent offers only file-scope filtering.
 The desktop Filter trigger shows the number of active filters, matching the
-mobile drawer; clearing all filters removes the badge. Hold Shift while selecting
-or deselecting Type options to keep the submenu open and combine several file
-types without reopening it. A normal selection closes the menu. Verify the badge
-tracks consecutive selections (1 → 2 → 1), including when filter groups refresh
+mobile drawer; clearing all filters removes the badge. Use the left checkboxes
+(or Space) to combine Type options without closing. Row activation adds and
+closes; Shift-click or **Only** selects just one type and stays open, following
+[shared multiselect behavior](ui-conventions.md#multiselect-dropdowns). Verify the badge
+tracks consecutive checkbox toggles (1 → 2 → 1), including when filter groups refresh
 while the menu is open. Desktop filter submenus allow a
 250 ms grace period when the mouse crosses the parent menu's padding; entering
 the submenu cancels the pending close. While the mouse heads toward an open

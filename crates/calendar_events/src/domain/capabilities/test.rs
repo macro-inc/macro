@@ -15,6 +15,7 @@ fn google(email: &str) -> OwnedInbox {
         link_id: Uuid::from_u128(1),
         email: email.to_string(),
         provider: CalendarProvider::Google,
+        writable_calendar_ids: Vec::new(),
     }
 }
 
@@ -295,16 +296,19 @@ fn three_inboxes() -> ActorInboxes {
             link_id: ORGANIZER_LINK,
             email: ORGANIZER.to_string(),
             provider: CalendarProvider::Google,
+            writable_calendar_ids: Vec::new(),
         },
         OwnedInbox {
             link_id: GUEST_LINK,
             email: GUEST.to_string(),
             provider: CalendarProvider::Google,
+            writable_calendar_ids: Vec::new(),
         },
         OwnedInbox {
             link_id: OUTLOOK_LINK,
             email: OUTLOOK.to_string(),
             provider: CalendarProvider::Outlook,
+            writable_calendar_ids: Vec::new(),
         },
     ])
     .expect("the actor owns inboxes")
@@ -405,3 +409,69 @@ const NO_INVITES: GuestPolicy = GuestPolicy {
     can_invite_others: false,
     can_see_other_guests: true,
 };
+
+/// The id Google gives a secondary calendar, which it names as the organizer
+/// of the events made on it.
+const SECONDARY_CALENDAR: &str = "c_0123abcd@group.calendar.google.com";
+
+fn with_writable_calendars(mut inbox: OwnedInbox, ids: &[&str]) -> OwnedInbox {
+    inbox.writable_calendar_ids = ids.iter().map(|id| id.to_string()).collect();
+    inbox
+}
+
+/// An event made through Macro on the inbox's secondary calendar before the
+/// creator stopped being listed: the calendar organizes it and the inbox's
+/// own address is its only guest.
+fn made_on_secondary_calendar() -> CalendarEvent {
+    let mut event = event(vec![attendee(GUEST, false)], GuestPolicy::default());
+    event.organizer_email = Some(SECONDARY_CALENDAR.to_string());
+    event
+}
+
+#[test]
+fn an_inbox_that_can_write_the_organizing_calendar_may_do_everything() {
+    let inbox = with_writable_calendars(
+        google(GUEST),
+        &[GUEST, "C_0123ABCD@group.calendar.google.com"],
+    );
+
+    let capabilities = ViewerCapabilities::for_event(&made_on_secondary_calendar(), Some(&inbox));
+
+    assert_eq!(capabilities, EVERYTHING);
+}
+
+#[test]
+fn an_inbox_that_only_reads_the_organizing_calendar_stays_a_guest() {
+    // Only writable calendars are loaded into the inbox, so a calendar it
+    // merely reads lends it nothing.
+    let inbox = with_writable_calendars(google(GUEST), &[GUEST]);
+
+    let capabilities = ViewerCapabilities::for_event(&made_on_secondary_calendar(), Some(&inbox));
+
+    assert_eq!(
+        capabilities,
+        ViewerCapabilities {
+            invite_guests: true,
+            rsvp: true,
+            ..ViewerCapabilities::NONE
+        }
+    );
+}
+
+#[test]
+fn another_of_the_actors_inboxes_writing_the_organizing_calendar_lends_nothing() {
+    let event = made_on_secondary_calendar();
+    let other = with_writable_calendars(
+        OwnedInbox {
+            link_id: Uuid::from_u128(2),
+            ..google("jacob@work.example.com")
+        },
+        &[SECONDARY_CALENDAR],
+    );
+    let actor = ActorInboxes::from_owned(vec![google(GUEST), other]).unwrap();
+
+    let capabilities = ViewerCapabilities::for_event(&event, actor.inbox(Uuid::from_u128(1)));
+
+    assert!(!capabilities.organize);
+    assert!(!capabilities.edit_details);
+}

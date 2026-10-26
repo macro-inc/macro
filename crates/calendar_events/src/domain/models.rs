@@ -1488,6 +1488,11 @@ pub struct CalendarEventMutationTarget {
     pub guest_policy: GuestPolicy,
     /// Whether the entity is a snapshot of a shared meeting.
     pub is_snapshot: bool,
+    /// Another writable calendar of the copy's inbox that holds the
+    /// organizer's own copy, as when the inbox is invited to an event made
+    /// on its secondary calendar. Changes only the organizer may make go
+    /// through that copy, as in Google's own client.
+    pub organizer_copy_calendar_id: Option<Uuid>,
 }
 
 impl CalendarEventMutationTarget {

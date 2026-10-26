@@ -9,6 +9,16 @@ the message text, including link labels and mention names, once per preview.
 Verify wide and narrow rows and channel/thread cards; links and mentions remain
 interactive inside the opened conversation.
 
+## Empty direct messages
+
+An empty human DM shows the centered conversations illustration and “Say hello”
+above the composer. The copy explains that recipients without a Macro account
+receive the message by email. Opening the DM sends nothing. Sending a human
+message queues an immediate email for nonusers, including follow-up messages,
+replies, and mentions; registered users retain their notification preferences.
+Check narrow and wide panes: the composer stays usable, and the empty state
+vanishes when the first timeline entry appears. Agent DMs keep their own UI.
+
 ## Create a channel
 
 1. `Create` → `Channel G`. Dialog `Create a channel` opens on step 1 of 3 with the `Name` textbox focused.
@@ -279,7 +289,7 @@ above the action row, including for empty and single-line drafts, so the
 attachment, delete-reply, and send controls have their own space.
 Both the expanded and collapsed composers start with a `+` button (`Add`). It
 opens a menu on desktop and a bottom drawer on mobile: `Mention` (opens the `@` typeahead), `Attach files` (the file
-picker; the iOS media picker on iOS), then under `Create` the same actions as
+picker; the iOS media picker on iOS), `GIF` (the same picker as `/gif`), then under `Create` the same actions as
 `/task`, `/poll`, `/form` and `/document` (poll and form only with forms on),
 then `Ask Macro` (inserts an `@Macro` mention) and, in a channel, `Start a call`
 (`Join call` while one is live). On phones, starting a new call opens a
@@ -320,6 +330,10 @@ An `@` inside a word stays literal text. Check hardware-keyboard input too;
 it should open only one menu.
 The same software-keyboard check applies to `:` for emoji and `/` for formatting
 commands: type a search and tap a result without sending the draft.
+Type `/gif` or choose **GIF** from `+`. The picker opens above the composer on
+phones and stays visible after you choose the action, including with the iOS
+keyboard open. Trending GIFs show first; tap search to filter, then tap a GIF
+to insert it without sending the draft.
 
 Closed mention menus do not gather, rank, or paginate candidates. When checking
 channel-switch performance, include touch navigation back to the list and reopening

@@ -198,6 +198,7 @@ export function ReviewsControls(
           onOpenChange={handleMenuOpenChange('filters')}
           triggerRef={(element) => (filterTrigger = element)}
           isSelected={(group, id) => isSelected(props, group, id)}
+          selectedIds={(group) => props.selected[group]}
           onSelectionChange={props.onFilterChange}
           onClear={props.onClearFilters}
         />

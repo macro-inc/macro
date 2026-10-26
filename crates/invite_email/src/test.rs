@@ -131,6 +131,7 @@ fn team_invite_rate_limit_key_is_per_invite() {
         role: None,
         sender_profile_picture_url: None,
         invitee_plan: InviteePlan::Free,
+        reminder: false,
     };
     let to_carol = InviteToTeamMetadata {
         team_invite_id: Uuid::from_u128(11),
@@ -167,6 +168,8 @@ fn make_channel_invite() -> ChannelInviteMetadata {
         invited_by: MacroUserIdStr::try_from_email("sender@example.com").unwrap(),
         channel_name: "general".to_string(),
         is_direct_message: false,
+        message_id: None,
+        email_recipient: None,
         message_content: None,
         sender_profile_picture_url: None,
     }
@@ -316,6 +319,7 @@ fn invitation_logos_keep_the_png_aspect_ratio() {
         role: None,
         sender_profile_picture_url: None,
         invitee_plan: InviteePlan::Free,
+        reminder: false,
     };
     for email in [
         make_invite().format_email(),
@@ -422,6 +426,47 @@ fn deserialization_without_sender_email_uses_none() {
     assert!(deserialized.sender_email.is_none());
 }
 
+#[test]
+fn dm_emails_deduplicate_retries_without_suppressing_later_messages() {
+    let first = ChannelInviteMetadata {
+        is_direct_message: true,
+        message_id: Some(Uuid::new_v4()),
+        ..make_channel_invite()
+    };
+    let other_recipient = ChannelInviteMetadata {
+        email_recipient: Some(MacroUserIdStr::try_from_email("other@example.com").unwrap()),
+        ..first.clone()
+    };
+    assert_ne!(
+        first.rate_limit_key().as_bytes(),
+        other_recipient.rate_limit_key().as_bytes()
+    );
+    let next = ChannelInviteMetadata {
+        message_id: Some(Uuid::new_v4()),
+        ..first.clone()
+    };
+    assert_eq!(
+        first.rate_limit_key().as_bytes(),
+        first.clone().rate_limit_key().as_bytes()
+    );
+    assert_ne!(
+        first.rate_limit_key().as_bytes(),
+        next.rate_limit_key().as_bytes()
+    );
+    let channel = ChannelInviteMetadata {
+        is_direct_message: false,
+        ..first
+    };
+    let next_channel = ChannelInviteMetadata {
+        is_direct_message: false,
+        ..next
+    };
+    assert_eq!(
+        channel.rate_limit_key().as_bytes(),
+        next_channel.rate_limit_key().as_bytes()
+    );
+}
+
 fn make_team_invite(invitee_plan: InviteePlan) -> InviteToTeamMetadata {
     InviteToTeamMetadata {
         team_name: "Acme".to_string(),
@@ -431,6 +476,7 @@ fn make_team_invite(invitee_plan: InviteePlan) -> InviteToTeamMetadata {
         role: None,
         sender_profile_picture_url: None,
         invitee_plan,
+        reminder: false,
     }
 }
 
@@ -535,4 +581,28 @@ fn team_invite_sent_before_plans_were_recorded_reads_as_free() {
 
     let read: InviteToTeamMetadata = serde_json::from_value(wire).unwrap();
     assert_eq!(read.invitee_plan, InviteePlan::Free);
+}
+
+#[test]
+fn team_invite_reminder_says_so_in_the_subject() {
+    let reminder = InviteToTeamMetadata {
+        reminder: true,
+        ..make_team_invite(InviteePlan::Free)
+    };
+    assert_eq!(
+        reminder.format_email().subject,
+        "Reminder: alice@acme.com invited you to join Acme on Macro"
+    );
+    assert_eq!(
+        make_team_invite(InviteePlan::Free).format_email().subject,
+        "alice@acme.com invited you to join Acme on Macro"
+    );
+}
+
+#[test]
+fn team_invites_queued_before_reminders_read_as_first_sends() {
+    let mut wire = serde_json::to_value(make_team_invite(InviteePlan::Free)).unwrap();
+    wire.as_object_mut().unwrap().remove("reminder");
+    let parsed: InviteToTeamMetadata = serde_json::from_value(wire).unwrap();
+    assert!(!parsed.reminder);
 }

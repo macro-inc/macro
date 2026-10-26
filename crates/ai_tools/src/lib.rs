@@ -18,6 +18,7 @@ mod display_results;
 pub mod email_attachments;
 mod import_channels;
 mod import_jobs;
+mod import_trackers;
 mod import_workspace;
 mod mcp_app_catalog;
 mod schemas;

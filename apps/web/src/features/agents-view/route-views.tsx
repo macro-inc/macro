@@ -7,6 +7,7 @@ import {
   usePageViewTracking,
   withAuth,
 } from '@components/app/split-layout/split-router/app-route-shell';
+import { useViewRestoration } from '@components/app/split-layout/view-restoration';
 import { enableChatV3Agents } from '@core/constant/featureFlags';
 import { useUserContext } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -85,6 +86,7 @@ function LegacyAgentsView() {
 
 export const AgentsRouteView = withAuth(() => {
   const panel = useSplitPanelOrThrow();
+  useViewRestoration();
   const route = () => {
     const content = panel.handle.content();
     if (content.type === 'component' && content.id === 'routines') return;

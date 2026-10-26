@@ -13,6 +13,9 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
     handle: { content: () => ({ type: 'component', params: {} }) },
   }),
 }));
+vi.mock('@components/app/split-layout/view-restoration', () => ({
+  useViewRestoration: () => {},
+}));
 vi.mock('@app/lib/analytics/analytics-context', () => ({
   useAnalytics: () => ({ pageView: vi.fn(), track: vi.fn() }),
 }));

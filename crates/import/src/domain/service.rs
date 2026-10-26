@@ -33,6 +33,9 @@ use uuid::Uuid;
 
 mod admission;
 mod notion_workspace;
+mod tracker_workspace;
+mod workspace;
+pub use workspace::WorkspaceImporter;
 mod prompts;
 mod slack;
 mod slack_discovery;
@@ -308,26 +311,31 @@ pub trait NotionWorkspaceImporter: Send + Sync + 'static {
 pub struct ImportServiceImpl<R, S, C, W = NoSlackSource, N = NoNotionConnections> {
     repo: R,
     notion: Arc<N>,
+    workspace_source: ImportSource,
+    trackers: std::collections::HashMap<
+        ImportSource,
+        Arc<dyn import_tracker::domain::model::TrackerConnections>,
+    >,
     slack_source: Arc<W>,
     mcp_tools: Arc<S>,
     creator: Arc<C>,
     recorder: Arc<dyn ai_usage::UsageRecorder>,
     admission: Arc<dyn ai_billing::AiAdmissionService>,
     notifier: Option<ImportNotify>,
-    jobs: NotionJobs,
+    jobs: WorkspaceJobs,
 }
 
 /// Where this process runs Notion workspace imports: its identity on the
 /// runs it holds, the shutdown that makes them hand over, and the tracker the
 /// host waits on before exiting.
 #[derive(Clone)]
-struct NotionJobs {
+struct WorkspaceJobs {
     instance: Uuid,
     shutdown: tokio_util::sync::CancellationToken,
     tracker: tokio_util::task::TaskTracker,
 }
 
-impl NotionJobs {
+impl WorkspaceJobs {
     fn new() -> Self {
         Self {
             instance: Uuid::now_v7(),
@@ -342,6 +350,8 @@ impl<R: Clone, S, C, W: SlackWorkspaceSource, N> Clone for ImportServiceImpl<R, 
         Self {
             repo: self.repo.clone(),
             notion: self.notion.clone(),
+            workspace_source: self.workspace_source,
+            trackers: self.trackers.clone(),
             slack_source: self.slack_source.clone(),
             mcp_tools: self.mcp_tools.clone(),
             creator: self.creator.clone(),
@@ -364,13 +374,15 @@ impl<R, S, C> ImportServiceImpl<R, S, C> {
         Self {
             repo,
             notion: Arc::new(NoNotionConnections),
+            workspace_source: ImportSource::Notion,
+            trackers: Default::default(),
             slack_source: Arc::new(NoSlackSource),
             mcp_tools,
             creator,
             recorder,
             admission: Arc::new(ai_billing::DisabledAiAdmissionService),
             notifier: None,
-            jobs: NotionJobs::new(),
+            jobs: WorkspaceJobs::new(),
         }
     }
 }
@@ -384,6 +396,8 @@ impl<R, S, C, W: SlackWorkspaceSource, N: Send + Sync + 'static> ImportServiceIm
         ImportServiceImpl {
             repo: self.repo,
             notion: self.notion,
+            workspace_source: self.workspace_source,
+            trackers: self.trackers,
             mcp_tools: self.mcp_tools,
             creator: self.creator,
             recorder: self.recorder,
@@ -392,6 +406,17 @@ impl<R, S, C, W: SlackWorkspaceSource, N: Send + Sync + 'static> ImportServiceIm
             jobs: self.jobs,
             slack_source: source,
         }
+    }
+
+    /// Register the read-only Linear and Jira adapters supplied by the host.
+    pub fn with_tracker_connections(
+        mut self,
+        linear: Arc<dyn import_tracker::domain::model::TrackerConnections>,
+        jira: Arc<dyn import_tracker::domain::model::TrackerConnections>,
+    ) -> Self {
+        self.trackers.insert(ImportSource::Linear, linear);
+        self.trackers.insert(ImportSource::Jira, jira);
+        self
     }
 
     /// Push state-change nudges through the given notifier.
@@ -423,6 +448,8 @@ impl<R, S, C, W: SlackWorkspaceSource, N: Send + Sync + 'static> ImportServiceIm
         ImportServiceImpl {
             repo: self.repo,
             notion: connections,
+            workspace_source: self.workspace_source,
+            trackers: self.trackers,
             mcp_tools: self.mcp_tools,
             creator: self.creator,
             recorder: self.recorder,
@@ -687,7 +714,7 @@ where
                 .await
             }
             // Notion rows go through the agent session, never here.
-            ImportSource::Notion => return,
+            ImportSource::Notion | ImportSource::Jira => return,
         };
 
         let persisted = match created {
@@ -911,6 +938,15 @@ where
         import_ids: Vec<Uuid>,
         discard_ids: Vec<Uuid>,
     ) -> Result<RunImportOutcome> {
+        for id in &import_ids {
+            if let Some(row) = self.repo.get(&user, *id).await?
+                && (row.metadata.get("plan").is_some() || row.source == ImportSource::Jira)
+            {
+                return Err(ImportError::NotReady(
+                    "Workspace plans must be approved through their review.",
+                ));
+            }
+        }
         let mut discarded = 0u64;
         for id in discard_ids {
             if self.repo.discard(&user, id).await? {
@@ -1274,6 +1310,11 @@ where
             )));
         }
 
+        if row.metadata.get("plan").is_some() {
+            return Err(ImportError::NotReady(
+                "Reviewed workspace rows are written only by the workspace importer.",
+            ));
+        }
         let entity_id = match row.source {
             ImportSource::Linear => {
                 // Agent-finalized Linear rows still carry staged metadata —
@@ -1298,6 +1339,11 @@ where
                         properties,
                     )
                     .await
+            }
+            ImportSource::Jira => {
+                return Err(ImportError::NotReady(
+                    "Jira imports require an approved workspace review.",
+                ));
             }
             ImportSource::Slack => {
                 return Err(ImportError::Other(anyhow::anyhow!(

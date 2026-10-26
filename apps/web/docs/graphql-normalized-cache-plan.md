@@ -209,7 +209,63 @@ SharedWorker still runs. The coordinator probes the physical owner Web Lock
 without waiting or stealing it; a held lock (or a failed probe) retries the
 heartbeat without changing epochs or touching storage. A released lock confirms
 silent worker termination and triggers the usual fenced recovery. Read deadlines
-still bound callers waiting on an unresponsive engine.
+still bound callers waiting on an unresponsive engine outside a visibility handoff.
+
+Protocol v10 reports tab visibility and epoch-fenced read states: `ready`,
+`waiting`, and `blocked`. A visible owner stays put even if another visible window
+gets focus. When its page hides, stop routing new work into that engine and ask it
+to drain immediately, without waiting for another visible consumer. An engine
+already loading/opening first finishes startup before draining. The runtime waits
+for admitted work and closes OPFS before acknowledging. Only then may another
+eligible visible page acquire the owner lock and open the existing database.
+Clients and their subscribers stay connected; an explicit page disposal can join
+the same drain and retire that page normally.
+
+If no eligible tab is visible, the coordinator enters `parked` with no engine.
+Background cache work queues until a visible page resumes ownership; it never
+starts a replacement in a hidden tab. A first-ever hidden registration also parks
+without touching storage. If an in-progress startup becomes all-hidden, pause its
+phase watchdog rather than misclassifying browser suspension as failure; resume
+the phase budget when a visible consumer returns. Parking retains the required
+open/reset action: it does not erase a reset requirement established by a real
+failure. Storage identity and version are unchanged. A ready recovery epoch
+publishes its storage outcome before immediately draining or parking, so hosts
+invalidate reset data/leases even if the next owner only opens existing storage.
+Reset completion accounting likewise follows accepted readiness, not whether
+that epoch remains active; its read pause stays in force during the drain.
+
+While parked or transitioning, `waiting` pauses read/init deadlines without
+creating a second page-side request queue. Reads, writes, and teardown retain
+coordinator admission order. A visible consumer starts a one-second read budget
+covering drain/startup/resume; changes of candidate do not extend it. If everyone
+hides again, cancel that budget. On expiry, `blocked` allows ordinary query network
+fallback (`cache-only` still never forwards) without repeatedly paying ten seconds.
+Only read callers are canceled, not admitted engine work or writes. Readiness
+restores deadlines and refreshes dependency registrations with preserved-storage
+semantics, including when startup finishes on its original owner.
+
+Already-sent HTTP mutations may finish while parked. Their local commit, rollback,
+or defer requests wait for storage and retain their position ahead of later
+claims. Accepted settlement requests survive their caller disconnecting; their
+orphaned replies are dropped, not their known outcomes. This queue is still
+coordinator memory, not durable storage: loss before acceptance or loss of all
+contexts/coordinator still needs the existing uncertain-outcome and server-side
+idempotency protections. Parking never reports an unpersisted enqueue as durable.
+
+The read budget never kills an owner, steals a lock, wipes storage, or replays a
+write. If a drain itself stalls, writes wait until it can finish or existing
+failure/navigation recovery applies. Owner telemetry adds `park-started`, `parked`,
+`unpark-started`, and `unpark-completed` alongside the `visibility-handoff-*` events.
+The backend-free `parking.browser.e2e.ts` exercises physical release, retained
+clients/storage, and a response settled after parking.
+
+Every departure rejects already-routed optimistic enqueues whose replies were
+lost as `admitted-enqueue-uncertain`, including requests from surviving tabs.
+An engine epoch fence does not undo a committed queue entry, and a planned
+recovery wipe has not erased it yet. The exchange must neither retry those
+enqueues nor forward them directly to the API. Requests queued at the coordinator
+but not yet routed remain eligible for one dispatch to the replacement engine;
+late old-epoch responses cannot settle the rejected requests.
 
 Safari can recreate the SharedWorker global while retaining a page's MessagePort,
 including when another tab closes. A second Effect ready frame is a transport

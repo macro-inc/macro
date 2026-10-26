@@ -31,8 +31,8 @@
  *   through the standard write path so dependent cached queries update.
  *
  * Cache failures normally degrade to the network. An admitted optimistic
- * enqueue with an unfenced transport outcome emits an error instead, because
- * forwarding could duplicate a side effect already durable in the old scope.
+ * enqueue with an unknown durable outcome emits an error instead, because
+ * forwarding could duplicate a side effect already in the persistent queue.
  */
 
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -1096,8 +1096,8 @@ export function normalizedCacheExchange(
           if (isAdmittedEnqueueUncertainError(error)) {
             enqueueTelemetry.failed('uncertain');
             options.onCacheError?.(error, op);
-            // The old-scope queue may already contain the side effect. It is
-            // unsafe to forward or retry without a coordinator fence.
+            // Fencing the old engine does not remove a committed queue entry.
+            // Never forward or retry an enqueue whose reply was lost.
             return uncertainEnqueueResult(op, error);
           }
           // Another context holds the database, so the enqueue never reached

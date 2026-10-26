@@ -167,6 +167,7 @@ function useHomeFilters() {
           TYPE_IDS.length
         : (state.facets[groupId]?.length ?? 0) > 0,
     isSelected,
+    selectedIds: (groupId: string) => state.facets[groupId] ?? [],
     setSelected,
   };
 }
@@ -230,6 +231,7 @@ export function HomeFilterDropdown() {
         open={open()}
         onOpenChange={setOpen}
         isSelected={filters.isSelected}
+        selectedIds={filters.selectedIds}
         isGroupActive={filters.isGroupActive}
         onSelectionChange={filters.setSelected}
         onClear={filters.clear}

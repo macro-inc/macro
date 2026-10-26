@@ -1,6 +1,5 @@
 import { $createImageNode, ImageNode } from '@macro-inc/lexical-core';
 import {
-  $getSelection,
   COMMAND_PRIORITY_NORMAL,
   createCommand,
   type LexicalCommand,
@@ -26,10 +25,9 @@ function registerGifPickerPlugin(
   return editor.registerCommand(
     TRY_INSERT_GIF_COMMAND,
     () => {
-      const selection = $getSelection();
-      if (!selection) {
-        return false;
-      }
+      // iOS can clear the Lexical selection on the tap that chose /gif
+      // before this command runs. The picker still opens; insert restores
+      // the caret or falls back to the end of the document.
       props.onOpenPicker();
       return true;
     },

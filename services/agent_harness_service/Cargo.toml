@@ -108,6 +108,8 @@ http = { workspace = true }
 http-body-util = { workspace = true }
 import = { path = "../../crates/import" }
 import_notion = { path = "../../crates/import_notion" }
+import_linear = { path = "../../crates/import_linear" }
+import_jira = { path = "../../crates/import_jira" }
 initiative = { path = "../../crates/initiative", default-features = false, features = ["postgres"] }
 jev = { path = "../../crates/jev", features = ["decisions", "outbound"] }
 kafka_util = { path = "../../crates/kafka_util" }

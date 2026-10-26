@@ -18,6 +18,11 @@ event contract (schema, sanitization, delivery semantics).
   new work-domain team sends to the creator's same-domain contacts who are not
   on Macro yet (`POST /team/domain-notice`, at most 25 per team). Its
   unsubscribe link is signed by the notification service at send time.
+- `src/domain/team_service/invite_reminders.rs` +
+  `src/inbound/invite_reminder_worker.rs`: reminder emails for unanswered
+  invites, swept hourly in `authentication_service`. The repository claims
+  due invites and counts the reminder before sending, so replicas never
+  double-send and a failed send drops that reminder rather than retrying.
 - `src/domain/owned_entity_cleanup.rs` + `open_seat_release.rs`: account/team
   deletion side effects (owned-entity transfer, seat release).
 - `src/inbound/axum_router.rs` / `src/inbound/toolset.rs`: HTTP routes and AI

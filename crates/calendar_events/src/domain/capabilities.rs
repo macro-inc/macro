@@ -114,7 +114,10 @@ impl ViewerCapabilities {
     ///
     /// Only the copy's own inbox counts: another of the actor's inboxes
     /// organizing or attending the event makes them nothing on this copy,
-    /// which is written through this inbox's grant. `None` is an actor who
+    /// which is written through this inbox's grant. The inbox organizes the
+    /// event when the organizer is its address or a calendar it can write
+    /// ([`OwnedInbox::organizes`]), as for an event made on a secondary
+    /// calendar, even on the copy the organizer's calendar invited it to. `None` is an actor who
     /// does not own the copy's inbox, such as a delegate, or a teammate or
     /// channel member looking at someone else's projection; they may do
     /// nothing beyond the event-without-attendees rule. Answering always
@@ -151,7 +154,7 @@ impl ViewerCapabilities {
         let is_organizer = inbox.is_some_and(|inbox| {
             access
                 .organizer_email
-                .is_some_and(|email| inbox.matches(email))
+                .is_some_and(|email| inbox.organizes(email))
                 || access
                     .attendees
                     .iter()

@@ -47,6 +47,23 @@ queued mutations should resume promptly, without waiting for the old poll or
 local retry timer; durable leases and server-retry deadlines still apply.
 Switching tabs or navigating an in-app route is not a back/forward-cache restore.
 
+Browser cache ownership prefers a visible tab. When the owner hides, its engine
+cooperatively drains and closes storage; if every app tab is hidden, storage parks
+without retiring their clients or reloading pages. Background cache work waits.
+Returning to any tab opens the same database in a visible owner. A visible owner
+is not moved just because another visible window gets focus. Reads can wait for
+normal warmup; if foreground handoff/resume exceeds one second, ordinary queries
+use network fallback while cache-only reads never forward. Writes and received
+mutation confirmations wait for storage instead of being sent twice.
+
+Verify the all-hidden case without activating the former owner: no held physical
+owner lock after parking, preserved generation/queue, and successful reads/writes
+from a returning tab. Also verify a pending HTTP response settling after parking
+and multiple surviving clients. A drain that Safari has already suspended still
+waits for that worker to resume; no deadline kills it or steals its lock. Lifecycle
+telemetry uses `park-started`, `parked`, `unpark-started`, `unpark-completed`, and
+`visibility-handoff-*` owner events.
+
 Safari can also restart the SharedWorker when its creating tab closes, leaving
 another tab's port alive but its coordinator registrations gone. The surviving
 page must re-register without a reload or cache wipe. Open two tabs, close the
@@ -55,6 +72,12 @@ Repeat through another handoff and while requests are pending. Interrupted
 optimistic enqueues must not be sent twice. A `graphql_cache.owner` event with
 `ownerEvent: coordinator-restarted` distinguishes this from engine replacement
 or a BFCache restore.
+
+The same write-safety rule applies when an owner navigates away without restarting
+the coordinator: a surviving tab's enqueue may be committed even if its reply was
+lost. It must report an uncertain outcome, not retry or fall through to a second
+API write. Verify this lost-reply case only with an isolated synthetic fixture,
+not by injecting mutation failures into a dev or production account.
 
 ## Android system navigation and sharing
 
@@ -403,6 +426,22 @@ cancels that navigation without adding a duplicate history step.
 A later ordinary rail press also cancels a new split still preloading from the
 active split's earlier Shift-press. Already-open splits and pending work from
 other splits remain intact.
+
+Ordinary rail, More-menu, and Go To shortcut navigation resumes opted-in apps'
+last locations during the current session, including nested details, tabs,
+filters, and local state registered with the split entry (such as scroll or
+selection). Views opt in with `useViewRestoration()`; views without the hook keep
+ordinary navigation behavior. The mobile dock uses the same memory; Search taps
+still start a fresh search. Memory is account-scoped and clears on reload,
+sign-out, or account changes. A leave guard stages each snapshot, but only a
+committed navigation saves it; refusal, cancellation, failure, and supersession
+leave the saved snapshot unchanged. Direct links and explicit Shift/open-in-split
+actions keep their requested destination. Closing a detail before switching apps
+remembers the list, not the closed detail. Views unmount normally; this is not a
+keep-alive cache for editors or other transient UI.
+Verify Chat → open channel → Calendar → Chat restores the same channel, then
+repeat with a filtered list and a nested Drive item. Check mobile dock switching,
+split Back/Forward, refused leave guards, explicit links, and account changes.
 Verify rapid app presses, returning to the currently shown app while another app
 loads, split focus changes, closing a split, and split Back/Forward. The last
 requested destination must win, and a later return to an earlier view must not
@@ -753,6 +792,10 @@ columns. The search field sits below the top bar, as in Projects; search by name
 creator, or model/agent, or press **Cmd/Ctrl+F** to focus it. **Create Routine** sits
 to the right of search. Click a row to open its settings in the same pane. Toggle
 the **Enabled** checkbox property directly in the list to pause or resume it.
+When the list is narrower than 760px (a phone, or the Settings sheet) it drops the
+column headers and **Created by**, and each row fits one line: name, status, the
+model or agent icon, and the **Enabled** checkbox, with no sideways scroll. Search
+fields hide their keyboard hint on touch devices.
 Open the routine and use its **Run History** tab to see past runs. Each run is its
 own agent session. The routine's **Runs hidden** / **Runs shown** chip decides
 where its runs appear. **Hide runs** (the default) keeps them off Home and out of

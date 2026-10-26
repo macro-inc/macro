@@ -624,6 +624,18 @@ refuses a policy change from anyone but the organizer with 403 `not_organizer`, 
 Outlook event with
 `provider_rejected`. `viewerCan.organize` marks the organizer of the displayed copy, including
 on Outlook, where `setGuestPolicy` is false.
+Google names the calendar an event was made on as its organizer, so an event on a secondary
+calendar shows `Organizer` with that calendar's name, and its organizer email is the calendar's
+id (`…@group.calendar.google.com`). Whoever can write that calendar organizes the event, as in
+Google: details, guests, guest permissions and Delete work as on their primary calendar, on
+every copy. A new event on a calendar other than the primary lists its creator as a guest only
+when it has other guests, as Google's own client does, so an event of one's own shows as one
+block in Google. With guests, Google also invites the creator's primary calendar; Macro shows
+both copies as one event, sends the organizer's changes and Delete through the copy on the
+secondary calendar, and keeps reminders and answers on the invitation. To verify, create an
+event on a secondary calendar with no guests and another with a guest, open each (no `Only the
+organizer can change this event.`), change the title, add a guest, then delete it, and check
+Google: the first shows once, and both disappear from every calendar after the delete.
 The details header's `Download .ics` icon button, beside `Copy event`, saves the event as an
 iCalendar file named after its title, so it can be passed on or added to another calendar. The
 file holds the series (its repeat rule, in the event's original time zone), title, description
@@ -639,7 +651,9 @@ where `Email guests` does, with no recipients, the title as subject, a plain-tex
 the body (title, when in the viewer's zone, the repeat rule in words, location, organizer and
 description, never guests or a join link) and the `.ics` attached as a picked file would be.
 Nothing is saved as a draft until you edit something. The file is `METHOD:PUBLISH`, so
-recipients get a copy to add to their calendar, not an invitation they can answer. If the file
+recipients get a copy to add to their calendar, not an invitation they can answer; in Macro the
+received email shows it as a shared event (see [Calendar invitations in
+email](#calendar-invitations-in-email)). If the file
 cannot be fetched, no composer opens and a `Failed to forward event` toast shows; to check it,
 answer the `.ics` route with an error.
 On desktop, every icon button in the details header (`Copy event`, `Download .ics`, `Forward
@@ -1270,14 +1284,16 @@ ICS attachments show a calendar icon in the attachment pill and file headers on
 desktop and mobile, including when the email uses `application/ics` or a
 parameterized `text/calendar` MIME type. Opening the attachment of a message that shows a
 card opens a dialog (a drawer on phones) with the same card, so its RSVP or `Add to calendar`
-works there, and `Download .ics`, which saves the file without adding it to Drive. When the
-card falls back to the saved invitation (the event matches nothing on your calendars, as with
-a forwarded event), its status line reads `Saved invitation.` in the dialog; the card in the
-email adds that the original email or invitation attachment has more options. The card
-stays put while the thread refreshes. Close, Escape, or dismissing the phone drawer returns
-focus to the attachment chip; `Open in calendar` closes the dialog before the calendar opens,
-including when Calendar is already open in another split, without pulling focus back to the
-email. A calendar file with
+works there, and `Download .ics`, which saves the file without adding it to Drive. When an
+invitation's card falls back to the saved invitation (the event matches nothing on your
+calendars), its status line reads `Saved invitation.` in the dialog; the card in the email
+adds that the original email or invitation attachment has more options. A shared event shown
+without a calendar check reads `Shared event.` in the dialog the same way, while the card in
+the email points at the original email or event attachment. The card stays put while the
+thread refreshes. Close, Escape, or dismissing the phone drawer returns focus to the
+attachment chip; `Open in calendar` closes the dialog before the calendar opens, including
+when Calendar is already open in another split, without pulling focus back to the email. A
+calendar file with
 no card (nothing Macro could read) downloads directly, and an Outlook cloud-reference `.ics`
 opens its Outlook page like any other reference attachment.
 Related recurring components are grouped behind their own disclosure. Only mail synced
@@ -1289,6 +1305,27 @@ Descriptions render sanitized rich text, including emphasis, links, and lists.
 Plain-text line breaks and literal angle brackets (such as `<bob@example.com>`)
 remain readable. Use `Show more` / `Show less` to expand or collapse the description;
 description links use the host's normal link-opening behavior.
+
+A published event file (`METHOD:PUBLISH`, what `Forward by email` attaches) is a shared
+event, not an invitation: the card reads `Shared event organized by <organizer>` and never
+shows Yes / Maybe / No, a last response, or a waiting-for-sync line. When the viewer already
+holds the meeting it says `On your calendar.` with `Open in calendar` and `View your day`;
+when the meeting is on more than one of the viewer's accounts it says
+`This event matches multiple accounts. Open your calendar to choose.`, as an invitation does.
+When the calendar check confirms the viewer does not hold it, the card says
+`Not on your calendar.` and, behind the `enable-calendar-add-shared-event` flag, offers
+`Add to calendar`, which imports the same snapshot as the channel-share card
+(the viewer's only writable Google calendar, or one picked from a menu; the real organizer
+kept, the viewer as the only guest, nobody notified) through email service's
+`POST /email/threads/{thread_id}/messages/{message_id}/calendar-invitations/{invitation_id}/copy`.
+The server reads the event from the saved email, never from the request. The card then
+resolves to the snapshot. A single occurrence, a cancelled event, a time that cannot be read,
+and mail saved before recurrence was recorded on the snapshot get no `Add to calendar`.
+Nor does a card whose check is not confirmed: it says `Checking your connected calendar…`
+while loading, `Connect a calendar to add this event.` without a calendar, and
+`Calendar unavailable. Saved event details are shown.` when the check fails; a failed
+refresh after an earlier `Not on your calendar.` keeps that line under the unavailable notice
+but withholds the button.
 
 A connected, resolved invitation shows the responding address and Yes / Maybe / No.
 Calendars connected through a linked inbox also resolve here, using that inbox's

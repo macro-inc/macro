@@ -85,6 +85,9 @@ const MACRO_TOOLS: Record<MacroToolName, Wording | null> = {
   GetTeamAvailability: (whose) => `check availability for ${whose} team`,
   GetThread: (whose) => `read ${whose} email`,
   ImportCompaniesCsv: (whose) => `import companies into ${whose} CRM`,
+  ImportFromLinear: (whose) =>
+    `import a Linear workspace into ${whose} workspace`,
+  ImportFromJira: (whose) => `import a Jira workspace into ${whose} workspace`,
   ImportFromNotion: (whose) =>
     `import a Notion workspace into ${whose} workspace`,
   ImportNotionPage: (whose) => `import a Notion page into ${whose} workspace`,

@@ -442,14 +442,15 @@ async fn unreadable_bound_events_keep_the_entire_original_action_for_a_compatibl
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn stored_settlements_read_back_as_the_kind_they_were_written(pool: PgPool) {
     use agent_runtime_protocol::domain::notification::{
-        DecisionOutcome, DecisionVia, ImportOutcome, ImportSettlement, ReviewOutcome,
-        ReviewSettlement,
+        DecisionOutcome, DecisionVia, ImportOutcome, ImportSettlement, ImportWorkspace,
+        ReviewOutcome, ReviewSettlement,
     };
     sqlx::raw_sql("INSERT INTO agent_session (id, owner_id, bot_id, model, harness, workspace) VALUES ('00000000-0000-0000-0000-000000000001','macro|owner@example.com','00000000-0000-0000-0000-00000000a9e7','test','macrod','/workspace')").execute(&pool).await.unwrap();
     let session = AgentSessionId::new_from_uuid(Uuid::from_u128(1));
     let store = PgNotificationStore(pool.clone());
     let import = ReviewSettlement::Import {
         import: ImportSettlement {
+            source: ImportWorkspace::Notion,
             outcome: ImportOutcome::Cancelled,
             error: Some("Cancelled".into()),
             imported: 1,

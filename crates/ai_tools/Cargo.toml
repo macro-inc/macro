@@ -8,6 +8,8 @@ version = "0.1.0"
 test-support = []
 
 [dependencies]
+import_linear = { path = "../import_linear" }
+import_jira = { path = "../import_jira" }
 clap = { workspace = true, features = ["derive"] }
 favorites = { path = "../favorites", features = ["ai_tools", "postgres"] }
 forms = { path = "../forms", features = ["ai_tools", "gateway", "postgres", "scheduling"] }

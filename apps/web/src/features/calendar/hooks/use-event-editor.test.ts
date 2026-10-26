@@ -1355,6 +1355,42 @@ describe('guests of an event the viewer was invited to', () => {
       dispose();
     }
   });
+
+  it('keeps the viewer on a meeting their secondary calendar organizes', async () => {
+    // Google names the secondary calendar as the organizer and lists the
+    // viewer's own address as a plain guest.
+    const organized = invitedEvent(
+      { ...mayModify, setGuestPolicy: true, organize: true },
+      {
+        organizerEmail: 'c_0123abcd@group.calendar.google.com',
+        attendees: [
+          {
+            email: 'me@example.com',
+            isOrganizer: false,
+            isOptional: false,
+            isSelf: true,
+            responseStatus: 'accepted',
+          },
+        ],
+      }
+    );
+    const { editor, dispose } = editorFor(organized, true);
+    try {
+      expect(editor.initialValues()?.guests).toBe('me@example.com');
+
+      await editor.save({
+        ...unchanged,
+        guestEmails: ['me@example.com', 'dana@example.com'],
+      });
+
+      expect(mocks.updateEvent.mock.lastCall?.[0].patch.attendees).toEqual([
+        { email: 'me@example.com' },
+        { email: 'dana@example.com' },
+      ]);
+    } finally {
+      dispose();
+    }
+  });
 });
 
 describe('guest permissions', () => {

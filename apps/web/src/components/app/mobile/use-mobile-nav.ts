@@ -90,12 +90,14 @@ export function useMobileNavNavigate(): (id: MobileDockNavId) => void {
     if (isNativeMobilePlatform()) {
       const routeState: MobileSearchRouteState | undefined =
         id === 'search' ? { sessionId: crypto.randomUUID() } : undefined;
-      replaceAllSplits(content, { routeState });
+      // Search taps intentionally start a new search session.
+      replaceAllSplits(content, { routeState, resume: id !== 'search' });
       return;
     }
     const fgContent = globalSplitManager()?.activeSplit()?.content();
     const isOnNavView = fgContent?.type === 'component';
     openWithSplit(content, {
+      resume: id !== 'search',
       mergeHistory: isOnNavView,
       // Route through the router so an existing pane receives the default tab.
       search: id === 'documents' || id === 'reviews' ? {} : undefined,

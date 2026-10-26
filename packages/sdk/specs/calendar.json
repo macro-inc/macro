@@ -1809,7 +1809,7 @@
       },
       "CopyCalendarEventRequest": {
         "type": "object",
-        "description": "Request body adding a channel-shared event to the requester's calendar.",
+        "description": "Request body adding a shared event to the requester's calendar.",
         "properties": {
           "calendarId": {
             "type": ["string", "null"],
