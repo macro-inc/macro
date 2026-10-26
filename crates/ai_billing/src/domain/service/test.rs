@@ -170,6 +170,7 @@ struct FakeReload {
 struct RepoState {
     settings: BillingSettings,
     balance: i64,
+    free_bonus_cents: i64,
     /// Credits consumed per period; charges are summed from `charges`.
     consumed: HashMap<DateTime<Utc>, i64>,
     purchases: Vec<String>,
@@ -348,6 +349,9 @@ impl BillingRepo for FakeRepo {
     async fn clear_overage_suspension(&self, _payer: &MacroUserIdStr<'_>) -> Result<()> {
         self.state.lock().unwrap().suspended = false;
         Ok(())
+    }
+    async fn free_allowance_bonus_cents(&self, _user: &MacroUserIdStr<'_>) -> Result<i64> {
+        Ok(self.state.lock().unwrap().free_bonus_cents)
     }
     async fn credit_balance_cents(&self, _payer: &MacroUserIdStr<'_>) -> Result<i64> {
         Ok(self.state.lock().unwrap().balance)
@@ -1241,6 +1245,32 @@ async fn free_users_are_hard_capped_at_the_free_allowance() {
             .await,
         Err(BillingError::FreePlan)
     ));
+}
+
+#[tokio::test]
+async fn earned_bonus_raises_the_free_allowance_up_to_the_cap() {
+    let (svc, repo, _, usage) = premium_service(500);
+    let free = user("free@x.com");
+    assert_eq!(
+        svc.check_allowance(&free).await.unwrap(),
+        AllowanceDecision::Deny(DenyReason::FreeAllowanceExhausted)
+    );
+
+    // Two rewards: $20 more allowance at provider cost.
+    repo.state.lock().unwrap().free_bonus_cents = 2_000;
+    let snap = svc.snapshot(&free).await.unwrap();
+    assert_eq!(snap.included_cents, 2_500);
+    assert_eq!(snap.remaining_cents, 2_000);
+    assert_eq!(
+        svc.check_allowance(&free).await.unwrap(),
+        AllowanceDecision::Allow
+    );
+
+    // Past the cap, more rewards add nothing.
+    repo.state.lock().unwrap().free_bonus_cents = 9_000;
+    *usage.cents.lock().unwrap() = 0;
+    let snap = svc.snapshot(&free).await.unwrap();
+    assert_eq!(snap.included_cents, 500 + 5_000);
 }
 
 #[tokio::test]
