@@ -57,13 +57,13 @@ impl Daemon {
         #[cfg(unix)]
         let workspaces = if crate::herdr::drives_herdr(&config.harness) {
             let root = crate::herdr::instance_directory(credentials.harness_id)?;
-            let herdr = crate::herdr::HerdrSession::detect()
-                .ok_or_else(|| rootcause::report!("start macrod inside a Herdr pane"))?;
+            if crate::herdr::HerdrSession::detect().is_none() {
+                rootcause::bail!("start macrod inside a Herdr pane");
+            }
             crate::herdr::configure_launch(&mut config.harness, &config.herdr, &root);
             Some(crate::herdr::repositories::Workspaces::new(
                 config.workspace.path.clone(),
                 config.herdr.storage_path.clone().unwrap_or(root),
-                crate::herdr::cli::HerdrCli::new(herdr.bin, herdr.workspace_id),
             ))
         } else {
             None

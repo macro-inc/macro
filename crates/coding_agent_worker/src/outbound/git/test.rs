@@ -33,7 +33,7 @@ async fn finds_an_existing_ssh_clone_for_an_https_request() {
 }
 
 #[tokio::test]
-async fn refreshes_origin_main_without_changing_the_users_branch_or_files() {
+async fn session_worktrees_use_fresh_main_without_changing_the_users_branch_or_files() {
     let root = tempfile::tempdir().unwrap();
     let source = root.path().join("source");
     std::fs::create_dir(&source).unwrap();
@@ -72,6 +72,32 @@ async fn refreshes_origin_main_without_changing_the_users_branch_or_files() {
         git(&clone, &["rev-parse", "origin/main"]).await.unwrap(),
         latest
     );
+    let session = root.path().join("session with spaces");
+    create_worktree(&clone, &session, "macro/session-one")
+        .await
+        .unwrap();
+    assert_eq!(git(&session, &["rev-parse", "HEAD"]).await.unwrap(), latest);
+    assert_eq!(
+        git(&session, &["branch", "--show-current"]).await.unwrap(),
+        "macro/session-one"
+    );
+    assert_eq!(
+        std::fs::read_to_string(session.join("file")).unwrap(),
+        "latest main"
+    );
+    std::fs::write(session.join("file"), "session edits").unwrap();
+    let second = root.path().join("second session");
+    create_worktree(&session, &second, "macro/session-two")
+        .await
+        .unwrap();
+    assert_eq!(
+        std::fs::read_to_string(second.join("file")).unwrap(),
+        "latest main"
+    );
+    assert_eq!(
+        std::fs::read_to_string(session.join("file")).unwrap(),
+        "session edits"
+    );
     assert_eq!(
         git(&clone, &["branch", "--show-current"]).await.unwrap(),
         "users-work"
@@ -80,37 +106,4 @@ async fn refreshes_origin_main_without_changing_the_users_branch_or_files() {
         std::fs::read_to_string(clone.join("file")).unwrap(),
         "uncommitted work"
     );
-}
-
-#[tokio::test]
-async fn reopening_a_linked_worktree_uses_the_main_checkout_as_herdr_source() {
-    let root = tempfile::tempdir().unwrap();
-    let source = root.path().join("source with spaces");
-    let linked = root.path().join("linked");
-    std::fs::create_dir(&source).unwrap();
-    git(&source, &["init", "--initial-branch=main"])
-        .await
-        .unwrap();
-    git(
-        &source,
-        &[
-            "-c",
-            "user.name=Test",
-            "-c",
-            "user.email=test@example.invalid",
-            "commit",
-            "--allow-empty",
-            "-m",
-            "initial",
-        ],
-    )
-    .await
-    .unwrap();
-    git(
-        &source,
-        &["worktree", "add", "-b", "session", linked.to_str().unwrap()],
-    )
-    .await
-    .unwrap();
-    assert_eq!(primary_worktree(&linked).await.unwrap(), source);
 }

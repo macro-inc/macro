@@ -39,6 +39,7 @@ use codex_fold::CodexLog;
 mod commands;
 mod effort;
 mod models;
+mod windows;
 
 /// The subcommand macrod's harness config names to run this adapter.
 pub(crate) const SUBCOMMAND: &str = "herdr-acp";
@@ -133,8 +134,6 @@ pub(crate) struct AdapterOptions {
     pub state_dir: Option<PathBuf>,
     /// Native model ID for new sessions.
     pub model: Option<String>,
-    /// Sessions use dispatcher-managed worktrees.
-    pub managed_worktrees: bool,
     /// The agent TUI sessions run.
     pub kind: TuiAgent,
     /// Passed to Claude Code as `--permission-mode`.
@@ -291,6 +290,7 @@ struct Session {
     model: Mutex<String>,
     effort: Mutex<Option<String>>,
     native_id: Mutex<Option<String>>,
+    window: Mutex<Option<super::cli::Window>>,
     prompt_pending: AtomicBool,
     live: tokio::sync::Mutex<Option<Live>>,
     cancel: Mutex<Option<CancellationToken>>,
@@ -477,6 +477,7 @@ impl Adapter {
                     .unwrap_or_else(|| DEFAULT_MODEL.to_owned()),
             ),
             native_id: Mutex::new(None),
+            window: Mutex::new(None),
             effort: Mutex::new(None),
             prompt_pending: AtomicBool::new(false),
             live: tokio::sync::Mutex::new(None),
@@ -497,6 +498,7 @@ impl Adapter {
                 cwd: session.cwd.clone(),
                 model: lock(&session.model).clone(),
                 native_id: lock(&session.native_id).clone(),
+                window: lock(&session.window).clone(),
                 transcript: live.and_then(|live| live.path.clone()),
                 started: live
                     .map(|live| live.started)
@@ -560,6 +562,7 @@ impl Adapter {
             model: Mutex::new(record.model.clone()),
             effort: Mutex::new(None),
             native_id: Mutex::new(record.native_id),
+            window: Mutex::new(record.window),
             prompt_pending: AtomicBool::new(false),
             live: tokio::sync::Mutex::new(None),
             cancel: Mutex::new(None),
@@ -571,6 +574,12 @@ impl Adapter {
             if offset == live.cursor.offset && live.pending.is_empty() {
                 break;
             }
+        }
+        if let Some(herdr) = &self.herdr
+            && let Ok(info) = herdr.agent_info(&live.name).await
+            && models::same_session(&session, &info)
+        {
+            self.remember_window(&session, &live, &info)?;
         }
         self.sync_model(&session, &live).await;
         *session.live.lock().await = Some(live);
@@ -659,10 +668,11 @@ impl Adapter {
                             "Herdr agent identity no longer matches this session",
                         ));
                     }
+                    self.remember_window(session, live, &info)?;
                 }
                 Err(error) if error.missing_agent() => {
+                    let mut restarted = self.launch(herdr, session, text, guard.as_ref()).await?;
                     let old = guard.take().expect("live session was checked above");
-                    let mut restarted = self.launch(herdr, session, text).await?;
                     restarted.path = old.path;
                     restarted.cursor = old.cursor;
                     restarted.log = old.log;
@@ -674,7 +684,7 @@ impl Adapter {
             }
         }
         if guard.is_none() {
-            *guard = Some(self.launch(herdr, session, text).await?);
+            *guard = Some(self.launch(herdr, session, text, None).await?);
             self.save(session, guard.as_ref())?;
         }
         let Some(live) = guard.as_mut() else {
@@ -741,21 +751,13 @@ impl Adapter {
         herdr: &HerdrCli,
         session: &Session,
         first_prompt: &str,
+        previous: Option<&Live>,
     ) -> Result<Live, RpcError> {
         let kind = self.options.kind;
         let label = title_from(first_prompt).unwrap_or_else(|| kind.herdr_kind().to_owned());
-        let window = if self.options.managed_worktrees {
-            let source = crate::outbound::git::primary_worktree(&session.cwd)
-                .await
-                .map_err(|error| RpcError::internal(error.to_string()))?;
-            herdr
-                .open_worktree(&source, &session.cwd, &label, !self.options.no_focus)
-                .await?
-        } else {
-            herdr
-                .open_window(&session.cwd, &label, !self.options.no_focus)
-                .await?
-        };
+        let window = self
+            .session_window(herdr, session, &label, previous)
+            .await?;
 
         let model = lock(&session.model).clone();
         let mut args = Vec::new();

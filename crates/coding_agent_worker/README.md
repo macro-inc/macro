@@ -8,16 +8,21 @@ repository is cloned using the operator's Git credentials. New worktrees start
 from a fresh fetch of `origin/main`; macrod never pulls into the operator's
 working branch. A repository without `main` produces an error.
 
-Herdr creates and registers the worktree. The session ID determines its path
-and branch, so redelivery reuses existing work without resetting edits. Cached
-repositories and worktrees live under `~/.macrod/herdr/<harness-id>/`. Each
+macrod creates each Git worktree without registering a Herdr workspace. The first
+prompt opens a tab in the workspace containing macrod, with that worktree as its
+working directory. Sessions therefore stay together even when another Herdr
+workspace already owns the repository's main checkout. The session ID determines
+the path and branch, so redelivery reuses existing work without resetting edits.
+Cached repositories and worktrees live under `~/.macrod/herdr/<harness-id>/`. Each
 paired macrod instance has one configuration and its own storage directory.
 
 ### Reconnecting native sessions
 
 macrod records native session IDs and transcript locations in private files in
-its instance directory. ACP `session/load` replays the native transcript before
-acknowledging the load. A running Herdr agent is reattached; an explicitly missing
+its instance directory, together with the session's Herdr tab. Native launch
+retries and daemon restarts reuse that tab; a closed tab is recreated. ACP
+`session/load` replays the native transcript before acknowledging the load.
+A running Herdr agent is reattached; an explicitly missing
 agent resumes its native session on the next prompt. Socket errors do not create
 replacement agents. Changing the configured provider does not convert existing
 sessions into sessions for the other provider.
@@ -101,6 +106,7 @@ Start macrod inside Herdr and choose **Claude Code in herdr** or **Codex in
 herdr** in Quickstart. Select a workspace directory containing your existing
 clones and pair with Macro. Native CLI authentication and Git credentials are
 reused. Each instance has one configuration, with no profiles to choose per run.
+Use a dedicated Herdr workspace for the daemon; its sessions open as tabs there.
 
 The Config tab adds **Model** (empty uses the native default), **Extra args**
 (shell-style quoting), **Storage** (empty uses automatic instance storage), and

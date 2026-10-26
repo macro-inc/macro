@@ -594,9 +594,11 @@ the shimmer.
   Enter the code from your own terminal, not the example screenshot.
   Run inside a herdr pane, macrod's Quickstart also offers **Claude Code in herdr**
   and **Codex in herdr**: each session of an agent on that runtime opens a herdr
-  tab in the directory macrod started from, running the real Claude Code or Codex
-  TUI. The session page streams its tool calls and replies, and its permission
-  prompts appear as approvals. Other runtimes started inside herdr get a live
+  tab in macrod's Herdr workspace, running the real Claude Code or Codex TUI in
+  its own Git worktree. Sessions stay in that workspace even when a different
+  workspace owns the repository's main checkout. The session page streams its
+  tool calls and replies, and its permission prompts appear as approvals.
+  Other runtimes started inside herdr get a live
   view tab per session that can prompt and interrupt it; approvals stay in Macro.
   Native Herdr sessions offer `/compact`, `/init`, and `/fast` in the slash menu;
   Codex also offers `/ultrafast`. Macro confirms delivery of speed commands;

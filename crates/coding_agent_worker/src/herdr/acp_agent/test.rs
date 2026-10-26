@@ -184,6 +184,7 @@ pub(super) fn save_transcript(root: &Path, id: &str) -> PathBuf {
             cwd: root.to_owned(),
             model: "sonnet".into(),
             native_id: Some(id.to_owned()),
+            window: None,
             transcript: Some(transcript.clone()),
             started: 1,
         })
@@ -534,7 +535,7 @@ esac
         .unwrap();
 
     adapter
-        .launch(&HerdrCli::new(script, None), &session, "hello")
+        .launch(&HerdrCli::new(script, None), &session, "hello", None)
         .await
         .unwrap();
 

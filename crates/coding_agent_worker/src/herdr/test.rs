@@ -69,7 +69,6 @@ fn instance_settings_keep_native_arguments_after_the_separator() {
             "codex",
             "--state-dir",
             "/private state",
-            "--managed-worktrees",
             "--model=custom-model",
             "--no-focus",
             "--",

@@ -123,7 +123,6 @@ pub(crate) fn configure_launch(
     let mut flags = vec![
         "--state-dir".to_owned(),
         state_dir.to_string_lossy().into_owned(),
-        "--managed-worktrees".to_owned(),
     ];
     if let Some(model) = &settings.model {
         flags.push(format!("--model={model}"));

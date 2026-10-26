@@ -12,6 +12,7 @@ fn records_survive_a_new_store_without_exposing_credentials() {
         cwd: PathBuf::from("/repo"),
         model: "sonnet".into(),
         native_id: Some(id.clone()),
+        window: None,
         transcript: Some(PathBuf::from("/log.jsonl")),
         started: 1,
     };
