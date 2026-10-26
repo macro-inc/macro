@@ -171,10 +171,11 @@ export const enableTasksReviews = defineFlag({
   default: onInDev,
 });
 
-/** Gantt layouts stay hidden until enabled remotely or with a local override. */
+/** Gantt is visible in local previews; deployed apps retain the remote rollout. */
 export const enableGantt = defineFlag({
   key: 'enable-gantt',
   env: 'ENABLE_GANTT',
+  default: LOCAL_ONLY || undefined,
 });
 
 export const ENABLE_PDF_MODIFICATION_DATA_AUTOSAVE = defineFlag({

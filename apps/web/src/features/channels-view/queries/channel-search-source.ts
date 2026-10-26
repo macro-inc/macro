@@ -31,6 +31,7 @@ export function createChannelSearchSource(options: {
     return byId;
   });
   const search = createSearchState({
+    surface: () => 'channels',
     enabled,
     text: options.text,
     localPool: () => [...localChannels().values()].map((data) => ({ data })),

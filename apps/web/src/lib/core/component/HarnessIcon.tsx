@@ -1,6 +1,6 @@
+import PlugsIcon from '@icon/system/regular/plugs.svg';
 import CodexIcon from '@icon/wide-codex-ide.svg';
 import CursorIcon from '@icon/wide-cursor-ide.svg';
-import PlugsIcon from '@phosphor/plugs.svg';
 import { Dynamic } from 'solid-js/web';
 import { match } from 'ts-pattern';
 

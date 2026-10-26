@@ -1,5 +1,5 @@
-import HashIcon from '@phosphor/hash.svg';
-import PercentIcon from '@phosphor/percent.svg';
+import HashIcon from '@icon/system/regular/hash.svg';
+import PercentIcon from '@icon/system/regular/percent.svg';
 import { Button, ButtonGroup } from '@ui';
 import { arc, type PieArcDatum, pie } from 'd3-shape';
 import { createMemo, createSignal, For, Show } from 'solid-js';

@@ -1,4 +1,4 @@
-import CaretUpIcon from '@phosphor/caret-up.svg';
+import CaretUpIcon from '@icon/system/regular/caret-up.svg';
 import { Button } from '@ui';
 import { CollapseTransition } from '@ui/components/CollapseTransition';
 import { createSignal, createUniqueId, type JSX } from 'solid-js';

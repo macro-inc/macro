@@ -1,5 +1,5 @@
-import SpinnerIcon from '@phosphor/spinner.svg';
-import CloseIcon from '@phosphor/x.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
+import CloseIcon from '@icon/system/regular/x.svg';
 import { ActionDialogShell } from '@ui/components/ActionDialogShell';
 import { Button } from '@ui/components/Button';
 import type { ConfirmDialogProps } from '@ui/components/ConfirmDialog';

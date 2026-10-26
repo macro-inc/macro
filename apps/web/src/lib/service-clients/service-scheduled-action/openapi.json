@@ -762,6 +762,21 @@
         ],
         "description": "A routine may run on one trigger or any of several schedules and Macro events."
       },
+      "AgentMcpServer": {
+        "type": "object",
+        "description": "One Pipedream app an agent lists under [`AgentMcpServers::Selected`].\n\nOnly the catalog identity is stored. Whether a given person has connected\nthe app is theirs, resolved at call time by the egress proxy, never here.",
+        "required": ["app_slug", "server_name"],
+        "properties": {
+          "app_slug": {
+            "type": "string",
+            "description": "Pipedream app slug, e.g. `linear`."
+          },
+          "server_name": {
+            "type": "string",
+            "description": "Display name, e.g. `Linear`."
+          }
+        }
+      },
       "AgentTask": {
         "type": "object",
         "required": ["prompt", "user_prompt"],
@@ -776,6 +791,13 @@
                 "description": "Absent when using Macro's agent-session runtime with a selected model."
               }
             ]
+          },
+          "mcp_servers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentMcpServer"
+            },
+            "description": "Apps the routine requires on top of the agent's own. The owner must\nhave each one connected to save the routine and for it to run."
           },
           "model": {
             "oneOf": [

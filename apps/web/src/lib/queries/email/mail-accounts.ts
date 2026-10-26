@@ -1,18 +1,50 @@
 import { normalizedCacheResultMetadata } from '@graphql-cache/exchange/normalized-cache-exchange';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import { MailAccountsDocument } from '@service-storage/graphql/generated/graphql';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
+import { createRequest } from '@urql/core';
 import { createLiveQuery } from '../../graphql-cache/solid/create-live-query';
 
 /** Reconcile account edits with mounted composers and the durable catalog. */
-export async function refreshMailAccounts(): Promise<void> {
-  const result = await getGraphqlSoupClient()
-    .query(MailAccountsDocument, {}, { requestPolicy: 'network-only' })
-    .toPromise();
-  // A nullable sendAs error must not discard healthy inboxes or their aliases.
-  if (!result.data)
-    throw result.error ?? new Error('Mail accounts refresh returned no data');
-  const metadata = normalizedCacheResultMetadata(result);
-  if (metadata?.source === 'live-network') await metadata.persistence;
+export function refreshMailAccounts(parentSpan?: Span): Promise<void> {
+  const refresh = async (span: Span) => {
+    try {
+      const client = getGraphqlSoupClient();
+      const operation = client.createRequestOperation(
+        'query',
+        createRequest(MailAccountsDocument, {}),
+        { requestPolicy: 'network-only' }
+      );
+      const fetch = operation.context.fetch;
+      // urql schedules the transport later. Re-enter the refresh context at
+      // dispatch, retaining the client's configured authentication/cache host.
+      const result = await client
+        .executeRequestOperation({
+          ...operation,
+          context: {
+            ...operation.context,
+            ...(fetch && {
+              fetch: (input: RequestInfo | URL, init?: RequestInit) =>
+                span.run(() => fetch(input, init)),
+            }),
+          },
+        })
+        .toPromise();
+      // A nullable sendAs error must not discard healthy inboxes or their aliases.
+      if (!result.data)
+        throw (
+          result.error ?? new Error('Mail accounts refresh returned no data')
+        );
+      const metadata = normalizedCacheResultMetadata(result);
+      if (metadata?.source === 'live-network') await metadata.persistence;
+    } catch (error) {
+      span.error('Mail account refresh failed');
+      throw error;
+    }
+  };
+  return parentSpan
+    ? parentSpan.span('email.settings.refresh', refresh)
+    : Telemetry.span('email.settings.refresh', refresh);
 }
 
 /** One identity-scoped GraphQL catalog for inboxes and their verified senders.

@@ -1,7 +1,7 @@
 import { SplitHeaderContextMenu } from '@components/app/split-layout/components/SplitHeaderContextMenu';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import { Button, type ButtonProps, cn } from '@ui';
 import { CollapseTransition } from '@ui/components/CollapseTransition';
 import type { JSX } from 'solid-js';

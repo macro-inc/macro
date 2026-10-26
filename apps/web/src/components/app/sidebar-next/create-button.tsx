@@ -5,7 +5,7 @@ import {
 import { APP_TOUR } from '@app/features/command/sidebar/tour';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { TOKENS } from '@core/hotkey/tokens';
-import PlusIcon from '@phosphor/plus.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { Button } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 

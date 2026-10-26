@@ -1,6 +1,6 @@
 import { toast } from '@core/component/Toast/Toast';
-import CalendarPlusIcon from '@phosphor/calendar-plus.svg';
-import CaretDownIcon from '@phosphor/caret-down.svg';
+import CalendarPlusIcon from '@icon/system/regular/calendar-plus.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
 import {
   isAlreadyOnCalendar,

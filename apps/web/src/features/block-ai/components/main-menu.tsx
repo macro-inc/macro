@@ -3,7 +3,7 @@
  * an artboard as PNG) and View toggles. Presentational.
  */
 
-import List from '@phosphor/list.svg';
+import List from '@icon/system/regular/list.svg';
 import { Button } from '@ui/components/Button';
 import { createSignal, onCleanup, Show } from 'solid-js';
 import { type MenuItem, MenuItems } from './status-bar';

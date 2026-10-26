@@ -1,10 +1,10 @@
-import CaretDown from '@phosphor/caret-down.svg';
-import CaretUp from '@phosphor/caret-up.svg';
-import MagnifyingGlass from '@phosphor/magnifying-glass.svg';
-import Swap from '@phosphor/swap.svg';
-import TextAa from '@phosphor/text-aa.svg';
-import TextT from '@phosphor/text-t.svg';
-import X from '@phosphor/x.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import CaretUp from '@icon/system/regular/caret-up.svg';
+import MagnifyingGlass from '@icon/system/regular/magnifying-glass.svg';
+import Swap from '@icon/system/regular/swap.svg';
+import TextAa from '@icon/system/regular/text-aa.svg';
+import TextT from '@icon/system/regular/text-t.svg';
+import X from '@icon/system/regular/x.svg';
 import { InputGroup } from '@ui/components/InputGroup';
 import { Toolbar } from '@ui/components/Toolbar';
 import { createEffect, on, Show } from 'solid-js';

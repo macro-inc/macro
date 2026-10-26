@@ -1,9 +1,9 @@
 import { isMobileWidth } from '@core/mobile/mobileWidth';
-import CaretDown from '@phosphor/caret-left.svg';
-import CaretRight from '@phosphor/caret-right.svg';
-import CheckIcon from '@phosphor/check.svg';
-import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
-import SquaresFour from '@phosphor/squares-four.svg';
+import CaretDown from '@icon/system/regular/caret-left.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
+import SquaresFour from '@icon/system/regular/squares-four.svg';
 import { cn, Dropdown } from '@ui';
 import {
   type Component,

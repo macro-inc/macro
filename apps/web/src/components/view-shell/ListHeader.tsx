@@ -1,4 +1,4 @@
-import SearchIcon from '@phosphor/magnifying-glass.svg';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import { Button, cn } from '@ui';
 import { createSignal, type JSX, onMount, Show } from 'solid-js';
 import { SearchBar } from './SearchBar';

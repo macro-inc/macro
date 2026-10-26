@@ -1,4 +1,5 @@
 import {
+  buildGroupedSoupRows,
   dateBucket,
   groupSoupEntities,
   type SoupGroup,
@@ -20,4 +21,15 @@ export function groupEmailEntitiesByDate(
     getGroupLabel: (_groupId, firstEntity) =>
       dateBucket(emailSortTimestamp(firstEntity), now).label,
   });
+}
+
+/** Keep today's messages flush with the header; retain older date headings. */
+export function buildEmailDateRows(
+  entities: WithNotification<EntityData>[],
+  now = new Date()
+) {
+  const rows = buildGroupedSoupRows(groupEmailEntitiesByDate(entities, now));
+  if (rows[0]?.kind === 'group-header' && rows[0].groupId === 'today')
+    rows.shift();
+  return rows;
 }

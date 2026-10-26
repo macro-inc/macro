@@ -3,7 +3,7 @@ import {
   useMobileNavNavigate,
 } from '@components/app/mobile/use-mobile-nav';
 import { usePreserveFocusOnButtonTaps } from '@core/mobile/usePreserveFocusOnButtonTaps';
-import XIcon from '@phosphor/x.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { SearchState } from './mobileSearchState';
 
 // The input lives in app chrome, outside result/category boundaries, and stays

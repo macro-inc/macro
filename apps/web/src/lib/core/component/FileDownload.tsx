@@ -1,10 +1,10 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { FileDownloadController } from '@core/util/createFileDownload';
 import { fireAndForget } from '@core/util/fireAndForget';
-import DownloadIcon from '@phosphor/download-simple.svg';
+import DownloadIcon from '@icon/system/regular/download-simple.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import ShareIcon from '@phosphor/export.svg';
-import SpinnerIcon from '@phosphor/spinner.svg';
-import XIcon from '@phosphor/x.svg';
 import { Button, Dropdown } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { useHoldParentHoverCardOpen } from './HoverCard';

@@ -417,6 +417,47 @@ fn custom_zones_do_not_poison_timed_calendar_pages_and_sequence_tracks_invitatio
 }
 
 #[test]
+fn the_organizer_of_a_created_event_holds_it_while_guests_have_not_answered() {
+    let mut value = event("created");
+    value["organizer"] = json!({"emailAddress":{"address":"Owner@Example.com","name":"Owner"}});
+    value["attendees"] = json!([
+        {
+            "emailAddress":{"address":"owner@example.com","name":"Owner"},
+            "type":"required",
+            "status":{"response":"none","time":"0001-01-01T00:00:00Z"}
+        },
+        {
+            "emailAddress":{"address":"ada@example.com","name":"Ada"},
+            "type":"required",
+            "status":{"response":"none","time":"0001-01-01T00:00:00Z"}
+        }
+    ]);
+
+    let projection = normalize::projection(&target(), value, vec![]).unwrap();
+
+    assert_eq!(
+        projection
+            .event
+            .attendees
+            .iter()
+            .map(|attendee| (
+                attendee.email.as_str(),
+                attendee.is_organizer,
+                attendee.response_status
+            ))
+            .collect::<Vec<_>>(),
+        [
+            ("owner@example.com", true, AttendeeResponseStatus::Accepted),
+            (
+                "ada@example.com",
+                false,
+                AttendeeResponseStatus::NeedsAction
+            ),
+        ]
+    );
+}
+
+#[test]
 fn until_before_the_daily_start_excludes_that_whole_date() {
     let time = EventTime::Timed {
         starts_at: "2026-10-01T10:00:00Z".parse().unwrap(),

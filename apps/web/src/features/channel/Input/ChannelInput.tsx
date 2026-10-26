@@ -32,11 +32,11 @@ import {
   uploadFile,
 } from '@core/util/upload';
 import type { EntityData } from '@entity';
-import AtIcon from '@phosphor/at.svg';
+import AtIcon from '@icon/system/regular/at.svg';
+import PaperclipIcon from '@icon/system/regular/paperclip.svg';
+import PhoneIcon from '@icon/system/regular/phone.svg';
 import ChartBarIcon from '@phosphor/chart-bar-horizontal.svg';
 import GifIcon from '@phosphor/gif.svg';
-import PaperclipIcon from '@phosphor/paperclip.svg';
-import PhoneIcon from '@phosphor/phone.svg';
 import type { MessageParent } from '@service-storage/messages';
 import { CollapsedInput, ComposerSurface, cn } from '@ui';
 import {

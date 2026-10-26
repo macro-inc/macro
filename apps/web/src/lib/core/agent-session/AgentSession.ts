@@ -19,6 +19,7 @@
  * rows the socket delivers after it are appended to the cached copy here.
  */
 
+import { analytics } from '@app/lib/analytics';
 import {
   AgentFoldWorkerUnavailable,
   closeSession,
@@ -470,7 +471,14 @@ export class AgentSession {
           new Error(result.error.map((error) => error.message).join(' '))
         );
       } else {
-        trace.accepted(result.value.actionId, result.value.status === 'queued');
+        const queued = result.value.status === 'queued';
+        trace.accepted(result.value.actionId, queued);
+        const attachments =
+          request.type === 'prompt' ? (request.attachments?.length ?? 0) : 0;
+        fireAndForget(
+          this.trackPromptSent(trace, queued, attachments),
+          'agent-session'
+        );
       }
       return result;
     } catch (error) {
@@ -481,6 +489,28 @@ export class AgentSession {
       if (this.closed) trace.end('released');
       if (trace.ended) this.prompts.delete(trace);
     }
+  }
+
+  /**
+   * Count an accepted prompt as an AI message, with the files it carries as
+   * `attachmentCount`, as the retired AI chat reported its messages, so AI
+   * engagement keeps one definition across both.
+   */
+  private async trackPromptSent(
+    trace: PromptTrace,
+    queued: boolean,
+    attachmentCount: number
+  ): Promise<void> {
+    const row = await this.sessionRow;
+    analytics.track('ai_message_sent', {
+      surface: 'agent',
+      agentSessionId: this.id,
+      agentId: row.isOk() ? row.value.botId : undefined,
+      newSession: trace.newSession,
+      submitSurface: trace.submitSurface,
+      queued,
+      attachmentCount,
+    });
   }
 
   /**

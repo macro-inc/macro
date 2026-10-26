@@ -6,10 +6,10 @@ import {
   createPipedreamCatalogSearch,
 } from '@core/pipedream/catalog';
 import { fireAndForget } from '@core/util/fireAndForget';
-import CheckIcon from '@phosphor/check.svg';
-import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import SpinnerIcon from '@phosphor/spinner-gap.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import SpinnerIcon from '@icon/system/regular/spinner-gap.svg';
 import type { PipedreamCatalogEntryResponse } from '@service-cognition/client';
 import { Button, InputGroup, Tooltip } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';

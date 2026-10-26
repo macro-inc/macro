@@ -23,7 +23,7 @@ import {
 import { fireAndForget } from '@core/util/fireAndForget';
 import { catchToResult } from '@core/util/result';
 import IconShared from '@icon/share.svg';
-import Download from '@phosphor/download.svg';
+import Download from '@icon/system/regular/download.svg';
 import { useGetFileBlob } from '../signal/blockData';
 
 export function TopBar() {

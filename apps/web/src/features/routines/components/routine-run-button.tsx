@@ -1,7 +1,7 @@
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CopyIcon from '@phosphor/copy.svg';
-import PauseIcon from '@phosphor/pause.svg';
-import PlayIcon from '@phosphor/play.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CopyIcon from '@icon/system/regular/copy.svg';
+import PauseIcon from '@icon/system/regular/pause.svg';
+import PlayIcon from '@icon/system/regular/play.svg';
 import { Button, ButtonGroup, Dropdown } from '@ui';
 import { Show } from 'solid-js';
 

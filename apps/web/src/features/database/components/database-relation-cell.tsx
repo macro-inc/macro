@@ -1,11 +1,11 @@
 import { fireAndForget } from '@core/util/fireAndForget';
+import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
+import ArrowUpRightIcon from '@icon/system/regular/arrow-up-right.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import LinkIcon from '@icon/system/regular/link-simple.svg';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Popover } from '@kobalte/core/popover';
-import ArrowRightIcon from '@phosphor/arrow-right.svg';
-import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
-import CheckIcon from '@phosphor/check.svg';
-import LinkIcon from '@phosphor/link-simple.svg';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
-import XIcon from '@phosphor/x.svg';
 import { Button, buttonClasses } from '@ui/components/Button';
 import { InputGroup } from '@ui/components/InputGroup';
 import {

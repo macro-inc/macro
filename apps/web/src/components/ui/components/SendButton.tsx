@@ -1,5 +1,5 @@
-import ArrowUp from '@phosphor/arrow-up.svg';
-import SpinnerIcon from '@phosphor/spinner-gap.svg';
+import ArrowUp from '@icon/system/bold/arrow-up-bold.svg';
+import SpinnerIcon from '@icon/system/regular/spinner-gap.svg';
 import { children, Show, splitProps } from 'solid-js';
 import { cn } from '../utils/classname';
 import { Button, type ButtonProps } from './Button';
@@ -60,7 +60,6 @@ export function SendButton(props: SendButtonProps) {
                 'not-touch:w-auto! not-touch:aspect-auto! not-touch:px-3 not-touch:gap-1.5'
             )
           : 'size-7',
-        '[&_svg]:stroke-[4px]',
         'transition-transform ease-in-out duration-150',
         'data-disabled:opacity-100 data-disabled:text-ink-extra-muted! data-disabled:bg-ink-muted/5',
         'active:not-disabled:scale-95',

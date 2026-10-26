@@ -8,9 +8,9 @@ import {
   createBulkMoveToProjectDssEntityMutation,
   type EntityData,
 } from '@entity';
-import FolderIcon from '@phosphor/folder.svg';
-import FolderPlusIcon from '@phosphor-icons/core/regular/folder-plus.svg?component-solid';
-import CloseIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
+import FolderIcon from '@icon/system/regular/folder.svg';
+import FolderPlusIcon from '@icon/system/regular/folder-plus.svg?component-solid';
+import CloseIcon from '@icon/system/regular/x.svg?component-solid';
 import { createProject, useProjectsQuery } from '@queries/storage/projects';
 import type { Project } from '@service-storage/generated/schemas';
 import { ActionDialogShell, Button, Input } from '@ui';

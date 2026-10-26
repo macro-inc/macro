@@ -1,4 +1,4 @@
-import Check from '@phosphor/check.svg';
+import Check from '@icon/system/regular/check.svg';
 import { Dropdown } from '@ui';
 import { For, onCleanup, Show } from 'solid-js';
 import { EVENT_EDITOR_STEPS, type EventEditorStep } from '../core/event-editor';

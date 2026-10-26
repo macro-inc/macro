@@ -1,9 +1,9 @@
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import GitBranchIcon from '@icon/system/regular/git-branch.svg';
 import { Popover } from '@kobalte/core/popover';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CheckIcon from '@phosphor/check.svg';
-import GitBranchIcon from '@phosphor/git-branch.svg';
 import GithubIcon from '@phosphor/github-logo.svg';
 import { Button, createCommandListController } from '@ui';
 import {

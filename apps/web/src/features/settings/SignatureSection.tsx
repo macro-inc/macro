@@ -1,8 +1,10 @@
 import { toast } from '@core/component/Toast/Toast';
 import { isMobile } from '@core/mobile/isMobile';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { ThrownResultError } from '@core/util/result';
 import { useEmailSignature } from '@queries/email/link';
 import {
+  traceSignatureMutation,
   useImportGmailSignatureMutation,
   useUpdateEmailSettingsMutation,
 } from '@queries/email/settings';
@@ -13,7 +15,7 @@ import { SignatureForm } from './components/signature-form';
 
 // Keep drafts when navigating away from Email settings. Quill loads on demand.
 const [signatureDrafts, setSignatureDrafts] = createSignal<
-  Record<string, string>
+  Record<string, { html: string }>
 >({});
 export function clearSignatureState(linkId: string): void {
   setSignatureDrafts((prev) => {
@@ -35,12 +37,12 @@ function saveSignatureErrorMessage(error: Error): string {
       : undefined;
   if (!unresolved) return 'Failed to save signature. Please try again.';
 
-  return 'Unable to save images. Use the image button to add images.';
+  return 'Unable to save images. Add accessible image URLs in HTML, or use the image button in Rich text.';
 }
 
 /**
  * Per-inbox signature editor. Reads the persisted signature from the links
- * query (no extra fetch) into the Quill editor, tracks an unsaved draft, and
+ * query (no extra fetch) into an HTML preview, tracks an unsaved draft, and
  * patches `email_settings` on save. The "replies & forwards" toggle patches
  * immediately (the backend patch is partial, so it leaves the signature alone).
  */
@@ -48,16 +50,10 @@ export function SignatureSection(props: { link: EmailLink }) {
   const signature = useEmailSignature(() => props.link.id);
   // Draft lives in the module-level store (keyed by link id) so it survives the
   // settings tab unmounting; `null` means "no unsaved edit".
-  const draft = () => signatureDrafts()[props.link.id] ?? null;
-  const setDraft = (html: string | null) =>
-    setSignatureDrafts((prev) => {
-      if (html === null) {
-        const next = { ...prev };
-        delete next[props.link.id];
-        return next;
-      }
-      return { ...prev, [props.link.id]: html };
-    });
+  const draft = () => signatureDrafts()[props.link.id]?.html ?? null;
+  // A fresh snapshot distinguishes a new edit even when its HTML is identical.
+  const setDraft = (html: string) =>
+    setSignatureDrafts((prev) => ({ ...prev, [props.link.id]: { html } }));
 
   const persisted = () => signature() ?? '';
   const isDirty = () => draft() !== null && draft() !== persisted();
@@ -65,8 +61,6 @@ export function SignatureSection(props: { link: EmailLink }) {
   // "Remove" stays available even after the user manually empties the editor.
   const hasContent = () => persisted().length > 0 || (draft()?.length ?? 0) > 0;
 
-  const updateSettings = useUpdateEmailSettingsMutation();
-  const importGmailSignature = useImportGmailSignatureMutation();
   // Imperative handle to the editor, so Save/Remove sync its content directly
   // (the reactive `value` path alone didn't reliably clear the box on Remove).
   let editorApi: { setContent: (html: string) => void } | undefined;
@@ -76,25 +70,68 @@ export function SignatureSection(props: { link: EmailLink }) {
   // Cleared when the user edits, starts a new save, or removes the signature.
   const [saveError, setSaveError] = createSignal<string | null>(null);
 
+  // Updating the links cache can remount this row. Hook callbacks still run
+  // after that; callbacks passed to mutate would leave the old draft behind.
+  const updateSettings = useUpdateEmailSettingsMutation({
+    onMutate: () => signatureDrafts()[props.link.id],
+    onSuccess: (data, { linkId, settings }, submittedDraft) => {
+      if (settings.signature === undefined) return;
+      // A user may reopen settings and start another draft while this finishes.
+      if (signatureDrafts()[linkId] === submittedDraft) {
+        clearSignatureState(linkId);
+        editorApi?.setContent(data.settings.signature ?? '');
+      }
+      toast.success(
+        settings.signature ? 'Signature saved' : 'Signature removed'
+      );
+    },
+    onError: (error, { settings }) => {
+      if (settings.signature === undefined) {
+        toast.failure('Failed to update setting.');
+      } else if (settings.signature === '') {
+        toast.failure('Failed to remove signature. Please try again.');
+      } else {
+        setSaveError(saveSignatureErrorMessage(error));
+      }
+    },
+  });
+
+  const importGmailSignature = useImportGmailSignatureMutation({
+    onMutate: () => signatureDrafts()[props.link.id],
+    onSuccess: (result, { linkId }, submittedDraft) => {
+      if (result.success) {
+        if (signatureDrafts()[linkId] === submittedDraft) {
+          clearSignatureState(linkId);
+          editorApi?.setContent(result.settings.signature ?? '');
+        }
+        toast.success('Signature imported from Gmail');
+      } else if (result.reason === 'no_signature') {
+        toast.failure('No signature found in Gmail');
+      } else if (result.reason === 'unresolved_images') {
+        setSaveError(
+          "Couldn't import images from your Gmail signature. Add accessible image URLs in HTML, or use the image button in Rich text."
+        );
+      } else {
+        toast.failure('Failed to import signature. Please try again.');
+      }
+    },
+    onError: () =>
+      toast.failure('Failed to import signature. Please try again.'),
+  });
+
   const saveSignature = () => {
     const next = draft();
     if (next === null) return;
     setSaveError(null);
-    updateSettings.mutate(
-      { linkId: props.link.id, settings: { signature: next } },
-      {
-        onSuccess: (data) => {
-          setDraft(null);
-          editorApi?.setContent(data.settings.signature ?? '');
-          toast.success('Signature saved');
-        },
-        // The backend rejects the whole patch (HTTP 422, nothing persisted) when
-        // a signature has images that won't render for recipients — e.g. pasted
-        // from another webmail account, so reachable only by that session. Show
-        // the (long) message inline below the buttons and keep the draft so the
-        // user can re-add those images and retry.
-        onError: (error) => setSaveError(saveSignatureErrorMessage(error)),
-      }
+    fireAndForget(
+      traceSignatureMutation('save', props.link.id, (span) =>
+        updateSettings.mutateAsync({
+          span,
+          linkId: props.link.id,
+          settings: { signature: next },
+        })
+      ),
+      'email-signature'
     );
   };
 
@@ -102,17 +139,15 @@ export function SignatureSection(props: { link: EmailLink }) {
   // "clear" contract; the editor reseeds to empty once the cache updates.
   const removeSignature = () => {
     setSaveError(null);
-    updateSettings.mutate(
-      { linkId: props.link.id, settings: { signature: '' } },
-      {
-        onSuccess: () => {
-          setDraft(null);
-          editorApi?.setContent('');
-          toast.success('Signature removed');
-        },
-        onError: () =>
-          toast.failure('Failed to remove signature. Please try again.'),
-      }
+    fireAndForget(
+      traceSignatureMutation('clear', props.link.id, (span) =>
+        updateSettings.mutateAsync({
+          span,
+          linkId: props.link.id,
+          settings: { signature: '' },
+        })
+      ),
+      'email-signature'
     );
   };
 
@@ -120,44 +155,25 @@ export function SignatureSection(props: { link: EmailLink }) {
   // editor shows the persisted value and any unsaved draft is discarded.
   const importFromGmail = () => {
     setSaveError(null);
-    importGmailSignature.mutate(
-      { linkId: props.link.id },
-      {
-        onSuccess: (result) => {
-          if (result.success) {
-            setDraft(null);
-            editorApi?.setContent(result.settings.signature ?? '');
-            toast.success('Signature imported from Gmail');
-          } else if (result.reason === 'no_signature') {
-            toast.failure('No signature found in Gmail');
-          } else if (result.reason === 'unresolved_images') {
-            setSaveError(
-              "Couldn't import images from your Gmail signature. Add the text here and use the image button to add images."
-            );
-          } else {
-            toast.failure('Failed to import signature. Please try again.');
-          }
-        },
-        onError: () =>
-          toast.failure('Failed to import signature. Please try again.'),
-      }
+    fireAndForget(
+      traceSignatureMutation('import', props.link.id, (span) =>
+        importGmailSignature.mutateAsync({ linkId: props.link.id, span })
+      ),
+      'email-signature'
     );
   };
 
   const setOnRepliesForwards = (checked: boolean) => {
-    updateSettings.mutate(
-      {
-        linkId: props.link.id,
-        settings: { signature_on_replies_forwards: checked },
-      },
-      { onError: () => toast.failure('Failed to update setting.') }
-    );
+    updateSettings.mutate({
+      linkId: props.link.id,
+      settings: { signature_on_replies_forwards: checked },
+    });
   };
 
   return (
     <SignatureForm
       email={props.link.email_address}
-      value={draft() ?? persisted()}
+      value={isMobile() ? persisted() : (draft() ?? persisted())}
       onInput={(html) => {
         setDraft(html);
         setSaveError(null);

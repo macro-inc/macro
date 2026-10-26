@@ -5,7 +5,10 @@
 //! primary calendar, one entity whose canonical copy is the invitation. Only
 //! the organizer's copy takes the organizer's changes, as in Google's own
 //! client, so those changes go through it, and the addressed copy is then
-//! read back so the entity shows them without waiting for sync.
+//! read back so the entity shows them without waiting for sync. Google
+//! carries them to the addressed copy some seconds later, so until then the
+//! response shows the meeting as the organizer's copy has it, as the stored
+//! entity does.
 use super::*;
 
 impl<R, G, T, B, N> CalendarMutationServiceImpl<R, G, T, B, N>
@@ -16,9 +19,11 @@ where
     B: MacroEventBroker,
     N: CalendarRefreshNotifier,
 {
-    /// Apply the meeting's changes through the organizer's copy, then what
-    /// the provider keeps on each copy (reminders, availability) to the
-    /// addressed copy, whose echo also brings the meeting's changes back.
+    /// Apply what the provider keeps on each copy (reminders, availability)
+    /// to the addressed copy, then the meeting's changes through the
+    /// organizer's copy. In that order the organizer's write is the fresher
+    /// one, so the addressed copy's echo, which Google has yet to update,
+    /// cannot take the meeting's content back.
     #[tracing::instrument(
         name = "calendar.update_through_organizer_copy",
         skip(self, requester_id, target, patch, scope),
@@ -46,14 +51,20 @@ where
         let organizer_copy = self
             .resolve_mutation_target(requester_id, target.event_id, Some(organizer_calendar_id))
             .await?;
-        let organized = self
-            .update_copy(requester_id, organizer_copy, patch, scope.clone())
-            .await?;
         if own.is_empty() {
+            let organized = self
+                .update_copy(requester_id, organizer_copy, patch, scope.clone())
+                .await?;
             return Ok(self.read_back(&target, &scope, organized).await);
         }
+        let addressed = self
+            .update_copy(requester_id, target.clone(), own, scope.clone())
+            .await?;
+        let organized = self
+            .update_copy(requester_id, organizer_copy, patch, scope)
+            .await?;
         tracing::Span::current().record("read_back", "own_fields");
-        self.update_copy(requester_id, target, own, scope).await
+        Ok(with_meeting_of(&target, addressed, &organized))
     }
 
     /// Add guests through the organizer's copy, then read the addressed
@@ -161,7 +172,7 @@ where
         match refreshed {
             Ok(event) => {
                 tracing::Span::current().record("read_back", "refreshed");
-                event
+                with_meeting_of(target, event, &written)
             }
             Err(error) => {
                 tracing::warn!(error = ?error, "failed to read the copy back after a write");
@@ -185,4 +196,37 @@ where
             .await
             .map_err(provider_error)
     }
+}
+
+/// The addressed copy's echo as Google will show it once it carries the
+/// organizer's write: a copy older than that write takes the meeting's
+/// content, schedule, and guests from the organizer copy's echo and keeps its
+/// own reminders, availability, and access, then the viewer is marked again
+/// against the guests it now lists.
+fn with_meeting_of(
+    target: &CalendarEventMutationTarget,
+    mut addressed: CalendarEvent,
+    organized: &CalendarEvent,
+) -> CalendarEvent {
+    if addressed.updated_at >= organized.updated_at {
+        return addressed;
+    }
+    addressed.title = organized.title.clone();
+    addressed.description = organized.description.clone();
+    addressed.location = organized.location.clone();
+    addressed.visibility = organized.visibility;
+    addressed.status = organized.status;
+    addressed.time = organized.time.clone();
+    addressed.recurrence_lines = organized.recurrence_lines.clone();
+    addressed.organizer_email = organized.organizer_email.clone();
+    addressed.organizer_name = organized.organizer_name.clone();
+    addressed.conference_url = organized.conference_url.clone();
+    addressed.conference_provider = organized.conference_provider;
+    addressed.attendees = organized.attendees.clone();
+    addressed.guest_policy = organized.guest_policy;
+    addressed.updated_at = organized.updated_at;
+    if let Some(viewer) = &target.actor {
+        viewer.mark_event(&mut addressed, target.email_link_id);
+    }
+    addressed
 }

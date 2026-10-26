@@ -7,12 +7,12 @@
  */
 
 import type { DeckOutline, ShapeOutline } from '@core/pptx-engine/types';
-import ArrowCounterClockwise from '@phosphor/arrow-counter-clockwise.svg';
-import CaretLeft from '@phosphor/caret-left.svg';
-import CaretRight from '@phosphor/caret-right.svg';
-import Pause from '@phosphor/pause.svg';
-import Play from '@phosphor/play.svg';
-import SquaresFour from '@phosphor/squares-four.svg';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg';
+import CaretLeft from '@icon/system/regular/caret-left.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
+import Pause from '@icon/system/regular/pause.svg';
+import Play from '@icon/system/regular/play.svg';
+import SquaresFour from '@icon/system/regular/squares-four.svg';
 import { Button } from '@ui/components/Button';
 import {
   createSignal,

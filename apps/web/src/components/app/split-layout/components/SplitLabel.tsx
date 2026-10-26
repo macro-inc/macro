@@ -21,8 +21,8 @@ import {
 } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import type { BuildEntityDataArgs } from '@entity';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import CaretDownIcon from '@phosphor/caret-down.svg';
 import { cn, Tooltip } from '@ui';
 import {
   type Accessor,

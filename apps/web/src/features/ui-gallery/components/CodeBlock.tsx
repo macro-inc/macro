@@ -1,7 +1,7 @@
 import { tsxLanguage } from '@codemirror/lang-javascript';
+import CheckIcon from '@icon/system/regular/check.svg';
+import CopyIcon from '@icon/system/regular/copy.svg';
 import { classHighlighter, highlightCode } from '@lezer/highlight';
-import CheckIcon from '@phosphor/check.svg';
-import CopyIcon from '@phosphor/copy.svg';
 import { Button, cn } from '@ui';
 import { createMemo, createSignal, For, onCleanup, Show } from 'solid-js';
 

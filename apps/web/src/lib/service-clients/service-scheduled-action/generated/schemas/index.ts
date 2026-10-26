@@ -24,6 +24,7 @@ export * from './actionTriggerOneOfFiveType';
 export * from './actionTriggerOneOfThree';
 export * from './actionTriggerOneOfThreeType';
 export * from './actionTriggerOneOfType';
+export * from './agentMcpServer';
 export * from './agentTask';
 export * from './agentTaskAgent';
 export * from './agentTaskAgentProperty';

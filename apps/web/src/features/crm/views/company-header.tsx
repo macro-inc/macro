@@ -5,8 +5,8 @@ import {
   formatDateAndTime,
   formatRelativeTimestamp,
 } from '@entity';
-import ClockIcon from '@phosphor/clock.svg';
-import GlobeIcon from '@phosphor/globe.svg';
+import ClockIcon from '@icon/system/regular/clock.svg';
+import GlobeIcon from '@icon/system/regular/globe.svg';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { Badge, Tooltip } from '@ui';
 import { createEffect, createSignal, For, onMount, Show } from 'solid-js';

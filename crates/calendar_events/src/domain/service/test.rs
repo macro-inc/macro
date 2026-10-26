@@ -76,6 +76,7 @@ impl CalendarRepository for FakeRepo {
             owner_id,
             change: CalendarEventChange::Created,
             team_ooo_changed,
+            aligned_copies: Vec::new(),
         })
     }
 

@@ -379,3 +379,5 @@ properties. `Prepare export` fetches every page and shows a count and three-row 
 it does not download. `Download CSV` saves the prepared snapshot using the selected
 columns. Changing scope requires preparing again. Cancel stops preparation. CSV uses UTF-8,
 quoted fields, original date timestamps and spreadsheet formula escaping.
+
+The existing CRM New menus use icons and muted descriptions for Company, Contact, and Pipeline. Pipeline availability and permissions are unchanged.

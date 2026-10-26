@@ -7,7 +7,7 @@
  */
 
 import type { DeckOutline, SlideOutline } from '@core/pptx-engine/types';
-import X from '@phosphor/x.svg';
+import X from '@icon/system/regular/x.svg';
 import { Button } from '@ui/components/Button';
 import { Dialog } from '@ui/components/Dialog';
 import { Input, inputClasses } from '@ui/components/Input';

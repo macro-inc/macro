@@ -1,5 +1,5 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import XIcon from '@phosphor/x.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Button, ComposerSurface, cn } from '@ui';
 import { Show } from 'solid-js';
 import { LogoStack, type PromotionLogo } from './logo-stack';

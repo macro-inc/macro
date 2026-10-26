@@ -1,5 +1,5 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import UploadIcon from '@phosphor/upload-simple.svg';
+import UploadIcon from '@icon/system/regular/upload-simple.svg';
 import { Button, Dialog, Panel, Select } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import type { CompanyImportPipelines } from '../context/pipelines';

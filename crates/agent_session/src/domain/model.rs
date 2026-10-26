@@ -178,7 +178,8 @@ pub enum SessionStatus {
 }
 
 /// Which Pipedream MCP servers a session is handed: the agent's own choice,
-/// snapshotted onto the session at creation like `instructions`. The servers
+/// plus any apps a routine requires, snapshotted onto the session at creation
+/// like `instructions`. The servers
 /// it resolves to are re-listed before each prompt, so an app the owner
 /// connects mid-session reaches a live agent that can `session/resume`;
 /// editing the agent's selection applies to its next session.

@@ -32,10 +32,10 @@ import {
   isCrmCompanyEntity,
   isCrmContactEntity,
 } from '@entity';
-import ArrowLeftIcon from '@phosphor/arrow-left.svg';
-import FileCsvIcon from '@phosphor/file-csv.svg';
-import ListIcon from '@phosphor/list.svg';
-import PlusIcon from '@phosphor/plus.svg';
+import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
+import FileCsvIcon from '@icon/system/regular/file-csv.svg';
+import ListIcon from '@icon/system/regular/list.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { Button, Dropdown, Tooltip } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import {

@@ -21,8 +21,8 @@ import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.
 import type { ChannelEntity } from '@entity';
 import { SOUP_ROW_CLASS } from '@entity/composed/list-entity/row-geometry';
 import { InboxDivider } from '@entity/composed/list-entity/shared';
-import SpinnerIcon from '@phosphor/spinner.svg';
-import XIcon from '@phosphor/x.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, cn, EmptyStatePanel } from '@ui';
 import {
@@ -219,6 +219,7 @@ export function ChannelsMobileView(props: {
           <Match when={!forceEmptyState() && props.source.isLoading()}>
             <div class="grid min-h-32 place-items-center text-ink-muted">
               <SpinnerIcon
+                aria-hidden={false}
                 aria-label="Loading conversations"
                 class="size-5 animate-spin"
               />
@@ -337,6 +338,7 @@ export function ChannelsMobileView(props: {
             <Show when={props.source.isLoadingMore()}>
               <div class="flex h-12 items-center justify-center text-ink-muted">
                 <SpinnerIcon
+                  aria-hidden={false}
                   aria-label="Loading more conversations"
                   class="size-4 animate-spin"
                 />

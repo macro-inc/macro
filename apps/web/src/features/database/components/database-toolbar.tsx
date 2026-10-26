@@ -1,8 +1,8 @@
 import { fireAndForget } from '@core/util/fireAndForget';
+import KanbanIcon from '@icon/system/regular/kanban.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import TableIcon from '@icon/system/regular/table.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import KanbanIcon from '@phosphor/kanban.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import TableIcon from '@phosphor/table.svg';
 import type { DatabaseView } from '@service-storage/generated/schemas/databaseView';
 import { Key } from '@solid-primitives/keyed';
 import {

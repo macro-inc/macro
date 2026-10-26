@@ -1,9 +1,9 @@
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { getWebOrigin } from '@core/util/webOrigin';
-import CheckIcon from '@phosphor/check.svg';
-import LinkIcon from '@phosphor/link.svg';
-import SpinnerIcon from '@phosphor/spinner.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { useGetChannelJoinLinkMutation } from '@queries/channel/join-links';
 import { Button } from '@ui';
 import { createSignal, onCleanup, Show } from 'solid-js';

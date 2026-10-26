@@ -1,5 +1,5 @@
-import CheckIcon from '@phosphor/check.svg';
-import GearIcon from '@phosphor/gear-six.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import GearIcon from '@icon/system/regular/gear-six.svg';
 import { Dropdown } from '@ui';
 import { useGantt } from './gantt-context';
 

@@ -1,5 +1,5 @@
+import XIcon from '@icon/system/regular/x.svg';
 import { Popover } from '@kobalte/core/popover';
-import XIcon from '@phosphor/x.svg';
 import { Button } from '@ui/components/Button';
 import { type JSX, Show } from 'solid-js';
 

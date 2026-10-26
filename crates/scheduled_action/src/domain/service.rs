@@ -24,7 +24,7 @@ use super::models::{
 use super::ports::{
     ScheduledActionExecutor, ScheduledActionRepo, ScheduledActionService, TaskTargetValidator,
 };
-use super::target_validation::{ModelOnlyTargets, require_explicit_agent};
+use super::target_validation::{ModelOnlyTargets, require_explicit_selection};
 
 #[cfg(test)]
 pub(crate) mod test;
@@ -146,7 +146,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets>
     where
         Targets: TaskTargetValidator,
     {
-        require_explicit_agent(&action.task, &input.task)?;
+        require_explicit_selection(&action.task, &input.task)?;
         let trigger_changed = !same_trigger(&action.trigger, &input.trigger);
         let configuration_changed = trigger_changed
             || action.name != input.name

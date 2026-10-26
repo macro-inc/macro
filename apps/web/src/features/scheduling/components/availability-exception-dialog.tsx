@@ -1,4 +1,4 @@
-import Trash from '@phosphor/trash.svg';
+import Trash from '@icon/system/regular/trash.svg';
 import { Button, DatePicker, Dialog } from '@ui';
 import { Show } from 'solid-js';
 import type { AvailabilityIssue } from '../core/availability';

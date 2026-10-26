@@ -2,6 +2,7 @@ import { createEmailInboxSource } from '@app/features/email-compose/queries/inbo
 import { normalizedCacheExchange } from '@graphql-cache/exchange/normalized-cache-exchange';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { INITIAL_CACHE_REVISION } from '@graphql-cache/protocol';
+import { Telemetry } from '@macro-inc/observability';
 import type { MailAccountsQuery } from '@service-storage/graphql/generated/graphql';
 import { QueryClient } from '@tanstack/solid-query';
 import { type Client, createClient, fetchExchange } from '@urql/core';
@@ -26,9 +27,6 @@ vi.mock('@service-storage/graphql-soup', () => ({
 }));
 vi.mock('@service-email/client', () => ({
   emailClient: { patchSettings: fixture.patchSettings },
-}));
-vi.mock('@macro-inc/observability', () => ({
-  Telemetry: { error: fixture.reportError },
 }));
 vi.mock('../client', () => ({
   get queryClient() {
@@ -156,6 +154,7 @@ function mountComposerAccounts() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.spyOn(Telemetry, 'error').mockImplementation(fixture.reportError);
   fixture.cacheEnabled = true;
   queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -225,7 +224,8 @@ describe('email settings account reconciliation', () => {
           signature_on_replies_forwards: false,
         },
       },
-      'inbox-1'
+      'inbox-1',
+      undefined
     );
 
     catalog.goOffline();

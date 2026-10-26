@@ -5,13 +5,20 @@ import {
   type EntityIconProps as CoreEntityIconProps,
   getEntityIconType,
 } from '@core/component/EntityIcon';
+import { TaskStatusIcon } from '@core/component/TaskStatusIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import { useChannelsContext } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import type { StreamEvent } from '@service-connection/generated/schemas';
 import { Match, Show, Switch } from 'solid-js';
 import { ChatProviderIcon } from '../components/ChatProviderIcon';
-import type { ChannelEntity, ChatEntity, EntityData } from '../types/entity';
+import {
+  type ChannelEntity,
+  type ChatEntity,
+  type EntityData,
+  isTaskEntity,
+} from '../types/entity';
+import { getTaskStatusOptionId } from '../utils/task-properties';
 
 interface EntityIconProps {
   entity: EntityData;
@@ -95,6 +102,7 @@ function DirectMessageIcon(props: {
 
 export function EntityIcon(props: EntityIconProps) {
   const iconType = () => getEntityIconType(props.entity);
+  const task = () => (isTaskEntity(props.entity) ? props.entity : undefined);
   const isDirectMessage = () =>
     props.entity.type === 'channel' &&
     props.entity.channelType === 'direct_message';
@@ -122,6 +130,18 @@ export function EntityIcon(props: EntityIconProps) {
         />
       }
     >
+      <Match when={task()}>
+        {(entity) => (
+          <TaskStatusIcon
+            statusId={getTaskStatusOptionId(entity())}
+            completed={entity().subType.is_completed}
+            size="fill"
+            class={props.class}
+            weight={props.weight}
+            theme={props.theme}
+          />
+        )}
+      </Match>
       <Match when={isDirectMessage()}>
         <DirectMessageIcon
           entity={props.entity as ChannelEntity}

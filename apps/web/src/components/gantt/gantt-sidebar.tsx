@@ -1,4 +1,4 @@
-import SidebarIcon from '@phosphor/sidebar-simple.svg';
+import SidebarIcon from '@icon/system/regular/sidebar-simple.svg';
 import { Button, cn, Layer, Surface } from '@ui';
 import {
   type Accessor,

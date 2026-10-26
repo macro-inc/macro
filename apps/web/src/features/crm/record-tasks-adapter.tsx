@@ -11,7 +11,7 @@ import {
   enableCrmActivity,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
-import PlusIcon from '@phosphor/plus.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { TagSetsQueryProvider } from '@property/tags/tag-sets-context';
 import { Button } from '@ui';
 import { Show } from 'solid-js';

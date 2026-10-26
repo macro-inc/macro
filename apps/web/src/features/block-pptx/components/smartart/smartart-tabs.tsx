@@ -10,17 +10,17 @@ import type {
   SmartArtPosition,
 } from '@core/pptx-engine/types';
 import { fireAndForget } from '@core/util/fireAndForget';
-import ArrowCounterClockwise from '@phosphor/arrow-counter-clockwise.svg';
-import ArrowDown from '@phosphor/arrow-down.svg';
-import ArrowUp from '@phosphor/arrow-up.svg';
-import Palette from '@phosphor/palette.svg';
-import PlusSquare from '@phosphor/plus-square.svg';
-import Shapes from '@phosphor/shapes.svg';
-import SidebarSimple from '@phosphor/sidebar-simple.svg';
-import Swap from '@phosphor/swap.svg';
-import TextIndent from '@phosphor/text-indent.svg';
-import TextOutdent from '@phosphor/text-outdent.svg';
-import TreeStructure from '@phosphor/tree-structure.svg';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg';
+import ArrowDown from '@icon/system/regular/arrow-down.svg';
+import ArrowUp from '@icon/system/regular/arrow-up.svg';
+import Palette from '@icon/system/regular/palette.svg';
+import PlusSquare from '@icon/system/regular/plus-square.svg';
+import Shapes from '@icon/system/regular/shapes.svg';
+import SidebarSimple from '@icon/system/regular/sidebar-simple.svg';
+import Swap from '@icon/system/regular/swap.svg';
+import TextIndent from '@icon/system/regular/text-indent.svg';
+import TextOutdent from '@icon/system/regular/text-outdent.svg';
+import TreeStructure from '@icon/system/regular/tree-structure.svg';
 import { For, type JSX, Show } from 'solid-js';
 import {
   canDemote,

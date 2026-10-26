@@ -1,9 +1,9 @@
 import { formatDate } from '@core/util/date';
 import { fireAndForget } from '@core/util/fireAndForget';
-import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
-import ArrowsClockwiseIcon from '@phosphor/arrows-clockwise.svg';
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import FileZipIcon from '@phosphor/file-zip.svg';
+import ArrowUpRightIcon from '@icon/system/regular/arrow-up-right.svg';
+import ArrowsClockwiseIcon from '@icon/system/regular/arrows-clockwise.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import FileZipIcon from '@icon/system/regular/file-zip.svg';
 import { ActionDialogShell, Button, cn, Dialog } from '@ui';
 import {
   createEffect,

@@ -11,12 +11,12 @@ import { getBlockNameFromEntity } from '@core/component/LexicalMarkdown/componen
 import { parseMacroAppUrl } from '@core/component/LexicalMarkdown/plugins/text-paste/textPastePlugin';
 import type { MentionItem } from '@core/component/LexicalMarkdown/utils/mentionsUtils';
 import { formatRelativeDay, formatTooltipDate } from '@core/util/dateParser';
+import ClockIcon from '@icon/system/regular/clock.svg';
 import {
   type CellDateMention,
   cellTextParts,
   encodeCellMention,
 } from '@macro-inc/spreadsheet/cell-mentions';
-import ClockIcon from '@phosphor/clock.svg';
 import { For, Suspense } from 'solid-js';
 import type { SpreadsheetMentions } from './context/spreadsheet-mentions';
 import { SpreadsheetCellLinks } from './spreadsheet-cell-links';

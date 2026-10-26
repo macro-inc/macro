@@ -1,8 +1,8 @@
 import { PLANS } from '@app/features/paywall/plans';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
 import type { CollectionNode } from '@kobalte/core';
 import { Select } from '@kobalte/core/select';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CheckIcon from '@phosphor/check.svg';
 import type { PaidPlan } from '@service-auth/ai-billing-types';
 import { Button } from '@ui';
 import { Show } from 'solid-js';

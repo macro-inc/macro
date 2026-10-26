@@ -1,7 +1,6 @@
+import ResetIcon from '@icon/system/regular/arrow-clockwise.svg';
+import HomeIcon from '@icon/system/regular/house.svg';
 import { Telemetry } from '@macro-inc/observability';
-
-import ResetIcon from '@phosphor/arrow-clockwise.svg';
-import HomeIcon from '@phosphor/house.svg';
 import { Button, Dialog, Surface } from '@ui';
 import { Show } from 'solid-js';
 

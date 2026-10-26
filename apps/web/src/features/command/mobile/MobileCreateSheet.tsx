@@ -1,5 +1,5 @@
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
-import CloseIcon from '@phosphor/x.svg';
+import CloseIcon from '@icon/system/regular/x.svg';
 import { Button } from '@ui/components/Button';
 import { createUniqueId, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';

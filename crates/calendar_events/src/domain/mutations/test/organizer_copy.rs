@@ -102,6 +102,45 @@ async fn a_title_change_goes_through_the_organizer_copy_and_reads_the_invitation
 }
 
 #[tokio::test]
+async fn a_title_change_shows_before_google_carries_it_to_the_invitation() {
+    let repo = repo();
+    let mut provider = FakeProvider::new(FakeProviderBehavior::Echo);
+    provider.echo_attendees = vec![
+        echo_attendee("self@example.com", false),
+        echo_attendee("ada@example.com", false),
+    ];
+    provider.refresh_stale = Some("Before");
+
+    let event = service(repo, provider, FakeTokens::ok())
+        .update_event(
+            "macro|user",
+            Uuid::now_v7(),
+            Some(INVITATION_CALENDAR),
+            CalendarEventPatch {
+                title: Some("Echo".to_string()),
+                ..CalendarEventPatch::default()
+            },
+            CalendarUpdateScope::All,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        event.title, "Echo",
+        "the organizer copy's title, not the stale invitation's"
+    );
+    assert_eq!(
+        event
+            .attendees
+            .iter()
+            .map(|attendee| (attendee.email.as_str(), attendee.is_self))
+            .collect::<Vec<_>>(),
+        [("self@example.com", true), ("ada@example.com", false)],
+        "the organizer copy's guests, with the viewer marked again"
+    );
+}
+
+#[tokio::test]
 async fn reminders_saved_with_a_title_stay_on_the_invitation() {
     let repo = repo();
     let upserts = repo.upserts.clone();
@@ -128,22 +167,24 @@ async fn reminders_saved_with_a_title_stay_on_the_invitation() {
         calls.lock().unwrap().as_slice(),
         ["update:master-id", "update:master-id"]
     );
+    // The invitation is written first, so the organizer's write is the
+    // fresher one and the invitation's echo cannot take the title back.
     assert_eq!(
         patches.lock().unwrap().as_slice(),
         [
             CalendarEventPatch {
-                title: Some("Renamed".to_string()),
+                reminders: Some(reminders()),
                 ..CalendarEventPatch::default()
             },
             CalendarEventPatch {
-                reminders: Some(reminders()),
+                title: Some("Renamed".to_string()),
                 ..CalendarEventPatch::default()
             },
         ]
     );
     assert_eq!(
         written_calendars(&upserts),
-        [ORGANIZER_CALENDAR, INVITATION_CALENDAR]
+        [INVITATION_CALENDAR, ORGANIZER_CALENDAR]
     );
 }
 
@@ -201,6 +242,40 @@ async fn guests_are_added_through_the_organizer_copy() {
     assert_eq!(
         written_calendars(&upserts),
         [ORGANIZER_CALENDAR, INVITATION_CALENDAR]
+    );
+}
+
+#[tokio::test]
+async fn added_guests_show_before_google_carries_them_to_the_invitation() {
+    let repo = repo();
+    let mut provider = FakeProvider::new(FakeProviderBehavior::Echo);
+    provider.echo_attendees = vec![
+        echo_attendee("self@example.com", false),
+        echo_attendee("ada@example.com", false),
+    ];
+    provider.refresh_stale = Some("Echo");
+
+    let event = service(repo, provider, FakeTokens::ok())
+        .invite_guests(
+            "macro|user",
+            Uuid::now_v7(),
+            Some(INVITATION_CALENDAR),
+            vec![CalendarAttendeeInput {
+                email: "ada@example.com".to_string(),
+                is_optional: false,
+                response_status: None,
+            }],
+            CalendarUpdateScope::All,
+        )
+        .await
+        .unwrap();
+
+    assert!(
+        event
+            .attendees
+            .iter()
+            .any(|attendee| attendee.email == "ada@example.com"),
+        "the new guest shows although the invitation read back lacks them"
     );
 }
 

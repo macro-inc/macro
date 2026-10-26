@@ -1,7 +1,7 @@
+import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
+import CalendarBlankIcon from '@icon/system/regular/calendar-blank.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import { Popover } from '@kobalte/core/popover';
-import ArrowRightIcon from '@phosphor/arrow-right.svg';
-import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
-import CaretDownIcon from '@phosphor/caret-down.svg';
 import { Calendar } from '@ui/components/Calendar';
 import { Layer } from '@ui/components/Layer';
 import { ToggleSwitch } from '@ui/components/ToggleSwitch';
@@ -208,6 +208,7 @@ export function EventDateTimeRangeFields(props: EventDateTimeRangeFieldsProps) {
           placement="bottom-start"
         />
         <ArrowRightIcon
+          aria-hidden={false}
           aria-label="to"
           class={cn(
             'size-3.5 shrink-0 text-ink-extra-muted',

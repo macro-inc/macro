@@ -1,5 +1,5 @@
 import { formatDate } from '@core/util/date';
-import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
+import ArrowUpRightIcon from '@icon/system/regular/arrow-up-right.svg';
 import { For, Index, type JSX, Show } from 'solid-js';
 import type {
   ImportConversation,

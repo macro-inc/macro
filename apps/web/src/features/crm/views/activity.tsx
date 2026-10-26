@@ -1,5 +1,5 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import PlusIcon from '@phosphor/plus.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { Button } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { useCrmContext } from '../context/crm-context';

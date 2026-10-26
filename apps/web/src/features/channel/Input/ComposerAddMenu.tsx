@@ -1,7 +1,7 @@
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { focusInput } from '@core/directive/focusInput';
 import { isMobile } from '@core/mobile/isMobile';
-import PlusIcon from '@phosphor/plus.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { Button, cn, Dropdown } from '@ui';
 import { For, type JSX, Show } from 'solid-js';
 

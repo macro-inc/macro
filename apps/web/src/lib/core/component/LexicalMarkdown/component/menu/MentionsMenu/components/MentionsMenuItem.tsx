@@ -1,10 +1,10 @@
 import { EntityIcon } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import type { ChannelEntity } from '@entity';
-import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
-import ClockIcon from '@phosphor/clock.svg';
-import EmailIcon from '@phosphor/envelope.svg';
-import UsersIcon from '@phosphor/users.svg';
+import CalendarBlankIcon from '@icon/system/regular/calendar-blank.svg';
+import ClockIcon from '@icon/system/regular/clock.svg';
+import EmailIcon from '@icon/system/regular/envelope.svg';
+import UsersIcon from '@icon/system/regular/users.svg';
 import { cn } from '@ui';
 import { createEffect, type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';

@@ -6,8 +6,8 @@ import {
 } from '@app/components/view-shell';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { EntityIcon } from '@core/component/EntityIcon';
+import FilterIcon from '@icon/system/regular/funnel-simple.svg';
 import { Accordion } from '@kobalte/core/accordion';
-import FilterIcon from '@phosphor/funnel-simple.svg';
 import { Dropdown } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import { createMemo, createSignal, For, type JSX, Show } from 'solid-js';

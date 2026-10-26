@@ -7,11 +7,11 @@
  */
 
 import { MenuItem, MenuSeparator } from '@core/component/ContextMenu';
-import ArrowDown from '@phosphor/arrow-down.svg';
-import ArrowUp from '@phosphor/arrow-up.svg';
-import PencilSimple from '@phosphor/pencil-simple.svg';
-import Trash from '@phosphor/trash.svg';
-import CaretRight from '@phosphor-fill/caret-right-fill.svg';
+import CaretRight from '@icon/system/fill/caret-right-fill.svg';
+import ArrowDown from '@icon/system/regular/arrow-down.svg';
+import ArrowUp from '@icon/system/regular/arrow-up.svg';
+import PencilSimple from '@icon/system/regular/pencil-simple.svg';
+import Trash from '@icon/system/regular/trash.svg';
 import { createSignal, For, Show } from 'solid-js';
 import type { SectionRow } from '../core/sections';
 import type { DeckSetup } from '../primitives/create-deck-setup';

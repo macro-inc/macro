@@ -1,8 +1,8 @@
+import Spinner from '@icon/system/bold/spinner-gap-bold.svg?component-solid';
+import ClipboardIcon from '@icon/system/regular/clipboard.svg';
+import DownloadIcon from '@icon/system/regular/download-simple.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Dialog, useDialogContext } from '@kobalte/core/dialog';
-import ClipboardIcon from '@phosphor/clipboard.svg';
-import DownloadIcon from '@phosphor/download-simple.svg';
-import XIcon from '@phosphor/x.svg';
-import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import { Button, cn } from '@ui';
 import {
   type Accessor,

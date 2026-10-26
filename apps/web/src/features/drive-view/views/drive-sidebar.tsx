@@ -8,9 +8,9 @@ import { FavoriteContextMenu } from '@app/features/favorites/FavoriteContextMenu
 import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
 import { useFavoriteDisplayName } from '@app/util/favorites';
 import { fireAndForget } from '@core/util/fireAndForget';
-import FolderIcon from '@phosphor/folder.svg';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
-import UploadIcon from '@phosphor/upload-simple.svg';
+import FolderIcon from '@icon/system/regular/folder.svg';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
+import UploadIcon from '@icon/system/regular/upload-simple.svg';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import { Button } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';

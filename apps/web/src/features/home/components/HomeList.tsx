@@ -39,7 +39,7 @@ import {
   type WithNotification,
 } from '@entity';
 import { getChannelThreadName } from '@entity/utils/channel-thread-name';
-import CheckIcon from '@phosphor/check.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { debounce } from '@solid-primitives/scheduled';
 import { Button } from '@ui';

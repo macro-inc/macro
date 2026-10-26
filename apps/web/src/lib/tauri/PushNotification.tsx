@@ -442,7 +442,8 @@ export function MaybePushNotificationRegistration(props: {
       },
       getCurrentPermission: async () => {
         const sysPerm = await push.checkPermissions();
-        if (sysPerm.status === 'prompt') {
+        // Quiet (provisional) delivery keeps the in-app prompt for full alerts.
+        if (sysPerm.status === 'prompt' || sysPerm.provisional) {
           return 'default';
         }
         const appNotification = await getCurrentPermission();

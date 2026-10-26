@@ -6,8 +6,8 @@ import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { fileDrop } from '@core/directive/fileDrop';
 import { debouncedDependent } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
-import UploadIcon from '@phosphor/upload-simple.svg';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
+import UploadIcon from '@icon/system/regular/upload-simple.svg';
 import { Button } from '@ui/components/Button';
 import {
   ctrlJKMenuNavigation,

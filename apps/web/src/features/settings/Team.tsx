@@ -1,11 +1,11 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { useUserId } from '@core/context/user';
 import { getDisplayName, tryMacroId } from '@core/user';
-import EnvelopeIcon from '@phosphor/envelope.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import SpinnerIcon from '@phosphor/spinner.svg';
-import UsersIcon from '@phosphor/users.svg';
-import XIcon from '@phosphor/x.svg';
+import EnvelopeIcon from '@icon/system/regular/envelope.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
+import UsersIcon from '@icon/system/regular/users.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import {
   useJoinTeamMutation,
   useRejectInvitationMutation,

@@ -17,8 +17,8 @@ import {
   openFilePicker,
   openFolderPicker,
 } from '@core/util/upload';
-import BuildingsIcon from '@phosphor/buildings.svg';
-import UploadIcon from '@phosphor/upload-simple.svg';
+import BuildingsIcon from '@icon/system/regular/buildings.svg';
+import UploadIcon from '@icon/system/regular/upload-simple.svg';
 import { Dropdown } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
 import { NewCallButton } from './NewCallButton';

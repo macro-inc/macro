@@ -244,10 +244,14 @@ async fn disconnect_revokes_the_pipedream_account_and_deletes_the_row() {
         .unwrap();
     let pd = FakePipedream::default();
 
-    disconnect_mcp_server(&store, &pd, &user("macro|user-1@example.com"), "linear")
+    let removed = disconnect_mcp_server(&store, &pd, &user("macro|user-1@example.com"), "linear")
         .await
         .unwrap();
 
+    assert_eq!(
+        removed.map(|connection| connection.account_id),
+        Some("apn_1".to_owned())
+    );
     assert_eq!(*pd.deleted.lock().unwrap(), vec!["apn_1".to_owned()]);
     assert!(store.records.lock().unwrap().is_empty());
 }
@@ -257,9 +261,10 @@ async fn disconnect_of_unknown_app_is_a_quiet_noop() {
     let store = FakeStore::default();
     let pd = FakePipedream::default();
 
-    disconnect_mcp_server(&store, &pd, &user("macro|user-1@example.com"), "linear")
+    let removed = disconnect_mcp_server(&store, &pd, &user("macro|user-1@example.com"), "linear")
         .await
         .unwrap();
 
+    assert!(removed.is_none());
     assert!(pd.deleted.lock().unwrap().is_empty());
 }

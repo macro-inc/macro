@@ -8,6 +8,7 @@ fn empty_service() -> AuthenticatedToolService<()> {
         (),
         "https://macro.com".to_owned(),
         url::Url::parse("https://static-file-service.macro.com").unwrap(),
+        McpAnalytics::disabled(),
     )
 }
 

@@ -10,13 +10,13 @@ import type {
   AnimationStart,
 } from '@core/pptx-engine/types';
 import { fireAndForget } from '@core/util/fireAndForget';
-import ArrowDown from '@phosphor/arrow-down.svg';
-import ArrowUp from '@phosphor/arrow-up.svg';
-import ListNumbers from '@phosphor/list-numbers.svg';
-import Play from '@phosphor/play.svg';
-import Plus from '@phosphor/plus.svg';
-import Sliders from '@phosphor/sliders-horizontal.svg';
-import Star from '@phosphor-fill/star-fill.svg';
+import Star from '@icon/system/fill/star-fill.svg';
+import ArrowDown from '@icon/system/regular/arrow-down.svg';
+import ArrowUp from '@icon/system/regular/arrow-up.svg';
+import ListNumbers from '@icon/system/regular/list-numbers.svg';
+import Play from '@icon/system/regular/play.svg';
+import Plus from '@icon/system/regular/plus.svg';
+import Sliders from '@icon/system/regular/sliders-horizontal.svg';
 import { For, type JSX, Show } from 'solid-js';
 import {
   CLASS_LABELS,
