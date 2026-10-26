@@ -26,7 +26,7 @@ import {
   CallPeopleSections,
   CallSidebar,
   type CallSidebarTab,
-} from './CallDetails';
+} from './CallSidebar';
 import { LK_TRACK_SOURCE } from './livekit-loader';
 import { MutedMicrophoneBadge } from './MutedMicrophoneBadge';
 import { ParticipantAvatarBackground } from './ParticipantAvatarBackground';
