@@ -122,7 +122,7 @@ function TeamForm(props: {
         name={form.name()}
         emails={form.slots()}
         disabled={form.pending() || props.finishing}
-        suggested={form.suggested}
+        hint="Invite teammates now for $10 AI credit each"
         onNameChange={form.setName}
         onEmailChange={form.setSlot}
         onRemoveEmail={form.removeSlot}
@@ -132,13 +132,16 @@ function TeamForm(props: {
           {(domain) => (
             <ToggleSwitch
               size="md"
-              class="w-full gap-3 border-t border-edge-muted pt-6"
+              class="w-full flex-row-reverse justify-between gap-3 border-t border-edge-muted pt-6"
               controlClass="shrink-0"
               checked={form.allowDomainJoin()}
               onChange={form.setAllowDomainJoin}
               label={
-                <span class="text-sm text-ink">
+                <span class="flex items-center gap-2 text-sm text-ink">
                   Allow @{domain()} emails to join
+                  <span class="rounded bg-ink/5 px-1.5 py-0.5 text-xs text-ink-muted">
+                    recommended
+                  </span>
                 </span>
               }
             />

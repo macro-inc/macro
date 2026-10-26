@@ -30,7 +30,8 @@ export function TeamSetupFields(props: {
   name: string;
   emails: string[];
   disabled?: boolean;
-  suggested?: boolean;
+  /** One line above the invite list, e.g. the reward for inviting. */
+  hint?: string;
   onNameChange: (value: string) => void;
   onEmailChange: (index: number, value: string) => void;
   onRemoveEmail: (index: number) => void;
@@ -53,11 +54,10 @@ export function TeamSetupFields(props: {
         />
       </label>
       <div class="flex flex-col gap-6 border-t border-edge-muted pt-6">
-        <Show when={props.suggested}>
-          <p class="-mt-2 text-sm leading-6 text-ink-muted">
-            We found a few people at your company. Review the addresses and
-            remove anyone you don’t want to invite.
-          </p>
+        <Show when={props.hint}>
+          {(hint) => (
+            <p class="-mt-2 text-sm leading-6 text-ink-muted">{hint()}</p>
+          )}
         </Show>
         <div ref={inviteList} class="flex flex-col gap-3">
           <Index each={props.emails}>

@@ -163,7 +163,6 @@ export function createTeamForm(
     domain: seed.domain,
     allowDomainJoin,
     setAllowDomainJoin,
-    suggested: seed.prefilled.length > 0,
     create,
   };
 }
