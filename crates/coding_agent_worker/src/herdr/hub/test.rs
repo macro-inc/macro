@@ -1,5 +1,18 @@
 use super::*;
 
+#[test]
+fn prompt_titles_skip_hidden_context_and_leading_mentions() {
+    assert_eq!(
+        title_from(
+            "<m-agent-context>{\"text\":\"hidden context\"}</m-agent-context>\n\n\
+             <m-user-mention>{\"displayName\":\"Gab Codex\"}</m-user-mention> Fix channel split\nmore"
+        ),
+        Some("Fix channel split".to_owned())
+    );
+    assert_eq!(title_from("<m-agent-context>incomplete"), None);
+    assert_eq!(title_from("<m-agent-context>{}</m-agent-context>\n"), None);
+}
+
 fn owner() -> Owner {
     MacroUserIdStr::try_from_email("owner@example.com").unwrap()
 }

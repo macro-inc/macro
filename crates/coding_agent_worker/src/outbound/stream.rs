@@ -14,6 +14,8 @@ use std::pin::Pin;
 use eventsource_stream::{Event, EventStreamError, Eventsource as _};
 use futures::{Stream, StreamExt as _};
 use harnesses::domain::models::HarnessAgent;
+#[cfg(unix)]
+use harnesses::domain::models::HarnessSession;
 use rootcause::prelude::ResultExt as _;
 use serde::de::DeserializeOwned;
 use webhook::domain::models::{WebhookFilter, WebhookScope};
@@ -97,6 +99,21 @@ impl EventStreamClient {
             .map(|agent| agent.bot_id.to_string())
             .collect();
         Ok(ids.into_iter().collect())
+    }
+
+    /// Recent session names visible to this harness, including later renames.
+    #[cfg(unix)]
+    #[tracing::instrument(name = "macrod.read_session_titles", skip_all, err)]
+    pub async fn sessions(&self) -> rootcause::Result<Vec<HarnessSession>> {
+        let mut headers = reqwest::header::HeaderMap::new();
+        macro_tower_layers::inject_trace_headers(&mut headers);
+        self.read(
+            "list this harness's sessions",
+            self.http
+                .get(format!("{}/harnesses/me/sessions", self.base))
+                .headers(headers),
+        )
+        .await
     }
 
     /// Open `GET /webhook/events/stream` and start reading envelopes of

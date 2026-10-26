@@ -26,6 +26,6 @@ case "$1 $2" in
       printf '%s\n' '{"result":{"process_info":{"shell_pid":1,"foreground_process_group_id":1}}}'
     fi
     ;;
-  'tab close') ;;
+  'tab close'|'tab rename') ;;
   *) exit 2 ;;
 esac

@@ -24,6 +24,7 @@ pub(crate) mod repositories;
 mod store;
 mod tail;
 mod tap;
+pub(crate) mod titles;
 pub(crate) mod wire;
 
 #[cfg(test)]

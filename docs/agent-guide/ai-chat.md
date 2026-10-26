@@ -598,6 +598,8 @@ the shimmer.
   its own Git worktree. Sessions stay in that workspace even when a different
   workspace owns the repository's main checkout. The session page streams its
   tool calls and replies, and its permission prompts appear as approvals.
+  Native tab names follow Macro's session names; macrod checks for changes every
+  five seconds.
   Other runtimes started inside herdr get a live
   view tab per session that can prompt and interrupt it; approvals stay in Macro.
   Native Herdr sessions offer `/compact`, `/init`, and `/fast` in the slash menu;

@@ -73,6 +73,8 @@ external chat replies depend on it. Direct session controls still mint IDs.
 - Create session checkouts through Git and open them as tabs in macrod's Herdr
   workspace; Herdr's worktree commands group them under the main checkout's
   workspace.
+- Keep native tab names aligned with Macro session names; exclude hidden prompt
+  context and mention payloads from fallback labels (`src/herdr/titles.rs`).
 - Switching native agents clears the previous agent's model/extra-args but
   keeps storage and focus preferences (README.md, "Setup").
 

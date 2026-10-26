@@ -16,6 +16,11 @@ the path and branch, so redelivery reuses existing work without resetting edits.
 Cached repositories and worktrees live under `~/.macrod/herdr/<harness-id>/`. Each
 paired macrod instance has one configuration and its own storage directory.
 
+Native tabs use the prompt's visible text until Macro supplies its session name;
+hidden context and mention payloads are excluded from that initial label. While
+macrod is running, it checks the harness's session names every five seconds and
+updates the matching tabs, including later renames made in Macro.
+
 ### Reconnecting native sessions
 
 macrod records native session IDs and transcript locations in private files in

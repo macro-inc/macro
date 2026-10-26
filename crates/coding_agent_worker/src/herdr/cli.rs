@@ -126,8 +126,8 @@ impl HerdrCli {
         parse_window(&output)
     }
 
-    /// Reuse a session's tab, including after Herdr moved its pane.
-    pub(crate) async fn existing_window(
+    /// Resolve a session's current tab without sending input to its pane.
+    pub(crate) async fn current_window(
         &self,
         window: &Window,
         cwd: &Path,
@@ -148,8 +148,23 @@ impl HerdrCli {
                 stderr: "the session's pane is now in a different directory".to_owned(),
             });
         }
+        Ok(Some(Window {
+            pane_id: pane.pane_id,
+            tab_id: pane.tab_id,
+        }))
+    }
+
+    /// Reuse a session's tab only while its shell owns the foreground.
+    pub(crate) async fn existing_window(
+        &self,
+        window: &Window,
+        cwd: &Path,
+    ) -> Result<Option<Window>, HerdrError> {
+        let Some(window) = self.current_window(window, cwd).await? else {
+            return Ok(None);
+        };
         let output = self
-            .run(&["pane", "process-info", "--pane", &pane.pane_id])
+            .run(&["pane", "process-info", "--pane", &window.pane_id])
             .await?;
         let process: ProcessAnswer =
             serde_json::from_str(&output).map_err(|source| HerdrError::Unparsable {
@@ -164,10 +179,7 @@ impl HerdrCli {
                     .to_owned(),
             });
         }
-        Ok(Some(Window {
-            pane_id: pane.pane_id,
-            tab_id: pane.tab_id,
-        }))
+        Ok(Some(window))
     }
 
     /// Type a command into a pane's shell and press Enter.
