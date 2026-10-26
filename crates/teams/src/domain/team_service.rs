@@ -44,6 +44,7 @@ use crate::domain::{
         TeamInviteRevokedMetadata, TeamJoinMethod, TeamMacroEvent, TeamMemberJoinedMetadata,
         TeamMemberRemovedMetadata, TeamMemberRoleChangedMetadata, TeamUpdatedMetadata,
     },
+    invite_rewards::{InviteRewardEvent, InviteRewarder, NoOpInviteRewarder},
     model::{
         CreateTeamError, CustomerError, DeleteTeamError, InviteUsersToTeamError,
         JoinTeamDirectlyError, JoinTeamError, PatchTeamCrmSettingsResponse, PatchTeamRequest,
@@ -141,6 +142,8 @@ pub struct TeamServiceImpl<
     /// Outbound port that purges everything a team owns before the team is
     /// deleted. The default refuses, so an unwired service cannot delete teams.
     owned_entity_cleanup: OEC,
+    /// Rewards whoever brought a new member onto the team.
+    invite_rewarder: Arc<dyn InviteRewarder>,
 }
 
 fn channel_error_to_team_error(error: ChannelMutationErr) -> TeamError {
@@ -177,6 +180,7 @@ where
             event_broker: self.event_broker.clone(),
             open_seat_release: self.open_seat_release.clone(),
             owned_entity_cleanup: self.owned_entity_cleanup.clone(),
+            invite_rewarder: self.invite_rewarder.clone(),
         }
     }
 }
@@ -281,6 +285,7 @@ where
             event_broker: NoopMacroEventBroker,
             open_seat_release: NoOpOpenSeatRelease,
             owned_entity_cleanup: UnwiredOwnedEntityCleanup,
+            invite_rewarder: Arc::new(NoOpInviteRewarder),
         }
     }
 }
@@ -650,6 +655,7 @@ where
             event_broker: self.event_broker,
             open_seat_release: self.open_seat_release,
             owned_entity_cleanup: self.owned_entity_cleanup,
+            invite_rewarder: self.invite_rewarder,
         }
     }
 
@@ -674,6 +680,7 @@ where
             event_broker,
             open_seat_release: self.open_seat_release,
             owned_entity_cleanup: self.owned_entity_cleanup,
+            invite_rewarder: self.invite_rewarder,
         }
     }
 
@@ -698,6 +705,37 @@ where
             event_broker: self.event_broker,
             open_seat_release,
             owned_entity_cleanup: self.owned_entity_cleanup,
+            invite_rewarder: self.invite_rewarder,
+        }
+    }
+
+    /// Replaces the rewarder for whoever brought a new member onto a team.
+    pub fn with_invite_rewarder(mut self, invite_rewarder: Arc<dyn InviteRewarder>) -> Self {
+        self.invite_rewarder = invite_rewarder;
+        self
+    }
+
+    /// Rewards `inviter` for `joined`, best-effort: the join already happened.
+    pub(crate) async fn reward_inviter(
+        &self,
+        inviter: &MacroUserIdStr<'_>,
+        joined: &MacroUserIdStr<'_>,
+        event_key: String,
+    ) {
+        if inviter == joined {
+            return;
+        }
+        let event = InviteRewardEvent {
+            inviter: inviter.clone().into_owned(),
+            joined: joined.clone().into_owned(),
+            event_key,
+        };
+        if let Err(error) = self.invite_rewarder.reward_inviter(event).await {
+            tracing::error!(
+                error = ?error,
+                inviter = %inviter,
+                "failed to reward the inviter for a team join"
+            );
         }
     }
 
@@ -723,6 +761,7 @@ where
             event_broker: self.event_broker,
             open_seat_release: self.open_seat_release,
             owned_entity_cleanup,
+            invite_rewarder: self.invite_rewarder,
         }
     }
 
@@ -2039,6 +2078,13 @@ where
             .await;
         self.enqueue_joining_user_contacts(user_id, &teammate_ids)
             .await;
+
+        self.reward_inviter(
+            &accepted_invite.invite.invited_by,
+            user_id,
+            format!("team-invite:{}", accepted_invite.invite.id),
+        )
+        .await;
 
         self.track_team_analytics_event(TeamAnalyticsEvent::TeamJoined {
             team_id: team_member.team_id,

@@ -1625,8 +1625,17 @@ impl TeamRepository for TeamRepositoryImpl {
         &self,
         team_id: &uuid::Uuid,
         token: &TeamInviteLinkToken,
+        created_by: &MacroUserIdStr<'_>,
     ) -> Result<(), TeamError> {
-        invite_link::set_team_invite_link(&self.pool, team_id, token).await
+        invite_link::set_team_invite_link(&self.pool, team_id, token, created_by).await
+    }
+
+    #[tracing::instrument(skip(self, token), err)]
+    async fn get_team_invite_link_creator(
+        &self,
+        token: &TeamInviteLinkToken,
+    ) -> Result<Option<MacroUserIdStr<'static>>, TeamError> {
+        invite_link::get_team_invite_link_creator(&self.pool, token).await
     }
 
     #[tracing::instrument(skip(self), err)]

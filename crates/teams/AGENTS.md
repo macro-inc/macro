@@ -23,6 +23,10 @@ event contract (schema, sanitization, delivery semantics).
   invites, swept hourly in `authentication_service`. The repository claims
   due invites and counts the reminder before sending, so replicas never
   double-send and a failed send drops that reminder rather than retrying.
+- `src/domain/invite_rewards.rs`: the `InviteRewarder` port, called when an
+  invite is accepted or someone joins through an invite link (rewarding the
+  sender or `team_invite_link.created_by`). Billing implements it in
+  `authentication_service`; `teams` cannot depend on `ai_billing`.
 - `src/domain/owned_entity_cleanup.rs` + `open_seat_release.rs`: account/team
   deletion side effects (owned-entity transfer, seat release).
 - `src/inbound/axum_router.rs` / `src/inbound/toolset.rs`: HTTP routes and AI

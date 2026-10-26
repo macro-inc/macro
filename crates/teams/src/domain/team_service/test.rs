@@ -146,6 +146,7 @@ struct MockTeamRepository {
     user_teams_after_add: Option<Vec<Team>>,
     journal: Journal,
     invite_link: Arc<Mutex<Option<TeamInviteLinkToken>>>,
+    invite_link_creator: Arc<Mutex<Option<MacroUserIdStr<'static>>>>,
     invite_link_team: Option<TeamInviteLinkTeam>,
     /// What `claim_due_invite_reminders` hands out, once.
     due_invite_reminders: Arc<Mutex<Vec<DueInviteReminder>>>,
@@ -232,6 +233,7 @@ impl MockTeamRepository {
             user_teams_after_add: None,
             journal: Journal::default(),
             invite_link: Arc::new(Mutex::new(None)),
+            invite_link_creator: Arc::new(Mutex::new(None)),
             invite_link_team: None,
             due_invite_reminders: Arc::new(Mutex::new(Vec::new())),
         }
@@ -933,9 +935,21 @@ impl TeamRepository for MockTeamRepository {
         &self,
         _: &uuid::Uuid,
         token: &TeamInviteLinkToken,
+        created_by: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<(), TeamError>> + Send {
         *self.invite_link.lock().unwrap() = Some(*token);
+        *self.invite_link_creator.lock().unwrap() = Some(created_by.clone().into_owned());
         async { Ok(()) }
+    }
+
+    fn get_team_invite_link_creator(
+        &self,
+        token: &TeamInviteLinkToken,
+    ) -> impl Future<Output = Result<Option<MacroUserIdStr<'static>>, TeamError>> + Send {
+        let creator = (*self.invite_link.lock().unwrap() == Some(*token))
+            .then(|| self.invite_link_creator.lock().unwrap().clone())
+            .flatten();
+        async move { Ok(creator) }
     }
 
     fn delete_team_invite_link(
@@ -954,6 +968,23 @@ impl TeamRepository for MockTeamRepository {
             .then(|| self.invite_link_team.clone())
             .flatten();
         async move { Ok(team) }
+    }
+}
+
+// -- Recording InviteRewarder --
+
+#[derive(Debug, Default)]
+pub(super) struct RecordingInviteRewarder {
+    pub(super) events: Mutex<Vec<crate::domain::invite_rewards::InviteRewardEvent>>,
+}
+
+impl crate::domain::invite_rewards::InviteRewarder for RecordingInviteRewarder {
+    fn reward_inviter(
+        &self,
+        event: crate::domain::invite_rewards::InviteRewardEvent,
+    ) -> crate::domain::invite_rewards::InviteRewardFuture<'_> {
+        self.events.lock().unwrap().push(event);
+        Box::pin(async { Ok(()) })
     }
 }
 
@@ -5373,6 +5404,33 @@ async fn team_event_invite_join_uses_accepted_invite_snapshot() {
         metadata["join_method"]["invited_by"],
         "macro|owner@example.com"
     );
+}
+
+#[tokio::test]
+async fn accepting_an_invite_rewards_the_inviter_once_per_invite() {
+    let team_id = uuid::Uuid::from_u128(335);
+    let invite_id = uuid::Uuid::from_u128(336);
+    let user_id = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
+    let team_repository = make_enterprise_join_team_repository(team_id, invite_id, &user_id);
+    let rewarder = Arc::new(RecordingInviteRewarder::default());
+    let service = TeamServiceImpl::new(
+        team_repository,
+        MockCustomerRepository::default(),
+        RecordingChannelService::default(),
+        MockUserRolesAndPermissionsService::default(),
+        Arc::new(MockNotificationIngress::new(HashSet::new())),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+    )
+    .with_invite_rewarder(rewarder.clone());
+
+    service.join_team(&invite_id, &user_id).await.unwrap();
+
+    let events = rewarder.events.lock().unwrap();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].inviter.as_ref(), "macro|owner@example.com");
+    assert_eq!(events[0].joined, user_id);
+    assert_eq!(events[0].event_key, format!("team-invite:{invite_id}"));
 }
 
 #[tokio::test]

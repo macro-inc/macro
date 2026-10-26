@@ -50,6 +50,34 @@ where
     OSR: OpenSeatRelease,
     OEC: OwnedEntityCleanup,
 {
+    /// Rewards whoever created the link `user_id` just joined through.
+    async fn reward_invite_link_creator(
+        &self,
+        token: &TeamInviteLinkToken,
+        team_id: &uuid::Uuid,
+        user_id: &MacroUserIdStr<'_>,
+    ) {
+        let creator = match self
+            .team_repository
+            .get_team_invite_link_creator(token)
+            .await
+        {
+            Ok(Some(creator)) => creator,
+            // Links made before creators were recorded reward nobody.
+            Ok(None) => return,
+            Err(error) => {
+                tracing::error!(error = ?error, %team_id, "failed to read the invite link creator");
+                return;
+            }
+        };
+        self.reward_inviter(
+            &creator,
+            user_id,
+            format!("team-invite-link:{team_id}:{user_id}"),
+        )
+        .await;
+    }
+
     /// Checks the caller may invite people to the team, the same rule as
     /// email invites, and returns whether they are a team admin or owner.
     async fn caller_may_invite(
@@ -119,7 +147,7 @@ where
 
         let token = TeamInviteLinkToken::generate();
         self.team_repository
-            .set_team_invite_link(&team_id, &token)
+            .set_team_invite_link(&team_id, &token, user_id)
             .await?;
         Ok(token)
     }
@@ -166,7 +194,11 @@ where
             .join_team_directly(&team.team_id, user_id, TeamJoinMethod::InviteLink)
             .await?
         {
-            Some(member) => Ok(JoinTeamByInviteLinkOutcome::Joined(member)),
+            Some(member) => {
+                self.reward_invite_link_creator(token, &team.team_id, user_id)
+                    .await;
+                Ok(JoinTeamByInviteLinkOutcome::Joined(member))
+            }
             // The insert found an existing membership, which a concurrent
             // join may have created on either this team or another one.
             None => {

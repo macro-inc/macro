@@ -351,11 +351,19 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<TeamInviteLinkToken>, TeamError>> + Send;
 
     /// Sets the team's invite link to `token`, replacing any existing link.
+    /// `created_by` is rewarded when someone joins through it.
     fn set_team_invite_link(
         &self,
         team_id: &uuid::Uuid,
         token: &TeamInviteLinkToken,
+        created_by: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<(), TeamError>> + Send;
+
+    /// Who created the invite link with `token`, if it exists and is known.
+    fn get_team_invite_link_creator(
+        &self,
+        token: &TeamInviteLinkToken,
+    ) -> impl Future<Output = Result<Option<MacroUserIdStr<'static>>, TeamError>> + Send;
 
     /// Removes the team's invite link. A no-op when the team has none.
     fn delete_team_invite_link(
