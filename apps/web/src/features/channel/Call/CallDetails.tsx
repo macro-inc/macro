@@ -1,10 +1,13 @@
 import { SidePanel } from '@components/app/side-panel';
 import { UserIcon } from '@core/component/UserIcon';
 import { getDisplayName, tryMacroId } from '@core/user';
+import ChatIcon from '@phosphor/chat-circle.svg';
 import MicrophoneSlash from '@phosphor/microphone-slash.svg';
-import { ToggleSwitch } from '@ui';
+import UsersIcon from '@phosphor/users.svg';
+import XIcon from '@phosphor/x.svg';
+import { Button, Tabs, ToggleSwitch } from '@ui';
 import type { RemoteParticipant } from 'livekit-client';
-import { children, For, type JSX, Show } from 'solid-js';
+import { For, type JSX, Show } from 'solid-js';
 import { useCallContext } from './CallContext';
 import { LK_TRACK_SOURCE } from './livekit-loader';
 
@@ -14,19 +17,18 @@ export type CallTeamSharing = {
   onToggle: () => void;
 };
 
+export type CallSidebarTab = 'people' | 'chat';
+
 /**
- * The call's Details sections. They register with the nearest
+ * The call sidebar's People sections. They register with the nearest
  * `SidePanel.Root` and render wherever its `SidePanel.Outlet` is mounted.
  */
-export function CallDetailsSections(props: {
+export function CallPeopleSections(props: {
   localUserId?: string;
   localName: string;
   participants: RemoteParticipant[];
-  inviteLink?: JSX.Element;
   teamSharing?: CallTeamSharing;
 }) {
-  // Resolve once: reading a JSX prop twice would build the control twice.
-  const invite = children(() => props.inviteLink);
   return (
     <>
       <SidePanel.Section
@@ -47,27 +49,12 @@ export function CallDetailsSections(props: {
           </For>
         </ul>
       </SidePanel.Section>
-      <Show when={invite.toArray().length > 0}>
-        <SidePanel.Section
-          id="call-invite"
-          title="Invite"
-          order={20}
-          defaultOpen
-        >
-          <div class="flex flex-col gap-2">
-            <p class="text-xs text-ink-muted">
-              Anyone with the link can ask to join.
-            </p>
-            {invite()}
-          </div>
-        </SidePanel.Section>
-      </Show>
       <Show when={props.teamSharing}>
         {(sharing) => (
           <SidePanel.Section
             id="call-sharing"
             title="Sharing"
-            order={30}
+            order={20}
             defaultOpen
           >
             <div class="flex items-start gap-3">
@@ -163,18 +150,22 @@ function RemotePersonRow(props: { participant: RemoteParticipant }) {
 }
 
 /**
- * Frames the Details sections like the call chat: docked beside the call on
- * wide layouts, over it on narrow ones.
+ * The call sidebar, with People and Chat tabs: docked beside the call on wide
+ * layouts, over it on narrow ones.
  */
-export function CallDetailsPanel(props: {
+export function CallSidebar(props: {
   id: string;
   open: boolean;
+  tab: CallSidebarTab;
+  showChat: boolean;
+  onTabChange: (tab: CallSidebarTab) => void;
   onClose: () => void;
+  children: JSX.Element;
 }) {
   return (
     <aside
       id={props.id}
-      aria-label="Call details"
+      aria-label="Call sidebar"
       hidden={!props.open}
       class="absolute inset-y-0 right-0 z-20 w-full max-w-90 min-h-0 flex-col bg-surface @min-[800px]/call:static @min-[800px]/call:w-90 @min-[800px]/call:shrink-0"
       classList={{ flex: props.open }}
@@ -185,7 +176,47 @@ export function CallDetailsPanel(props: {
         props.onClose();
       }}
     >
-      <SidePanel.Outlet />
+      <div class="flex shrink-0 items-center gap-2 px-3 pt-3">
+        <Show
+          when={props.showChat}
+          fallback={<h2 class="px-1 text-sm font-medium text-ink">People</h2>}
+        >
+          <Tabs
+            aria-label="Call sidebar"
+            size="md"
+            touch="pills"
+            options={[
+              { value: 'people', label: 'People', icon: UsersIcon },
+              { value: 'chat', label: 'Chat', icon: ChatIcon },
+            ]}
+            value={props.tab}
+            onChange={props.onTabChange}
+          />
+        </Show>
+        <Button
+          class="ml-auto"
+          variant="ghost"
+          size="icon-md"
+          label="Close sidebar"
+          onClick={props.onClose}
+        >
+          <XIcon />
+        </Button>
+      </div>
+      {props.children}
     </aside>
+  );
+}
+
+/** The People tab: the registered sections, kept mounted while hidden. */
+export function CallPeoplePane(props: { open: boolean }) {
+  return (
+    <div
+      hidden={!props.open}
+      class="min-h-0 flex-1 flex-col"
+      classList={{ flex: props.open }}
+    >
+      <SidePanel.Outlet />
+    </div>
   );
 }

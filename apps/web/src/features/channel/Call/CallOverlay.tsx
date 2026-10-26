@@ -1,11 +1,12 @@
-import { SidePanel, useSidePanel } from '@components/app/side-panel';
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
+import { SidePanel } from '@components/app/side-panel';
 import { UserIcon } from '@core/component/UserIcon';
 import { useAuthor, useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ChatIcon from '@icon/system/regular/chat-circle.svg';
-import SidePanelIcon from '@icon/system/regular/sidebar-simple.svg';
+import UsersIcon from '@icon/system/regular/users.svg';
 import { Button, cn } from '@ui';
 import type { RemoteParticipant, Track } from 'livekit-client';
 import {
@@ -20,7 +21,12 @@ import {
 } from 'solid-js';
 import { useCallContext } from './CallContext';
 import { CallControls } from './CallControls/CallControls';
-import { CallDetailsPanel, CallDetailsSections } from './CallDetails';
+import {
+  CallPeoplePane,
+  CallPeopleSections,
+  CallSidebar,
+  type CallSidebarTab,
+} from './CallDetails';
 import { LK_TRACK_SOURCE } from './livekit-loader';
 import { MutedMicrophoneBadge } from './MutedMicrophoneBadge';
 import { ParticipantAvatarBackground } from './ParticipantAvatarBackground';
@@ -243,18 +249,17 @@ type CallOverlayProps = {
   showChat?: boolean;
   /** Narrow RTC credential for a guest; never an account bearer. */
   guestChatSession?: { token: string; participantId: string };
-  /** The host's share-link control, shown in the Details panel's Invite section. */
-  inviteLink?: JSX.Element;
+  /** Leading content of the call's top row, such as its title and share link. */
+  header?: JSX.Element;
 };
 
 /**
- * The call view. Its right-hand panel shows either the call's Details
- * sections or its chat: opening chat swaps it in for Details, and closing it
- * brings Details back.
+ * The call view. Its top row ends with People and Chat toggles that open the
+ * call sidebar on that tab; the sidebar starts closed.
  */
 export function CallOverlay(props: CallOverlayProps) {
   return (
-    <SidePanel.Root defaultOpen={false} persistKey="call-details">
+    <SidePanel.Root>
       <CallOverlayContent {...props} />
     </SidePanel.Root>
   );
@@ -262,46 +267,39 @@ export function CallOverlay(props: CallOverlayProps) {
 
 function CallOverlayContent(props: CallOverlayProps) {
   const callCtx = useCallContext();
-  const sidePanel = useSidePanel()!;
   const currentUserId = useUserId();
   const currentUserName = useAuthor();
   const isConnecting = () => callCtx.isConnecting();
   const teamShare = useActiveCallTeamShare();
   const sharedWithTeam = () =>
     props.sharedWithTeam ?? callCtx.isSharedWithTeam();
-  const [chatOpen, setChatOpen] = createSignal(false);
-  const [chatMounted, setChatMounted] = createSignal(false);
-  const chatId = createUniqueId();
-  let chatButton: HTMLButtonElement | undefined;
-  const closeChat = () => {
-    setChatOpen(false);
-    chatButton?.focus();
-  };
-  const toggleChat = () => {
-    if (chatOpen()) return closeChat();
-    setChatMounted(true);
-    setChatOpen(true);
-  };
   const canChat = () => props.showChat !== false && !!callCtx.activeCallId();
   const teamShareLocked = () =>
     isConnecting() || !teamShare.canToggle() || teamShare.isPending();
 
-  const detailsId = createUniqueId();
-  let detailsButton: HTMLButtonElement | undefined;
-  /** Details stays open underneath chat and returns when chat closes. */
-  const detailsOpen = () => sidePanel.isOpen() && !(canChat() && chatOpen());
-  const panelOpen = () => detailsOpen() || (canChat() && chatOpen());
-  const closeDetails = () => {
-    sidePanel.setIsOpen(false);
-    detailsButton?.focus();
+  const [sidebarOpen, setSidebarOpen] = createSignal(false);
+  const [tab, setTab] = createSignal<CallSidebarTab>('people');
+  const [chatMounted, setChatMounted] = createSignal(false);
+  const sidebarId = createUniqueId();
+  const chatId = createUniqueId();
+  const activeTab = (): CallSidebarTab => (canChat() ? tab() : 'people');
+  const isShowing = (target: CallSidebarTab) =>
+    sidebarOpen() && activeTab() === target;
+  let peopleButton: HTMLButtonElement | undefined;
+  let chatButton: HTMLButtonElement | undefined;
+  const showTab = (target: CallSidebarTab) => {
+    if (target === 'chat') setChatMounted(true);
+    setTab(target);
+    setSidebarOpen(true);
   };
-  const toggleDetails = () => {
-    if (chatOpen()) {
-      setChatOpen(false);
-      sidePanel.setIsOpen(true);
-      return;
-    }
-    sidePanel.toggle();
+  const closeSidebar = () => {
+    const opener = activeTab() === 'chat' ? chatButton : peopleButton;
+    setSidebarOpen(false);
+    opener?.focus();
+  };
+  const toggleTab = (target: CallSidebarTab) => {
+    if (isShowing(target)) return closeSidebar();
+    showTab(target);
   };
 
   const participants = () =>
@@ -360,6 +358,35 @@ function CallOverlayContent(props: CallOverlayProps) {
 
   return (
     <div class="flex flex-col h-full min-h-0 @container/call touch:pb-(--mobile-content-inset-bottom)">
+      <div class="flex shrink-0 items-center gap-4 pb-3">
+        <div class="flex min-w-0 flex-1 flex-wrap items-center gap-4">
+          {props.header}
+        </div>
+        <HeaderActionGroup label="Call sidebar">
+          <Button
+            ref={peopleButton}
+            size="icon-md"
+            label={isShowing('people') ? 'Hide people' : 'Show people'}
+            aria-pressed={isShowing('people')}
+            aria-controls={sidebarId}
+            onClick={() => toggleTab('people')}
+          >
+            <UsersIcon />
+          </Button>
+          <Show when={canChat()}>
+            <Button
+              ref={chatButton}
+              size="icon-md"
+              label={isShowing('chat') ? 'Close chat' : 'Open chat'}
+              aria-pressed={isShowing('chat')}
+              aria-controls={sidebarId}
+              onClick={() => toggleTab('chat')}
+            >
+              <ChatIcon />
+            </Button>
+          </Show>
+        </HeaderActionGroup>
+      </div>
       <div class="relative flex min-h-0 flex-1 overflow-hidden">
         <div class="flex min-w-0 flex-1 flex-col">
           {/* Screen share area */}
@@ -428,47 +455,51 @@ function CallOverlayContent(props: CallOverlayProps) {
             </Show>
           </div>
         </div>
-        <Show when={canChat() && chatMounted()}>
-          <Show when={callCtx.activeCallId()} keyed>
-            {(callId) => (
-              <Suspense>
-                <Show
-                  when={props.guestChatSession}
-                  keyed
-                  fallback={
-                    <CallChat
-                      callId={callId}
-                      id={chatId}
-                      open={chatOpen()}
-                      onClose={closeChat}
-                    />
-                  }
-                >
-                  {(session) => (
-                    <GuestCallChat
-                      callId={callId}
-                      session={session}
-                      id={chatId}
-                      open={chatOpen()}
-                      onClose={closeChat}
-                    />
-                  )}
-                </Show>
-              </Suspense>
-            )}
+        <CallSidebar
+          id={sidebarId}
+          open={sidebarOpen()}
+          tab={activeTab()}
+          showChat={canChat()}
+          onTabChange={showTab}
+          onClose={closeSidebar}
+        >
+          <CallPeoplePane open={activeTab() === 'people'} />
+          <Show when={canChat() && chatMounted()}>
+            <Show when={callCtx.activeCallId()} keyed>
+              {(callId) => (
+                <Suspense>
+                  <Show
+                    when={props.guestChatSession}
+                    keyed
+                    fallback={
+                      <CallChat
+                        callId={callId}
+                        id={chatId}
+                        open={isShowing('chat')}
+                        onClose={closeSidebar}
+                      />
+                    }
+                  >
+                    {(session) => (
+                      <GuestCallChat
+                        callId={callId}
+                        session={session}
+                        id={chatId}
+                        open={isShowing('chat')}
+                        onClose={closeSidebar}
+                      />
+                    )}
+                  </Show>
+                </Suspense>
+              )}
+            </Show>
           </Show>
-        </Show>
-        <CallDetailsPanel
-          id={detailsId}
-          open={detailsOpen()}
-          onClose={closeDetails}
-        />
+        </CallSidebar>
       </div>
-      <CallDetailsSections
+      <CallPeopleSections
         localUserId={localUserId()}
         localName={localDisplayName()}
         participants={participants()}
-        inviteLink={props.inviteLink}
         teamSharing={
           callCtx.activeChannelId() !== null && props.showTeamSharing !== false
             ? {
@@ -484,47 +515,11 @@ function CallOverlayContent(props: CallOverlayProps) {
           beside it) is the call's last row, where the corner prompt sits, so the
           prompt waits. */}
       <div
-        class="relative flex shrink-0 flex-col items-center gap-2 py-3"
+        class="relative flex shrink-0 justify-center px-2 py-3"
         data-holds-prompts={isTouchDevice() ? undefined : ''}
-        classList={{ '@min-[800px]/call:mr-90': panelOpen() }}
+        classList={{ '@min-[800px]/call:mr-90': sidebarOpen() }}
       >
-        <div class="grid w-full grid-cols-[minmax(3.5rem,1fr)_minmax(0,36rem)_minmax(3.5rem,1fr)] items-center gap-2 px-2 @max-[500px]/call:grid-cols-[minmax(0,1fr)_auto]">
-          <div class="col-start-2 flex min-w-0 justify-center @max-[500px]/call:col-start-1">
-            <CallControls onLeave={props.onLeave} />
-          </div>
-          <div class="flex items-center gap-1 justify-self-end rounded-xl border border-edge-muted bg-panel p-1.5 shadow-sm @max-[500px]/call:p-1">
-            <Button
-              ref={detailsButton}
-              size="icon-lg"
-              aria-label={detailsOpen() ? 'Hide details' : 'Show details'}
-              tooltip={{
-                content: detailsOpen() ? 'Hide details' : 'Show details',
-                placement: 'top',
-              }}
-              aria-pressed={detailsOpen()}
-              aria-controls={detailsId}
-              onClick={toggleDetails}
-            >
-              <SidePanelIcon class="rotate-180" />
-            </Button>
-            <Show when={canChat()}>
-              <Button
-                ref={chatButton}
-                size="icon-lg"
-                aria-label={chatOpen() ? 'Close chat' : 'Open chat'}
-                tooltip={{
-                  content: chatOpen() ? 'Close chat' : 'Open chat',
-                  placement: 'top',
-                }}
-                aria-pressed={chatOpen()}
-                aria-controls={chatId}
-                onClick={toggleChat}
-              >
-                <ChatIcon />
-              </Button>
-            </Show>
-          </div>
-        </div>
+        <CallControls onLeave={props.onLeave} />
       </div>
     </div>
   );

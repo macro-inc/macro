@@ -17,6 +17,7 @@ import {
   Switch,
 } from 'solid-js';
 import { MeetingCallHeading } from '../components/meeting-call-heading';
+import { MeetingCopyButton } from '../components/meeting-copy-button';
 import {
   MeetingParticipants,
   type MeetingParticipantsState,
@@ -44,6 +45,8 @@ export function MeetingPage(props: {
   avatar?: JSX.Element;
   participants?: MeetingParticipantsState;
   startCall?: boolean;
+  url?: string;
+  onCopy: () => Promise<void>;
   onRename?: (title: string) => Promise<void>;
   /** The host keeps the URL in sync without replacing this session owner. */
   onCallStateChange?: (connected: boolean) => void;
@@ -56,7 +59,9 @@ export function MeetingPage(props: {
   renderCall: (
     onLeave: () => void,
     name: Accessor<string>,
-    credentials: Accessor<MeetingCredentials | undefined>
+    credentials: Accessor<MeetingCredentials | undefined>,
+    /** The call's title and share link, for the call's top row. */
+    header: JSX.Element
   ) => JSX.Element;
 }) {
   const session = createMeetingSession(props.session);
@@ -158,8 +163,8 @@ export function MeetingPage(props: {
 
   return (
     <main class="ph-no-capture flex h-dvh min-h-0 flex-col bg-surface p-4 text-ink sm:p-6">
-      <header class="flex flex-wrap items-center gap-4 pb-4">
-        <Show when={!inCall()}>
+      <Show when={!inCall()}>
+        <header class="flex flex-wrap items-center gap-4 pb-4">
           <a
             href="/app"
             class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-ink-muted hover:bg-hover focus-visible:outline-2 focus-visible:outline-accent"
@@ -167,27 +172,15 @@ export function MeetingPage(props: {
             <ArrowLeft class="size-4" />
             Back to Macro
           </a>
-        </Show>
-        <Show
-          when={inCall()}
-          fallback={
-            <div class="flex items-center gap-3">
-              <Phone class="size-6 text-accent" />
-              <div>
-                <p class="text-xs font-medium text-ink-muted">Macro Calls</p>
-                <h1 class="text-lg font-semibold">
-                  {ready()?.title || 'Call'}
-                </h1>
-              </div>
+          <div class="flex items-center gap-3">
+            <Phone class="size-6 text-accent" />
+            <div>
+              <p class="text-xs font-medium text-ink-muted">Macro Calls</p>
+              <h1 class="text-lg font-semibold">{ready()?.title || 'Call'}</h1>
             </div>
-          }
-        >
-          <MeetingCallHeading
-            title={ready()?.title || 'Call'}
-            onRename={props.onRename}
-          />
-        </Show>
-      </header>
+          </div>
+        </header>
+      </Show>
       <Switch>
         <Match when={leaving()}>
           <div
@@ -202,7 +195,18 @@ export function MeetingPage(props: {
             {props.renderCall(
               () => fireAndForget(leave(), 'meetings'),
               displayName,
-              session.credentials
+              session.credentials,
+              <>
+                <MeetingCallHeading
+                  title={ready()?.title || 'Call'}
+                  onRename={props.onRename}
+                />
+                <Show when={props.url}>
+                  {(url) => (
+                    <MeetingCopyButton url={url()} onCopy={props.onCopy} />
+                  )}
+                </Show>
+              </>
             )}
           </div>
         </Match>

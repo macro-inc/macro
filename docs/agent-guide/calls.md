@@ -168,7 +168,7 @@ still works if preparation fails or expires.
 Entry waits for the room connection;
 teammate invitations continue afterward. For a newly started call, transcription
 and recording start in the background instead of delaying join credentials.
-Copying the meeting URL is available after joining, in the in-call header.
+Copying the meeting URL is available after joining, in the call's top row.
 
 The creator presses `Start call`; invitees press `Join call`. Loading the page or
 completing authentication never joins automatically, including old `?join=true`
@@ -185,7 +185,7 @@ and as the last participant, including at phone width. During a delayed leave,
 the page shows `Leaving call…` without flashing setup; navigating elsewhere must
 not be undone when cleanup finishes. Inline channel call controls return to
 Messages on leave and stay in the channel, even when that hangup ends the call.
-`Copy Meeting Url` is available during the call, in the Details panel.
+`Copy Meeting Url` is available during the call, at the left of the call's top row.
 Rejoining from a new page waits for the prior page's pending leave cleanup before
 requesting another connection, so a slow leave cannot disconnect the replacement.
 Leaving the last participant archives the session first and tears down its media
@@ -212,7 +212,7 @@ Backgrounds use a simple menu with None, Light blur, Strong blur, and image uplo
 Selected devices and backgrounds carry into the call; unsupported browsers use
 the system speaker. If a background cannot be applied, the camera stays off
 until the user retries or chooses None. The screen uses a gray join
-button. The in-call header shows the current local time before the call name. Owners can click the name
+button. The call's top row shows the current local time before the call name. Owners can click the name
 to rename it, then Save or press Enter; Cancel or Escape discards the edit. Guests and other participants see a
 read-only name.
 
@@ -231,15 +231,14 @@ participants hear it alongside microphones, even away from the Call tab. Leave
 call is a separate button. Click outside or press Escape to close a menu.
 The controls also work by keyboard and touch.
 
-The bottom-right island has **Show details** (side-panel icon) and **Open chat**.
-Both open the same right-hand panel, docked beside the call from 800px wide and
-over it below that. Details uses the document side panel's sections: **People**
-(everyone in the call, with a muted icon, you marked `(you)`), **Invite** (the
-gray `Copy Meeting Url` button, when the call has a share link), and **Sharing**
-(the `Share with team` switch, for channel calls the viewer can share). Opening
-chat swaps it in for Details; closing chat brings Details back. Escape closes the
-panel. At phone width the controls
-and the island stay on one row.
+The call's top row has the call's title and share link on the left and an
+island on the right with **Show people** and **Open chat**. Each opens the call
+sidebar on that tab, docked beside the call from 800px wide and over it below
+that; the sidebar starts closed on every call. Its **People** and **Chat** tabs
+switch in place, and **Close sidebar** (or Escape) closes it. People uses the
+document side panel's sections: **People** (everyone in the call, with a muted
+icon, you marked `(you)`) and **Sharing** (the `Share with team` switch, for
+channel calls the viewer can share). Guests without chat see People only.
 
 ### Browser call diagnostics
 
@@ -282,13 +281,13 @@ share the setup ID and that media failures remain visible when join succeeds.
 ### Sharing a call
 
 With quick calls enabled, channel calls use the same **Copy Meeting Url** button
-as instant and scheduled calls, in the Details panel's Invite section. Clicking it creates the share link and copies it;
+as instant and scheduled calls, at the left of the call's top row. Clicking it creates the share link and copies it;
 opening the call tab alone does not create a link. If loading fails, click again
 to retry. If clipboard access fails, a selectable URL appears below the button.
 
 A channel call's **Share** dialog has a `Team access` control (None or View) for the same canonical
 team share. Its side panel has a `Sharing` section with one `Share with team` checkbox, and the
-call's Details panel carries the same setting as a `Share with team` switch while a call is live. It is canonical team sharing (the
+call sidebar's People tab carries the same setting as a `Share with team` switch while a call is live. It is canonical team sharing (the
 same `Team access` model documents and AI chats use), fixed at **view**. While the call is **live**
 the checkbox is a pending toggle (on by default for channel calls)
 that any participant with edit access can flip;

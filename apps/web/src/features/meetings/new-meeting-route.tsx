@@ -22,7 +22,6 @@ import { Button } from '@ui';
 import { onCleanup, Show, Suspense } from 'solid-js';
 import { browserMeetingMedia } from './browser/meeting-media';
 import { preloadMeetingRuntime } from './browser/meeting-runtime';
-import { MeetingCopyButton } from './components/meeting-copy-button';
 import type { MeetingPageState } from './context/meeting-session';
 import { useMeetingSessionLifecycle } from './context/meeting-session-lifecycle';
 import { createNewMeeting } from './primitives/new-meeting';
@@ -106,6 +105,11 @@ function NewMeetingSetup(props: {
       initialBackground={call.backgroundEffect()}
       readBackgroundImage={readBackgroundImage}
       startCall
+      url={url()}
+      onCopy={async () => {
+        const link = url();
+        if (link) await navigator.clipboard.writeText(link);
+      }}
       onRename={canRename() ? rename : undefined}
       renderInvite={(joining) => (
         <div class="flex flex-col gap-2">
@@ -146,7 +150,7 @@ function NewMeetingSetup(props: {
         },
         disconnect: call.meetingSession.disconnect,
       }}
-      renderCall={(onLeave, name) => (
+      renderCall={(onLeave, name, _credentials, header) => (
         <div class="flex h-full min-h-0 flex-col">
           <Show when={draft.inviteError()}>
             <div
@@ -169,16 +173,7 @@ function NewMeetingSetup(props: {
               onLeave={onLeave}
               localName={name()}
               showTeamSharing={false}
-              inviteLink={
-                <Show when={url()}>
-                  {(link) => (
-                    <MeetingCopyButton
-                      url={link()}
-                      onCopy={() => navigator.clipboard.writeText(link())}
-                    />
-                  )}
-                </Show>
-              }
+              header={header}
             />
           </div>
         </div>

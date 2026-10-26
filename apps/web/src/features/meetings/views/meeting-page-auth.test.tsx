@@ -84,6 +84,7 @@ it.each([
         })}
         authenticated={() => test.authenticated}
         author={() => 'Member'}
+        onCopy={async () => {}}
         onLeave={onLeave}
         onCallStateChange={onCallStateChange}
         mediaAccess={{
@@ -164,6 +165,7 @@ it('waits for confirmed membership before rendering setup or requesting devices'
       })}
       authenticated={authenticated}
       author={() => 'Member'}
+      onCopy={async () => {}}
       mediaAccess={{ request }}
       session={{
         lifecycle: createMeetingSessionLifecycle(),

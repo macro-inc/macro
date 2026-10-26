@@ -1,10 +1,12 @@
 import { type JSX, onCleanup, onMount } from 'solid-js';
 
-/** A persistent sidebar: closing it preserves the composer and scroll position. */
+/**
+ * The call sidebar's Chat tab. It stays mounted while hidden, so switching
+ * tabs or closing the sidebar preserves the composer and scroll position.
+ */
 export function CallChatPanel(props: {
   id: string;
   open: boolean;
-  onClose: () => void;
   children: JSX.Element;
   composer: JSX.Element;
 }) {
@@ -22,18 +24,12 @@ export function CallChatPanel(props: {
   });
 
   return (
-    <aside
+    <section
       id={props.id}
       aria-label="Call chat"
       hidden={!props.open}
-      class="absolute inset-y-0 right-0 z-20 w-full max-w-90 min-h-0 flex-col bg-surface @min-[800px]/call:static @min-[800px]/call:w-90 @min-[800px]/call:shrink-0"
+      class="min-h-0 flex-1 flex-col"
       classList={{ flex: props.open }}
-      onKeyDown={(event) => {
-        if (event.key !== 'Escape' || event.defaultPrevented) return;
-        event.preventDefault();
-        event.stopPropagation();
-        props.onClose();
-      }}
     >
       <div
         ref={viewport}
@@ -49,6 +45,6 @@ export function CallChatPanel(props: {
         <div ref={content}>{props.children}</div>
       </div>
       <div class="shrink-0 p-3">{props.composer}</div>
-    </aside>
+    </section>
   );
 }
