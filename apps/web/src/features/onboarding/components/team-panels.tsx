@@ -1,13 +1,16 @@
 import CheckIcon from '@phosphor/check.svg';
+import LinkIcon from '@phosphor/link.svg';
 import { Button } from '@ui';
 import { For } from 'solid-js';
 import type { TeamInvite } from '../context/onboarding-context';
-import { ContinueButton, SkipButton } from './controls';
+import { ContinueButton, SecondaryButton, SkipButton } from './controls';
 
 /** Already on a team — auto-joined by domain, or just created/joined here. */
 export function OnTeamPanel(props: {
   name: string;
   finishing: boolean;
+  copyingLink: boolean;
+  onCopyLink: () => void;
   onContinue: () => void;
 }) {
   return (
@@ -28,6 +31,14 @@ export function OnTeamPanel(props: {
         label={props.finishing ? 'Opening your workspace…' : 'Continue'}
         disabled={props.finishing}
         onClick={props.onContinue}
+        secondary={
+          <SecondaryButton
+            label="Copy invite link"
+            icon={<LinkIcon class="size-5 shrink-0" aria-hidden="true" />}
+            disabled={props.copyingLink || props.finishing}
+            onClick={props.onCopyLink}
+          />
+        }
       />
     </div>
   );

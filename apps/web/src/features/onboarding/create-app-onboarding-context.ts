@@ -1,11 +1,15 @@
 import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
+import { teamInviteLinkUrl } from '@app/features/settings/TeamInviteLinkSection';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { toast } from '@core/component/Toast/Toast';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { deriveIsAuthenticated } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
 import { idToDisplayName, idToEmail } from '@core/user/util';
+import { writeClipboardData } from '@core/util/dataTransfer';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { getWebOrigin } from '@core/util/webOrigin';
+import { Telemetry } from '@macro-inc/observability';
 import {
   useAiBillingPlansQuery,
   useCreateBillingPortalMutation,
@@ -15,6 +19,7 @@ import {
 } from '@queries/auth';
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
 import { type UserInfoData, useUserInfoQuery } from '@queries/auth/user-info';
+import { queryClient } from '@queries/client';
 import { useContactsQuery } from '@queries/contacts/contacts';
 import { invalidateEmailLinks, useEmailLinksQuery } from '@queries/email/link';
 import { queryReadyGate } from '@queries/gate';
@@ -31,7 +36,13 @@ import {
   useUserInvitesQuery,
 } from '@queries/team/invitations';
 import {
+  fetchTeamInviteLinkToken,
+  useCreateTeamInviteLinkMutation,
+} from '@queries/team/invite-link';
+import { useSendReferralInvitesMutation } from '@queries/team/referrals';
+import {
   useCreateTeamWithInvitesMutation,
+  userTeamsQueryOptions,
   useUserTeamsQuery,
 } from '@queries/team/teams';
 import { applyWorkspaceAccent } from './apply-workspace-accent';
@@ -58,6 +69,25 @@ type UserInfoResult = {
   error: Error | null;
   data: UserInfoData | undefined;
 };
+
+/** Copies `text`, confirming either way; rejects when nothing was copied. */
+async function copyLink(text: string, copied: string, failed: string) {
+  if (await writeClipboardData({ 'text/plain': text })) {
+    toast.success(copied);
+    return;
+  }
+  toast.failure(failed);
+  throw new Error(failed);
+}
+
+/** The created team's id, or undefined when creation failed. */
+async function createdTeamId(creation: Promise<{ id: string }>) {
+  try {
+    return (await creation).id;
+  } catch {
+    return undefined;
+  }
+}
 
 function toViewerState(result: UserInfoResult): ViewerState {
   // Guarded: an unguarded `data` read suspends while the query is pending.
@@ -95,6 +125,27 @@ export function createAppOnboardingContext(): OnboardingContext {
   const completeOnboarding = useCompleteOnboardingMutation();
   const completeTutorial = useCompleteTutorialMutation();
   const connectTool = createOnboardingToolConnect();
+  const createInviteLink = useCreateTeamInviteLinkMutation();
+  const sendReferrals = useSendReferralInvitesMutation();
+  // A team created on this step: its optimistic placeholder is in the teams
+  // cache until creation settles, so the invite link waits for the real id.
+  let createdTeam: Promise<string | undefined> | undefined;
+
+  const currentTeamId = async () =>
+    (await createdTeam) ??
+    (await queryClient.fetchQuery(userTeamsQueryOptions()))[0]?.id;
+
+  /** The team's link token, creating the link when the team has none. Only
+   * admins and owners may create one; the mutation reports that failure. */
+  const teamInviteLinkToken = () =>
+    Telemetry.span('onboarding.team_invite_link', async (span) => {
+      const teamId = await currentTeamId();
+      if (!teamId) throw new Error('Not on a team');
+      span.setAttr('team.id', teamId);
+      const existing = await fetchTeamInviteLinkToken(teamId);
+      span.setAttr('invite_link.created', existing === null);
+      return existing ?? (await createInviteLink.mutateAsync({ teamId }));
+    });
 
   const viewer = () => toViewerState(userInfo);
   const needsOnboarding = () => {
@@ -218,14 +269,49 @@ export function createAppOnboardingContext(): OnboardingContext {
       };
     },
     createTeam: async ({ name, invites, allowDomainJoin }) => {
-      await createTeam.mutateAsync({
+      const creation = createTeam.mutateAsync({
         name,
         invites: invites.map((email) => ({ email })),
         allowDomainJoin,
       });
+      createdTeam = createdTeamId(creation);
+      await creation;
     },
     joinTeam: async (inviteId) => {
       await joinTeam.mutateAsync({ teamInviteId: inviteId });
+    },
+    copyTeamInviteLink: async () => {
+      let token: string;
+      try {
+        token = await teamInviteLinkToken();
+      } catch (error) {
+        if (!createInviteLink.isError)
+          toast.failure("Couldn't get your team's invite link");
+        throw error;
+      }
+      await copyLink(
+        teamInviteLinkUrl(token),
+        'Invite link copied',
+        'Could not copy invite link'
+      );
+    },
+    sendReferralInvites: async (emails) => {
+      const { sent } = await sendReferrals.mutateAsync(emails);
+      if (sent.length === 0) throw new Error('No referral invites were sent');
+    },
+    copyReferralLink: async () => {
+      const code = queryReadyGate(userInfo)
+        ? userInfo.data.referralCode
+        : undefined;
+      if (!code) {
+        toast.failure("Your referral link isn't ready yet");
+        throw new Error('No referral code');
+      }
+      await copyLink(
+        `${getWebOrigin()}/app/signup?referral_code=${code}`,
+        'Referral link copied',
+        'Failed to copy link'
+      );
     },
 
     createInviteOffer: () => {

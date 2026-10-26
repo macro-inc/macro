@@ -1,25 +1,37 @@
 import { fireAndForget } from '@core/util/fireAndForget';
+import LinkIcon from '@phosphor/link.svg';
 import { ToggleSwitch } from '@ui';
 import { createMemo, Match, Show, Switch } from 'solid-js';
-import { ContinueButton, SkipButton } from '../components/controls';
+import {
+  ContinueButton,
+  SecondaryButton,
+  SkipButton,
+} from '../components/controls';
 import {
   InvitesPanel,
   OnTeamPanel,
   TeamLoadError,
   TeamStatus,
 } from '../components/team-panels';
-import { TeamSetup, TeamSetupFields } from '../components/team-setup';
+import {
+  InviteEmailList,
+  TeamSetup,
+  TeamSetupFields,
+} from '../components/team-setup';
 import { useOnboardingContext } from '../context/onboarding-context';
 import {
+  createReferralForm,
   createTeamForm,
+  createTeamInviteLinkCopy,
   createTeamStep,
   type TeamFormSeed,
   teamFormSeed,
 } from '../primitives/team-step';
 
-/** Set up your team: already a member → confirmation, pending invites →
- * join, otherwise create (with a domain-derived name and same-domain
- * teammates pre-added to the invite list). */
+/** Set up your team: already a member → confirmation with the team's invite
+ * link, pending invites → join, a work domain → create (with a domain-derived
+ * name and same-domain teammates pre-added to the invite list), and a
+ * personal address → refer friends instead of creating a team. */
 export function TeamStep(props: {
   finishing: boolean;
   onContinue: () => void;
@@ -46,8 +58,22 @@ export function TeamStep(props: {
       })
   );
 
+  const inviteLink = createTeamInviteLinkCopy(context);
+  // A personal address has no team to create; it refers friends instead.
+  const referring = () => {
+    const ready = seed();
+    return team.state().t === 'create' && ready !== undefined && !ready.domain;
+  };
+
   return (
-    <TeamSetup>
+    <TeamSetup
+      title={referring() ? 'Invite friends.' : undefined}
+      subtitle={
+        referring()
+          ? 'Get $10 of AI credit for each person who signs up.'
+          : undefined
+      }
+    >
       <Switch>
         <Match when={team.state().t === 'error'}>
           <TeamLoadError onRetry={team.retry} />
@@ -60,6 +86,8 @@ export function TeamStep(props: {
             <OnTeamPanel
               name={name}
               finishing={props.finishing}
+              copyingLink={inviteLink.copying()}
+              onCopyLink={() => fireAndForget(inviteLink.copy(), 'onboarding')}
               onContinue={props.onContinue}
             />
           )}
@@ -80,13 +108,23 @@ export function TeamStep(props: {
             fallback={<TeamStatus message="Finding your teammates…" />}
           >
             {(ready) => (
-              <TeamForm
-                finishing={props.finishing}
-                seed={ready()}
-                ownEmail={ownEmail()}
-                onContinue={props.onContinue}
-                onSkip={props.onSkip}
-              />
+              <Show
+                when={ready().domain}
+                fallback={
+                  <ReferralForm
+                    finishing={props.finishing}
+                    ownEmail={ownEmail()}
+                    onContinue={props.onContinue}
+                    onSkip={props.onSkip}
+                  />
+                }
+              >
+                <TeamForm
+                  finishing={props.finishing}
+                  seed={ready()}
+                  ownEmail={ownEmail()}
+                />
+              </Show>
             )}
           </Show>
         </Match>
@@ -103,17 +141,16 @@ const pendingInvites = (
   state: ReturnType<ReturnType<typeof createTeamStep>['state']>
 ) => (state.t === 'invites' ? state.invites : undefined);
 
+/** Creating the team switches the step to the on-team confirmation, where
+ * the creator can copy the team's invite link before continuing. */
 function TeamForm(props: {
   finishing: boolean;
   seed: TeamFormSeed;
   ownEmail: string | undefined;
-  onContinue: () => void;
-  onSkip: () => void;
 }) {
   const context = useOnboardingContext();
   const form = createTeamForm(context, props.seed, {
     ownEmail: props.ownEmail,
-    onCreated: props.onContinue,
   });
   return (
     <div class="flex flex-col gap-3">
@@ -161,13 +198,63 @@ function TeamForm(props: {
         disabled={!form.canCreate() || props.finishing}
         onClick={() => fireAndForget(form.create(), 'onboarding')}
       />
-      {/* A work domain always gets a team; only personal addresses may skip. */}
-      <Show when={!form.domain}>
-        <SkipButton
-          disabled={form.pending() || props.finishing}
-          onClick={props.onSkip}
+    </div>
+  );
+}
+
+function ReferralForm(props: {
+  finishing: boolean;
+  ownEmail: string | undefined;
+  onContinue: () => void;
+  onSkip: () => void;
+}) {
+  const context = useOnboardingContext();
+  const form = createReferralForm(context, {
+    ownEmail: props.ownEmail,
+    onSent: props.onContinue,
+  });
+  const count = () => form.invites().length;
+  return (
+    <div class="flex flex-col gap-3">
+      <fieldset
+        disabled={form.sending() || props.finishing}
+        class="flex min-w-0 flex-col gap-6 text-left"
+      >
+        <InviteEmailList
+          id="referral"
+          emails={form.slots()}
+          person="Friend"
+          placeholder="friend@example.com"
+          onEmailChange={form.setSlot}
+          onRemoveEmail={form.removeSlot}
+          onAddEmail={form.addSlot}
         />
-      </Show>
+      </fieldset>
+      <ContinueButton
+        label={
+          props.finishing
+            ? 'Opening your workspace…'
+            : form.sending()
+              ? 'Sending invites…'
+              : count() === 0
+                ? 'Send invites'
+                : `Send ${count()} ${count() === 1 ? 'invite' : 'invites'}`
+        }
+        disabled={count() === 0 || form.sending() || props.finishing}
+        onClick={() => fireAndForget(form.send(), 'onboarding')}
+        secondary={
+          <SecondaryButton
+            label="Copy referral link"
+            icon={<LinkIcon class="size-5 shrink-0" aria-hidden="true" />}
+            disabled={form.copying() || props.finishing}
+            onClick={() => fireAndForget(form.copyLink(), 'onboarding')}
+          />
+        }
+      />
+      <SkipButton
+        disabled={form.sending() || props.finishing}
+        onClick={props.onSkip}
+      />
     </div>
   );
 }

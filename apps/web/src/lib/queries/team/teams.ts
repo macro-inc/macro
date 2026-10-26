@@ -17,7 +17,7 @@ import { TeamRole } from '@service-auth/generated/schemas/teamRole';
 import type { TeamWithMembers } from '@service-auth/generated/schemas/teamWithMembers';
 import type { ToggleAutoJoinDomainResponse } from '@service-auth/generated/schemas/toggleAutoJoinDomainResponse';
 import type { ToggleNonAdminInvitesResponse } from '@service-auth/generated/schemas/toggleNonAdminInvitesResponse';
-import { useMutation, useQuery } from '@tanstack/solid-query';
+import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { authKeys } from '../auth';
 import { queryClient } from '../client';
@@ -33,11 +33,14 @@ function fetchTeam() {
   return throwOnErr(() => authServiceClient.getTeam());
 }
 
-export function useUserTeamsQuery() {
-  return useQuery(() => ({
+export const userTeamsQueryOptions = () =>
+  queryOptions({
     queryKey: teamKeys.userTeams.queryKey,
     queryFn: fetchUserTeams,
-  }));
+  });
+
+export function useUserTeamsQuery() {
+  return useQuery(userTeamsQueryOptions);
 }
 
 export function useTeamQuery(teamId: Accessor<string>) {

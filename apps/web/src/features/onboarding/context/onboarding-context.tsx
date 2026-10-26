@@ -124,6 +124,19 @@ export type OnboardingContext = {
   }): Promise<void>;
   /** Rejects on failure; the capability reports its own errors. */
   joinTeam(inviteId: string): Promise<void>;
+  /**
+   * Copies the viewer's team invite link, creating the link when the team has
+   * none. Rejects on failure; the capability reports its own result.
+   */
+  copyTeamInviteLink(): Promise<void>;
+  /**
+   * Sends a referral invite to each address; no team is involved. Rejects
+   * when none was sent; the capability reports its own result.
+   */
+  sendReferralInvites(emails: string[]): Promise<void>;
+  /** Copies the viewer's referral sign-up link. Rejects on failure; the
+   * capability reports its own result. */
+  copyReferralLink(): Promise<void>;
   /** The invite promotion the account holds; null when it has none. */
   createInviteOffer(): Accessor<Loadable<InviteOffer | null>>;
   createTrialEligibility(): {

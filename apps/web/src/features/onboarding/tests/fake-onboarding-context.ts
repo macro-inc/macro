@@ -59,6 +59,9 @@ export type FakeOnboardingWorld = {
       | 'catalog'
       | 'createTeam'
       | 'joinTeam'
+      | 'teamInviteLink'
+      | 'referralInvites'
+      | 'referralLink'
       | 'planCatalog'
       | 'trialEligibility'
       | 'checkout'
@@ -322,6 +325,18 @@ export function createFakeOnboarding(
         draft.invites = draft.invites.filter((item) => item.id !== inviteId);
         if (invite) draft.teams = [{ name: `${invite.invitedBy}'s team` }];
       });
+    },
+    copyTeamInviteLink: async () => {
+      call('copyTeamInviteLink');
+      fail('teamInviteLink');
+    },
+    sendReferralInvites: async (emails) => {
+      call(`sendReferralInvites:${emails.join(',')}`);
+      fail('referralInvites');
+    },
+    copyReferralLink: async () => {
+      call('copyReferralLink');
+      fail('referralLink');
     },
     createInviteOffer: () => () => ({ t: 'ready', value: world.inviteOffer }),
     createTrialEligibility: () => ({
