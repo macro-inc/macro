@@ -1143,9 +1143,11 @@ Counts describe loaded results, not the full server corpus. Scans through
 incomplete or already-visible cache hits are bounded per action; continue
 navigating/scrolling, or narrow the query, to resume from the saved cursor.
 A failed local refresh keeps displayed rows and their continuation available for
-another pagination attempt. Missing items may still be uncached, but should appear
-after hydration without retyping, including channels outside the first cached
-page. Cmd+K's
+another pagination attempt. Quick Access merges the complete channel list with
+cached channels, so known channels remain searchable before cache hydration and
+outside its recent page. Cached metadata wins for duplicate channels while newer
+viewed timestamps from either source are retained. Other uncached items should
+appear after hydration without retyping. Cmd+K's
 local search explicitly excludes email hits before limiting entity results;
 email mentions keep their separate search-service path. Text search loads only
 its requested cache buckets, so a document-only category must not read the email
@@ -1202,9 +1204,14 @@ contacts.
 
 Cmd+K merges cached and locally available items before applying recency order.
 An empty query prefers when an item was last viewed, falling back to its update
-time; equal timestamps have a stable entity-type and ID order. Searching retains the menu's
-relevance/recency ranking and DM boost with GraphQL enabled. Verify that refreshing
-the cache or reopening the menu with unchanged data does not reorder the results.
+time; equal timestamps have a stable entity-type and ID order. Typed searches give
+channels (including DMs) the same 3x boost as the main search view, with the menu's
+additional 1.8x DM boost; relevance and viewed recency still order those results.
+This shared ranking also applies to mobile name search. Verify an older matching
+channel stays above recent CRM contacts and agent sessions in All, and remains
+findable in Channels while its cache entry is absent. Refreshing the cache or
+reopening the menu with unchanged data must not reorder results or duplicate a
+channel when its cache entry arrives.
 
 Pending or failed Quick Access history, recently-viewed, skills, and cached-channel
 lookups must not hide the app shell. Verify a cold lookup with Cmd/Ctrl+K: navigation

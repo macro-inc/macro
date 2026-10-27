@@ -514,15 +514,26 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     const viewedAtMap = soupViewedAtMap();
     const allEntries: IndexEntry[] = [];
 
-    // The GraphQL cache is authoritative while enabled. Otherwise preserve the
-    // existing channel-list source unchanged.
-    const usesCache = cacheHost() !== undefined;
-    const channelData = usesCache
-      ? queryReadyGate(cachedChannelsQuery)
-        ? cachedChannelsQuery.data
-        : []
-      : channels().map(apiChannelToQuickAccessChannel);
-    for (const sourceChannel of channelData) {
+    // A partial cache must not hide channels already available in the complete
+    // channel list. Cached metadata wins for duplicates, retaining newer views.
+    const channelData = new Map(
+      channels().map((channel) => [
+        channel.id,
+        apiChannelToQuickAccessChannel(channel),
+      ])
+    );
+    if (cacheHost() && queryReadyGate(cachedChannelsQuery)) {
+      for (const channel of cachedChannelsQuery.data) {
+        channelData.set(channel.id, {
+          ...channel,
+          viewedAt: latestDate(
+            channelData.get(channel.id)?.viewedAt,
+            channel.viewedAt
+          ),
+        });
+      }
+    }
+    for (const sourceChannel of channelData.values()) {
       const recentlyViewedAt = viewedAtMap.get(sourceChannel.id);
       const viewedAt = latestDate(recentlyViewedAt, sourceChannel.viewedAt);
       const channel = { ...sourceChannel, viewedAt };
@@ -1145,7 +1156,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
                 cachedEmails,
               ] = await Promise.all([
                 materializeCachedGraphqlHistoryItems(projectionHost, missing),
-                materializeCachedGraphqlChannels(projectionHost, missing),
+                materializeCachedGraphqlChannels(projectionHost, documents),
                 materializeCachedGraphqlCrmCompanies(projectionHost, missing),
                 materializeCachedGraphqlCrmContacts(projectionHost, missing),
                 materializeCachedEmailItems(projectionHost, documents),
@@ -1170,6 +1181,18 @@ export function createQuickAccessValue(): QuickAccessContextValue {
                 if (document.bucket === 'email') {
                   const email = emailsById.get(id);
                   return email ? [email] : [];
+                }
+                const channel = channelsById.get(id);
+                if (channel) {
+                  return [
+                    channelToQuickAccessItem({
+                      ...channel,
+                      viewedAt: latestDate(
+                        soupViewedAtMap().get(id),
+                        channel.viewedAt
+                      ),
+                    }),
+                  ];
                 }
                 const cached = itemCache.get(id)?.item;
                 if (cached) return [cached];
@@ -1223,8 +1246,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
                     },
                   ];
                 }
-                const channel = channelsById.get(id);
-                return channel ? [channelToQuickAccessItem(channel)] : [];
+                return [];
               });
             },
           })
@@ -1237,9 +1259,26 @@ export function createQuickAccessValue(): QuickAccessContextValue {
 
       // Search describes cached contents, not corpus completeness. Merge known
       // rows before sorting recency so hydration cannot promote older items.
-      const ranked = projected
-        .items()
-        .map((item) => itemCache.get(item.id)?.item ?? item);
+      const ranked = projected.items().map((item) => {
+        const cached = itemCache.get(item.id)?.item;
+        if (!cached) return item;
+        // Projected channels carry current cache metadata even when the
+        // complete list still has an older name. Only overlay newer views.
+        if (item.kind === 'entity' && item.data.type === 'channel') {
+          const viewedAt = latestDate(
+            item.timestamps.viewedAt,
+            cached.timestamps.viewedAt
+          );
+          return {
+            ...item,
+            sortTimestamp:
+              toTimestamp(viewedAt) || toTimestamp(item.timestamps.updatedAt),
+            timestamps: { ...item.timestamps, viewedAt },
+            data: { ...item.data, viewedAt },
+          };
+        }
+        return cached;
+      });
       const seen = new Set(ranked.map((item) => item.id));
       const combined = ranked.concat(
         local.filter((item) => !seen.has(item.id))
