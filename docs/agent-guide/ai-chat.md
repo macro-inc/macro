@@ -1113,18 +1113,22 @@ provider usage and completed writes may remain after cancellation.
 
 The public workspace MCP (`mcp-server[-dev].macro.com`) evaluates the same
 `ai-code-mode` flag for the OAuth user on `initialize`, `tools/list` and
-`tools/call`, cached per user for a minute. Enabled users see `ExecuteCode`,
-`DescribeCodeTools` and `ReadCodeDocs` in place of the SDK-covered native tools,
-and the server instructions tell the client to call `DescribeCodeTools` with a
-`task`, then `ReadCodeDocs` for the symbols it uses, before writing a program. Programs export `async function main({macro})` and return
-exactly `{data}` (an empty `reviews: []` is dropped). There is no session,
-execution journal, review stack or `execution_id`; the receipt carries status,
-observed SDK activity, result and error. Runs act as the user with no agent
-attribution and no owner approval card: the MCP client asks before each tool
-call. SDK writes, including email sends, take effect immediately. Every native
-tool stays callable; MCP clients cache tool lists, so a flag change appears after
-reconnecting. Public runs use their own Deno budget (four running, eight queued
-per replica) so external traffic cannot take agent sessions' slots.
+`tools/call`, cached per user for a minute. Enabled users see only
+`ExecuteCode`, `DescribeCodeTools` and `ReadCodeDocs` on `tools/list` — not the
+individual Macro tools — and the server instructions tell the client to call
+`DescribeCodeTools` with a `task`, then `ReadCodeDocs` for the symbols it uses,
+before writing a program. Programs export `async function main({macro})` and
+return exactly `{data}` (an empty `reviews: []` is dropped). There is no
+session, execution journal, review stack or `execution_id`; the receipt carries
+status, observed SDK activity, result and error. Runs act as the user with no
+agent attribution and no owner approval card: the MCP client asks before each
+tool call. SDK writes, including email sends, take effect immediately. Hidden
+native tools stay callable if a client already knows their names; MCP clients
+cache tool lists, so a flag change appears after reconnecting. Public runs use
+their own Deno budget (four running, eight queued per replica) so external
+traffic cannot take agent sessions' slots. Agent-session code mode is
+unchanged: it still keeps a reduced direct toolset for search, document
+editing, and other work outside the SDK.
 
 To verify locally, run Claude Code against the stack's MCP with
 `tooling/scripts/claude-local-mcp.sh --instance <name> --email <email>`. It mints

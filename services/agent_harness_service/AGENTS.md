@@ -24,8 +24,9 @@ Pulumi stacks; they do not host extra agent processes.
 - `src/internal_mcp.rs`: the internal MCP server exposed to running sessions.
 - `src/public_mcp.rs` + `src/public_mcp/`: public workspace MCP and OAuth;
   reuses the harness tool context and retains bearer authentication. Users with
-  `ai-code-mode` get `ExecuteCode`/`DescribeCodeTools`/`ReadCodeDocs` in place of SDK-covered
-  tools (`tool_service.rs`); the flag is cached per user (`tool_mode_cache.rs`).
+  `ai-code-mode` get only `ExecuteCode`/`DescribeCodeTools`/`ReadCodeDocs` on
+  `tools/list` (`tool_service.rs`); hidden native tools stay callable. The flag
+  is cached per user (`tool_mode_cache.rs`).
   `src/public_mcp/analytics.rs` sends PostHog `$mcp_initialize` /
   `$mcp_tool_call` events (PostHog MCP analytics schema) in the background,
   with the user's team as the `team` group. At most 64 sends run at once
