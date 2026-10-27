@@ -122,6 +122,7 @@ function DesktopChannelThreads(props: { sources: ChannelsSources }) {
       new Map(
         deduplicateChannels([
           props.sources.threads.items(),
+          props.sources.team_channels.items(),
           props.sources.channels.items(),
           props.sources.direct_messages.items(),
           props.sources.recents.items(),
@@ -288,6 +289,7 @@ function ChannelDetailRouteContent() {
       channelId(),
       sources
         ? deduplicateChannels([
+            sources.team_channels.items(),
             sources.channels.items(),
             sources.direct_messages.items(),
             sources.recents.items(),
