@@ -10,13 +10,16 @@ import {
   type CalendarInvitation,
   invitationSchedule,
 } from '../email-message/core/calendar-invitation';
-import { invitationConflicts } from './queries/invitation-conflict';
+import {
+  invitationConflicts,
+  occurrenceAtInvitationTime,
+} from './queries/invitation-conflict';
 
 /**
  * A local-day agenda using the same occurrence cache as the calendar. The
- * viewer's own copy of the event is the invitation's row in its time slot;
- * the invitation's own time stands in above the list only while that row
- * is not in it.
+ * viewer's own copy of the event, at the invitation's time, is the
+ * invitation's row in its time slot; the invitation's own time stands above
+ * the list only while no such row is in it.
  */
 export function CalendarInvitationDay(props: {
   invitation: CalendarInvitation;
@@ -45,9 +48,11 @@ export function CalendarInvitationDay(props: {
   }));
   const data = () => (query.isSuccess ? query.data : undefined);
   const items = () => data()?.items.slice(0, 20);
-  const isInvitation = (item: CalendarOccurrenceItem) =>
+  const isEvent = (item: CalendarOccurrenceItem) =>
     item.event.id === props.eventId &&
     item.occurrence.occurrenceKey === props.occurrenceKey;
+  const isInvitation = (item: CalendarOccurrenceItem) =>
+    isEvent(item) && occurrenceAtInvitationTime(props.invitation, item);
   const invitationListed = () => items()?.some(isInvitation) ?? false;
   const label = (value: string) =>
     new Intl.DateTimeFormat(undefined, {
@@ -66,7 +71,7 @@ export function CalendarInvitationDay(props: {
           Close
         </Button>
       </div>
-      <Show when={!(range() && query.isPending) && !invitationListed()}>
+      <Show when={!query.isLoading && !invitationListed()}>
         <p class="my-3 rounded-md bg-accent-bg p-3 text-ink">
           <span class="mr-2 font-medium">This invitation</span>
           {
@@ -109,7 +114,7 @@ export function CalendarInvitationDay(props: {
           {(item) => (
             <li
               class="rounded-md p-2 [overflow-wrap:anywhere]"
-              classList={{ 'bg-accent-bg': isInvitation(item) }}
+              classList={{ 'bg-accent-bg': isEvent(item) }}
             >
               <span class="mr-3 text-ink-muted">
                 {item.occurrence.time.kind === 'timed'

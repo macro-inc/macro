@@ -6,11 +6,15 @@ import type { CalendarOccurrenceItem } from '@service-storage/generated/schemas/
 import { cleanup, render, screen, within } from '@solidjs/testing-library';
 import type { JSX } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  type CalendarInvitation,
+  invitationSchedule,
+} from '../email-message/core/calendar-invitation';
 import { invitationFixture } from '../email-message/core/calendar-invitation-fixtures';
 import { CalendarInvitationDay } from './calendar-invitation-day';
 
 const day = vi.hoisted(() => ({
-  state: 'success' as 'pending' | 'success' | 'error',
+  state: 'success' as 'loading' | 'paused' | 'success' | 'error',
   items: [] as CalendarOccurrenceItem[],
 }));
 vi.mock('@queries/calendar/occurrences', () => ({
@@ -22,7 +26,10 @@ vi.mock('@queries/calendar/occurrences', () => ({
   }),
   useCalendarOccurrencesQuery: () => ({
     get isPending() {
-      return day.state === 'pending';
+      return day.state === 'loading' || day.state === 'paused';
+    },
+    get isLoading() {
+      return day.state === 'loading';
     },
     get isSuccess() {
       return day.state === 'success';
@@ -103,10 +110,18 @@ const standup = occurrence(
   '2026-09-24T16:15:00Z'
 );
 
-function renderDay() {
+/** The invitation's time as the agenda writes it, in this machine's zone. */
+const invitationTime = (invitation: CalendarInvitation) =>
+  invitationSchedule(
+    invitation,
+    true,
+    Intl.DateTimeFormat().resolvedOptions().timeZone
+  ).when;
+
+function renderDay(invitation: CalendarInvitation = invitationFixture) {
   render(() => (
     <CalendarInvitationDay
-      invitation={invitationFixture}
+      invitation={invitation}
       eventId={ownCopy.event.id}
       occurrenceKey={ownCopy.occurrence.occurrenceKey}
       hour12
@@ -127,19 +142,43 @@ describe('CalendarInvitationDay', () => {
     ]);
     expect(within(rows[1]).getByText('This invitation')).toBeTruthy();
     expect(within(agenda).getAllByText('This invitation')).toHaveLength(1);
-    expect(within(agenda).queryByText(/Sep 24, 2026/)).toBeNull();
+    expect(agenda.textContent).not.toContain(invitationTime(invitationFixture));
+  });
+
+  it('keeps a newer email’s time above the day when the copy is still at its old time', () => {
+    day.items = [standup, ownCopy];
+    const moved: CalendarInvitation = {
+      ...invitationFixture,
+      start: {
+        kind: 'zoned',
+        value: '2026-09-24T18:00:00Z',
+        time_zone: 'America/Los_Angeles',
+      },
+      end: {
+        kind: 'zoned',
+        value: '2026-09-24T18:30:00Z',
+        time_zone: 'America/Los_Angeles',
+      },
+    };
+    const agenda = renderDay(moved);
+    const line = within(agenda).getByText('This invitation').closest('p');
+    expect(line?.textContent).toContain(invitationTime(moved));
+    const rows = within(agenda).getAllByRole('listitem');
+    expect(rows[1]?.textContent).toContain('Product review');
+    expect(rows[1]?.classList.contains('bg-accent-bg')).toBe(true);
+    expect(within(agenda).getAllByText('This invitation')).toHaveLength(1);
   });
 
   it('keeps the invitation’s time above the day while its copy is not listed', () => {
     day.items = [standup];
     const agenda = renderDay();
     const line = within(agenda).getByText('This invitation').closest('p');
-    expect(line?.textContent).toMatch(/Sep 24, 2026/);
+    expect(line?.textContent).toContain(invitationTime(invitationFixture));
     expect(within(agenda).getAllByRole('listitem')).toHaveLength(1);
   });
 
   it('waits for the day before placing the invitation', () => {
-    day.state = 'pending';
+    day.state = 'loading';
     const agenda = renderDay();
     expect(within(agenda).getByRole('status').textContent).toBe(
       'Loading calendar…'
@@ -147,12 +186,20 @@ describe('CalendarInvitationDay', () => {
     expect(within(agenda).queryByText('This invitation')).toBeNull();
   });
 
+  it('shows the invitation’s time while the day cannot load offline', () => {
+    day.state = 'paused';
+    const agenda = renderDay();
+    expect(
+      within(agenda).getByText('This invitation').closest('p')?.textContent
+    ).toContain(invitationTime(invitationFixture));
+  });
+
   it('shows the invitation’s time when the calendar is unavailable', () => {
     day.state = 'error';
     const agenda = renderDay();
     expect(
       within(agenda).getByText('This invitation').closest('p')?.textContent
-    ).toMatch(/Sep 24, 2026/);
+    ).toContain(invitationTime(invitationFixture));
     expect(
       within(agenda).getByText(
         'Calendar unavailable. Conflicts could not be checked.'
