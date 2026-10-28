@@ -22,6 +22,11 @@ export type {
 } from './panes/types';
 export type { ClaimHolder } from './router/claims';
 export { createSplitRouter } from './router/create-router';
+export type {
+  LayoutPane,
+  LayoutSnapshot,
+  RestoreLayoutOptions,
+} from './router/layout';
 export { PANE_LEVEL } from './router/leave-guards';
 export type {
   SplitRouterMiddleware,
