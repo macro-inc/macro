@@ -39,7 +39,7 @@ export function SendButton(props: SendButtonProps) {
   return (
     <Button
       variant="primary"
-      size="icon-lg"
+      size="icon-md"
       draggable={false}
       aria-label={
         local['aria-label'] ??
@@ -70,12 +70,12 @@ export function SendButton(props: SendButtonProps) {
       <Show
         when={!local.pending}
         fallback={
-          <SpinnerIcon class="size-4 shrink-0 animate-spin touch:size-3.5" />
+          <SpinnerIcon class="size-5 shrink-0 animate-spin touch:size-6" />
         }
       >
         {resolved() ?? (
           <>
-            <ArrowUp class="size-4 shrink-0 touch:size-3.5" />
+            <ArrowUp class="size-5 shrink-0 touch:size-6" />
             <Show when={local.actionLabel}>
               <span class="hidden whitespace-nowrap text-sm font-medium not-touch:inline">
                 {local.actionLabel}

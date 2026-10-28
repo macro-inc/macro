@@ -274,7 +274,7 @@ export function ChatInput(props: ChatInputComponentProps) {
     <Button
       tooltip="Attach files"
       variant="ghost"
-      size="icon-lg"
+      size="icon-md"
       class="text-ink not-touch:text-composer-ink"
       aria-label="Attach files"
       onClick={() => {
@@ -282,7 +282,7 @@ export function ChatInput(props: ChatInputComponentProps) {
         fileInputRef?.click();
       }}
     >
-      <PaperclipIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
+      <PaperclipIcon class="size-5 touch:size-6 shrink-0 pointer-events-none" />
     </Button>
   );
 

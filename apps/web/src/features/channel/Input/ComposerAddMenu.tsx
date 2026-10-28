@@ -57,7 +57,7 @@ export function ComposerAddMenu(props: {
     >
       <Button
         variant="ghost"
-        size="icon-lg"
+        size="icon-md"
         class={props.class}
         aria-label="Add"
         aria-haspopup="dialog"
@@ -69,7 +69,7 @@ export function ComposerAddMenu(props: {
         }}
         onClick={() => props.onOpenDrawer()}
       >
-        <PlusIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
+        <PlusIcon class="size-5 touch:size-6 shrink-0 pointer-events-none" />
       </Button>
     </Show>
   );
@@ -97,12 +97,12 @@ function AddDropdown(props: {
         tooltip="Add"
         data-composer-menu-anchor
         variant="ghost"
-        size="icon-lg"
+        size="icon-md"
         class={props.class}
         aria-label="Add"
         disabled={props.disabled}
       >
-        <PlusIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
+        <PlusIcon class="size-5 touch:size-6 shrink-0 pointer-events-none" />
       </Dropdown.Trigger>
       <Dropdown.Content
         class={cn('min-w-56', props.contentClass)}

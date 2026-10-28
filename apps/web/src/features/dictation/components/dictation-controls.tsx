@@ -18,13 +18,13 @@ export function DictationButton(props: {
       <Button
         aria-label={props.dictation.label()}
         variant="ghost"
-        size="icon-lg"
+        size="icon-md"
         class="text-ink not-touch:text-composer-ink"
         tooltip={props.dictation.label()}
         disabled={props.disabled || props.dictation.disabled()}
         onClick={() => fireAndForget(props.dictation.start(), 'dictation')}
       >
-        <MicrophoneIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
+        <MicrophoneIcon class="size-5 touch:size-6 shrink-0 pointer-events-none" />
       </Button>
     </Show>
   );
