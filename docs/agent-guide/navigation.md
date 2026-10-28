@@ -1211,6 +1211,18 @@ between buckets must still appear without retyping in every affected view.
 Older cache runtimes without bucket metadata, mutations, and identity resets
 refresh conservatively. For an empty search, scroll toward the end (or use
 Down); mentions offer **View all** for a category and then load more local pages.
+The @ menu ranks loaded projects and cached document/task matches together
+before choosing preview rows, with the same ranking on desktop and phone.
+Exact and prefix name matches get boosts, task projects get a type boost, and
+viewed recency and shorter names contribute. Empty-query browsing remains
+recency-led; existing People preview slots and phone pinning remain. Tuning lives
+in `MENTION_RANKING_CONFIG` in the mention menu's `utils/mention-ranking.ts`.
+Broader cache/server matches remain reachable even when the local fuzzy matcher
+would omit them. To verify, type `@task` with a project named `Task planning`
+and many recent tasks containing “task”: the project should appear in the first
+preview rows and stay near the top in **View all**. Select it with Enter or a
+phone tap and confirm a project mention is inserted.
+
 Counts describe loaded results, not the full server corpus. Scans through
 incomplete or already-visible cache hits are bounded per action; continue
 navigating/scrolling, or narrow the query, to resume from the saved cursor.

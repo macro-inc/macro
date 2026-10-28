@@ -81,6 +81,13 @@ Gate event notes and document Share meeting-link controls with
 on in dev and uses PostHog in production.
 See `docs/agent-guide/calendar.md` at the repo root.
 
+Mention menus rank loaded entity sources together with `MENTION_RANKING_CONFIG`
+in `MentionsMenu/utils/mention-ranking.ts`: name relevance, viewed recency,
+brevity, and explicit type/name boosts. Task projects use the `initiative`
+bucket; `project` means a Drive folder. Preserve broader cache/server matches
+and the existing People preview/pinning. The channel browser suite below also
+checks project ranking and insertion on desktop and phone.
+
 Channel composer draft persistence has a backend-free browser regression:
 `bunx playwright test --config src/features/channel/Input/browser-test/playwright.config.ts`.
 It types a draft, remounts the composer over it, and checks the blank lines survive.
