@@ -24,32 +24,37 @@ export function CallControls(props: CallControlsProps) {
 
   return (
     <Show when={readWhen(props.when)}>
-      <Show when={isPlatform('android') && nativeCall?.snapshot()}>
+      <Show
+        when={nativeCall?.snapshot()}
+        fallback={
+          <CallControlsDefaultAndPanelRow
+            onLeave={props.onLeave}
+            extra={props.extra}
+          />
+        }
+      >
         <div class="flex gap-2">
-          <button
-            type="button"
-            onClick={() =>
-              fireAndForget(
-                setNativeCallKitVideoOverlayMode('expanded'),
-                'channel-call'
-              )
-            }
-          >
-            Open call controls
-          </button>
-          <button
-            type="button"
-            onClick={() => fireAndForget(props.onLeave(), 'channel-call')}
-          >
-            End call
-          </button>
+          <Show when={isPlatform('android')}>
+            <button
+              type="button"
+              onClick={() =>
+                fireAndForget(
+                  setNativeCallKitVideoOverlayMode('expanded'),
+                  'channel-call'
+                )
+              }
+            >
+              Open call controls
+            </button>
+            <button
+              type="button"
+              onClick={() => fireAndForget(props.onLeave(), 'channel-call')}
+            >
+              End call
+            </button>
+          </Show>
+          {props.extra}
         </div>
-      </Show>
-      <Show when={!nativeCall?.snapshot()}>
-        <CallControlsDefaultAndPanelRow
-          onLeave={props.onLeave}
-          extra={props.extra}
-        />
       </Show>
     </Show>
   );

@@ -88,7 +88,7 @@ export function MeetingCopyButton(props: {
       <Show when={error()}>
         <div
           classList={{
-            'absolute bottom-full left-1/2 mb-2 w-64 -translate-x-1/2 rounded-lg bg-panel p-2 shadow-sm':
+            'absolute bottom-full left-1/2 mb-2 w-[min(16rem,calc(100vw-2rem))] -translate-x-1/2 rounded-lg bg-panel p-2 shadow-sm':
               props.compact,
           }}
         >
