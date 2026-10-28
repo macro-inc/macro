@@ -95,6 +95,13 @@ narrowed by a yes/no condition, or a schedule), and why it fits this user.
   page, whose **Suggested for you** section lists every sidebar's suggestions
   below your routines, filterable by area.
 
+The following screenshots use the browser fixture's sample suggestions, not
+mailbox data.
+
+![Suggested routines in light mode](media/routines/suggestions-light.jpg)
+
+![Suggested routines in dark mode](media/routines/suggestions-dark.jpg)
+
 Suggestions are one stored set per user (`GET /routine-suggestions` on
 cognition, from the `routine_suggestions` crate). The server reads the newest
 inbox messages straight from Gmail and Outlook, so a new mailbox need not have
