@@ -18,11 +18,13 @@ Databases open at
 `/app/database/<uuid>`; from Drive (its list, favorites, or **New → Database**)
 they open inline at `/app/drive/database/<uuid>` with Drive's sidebar in place.
 A database contains tables; records belong to a table and
-its properties describe each record. The database name in the split header is an
-static label, matching other blocks. Choose **Rename** in Database actions to
-edit it. Enter or leaving the input saves and closes it; Escape cancels. Saving
-a title does not enter the grid, and a failed rename shows a toast. Viewers without edit access see the
-split header's `viewer` badge instead.
+its properties describe each record. The database name in the split header is a
+static label until edited. Double-click it or choose **Rename** in Database actions
+to edit the same inline title with the current name selected. On touch devices,
+use **Database actions → Rename**. Enter or leaving the input saves and closes it; Escape cancels. Saving
+a title does not enter the grid, and a failed rename shows a toast. Reload to verify
+the saved name persists. Viewers cannot enter rename from either entry point and
+see the split header's `viewer` badge instead.
 
 Reopening a loaded table or view shows its cached rows while a background read
 checks for changes. Wait for refreshing to finish before asserting server
@@ -155,7 +157,10 @@ puts the typing cursor in that column's first cell, without waiting for creation
 or renaming to finish. Escape keeps the default name.
 There is no creation dialog. Double-click a header, press F2 while it is focused,
 or choose **Rename column** from its arrow or right-click menu to rename it later.
-Its type icon stays in place while editing. SQL refers to tables and columns by
+Its type icon stays in place while editing. A rename updates the cached column
+label before the save finishes and keeps the same header mounted; the old name
+must not flash back while the schema refreshes. Reload to confirm it persisted.
+SQL refers to tables and columns by
 their display names (double-quoted), so a rename changes the name a saved query
 must use.
 

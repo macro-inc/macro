@@ -33,6 +33,16 @@ Home previews remain display-only as described above. The backend-free browser
 check is in
 `apps/web/src/lib/core/component/LexicalMarkdown/component/core/browser-test/README.md`.
 
+## Block formatting
+
+Selecting several paragraphs and choosing Quote or a heading in the floating
+format toolbar applies it to the same paragraphs in either selection direction.
+Verify a selection from the last paragraph back to the start of the first:
+the first paragraph must receive the format too. A range ending at the start of
+the following paragraph leaves that following paragraph unchanged.
+The backend-free quote check is documented in the Markdown browser-test README
+linked above.
+
 ## Empty direct messages
 
 An empty human DM shows the centered conversations illustration and “Say hello”
@@ -277,15 +287,16 @@ verify that its tool response includes the matching attachment URLs.
 
 ## Message composer
 
-Channel messages and thread replies have a microphone next to Send, including
-the collapsed composer. It uses the same OpenAI Whisper dictation and scrolling
-volume timeline as AI chat. **Use dictation** appends text to the draft without
+Channel messages and thread replies have a microphone next to Send on pointer
+devices. It uses the same OpenAI Whisper dictation and scrolling volume
+timeline as AI chat. **Use dictation** appends text to the draft without
 sending; **Cancel dictation** or Escape preserves the existing draft. Sending
 is blocked during dictation, including keyboard and external send actions.
-When local recognition is unavailable, confirming uploads the in-memory audio
-to Whisper. This fallback is available on all plans without consuming chat credits.
-Browsers without microphone recording show a disabled button.
-The first click downloads a language pack when needed; click again to record.
+Confirming uploads the in-memory audio to Whisper, which is available on all
+plans without consuming chat credits. Browsers without microphone recording
+show a disabled button. Touch devices have no microphone in either the
+collapsed or the expanded composer — their keyboards already dictate — so Send
+is the only control on that edge.
 
 Composer and conversation body text use `text-base` (15px at the default root
 size) on desktop and mobile. The shared scale uses 14px for `text-sm` and 12px
@@ -513,10 +524,10 @@ new GitHub PR with their session. Macro Internal MCP is hosted by the harness
 service at `/mcp/internal` on its egress listener, separately from workspace MCP.
 Cursor, sandbox, and macrod sessions receive session-scoped credentials; the
 model supplies only the URL. The tool records the link, not the GitHub PR itself.
-The shared Macro system instructions ask agents to register PRs when
-`macro_internal.set_pull_request` is available, to open them ready for review
-rather than as drafts, and to get CI passing before handing off. Macro Internal
-MCP also advertises this guidance in its server instructions. It is not prepended
+Macro Internal MCP's server instructions ask coding agents to register PRs with
+it, to open them ready for review rather than as drafts, and to get CI passing
+before handing off. External MCP clients get the ready-for-review rule in
+Macro's MCP instructions, and in-app agents tell coding agents they dispatch. It is not prepended
 to individual user messages. Cursor
 enables automatic PR creation when a repository is selected. Its returned URL
 is also recorded because
@@ -1036,8 +1047,8 @@ Rows use the same touch highlight as Home and Email: taps retain feedback while
 opening, holds stay highlighted for the action menu, and scrolling or cancelling
 a touch clears the press highlight.
 The mobile dock Search button opens the independent Search route. Its Channels
-and People categories search cached channel names and people directly; the
-conversation list does not constrain results. Full-text search is explicit,
+and People categories search the complete channel list, cached channel names,
+and people directly; the conversation list does not constrain results. Full-text search is explicit,
 and People uses the existing channel-content scope. Closing search resets its
 session; the conversation list retains its browse pagination. See
 [Search](search.md) for mode, keyboard, and session-reset checks.
@@ -1365,8 +1376,8 @@ For mobile send regressions, keep the software keyboard open and send several
 short and multiline messages consecutively. The keyboard should remain open,
 the cleared composer should retain focus, and a pinned chat should remain at the
 bottom through composer resizing and server acknowledgement. Check that restoring
-the caret after send does not pan the page while the keyboard resizes. Repeat with dictation
-and check that sent text does not return. Scroll into history before an incoming
+the caret after send does not pan the page while the keyboard resizes. Repeat with the
+keyboard's own dictation and check that sent text does not return. Scroll into history before an incoming
 message or acknowledgement and verify that it does not pull you to latest.
 
 For composer cleanup, repeatedly open and leave channels and threads, then

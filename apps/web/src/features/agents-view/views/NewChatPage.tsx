@@ -7,6 +7,7 @@ import {
 } from '@channel/Input';
 import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
 import { SpeedToggle } from '@core/component/AI/component/input/SpeedToggle';
+import { modelLabel } from '@core/component/AI/constant/model-label';
 import {
   acceleratedSpeed,
   speedForModel,
@@ -20,7 +21,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { uploadFile } from '@core/util/upload';
 import ChatIcon from '@icon/system/regular/chat-circle.svg';
 import CodeIcon from '@icon/system/regular/code.svg';
-import AutoIcon from '@icon/system/regular/magic-wand.svg';
+import AutoIcon from '@icon/system/regular/sparkle.svg';
 import { useAgentCapabilitiesQuery } from '@queries/agents/capabilities';
 import { chooseAgentMode } from '@queries/agents/mode-choice';
 import { useAiBillingSummaryQuery } from '@queries/auth/ai-billing';
@@ -86,7 +87,7 @@ export function NewChatPage(props: {
   roster: RosterAgent[];
   /**
    * Auto, Chat, or Code; Chat and Code also limit the agents offered.
-   * Uncontrolled callers get the signed-in user's last choice.
+   * Uncontrolled callers start in Auto.
    */
   mode?: ComposerMode;
   onModeChange?: (mode: ComposerMode) => void;
@@ -103,7 +104,7 @@ export function NewChatPage(props: {
   const recentAgents = createRecentAgentSelections(userId());
   const repositories = createRecentRepositories(userId());
   const preferredInmem = createPreferredInmemModel(userId());
-  const ownMode = createWorkspaceMode(userId());
+  const ownMode = createWorkspaceMode();
   const mode = () => props.mode ?? ownMode.mode();
   const auto = () => mode() === 'auto';
   /** Auto shows and prepares the chat agent; a prompt it sends to Code starts the coding agent. */
@@ -509,6 +510,12 @@ export function NewChatPage(props: {
       drawerOpen
       placeholder={coding() ? 'Describe what you want to build' : undefined}
       onSend={send}
+      modelName={modelLabel(
+        composerModelOverride(),
+        selectedCatalog
+          .models()
+          .find((model) => model.id === composerModelOverride())?.name
+      )}
       supportsImages={
         selectedCatalog
           .models()

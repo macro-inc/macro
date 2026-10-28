@@ -136,7 +136,7 @@ export function RecurrenceBuilder(props: RecurrenceBuilderProps) {
                 {(code) => (
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="secondary"
                     size="icon-sm"
                     class="text-xxs"
                     aria-label={code}

@@ -90,7 +90,7 @@ export function CursorConnectPage(props: { onClose: () => void }) {
       description="Run agents on your own Cursor subscription. Sessions run in Cursor Cloud and stream into Macro."
       actions={
         <Button variant="ghost" size="sm" onClick={props.onClose}>
-          <ArrowLeftIcon />
+          <ArrowLeftIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
           Back
         </Button>
       }
@@ -236,7 +236,7 @@ export function CursorConnectPage(props: { onClose: () => void }) {
                     </Button>
                     <Button
                       type="submit"
-                      variant="cta"
+                      variant="neutral"
                       size="sm"
                       disabled={!apiKey().trim() || saveKey.isPending}
                     >
@@ -247,7 +247,7 @@ export function CursorConnectPage(props: { onClose: () => void }) {
               >
                 <Button
                   type="button"
-                  variant="cta"
+                  variant="neutral"
                   size="sm"
                   onClick={props.onClose}
                 >

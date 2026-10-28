@@ -109,7 +109,7 @@ function EmailSignatures() {
         <SettingsCard>
           <SettingsRow label="Couldn't load signatures">
             <Button
-              variant="outline"
+              variant="secondary"
               onClick={() => fireAndForget(query.refetch(), 'email-settings')}
             >
               Try again

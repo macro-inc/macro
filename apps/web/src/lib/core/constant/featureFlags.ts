@@ -150,6 +150,13 @@ export const PROD_MODE_ENV = import.meta.env.MODE === 'production';
 
 const onInDev = DEV_MODE_ENV || undefined;
 
+/** Browser-style tabs in the macOS desktop title bar; each tab holds a split layout. */
+export const enableDesktopTabs = defineFlag({
+  key: 'enable-desktop-tabs',
+  env: 'ENABLE_DESKTOP_TABS',
+  default: onInDev,
+});
+
 // Leave the production PostHog flag disabled until archive-import rollout.
 export const enableSlackArchiveImport = defineFlag({
   key: 'enable-slack-archive-import',
@@ -711,6 +718,17 @@ export const enableCalendarTeamSharing = defineFlag({
 export const enableCalendarGuestInvites = defineFlag({
   key: 'enable-calendar-guest-invites',
   env: 'ENABLE_CALENDAR_GUEST_INVITES',
+  default: onInDev,
+});
+
+// Forwarding an invitation: event details' and the editor's "Forward
+// invitation", offered where a guest cannot add guests, which emails the
+// event's .ics from the inbox holding the viewer's copy. On in dev only until
+// a real send has passed on dev; there is no PostHog flag yet, so it stays off
+// in production. Override with VITE_ENABLE_CALENDAR_INVITATION_FORWARD.
+export const enableCalendarInvitationForward = defineFlag({
+  key: 'enable-calendar-invitation-forward',
+  env: 'ENABLE_CALENDAR_INVITATION_FORWARD',
   default: onInDev,
 });
 

@@ -29,9 +29,10 @@ export function SidebarSearchMenu(props: {
       }}
     >
       <Dropdown.Trigger
+        aria-label={t('nav.search')}
+        tooltip={t('nav.search')}
         size="icon-md"
         {...props.triggerProps}
-        label={t('nav.search')}
       >
         <MagnifyingGlassIcon class="size-5" />
       </Dropdown.Trigger>

@@ -81,6 +81,7 @@ export function CallDetailActions(props: {
       <Show when={!isMobile() && !props.record.isActive && canCallAgain()}>
         <HeaderActionGroup label="Call actions">
           <HeaderActionButton
+            grouped
             label="Call Again"
             icon={<PhoneCallIcon class="size-3.5 touch:size-4" />}
             onClick={callAgain}
@@ -176,7 +177,7 @@ export function CallDetailContent(props: {
                 <div class="flex flex-col items-center gap-3 text-sm">
                   <span>This call recording could not be displayed.</span>
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
                     onClick={() =>
                       fireAndForget(props.query.refetch(), 'call-detail')

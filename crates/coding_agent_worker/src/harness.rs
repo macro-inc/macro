@@ -8,11 +8,16 @@ use std::time::Duration;
 use crate::config::Harness;
 use crate::outbound::acp_probe::{ProbeError, ProbeSubprocess, probe_subprocess};
 use crate::outbound::acp_process::AcpProcess;
-use agent_client_protocol::{Client, ConnectTo, LineDirection};
+use crate::self_knowledge::SelfKnowledge;
+use agent_client_protocol::{
+    Channel as AcpChannel, Client, ConnectTo, LineDirection, TransportFrame,
+};
 use agent_runtime_protocol::domain::connection::{
     ConnectionError, ModelProbeHandler, RuntimeChannel, RuntimeConnection,
 };
 use agent_runtime_protocol::domain::schema::v0::SystemEvent;
+use futures::StreamExt as _;
+use tokio_util::task::AbortOnDropHandle;
 
 #[cfg(test)]
 mod test;
@@ -57,12 +62,15 @@ pub async fn bridge(
             }
         });
 
+    let (agent_side, relay_side) = AcpChannel::duplex();
+    let _relay = AbortOnDropHandle::new(tokio::spawn(relay(acp, relay_side)));
+
     runtime
         .system_event(SystemEvent::AcpReady)
         .map_err(BridgeError::Announce)?;
 
     let outcome = tokio::select! {
-        outcome = ConnectTo::<Client>::connect_to(agent, acp) => outcome,
+        outcome = ConnectTo::<Client>::connect_to(agent, agent_side) => outcome,
         () = runtime.closed() => Ok(()),
     };
 
@@ -73,6 +81,51 @@ pub async fn bridge(
     }
 
     outcome.map_err(|error| BridgeError::Harness(error.to_string()))
+}
+
+/// Pump frames between the service and the agent, teaching each new
+/// session's agent about this runtime on its first prompt. Ends when either
+/// side closes, which closes the other.
+async fn relay(mut service: AcpChannel, mut agent: AcpChannel) {
+    let mut self_knowledge = SelfKnowledge::default();
+    loop {
+        tokio::select! {
+            frame = service.rx.next() => {
+                let Some(frame) = frame else { break };
+                let frame = match frame {
+                    TransportFrame::Single(message) => {
+                        TransportFrame::Single(teach(&mut self_knowledge, message))
+                    }
+                    other => other,
+                };
+                if agent.tx.unbounded_send(frame).is_err() {
+                    break;
+                }
+            }
+            frame = agent.rx.next() => {
+                let Some(frame) = frame else { break };
+                if let TransportFrame::Single(message) = &frame
+                    && let Ok(message) = serde_json::to_value(message)
+                {
+                    self_knowledge.inbound(&message);
+                }
+                if service.tx.unbounded_send(frame).is_err() {
+                    break;
+                }
+            }
+        }
+    }
+}
+
+fn teach(
+    self_knowledge: &mut SelfKnowledge,
+    message: agent_client_protocol::RawJsonRpcMessage,
+) -> agent_client_protocol::RawJsonRpcMessage {
+    let Ok(mut value) = serde_json::to_value(&message) else {
+        return message;
+    };
+    self_knowledge.outbound(&mut value);
+    serde_json::from_value(value).unwrap_or(message)
 }
 
 fn probe_process(harness: &Harness, cwd: &Path) -> ProbeSubprocess {

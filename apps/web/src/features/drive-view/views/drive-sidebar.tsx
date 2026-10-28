@@ -167,7 +167,7 @@ export function DriveSidebarContent(props: { onNavigate?: () => void }) {
             <CollapsibleSection.Indicator />
           </CollapsibleSection.Trigger>
           <CollapsibleSection.Action
-            label="Search folders"
+            aria-label="Search folders"
             onClick={() => {
               const open = !searchingFolders();
 

@@ -36,6 +36,7 @@ export default {
   hideFromSidebar: 'Hide from sidebar',
   unreadItems: 'Unread items',
   activeCall: 'Active call',
+  returnToCall: 'Return to call',
   nextMeeting: 'Next meeting: {{time}}',
   more: 'More',
   moreOptions: 'More options',
