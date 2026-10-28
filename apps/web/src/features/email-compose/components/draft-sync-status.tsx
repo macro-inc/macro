@@ -26,7 +26,7 @@ export function DraftSyncStatus(props: {
           <Show when={state().action || props.error}>
             <Button
               size="sm"
-              variant="outline"
+              variant="secondary"
               disabled={props.busy}
               onClick={props.onRetry}
             >
@@ -36,7 +36,7 @@ export function DraftSyncStatus(props: {
           <Show when={state().canKeepEditing}>
             <Button
               size="sm"
-              variant="outline"
+              variant="secondary"
               disabled={props.busy}
               onClick={props.onKeepEditing}
             >

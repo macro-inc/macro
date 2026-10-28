@@ -5,12 +5,13 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CellValueOneOfNineType } from './cellValueOneOfNineType';
+import type { DateRange } from './dateRange';
 
 /**
- * Complete http or https URLs; at most one for a single-valued column.
+ * A span of time; its end may not come before its start.
  */
 export type CellValueOneOfNine = {
   type: CellValueOneOfNineType;
-  /** Complete http or https URLs; at most one for a single-valued column. */
-  value: string[];
+  /** A span of time; its end may not come before its start. */
+  value: DateRange;
 };

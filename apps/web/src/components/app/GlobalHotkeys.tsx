@@ -12,6 +12,7 @@ import {
 import { openMacroMcpSetupModal } from '@app/features/integrations/mcp-setup/MacroMcpSetupModal';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { inEnglish, t } from '@app/lib/i18n';
 import { useSubscribeToKeypress } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
@@ -64,18 +65,70 @@ import { ResultAsync } from 'neverthrow';
 import { type Component, onCleanup, Show } from 'solid-js';
 import { useSplitLayout } from './split-layout/layout';
 
+// `keyword` is the English name, kept as a search term in every language;
+// `label` is the displayed (translated) name.
 const COMMAND_MENU_CATEGORY_HOTKEYS: Array<{
   category: CategoryFilter;
   hotkey: ValidHotkey;
+  keyword: string;
   label: string;
 }> = [
-  { category: 'all', hotkey: 'l', label: 'All' },
-  { category: 'commands', hotkey: 'm', label: 'Command' },
-  { category: 'chats', hotkey: 'a', label: 'Agents' },
-  { category: 'documents', hotkey: 'f', label: 'Files' },
-  { category: 'tasks', hotkey: 't', label: 'Tasks' },
-  { category: 'channels', hotkey: 'c', label: 'Channels' },
-  { category: 'dms', hotkey: 'p', label: 'People' },
+  {
+    category: 'all',
+    hotkey: 'l',
+    keyword: 'All',
+    get label() {
+      return t('commandMenu.categoryAll');
+    },
+  },
+  {
+    category: 'commands',
+    hotkey: 'm',
+    keyword: 'Command',
+    get label() {
+      return t('commandMenu.categoryCommands');
+    },
+  },
+  {
+    category: 'chats',
+    hotkey: 'a',
+    keyword: 'Agents',
+    get label() {
+      return t('commandMenu.categoryAgents');
+    },
+  },
+  {
+    category: 'documents',
+    hotkey: 'f',
+    keyword: 'Files',
+    get label() {
+      return t('commandMenu.categoryFiles');
+    },
+  },
+  {
+    category: 'tasks',
+    hotkey: 't',
+    keyword: 'Tasks',
+    get label() {
+      return t('commandMenu.categoryTasks');
+    },
+  },
+  {
+    category: 'channels',
+    hotkey: 'c',
+    keyword: 'Channels',
+    get label() {
+      return t('commandMenu.categoryChannels');
+    },
+  },
+  {
+    category: 'dms',
+    hotkey: 'p',
+    keyword: 'People',
+    get label() {
+      return t('commandMenu.categoryPeople');
+    },
+  },
 ];
 
 function useHotkeyAnalytics(): void {
@@ -101,10 +154,12 @@ function useHotkeyAnalytics(): void {
     if (!context.commandCaptured) return;
 
     const command = context.commandCaptured;
-    const description =
+    // Analytics groups actions by their English description in every language.
+    const description = inEnglish(() =>
       typeof command.description === 'function'
         ? command.description()
-        : command.description;
+        : command.description
+    );
 
     const pressedKeysString = context.pressedKeysString;
 
@@ -179,7 +234,7 @@ export default function GlobalShortcuts() {
     hotkeyToken: TOKENS.global.createCommand,
     hotkey: 'c',
     scopeId: 'global',
-    description: 'Create',
+    description: () => t('commands.create'),
     keyDownHandler: () => {
       const willOpen = !createMenuOpen();
 
@@ -226,7 +281,7 @@ export default function GlobalShortcuts() {
   registerHotkey({
     hotkey: 'escape',
     scopeId: CREATE_MENU_COMMAND_SCOPE,
-    description: 'Close Create',
+    description: () => t('commands.closeCreate'),
     condition: createMenuOpen,
     keyDownHandler: () => {
       setCreateMenuOpen(false);
@@ -238,7 +293,7 @@ export default function GlobalShortcuts() {
   registerHotkey({
     hotkey: 'c',
     scopeId: CREATE_MENU_COMMAND_SCOPE,
-    description: 'Close Create',
+    description: () => t('commands.closeCreate'),
     condition: () =>
       createMenuOpen() &&
       !createCommands.some(
@@ -256,9 +311,10 @@ export default function GlobalShortcuts() {
     hotkeyToken: TOKENS.global.commandMenu,
     hotkey: 'cmd+k',
     scopeId: 'global',
-    description: () => {
-      return CommandState.isOpen() ? 'Close command menu' : 'Open command menu';
-    },
+    description: () =>
+      CommandState.isOpen()
+        ? t('commands.closeCommandMenu')
+        : t('commands.openCommandMenu'),
     keyDownHandler: () => {
       console.log('## CMD K - global');
       handleCommandMenu();
@@ -272,7 +328,7 @@ export default function GlobalShortcuts() {
   registerHotkey({
     hotkey: COMMAND_MENU_CATEGORY_LEADER_KEY,
     scopeId: 'global',
-    description: 'Open category',
+    description: () => t('commands.openCategory'),
     keyDownHandler: () => true,
     activateCommandScopeId: COMMAND_MENU_CATEGORY_SCOPE,
     surfaceNestedCommands: true,
@@ -283,7 +339,8 @@ export default function GlobalShortcuts() {
     registerHotkey({
       hotkey: item.hotkey,
       scopeId: COMMAND_MENU_CATEGORY_SCOPE,
-      description: `Open ${item.label}`,
+      description: () =>
+        t('commands.openCategoryNamed', { category: item.label }),
       keyDownHandler: () => {
         setActiveScope('global');
         CommandState.setCategoryFilter(item.category);
@@ -292,7 +349,7 @@ export default function GlobalShortcuts() {
         CommandState.open();
         return true;
       },
-      keywords: ['command menu', 'palette', 'category', item.label],
+      keywords: ['command menu', 'palette', 'category', item.keyword],
       runWithInputFocused: true,
     });
   }
@@ -315,7 +372,7 @@ export default function GlobalShortcuts() {
   registerHotkey({
     hotkey: 'cmd+\\',
     scopeId: 'global',
-    description: 'Create new split',
+    description: () => t('commands.createNewSplit'),
     condition: canFit,
     keyDownHandler: createNewSplit,
     runWithInputFocused: true,
@@ -325,7 +382,7 @@ export default function GlobalShortcuts() {
     hotkeyToken: TOKENS.global.createNewSplit,
     hotkey: '\\',
     scopeId: 'global',
-    description: 'Create new split',
+    description: () => t('commands.createNewSplit'),
     condition: canFit,
     keyDownHandler: createNewSplit,
   });
@@ -344,7 +401,7 @@ export default function GlobalShortcuts() {
     hotkeyToken: TOKENS.global.toggleSettings,
     hotkey: 'cmd+;',
     scopeId: 'global',
-    description: 'Toggle settings',
+    description: () => t('commands.toggleSettings'),
     keyDownHandler: () => {
       toggleSettings();
       return true;
@@ -354,7 +411,7 @@ export default function GlobalShortcuts() {
 
   registerHotkey({
     scopeId: 'global',
-    description: 'Account',
+    description: () => t('commands.account'),
     icon: UserIcon,
     keyDownHandler: () => {
       openSettingsAt('Account');
@@ -365,12 +422,12 @@ export default function GlobalShortcuts() {
 
   registerHotkey({
     scopeId: 'global',
-    description: 'Logout',
+    description: () => t('commands.logout'),
     icon: LogoutIcon,
     keyDownHandler: () => {
       logout().catch((error) => {
         Telemetry.error(error, { surface: 'logout' });
-        toast.failure('Failed to sign out');
+        toast.failure(t('commands.failedToSignOut'));
       });
       return true;
     },
@@ -379,7 +436,7 @@ export default function GlobalShortcuts() {
 
   registerHotkey({
     scopeId: 'global',
-    description: 'MCP setup',
+    description: () => t('commands.mcpSetup'),
     keyDownHandler: () => {
       openMacroMcpSetupModal();
       return true;
@@ -392,7 +449,7 @@ export default function GlobalShortcuts() {
 
   const setThemeScope = registerHotkey({
     scopeId: 'global',
-    description: 'Change theme',
+    description: () => t('commands.changeTheme'),
     keyDownHandler: () => {
       return true;
     },
@@ -430,7 +487,7 @@ export default function GlobalShortcuts() {
   // the OS scheme rather than pinning a fixed theme.
   registerHotkey({
     scopeId: setThemeScope.commandScopeId,
-    description: 'System preference',
+    description: () => t('commands.systemPreference'),
     keyDownHandler: () => {
       applySystemTheme();
       analytics.track('theme_changed', { themeId: 'system' });
@@ -439,7 +496,7 @@ export default function GlobalShortcuts() {
     runWithInputFocused: true,
     displayComponent: () => (
       <div class="flex items-center gap-2">
-        System preference
+        {t('commands.systemPreference')}
         <Show when={systemResolvedTheme()}>
           {(theme) => <ThemeChips theme={theme()} size="sm" />}
         </Show>
@@ -473,7 +530,7 @@ export default function GlobalShortcuts() {
 
   const setPreferredLightScope = registerHotkey({
     scopeId: 'global',
-    description: 'Set default light theme',
+    description: () => t('commands.setDefaultLightTheme'),
     keyDownHandler: () => {
       return true;
     },
@@ -499,7 +556,7 @@ export default function GlobalShortcuts() {
 
   const setPreferredDarkScope = registerHotkey({
     scopeId: 'global',
-    description: 'Set default dark theme',
+    description: () => t('commands.setDefaultDarkTheme'),
     keyDownHandler: () => {
       return true;
     },
@@ -526,7 +583,9 @@ export default function GlobalShortcuts() {
   registerHotkey({
     scopeId: 'global',
     description: () =>
-      `${themeMode() === 'system' ? 'Turn off a' : 'A'}uto-detect color scheme`,
+      themeMode() === 'system'
+        ? t('commands.turnOffAutoDetectColorScheme')
+        : t('commands.autoDetectColorScheme'),
     keyDownHandler: () => {
       // Toggle system (auto-detect) on/off; turning it off pins the theme to the
       // OS's current scheme so the appearance doesn't visibly change.
@@ -538,7 +597,7 @@ export default function GlobalShortcuts() {
 
   registerHotkey({
     scopeId: 'global',
-    description: 'Upload files',
+    description: () => t('commands.uploadFiles'),
     icon: () => <Upload class="size-4" />,
     keyDownHandler: () => {
       openFilePicker({ multiple: true }, async (files) => {
@@ -570,7 +629,7 @@ export default function GlobalShortcuts() {
 
   registerHotkey({
     scopeId: 'global',
-    description: 'Upload folders',
+    description: () => t('commands.uploadFolders'),
     icon: () => <Upload class="size-4" />,
     keyDownHandler: () => {
       openFolderPicker({ multiple: true }, async (files) => {
@@ -609,12 +668,14 @@ export default function GlobalShortcuts() {
     hotkeyToken: TOKENS.global.undo,
     hotkey: 'cmd+z',
     scopeId: 'global',
-    description: 'Undo',
+    description: () => t('commands.undo'),
     keyDownHandler: (e) => {
       if (!undoCtx.canUndo()) return false;
       e?.preventDefault();
       fireAndForget(
-        undoCtx.undo({ onError: () => toast.failure('Failed to undo') }),
+        undoCtx.undo({
+          onError: () => toast.failure(t('commands.failedToUndo')),
+        }),
         'global-hotkeys'
       );
       return true;
@@ -626,12 +687,14 @@ export default function GlobalShortcuts() {
     hotkeyToken: TOKENS.global.redo,
     hotkey: 'shift+cmd+z',
     scopeId: 'global',
-    description: 'Redo',
+    description: () => t('commands.redo'),
     keyDownHandler: (e) => {
       if (!undoCtx.canRedo()) return false;
       e?.preventDefault();
       fireAndForget(
-        undoCtx.redo({ onError: () => toast.failure('Failed to redo') }),
+        undoCtx.redo({
+          onError: () => toast.failure(t('commands.failedToRedo')),
+        }),
         'global-hotkeys'
       );
       return true;

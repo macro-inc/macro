@@ -27,13 +27,14 @@ export function MobileAuthWelcome() {
           </div>
           <div class="flex flex-col gap-3 px-8 pb-8">
             <Button
-              variant="strong"
+              variant="secondary"
               size="xl"
               onClick={() => navigate('/onboarding')}
             >
               Create new account
             </Button>
             <Button
+              variant="secondary"
               size="xl"
               class="border border-edge-muted"
               onClick={() => navigate('/login')}

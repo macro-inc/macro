@@ -50,7 +50,7 @@ impl SQS {
     }
 
     /// Sends a message to the Gmail operations queue
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, message), fields(link_id = %message.link_id), err)]
     pub async fn enqueue_gmail_ops_notification(
         &self,
         message: GmailOpsPubsubMessage,
@@ -116,7 +116,7 @@ impl SQS {
     }
 
     /// Sends a message to the Gmail operations retry queue
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, message), fields(link_id = %message.link_id), err)]
     pub async fn enqueue_gmail_ops_retry_notification(
         &self,
         message: GmailOpsPubsubMessage,
@@ -128,7 +128,7 @@ impl SQS {
     }
 }
 
-#[tracing::instrument(skip(sqs_client))]
+#[tracing::instrument(skip(sqs_client, message))]
 async fn enqueue_notification<T: serde::Serialize + std::fmt::Debug>(
     sqs_client: &aws_sdk_sqs::Client,
     queue_url: &str,

@@ -53,9 +53,16 @@ fn an_open_tool_is_forgotten_once_it_reports() {
     let mut open = None;
     track_open_tool(
         &mut open,
-        &json!({"sessionUpdate": "tool_call", "toolCallId": "t", "title": "Bash ls"}),
+        &json!({"sessionUpdate": "tool_call", "toolCallId": "t", "title": "Bash ls", "_meta": {"claudeCode": {"toolName": "Bash"}}}),
     );
-    assert_eq!(open, Some(("t".to_owned(), "Bash ls".to_owned())));
+    assert_eq!(
+        open,
+        Some(OpenTool {
+            id: "t".to_owned(),
+            title: "Bash ls".to_owned(),
+            name: Some("Bash".to_owned()),
+        })
+    );
     track_open_tool(
         &mut open,
         &json!({"sessionUpdate": "tool_call_update", "toolCallId": "other"}),

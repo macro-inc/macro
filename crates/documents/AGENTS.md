@@ -26,6 +26,11 @@ word docs, Illustrator/Photoshop files).
   delegates design work. Both use edit receipts and live scene
   deltas, never whole-file saves. Render output includes native media plus an
   immutable revision, crop/object mapping and actual DOM text bounds.
+- `src/domain/word_document.rs`: Word tools read and edit the DOCX live copy
+  through the editing worker. A DOCX nobody has opened yet is seeded first from
+  its stored parts (`S3DocumentFiles`), in the editor's exact Loro shape
+  (`word_document/seed.rs`, mirroring the web `writeCollabState`); keep the
+  two in step.
 - `src/inbound/toolset.rs`: one submodule per AI document tool (`create_document`,
   `edit_document`, `word_document`, `spreadsheet`, `presentation`, ...).
 - `src/inbound/axum_router.rs`: the HTTP surface; `axum_router/get_text.rs`

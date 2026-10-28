@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM whatsapp_roster WHERE account_id = $1 AND group_jid = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "262c0c7896fbdb85403c9942a03c8a4a40aeaa5173da5da2adfb54d17e61b010"
+}

@@ -4,6 +4,7 @@
  * `/component/agent-ui`.
  */
 
+import { PermissionCard } from '@app/features/agent-interactions/components/PermissionCard';
 import {
   initialValues,
   validate,
@@ -210,6 +211,12 @@ function QueuedInFlightDemo() {
       actionId: 'newer',
       kind: 'prompt',
       prompt: 'Also mention the flush control',
+    },
+    {
+      actionId: 'refused',
+      kind: 'prompt',
+      prompt: 'This steer was refused, so it stays queued',
+      sendFailed: true,
     },
   ]);
   const [note, setNote] = createSignal(
@@ -1153,6 +1160,24 @@ export default function AgentUiGallery() {
                 },
                 schema: FIXTURE_ELICITATION,
               }}
+            />
+          </Item>
+
+          <Item label="PermissionCard (native Herdr session)">
+            <PermissionCard
+              action="Run command"
+              detail="cargo test -p coding_agent_worker"
+              options={[
+                { id: 'allow', name: 'Allow once', kind: 'allow_once' },
+                {
+                  id: 'always',
+                  name: 'Always allow `cargo test -p coding_agent_worker` in this session',
+                  kind: 'allow_always',
+                },
+                { id: 'reject', name: 'Reject', kind: 'reject_once' },
+              ]}
+              canAnswer
+              onSelect={() => {}}
             />
           </Item>
 

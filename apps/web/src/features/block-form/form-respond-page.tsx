@@ -110,7 +110,7 @@ function FormRespondContent(props: { formId: string }) {
                           Preview · responses won’t be saved
                         </span>
                         <Button
-                          variant="outline"
+                          variant="secondary"
                           onClick={() =>
                             navigate(
                               `/form/${encodeURIComponent(props.formId)}`

@@ -54,6 +54,10 @@ vi.mock('@app/features/access-requests/access-requests', async (original) => ({
     error: () => undefined,
   }),
 }));
+// Inviting people by email is covered with the access request views.
+vi.mock('@app/features/access-requests/views/DirectAccessInvite', () => ({
+  DirectAccessInvite: () => null,
+}));
 vi.mock(
   '@app/features/access-requests/share-request-trigger',
   async (original) => ({
@@ -96,6 +100,8 @@ const mocks = vi.hoisted(() => ({
   updateAgentPermissions: vi.fn(),
   getInitiativePermissions: vi.fn(),
   updateInitiativePermissions: vi.fn(),
+  getExternalChatPermissions: vi.fn(),
+  updateExternalChatPermissions: vi.fn(),
   getDocumentPermissions: vi.fn(),
   getDatabasePermissions: vi.fn(),
   updateDatabasePermissions: vi.fn(),
@@ -223,6 +229,12 @@ vi.mock('@queries/initiative/share-permissions', () => ({
     mocks.getInitiativePermissions(...args),
   updateInitiativeSharePermissions: (...args: unknown[]) =>
     mocks.updateInitiativePermissions(...args),
+}));
+vi.mock('@queries/external-chats/share-permissions', () => ({
+  fetchExternalChatPermissions: (...args: unknown[]) =>
+    mocks.getExternalChatPermissions(...args),
+  updateExternalChatPermissions: (...args: unknown[]) =>
+    mocks.updateExternalChatPermissions(...args),
 }));
 vi.mock('@core/component/SharePermissions', () => ({
   Permissions: { OWNER: 'owner', CAN_EDIT: 'edit', CAN_VIEW: 'view' },
@@ -357,12 +369,13 @@ vi.mock('@ui', async () => {
     children?: JSX.Element;
     disabled?: boolean;
     tooltip?: string;
+    'aria-label'?: string;
     onClick?: () => void;
   }) => (
     <button
       disabled={props.disabled}
       onClick={props.onClick}
-      aria-label={props.tooltip}
+      aria-label={props['aria-label'] ?? props.tooltip}
     >
       {props.children}
     </button>
@@ -408,7 +421,7 @@ vi.mock('@ui', async () => {
       ItemIndicator: Container,
       Group: Container,
     }),
-    ButtonGroup: Object.assign(Container, { Divider: () => null }),
+    ButtonGroup: Object.assign(Container, { Button, Divider: () => null }),
     Tabs: (props: {
       'aria-label'?: string;
       onChange?: (value: string) => void;
@@ -1587,7 +1600,46 @@ describe('native project sharing', () => {
     }
   );
 
-  it('copies the project route instead of a block URL', () => {
+  it('lets the owner of an external chat revoke a channel its mention shared it with', async () => {
+    mocks.inBlock = false;
+    mocks.getExternalChatPermissions.mockResolvedValue(
+      ok({
+        id: 'external-chat-permissions',
+        owner: ME,
+        channelSharePermissions: [
+          { channel_id: 'channel-1', access_level: 'view' },
+        ],
+      })
+    );
+    mocks.updateExternalChatPermissions.mockResolvedValue(ok(undefined));
+    render(() => (
+      <ShareModal
+        id="chat-1"
+        name="Family"
+        owner={ME}
+        itemType="external_chat"
+        blockAlias="external_chat"
+        userPermissions={Permissions.OWNER}
+        open
+        onOpenChange={vi.fn()}
+      />
+    ));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Set option none' })
+    );
+    await vi.waitFor(() =>
+      expect(mocks.updateExternalChatPermissions).toHaveBeenCalledWith(
+        'chat-1',
+        {
+          channelSharePermissions: [
+            { operation: 'remove', channelId: 'channel-1' },
+          ],
+        }
+      )
+    );
+  });
+
+  it('copies the project link that pastes as a mention', () => {
     mocks.inBlock = false;
     render(() => (
       <ShareTrigger
@@ -1598,7 +1650,7 @@ describe('native project sharing', () => {
     ));
     fireEvent.click(screen.getByRole('button', { name: 'Copy Share Link' }));
     expect(mocks.copyLink).toHaveBeenCalledWith(
-      'https://macro.com/app/component/initiative-view~initiative-1~overview'
+      'https://macro.com/app/initiative/initiative-1'
     );
   });
 });
@@ -1930,8 +1982,9 @@ describe('form share roles', () => {
     );
   });
 
-  it('offers View and Edit on a form, which has no comments, and every level elsewhere', () => {
+  it('offers View and Edit on a form, which has no comments, View on an external chat, and every level elsewhere', () => {
     expect(shareLevelsFor('form')).toEqual(['view', 'edit']);
+    expect(shareLevelsFor('external_chat')).toEqual(['view']);
     expect(shareLevelsFor('document')).toBeUndefined();
     render(() => (
       <ShareOptions

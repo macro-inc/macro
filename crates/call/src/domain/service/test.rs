@@ -31,12 +31,14 @@ mod guest_chat;
 mod meeting_invites;
 mod meeting_participants;
 mod meeting_startup;
+mod orphan_rooms;
 
 use crate::domain::meetings::GuestId;
 use crate::domain::models::{
     ActiveCallSummary, AddParticipantError, ArchivedCall, Call, CallError, CallParticipant,
     CallRecord, CallRecordTranscriptSegment, CallWebhookEvent, DeletedCallRecordStorageKeys,
-    EditCallRecordRequest, EgressS3Config, RingStatus, VerifiedRingToken, VoipPushPayloadRequest,
+    EditCallRecordRequest, EgressS3Config, RingStatus, RtcRoom, VerifiedRingToken,
+    VoipPushPayloadRequest,
 };
 use crate::domain::ports::{
     CallRtcClient, CallService, CallSummarizer, MockCallRepository, MockCallRtcClient,
@@ -120,6 +122,10 @@ impl CallRtcClient for MockRtcClient {
 
     async fn delete_room(&self, _room_name: &str) -> anyhow::Result<()> {
         Ok(())
+    }
+
+    async fn list_rooms(&self) -> anyhow::Result<Vec<RtcRoom>> {
+        Ok(Vec::new())
     }
 
     async fn generate_token<'a>(

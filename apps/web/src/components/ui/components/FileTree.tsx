@@ -176,10 +176,11 @@ function Root<T>(props: FileTreeRootProps<T>) {
             </Row>
             <span class="absolute top-1/2 right-1.5 flex -translate-y-1/2">
               <Button
+                aria-label={`${open() ? 'Collapse' : 'Expand'} ${row.directory.name}`}
+                tooltip={`${open() ? 'Collapse' : 'Expand'} ${row.directory.name}`}
                 variant="ghost"
                 size="icon-sm"
                 class="size-6 shrink-0 rounded-lg touch:size-9"
-                label={`${open() ? 'Collapse' : 'Expand'} ${row.directory.name}`}
                 aria-expanded={open()}
                 onClick={() => toggle(path())}
               >

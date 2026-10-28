@@ -136,6 +136,9 @@ fn compare(ranks: &OptionRanks, left: Option<&Cell>, right: Option<&Cell>) -> Ra
             }
             (Cell::Bool(left), Cell::Bool(right)) => left.cmp(right),
             (Cell::Date(left), Cell::Date(right)) => left.cmp(right),
+            (Cell::DateRange(left), Cell::DateRange(right)) => {
+                (left.start, left.end).cmp(&(right.start, right.end))
+            }
             (Cell::Options(left), Cell::Options(right)) => {
                 option_rank(ranks, left).cmp(&option_rank(ranks, right))
             }

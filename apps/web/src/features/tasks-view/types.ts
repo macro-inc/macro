@@ -30,10 +30,9 @@ export type TaskReferenceScope = {
  * resolves the membership: the record's Companies or Contacts property, a
  * reference to the record, or (for a company) either for any of its contacts.
  */
-export type TaskCrmScope = {
-  type: 'company' | 'contact';
-  id: string;
-};
+export type TaskCrmScope =
+  | { type: 'company' | 'contact'; id: string }
+  | { type: 'activity' };
 
 export type TaskDetailTarget = {
   id: string;
@@ -49,6 +48,8 @@ export type TasksViewState = {
   facets: FacetSelection;
   collapsedGroupIds: string[];
   collapsedSidebarSectionIds: string[];
+  /** Transient marker: never persist saved-view filter drafts in entry history. */
+  savedViewActive?: boolean;
 };
 
 export type TasksViewStateOptions = Partial<TasksViewState>;

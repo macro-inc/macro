@@ -2,6 +2,7 @@
 //! the column's kind.
 
 use chrono::{DateTime, NaiveDate, Utc};
+use models_databases::DateRange;
 
 use crate::catalog::{Column, ColumnKind, EntityKind};
 use crate::parse::{ComparisonOperator, Condition, Literal};
@@ -134,7 +135,11 @@ fn check_operator(column: &Column, operator: ComparisonOperator) -> Result<(), R
             | ComparisonOperator::GreaterOrEqual
     );
     let supported = match column.kind {
-        ColumnKind::Text | ColumnKind::Link | ColumnKind::Number | ColumnKind::Date => {
+        ColumnKind::Text
+        | ColumnKind::Link
+        | ColumnKind::Number
+        | ColumnKind::Date
+        | ColumnKind::DateRange => {
             return Ok(());
         }
         ColumnKind::Boolean => "checkbox columns support = and !=",
@@ -152,12 +157,29 @@ fn check_operator(column: &Column, operator: ComparisonOperator) -> Result<(), R
 }
 
 const DATE_HINT: &str = "compare it to an ISO date like '2026-09-01' or '2026-09-01T09:00:00Z'";
+const RANGE_COMPARISON_HINT: &str = "compare it to an ISO date like '2026-09-01': = contains it, \
+                                     < ends before it, > starts after it";
+const RANGE_HINT: &str =
+    "write an ISO interval like '2026-09-01/2026-09-05', or one date for a single day";
 
-/// Type a literal a column is compared to. Lists belong to writes.
+/// Type a literal a column is compared to. Lists belong to writes. A date
+/// range compares to a date: whether it contains it, ends before it or
+/// starts after it.
 pub fn typed(column: &Column, lit: Literal) -> Result<Value, ResolveError> {
     if matches!(lit, Literal::List(_)) {
         return Err(ResolveError::ListInComparison {
             column: column.name.clone(),
+        });
+    }
+    if column.kind == ColumnKind::DateRange {
+        return match lit {
+            Literal::Text(text) => parse_date(&text).map(Value::Date),
+            _ => None,
+        }
+        .ok_or_else(|| ResolveError::TypeMismatch {
+            column: column.name.clone(),
+            expected: "date",
+            hint: RANGE_COMPARISON_HINT,
         });
     }
     typed_one(column, lit)
@@ -214,6 +236,10 @@ fn typed_one(column: &Column, lit: Literal) -> Result<Value, ResolveError> {
             .map(Value::Date)
             .ok_or_else(|| mismatch("date", DATE_HINT)),
         (ColumnKind::Date, _) => Err(mismatch("date", DATE_HINT)),
+        (ColumnKind::DateRange, Literal::Text(text)) => parse_range(&text)
+            .map(Value::DateRange)
+            .ok_or_else(|| mismatch("date range", RANGE_HINT)),
+        (ColumnKind::DateRange, _) => Err(mismatch("date range", RANGE_HINT)),
         (ColumnKind::Select { options, .. }, Literal::Text(label)) => options
             .iter()
             .find(|option| option.label.eq_ignore_ascii_case(&label))
@@ -254,6 +280,19 @@ fn is_entity_id(text: &str) -> bool {
         || text
             .split_once('|')
             .is_some_and(|(kind, rest)| !kind.is_empty() && !rest.is_empty())
+}
+
+/// `2026-09-01/2026-09-05`, an ISO interval of two dates or date-times
+/// ending no earlier than it starts, or one date for the range of that
+/// instant.
+fn parse_range(text: &str) -> Option<DateRange> {
+    DateRange::parse_interval(text, parse_date).or_else(|| {
+        let date = parse_date(text)?;
+        Some(DateRange {
+            start: date,
+            end: date,
+        })
+    })
 }
 
 /// `2026-09-01` (midnight UTC) or any RFC 3339 date-time.

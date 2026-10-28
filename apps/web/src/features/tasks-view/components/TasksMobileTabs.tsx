@@ -3,6 +3,7 @@ import { type JSX, Show } from 'solid-js';
 import { TASK_TABS, type TaskTabItem } from '../constants';
 import { useTasksView } from '../tasks-view-context';
 import type { TasksTab } from '../types';
+import { TaskSavedViewsPicker } from '../views/task-saved-views';
 import { TasksFilterDrawer } from './TasksFilterDrawer';
 
 const toPill = (tab: TaskTabItem): PillTabItem<TasksTab> => ({
@@ -24,14 +25,17 @@ export function TasksMobileTabs(props: { leading?: JSX.Element }) {
         class="-ml-(--mobile-chrome-gutter) w-[calc(100%+2*var(--mobile-chrome-gutter))] max-w-none flex-none"
         contentClass="px-(--mobile-chrome-gutter)"
         leading={
-          props.leading ?? (
-            <Show when={state.tab !== 'projects'}>
-              <TasksFilterDrawer />
-            </Show>
-          )
+          <>
+            {props.leading ?? (
+              <Show when={state.tab !== 'projects'}>
+                <TasksFilterDrawer />
+              </Show>
+            )}
+            <TaskSavedViewsPicker />
+          </>
         }
         items={items()}
-        value={state.tab}
+        value={state.savedViewActive ? undefined : state.tab}
         onChange={setTab}
       />
     </div>

@@ -18,6 +18,26 @@
 
 ## Methods
 
+### archive()
+
+> **archive**(`threads`, `archived?`): `Promise`\<[`EmailThread`](../../thread/classes/EmailThread.md)[]\>
+
+Archive many threads (or unarchive with `false`). Resolves to the threads
+whose state could not change.
+
+#### Parameters
+
+| Parameter | Type | Default value |
+| ------ | ------ | ------ |
+| `threads` | [`EmailThread`](../../thread/classes/EmailThread.md)[] | `undefined` |
+| `archived?` | `boolean` | `true` |
+
+#### Returns
+
+`Promise`\<[`EmailThread`](../../thread/classes/EmailThread.md)[]\>
+
+***
+
 ### attachment()
 
 > **attachment**(`id`): [`EmailAttachment`](../../attachment/classes/EmailAttachment.md)

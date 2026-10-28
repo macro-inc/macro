@@ -160,10 +160,11 @@ function ChannelSortDropdown(props: {
   return (
     <Dropdown placement="bottom-end">
       <Dropdown.Trigger
+        aria-label={`Sort ${props.label.toLowerCase()}`}
+        tooltip={`Sort ${props.label.toLowerCase()}`}
         as={ViewSidebar.Control}
         variant="ghost"
         size="icon-sm"
-        label={`Sort ${props.label.toLowerCase()}`}
       >
         <SortIcon class="size-3.5" />
       </Dropdown.Trigger>
@@ -292,8 +293,9 @@ function ChannelOption(props: {
         dnd?.droppable.ref(element);
       }}
       {...(canLabelChannel(props.channel) ? dnd?.draggable.dragActivators : {})}
-      onPointerDown={() => {
+      onPointerDown={(event) => {
         didDrag = false;
+        rail.prefetchRow(rowId(), event);
       }}
       class={cn(
         'min-w-0',
@@ -432,7 +434,7 @@ function ExpandedHeader(props: { search: ChannelRailSearch }) {
           />
           <Show when={isTouchDevice()}>
             <ViewSidebar.Control
-              label={
+              aria-label={
                 props.search.isOpen() ? 'Close search' : 'Search conversations'
               }
               aria-pressed={props.search.isOpen()}
@@ -926,6 +928,9 @@ function RecentConversationCard(props: { channel: ChannelEntity }) {
         focused={item().focused}
         onActivate={(event) =>
           rail.activateRow(rowKeyForChannel(props.channel.id), event)
+        }
+        onPress={(event) =>
+          rail.prefetchRow(rowKeyForChannel(props.channel.id), event)
         }
       />
     </ChannelRailItemContextMenu>

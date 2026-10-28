@@ -76,7 +76,7 @@ export function InviteLinksPortal() {
               body="This page is for Macro staff."
               action={
                 <Button
-                  variant="cta"
+                  variant="primary"
                   size="lg"
                   onClick={() =>
                     navigate(
@@ -286,7 +286,12 @@ function CreateLinkForm(props: { onCreated: (link: GtmInviteLink) => void }) {
         />
       </div>
       <div class="flex items-center justify-end gap-3">
-        <Button variant="cta" size="lg" type="submit" disabled={!canSubmit()}>
+        <Button
+          variant="primary"
+          size="lg"
+          type="submit"
+          disabled={!canSubmit()}
+        >
           <LinkIcon class="size-4" />
           {create.isPending ? 'Creating…' : 'Create link'}
         </Button>
@@ -315,7 +320,11 @@ function LatestLinkCard(props: { link: GtmInviteLink }) {
           {formatFreeMonths(props.link.freeMonths)} · expires in{' '}
           {formatTimeLeft(props.link.expiresAt).replace(' left', '')}
         </span>
-        <Button variant="strong" size="sm" onClick={() => copyLink(props.link)}>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => copyLink(props.link)}
+        >
           <CopyIcon class="size-4" />
           Copy link
         </Button>

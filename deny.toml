@@ -225,6 +225,7 @@ deny = [
     "agent_harness",             # Warm-claim and handshake span tests
     "agent_inmem",               # GenAI trace propagation tests
     "agent_session",             # GenAI span tests
+    "ai_billing",                # Background usage span propagation tests only
     "ai_toolset",                # GenAI span tests
     "channels",                  # Dev logging only
     "coding_agent_worker",       # Standalone daemon logging setup
@@ -251,6 +252,8 @@ deny = [
     "tracing-tree",
     "tracing-web",               # External WASM tracing layer
     "turso_core",                # External Turso crate requires tracing-subscriber directly
+    "whatsapp_session_service",  # Notification span propagation test only
+    "whatsmeow",                 # Span hierarchy and JID-redaction tests only
     "worker-rs-otel",             # Cloudflare/WASM OpenTelemetry integration
     "workspace-hack",             # cargo-hakari generated crate
   ], reason = "Use macro_entrypoint for tracing setup in workspace crates" },

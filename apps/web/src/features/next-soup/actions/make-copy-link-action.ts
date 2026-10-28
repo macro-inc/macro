@@ -1,4 +1,5 @@
 import { copyCalendarEventMentionTarget } from '@app/features/calendar-view/copy-event-mention';
+import { t } from '@app/lib/i18n';
 import { getChannelParams } from '@block-channel/utils/link';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
@@ -79,7 +80,7 @@ export const makeCopyLinkAction = () => {
     const url = getEntityUrl(entity);
 
     await navigator.clipboard.writeText(url);
-    toast.success('Link copied to clipboard');
+    toast.success(t('entityActions.toastLinkCopied'));
   };
 
   /** Blocks already know their id and URL discriminator even when their full
@@ -88,7 +89,7 @@ export const makeCopyLinkAction = () => {
     await navigator.clipboard.writeText(
       buildSimpleEntityUrl({ id, type: blockType })
     );
-    toast.success('Link copied to clipboard');
+    toast.success(t('entityActions.toastLinkCopied'));
   };
 
   const executeWithSoup = async (

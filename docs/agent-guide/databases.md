@@ -18,11 +18,13 @@ Databases open at
 `/app/database/<uuid>`; from Drive (its list, favorites, or **New → Database**)
 they open inline at `/app/drive/database/<uuid>` with Drive's sidebar in place.
 A database contains tables; records belong to a table and
-its properties describe each record. The database name in the split header is an
-static label, matching other blocks. Choose **Rename** in Database actions to
-edit it. Enter or leaving the input saves and closes it; Escape cancels. Saving
-a title does not enter the grid, and a failed rename shows a toast. Viewers without edit access see the
-split header's `viewer` badge instead.
+its properties describe each record. The database name in the split header is a
+static label until edited. Double-click it or choose **Rename** in Database actions
+to edit the same inline title with the current name selected. On touch devices,
+use **Database actions → Rename**. Enter or leaving the input saves and closes it; Escape cancels. Saving
+a title does not enter the grid, and a failed rename shows a toast. Reload to verify
+the saved name persists. Viewers cannot enter rename from either entry point and
+see the split header's `viewer` badge instead.
 
 Reopening a loaded table or view shows its cached rows while a background read
 checks for changes. Wait for refreshing to finish before asserting server
@@ -155,15 +157,18 @@ puts the typing cursor in that column's first cell, without waiting for creation
 or renaming to finish. Escape keeps the default name.
 There is no creation dialog. Double-click a header, press F2 while it is focused,
 or choose **Rename column** from its arrow or right-click menu to rename it later.
-Its type icon stays in place while editing. SQL refers to tables and columns by
+Its type icon stays in place while editing. A rename updates the cached column
+label before the save finishes and keeps the same header mounted; the old name
+must not flash back while the schema refreshes. Reload to confirm it persisted.
+SQL refers to tables and columns by
 their display names (double-quoted), so a rename changes the name a saved query
 must use.
 
 The current type has a checkmark in **Change type**; selecting it leaves the column unchanged. Types that cannot convert any existing values are omitted, while empty columns can still choose a new type.
 
 The header arrow menu groups schema and view actions. **Change type** checks the
-column's values against Text, Number, Select, Multi-select, Date, Checkbox, URL,
-People, Documents, Tasks, and relations to tables in this database, showing
+column's values against Text, Number, Select, Multi-select, Date, Time range,
+Checkbox, URL, People, Documents, Tasks, and relations to tables in this database, showing
 "Checking values…" meanwhile, then lists only the types the column can become (a
 checkbox can only become text; only an empty column can become People or a
 relation). A type some values would not survive shows how many, such
@@ -175,7 +180,8 @@ batch), leaving this column as it is. Every other type converts immediately. A
 type change never empties a value; only deleting a cell, row, column, table or
 option does. Plain number strings can become numbers; padding, leading zeros and
 ambiguous values count as values that don't fit. A date becomes its `YYYY-MM-DD`
-text. Changing a placement never changes another table that uses the same property.
+text, or a one-day range. Text and single selects become ranges when each value
+is `start/end` or one date; a range can only become text. Changing a placement never changes another table that uses the same property.
 A relation can hold multiple records.
 
 **Formula columns.** **Change type → Formula** opens the formula editor under the
@@ -297,6 +303,25 @@ Date cells open Macro's date selector (the one tasks use): type a date or phrase
 such as `tomorrow`, `3d`, or `feb 17` and press Enter, or pick **Custom date...**
 for a calendar. Typing on a selected date cell starts that search; Delete clears
 the date, and Tab leaves the selector without changing it.
+Time-range cells show their days (`Oct 9 – 13, 2026`) or, with times,
+`Oct 9, 9:00 AM – 5:00 PM` / `Oct 9, 9:00 AM – Oct 13, 5:00 PM`. They open the
+calendar event composer's date/time fields (`components/date-time-range`), with
+focus on the first, all on one row: a date button per end that drops down a
+calendar, and, with times, a time field beside each (type `3`, `3p`, `330` or
+`15:30` and the 15-minute list jumps there and fills in the rest; Enter, Tab
+or leaving commits, Escape restores; an end's times show the duration from the
+start), an **All day** switch, and an × (**Clear**), which empties the range and
+closes. An empty cell shows **Start date** / **End date** and starts all day;
+the first day picked sets both ends. A new start carries the end along,
+keeping the range's length. Turning All day off gives each end the next full
+hour, an hour long. An end before the start is shown in red with an inline
+message and never saved. Every other change saves at once; the fields' lists
+open inside the menu, Escape closes an open list and then the menu, and a
+click outside closes it. Delete on the cell empties it
+too. Range filters test a whole day: contains (the range overlaps that day),
+does not contain, starts after, starts on or before, ends before, ends on or
+after, so a 1 PM to 5 PM range contains its day. Properties of type **Time range**
+edit with the same fields.
 Invalid numbers remain in the editor for correction.
 Drag across table cells to select a rectangle, or Shift-click another cell to
 extend from the first cell. Delete or Backspace clears editable cells in that
@@ -360,7 +385,7 @@ saved record. The same uncertain draft cannot submit another insert.
 View-only access allows browsing, searching, and filtering or sorting All records
 for yourself, but disables data, schema and stored view changes.
 
-## Table and board views
+## Table, board, and timeline views
 
 Tables contain the records; **Views** are shared ways to show them, stored with the
 database and the same for everyone who can open it. **All records** is always first:
@@ -368,11 +393,15 @@ the table in its own order. Filters, sorts and column changes made on All record
 change only what you see, until you make a view of them. Viewers can search and use
 All records; only editors change stored views.
 
-**New view** (the **+** beside the tabs) opens a dropdown with **Table** and
-**Board**. Choosing one immediately creates and opens it with an available default
-name, keeping the current filter and sort. A board starts grouped by the first
-single-select or single-person column, or creates a Status column if there are
-none. After creation, use the **Group by** dropdown in the board toolbar to change
+**New view** (the **+** beside the tabs) opens a dropdown with **Table**,
+**Board**, and **Timeline**. Choosing one immediately creates and opens it with an
+available default name, keeping the current filter and sort. A board starts grouped
+by the first single-select or single-person column, or creates a Status column if
+there are none. A timeline spans the first date-range column, or creates a Time
+range column if there are none. A view tab's right-click menu switches a stored view
+with **Show as table**, **Show as board** (one item per grouping column, or
+**Create a Status column**), and **Show as timeline** (**Along …** per date-range
+column, or **Create a Time range column**). After creation, use the **Group by** dropdown in the board toolbar to change
 the grouping column. Card settings stay; lane ordering resets for the new groups.
 Multi-selects and checkboxes cannot group a board. Double-click a view tab, press
 F2, or right-click it and choose **Rename view** to rename it in place (Enter saves,
@@ -402,7 +431,7 @@ and the row is scrolled to and highlighted, or its record opens when the view do
 not show it. Escape closes the search and returns focus to where it was opened
 from. The term is kept while you switch tables.
 
-A view's layout, Table or Board, is chosen when the view is created. Creating a
+A view's layout, Table, Board or Timeline, is chosen when the view is created. Creating a
 view closes the menu and opens its tab immediately while saving. If saving
 fails, the view shows **Retry** and **Dismiss**; retry checks whether the first
 attempt committed before creating anything again. Columns
@@ -480,6 +509,62 @@ of the board matches Tasks' hidden-lanes panel. Its **New group** button opens a
 name field. Its right-aligned actions show **Cancel** followed by a filled **Add
 group** button, which adds another option and lane with the next palette colour.
 Escape cancels; validation and save failures keep the draft for retry.
+
+A timeline draws one bar per record across its date-range column, on the shared
+Gantt chart: an all-day range spans whole days, and a range with times starts and
+ends at its exact times in the viewer's time zone. The chart is the whole view:
+the record list drawer at the left starts closed (**Show timeline items** opens
+it), beside **Today**, grid settings and zoom controls. A bar shows its record's
+name, then, as room allows, its times (**9:30 AM – 4 PM** within a day,
+**Oct 9, 10:30 AM → Oct 13, 5 PM** across days; all-day bars show none), then
+its bar fields separated by middots. What does not fit drops whole from the
+end (fields first, then times); only a name longer than its bar is cut short.
+Records with an empty range show a dashed chip with their name and **No
+dates** in their row at today (now at hours zoom), kept at the nearest visible
+edge when today is scrolled away; ungrouped, they sit under an **Undated**
+heading. Clicking a bar or chip, or Enter on it (they are focusable in row
+order), opens its record.
+The **Timeline menu** (the **⋯** above the chart, for anyone who can change the
+view) chooses **Time range** (which time-range column the bars span), **Bar label**
+(the column each record is named by, the table's first by default), **Bar
+fields** (other columns shown after the name, in the order turned on), **Group
+by** (**None**, or a single select or single person) and **Color by** (**None**,
+or a select or tag column). A colored bar takes its option's color as a soft
+fill with a solid left edge; a multi-valued cell tints by its first colored
+option and shows the others as dots at the bar's right end, and an empty cell
+or a removed or uncolored option stays neutral. A grouped timeline lists
+every option as a collapsible group, even an empty one, then the records with no
+value; undated records stay in their group. Zooming in
+(Ctrl/Cmd-scroll, the zoom buttons, or **Hours** under settings' **Period**)
+continues past days into hours: the header shows each day (**Fri, Oct 9**) above
+hour ticks that thin out as you zoom out, midnights draw a stronger line, nights
+and weekends are faintly shaded, and the today line becomes a now line with the
+current time. **Today** then centers on the current time. Editors can drag a bar
+to move it, or drag its left or right edge to change its start or end; the range
+saves when released, and Escape cancels, with both ends shown while dragging.
+All-day bars always move by whole days and stay all day. Bars with times move by
+whole days at week and month zoom (keeping their times), by hours at day zoom
+and by 15 minutes at hours zoom. Dragging a chip across gives its record dates:
+the day it is dropped on, or an hour at hours zoom. On a grouped timeline, a
+drag that starts mostly up or down moves the bar or chip into the group it is
+dropped on (highlighted while dragging) instead of rescheduling it; with the
+drawer open, a record's name drags between groups too. On touch, press and hold
+a bar before dragging it; a moving touch scrolls. Drag across empty space in the
+chart to create a record spanning those days, or at hours zoom those times in
+15-minute steps; it opens once saved.
+Right-clicking a bar, a chip or (drawer open) a record's name, or Shift+F10 /
+the menu key on a focused one, opens its menu: **Open record**, **Edit time
+range…** (the cell's date/time fields beside the bar), **Rename** (a name field over the
+bar; Enter or leaving it saves, Escape cancels), **Move to group** (grouped
+timelines; listed inline on phones), **Remove dates** or, on a chip, **Add
+dates** (all day today), **Duplicate** and **Delete record** (confirmed first).
+Viewers see only **Open record**. On touch, a **⋯** button at a bar's right end
+opens the same menu. Right-clicking empty chart space offers editors **New
+record here**: that day, or an hour at hours zoom, in the group of the row
+clicked. The toolbar's **New** creates
+a record spanning today and opens it. The date-range column cannot be deleted or
+retyped while a timeline spans it; deleting the grouping, coloring or a bar
+field column only drops it from the timeline.
 
 Creating or changing a record can make it fall outside the current
 filters. A saved-record notice offers **Open record** to inspect it without

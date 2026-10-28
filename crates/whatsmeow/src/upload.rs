@@ -18,6 +18,7 @@ use base64::engine::general_purpose::{URL_SAFE, URL_SAFE_NO_PAD};
 use hmac::{Hmac, Mac};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
+use tracing::Instrument;
 
 use crate::download::{MEDIA_HMAC_LENGTH, MediaHttpClient, MediaType, get_media_keys};
 use crate::mediaconn::MediaConn;
@@ -98,9 +99,18 @@ pub async fn upload(
     app_info: MediaType,
 ) -> Result<UploadResponse, UploadError> {
     let media_key: [u8; 32] = rand::random();
-    let (mut resp, data_to_upload) = encrypt_media(plaintext, &media_key, app_info)?;
+    // Macro addition: encrypt and HTTP upload as child spans.
+    let (mut resp, data_to_upload) = tracing::info_span!("whatsmeow.media.encrypt")
+        .in_scope(|| encrypt_media(plaintext, &media_key, app_info))?;
     let file_enc_sha256 = resp.file_enc_sha256.clone();
-    raw_upload(
+    let upload_span = tracing::info_span!(
+        "whatsmeow.media.upload_http",
+        size = data_to_upload.len(),
+        outcome = tracing::field::Empty,
+        status_code = tracing::field::Empty,
+        otel.status_code = tracing::field::Empty,
+    );
+    let uploaded = raw_upload(
         http,
         media_conn,
         data_to_upload,
@@ -109,7 +119,13 @@ pub async fn upload(
         false,
         &mut resp,
     )
-    .await?;
+    .instrument(upload_span.clone())
+    .await;
+    if let Err(UploadError::Status(status)) = &uploaded {
+        upload_span.record("status_code", status);
+    }
+    crate::telemetry::record_result(&upload_span, &uploaded);
+    uploaded?;
     Ok(resp)
 }
 

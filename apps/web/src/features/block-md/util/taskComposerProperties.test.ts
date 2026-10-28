@@ -106,6 +106,24 @@ it('skips the check without a project', async () => {
   expect(mock.properties).not.toHaveBeenCalled();
 });
 
+it('confirms creation before waiting for a project membership read', async () => {
+  mock.create.mockResolvedValue({ documentId: 'task' });
+  const projectRead = Promise.withResolvers<[]>();
+  const confirmed = Promise.withResolvers<string>();
+  mock.properties.mockReturnValue(projectRead.promise);
+  const creating = createTaskWithProperties(
+    'Ship it',
+    '',
+    [[SYSTEM_PROPERTY_IDS.PROJECT, taskComposerProjectValue('project')]],
+    new Map(),
+    vi.fn(),
+    { onCreated: (task) => confirmed.resolve(task.documentId) }
+  );
+  expect(await confirmed.promise).toBe('task');
+  projectRead.resolve([]);
+  expect(await creating).toEqual({ documentId: 'task' });
+});
+
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import {
   taskComposerVisiblePropertyIds,
@@ -307,4 +325,16 @@ it('retains a created single-select definition when the definition query fails',
   } finally {
     dispose();
   }
+});
+
+it('lets the composer own failed-create feedback without silencing other callers', async () => {
+  mock.create.mockResolvedValue(null);
+  expect(
+    await createTaskWithProperties('Draft', '', [], new Map(), vi.fn(), {
+      showFailureToast: false,
+    })
+  ).toBeNull();
+  expect(mock.failure).not.toHaveBeenCalled();
+  expect(await create()).toBeNull();
+  expect(mock.failure).toHaveBeenCalledExactlyOnceWith('Failed to create Task');
 });

@@ -46,6 +46,7 @@ function toRoutine(schedule: ScheduledAction): RoutineSnapshot {
       schedule.run_visibility,
     ]),
     draft: draftFromSchedule(schedule),
+    templateId: schedule.template_id ?? undefined,
   };
 }
 

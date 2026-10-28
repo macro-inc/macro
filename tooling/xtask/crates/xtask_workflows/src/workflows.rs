@@ -24,6 +24,7 @@ mod cargo_deny;
 mod cargo_workspace_dependency_check;
 mod check_generated;
 mod check_node_modules_nix;
+mod check_tauri_lockfiles;
 mod cla;
 mod cleanup_preview;
 mod code_check_cloud_storage;
@@ -47,6 +48,7 @@ mod ios_release_drift;
 mod ios_release_watch;
 mod native_check_label;
 mod path_validation;
+mod pr_privacy_check;
 mod publish_sdk;
 mod pulumi_preview_pr;
 mod push_local_stack_binaries;
@@ -286,6 +288,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         render_yaml: || render_gh_workflow(ios_preview::ios_preview)(),
     },
     WorkflowFile {
+        slug: "pr_privacy_check",
+        file_name: "pr-privacy-check.yml",
+        render_yaml: || render_gh_workflow(pr_privacy_check::pr_privacy_check)(),
+    },
+    WorkflowFile {
         slug: "push_local_stack_binaries",
         file_name: "push_local_stack_binaries.yml",
         render_yaml: || render_gh_workflow(push_local_stack_binaries::push_local_stack_binaries)(),
@@ -374,6 +381,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "check_node_modules_nix",
         file_name: "check_node_modules_nix.yml",
         render_yaml: || render_gh_workflow(check_node_modules_nix::check_node_modules_nix)(),
+    },
+    WorkflowFile {
+        slug: "check_tauri_lockfiles",
+        file_name: "check_tauri_lockfiles.yml",
+        render_yaml: || render_gh_workflow(check_tauri_lockfiles::check_tauri_lockfiles)(),
     },
     WorkflowFile {
         slug: "check_generated",

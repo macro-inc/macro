@@ -163,7 +163,7 @@ async fn throttling_respects_provider_retry_after() {
         error,
         EmailApiError::RateLimited {
             retry_after: Some(Duration::from_secs(17)),
-            origin: RateLimitOrigin::Provider
+            origin: RateLimitOrigin::Provider { concurrency: false }
         }
     );
 }

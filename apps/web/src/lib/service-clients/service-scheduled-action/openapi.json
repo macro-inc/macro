@@ -602,6 +602,281 @@
           }
         }
       }
+    },
+    "/scheduled-actions/{id}/template": {
+      "get": {
+        "tags": ["scheduled actions"],
+        "operationId": "get_scheduled_action_template",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the shared routine",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoutineTemplate"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The routine is not shared",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["scheduled actions"],
+        "operationId": "share_scheduled_action_template",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the routine to share",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShareRoutineTemplate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoutineTemplate"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["scheduled actions"],
+        "operationId": "unshare_scheduled_action_template",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the shared routine",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scheduled-actions/{id}/template/activate": {
+      "post": {
+        "tags": ["scheduled actions"],
+        "operationId": "activate_scheduled_action_template",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the shared routine",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateScheduledAction"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduledActionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The routine is not shared",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1051,6 +1326,65 @@
         "type": "string",
         "description": "A nonblank model identifier. Runtime catalogs, not the scheduler, own availability."
       },
+      "RoutineTemplate": {
+        "type": "object",
+        "description": "A shared routine's snapshot, readable by any signed-in user with its ID.",
+        "required": [
+          "id",
+          "author",
+          "name",
+          "description",
+          "trigger",
+          "task",
+          "variables",
+          "active_count",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "active_count": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Routines activated from this template, including stopped ones.",
+            "minimum": 0
+          },
+          "author": {
+            "type": "string",
+            "description": "Who shared it: the source routine's owner."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "description": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The routine it was shared from."
+          },
+          "name": {
+            "type": "string"
+          },
+          "task": {
+            "type": "object"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/ActionTrigger"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "variables": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TemplateVariable"
+            }
+          }
+        }
+      },
       "RoutineTrigger": {
         "oneOf": [
           {
@@ -1163,6 +1497,11 @@
           "task": {
             "type": "object"
           },
+          "template_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The shared template this routine was activated from, if any."
+          },
           "trigger": {
             "$ref": "#/components/schemas/ActionTrigger"
           },
@@ -1273,6 +1612,89 @@
         },
         "additionalProperties": false
       },
+      "ShareRoutineTemplate": {
+        "type": "object",
+        "description": "What the owner supplies when sharing; the rest is snapshotted from the routine.",
+        "required": ["description", "variables"],
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "variables": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TemplateVariable"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "TemplateVariable": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A person mentioned in the instructions, by their user ID.",
+            "required": ["id", "label", "fill", "kind"],
+            "properties": {
+              "fill": {
+                "$ref": "#/components/schemas/VariableFill"
+              },
+              "id": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["user"]
+              },
+              "label": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A document, channel or other item mentioned in the instructions.",
+            "required": ["id", "block_name", "label", "fill", "kind"],
+            "properties": {
+              "block_name": {
+                "type": "string",
+                "description": "The mention's block name, such as `channel` or `md`."
+              },
+              "fill": {
+                "$ref": "#/components/schemas/VariableFill"
+              },
+              "id": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["item"]
+              },
+              "label": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The time zone of the routine's schedules.",
+            "required": ["timezone", "fill", "kind"],
+            "properties": {
+              "fill": {
+                "$ref": "#/components/schemas/VariableFill"
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["time_zone"]
+              },
+              "timezone": {
+                "type": "string"
+              }
+            }
+          }
+        ],
+        "description": "A user-specific part of a shared routine."
+      },
       "UpdateScheduledAction": {
         "oneOf": [
           {
@@ -1283,6 +1705,11 @@
           }
         ],
         "description": "Full replacement of client configuration, not of server-owned action state."
+      },
+      "VariableFill": {
+        "type": "string",
+        "description": "How a variable is filled when someone activates the template.",
+        "enum": ["activator", "shared", "choice"]
       }
     }
   },

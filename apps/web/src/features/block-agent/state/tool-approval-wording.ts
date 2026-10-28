@@ -140,6 +140,7 @@ const MACRO_TOOLS: Record<MacroToolName, Wording | null> = {
   UpdateAgentSessionSharing: (whose) => `change ${whose} session sharing`,
   ReadAgentSession: (whose) => `read ${whose} agent sessions`,
   ReadChat: (whose) => `read ${whose} chats`,
+  ReadCodeDocs: null,
   ReadCanvas: (whose) => `read ${whose} canvases`,
   RenderCanvas: (whose) => `view ${whose} canvases`,
   ReadContent: (whose) => `read ${whose} documents`,

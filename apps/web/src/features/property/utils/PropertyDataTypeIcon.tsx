@@ -2,6 +2,7 @@ import ContactIcon from '@icon/system/regular/address-book.svg';
 import CompanyIcon from '@icon/system/regular/building.svg';
 import CalculatorIcon from '@icon/system/regular/calculator.svg';
 import CalendarBlankIcon from '@icon/system/regular/calendar-blank.svg';
+import CalendarDotsIcon from '@icon/system/regular/calendar-dots.svg';
 import ChatIcon from '@icon/system/regular/chat.svg';
 import CheckSquareIcon from '@icon/system/regular/check-square.svg';
 import ThreadIcon from '@icon/system/regular/envelope.svg';
@@ -55,6 +56,7 @@ export const PropertyDataTypeIcon: Component<{
       .with('NUMBER', () => CalculatorIcon)
       .with('BOOLEAN', () => CheckSquareIcon)
       .with('DATE', () => CalendarBlankIcon)
+      .with('DATE_RANGE', () => CalendarDotsIcon)
       .with('LINK', () => LinkIcon)
       .with('SELECT_STRING', () => ListBulletIcon)
       .with('SELECT_NUMBER', () => ListBulletIcon)

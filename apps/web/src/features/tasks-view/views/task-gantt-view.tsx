@@ -96,6 +96,7 @@ export function TaskGanttView(props: {
           >
             Tasks couldn’t be loaded.
             <Button
+              variant="ghost"
               onClick={() =>
                 fireAndForget(props.source.refresh?.(), 'tasks-view')
               }

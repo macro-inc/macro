@@ -36,6 +36,7 @@
 - [CreatePropertyDefinitionResponses](type-aliases/CreatePropertyDefinitionResponses.md)
 - [CreatePropertyScope](type-aliases/CreatePropertyScope.md)
 - [DataType](type-aliases/DataType.md)
+- [DateRange](type-aliases/DateRange.md)
 - [DeleteEntityPropertyData](type-aliases/DeleteEntityPropertyData.md)
 - [DeleteEntityPropertyErrors](type-aliases/DeleteEntityPropertyErrors.md)
 - [DeleteEntityPropertyResponse](type-aliases/DeleteEntityPropertyResponse.md)

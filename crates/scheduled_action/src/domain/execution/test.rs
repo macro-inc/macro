@@ -2,7 +2,7 @@ use super::*;
 use crate::domain::event_runs::{
     AuthorizedEventRun, ClaimToken, ConfigurationRevision, PendingEventRun,
 };
-use crate::domain::event_trigger::EventReference;
+use crate::domain::event_trigger::{EventName, EventReference};
 use crate::domain::models::{ActionKind, ExecutionResourceType, RunVisibility};
 use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -331,6 +331,7 @@ fn action() -> ScheduledAction {
         created_at: Utc::now(),
         updated_at: Utc::now(),
         run_visibility: RunVisibility::Unlisted,
+        template_id: None,
     }
 }
 fn executor(repo: Repo, runner: Runner) -> InProcessExecutor<Repo, Live, Runner> {
@@ -833,4 +834,114 @@ async fn event_cancellation_is_terminal_interruption() {
     let result = executor.execute(&event_run(), async {}).await;
     assert_eq!(result.outcome, EventRunOutcome::Interrupted);
     assert_eq!(executor.runner.calls.load(Ordering::SeqCst), 0);
+}
+
+#[derive(Default)]
+struct Observer(Mutex<Vec<FinishedRoutineRun>>);
+impl RoutineRunObserver for Observer {
+    fn run_finished(&self, run: FinishedRoutineRun) {
+        self.0.lock().unwrap().push(run);
+    }
+}
+
+fn observed(
+    executor: InProcessExecutor<Repo, Live, Runner>,
+) -> (InProcessExecutor<Repo, Live, Runner>, Arc<Observer>) {
+    let observer = Arc::new(Observer::default());
+    (executor.with_observer(observer.clone()), observer)
+}
+
+fn ends(observer: &Observer) -> Vec<(RunTrigger, RunTarget, RunEnd)> {
+    observer
+        .0
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|run| (run.trigger, run.target, run.end))
+        .collect()
+}
+
+#[tokio::test]
+async fn due_and_manual_runs_are_reported_once_with_their_trigger() {
+    let mut manual = action();
+    manual.next_run_at = Some(Utc::now() + chrono::Duration::hours(1));
+    for (action, trigger) in [
+        (action(), RunTrigger::Scheduled),
+        (manual, RunTrigger::Manual),
+    ] {
+        let (executor, observer) = observed(executor(Repo::default(), Runner::default()));
+        executor.runner.finish.cancel();
+        executor.execute_action(action.clone()).await.unwrap();
+        drain(&executor).await;
+        assert_eq!(
+            ends(&observer),
+            [(trigger, RunTarget::Model, RunEnd::Succeeded)]
+        );
+        let runs = observer.0.lock().unwrap();
+        assert_eq!(runs[0].owner.as_ref(), USER);
+        assert_eq!(Some(runs[0].routine_id), action.id);
+    }
+}
+
+#[tokio::test]
+async fn failed_and_refused_runs_report_how_they_ended() {
+    let (failing, observer) = observed(executor(
+        Repo::default(),
+        Runner {
+            fail_run: true,
+            ..Runner::default()
+        },
+    ));
+    failing.runner.finish.cancel();
+    failing.execute_action(action()).await.unwrap();
+    drain(&failing).await;
+    assert_eq!(ends(&observer)[0].2, RunEnd::Failed);
+
+    for (error, end) in admission_failures()
+        .into_iter()
+        .zip([RunEnd::AiLimitReached, RunEnd::Failed])
+    {
+        let (executor, observer) = observed(
+            executor(Repo::default(), Runner::default()).with_admission(admission(Err(error))),
+        );
+        let _ = executor.execute_action(action()).await;
+        drain(&executor).await;
+        assert_eq!(
+            ends(&observer),
+            [(RunTrigger::Scheduled, RunTarget::Model, end)]
+        );
+    }
+}
+
+#[tokio::test]
+async fn interrupted_runs_are_reported_as_interrupted() {
+    let (executor, observer) = observed(executor(Repo::default(), Runner::default()));
+    executor.execute_action(action()).await.unwrap();
+    executor.cancellation.cancel();
+    drain(&executor).await;
+    assert_eq!(ends(&observer)[0].2, RunEnd::Interrupted);
+}
+
+#[tokio::test]
+async fn event_runs_report_the_event_that_fired_them() {
+    let (executor, observer) = observed(executor(Repo::default(), Runner::default()));
+    executor.runner.finish.cancel();
+    executor.execute(&event_run(), std::future::pending()).await;
+    assert_eq!(
+        ends(&observer),
+        [(
+            RunTrigger::Event(EventName::DocumentUpdated),
+            RunTarget::Model,
+            RunEnd::Succeeded
+        )]
+    );
+}
+
+#[tokio::test]
+async fn runs_that_never_claim_are_not_reported() {
+    let (executor, observer) = observed(executor(Repo::default(), Runner::default()));
+    *executor.repo.claim.lock().unwrap() = Some(ClaimToken::generate());
+    assert!(executor.execute_action(action()).await.is_err());
+    drain(&executor).await;
+    assert!(observer.0.lock().unwrap().is_empty());
 }

@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import tempfile
+import subprocess
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
+import scan
 from scan import (
     Exceptions,
     iter_diff_findings,
@@ -113,6 +116,51 @@ diff --git a/gone.md b/gone.md
         )
         self.assertEqual(findings[0].kind, "email")
         self.assertEqual(findings[0].path, "<text>")
+
+    def test_added_content_cannot_be_parsed_as_a_file_header(self):
+        diff = """diff --git a/note.md b/note.md
+--- a/note.md
++++ b/note.md
+@@ -0,0 +1,2 @@
++++ ada@customers-inc.com
++more ada@customers-inc.com
+"""
+        findings = list(iter_diff_findings(diff, Exceptions(set(), set(), set())))
+        self.assertEqual([(f.path, f.line_no) for f in findings], [("note.md", 1), ("note.md", 2)])
+
+    def test_reports_do_not_expose_matched_values(self):
+        findings = scan_text("ada@customers-inc.com", Exceptions(set(), set(), set()))
+        self.assertEqual(findings[0].render(), "<text>:1: email [redacted]")
+
+
+class GitDiffTest(unittest.TestCase):
+    def test_staged_rename_is_scanned_without_a_remote_base(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(scan.os.environ, {"CHECK_BASE": ""}):
+            root = Path(tmp)
+            subprocess.run(["git", "init", "-q", tmp], check=True)
+            original = root / "original.md"
+            original.write_text("safe content\n" * 20, encoding="utf-8")
+            subprocess.run(["git", "-C", tmp, "add", "."], check=True)
+            subprocess.run([
+                "git", "-C", tmp, "-c", "user.name=Test", "-c", "user.email=user@example.com",
+                "-c", "core.hooksPath=/dev/null", "commit", "-qm", "initial",
+            ], check=True)
+            renamed = root / "renamed.md"
+            original.rename(renamed)
+            with renamed.open("a", encoding="utf-8") as file:
+                file.write("ada@customers-inc.com\n")
+            subprocess.run(["git", "-C", tmp, "add", "-A"], check=True)
+            with patch.object(scan, "ROOT", root):
+                for diff in (scan.staged_diff(), scan.changed_diff()):
+                    findings = list(iter_diff_findings(diff, Exceptions(set(), set(), set())))
+                    self.assertEqual([(f.path, f.kind) for f in findings], [("renamed.md", "email")])
+
+    def test_git_errors_fail_the_scan(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(scan, "ROOT", Path(tmp)):
+            with self.assertRaises(subprocess.CalledProcessError):
+                scan.staged_diff()
+            with self.assertRaises(subprocess.CalledProcessError):
+                scan.changed_diff()
 
 
 if __name__ == "__main__":

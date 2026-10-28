@@ -502,7 +502,12 @@ export type FailureNoticeKind =
    */
   | 'provider_usage_limit'
   /**  The selected model cannot read image attachments in this conversation. */
-  | 'unsupported_image_input';
+  | 'unsupported_image_input'
+  /**
+   *  The provider ended the run in failure; its own page for the run is
+   *  where any detail it kept lives.
+   */
+  | 'provider_run_failed';
 
 /**  A file modification a tool reported. */
 export type FileDiff = {

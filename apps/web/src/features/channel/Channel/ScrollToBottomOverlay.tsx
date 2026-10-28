@@ -46,17 +46,20 @@ export function ScrollToBottomOverlay(props: ScrollToBottomOverlayProps) {
             </button>
           }
         >
-          <MobileDockIsland
+          <div
+            data-scroll-to-bottom
             class="absolute z-10 right-[calc(var(--safe-right,0px)+var(--mobile-chrome-gutter))]"
             style={{ bottom: `${FloatRegions.hostHeight() + 12}px` }}
           >
-            <MobileDockButton
-              icon={ArrowDown}
-              ariaLabel="Jump to latest"
-              data-keep-keyboard
-              onClick={() => props.onScrollToBottom('smooth')}
-            />
-          </MobileDockIsland>
+            <MobileDockIsland>
+              <MobileDockButton
+                icon={ArrowDown}
+                ariaLabel="Jump to latest"
+                data-keep-keyboard
+                onClick={() => props.onScrollToBottom('smooth')}
+              />
+            </MobileDockIsland>
+          </div>
         </Show>
       </Layer>
     </Show>

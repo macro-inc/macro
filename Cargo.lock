@@ -446,10 +446,12 @@ dependencies = [
  "entity_access_db_utils",
  "entity_registry",
  "entity_registry_db_utils",
+ "feature_flags",
  "futures",
  "genai_telemetry",
  "github",
  "harness_id",
+ "jev",
  "kafka_util",
  "lexical_client",
  "macro_authorization",
@@ -672,6 +674,7 @@ dependencies = [
  "tracing",
  "trigger_context",
  "unfurl_service",
+ "universal_input",
  "url",
  "utoipa",
  "utoipa-swagger-ui",
@@ -827,6 +830,7 @@ dependencies = [
  "entity_registry_db_utils",
  "genai_telemetry",
  "harness_id",
+ "jev",
  "lazy-regex",
  "macro_authorization",
  "macro_db_migrator",
@@ -1023,6 +1027,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "tracing-subscriber",
  "utoipa",
  "wiremock",
  "workspace-hack",
@@ -2233,6 +2238,7 @@ dependencies = [
  "tracing",
  "url",
  "urlencoding",
+ "user_language",
  "user_quota",
  "utoipa",
  "utoipa-swagger-ui",
@@ -3121,6 +3127,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "backon"
+version = "1.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cffb0e931875b666fc4fcb20fee52e9bbd1ef836fd9e9e04ec21555f9f85f7ef"
+dependencies = [
+ "fastrand 2.4.1",
+]
+
+[[package]]
 name = "base16ct"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3804,6 +3819,7 @@ dependencies = [
  "urlencoding",
  "utoipa",
  "uuid",
+ "wiremock",
  "workspace-hack",
 ]
 
@@ -4569,6 +4585,7 @@ dependencies = [
  "futures",
  "harness_id",
  "harnesses",
+ "lazy-regex",
  "macro_env_var",
  "macro_event_broker",
  "macro_user_id",
@@ -4774,6 +4791,7 @@ dependencies = [
  "notification",
  "predicate-index",
  "rootcause",
+ "saved_views",
  "scheduled_action",
  "serde",
  "serde_json",
@@ -4887,6 +4905,7 @@ dependencies = [
  "model-entity",
  "models_bulk_upload",
  "opentelemetry",
+ "postcard",
  "redis",
  "secretsmanager_client",
  "serde",
@@ -4927,7 +4946,9 @@ dependencies = [
 name = "connection_gateway_models"
 version = "0.1.0"
 dependencies = [
+ "macro_user_id",
  "model-entity",
+ "postcard",
  "serde",
  "serde_json",
  "utoipa",
@@ -6447,6 +6468,7 @@ dependencies = [
  "axum",
  "axum-extra",
  "base64 0.22.1",
+ "bebop",
  "bot_id",
  "bots",
  "bytes",
@@ -6456,6 +6478,7 @@ dependencies = [
  "call",
  "channel_bots",
  "channel_labels",
+ "channel_sender",
  "channels",
  "chat",
  "chrono",
@@ -6485,6 +6508,7 @@ dependencies = [
  "entity_mutation",
  "entity_registry",
  "entity_registry_db_utils",
+ "external_chat",
  "favorites",
  "flate2",
  "foreign_entity",
@@ -6548,6 +6572,7 @@ dependencies = [
  "models_soup",
  "notification",
  "opensearch_client",
+ "opentelemetry",
  "ordered-float",
  "projects",
  "properties",
@@ -6577,6 +6602,8 @@ dependencies = [
  "sqs_client",
  "sqs_worker",
  "static_file_service_client",
+ "sync_router",
+ "sync_service_bebop_schema",
  "sync_service_client",
  "sync_service_hex",
  "system_properties",
@@ -6585,10 +6612,12 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tokio-tungstenite 0.27.0",
+ "tokio-tungstenite 0.28.0",
  "tokio-util",
  "tower 0.5.3",
  "tower-http",
  "tracing",
+ "tracing-opentelemetry",
  "tungstenite 0.27.0",
  "unicode-segmentation",
  "urlencoding",
@@ -6597,6 +6626,7 @@ dependencies = [
  "utoipa-swagger-ui",
  "uuid",
  "webhook",
+ "whatsapp_linked",
  "work_feed",
  "workspace-hack",
  "zip 9.0.5",
@@ -6726,6 +6756,7 @@ dependencies = [
  "comms_db_client",
  "connection",
  "document_sub_type",
+ "docx_engine",
  "dotenvy",
  "embedding",
  "entity_access",
@@ -6743,6 +6774,7 @@ dependencies = [
  "jsonwebtoken 10.3.0",
  "kafka_util",
  "lexical_client",
+ "loro",
  "macro_authorization",
  "macro_aws_config",
  "macro_db_client",
@@ -7210,6 +7242,8 @@ dependencies = [
  "http 1.4.0",
  "httpdate",
  "lol_html",
+ "macro_db_migrator",
+ "macro_event_broker",
  "mail-builder",
  "mailparse",
  "models_email",
@@ -7219,6 +7253,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "sqlx",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -7391,6 +7426,7 @@ dependencies = [
  "models_properties",
  "notification",
  "once_cell",
+ "rand 0.9.4",
  "redis",
  "regex",
  "reqwest 0.13.4",
@@ -7840,6 +7876,38 @@ name = "extended"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "af9673d8203fcb076b19dfd17e38b3d4ae9f44959416ea532ce72415a6020365"
+
+[[package]]
+name = "external_chat"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "chrono",
+ "entity_access",
+ "entity_access_db_utils",
+ "image",
+ "macro_authorization",
+ "macro_user_id",
+ "model-entity",
+ "models_permissions",
+ "nom 8.0.0",
+ "opentelemetry",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "share_permission_db_utils",
+ "sqlx",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "tracing-opentelemetry",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
 
 [[package]]
 name = "fallible-iterator"
@@ -13026,6 +13094,9 @@ version = "0.1.0"
 dependencies = [
  "macro_user_id",
  "serde",
+ "serde_json",
+ "sqlx",
+ "strum 0.27.2",
  "utoipa",
  "uuid",
  "workspace-hack",
@@ -13057,6 +13128,7 @@ dependencies = [
  "fractional_index",
  "macro_user_id",
  "macro_uuid",
+ "nom 8.0.0",
  "schemars 1.2.1",
  "serde",
  "serde_json",
@@ -14990,9 +15062,11 @@ dependencies = [
  "async-trait",
  "axum",
  "base64 0.22.1",
+ "chrono",
  "futures",
  "http 1.4.0",
  "macro_authorization",
+ "macro_db_migrator",
  "macro_user_id",
  "mcp_toolset",
  "model-error-response",
@@ -16212,12 +16286,15 @@ version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72d32a1ac9123f0d84fda64bfc02a271d9868483162dd2d9099b5c362ece064c"
 dependencies = [
+ "arc-swap",
  "arcstr",
  "async-lock",
+ "backon",
  "bytes",
  "cfg-if",
  "combine",
  "crc16",
+ "futures-channel",
  "futures-util",
  "itoa",
  "log",
@@ -17107,11 +17184,16 @@ dependencies = [
 name = "saved_views"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "chrono",
+ "macro_db_migrator",
  "macro_uuid",
+ "rootcause",
  "serde",
  "serde_json",
  "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
  "tracing",
  "utoipa",
  "uuid",
@@ -19427,6 +19509,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "sync_router"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bebop",
+ "futures",
+ "mockall",
+ "opentelemetry",
+ "rustls",
+ "sync_service_bebop_schema",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-tungstenite 0.28.0",
+ "tokio-util",
+ "tracing",
+ "tracing-opentelemetry",
+ "url",
+ "webpki-roots 1.0.10",
+ "workspace-hack",
+]
+
+[[package]]
 name = "sync_service"
 version = "0.1.0"
 dependencies = [
@@ -20806,6 +20910,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "universal_input"
+version = "0.1.0"
+dependencies = [
+ "agent",
+ "ai_billing",
+ "ai_usage",
+ "axum",
+ "chrono",
+ "chrono-tz",
+ "futures",
+ "jev",
+ "macro_authorization",
+ "macro_env_var",
+ "macro_tower_layers",
+ "macro_user_id",
+ "model_user",
+ "reqwest 0.13.4",
+ "rootcause",
+ "schemars 1.2.1",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower 0.5.3",
+ "tracing",
+ "utoipa",
+ "wiremock",
+ "workspace-hack",
+]
+
+[[package]]
 name = "unsafe-libyaml"
 version = "0.2.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -20927,6 +21063,25 @@ dependencies = [
  "tracing",
  "utoipa",
  "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "user_language"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_user_id",
+ "model-error-response",
+ "model_user",
+ "rootcause",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "utoipa",
  "workspace-hack",
 ]
 
@@ -21568,6 +21723,32 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a28ac98ddc8b9274cb41bb4d9d4d5c425b6020c50c46f25559911905610b4a88"
 
 [[package]]
+name = "whatsapp_e2e"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "entity_access",
+ "entity_access_db_utils",
+ "external_chat",
+ "macro_db_migrator",
+ "macro_user_id",
+ "sqlx",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "uuid",
+ "whatsapp_fake_server",
+ "whatsapp_linked",
+ "whatsapp_session_service",
+ "whatsapp_store_pg",
+ "whatsmeow",
+ "whatsmeow_signal",
+ "workspace-hack",
+ "zeroize",
+]
+
+[[package]]
 name = "whatsapp_fake_server"
 version = "0.1.0"
 dependencies = [
@@ -21576,6 +21757,7 @@ dependencies = [
  "axum",
  "base64 0.22.1",
  "chrono",
+ "flate2",
  "futures",
  "hmac 0.12.1",
  "nom 8.0.0",
@@ -21592,6 +21774,108 @@ dependencies = [
  "whatsmeow",
  "whatsmeow_signal",
  "workspace-hack",
+]
+
+[[package]]
+name = "whatsapp_linked"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "chrono",
+ "entity_access",
+ "entity_access_db_utils",
+ "entity_registry_db_utils",
+ "external_chat",
+ "harness_id",
+ "image",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_user_id",
+ "model-entity",
+ "model_owner",
+ "model_user",
+ "models_permissions",
+ "nom 8.0.0",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "share_permission_db_utils",
+ "sqlx",
+ "strum 0.27.2",
+ "tokio",
+ "tower 0.5.3",
+ "tracing",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "whatsapp_session_service"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "aws-sdk-kms",
+ "axum",
+ "chrono",
+ "database_env_vars",
+ "doppler-config",
+ "external_chat",
+ "futures",
+ "macro_aws_config",
+ "macro_config",
+ "macro_db_migrator",
+ "macro_entrypoint",
+ "macro_env",
+ "macro_service_urls",
+ "nom 8.0.0",
+ "rootcause",
+ "rustls",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+ "whatsapp_fake_server",
+ "whatsapp_linked",
+ "whatsapp_store_pg",
+ "whatsmeow",
+ "whatsmeow_signal",
+ "workspace-hack",
+]
+
+[[package]]
+name = "whatsapp_store_pg"
+version = "0.1.0"
+dependencies = [
+ "aes-gcm 0.10.3",
+ "async-trait",
+ "aws-sdk-kms",
+ "chrono",
+ "futures",
+ "hex",
+ "macro_db_migrator",
+ "postcard",
+ "prost 0.14.3",
+ "rand 0.9.4",
+ "rootcause",
+ "serde",
+ "sqlx",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "uuid",
+ "whatsmeow",
+ "workspace-hack",
+ "zeroize",
 ]
 
 [[package]]
@@ -21628,6 +21912,7 @@ dependencies = [
  "tokio-tungstenite 0.28.0",
  "tokio-util",
  "tracing",
+ "tracing-subscriber",
  "uuid",
  "whatsmeow_proto",
  "workspace-hack",

@@ -87,7 +87,7 @@ class Finding:
 
     def render(self) -> str:
         location = self.path if self.line_no <= 0 else f"{self.path}:{self.line_no}"
-        return f"{location}: {self.kind} {self.value}"
+        return f"{location}: {self.kind} [redacted]"
 
 
 @dataclass
@@ -181,11 +181,13 @@ def parse_unified_diff(diff: str) -> list[Finding]:
 def iter_diff_findings(diff: str, exceptions: Exceptions) -> Iterable[Finding]:
     path = ""
     new_line_no = 0
+    in_hunk = False
     for raw in diff.splitlines():
         if raw.startswith("diff --git "):
             path = ""
+            in_hunk = False
             continue
-        if raw.startswith("+++ "):
+        if not in_hunk and raw.startswith("+++ "):
             plus_path = raw[4:]
             if plus_path == "/dev/null":
                 path = ""
@@ -193,12 +195,13 @@ def iter_diff_findings(diff: str, exceptions: Exceptions) -> Iterable[Finding]:
             path = plus_path[2:] if plus_path.startswith("b/") else plus_path
             continue
         if raw.startswith("@@"):
+            in_hunk = True
             match = re.search(r"\+(\d+)", raw)
             new_line_no = int(match.group(1)) if match else 0
             continue
         if not path or skip_path(path) or raw.startswith("Binary files "):
             continue
-        if raw.startswith("+") and not raw.startswith("+++"):
+        if in_hunk and raw.startswith("+"):
             yield from scan_line(path, new_line_no, raw[1:], exceptions)
             new_line_no += 1
         elif raw.startswith("-") and not raw.startswith("---"):
@@ -218,7 +221,8 @@ def git(*args: str) -> subprocess.CompletedProcess[str]:
 
 
 def staged_diff() -> str:
-    result = git("diff", "--cached", "-U0", "--diff-filter=AM", "--no-color")
+    result = git("diff", "--cached", "-U0", "--diff-filter=AMR", "--no-color")
+    result.check_returncode()
     return result.stdout
 
 
@@ -228,11 +232,10 @@ def merge_base() -> str:
 
 
 def changed_diff() -> str:
-    base = os.environ.get("CHECK_BASE") or merge_base()
-    args = ["diff", "-U0", "--diff-filter=AM", "--no-color"]
-    if base:
-        args.append(base)
+    base = os.environ.get("CHECK_BASE") or merge_base() or "HEAD"
+    args = ["diff", "-U0", "--diff-filter=AMR", "--no-color", base]
     result = git(*args)
+    result.check_returncode()
     return result.stdout
 
 

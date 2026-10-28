@@ -491,4 +491,12 @@ describe('makeDeleteAction.canExecute', () => {
     expect(canExecute(entity('channel_message'))).toBe(false);
     expect(canExecute(entity('channel_thread'))).toBe(false);
   });
+
+  it('offers only what the delete mutation removes', () => {
+    expect(canExecute(entity('call'))).toBe(true);
+    expect(canExecute(entity('routine'))).toBe(true);
+    expect(canExecute(entity('calendar_event'))).toBe(false);
+    expect(canExecute(entity('initiative'))).toBe(false);
+    expect(canExecute(entity('foreign'))).toBe(false);
+  });
 });

@@ -292,7 +292,7 @@ function ChannelCallsList(props: { channelId: string }) {
                       : 'Calls couldn’t be loaded.'}
                   </span>
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
                     onClick={() =>
                       fireAndForget(source.refresh(), 'channel-calls')
@@ -424,9 +424,8 @@ function ChannelCallsList(props: { channelId: string }) {
                                   }
                                 >
                                   <Button
-                                    variant="outline"
+                                    variant="secondary"
                                     size="sm"
-                                    depth={2}
                                     disabled={loadMore().isLoading}
                                     class="bg-surface"
                                   >

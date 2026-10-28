@@ -501,6 +501,13 @@ function cell(
       value: dateValue,
     }))
     .with(
+      { __typename: 'GraphqlDateRangePropertyValue' },
+      ({ rangeStart, rangeEnd }) => ({
+        type: 'dateRange',
+        value: { start: rangeStart, end: rangeEnd },
+      })
+    )
+    .with(
       { __typename: 'GraphqlSelectOptionPropertyValue' },
       ({ optionIds }) => ({
         type: 'options',

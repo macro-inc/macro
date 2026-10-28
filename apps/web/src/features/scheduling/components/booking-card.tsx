@@ -371,11 +371,14 @@ export function BookingCard(props: {
           <div class="col-start-1 col-end-3 row-start-3 flex min-w-0 items-center justify-end gap-2 self-start @min-[42rem]/bookings:col-start-3 @min-[42rem]/bookings:col-end-4 @min-[42rem]/bookings:row-start-2">
             <Dropdown>
               <Dropdown.Trigger
+                aria-label={`Options for ${props.booking.name}`}
+                tooltip={{
+                  content: `Options for ${props.booking.name}`,
+                  disabled: true,
+                }}
                 variant="ghost"
                 size="icon-md"
-                label={`Options for ${props.booking.name}`}
                 class="touch:hidden"
-                tooltipDisabled
               >
                 <Dots class="size-4" />
               </Dropdown.Trigger>
@@ -392,10 +395,7 @@ export function BookingCard(props: {
                   href={url()}
                   target="_blank"
                   rel="noopener noreferrer"
-                  class={buttonClasses({
-                    variant: 'outline',
-                    size: 'md',
-                  })}
+                  class={buttonClasses({ variant: 'secondary', size: 'md' })}
                 >
                   <External aria-hidden="true" class="size-3.5" />
                   Join meeting
@@ -408,7 +408,7 @@ export function BookingCard(props: {
               }
             >
               <Button
-                variant="strong"
+                variant="secondary"
                 size="md"
                 disabled={!!props.busyId}
                 onClick={() => props.onApprove(props.booking.id)}

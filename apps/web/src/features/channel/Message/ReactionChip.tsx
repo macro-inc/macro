@@ -1,5 +1,6 @@
 import { touchHandler } from '@core/directive/touchHandler';
 import { idToDisplayName } from '@core/user';
+import { tryMacroId } from '@core/user/macroId';
 import { Popover } from '@kobalte/core/popover';
 import { Button, cn, HoverCard } from '@ui';
 import { createSignal, type JSX, Show } from 'solid-js';
@@ -25,14 +26,23 @@ export function formatReactorNames(
 ): string {
   if (userIds.length === 0) return '';
 
+  // Reactors outside Macro, such as WhatsApp participants, have no name here.
+  const isNamed = (id: string) =>
+    id === currentUserId || tryMacroId(id) !== undefined;
   const ordered = [
     ...userIds.filter((id) => id === currentUserId),
-    ...userIds.filter((id) => id !== currentUserId),
+    ...userIds.filter((id) => id !== currentUserId && isNamed(id)),
   ];
+  const others = userIds.filter((id) => !isNamed(id)).length;
 
-  const names = ordered.map((id) =>
-    id === currentUserId ? 'You' : idToDisplayName(id)
-  );
+  const names = [
+    ...ordered.map((id) =>
+      id === currentUserId ? 'You' : idToDisplayName(id)
+    ),
+    ...(others === 0
+      ? []
+      : [others === 1 ? '1 other person' : `${others} other people`]),
+  ];
 
   if (names.length === 1) return names[0]!;
   if (names.length === 2) return `${names[0]} and ${names[1]}`;
@@ -80,7 +90,6 @@ export function ReactionChip(props: ReactionChipProps) {
             data-emoji={props.emoji}
             data-user-reacted={props.selected ? '' : undefined}
             aria-pressed={!!props.selected}
-            noTouchResize
             ref={(el) =>
               touchHandler(el, () => ({
                 onLongPress: () => {
@@ -90,7 +99,7 @@ export function ReactionChip(props: ReactionChipProps) {
               }))
             }
             size="sm"
-            variant={props.selected ? 'accent' : 'outline'}
+            variant={props.selected ? 'primary' : 'secondary'}
             class={cn(
               'flex flex-row items-center h-7 min-w-7 gap-1',
               !props.interactive && 'pointer-events-auto'

@@ -727,21 +727,27 @@ async fn http_creation_listing_schema_and_records_use_pipeline_access(pool: PgPo
     #[derive(Clone)]
     struct Token;
     impl JwtValidator for Token {
-        fn validate(
+        fn validate_credential(
             &self,
             jwt: &str,
-        ) -> Result<ValidatedIdentity, rootcause::Report<MacroAuthorizationError>> {
+        ) -> Result<
+            macro_authorization::ValidatedCredential,
+            rootcause::Report<MacroAuthorizationError>,
+        > {
             if jwt != "owner" && jwt != "outsider" {
                 return Err(rootcause::Report::new(
                     MacroAuthorizationError::InvalidCredentials,
                 ));
             }
-            Ok(ValidatedIdentity {
-                agent_id: None,
-                user_id: if jwt == "owner" { OWNER } else { OUTSIDER }.into(),
-                fusion_user_id: "test-fusion-user".into(),
-                organization_id: None,
-                permissions: None,
+            Ok(macro_authorization::ValidatedCredential {
+                origin: macro_authorization::CredentialOrigin::Session,
+                identity: ValidatedIdentity {
+                    agent_id: None,
+                    user_id: if jwt == "owner" { OWNER } else { OUTSIDER }.into(),
+                    fusion_user_id: "test-fusion-user".into(),
+                    organization_id: None,
+                    permissions: None,
+                },
             })
         }
     }

@@ -86,11 +86,13 @@ function selectEntryState(state: TasksViewState): TasksEntryState {
   return {
     version: 1,
     layout: state.layout,
-    tab: state.tab,
-    search: state.search,
+    tab: state.savedViewActive ? 'my-tasks' : state.tab,
+    search: state.savedViewActive ? '' : state.search,
     groupBy: state.groupBy,
     sort: state.sort.map((item) => ({ ...item })),
-    facets: normalizeFacetSelection(state.facets),
+    facets: normalizeFacetSelection(
+      state.savedViewActive ? DEFAULT_TASK_FACET_SELECTION : state.facets
+    ),
     collapsedGroupIds: [...state.collapsedGroupIds],
   };
 }
