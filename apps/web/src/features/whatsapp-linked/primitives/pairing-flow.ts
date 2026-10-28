@@ -7,7 +7,6 @@ import {
   onCleanup,
 } from 'solid-js';
 import type {
-  PairingCancelReason,
   PasskeyCeremony,
   StartedPairing,
   WhatsAppLinkedCapabilities,
@@ -39,7 +38,7 @@ export type PairingFlow = {
   /** Answers WhatsApp's passkey challenge on this device. */
   confirmPasskey: () => Promise<void>;
   retry: () => Promise<void>;
-  cancel: (reason: PairingCancelReason) => Promise<void>;
+  cancel: () => Promise<void>;
 };
 
 const visible = () => document.visibilityState === 'visible';
@@ -137,10 +136,7 @@ export function createPairingFlow(
     if (now !== expired) {
       // Closed (or restarted) while the next code was on its way: end it.
       if (started.isOk() && started.value.pairingId !== now)
-        await capabilities.cancelPairing(
-          started.value.pairingId,
-          'expired_roll'
-        );
+        await capabilities.cancelPairing(started.value.pairingId);
       return;
     }
     if (started.isErr()) {
@@ -200,7 +196,7 @@ export function createPairingFlow(
     );
   };
 
-  const cancel = async (reason: PairingCancelReason) => {
+  const cancel = async () => {
     setStartFailed(false);
     const pairing = current();
     const finished =
@@ -208,7 +204,7 @@ export function createPairingFlow(
     setCurrent(undefined);
     if (!pairing || finished) return;
     // The server also expires an abandoned pairing; nothing to recover here.
-    await capabilities.cancelPairing(pairing.pairingId, reason);
+    await capabilities.cancelPairing(pairing.pairingId);
   };
 
   return {

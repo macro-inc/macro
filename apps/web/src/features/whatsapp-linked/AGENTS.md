@@ -52,9 +52,6 @@ own shareable external chat (`POST /external-chats` with `provider:
   and fewer than `AUTO_ROLLS` codes rolled since the last click; otherwise the
   QR square offers **Show a new code**. A pairing that arrives after Cancel is
   cancelled at once.
-- The pairing dialog sets `dismissOnOutside={false}`: an outside click or
-  focus loss must not cancel a pairing mid-scan. Every cancel names its
-  `PairingCancelReason`, recorded on the `whatsapp.cancel_pairing` span.
 - Disconnect results are toasts, not page state.
 - Wire types come from DSS's generated `@service-storage/generated/schemas`
   (`WhatsApp*`, `ExternalChat*`); change `crates/whatsapp_linked` and

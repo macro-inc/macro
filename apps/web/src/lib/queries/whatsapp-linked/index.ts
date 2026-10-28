@@ -94,11 +94,9 @@ export function useDisconnectWhatsappMutation() {
 
 export function useCancelWhatsappPairingMutation() {
   return useMutation(() => ({
-    mutationFn: (input: { pairingId: string; reason: string }) =>
-      whatsappOperation(
-        'cancel_pairing',
-        () => throwOnErr(() => client.cancelPairing(input.pairingId)),
-        { 'whatsapp.cancel_reason': input.reason }
+    mutationFn: (pairingId: string) =>
+      whatsappOperation('cancel_pairing', () =>
+        throwOnErr(() => client.cancelPairing(pairingId))
       ),
     onSettled: invalidateAccount,
   }));

@@ -2,7 +2,6 @@ import { okAsync, type ResultAsync } from 'neverthrow';
 import { type Accessor, createSignal, type Setter } from 'solid-js';
 import { vi } from 'vitest';
 import type {
-  PairingCancelReason,
   PairingRead,
   PasskeyCapability,
   RequestFailure,
@@ -104,10 +103,8 @@ export function createFakeWhatsApp(initial: {
         })
     ),
     cancelPairing: vi.fn(
-      (
-        _pairingId: string,
-        _reason: PairingCancelReason
-      ): ResultAsync<void, RequestFailure> => okAsync(undefined)
+      (_pairingId: string): ResultAsync<void, RequestFailure> =>
+        okAsync(undefined)
     ),
     pairingFinished: vi.fn(async () => undefined),
     disconnect: vi.fn(

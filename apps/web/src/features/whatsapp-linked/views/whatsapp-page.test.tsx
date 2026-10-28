@@ -152,44 +152,7 @@ describe('not connected', () => {
 
     fireEvent.click(dialog.getByRole('button', { name: 'Cancel' }));
     await waitFor(() =>
-      expect(fake.capabilities.cancelPairing).toHaveBeenCalledWith(
-        'pairing-1',
-        'button'
-      )
-    );
-    await waitFor(() => expect(dialogOpen()).toBe(false));
-  });
-
-  it('keeps the pairing when a click or focus lands outside the dialog', async () => {
-    const fake = createFakeWhatsApp({ account: null });
-    mount(fake);
-    fireEvent.click(screen.getByRole('button', { name: 'Connect' }));
-    await screen.findByRole('dialog');
-    fake.setPairing({ kind: 'scan', qr: '2@pairing-ref' });
-    // Kobalte starts listening for outside interactions a task after opening.
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    fireEvent.pointerDown(document.body);
-    fireEvent.focusIn(document.body);
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    expect(dialogOpen()).toBe(true);
-    expect(fake.capabilities.cancelPairing).not.toHaveBeenCalled();
-  });
-
-  it('cancels the pairing on Escape', async () => {
-    const fake = createFakeWhatsApp({ account: null });
-    mount(fake);
-    fireEvent.click(screen.getByRole('button', { name: 'Connect' }));
-    await screen.findByRole('dialog');
-    fake.setPairing({ kind: 'scan', qr: '2@pairing-ref' });
-
-    fireEvent.keyDown(document, { key: 'Escape' });
-    await waitFor(() =>
-      expect(fake.capabilities.cancelPairing).toHaveBeenCalledExactlyOnceWith(
-        'pairing-1',
-        'escape'
-      )
+      expect(fake.capabilities.cancelPairing).toHaveBeenCalledWith('pairing-1')
     );
     await waitFor(() => expect(dialogOpen()).toBe(false));
   });
@@ -363,14 +326,7 @@ describe('not connected', () => {
       expiresAt: new Date(Date.now() + 52_000).toISOString(),
     });
     await waitFor(() =>
-      expect(fake.capabilities.cancelPairing).toHaveBeenCalledWith(
-        'pairing-2',
-        'expired_roll'
-      )
-    );
-    expect(fake.capabilities.cancelPairing).toHaveBeenCalledWith(
-      'pairing-1',
-      'button'
+      expect(fake.capabilities.cancelPairing).toHaveBeenCalledWith('pairing-2')
     );
     expect(dialogOpen()).toBe(false);
   });

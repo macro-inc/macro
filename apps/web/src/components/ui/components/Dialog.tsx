@@ -40,11 +40,6 @@ export type DialogProps = {
   animate?: boolean;
   /** Constrain children on mobile so their own scroll regions can resize. */
   contentOwnsScroll?: boolean;
-  /**
-   * `false` keeps the dialog open on an outside pointer-down or focus loss, so
-   * only Escape and the dialog's own buttons close it. Defaults to `true`.
-   */
-  dismissOnOutside?: boolean;
 };
 
 export function Dialog(props: DialogProps) {
@@ -79,7 +74,6 @@ function DialogDrawer(props: DialogProps) {
         onFinalFocus={props.onCloseAutoFocus}
         restoreFocus
         noOutsidePointerEvents
-        closeOnOutsidePointer={props.dismissOnOutside !== false}
       >
         <MobileDrawer.Portal>
           <MobileDrawer.Overlay
@@ -194,9 +188,6 @@ function DesktopDialog(props: DialogProps) {
             onCloseAutoFocus={props.onCloseAutoFocus}
             onEscapeKeyDown={props.onEscapeKeyDown}
             onOpenAutoFocus={props.onOpenAutoFocus}
-            onInteractOutside={(event) => {
-              if (props.dismissOnOutside === false) event.preventDefault();
-            }}
           >
             {props.children}
           </KobalteDialog.Content>
