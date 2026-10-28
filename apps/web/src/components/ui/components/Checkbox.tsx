@@ -3,7 +3,12 @@ import {
   Checkbox as KobalteCheckbox,
   useCheckboxContext,
 } from '@kobalte/core/checkbox';
-import { type ComponentProps, createContext, splitProps, useContext } from 'solid-js';
+import {
+  type ComponentProps,
+  createContext,
+  splitProps,
+  useContext,
+} from 'solid-js';
 import { cn } from '../utils/classname';
 import { createVariants } from '../utils/variants';
 
@@ -15,7 +20,7 @@ type ControlProps = ComponentProps<typeof KobalteCheckbox.Control>;
 type IndicatorProps = ComponentProps<typeof KobalteCheckbox.Indicator>;
 type LabelProps = ComponentProps<typeof KobalteCheckbox.Label>;
 
-const CheckboxSizeContext = createContext<() => CheckboxSize>(() => 'md');
+const CheckboxSizeContext = createContext((): CheckboxSize => 'md');
 const checkboxVariants = createVariants(
   'inline-grid shrink-0 place-items-center rounded border border-border-primary bg-transparent text-button-primary-ink data-checked:border-accent data-checked:bg-accent data-indeterminate:border-accent data-indeterminate:bg-accent',
   {
@@ -42,7 +47,6 @@ function CheckboxMark(props: {
   return (
     <svg
       aria-hidden="true"
-      focusable="false"
       viewBox="0 0 12 12"
       fill="none"
       stroke="currentColor"

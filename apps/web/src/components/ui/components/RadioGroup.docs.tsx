@@ -82,7 +82,11 @@ function StatesDemo() {
     <div class="grid gap-6">
       <For each={['sm', 'md', 'lg'] as const}>
         {(size) => (
-          <RadioGroup defaultValue="on" size={size} aria-label={`${size} radio size`}>
+          <RadioGroup
+            defaultValue="on"
+            size={size}
+            aria-label={`${size} radio size`}
+          >
             <RadioGroup.Item value="on">
               <RadioGroup.ItemControl />
               <RadioGroup.ItemLabel>{size}</RadioGroup.ItemLabel>

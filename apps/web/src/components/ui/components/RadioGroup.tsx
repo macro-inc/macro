@@ -1,5 +1,10 @@
 import { RadioGroup as KobalteRadioGroup } from '@kobalte/core/radio-group';
-import { type ComponentProps, createContext, splitProps, useContext } from 'solid-js';
+import {
+  type ComponentProps,
+  createContext,
+  splitProps,
+  useContext,
+} from 'solid-js';
 import { cn } from '../utils/classname';
 
 export type RadioGroupSize = 'sm' | 'md' | 'lg';
@@ -8,11 +13,16 @@ export type RadioGroupProps = ComponentProps<typeof KobalteRadioGroup> & {
 };
 type ItemProps = ComponentProps<typeof KobalteRadioGroup.Item>;
 type ItemControlProps = ComponentProps<typeof KobalteRadioGroup.ItemControl>;
-type ItemIndicatorProps = ComponentProps<typeof KobalteRadioGroup.ItemIndicator>;
+type ItemIndicatorProps = ComponentProps<
+  typeof KobalteRadioGroup.ItemIndicator
+>;
 type ItemLabelProps = ComponentProps<typeof KobalteRadioGroup.ItemLabel>;
 
-const RadioGroupSizeContext = createContext<() => RadioGroupSize>(() => 'md');
-const radioSizes: Record<RadioGroupSize, { control: string; indicator: string }> = {
+const RadioGroupSizeContext = createContext((): RadioGroupSize => 'md');
+const radioSizes: Record<
+  RadioGroupSize,
+  { control: string; indicator: string }
+> = {
   sm: { control: 'size-3.5', indicator: 'size-1.5' },
   md: { control: 'size-4', indicator: 'size-2' },
   lg: { control: 'size-5', indicator: 'size-2.5' },

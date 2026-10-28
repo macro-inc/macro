@@ -102,11 +102,13 @@ function SettingsRowDemo() {
 function FormStateDemo() {
   return (
     <div class="flex flex-col gap-3">
-      <ToggleSwitch name="readonly-setting" readOnly defaultChecked label="Read-only setting" />
       <ToggleSwitch
-        validationState="invalid"
-        label="Setting needs attention"
+        name="readonly-setting"
+        readOnly
+        defaultChecked
+        label="Read-only setting"
       />
+      <ToggleSwitch validationState="invalid" label="Setting needs attention" />
       <span class="text-xs text-failure">
         This setting cannot be changed yet.
       </span>

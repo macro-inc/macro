@@ -1,11 +1,15 @@
-import { Switch as KobalteSwitch } from '@kobalte/core/switch';
-import type { ComponentProps, JSX } from 'solid-js';
+import type { PolymorphicProps } from '@kobalte/core/polymorphic';
+import {
+  Switch as KobalteSwitch,
+  type SwitchRootProps,
+} from '@kobalte/core/switch';
+import type { JSX } from 'solid-js';
 import { Show, splitProps } from 'solid-js';
 import { cn } from '../utils/classname';
 
 export type ToggleSwitchSize = 'xs' | 'sm' | 'md';
 export type ToggleSwitchProps = Omit<
-  ComponentProps<typeof KobalteSwitch>,
+  PolymorphicProps<'div', SwitchRootProps<'div'>>,
   'children'
 > & {
   labelClass?: string;
@@ -19,17 +23,20 @@ const SWITCH_SIZES = {
   xs: {
     control: 'h-3.5 w-7',
     thumb: '-left-0.5 -top-px size-3.5 data-checked:translate-x-4',
-    pressed: 'group-active/switch:w-4 data-checked:group-active/switch:translate-x-3.5',
+    pressed:
+      'group-active/switch:w-4 data-checked:group-active/switch:translate-x-3.5',
   },
   sm: {
     control: 'h-4 w-8',
     thumb: '-left-0.5 -top-px size-4 data-checked:translate-x-4.5',
-    pressed: 'group-active/switch:w-5 data-checked:group-active/switch:translate-x-3.5',
+    pressed:
+      'group-active/switch:w-5 data-checked:group-active/switch:translate-x-3.5',
   },
   md: {
     control: 'h-5 w-10',
     thumb: '-left-0.5 -top-px size-5 data-checked:translate-x-5.5',
-    pressed: 'group-active/switch:w-6 data-checked:group-active/switch:translate-x-4.5',
+    pressed:
+      'group-active/switch:w-6 data-checked:group-active/switch:translate-x-4.5',
   },
 } as const;
 
@@ -90,7 +97,7 @@ export const ToggleSwitch = (props: ToggleSwitchProps): JSX.Element => {
       >
         <KobalteSwitch.Thumb
           class={cn(
-            'absolute rounded-full border border-border-secondary bg-white transition-[width,translate,background-color] duration-150 ease-out data-checked:bg-accent-contrast motion-reduce:transition-none',
+            'absolute rounded-full border border-border-secondary bg-[white] transition-[width,translate,background-color] duration-150 ease-out data-checked:bg-accent-contrast motion-reduce:transition-none',
             sizing().thumb,
             !local.disabled && !others.readOnly && sizing().pressed
           )}
