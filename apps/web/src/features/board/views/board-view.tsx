@@ -6,7 +6,8 @@ import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import { Button } from '@ui';
-import { createSignal, Match, Switch } from 'solid-js';
+import { type Component, createSignal } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import { useBoard } from '../context/board-context';
 import {
   BOARD_VARIANTS,
@@ -23,6 +24,15 @@ import { PeopleBoard } from './people-board';
 import { RadarBoard } from './radar-board';
 import { RiverBoard } from './river-board';
 import type { VariantProps } from './variant-shared';
+
+/** Every variant's board; a new id fails to type-check until it has one. */
+const VARIANT_VIEWS: Record<BoardVariant, Component<VariantProps>> = {
+  v1a: NeighborhoodsBoard,
+  v1b: BubblesBoard,
+  v1c: RiverBoard,
+  v1d: RadarBoard,
+  v1e: PeopleBoard,
+};
 
 /**
  * The company board: a variant picker beside a pannable, zoomable board of
@@ -148,23 +158,10 @@ export function BoardView(props: {
             </HeaderActionGroup>
           </ViewShell.TopBar>
           <div class="relative min-h-0 flex-1 overflow-hidden border-t border-edge-muted">
-            <Switch>
-              <Match when={props.variant === 'v1a'}>
-                <NeighborhoodsBoard {...variantProps} />
-              </Match>
-              <Match when={props.variant === 'v1b'}>
-                <BubblesBoard {...variantProps} />
-              </Match>
-              <Match when={props.variant === 'v1c'}>
-                <RiverBoard {...variantProps} />
-              </Match>
-              <Match when={props.variant === 'v1d'}>
-                <RadarBoard {...variantProps} />
-              </Match>
-              <Match when={props.variant === 'v1e'}>
-                <PeopleBoard {...variantProps} />
-              </Match>
-            </Switch>
+            <Dynamic
+              component={VARIANT_VIEWS[props.variant]}
+              {...variantProps}
+            />
           </div>
         </ViewShell.Main>
       </ViewShell.Root>

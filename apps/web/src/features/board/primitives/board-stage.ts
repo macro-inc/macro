@@ -40,9 +40,10 @@ export function createBoardStage<TNode extends { key: string }>(options: {
     options.nodes().filter((node) => movedTo(node.key))
   );
 
-  const bounds = () =>
-    unionBounds([
-      ...(options.layoutBounds() ? [options.layoutBounds() as Bounds] : []),
+  const bounds = () => {
+    const laidOut = options.layoutBounds();
+    return unionBounds([
+      ...(laidOut ? [laidOut] : []),
       ...moved().flatMap((node) => {
         const point = movedTo(node.key);
         if (!point) return [];
@@ -51,6 +52,7 @@ export function createBoardStage<TNode extends { key: string }>(options: {
         ];
       }),
     ]);
+  };
 
   const camera = createBoardCamera({
     saved: () => options.memory.camera(options.variant),
