@@ -1148,10 +1148,11 @@ produce one connection; leaving from either control ends the same call. Navigate
 away and return while connected to check that the call and its controls remain
 usable.
 
-The **Open chat** button at the bottom-right, level with the media controls,
-opens chat beside the video. The toggle stays in this bottom controls row on phones.
-**Copy Meeting Url** sits at the bottom-left, level with the controls, and becomes
-an icon-only button in narrow panes. The panel has a **Call chat** heading and
+The **Open chat** button at the bottom-right opens chat beside the video.
+**Copy Meeting Url** sits at the bottom-left and becomes icon-only in narrow panes.
+Phones inset both actions from the edges. The smallest phones put the media
+controls in a separate row above these actions; wider panes keep one row.
+The panel has a **Call chat** heading and
 spans the full call content height, including the media controls row. The controls
 stay centered under the video on wide panes. In narrow desktop panes, chat overlays
 the video. On phones, chat opens in the shared bottom sheet; drag the handle, tap the backdrop, or press Escape

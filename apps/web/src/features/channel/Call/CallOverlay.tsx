@@ -327,7 +327,7 @@ export function CallOverlay(props: {
     >
       {/* The call owns its controls instead of the mobile New action. */}
       <FloatRegion region="accessory" />
-      <div class="relative flex min-h-0 flex-1 gap-3 overflow-hidden mobile:overflow-visible">
+      <div class="relative flex min-h-0 flex-1 gap-3 overflow-hidden">
         <div class="flex min-h-0 min-w-0 flex-1 flex-col @container/call-stage">
           {/* Screen share area */}
           <Show when={hasAnyScreenShare()}>
@@ -447,12 +447,14 @@ export function CallOverlay(props: {
                 </button>
               </Tooltip>
             </Show>
-            <div class="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 px-2 mobile:gap-0 mobile:px-0 mobile:@max-xs/call:w-screen @3xl/call-stage:grid-cols-[minmax(0,1fr)_minmax(18rem,2fr)_minmax(0,1fr)]">
-              <div class="min-w-0 max-w-48">{props.footerLeading}</div>
-              <div class="flex min-w-0 justify-center">
+            <div class="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 px-2 mobile:gap-y-3 mobile:@max-[22rem]/call:grid-cols-2 @3xl/call-stage:grid-cols-[minmax(0,1fr)_minmax(18rem,2fr)_minmax(0,1fr)]">
+              <div class="min-w-0 max-w-48 mobile:@max-[22rem]/call:row-start-2">
+                {props.footerLeading}
+              </div>
+              <div class="flex min-w-0 justify-center mobile:@max-[22rem]/call:col-span-2 mobile:@max-[22rem]/call:row-start-1">
                 <CallControls onLeave={props.onLeave} />
               </div>
-              <div class="flex justify-end">
+              <div class="flex justify-end mobile:@max-[22rem]/call:row-start-2">
                 <Show when={canChat()}>
                   <Button
                     ref={chatButton}
