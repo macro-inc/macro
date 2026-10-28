@@ -44,6 +44,8 @@ existing hover and pressed states. Emphasized variants retain their treatment,
 including an active call's green ink. Button size does not change variant colors
 or framing. Primary, neutral, secondary, danger, and success Buttons automatically use raised desktop styling and glass on touch. Use `finish="flat"` to opt out, or `finish="raised"` to frame a ghost/link action. Outline Buttons always stay flat, including when a finish is supplied.
 Primary Buttons use the theme accent and its resolved contrast color. Use `neutral` for solid monochrome emphasis (black in light themes, white in dark themes), and secondary for softer neutral actions. Current Button usages trial secondary instead of outline; the outline API and canonical gallery examples remain available. The separate accent variant remains removed.
+Button API and composition details live in the
+[shared primitive contract](../../.agents/rules/web/ui-primitives.md#button-and-buttongroup).
 Inline calendar-invitation text actions remove the transparent border to keep alignment.
 
 ## Canonical desktop surfaces
@@ -131,10 +133,10 @@ single-select rows keep their rounded shape.
 
 ## Dialog actions
 
-Cancel uses a ghost button. Existing confirm, save, and create actions use
-secondary; primary provides the higher-emphasis neutral fill, and accent is
-solid accent. Loading actions use `loading`. Mobile confirmation drawers use
-the same action hierarchy.
+Cancel uses a ghost button. Use primary for the main confirm, save, or create
+action; it uses the theme accent. Use neutral for solid monochrome emphasis and
+secondary for softer neutral actions. Loading actions use `loading`. Mobile
+confirmation drawers use the same action hierarchy.
 
 ## List-item sharing
 

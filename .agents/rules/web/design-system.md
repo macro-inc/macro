@@ -55,6 +55,8 @@ construction. Browse them at `/app/component/ui` (Foundations → Controls).
 - Current application Button usages trial `secondary` instead of `outline`, including shared wrappers and groups. Keep the outline API and canonical Button gallery examples; do not change outline variants on badges, inputs, or other components.
 - Settings actions that previously used inverse-filled `cta` styling use explicit `variant="neutral"`, including creation, runtime setup, billing, invitation, and signature-save actions. Keep existing accent, ghost, and destructive actions in their own roles; do not recolor Button descendants from `SettingsPage`.
 - Primary, neutral, secondary, danger, and success Buttons and ButtonGroup frames automatically use the raised desktop finish and shared glass on touch. Use `finish="flat"` to opt out or `finish="raised"` to frame a ghost/link action. Outline variants, bare controls, and grouped segments always stay flat.
+- Follow the [Button and ButtonGroup contract](ui-primitives.md#button-and-buttongroup)
+  for accessible names, tooltips, sizing, explicit segments, and activation behavior.
 - **FE-64** Components own their state treatments: desktop Tabs share a flat rounded track with an inset selected pill;
   Button uses the semantic pressed fill for its variant. Mark action toggles with
   `aria-pressed`, and expansion triggers with `aria-expanded`. Do not restyle
