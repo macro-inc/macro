@@ -1190,7 +1190,7 @@ describe('guests of an event the viewer was invited to', () => {
     try {
       expect(editor.disabledFields()?.guests).toBe(true);
       expect(editor.guestsReadOnlyReason()).toBe(
-        "Only the organizer can invite guests. You can forward the invitation instead. The people you send it to can add the event to their calendar but won't be on the guest list."
+        "Only the organizer can invite guests. You can forward the invitation instead. The people you send it to get the event by email but won't be on the guest list."
       );
     } finally {
       dispose();
