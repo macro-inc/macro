@@ -46,10 +46,7 @@ const VARIANT_VIEWS: Record<BoardVariant, Component<VariantProps>> = {
 export function BoardView(props: {
   variant: BoardVariant;
   onVariantChange: (variant: BoardVariant) => void;
-  /**
-   * Number keys and Tab cycle variants while this scope is active, and
-   * lists move between items.
-   */
+  /** Number keys pick variants while this scope is active; lists move between items. */
   hotkeys?: { scopeId: string; enabled: () => boolean };
 }) {
   const board = useBoard();
@@ -81,6 +78,8 @@ export function BoardView(props: {
       scopeId: hotkeys.scopeId,
       enabled: hotkeys.enabled,
       ids: () => BOARD_VARIANTS,
+      // Tab keeps moving focus between cards and controls.
+      sequentialIds: () => [],
       activeId: () => props.variant,
       setActiveId: props.onVariantChange,
     });
