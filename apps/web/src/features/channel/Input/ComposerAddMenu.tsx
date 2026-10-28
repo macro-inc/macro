@@ -57,8 +57,8 @@ export function ComposerAddMenu(props: {
     >
       <Button
         variant="ghost"
-        size="icon-md"
-        class={cn('touch:size-6', props.class)}
+        size="icon-lg"
+        class={props.class}
         aria-label="Add"
         aria-haspopup="dialog"
         disabled={props.disabled}
@@ -97,8 +97,8 @@ function AddDropdown(props: {
         tooltip="Add"
         data-composer-menu-anchor
         variant="ghost"
-        size="icon-md"
-        class={cn('touch:size-6', props.class)}
+        size="icon-lg"
+        class={props.class}
         aria-label="Add"
         disabled={props.disabled}
       >

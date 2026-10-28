@@ -39,7 +39,7 @@ export function SendButton(props: SendButtonProps) {
   return (
     <Button
       variant="primary"
-      size={local.appearance === 'composer' ? 'icon-md' : 'icon-sm'}
+      size="icon-lg"
       draggable={false}
       aria-label={
         local['aria-label'] ??
@@ -51,14 +51,11 @@ export function SendButton(props: SendButtonProps) {
       }
       data-intent={local.intent === 'flush' ? 'flush' : undefined}
       class={cn(
-        'border-0 touch:size-7.5',
+        'border-0',
         local.intent === 'flush' && 'ring-2 ring-accent/60',
-        local.appearance === 'composer'
-          ? cn(
-              local.actionLabel &&
-                'not-touch:w-auto! not-touch:aspect-auto! not-touch:px-3 not-touch:gap-1.5'
-            )
-          : 'size-7',
+        local.appearance === 'composer' &&
+          local.actionLabel &&
+          'not-touch:w-auto! not-touch:aspect-auto! not-touch:px-3 not-touch:gap-1.5',
         'transition-transform ease-in-out duration-150',
         'data-disabled:opacity-100 data-disabled:text-ink-extra-muted! data-disabled:bg-ink-muted/5',
         'active:not-disabled:scale-95',

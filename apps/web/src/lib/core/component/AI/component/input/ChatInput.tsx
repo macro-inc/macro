@@ -274,8 +274,8 @@ export function ChatInput(props: ChatInputComponentProps) {
     <Button
       tooltip="Attach files"
       variant="ghost"
-      size="icon-md"
-      class="text-ink not-touch:text-composer-ink touch:size-6"
+      size="icon-lg"
+      class="text-ink not-touch:text-composer-ink"
       aria-label="Attach files"
       onClick={() => {
         // Open synchronously from the tap so the native picker retains user activation.

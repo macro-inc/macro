@@ -18,7 +18,7 @@ export function DictationButton(props: {
       <Button
         aria-label={props.dictation.label()}
         variant="ghost"
-        size="icon-md"
+        size="icon-lg"
         class="text-ink not-touch:text-composer-ink"
         tooltip={props.dictation.label()}
         disabled={props.disabled || props.dictation.disabled()}
