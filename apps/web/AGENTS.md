@@ -572,6 +572,8 @@ payloads exhaustively, summarize outcomes without draft content, and keep the
 icon, truncated summary, timestamp, and optional subject action on one line on
 desktop and mobile.
 Keep Responding bound to the notification turn, including rejection and noop.
+Harness background-task reports are `task_notification` message parts, rendered
+as `ActionLine` rows in the agent reply (`TaskNotificationPart`).
 The backend-free desktop/mobile check is
 `bunx playwright test --config src/features/block-agent/browser-test/playwright.config.ts`.
 Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` when using the Nix Chrome binary.
