@@ -1591,6 +1591,9 @@ async fn run() -> anyhow::Result<()> {
                     Arc::new(
                         agent_harness::outbound::connected_apps::PipedreamConnectedApps::new(
                             Arc::clone(&mcp_connections),
+                            Arc::new(mcp_select::NativeOverlayConnections::new(Some(Arc::clone(
+                                &mcp_servers,
+                            )))),
                         ),
                     ),
                     Arc::clone(&notification_service),

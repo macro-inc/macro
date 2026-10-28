@@ -15064,6 +15064,7 @@ dependencies = [
  "futures",
  "http 1.4.0",
  "macro_authorization",
+ "macro_db_migrator",
  "macro_user_id",
  "mcp_toolset",
  "model-error-response",

@@ -101,7 +101,10 @@ import {
 } from '../Input';
 import { ChannelInputContainer } from '../Input/ChannelInputContainer';
 import { hasSendableInputContent } from '../Input/utils/sendable-content';
-import { decodeSystemActivity } from '../queries/system-activity';
+import {
+  decodeSystemActivityRow,
+  mergesSystemActivity,
+} from '../queries/system-activity';
 import { SystemActivity } from '../SystemActivity';
 import { ChannelThread } from '../Thread';
 import { ThreadRow } from '../Thread/ThreadRow';
@@ -263,10 +266,12 @@ export function Channel(props: ChannelProps) {
   );
 
   // The index reads immediately, before EntityLoadGate's boundary exists.
-  const messageIndex = createMessageIndex(() =>
-    queryReadyGate(messagesQuery)
-      ? (messagesQuery.data as MessageTimelineData)
-      : undefined
+  const messageIndex = createMessageIndex(
+    () =>
+      queryReadyGate(messagesQuery)
+        ? (messagesQuery.data as MessageTimelineData)
+        : undefined,
+    mergesSystemActivity
   );
 
   const messageById = () => messageIndex.byId;
@@ -833,8 +838,10 @@ export function Channel(props: ChannelProps) {
                                             listMeta={listMetaByKey()[item.id]}
                                           >
                                             <SystemActivity
-                                              event={decodeSystemActivity(
-                                                activity()
+                                              event={decodeSystemActivityRow(
+                                                messageIndex.activityGroupByKey.get(
+                                                  item.id
+                                                ) ?? [activity()]
                                               )}
                                             />
                                             <Show when={isNewestRow()}>

@@ -125,13 +125,11 @@ const chats = [
 ];
 
 describe('not connected', () => {
-  it('explains the account risk and links WhatsApp through a QR dialog', async () => {
+  it('links WhatsApp through a QR dialog', async () => {
     const fake = createFakeWhatsApp({ account: null });
     mount(fake);
 
-    expect(
-      screen.getByText(/unofficial WhatsApp client/, { exact: false })
-    ).toBeTruthy();
+    expect(screen.queryByText(/unofficial|ban accounts/i)).toBeNull();
     expect(fake.chatsEnabled[0]?.()).toBe(false);
 
     fireEvent.click(screen.getByRole('button', { name: 'Connect' }));

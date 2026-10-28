@@ -12,6 +12,24 @@ workspace. The top-right split icon opens another Home split, even
 when Home is already open, and is disabled when there is no room for a new split.
 Its tooltip is “New Split” and displays the registered new-split shortcut (`\`).
 
+## Desktop tabs (macOS, `enable-desktop-tabs` flag)
+
+The title bar's center holds browser-style tabs; each tab is a whole split
+layout. Only the active tab's layout is mounted — switching tabs swaps every
+split through the router, preserving each split's back/forward history and
+running unsaved-changes guards. A tab holding more than one split shows a
+split icon with the count. The strip's `+` button (and `Cmd+T`) opens a tab on
+Home; the `X` or a middle click closes one (the last tab cannot close;
+`Shift+Cmd+W` closes the active tab); `Ctrl+Tab` / `Ctrl+Shift+Tab` cycle.
+Cmd+click (Ctrl elsewhere) on anything that navigates opens the destination in
+a background tab; adding Shift also switches to it. Tabs are not draggable.
+Tabs persist per user and restore on launch. In the browser and on other
+platforms the strip does not render.
+
+Reference captures (browser fixture with the desktop gates forced):
+[a three-split tab beside a second tab](media/desktop-tabs/three-split-tab.png)
+and [tabs restored after a reload](media/desktop-tabs/restored-tabs.png).
+
 After native bundle updates, verify that Home and channel details load without
 an update toast on every launch. Relative bundled assets such as Loro's WASM
 must load through the webview, not native HTTP. A `vite:preloadError` with
@@ -55,6 +73,17 @@ is not moved just because another visible window gets focus. Reads can wait for
 normal warmup; if foreground handoff/resume exceeds one second, ordinary queries
 use network fallback while cache-only reads never forward. Writes and received
 mutation confirmations wait for storage instead of being sent twice.
+
+On return, queued commits should produce a coalesced cache refresh, not rebuild
+every cache-driven view after each intermediate write. Open Calendar, switch to
+an unrelated tab (or fully cover Chrome with another macOS app), let remote
+updates arrive, then return and immediately click an event and change the date.
+Check that input is handled and the final events appear without repeated chip
+rebuilds. Repeat with several hidden Macro tabs. `graphql_cache.change_batch`
+reports the number of hints combined; individual commits and mutation replies
+remain separate. The backend-free parking regression verifies five queued commits
+produce one visible-cache refresh, but real macOS occlusion and calendar input
+still need this manual check.
 
 Verify the all-hidden case without activating the former owner: no held physical
 owner lock after parking, preserved generation/queue, and successful reads/writes

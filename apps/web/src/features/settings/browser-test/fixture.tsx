@@ -14,7 +14,7 @@ import { macroDarkTheme } from '../../theme/themes/macro-dark';
 import { macroLightTheme } from '../../theme/themes/macro-light';
 import { themeCssVars } from '../../theme/utils/themeColorTokens';
 import { Appearance } from '../Appearance';
-import { DesktopAppInfo } from '../components/desktop-app';
+import { AppInfo } from '../components/app-info';
 import { SettingsSearchTarget } from '../components/settings-search-target';
 import { SettingsSidebar } from '../components/settings-sidebar';
 import { SignatureForm } from '../components/signature-form';
@@ -149,9 +149,12 @@ function Fixture() {
           when={page !== 'Desktop App'}
           fallback={
             <Show when={desktop()} fallback={<DesktopApp />}>
-              <DesktopAppInfo
+              <AppInfo
+                title="Desktop App (Alpha)"
+                description="Your installed version of Macro Alpha."
                 version="2.5.0"
                 buildDate={new Date('2026-10-01T16:30:00Z')}
+                bundleDate={new Date('2026-10-27T09:15:00Z')}
               />
             </Show>
           }

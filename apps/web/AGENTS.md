@@ -46,6 +46,11 @@ slides into a short window; the phone drawer shows late requests:
 Keep the popover's `flip` limited to `left-start`: an end fallback re-places it
 above the event whenever a late section changes its height.
 
+The desktop app's local runtime setup (find an agent, connect, create the
+agent, retry, open a session) has a backend-free browser regression over a
+scripted runtime:
+`bunx playwright test --config src/features/local-runtime/browser-test/playwright.config.ts`.
+
 Meeting-note creation, linking, optional team access, retry, and unlinking have desktop and
 phone browser coverage in `features/calendar-notes`:
 `bunx playwright test --config src/features/calendar-notes/browser-test/playwright.config.ts`.
@@ -220,12 +225,20 @@ the user's newest account for that app from the last fifteen minutes.
 - Reject already-routed optimistic enqueues with missing replies as uncertain on
   every owner departure; never forward them through network fallback, because
   their durable queue entries may survive the old engine.
+- Dispatch live GraphQL notification callbacks before cache persistence so hidden
+  tabs can show browser alerts; keep cache-dependent channel reconciliation
+  behind ordered writes and never replay alerts when the cache resumes. Link
+  cache queue/apply spans to receipt and mark listener failures without stopping
+  the remaining callbacks.
 - Drain browser cache engines when their last visible consumer hides, then park
   without retiring clients; queue background work until a visible owner reopens
   storage, retaining accepted mutation settlements even if their caller leaves.
   Publish recovery reset outcomes before parking while retaining the read pause.
   Bound foreground resume reads to one second without killing an owner, stealing
   its lock, replaying writes, or treating intentional parking as a failure.
+- Coalesce broad browser cache-change hints across the coordinator's in-flight
+  backlog, not the engine's per-message queue; keep reset fences, mutation
+  settlements, and query-specific invalidations immediate.
 - Retry still-current query reads once when engine replacement invalidates their
   snapshot; do not strand urql's in-flight key or revive torn-down or superseded reads.
   Keep network forwarding deduplicated and cache-only reads off the network.
@@ -247,6 +260,7 @@ the user's newest account for that app from the last fifteen minutes.
 - Keep split chrome portal targets reactive so cached views can mount before their header, and clear a retiring header's targets only while it still owns them.
 - Opt views into session restoration with `split-layout/view-restoration` and set `resume: true` on ordinary layout navigation; publish captured state only through the leave guard's `onCommit`, keep explicit links and new splits fresh, and reuse entry-state captors rather than hidden mounted views.
 - Let `ViewShell.TopBar` own split close and navigation controls; do not add a second split close button inside Agents headers or their preview `headerLeading`.
+- Desktop tabs (`components/app/tab-layout`, macOS + `enable-desktop-tabs`) hold one split layout per tab over the router's `layoutSnapshot`/`restoreLayout`; only the active tab is live, and the strip renders in the title bar's center slot. Cmd+click becomes a background tab through `openInNewTabMiddleware`, so tab operations must disarm the intent tracker before navigating. Tabs are not draggable. See the tabs section of `docs/agent-guide/navigation.md` at the repository root.
 - Show only the Recent conversation feed in mobile Channels, without view tabs or a persisted mobile tab selection; render its rows with Home's touch row (`ChannelCardLayout` and `InboxDivider`) and pin at most six channel favorites above it.
 - Mount the mobile search input before focusing it inside the dock tap; keep navigation in that handler so focus does not trigger a second navigation or lose iOS keyboard activation.
 - Preserve focused chrome editors during deferred split insertion/removal autofocus; explicit return-focus commands may still focus the pane.
@@ -344,6 +358,8 @@ the user's newest account for that app from the last fifteen minutes.
   with `t()` from `@app/lib/i18n`, adding only the English to
   `src/lib/i18n/locales/en/`. The periodic `update-translations` skill fills
   in the other languages. See the [i18n rule](../../.agents/rules/web/i18n.md).
+  The resolved interface language is reported to PostHog as the person
+  property `interface_language` when the account language loads.
 - When adding or changing a feature flag, follow the `feature-flags` skill.
 - When adding or changing a view's feature tour, follow the `add-tour` skill.
 

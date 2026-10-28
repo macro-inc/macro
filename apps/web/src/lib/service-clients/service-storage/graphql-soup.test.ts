@@ -468,7 +468,11 @@ vi.mock('./graphql/generated/graphql', () => ({
   GroupSoupDocument: {},
   SoupDocument: {},
 }));
+vi.mock('./graphql-notification-receipt', () => ({
+  notificationReceiptExchange: () => ({ kind: 'notification-receipt' }),
+}));
 vi.mock('./graphql-soup-websocket', () => ({
+  publishNotificationPatch: vi.fn(),
   SOUP_GRAPHQL_WEBSOCKET_RETRY_ATTEMPTS: 0,
   shouldRetryGraphqlSoupWebSocket: () => false,
   waitToRetryGraphqlSoupWebSocket: vi.fn(),
@@ -484,9 +488,21 @@ vi.mock('@urql/core', () => ({
   createClient: (options: {
     exchanges: Array<{ kind?: string; host?: typeof mocks.host }>;
   }) => {
-    const cacheExchange = options.exchanges.find(
+    const cacheIndex = options.exchanges.findIndex(
       ({ kind }) => kind === 'cache'
     );
+    const subscriptionIndex = options.exchanges.findIndex(
+      ({ kind }) => kind === 'subscription'
+    );
+    if (subscriptionIndex >= 0) {
+      const receiptIndex = options.exchanges.findIndex(
+        ({ kind }) => kind === 'notification-receipt'
+      );
+      expect(receiptIndex).toBeGreaterThanOrEqual(0);
+      expect(receiptIndex).toBeLessThan(subscriptionIndex);
+      if (cacheIndex >= 0) expect(receiptIndex).toBeGreaterThan(cacheIndex);
+    }
+    const cacheExchange = options.exchanges[cacheIndex];
     if (!cacheExchange?.host) {
       return options.exchanges.some(({ kind }) => kind === 'subscription')
         ? mocks.realtimeClient

@@ -276,8 +276,8 @@ const SETTINGS: Setting[] = [
   },
   {
     tab: 'Mobile App',
-    title: 'Get the mobile app',
-    keywords: 'download phone ios android qr code',
+    title: 'Mobile app version and download',
+    keywords: 'download phone ios android qr code version build bundle',
   },
 ];
 

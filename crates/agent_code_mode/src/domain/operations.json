@@ -219,6 +219,7 @@
   "cognition.deletePipedreamMcpConnection": "Delete Pipedream Mcp Connection",
   "cognition.listPipedreamMcpConnections": "List Pipedream Mcp Connections",
   "cognition.updatePipedreamMcpConnection": "Update Pipedream Mcp Connection",
+  "cognition.listPipedreamMcpOverlays": "List Pipedream Mcp Overlays",
   "cognition.recoverPipedreamMcpConnection": "Recover Pipedream Mcp Connection",
   "cognition.createPipedreamMcpToken": "Create Pipedream Mcp Token",
   "cognition.getBatchPreview": "Get Batch Preview",
