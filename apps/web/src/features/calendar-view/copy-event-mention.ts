@@ -6,6 +6,7 @@ import {
 } from '@app/features/calendar-view/calendar-url';
 import { toast } from '@core/component/Toast/Toast';
 import { writeClipboardData } from '@core/util/dataTransfer';
+import { getWebOrigin } from '@core/util/webOrigin';
 
 /** What a copied event needs to come back as a mention or a deep link. */
 export type CalendarMentionTarget = {
@@ -49,15 +50,11 @@ export function calendarEventDeepLink(target: {
   eventId: string;
   occurrenceKey?: string;
 }): string {
-  let hostname = window.location.hostname.replace('www.', '').toLowerCase();
-  if (hostname === 'localhost') {
-    hostname = 'dev.macro.com';
-  }
   const params = new URLSearchParams({
     [calendarFocusedEventSearchKey()]: target.eventId,
   });
   const path = calendarPath(getPreferredCalendarPeriodView());
-  return `https://${hostname}/app${path}?${params.toString()}`;
+  return `${getWebOrigin()}/app${path}?${params.toString()}`;
 }
 
 /**

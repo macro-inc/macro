@@ -14,6 +14,7 @@ import { copyBranchNameToClipboard } from '@core/util/branchName';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { lazyNamed } from '@core/util/lazyNamed';
 import { matches } from '@core/util/match';
+import { getWebOrigin } from '@core/util/webOrigin';
 import Minimize from '@icon/system/regular/arrows-in.svg';
 import ColumnsPlusRight from '@icon/system/regular/columns-plus-right.svg';
 import DotsThree from '@icon/system/regular/dots-three.svg';
@@ -392,11 +393,7 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
 
   const handleCopy = async () => {
     try {
-      let hostname = window.location.hostname.replace('www.', '').toLowerCase();
-      if (hostname === 'localhost') {
-        hostname = 'dev.macro.com';
-      }
-      let link = `https://${hostname}/app/${props.blockName}/${props.documentId}`;
+      let link = `${getWebOrigin()}/app/${props.blockName}/${props.documentId}`;
 
       if (props.blockParams && Object.keys(props.blockParams).length > 0) {
         const queryParams = new URLSearchParams(props.blockParams).toString();

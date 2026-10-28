@@ -17,6 +17,11 @@ vi.mock('@core/util/dataTransfer', () => ({ writeClipboardData }));
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { success: vi.fn(), failure: vi.fn() },
 }));
+// The native shells serve the app from their own origin, so the deep link
+// takes the web app's host rather than the one in `window.location`.
+vi.mock('@core/util/webOrigin', () => ({
+  getWebOrigin: () => 'https://macro.com',
+}));
 
 const written = () => writeClipboardData.mock.calls[0]?.[0];
 
@@ -95,7 +100,9 @@ describe('copyCalendarEventMentionTarget', () => {
     });
 
     const plain = written()?.['text/plain'] ?? '';
-    expect(plain).toMatch(/\/app\/calendar\/(month|week|day)\?/);
+    expect(plain).toMatch(
+      /^https:\/\/macro\.com\/app\/calendar\/(month|week|day)\?/
+    );
     expect(plain).toContain('s0.calendar.eventId=event-1');
     expect(plain).not.toContain('occurrenceKey');
   });

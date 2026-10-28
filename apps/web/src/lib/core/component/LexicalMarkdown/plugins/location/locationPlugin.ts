@@ -1,4 +1,5 @@
 import type { BlockName } from '@core/block';
+import { getCurrentWebUrl } from '@core/util/webOrigin';
 import { mergeRegister } from '@lexical/utils';
 import { $getId, type NodeIdMappings } from '@macro-inc/lexical-core';
 import {
@@ -388,7 +389,7 @@ export function $getSelectionLocation() {
 }
 
 export function $getLocationUrl(blockName: BlockName, blockId: string) {
-  const url = new URL(window.location.href);
+  const url = new URL(getCurrentWebUrl());
   if (blockId) {
     url.pathname = `app/${blockName}/${blockId}`;
   }

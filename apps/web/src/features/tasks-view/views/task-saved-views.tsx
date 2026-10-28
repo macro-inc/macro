@@ -6,6 +6,7 @@ import { useUserId } from '@core/context/user';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { writeClipboardData } from '@core/util/dataTransfer';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { getWebOrigin } from '@core/util/webOrigin';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import BookmarkIcon from '@phosphor/bookmark-simple.svg';
 import DotsIcon from '@phosphor/dots-three.svg';
@@ -477,7 +478,7 @@ async function copySavedViewLink(id: string) {
     savedView: id,
   });
   if (!params) return;
-  const url = new URL('/app/component/tasks', window.location.origin);
+  const url = new URL('/app/component/tasks', getWebOrigin());
   replacePaneSearchParams(url.searchParams, [
     { [tasksTabSearch.namespace]: params },
   ]);

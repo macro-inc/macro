@@ -9,6 +9,7 @@ import { buildMessageLink } from '@channel/Thread/utils/message-actions';
 import { useUserId } from '@core/context/user';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { getCurrentWebUrl } from '@core/util/webOrigin';
 import {
   useDeleteMessageMutation,
   usePatchMessageMutation,
@@ -105,7 +106,7 @@ export function MessageThread(
     buildLink: (message) =>
       message.parent?.type === 'channel'
         ? buildMessageLink(message.parent.id, message.id, message.thread_id)
-        : (props.buildLink?.(message) ?? window.location.href),
+        : (props.buildLink?.(message) ?? getCurrentWebUrl()),
     deleteMessage: confirm.requestDelete,
     addReaction: addReaction.mutate,
     removeReaction: removeReaction.mutate,
