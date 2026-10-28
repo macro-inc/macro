@@ -1,8 +1,3 @@
-/* Keep the shorter first description at the same three-line desktop rhythm. */
-@media (min-width: 1200px) {
-  #crm-from-email .product-feature-intro p { max-width: 38ch; }
-}
-
 /* Jump links reuse the CRM line illustrations. */
 .crm-feature-links a { gap: 8px; color: #b5b5b5; font-size: 13px; }
 .crm-feature-links a:hover { color: #fff; }

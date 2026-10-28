@@ -63,11 +63,9 @@ export function FeaturePageSection(props: {
     >
       <header class="product-feature-intro">
         <h2 id={`${props.id}-title`}>
-          <For
-            each={typeof props.title === 'string' ? [props.title] : props.title}
-          >
-            {(line) => <span>{line}</span>}
-          </For>
+          {typeof props.title === 'string'
+            ? props.title
+            : props.title.join(' ')}
         </h2>
         <p>{props.description}</p>
       </header>

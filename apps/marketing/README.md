@@ -360,13 +360,14 @@ the checklist heading unmarked.
 Feature chapters rely on their heading, description, and working demo. Do not
 reintroduce unused feature-card guides or duplicate explanatory drawers.
 
-Desktop chapters use a 1160px maximum measure and shared typography: two
-heading lines and three description lines share a height, with a wider
-description column. Let shorter or longer copy wrap naturally without clipping,
-fixed heights, or copy changes to force a line count. Below 1200px the intro
-stacks; phone layouts keep the page gutters. Email stages share the chapter alignment
-without an extra inset. This pattern only applies to lower subpage sections;
-leave the homepage, product heroes, and wallpaper demos unchanged.
+Feature chapters use the homepage's single-column layout on every screen: a
+640px reading column above an 800px demo, with weight-400 slab headings at 32px
+and 19px body copy. Headings wrap naturally rather than forcing line breaks.
+Phones use 28px headings, 18px body copy, and inset page gutters. Full-width
+section rules use 5.4% ink, with 20px more space below each rule than above.
+Email stages share the chapter alignment without an extra inset. This pattern
+applies to all eight feature subpages; product heroes and wallpaper demos keep
+their existing layouts. Agent connection options stack in the same reading column.
 FAQ disclosures retain the onboarding security section’s reading measure.
 Use “Questions about Macro [product]” for every product FAQ title, matching the
 page’s product name (Mail, Chat, Docs, Tasks, Calls, CRM, Agents, or for GitHub).
@@ -680,7 +681,7 @@ are not shown in the UI. Icon-only comparison tables are not exported as prose
 FAQ answers. Verify table columns, keyboard focus, scrolling, and existing
 functional FAQs after moving or adding a comparison.
 
-Match each comparison’s outer edges to the 1160px demo chapter above it and
+Keep comparison tables at their wider 1160px measure for legibility and
 use the same mobile gutters. Keep horizontal overflow inside the keyboard-focusable
 table. Use neutral check marks, text, and competitor marks with the standard Macro
 logo; white on dark pages and dark ink on cream pages. Comparison accent tokens
@@ -757,7 +758,7 @@ above, scaled proportionally inside its frame. Its sidebar must remain visible
 at 768px and 895px; the canvas must not trigger a narrow app layout. Phones use
 the responsive workspace and navigation drawer. Verify menu anchoring as well as
 sidebar visibility after resizing. BYOA presents macrod and external MCP as two
-connection paths, side by side on desktop and stacked on phones. Both setup links
+connection paths, stacked in one reading column on desktop and phones. Both setup links
 remain visible. MCP commands reuse `AgentMcpSetup` inside an optional disclosure
 without a fixed-height demo window. Verify each client expands and copies its
 command. The closing FAQ answers model, access, review, and background-work questions.
