@@ -28,6 +28,7 @@ export type {
   SplitRouterMiddlewareContext,
   SplitRouterMiddlewareResult,
 } from './router/middleware';
+export { preloadComponent, withinBudget } from './router/preload';
 export type { PendingNavigation } from './router/runner';
 export type {
   ClaimOwner,

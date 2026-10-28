@@ -1826,7 +1826,8 @@ html:not([data-touch-device="true"]) [data-message][data-targeted]:hover{
 /* Immediate touch feedback for mobile soup entity rows */
 [data-soup-entity].touch-highlight [data-swipe-content],
 [data-soup-entity].touch-highlight [data-channel-conversation],
-[data-soup-entity].touch-highlight .soup-list-entity {
+[data-soup-entity].touch-highlight .soup-list-entity,
+[data-soup-entity].touch-highlight.soup-list-entity {
   background-color: var(--color-hover);
   transition: none;
 }

@@ -26,15 +26,26 @@ function hasPreload(component: unknown): component is { preload: unknown } {
   return typeof component === 'function' && 'preload' in component;
 }
 
-function warmComponent(component: unknown): void {
+/**
+ * Starts loading a `lazy()` component's chunk and returns its settlement, or
+ * nothing when the component is not lazy. A failed chunk settles quietly: the
+ * view's own Suspense and error boundaries report it.
+ */
+export function preloadComponent(
+  component: unknown
+): Promise<void> | undefined {
   if (!hasPreload(component)) return;
 
   const preload = component.preload;
   if (typeof preload !== 'function') return;
 
   const chunk: unknown = preload.call(component);
-  if (chunk instanceof Promise)
-    fireAndForget(settleQuietly(chunk), 'split-router');
+  return chunk instanceof Promise ? settleQuietly(chunk) : undefined;
+}
+
+function warmComponent(component: unknown): void {
+  const chunk = preloadComponent(component);
+  if (chunk) fireAndForget(chunk, 'split-router');
 }
 
 function preloadNode(

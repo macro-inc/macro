@@ -50,6 +50,7 @@ import {
   ENTITY_ID_DATA_ATTRIBUTE,
   entityIdSelector,
 } from '@core/dom-selectors';
+import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import type { DateValue } from '@core/util/date';
@@ -124,6 +125,7 @@ import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-qu
 import { isAfter } from 'date-fns';
 import { match } from 'ts-pattern';
 import { applyGraphqlDoneOptimistic } from './actions/graphql-done-optimism';
+import { holdPhoneOpenUntilReady } from './hold-phone-open';
 import {
   searchLocationTarget,
   searchLocationUpdates,
@@ -808,6 +810,21 @@ export const openEntityInSplitFromUnifiedList = async (
       channelReadScope: options.channelReadScope,
     });
   };
+  // Phones hold the pressed row until the pane can slide in with content. A
+  // newer tap, or leaving the list meanwhile, cancels this open.
+  if (isMobile()) {
+    const isLatestTap = await holdPhoneOpenUntilReady(content, channelTarget);
+    const currentSource =
+      splitHandle?.content() ?? splitManager.activeSplit()?.content();
+    if (
+      !isLatestTap ||
+      currentSource?.type !== sourceContent?.type ||
+      currentSource?.id !== sourceContent?.id
+    ) {
+      return;
+    }
+  }
+
   const result = splitManager.openWithSplit(splitContent, {
     search: target ? searchLocationUpdates(content.id, target) : undefined,
     onApplied: markNotificationsSeen,
