@@ -1,9 +1,13 @@
 import type { MacroClient } from '../../utils/client';
-import type { Project } from '../projects/project';
 import type { SearchOpts } from '../search';
-import type { Team } from '../teams/team';
-import { Task } from './task';
+import { Task, type TaskOptions, type TaskSummary } from './task';
 
+/**
+ * Tasks: one `create` call sets initiative, assignees and due date; one
+ * `summaries` call reads many names (`name()` loads each whole document).
+ * Creating a task needs only what the request states; don't research what it
+ * describes unless asked.
+ */
 export class TaskNamespace {
   constructor(private readonly client: MacroClient) {}
 
@@ -12,15 +16,20 @@ export class TaskNamespace {
     return Task.byId(this.client, id);
   }
 
-  /** Create a task. */
-  create(opts: {
-    name: string;
-    markdown?: string;
-    project?: Project;
-    team?: Team;
-    shareWithTeam?: boolean;
-  }): Promise<Task> {
+  /**
+   * Create a task, with its initiative, assignees and due date in the same
+   * request. The task starts Not started.
+   */
+  create(opts: TaskOptions): Promise<Task> {
     return Task.create(this.client, opts);
+  }
+
+  /**
+   * Names and state of many tasks in one request, in the order given. Tasks
+   * that no longer exist are left out.
+   */
+  summaries(tasks: Task[]): Promise<TaskSummary[]> {
+    return Task.summaries(this.client, tasks);
   }
 
   /**

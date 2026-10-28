@@ -63,7 +63,10 @@ export class Initiative extends MacroEntity<InitiativeDetail> {
     ids.map((id) => User.byId(this.client, id)),
   );
 
-  /** Tasks in this initiative. */
+  /**
+   * Tasks in this initiative. For their names, pass them to
+   * `macro.tasks.summaries` (one request) instead of calling `name()` on each.
+   */
   readonly tasks = this.mappedField('taskIds', (ids) =>
     ids.map((id) => Task.byId(this.client, id)),
   );

@@ -1,5 +1,10 @@
 # Class: TaskNamespace
 
+Tasks: one `create` call sets initiative, assignees and due date; one
+`summaries` call reads many names (`name()` loads each whole document).
+Creating a task needs only what the request states; don't research what it
+describes unless asked.
+
 ## Constructors
 
 ### Constructor
@@ -40,18 +45,14 @@ A handle to a task by document id. Details load on first access.
 
 > **create**(`opts`): `Promise`\<[`Task`](../../task/classes/Task.md)\>
 
-Create a task.
+Create a task, with its initiative, assignees and due date in the same
+request. The task starts Not started.
 
 #### Parameters
 
 | Parameter | Type |
 | ------ | ------ |
-| `opts` | \{ `markdown?`: `string`; `name`: `string`; `project?`: [`Project`](../../../projects/project/classes/Project.md); `shareWithTeam?`: `boolean`; `team?`: [`Team`](../../../teams/team/classes/Team.md); \} |
-| `opts.markdown?` | `string` |
-| `opts.name` | `string` |
-| `opts.project?` | [`Project`](../../../projects/project/classes/Project.md) |
-| `opts.shareWithTeam?` | `boolean` |
-| `opts.team?` | [`Team`](../../../teams/team/classes/Team.md) |
+| `opts` | [`TaskOptions`](../../task/interfaces/TaskOptions.md) |
 
 #### Returns
 
@@ -93,3 +94,22 @@ Search tasks by name and content, most relevant first, auto-paginated.
 #### Returns
 
 `AsyncGenerator`\<[`Task`](../../task/classes/Task.md)\>
+
+***
+
+### summaries()
+
+> **summaries**(`tasks`): `Promise`\<[`TaskSummary`](../../task/interfaces/TaskSummary.md)[]\>
+
+Names and state of many tasks in one request, in the order given. Tasks
+that no longer exist are left out.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `tasks` | [`Task`](../../task/classes/Task.md)[] |
+
+#### Returns
+
+`Promise`\<[`TaskSummary`](../../task/interfaces/TaskSummary.md)[]\>
