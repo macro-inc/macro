@@ -12559,6 +12559,7 @@ dependencies = [
  "anyhow",
  "axum",
  "base64 0.22.1",
+ "bot_id",
  "fusionauth",
  "macro_auth",
  "macro_user_id",

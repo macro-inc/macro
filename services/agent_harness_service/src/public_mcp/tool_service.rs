@@ -6,7 +6,9 @@ use crate::public_mcp::tool_response::tool_result_with_media;
 use agent_code_mode::inbound::toolset::UserCodeModeToolContext;
 use agent_inmem::domain::tool_mode::{ToolMode, ToolModeSelector};
 use ai_toolset::{AsyncToolCollection, RequestContext, ToolSet};
+use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
+use mcp_auth_proxy::inbound::middleware::SignedAgent;
 use rmcp::{
     handler::server::ServerHandler,
     model::{
@@ -39,6 +41,22 @@ fn definitions<Context>(toolset: &AsyncToolCollection<Context>) -> impl Iterator
         .with_title(value.annotations.title)
         .annotate(mcp_annotations(&value.annotations))
     })
+}
+
+/// A tool context that can write as an agent instead of the default Macro bot.
+pub trait ActsAsAgent {
+    /// Run mutating tools as `agent`, still on the authenticated user's behalf.
+    fn acting_as(self, agent: BotId) -> Self;
+}
+
+impl ActsAsAgent for ai_tools::ToolServiceContext {
+    fn acting_as(self, agent: BotId) -> Self {
+        self.with_actor(agent)
+    }
+}
+
+impl ActsAsAgent for () {
+    fn acting_as(self, _agent: BotId) -> Self {}
 }
 
 /// Code mode for flagged users: SDK-covered native tools give way to the SDK.
@@ -136,12 +154,32 @@ impl<Context> AuthenticatedToolService<Context> {
     }
 }
 
+impl<Context> AuthenticatedToolService<Context>
+where
+    Context: Clone + ActsAsAgent,
+{
+    /// The context a tool call runs in: as the agent its token was signed
+    /// for, when it was. A self-hosted agent's calls arrive through egress
+    /// with the session's bound agent signed in; OAuth clients and pasted
+    /// API keys carry none and keep the default Macro bot. Nothing the
+    /// request says for itself (headers, arguments) can name a bot.
+    fn call_context(&self, extensions: &rmcp::model::Extensions) -> Context {
+        let agent = extensions
+            .get::<http::request::Parts>()
+            .and_then(|parts| parts.extensions.get::<SignedAgent>());
+        match agent {
+            Some(SignedAgent(agent)) => self.context.clone().acting_as(*agent),
+            None => self.context.clone(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod test;
 
 impl<Context> ServerHandler for AuthenticatedToolService<Context>
 where
-    Context: Clone + Send + Sync + MarkdownImageResolver + 'static,
+    Context: Clone + Send + Sync + MarkdownImageResolver + ActsAsAgent + 'static,
 {
     fn get_info(&self) -> ServerInfo {
         let mut info = ServerInfo::new(ServerCapabilities::builder().enable_tools().build());
@@ -247,7 +285,7 @@ where
 
 impl<Context> AuthenticatedToolService<Context>
 where
-    Context: Clone + Send + Sync + MarkdownImageResolver + 'static,
+    Context: Clone + Send + Sync + MarkdownImageResolver + ActsAsAgent + 'static,
 {
     /// Runs one tool call and classifies how it ended, for analytics.
     async fn run_tool(
@@ -317,7 +355,7 @@ where
         let result = match self
             .toolset
             .try_tool_call(
-                self.context.clone(),
+                self.call_context(&context.extensions),
                 request_context,
                 &request.name,
                 &arguments,

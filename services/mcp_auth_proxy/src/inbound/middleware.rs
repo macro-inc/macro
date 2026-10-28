@@ -10,12 +10,19 @@ use axum::{
         header::{HeaderValue, WWW_AUTHENTICATE},
     },
 };
+use bot_id::BotId;
 use macro_auth::middleware::decode_jwt::{JwtToken, JwtValidationArgs, handler};
 use macro_user_id::user_id::MacroUserIdStr;
 
 /// Validated Macro JWT from the `Authorization: Bearer` header.
 #[derive(Clone)]
 pub struct JwtAccessToken(pub String);
+
+/// The agent a Macro API token was signed for. Only key holders (the agent
+/// harness's egress) sign the claim, so a client can never name a bot; tools
+/// write as this agent on the user's behalf.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SignedAgent(pub BotId);
 
 /// Which kind of credential authenticated an MCP request.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -97,7 +104,8 @@ fn unauthorized_response(request: &Request<Body>, error: Option<&str>) -> Respon
 }
 
 /// Validates `Authorization: Bearer <token>` and stores the authenticated
-/// [`MacroUserIdStr`] and its [`McpAuthMethod`] in the request extensions.
+/// [`MacroUserIdStr`], its [`McpAuthMethod`], and any [`SignedAgent`] in the
+/// request extensions.
 pub async fn validate_bearer(
     axum::extract::State(jwt_args): axum::extract::State<JwtValidationArgs>,
     mut request: Request<Body>,
@@ -123,9 +131,13 @@ pub async fn validate_bearer(
         }
     };
 
-    let (user_id, auth_method) = match jwt_token {
-        JwtToken::MacroAccessToken(token) => (token.macro_user_id, McpAuthMethod::OAuth),
-        JwtToken::MacroApiToken(token) => (token.macro_user_id, McpAuthMethod::ApiKey),
+    let (user_id, auth_method, agent) = match jwt_token {
+        JwtToken::MacroAccessToken(token) => (token.macro_user_id, McpAuthMethod::OAuth, None),
+        JwtToken::MacroApiToken(token) => (
+            token.macro_user_id,
+            McpAuthMethod::ApiKey,
+            token.agent_id.map(BotId::new_from_uuid),
+        ),
     };
 
     let user_id = match MacroUserIdStr::try_from(user_id) {
@@ -138,6 +150,9 @@ pub async fn validate_bearer(
 
     request.extensions_mut().insert(user_id);
     request.extensions_mut().insert(auth_method);
+    if let Some(agent) = agent {
+        request.extensions_mut().insert(SignedAgent(agent));
+    }
     request.extensions_mut().insert(JwtAccessToken(token));
 
     next.run(request).await

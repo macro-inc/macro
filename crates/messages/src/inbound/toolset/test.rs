@@ -555,6 +555,40 @@ async fn comment_on_a_project_posts_as_the_bot_for_the_user() {
     assert!(messages.parent_lookups.lock().unwrap().is_empty());
 }
 
+/// A host running a specific agent (the public MCP for a self-hosted
+/// session, the in-memory runtime) posts each agent's comments as that agent,
+/// still on the acting user's behalf.
+#[tokio::test]
+async fn comments_from_two_agents_post_as_each_agent_for_the_user() {
+    let reviewer = bot_id::BotId::new_from_uuid(Uuid::from_u128(0xA1));
+    let planner = bot_id::BotId::new_from_uuid(Uuid::from_u128(0xA2));
+    let messages = FakeMessages::default();
+    for agent in [reviewer, planner] {
+        let ServiceContext(tool_context) = context(AccessLevel::Comment, messages.clone());
+        comment_on_initiative("Looks good.")
+            .call(ServiceContext(tool_context.with_actor(agent)), request())
+            .await
+            .unwrap();
+    }
+
+    let posts = messages.posts.lock().unwrap();
+    let authors: Vec<_> = posts
+        .iter()
+        .map(|(access, post)| {
+            let EntityAccessAuth::Bot(bot) = access.auth() else {
+                panic!("expected a bot post, got {:?}", access.auth());
+            };
+            assert_eq!(
+                access.acting_user_id().map(|user| user.as_ref()),
+                Some(USER)
+            );
+            assert_eq!(post.attribution, MessageAttribution::ActingUser);
+            bot.bot_id()
+        })
+        .collect();
+    assert_eq!(authors, [reviewer, planner]);
+}
+
 #[tokio::test]
 async fn reply_by_thread_id_alone_finds_its_item() {
     let messages = FakeMessages::default();

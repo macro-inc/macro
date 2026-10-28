@@ -220,6 +220,78 @@ fn authenticated_user_id_requires_user_extension_inside_request_parts() {
     assert_eq!(error.message, "missing user identity — is auth configured?");
 }
 
+/// Stands in for the tool context: which bot its tools would write as.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct WritesAs(BotId);
+
+impl ActsAsAgent for WritesAs {
+    fn acting_as(self, agent: BotId) -> Self {
+        Self(agent)
+    }
+}
+
+fn writing_service() -> AuthenticatedToolService<WritesAs> {
+    AuthenticatedToolService::new(
+        Arc::new(AsyncToolCollection::new()),
+        WritesAs(bot_id::MACRO_AI_BOT_ID),
+        "https://macro.com".to_owned(),
+        url::Url::parse("https://static-file-service.macro.com").unwrap(),
+        McpAnalytics::disabled(),
+    )
+}
+
+fn call_extensions(agent: Option<BotId>, headers: &[(&str, &str)]) -> rmcp::model::Extensions {
+    let mut request = http::Request::new(());
+    for (name, value) in headers {
+        request.headers_mut().insert(
+            http::HeaderName::from_bytes(name.as_bytes()).unwrap(),
+            http::HeaderValue::from_str(value).unwrap(),
+        );
+    }
+    let mut parts = request.into_parts().0;
+    parts
+        .extensions
+        .insert(MacroUserIdStr::try_from_email("owner@macro.com").unwrap());
+    if let Some(agent) = agent {
+        parts.extensions.insert(SignedAgent(agent));
+    }
+    let mut extensions = rmcp::model::Extensions::new();
+    extensions.insert(parts);
+    extensions
+}
+
+/// Two self-hosted agents of one owner each write as themselves, from the
+/// agent egress signed into their session's token.
+#[test]
+fn a_call_signed_for_an_agent_writes_as_that_agent() {
+    let service = writing_service();
+
+    assert_eq!(
+        service.call_context(&call_extensions(Some(BotId::TEST_A), &[])),
+        WritesAs(BotId::TEST_A)
+    );
+    assert_eq!(
+        service.call_context(&call_extensions(Some(BotId::TEST_B), &[])),
+        WritesAs(BotId::TEST_B)
+    );
+}
+
+/// OAuth clients and pasted API keys carry no signed agent and keep the
+/// default bot; a bot the request names for itself is ignored.
+#[test]
+fn an_unsigned_call_cannot_pick_a_bot() {
+    let service = writing_service();
+    let forged = BotId::TEST_A.to_string();
+
+    assert_eq!(
+        service.call_context(&call_extensions(
+            None,
+            &[("x-macro-agent-id", &forged), ("x-macro-bot-id", &forged)],
+        )),
+        WritesAs(bot_id::MACRO_AI_BOT_ID)
+    );
+}
+
 mod code_mode {
     use super::*;
     use agent_code_mode::domain::{
