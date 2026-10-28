@@ -60,6 +60,10 @@ tools — hexagonal, heavily feature-gated.
   Synced Macro drafts in junk/trash must not advance All Mail timestamps.
   Filtered and unfiltered All Mail share the dynamic builder and its per-inbox
   ordered, limited scans; do not add a separate whole-mailbox sort.
+- Spam and Trash select present messages using mailbox facts, including before
+  pagination and address filters; only Trash relaxes the default trash exclusion.
+- Restore Outlook junk drafts to Drafts without Inbox membership; continue rejecting
+  attempts to mark clean drafts as junk.
 
 - Reconcile deferred message deletion before claiming scheduled work; unresolved sends retain their message, attachments, and delivery job.
 - Durable send admission supports Gmail and Outlook; Outlook delivery stays with its provider coordinator.

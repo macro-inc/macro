@@ -87,6 +87,8 @@ const emailTabSources = {
   sent: 'soup',
   scheduled: 'scheduled-message-service',
   reminders: 'reminder-collection',
+  spam: 'provider-folder-rest',
+  trash: 'provider-folder-rest',
   calendar: 'soup',
   drafts: 'soup',
   shared: 'soup',
@@ -95,7 +97,11 @@ const emailTabSources = {
   focus: 'focus-list',
 } as const satisfies Record<
   (typeof EMAIL_TABS)[number]['id'],
-  'soup' | 'scheduled-message-service' | 'reminder-collection' | 'focus-list'
+  | 'soup'
+  | 'scheduled-message-service'
+  | 'reminder-collection'
+  | 'provider-folder-rest'
+  | 'focus-list'
 >;
 const taskTabSources = {
   'my-tasks': 'soup',

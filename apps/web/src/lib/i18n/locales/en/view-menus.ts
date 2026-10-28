@@ -1,5 +1,13 @@
 export default {
   // View tabs
+  favorites: 'Favorites',
+  scheduled: 'Scheduled',
+  reminders: 'Reminders',
+  archived: 'Archived',
+  spam: 'Spam',
+  trash: 'Trash',
+  inbox: 'Inbox',
+  library: 'Library',
   signal: 'Signal',
   noise: 'Noise',
   all: 'All',

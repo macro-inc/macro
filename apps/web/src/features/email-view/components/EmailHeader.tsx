@@ -17,6 +17,7 @@ import { tourTarget } from '@ui/components/Tour';
 import { createSignal, Show } from 'solid-js';
 import { composeEmail } from '../compose-email';
 import {
+  canSearchEmailTab,
   EMAIL_FOCUS_TAB,
   EMAIL_INBOX_TAB_IDS,
   EMAIL_TAB_LABELS,
@@ -104,8 +105,7 @@ export function EmailHeader(props: EmailHeaderProps) {
     focusSearch?.();
     return true;
   };
-  const canSearch = () =>
-    state.tab !== 'scheduled' && state.tab !== 'reminders';
+  const canSearch = () => canSearchEmailTab(state.tab);
 
   // Mail clients search with `/`; elsewhere it opens the app's search view.
   registerHotkey({
@@ -186,7 +186,7 @@ export function EmailHeader(props: EmailHeaderProps) {
           onClick={() => composeEmail(openWithSplit, state.inboxIds)}
         />
       </div>
-      <Show when={state.tab !== 'reminders' && state.tab !== 'scheduled'}>
+      <Show when={canSearch()}>
         <ListHeaderSearch
           ref={searchTarget}
           label="Search email"

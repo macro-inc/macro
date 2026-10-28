@@ -353,6 +353,23 @@ the backend schema containing `setEmailThreadArchived` and
 Browser WASM and native cache builds must include the regenerated schema metadata;
 native offline archive support therefore requires a full app build, not just OTA.
 
+### Spam and Trash
+
+The desktop sidebar and mobile tabs include **Spam** and **Trash**. Spam reads
+Gmail Spam or Outlook Junk; Trash reads Gmail Trash or Outlook Deleted Items.
+Account, alias, and facet filters stay within the selected folder. Mixed threads
+show their latest message in that folder, and folder membership is checked before
+pagination. These views load server pages; full-text search and offline predicate
+filtering are not available for them yet.
+
+Use **Not spam** on a Spam row or **Restore** on a Trash row. The same
+action appears in the selection toolbar for bulk restores, including on mobile.
+Outlook restores received mail to Inbox and provider drafts to Drafts. Gmail removes
+the Spam or Trash label and preserves the remaining labels. A successful request uses
+the existing pending mailbox operation flow; the thread's operation notice shows
+provider confirmation or failure. Failed requests remain retryable, and a partial
+bulk failure does not undo successful restores. No permanent-delete action is added.
+
 ### Cached Mail filtering
 
 The per-query caches for email threads, channels, and native offline document
@@ -391,7 +408,7 @@ headers use the selected Mail view's indexed timestamps, not a preview cached fr
 another view. Drafts and Sent display their latest eligible message snapshot, even
 when a newer normal message is the ALL preview; no message bodies are needed.
 Sent also requires a canonical outbound timestamp. Trashed messages cannot supply
-any preview. All Mail also excludes spam/junk, including its cached preview and
+these cached previews. All Mail also excludes spam/junk, including its cached preview and
 non-draft baseline after draft edits. Mixed threads show the latest message outside
 spam and trash; excluded messages must not consume a page slot. Drafts and Sent
 keep their own canonical preview membership. Mail profiles v5/v6 require fresh

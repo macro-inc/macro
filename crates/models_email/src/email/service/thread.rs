@@ -218,6 +218,8 @@ pub enum PreviewViewStandardLabel {
     Drafts,
     Starred,
     All,
+    Spam,
+    Trash,
     Important,
     Other,
 }

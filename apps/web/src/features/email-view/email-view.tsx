@@ -175,7 +175,9 @@ const MOBILE_EMAIL_TABS: PillTabItem<EmailTab>[] = [
   ...EMAIL_TABS.filter((tab) => tab.id !== EMAIL_FOCUS_TAB.id),
 ].map((tab) => ({
   value: tab.id,
-  label: tab.badge ? `${tab.label} · ${tab.badge}` : tab.label,
+  get label() {
+    return tab.badge ? `${tab.label} · ${tab.badge}` : tab.label;
+  },
 }));
 
 function EmailMobileLayout(props: ParentProps) {

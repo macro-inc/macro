@@ -33,6 +33,9 @@ thread/message API types, DB row types, and Gmail API response shapes.
 
 Parsed message responses expose the draft generation captured in the same SQL snapshot as their content.
 
+Preview wire names include `spam` and `trash`; provider folder semantics belong to
+the email domain and use normalized mailbox facts, not Gmail-only label names.
+
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`

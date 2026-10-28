@@ -102,6 +102,7 @@ export function ListEntity(props: ListEntityProps) {
   // Legacy Soup callers do not pass row behavior explicitly yet.
   const soupView = useMaybeSoupView();
   const rowActions = children(() => props.actions);
+  const touchActions = children(() => props.touchActions);
   const leadingAction = children(() => props.leadingAction);
   const titleLeading = children(() => props.titleLeading);
   const icon = children(() => props.icon);
@@ -165,7 +166,7 @@ export function ListEntity(props: ListEntityProps) {
   const layoutProps = (): LayoutProps => ({
     entity: props.entity,
     actions: !isTouchDevice() ? rowActions() : undefined,
-    leadingAction: !isTouchDevice() ? leadingAction() : undefined,
+    leadingAction: isTouchDevice() ? touchActions() : leadingAction(),
     titleLeading: titleLeading(),
     icon: icon(),
     titleTrailing: titleTrailing(),
