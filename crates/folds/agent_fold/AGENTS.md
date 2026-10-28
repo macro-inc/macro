@@ -70,6 +70,9 @@ Server-added invocation context is marked by the protocol’s block metadata.
 Omit those blocks from user messages, including replay; preserve unmarked text
 even when it contains agent-context tags.
 
+Terminal failures remain `TurnState::Failed` until a new turn starts; the existing
+session projection carries that state to list rows without loading transcripts.
+
 ## Checks
 
 - `cargo test -p agent_fold`.

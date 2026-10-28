@@ -1709,6 +1709,13 @@ with `set_pull_request`, then use **Refresh changes**. An unavailable or
 oversized PR is explained in the pane; there is no branch or container fallback.
 Refresh request failures show a retry banner while keeping the last diff visible.
 The pane does not create PRs or generate their descriptions.
+
+### Failed session rows
+
+A failed agent turn shows a small red status dot in Home and Agents, including
+after reloading the list. Open the row to read the existing transcript error.
+Starting another turn clears the failure dot; unread state remains independent.
+
 ### Live development previews
 
 Coding agents can call the internal **SharePreview** tool with their local HTTP
