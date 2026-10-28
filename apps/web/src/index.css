@@ -858,6 +858,9 @@ html:not([data-touch-device="true"]) [data-invert] {
 @custom-variant light-mode (&:where([data-theme-light="true"] *));
 @custom-variant dark-mode (&:where([data-theme-light="false"] *));
 
+/* Expanded content is not a pressed action; only popup triggers stay active. */
+@custom-variant popup-open (&:where([aria-haspopup]:not([aria-haspopup="false"]))[aria-expanded="true"]);
+
 /* Desktop floating surfaces use a close contact shadow rather than the longer
    touch shadow. */
 html:not([data-touch-device='true']) {

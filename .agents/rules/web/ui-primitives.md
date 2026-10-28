@@ -56,6 +56,9 @@ Applies to `apps/web/src/components/ui`, including ports from shadcn-solid.
   remain flat, and own their hover/pressed/disabled states. The frame owns its
   material once, without a whole-group hover treatment. Group labels use
   `aria-label`; `CopyButton` joins with `as={ButtonGroup.Button}`.
+- Keep `aria-expanded` on disclosure controls without treating expanded content
+  as a selected action. Button highlights an open popup only when the same
+  trigger has `aria-haspopup`; use `aria-pressed` for genuine action toggles.
 - Keep Button's visible focus outline suppressed in ordinary color modes and
   retain its forced-colors indicator. Do not remove other controls' focus styling.
 - Keep Tooltip's assembled and compound APIs on the same implementation and

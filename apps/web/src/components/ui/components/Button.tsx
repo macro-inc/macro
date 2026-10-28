@@ -27,7 +27,7 @@ const buttonFrames = {
     'bg-button-neutral-bg text-button-neutral-ink border-transparent shadow-button',
   secondary: cn(
     'bg-button-secondary-bg text-ink-muted border-border-secondary dark-mode:border-transparent shadow-button',
-    'light-mode:not-data-disabled:active:border-border-secondary light-mode:aria-pressed:border-border-secondary light-mode:aria-expanded:border-border-secondary'
+    'light-mode:not-data-disabled:active:border-border-secondary light-mode:aria-pressed:border-border-secondary light-mode:popup-open:border-border-secondary'
   ),
   outline:
     'bg-transparent text-ink-muted border-border-secondary bg-none shadow-none',
@@ -39,10 +39,10 @@ const buttonFrames = {
 };
 
 const buttonMutedTextStyles =
-  'not-data-disabled:hover:text-ink not-data-disabled:focus-visible:text-ink not-data-disabled:active:text-ink aria-pressed:text-ink aria-expanded:text-ink';
-// Headless data-expanded can describe surrounding context rather than this action.
+  'not-data-disabled:hover:text-ink not-data-disabled:focus-visible:text-ink not-data-disabled:active:text-ink aria-pressed:text-ink popup-open:text-ink';
+// Disclosure state stays semantic; only open popups receive active styling.
 const buttonPressedStyles =
-  'not-data-disabled:active:bg-none aria-pressed:bg-none aria-expanded:bg-none not-data-disabled:active:shadow-none aria-pressed:shadow-none aria-expanded:shadow-none';
+  'not-data-disabled:active:bg-none aria-pressed:bg-none popup-open:bg-none not-data-disabled:active:shadow-none aria-pressed:shadow-none popup-open:shadow-none';
 
 /** Shared recipe for Button and headless controls that own their rendering. */
 const buttonStyles = createVariants(
@@ -51,39 +51,39 @@ const buttonStyles = createVariants(
     variant: {
       primary: cn(
         buttonFrames.primary,
-        'not-data-disabled:hover:bg-button-primary-hover not-data-disabled:active:bg-button-primary-pressed aria-pressed:bg-button-primary-pressed aria-pressed:not-data-disabled:hover:bg-button-primary-pressed aria-expanded:bg-button-primary-pressed aria-expanded:not-data-disabled:hover:bg-button-primary-pressed',
+        'not-data-disabled:hover:bg-button-primary-hover not-data-disabled:active:bg-button-primary-pressed aria-pressed:bg-button-primary-pressed aria-pressed:not-data-disabled:hover:bg-button-primary-pressed popup-open:bg-button-primary-pressed popup-open:not-data-disabled:hover:bg-button-primary-pressed',
         buttonPressedStyles
       ),
       neutral: cn(
         buttonFrames.neutral,
-        'not-data-disabled:hover:bg-button-neutral-hover not-data-disabled:active:bg-button-neutral-pressed aria-pressed:bg-button-neutral-pressed aria-pressed:not-data-disabled:hover:bg-button-neutral-pressed aria-expanded:bg-button-neutral-pressed aria-expanded:not-data-disabled:hover:bg-button-neutral-pressed',
+        'not-data-disabled:hover:bg-button-neutral-hover not-data-disabled:active:bg-button-neutral-pressed aria-pressed:bg-button-neutral-pressed aria-pressed:not-data-disabled:hover:bg-button-neutral-pressed popup-open:bg-button-neutral-pressed popup-open:not-data-disabled:hover:bg-button-neutral-pressed',
         buttonPressedStyles
       ),
       secondary: cn(
         buttonFrames.secondary,
         buttonMutedTextStyles,
-        'not-data-disabled:hover:bg-button-secondary-hover not-data-disabled:active:bg-button-secondary-pressed aria-pressed:bg-button-secondary-pressed aria-pressed:not-data-disabled:hover:bg-button-secondary-pressed aria-expanded:bg-button-secondary-pressed aria-expanded:not-data-disabled:hover:bg-button-secondary-pressed',
+        'not-data-disabled:hover:bg-button-secondary-hover not-data-disabled:active:bg-button-secondary-pressed aria-pressed:bg-button-secondary-pressed aria-pressed:not-data-disabled:hover:bg-button-secondary-pressed popup-open:bg-button-secondary-pressed popup-open:not-data-disabled:hover:bg-button-secondary-pressed',
         buttonPressedStyles
       ),
       outline: cn(
         buttonFrames.outline,
         buttonMutedTextStyles,
-        'not-data-disabled:hover:bg-button-outline-hover not-data-disabled:active:bg-button-outline-pressed aria-pressed:bg-button-outline-pressed aria-pressed:not-data-disabled:hover:bg-button-outline-pressed aria-expanded:bg-button-outline-pressed aria-expanded:not-data-disabled:hover:bg-button-outline-pressed',
+        'not-data-disabled:hover:bg-button-outline-hover not-data-disabled:active:bg-button-outline-pressed aria-pressed:bg-button-outline-pressed aria-pressed:not-data-disabled:hover:bg-button-outline-pressed popup-open:bg-button-outline-pressed popup-open:not-data-disabled:hover:bg-button-outline-pressed',
         buttonPressedStyles
       ),
       ghost: cn(
         buttonFrames.ghost,
-        'not-data-disabled:hover:bg-button-tertiary-hover not-data-disabled:hover:text-ink not-data-disabled:active:bg-button-tertiary-pressed not-data-disabled:active:text-ink aria-pressed:bg-button-tertiary-pressed aria-pressed:text-ink aria-pressed:not-data-disabled:hover:bg-button-tertiary-pressed aria-expanded:bg-button-tertiary-pressed aria-expanded:text-ink aria-expanded:not-data-disabled:hover:bg-button-tertiary-pressed',
+        'not-data-disabled:hover:bg-button-tertiary-hover not-data-disabled:hover:text-ink not-data-disabled:active:bg-button-tertiary-pressed not-data-disabled:active:text-ink aria-pressed:bg-button-tertiary-pressed aria-pressed:text-ink aria-pressed:not-data-disabled:hover:bg-button-tertiary-pressed popup-open:bg-button-tertiary-pressed popup-open:text-ink popup-open:not-data-disabled:hover:bg-button-tertiary-pressed',
         buttonPressedStyles
       ),
       danger: cn(
         buttonFrames.danger,
-        'not-data-disabled:hover:bg-button-danger-hover not-data-disabled:active:bg-button-danger-pressed aria-pressed:bg-button-danger-pressed aria-pressed:not-data-disabled:hover:bg-button-danger-pressed aria-expanded:bg-button-danger-pressed aria-expanded:not-data-disabled:hover:bg-button-danger-pressed',
+        'not-data-disabled:hover:bg-button-danger-hover not-data-disabled:active:bg-button-danger-pressed aria-pressed:bg-button-danger-pressed aria-pressed:not-data-disabled:hover:bg-button-danger-pressed popup-open:bg-button-danger-pressed popup-open:not-data-disabled:hover:bg-button-danger-pressed',
         buttonPressedStyles
       ),
       success: cn(
         buttonFrames.success,
-        'not-data-disabled:hover:bg-button-success-hover not-data-disabled:active:bg-button-success-pressed aria-pressed:bg-button-success-pressed aria-pressed:not-data-disabled:hover:bg-button-success-pressed aria-expanded:bg-button-success-pressed aria-expanded:not-data-disabled:hover:bg-button-success-pressed',
+        'not-data-disabled:hover:bg-button-success-hover not-data-disabled:active:bg-button-success-pressed aria-pressed:bg-button-success-pressed aria-pressed:not-data-disabled:hover:bg-button-success-pressed popup-open:bg-button-success-pressed popup-open:not-data-disabled:hover:bg-button-success-pressed',
         buttonPressedStyles
       ),
       link: cn(
