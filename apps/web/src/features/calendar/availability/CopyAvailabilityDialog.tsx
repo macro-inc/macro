@@ -196,7 +196,11 @@ export function CopyAvailabilityDialog(props: ManagedDialogProps) {
               class="flex w-full items-center justify-between gap-2 text-sm text-ink-muted"
             >
               Could not load availability.
-              <Button variant="secondary" size="sm" onClick={availability.retry}>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={availability.retry}
+              >
                 Retry
               </Button>
             </div>

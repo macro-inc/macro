@@ -256,6 +256,10 @@ export default defineDoc({
     { id: 'header', title: 'Header action', render: HeaderDemo, fill: true },
     { id: 'trigger', title: 'Headless menu trigger', render: TriggerDemo },
     { id: 'themes', title: 'Light and dark', render: ThemesDemo, fill: true },
-    { id: 'finishes', title: 'Automatic and flat finishes', render: FinishesDemo },
+    {
+      id: 'finishes',
+      title: 'Automatic and flat finishes',
+      render: FinishesDemo,
+    },
   ],
 });

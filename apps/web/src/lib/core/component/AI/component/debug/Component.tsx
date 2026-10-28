@@ -104,7 +104,10 @@ function ChatInputBoxInner() {
           <Button onClick={() => input.setIsGenerating(true)} variant="primary">
             Generate
           </Button>
-          <Button onClick={() => input.setIsGenerating(false)} variant="primary">
+          <Button
+            onClick={() => input.setIsGenerating(false)}
+            variant="primary"
+          >
             Stop
           </Button>
         </div>

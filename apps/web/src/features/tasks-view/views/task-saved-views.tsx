@@ -11,7 +11,13 @@ import BookmarkIcon from '@phosphor/bookmark-simple.svg';
 import DotsIcon from '@phosphor/dots-three.svg';
 import InfoIcon from '@phosphor/info.svg';
 import WarningIcon from '@phosphor/warning-circle.svg';
-import { Button, ButtonGroup, type DialogHandle, Dropdown, openDialog } from '@ui';
+import {
+  Button,
+  ButtonGroup,
+  type DialogHandle,
+  Dropdown,
+  openDialog,
+} from '@ui';
 import { ok } from 'neverthrow';
 import { batch, For, getOwner, type Owner, onCleanup, Show } from 'solid-js';
 import { v4 as uuid } from 'uuid';
@@ -753,7 +759,9 @@ export function TaskSavedViewFailure() {
   return (
     <div class="flex h-full flex-col items-center justify-center gap-4 p-6 text-sm">
       <p role="alert">{message()}</p>
-      <Button variant="ghost" onClick={() => setTab('my-tasks')}>Return to Tasks</Button>
+      <Button variant="ghost" onClick={() => setTab('my-tasks')}>
+        Return to Tasks
+      </Button>
     </div>
   );
 }

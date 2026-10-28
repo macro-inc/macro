@@ -326,7 +326,9 @@ export function UsageSettingsView(props: { context: UsageContext }) {
                     Open paid usage-limit dialog
                   </Button>
                   <Button
-                    variant={developer().beforeLaunch() ? 'primary' : 'secondary'}
+                    variant={
+                      developer().beforeLaunch() ? 'primary' : 'secondary'
+                    }
                     size="sm"
                     aria-pressed={developer().beforeLaunch()}
                     onClick={developer().previewBeforeLaunch}

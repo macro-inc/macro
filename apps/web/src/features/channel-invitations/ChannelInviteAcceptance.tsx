@@ -131,7 +131,12 @@ function JoinConfirmation(props: { onJoin: () => void }) {
           Confirm that you want to join this channel.
         </p>
       </div>
-      <Button variant="secondary" size="md" class="w-full" onClick={props.onJoin}>
+      <Button
+        variant="secondary"
+        size="md"
+        class="w-full"
+        onClick={props.onJoin}
+      >
         Join Channel
       </Button>
     </div>

@@ -331,7 +331,10 @@ export function DriveList() {
                         </Button>
                       </Show>
                       <Show when={hasFilters()}>
-                        <Button variant="secondary" onClick={state.clearFilters}>
+                        <Button
+                          variant="secondary"
+                          onClick={state.clearFilters}
+                        >
                           Clear filters
                         </Button>
                       </Show>

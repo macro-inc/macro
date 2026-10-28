@@ -373,7 +373,10 @@ export function ListNavigationButtons(props: {
         </ButtonGroup.Button>
         <ButtonGroup.Button
           aria-label={t('splitMenu.nextItem')}
-          tooltip={{ content: t('splitMenu.nextItem'), hotkey: TOKENS.entity.step.end }}
+          tooltip={{
+            content: t('splitMenu.nextItem'),
+            hotkey: TOKENS.entity.step.end,
+          }}
           variant="ghost"
           size={iconSize()}
           disabled={!props.navigation.canNext()}

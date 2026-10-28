@@ -476,7 +476,11 @@ export function PresenterView(props: {
         >
           <div class="mb-3 flex items-center justify-between">
             <h2 class="font-medium">All slides</h2>
-            <Button variant="secondary" size="sm" onClick={() => setGrid(false)}>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setGrid(false)}
+            >
               Back
             </Button>
           </div>

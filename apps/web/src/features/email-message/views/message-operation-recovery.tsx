@@ -76,7 +76,11 @@ export function MessageOperationRecovery(props: {
               editing.
             </p>
             <Show when={props.onReloadDraft}>
-              <Button size="sm" variant="secondary" onClick={props.onReloadDraft}>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={props.onReloadDraft}
+              >
                 Reload draft
               </Button>
             </Show>

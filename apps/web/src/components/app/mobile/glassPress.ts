@@ -72,7 +72,9 @@ export function installGlassPress() {
     const element =
       input ??
       control?.closest<HTMLElement>(GROUP) ??
-      (control?.matches('.glass, [class~="touch:glass"], .island, [class~="touch:island"]')
+      (control?.matches(
+        '.glass, [class~="touch:glass"], .island, [class~="touch:island"]'
+      )
         ? control
         : undefined);
     if (!element) return;

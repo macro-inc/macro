@@ -594,7 +594,11 @@ export default function DocumentWherePlayground() {
           </section>
 
           <section class="flex gap-2">
-            <Button variant="secondary" size="sm" onClick={loadJsonFromControls}>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={loadJsonFromControls}
+            >
               Edit JSON
             </Button>
             <Button
