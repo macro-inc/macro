@@ -5,8 +5,8 @@ Datadog monitors and synthetic tests as code.
 36 resources here (35 monitors and one synthetic test) already exist in
 Datadog. This stack **adopts** them — it does not recreate them. `import.json`
 lists every one by id. Everything else is declared here first and is created
-on deploy: the rule catalog's monitors (`monitors/catalog.ts`), the rollout
-monitors, the GoAlert webhooks and health check, and one log-based metric.
+on deploy: the prod threshold and anomaly monitors (`monitors/macrodb.ts`,
+`redis.ts`, `queues.ts`, `regressions.ts`), the rollout monitors, the GoAlert webhooks and health check, and one log-based metric.
 
 ## Routing
 
@@ -31,18 +31,20 @@ pager is down, a page through it would never arrive.
 Paging monitors: the app-down synthetic, ALB non-200 responses and low healthy
 hosts, Lambda error count, web-app source errors, macro-cache memory, RDS high
 CPU, RDS storage, RDS proxy connections, the three SES reputation monitors, the
-GraphQL soup DSS 5xx and DB connections monitors, and every catalog rule with
-`pages: true`. `error-logs-overall` notifies without paging because it crosses
+GraphQL soup DSS 5xx and DB connections monitors, and macrodb blocked
+connections. `error-logs-overall` notifies without paging because it crosses
 its thresholds many times a day.
 
-## Rule catalog
+## Prod threshold monitors
 
-`monitors/catalog.ts` creates one monitor, `catalog-<id>`, per rule in
-[`infra/alerts/rules.json`](../../alerts/rules.json). The catalog also drives
-the Grafana mirror; see [its README](../../alerts/README.md). Add or tune a
-rule there, not here. The error-logs anomaly rule reads `macro.logs.errors`,
-a log-based metric declared next to the generator, because log monitors have no
-anomaly function.
+`monitors/macrodb.ts`, `redis.ts`, `queues.ts` and `regressions.ts` declare
+the prod threshold, forecast and anomaly monitors with `prodMonitor()`. The ones
+on CloudWatch metrics have hand-written copies in Grafana
+(`infra/stacks/observability/nixos/alerting.nix`), and Grafana pages on-call for
+the critical ones through GoAlert. Their Datadog copies only notify, so one
+incident pages once. Keep thresholds and windows in sync by hand. The error-logs
+anomaly monitor reads `macro.logs.errors`, a log-based metric declared in
+`regressions.ts`, because log monitors have no anomaly function.
 
 ## Read this before deploying
 
@@ -86,7 +88,7 @@ The gate is that preview:
 - **35 monitors + 1 synthetic test updated, in `message` and
   `renotifyInterval` only** — the routing move. The two AI-editing monitors,
   already deployed from this stack, update the same way.
-- **69 resources to create**: 64 monitors (25 catalog, 19 GraphQL soup, 9
+- **69 resources to create**: 64 monitors (25 prod threshold and anomaly, 19 GraphQL soup, 9
   notification retention, 10 WhatsApp session, 1 native call push), 2 webhooks,
   1 log-based metric, the GoAlert synthetic test, and the notification
   retention dashboard.
@@ -155,10 +157,10 @@ is applied. Reach for `restrictedRoles` if convention stops being enough.
 
 ## Adding a monitor
 
-Add threshold rules to the [catalog](../../alerts/README.md). Declare anything
-the catalog can't express in the matching `monitors/*.ts` with
-`new datadog.Monitor(...)`, ending its message with `notify({ pages })` and
-setting `renotifyInterval: RENOTIFY_MINUTES`. Use the `adopted()` helper only
+Add a prod threshold or anomaly monitor with `prodMonitor()` in the matching
+`monitors/*.ts`, and its Grafana copy in `alerting.nix` when the metric is in
+CloudWatch. Declare anything else with `new datadog.Monitor(...)`, ending its
+message with `notify({ pages })` and setting `renotifyInterval: RENOTIFY_MINUTES`. Use the `adopted()` helper only
 for monitors that already exist in Datadog — it sets `protect`, which is there
 to stop a program that no longer declares a pre-existing monitor from deleting
 it, and the hourly renotify default.

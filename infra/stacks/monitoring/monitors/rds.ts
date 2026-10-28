@@ -148,8 +148,8 @@ adopted('rds-low-freeable-memory', {
   type: 'query alert',
   query:
     'avg(last_1h):avg:aws.rds.freeable_memory{environment:prod OR database_instance:macro-db-prod.ctkwyjgndnfr.us-east-1.rds.amazonaws.com} by {database_instance} < 2000000000',
-  // The catalog's macrodb-*-freeable-memory monitors page on the same metric
-  // over a shorter window; this one only notifies.
+  // macrodb.ts and Grafana watch the same metric over a shorter window; this
+  // one only notifies.
   message: `{{database_instance.name}} freeable memory is {{value}} bytes.
 
 ${notify({ pages: false })}`,

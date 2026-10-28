@@ -1,7 +1,7 @@
 # Queue alerts
 
 Runbook for the SQS monitors in
-[`infra/alerts/rules.json`](../../infra/alerts/rules.json).
+[`monitors/queues.ts`](../../infra/stacks/monitoring/monitors/queues.ts).
 
 ## Dead letters
 

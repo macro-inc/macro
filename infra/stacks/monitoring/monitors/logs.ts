@@ -102,7 +102,7 @@ adopted('error-logs-overall', {
   type: 'log alert',
   query: 'formula("query - query1").last("5m") > 25000',
   // Crosses its thresholds many times a day, so it notifies without paging.
-  // The catalog's per-service anomaly monitors cover regressions.
+  // The per-service anomaly monitors in regressions.ts cover regressions.
   message: `Increase in overall count of error logs across production services.
 Please view datadog to checkout what specific items may be causing the issues.
 

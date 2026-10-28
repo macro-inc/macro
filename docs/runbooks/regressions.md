@@ -1,7 +1,7 @@
 # Error and latency regression alerts
 
 Runbook for the per-service anomaly monitors in
-[`infra/alerts/rules.json`](../../infra/alerts/rules.json). Each compares a
+[`monitors/regressions.ts`](../../infra/stacks/monitoring/monitors/regressions.ts). Each compares a
 service's errors or latency with its own usual band for that time of day, so it
 fires on a change, not on a fixed count.
 

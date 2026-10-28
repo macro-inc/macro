@@ -4,14 +4,14 @@
 
 Org-global Datadog monitors, synthetics, and rollout dashboards. This stack is
 manual and has only a prod stack, even for monitors covering both environments.
-Threshold rules come from the shared catalog in `infra/alerts/rules.json`
-(`monitors/catalog.ts`); every monitor notifies through `notify.ts`.
+Prod threshold and anomaly monitors are in `monitors/{macrodb,redis,queues,regressions}.ts`
+(`prodMonitor()` in `prod-monitor.ts`); every monitor notifies through `notify.ts`.
 
 ## Checks
 
 From `infra/`:
-- `bun test --isolate stacks/monitoring alerts` (routing, catalog and
-  notification retention tests). `--isolate` matters: the Pulumi mock tests
+- `bun test --isolate stacks/monitoring` (routing and notification retention
+  tests). `--isolate` matters: the Pulumi mock tests
   each import modules that register resources, and a shared module cache
   hides them from the second file.
 - `bun run check`
@@ -21,6 +21,10 @@ From `infra/`:
 
 ## Gotchas
 
+- The CloudWatch-based monitors in `macrodb.ts`, `redis.ts` and `queues.ts`
+  have hand-written Grafana copies in
+  `infra/stacks/observability/nixos/alerting.nix`. Change thresholds and windows
+  in both. Grafana pages for those, so their Datadog copies use `pages: false`.
 - Read `README.md` before deployment: imported resources must be adopted first
   to avoid duplicate alerts. Never deploy without explicit approval.
 - Deploying needs the `goalertIntegrationKey` secret in stack config, and

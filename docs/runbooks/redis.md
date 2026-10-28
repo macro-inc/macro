@@ -1,7 +1,7 @@
 # Redis alerts
 
 Runbook for the ElastiCache monitors in
-[`infra/alerts/rules.json`](../../infra/alerts/rules.json): memory used,
+[`monitors/redis.ts`](../../infra/stacks/monitoring/monitors/redis.ts): memory used,
 memory forecast, and evictions, per node of every prod cache.
 
 ## Memory

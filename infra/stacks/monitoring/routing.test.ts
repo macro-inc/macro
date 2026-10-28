@@ -74,21 +74,25 @@ test('every monitor renotifies while it stays in alert', () => {
   }
 });
 
-test('paging catalog rules open and close a GoAlert alert; the rest only notify', () => {
-  const freeable = monitors().find(
-    (r) => r.name === 'catalog-macrodb-primary-freeable-memory'
+test('paging prod monitors open and close a GoAlert alert; the rest only notify', () => {
+  const blocked = monitors().find(
+    (r) => r.name === 'macrodb-blocked-connections'
   );
-  expect(freeable?.inputs.message).toContain(
+  expect(blocked?.inputs.message).toContain(
     '{{#is_alert}}Paging on-call. @webhook-goalert{{/is_alert}}'
   );
-  expect(freeable?.inputs.message).toContain(
+  expect(blocked?.inputs.message).toContain(
     '{{#is_recovery}}@webhook-goalert-close{{/is_recovery}}'
   );
-  expect(freeable?.inputs.priority).toBe('2');
+  expect(blocked?.inputs.priority).toBe('2');
 
-  const latency = monitors().find(
-    (r) => r.name === 'catalog-macrodb-read-latency'
+  // Grafana pages for this one, so Datadog only notifies.
+  const freeable = monitors().find(
+    (r) => r.name === 'macrodb-primary-freeable-memory'
   );
+  expect(freeable?.inputs.message).not.toContain('@webhook-goalert');
+
+  const latency = monitors().find((r) => r.name === 'macrodb-read-latency');
   expect(latency?.inputs.message).not.toContain('@webhook-goalert');
   expect(latency?.inputs.priority).toBe('3');
 });
@@ -103,7 +107,7 @@ test('the GoAlert health check does not page through GoAlert', () => {
 
 test('anomaly rules recover at zero and carry their alert window', () => {
   const anomaly = monitors().find(
-    (r) => r.name === 'catalog-apm-server-error-anomaly'
+    (r) => r.name === 'apm-server-error-anomaly'
   );
   expect(anomaly?.inputs.monitorThresholds).toEqual({
     critical: '1',

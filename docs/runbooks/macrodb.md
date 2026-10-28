@@ -1,7 +1,7 @@
 # MacroDB alerts
 
 Runbook for the `macro-db-prod` and `macro-db-prod-read-replica` monitors in
-[`infra/alerts/rules.json`](../../infra/alerts/rules.json). Both instances are
+[`monitors/macrodb.ts`](../../infra/stacks/monitoring/monitors/macrodb.ts). Both instances are
 `db.m9g.2xlarge`: 8 vCPU, about 30 GB of memory, `max_connections` 3,439.
 
 Start in three places:
