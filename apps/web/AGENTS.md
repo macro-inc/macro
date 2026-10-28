@@ -551,3 +551,11 @@ See the [download walkthrough](../../docs/agent-guide/files.md#downloading-files
 
 - Reuse `CreateMenuItem` for explanatory New menu entries: original icons, a title, and muted wrapping descriptions, preserving the existing `ViewCreateButton` trigger and each action's feature gates.
 - Keep transient toasts in their bounded stack and persistent prompts/reminders in separate regions; preserve keyboard dismissal, full mobile descriptions, and remaining-time pause on hover/focus.
+
+### Agent result task lists
+
+Agent result task titles wrap above live metadata; nested horizontal groups
+stack below 672px of container width. The backend-free browser regression is
+`bunx playwright test --config src/features/dynamic-ui/browser-test/playwright.config.ts`.
+It covers desktop and touch layouts, narrow containers inside a wide viewport,
+unbroken titles, and keyboard opening.

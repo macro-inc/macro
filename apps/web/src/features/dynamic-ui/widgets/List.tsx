@@ -16,7 +16,8 @@ import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import type { EntityIconSelector } from '@core/component/EntityIcon';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import { ListEntity, ListLayoutProvider } from '@entity/composed/ListEntity';
-import type { EntityData } from '@entity/types/entity';
+import { Entity } from '@entity/entity';
+import { type EntityData, isTaskEntity } from '@entity/types/entity';
 import type { WithNotification } from '@entity/types/notification';
 import type { GroupByField, GroupMeta } from '@queries/soup/grouped/types';
 import {
@@ -24,8 +25,10 @@ import {
   type SoupAstItemsQueryArgs,
   useSoupAstItemsQuery,
 } from '@queries/soup/items';
+import { formatDocumentName } from '@service-storage/util/filename';
 import { createMemo, For, Show, Suspense } from 'solid-js';
 import type { EntityRef, WidgetOf } from '../schema';
+import { TaskResultRow } from './TaskResultRow';
 
 /**
  * A list of workspace items, as an agent collection card: a header with the
@@ -33,9 +36,8 @@ import type { EntityRef, WidgetOf } from '../schema';
  * with "N more below" once the list is long.
  *
  * ── Real unified-list rows ───────────────────────────────────────────────────
- * Rows render via {@link ListEntity} — the very same component the soup list uses
- * — so each row shows icon + title + meta + timestamp and, for TASKS, the live
- * status / priority / assignee pills (`Entity.Properties` inside the wide layout).
+ * Tasks use {@link TaskResultRow} with a wrapping title above live properties
+ * and the timestamp. Other items retain the unified list’s {@link ListEntity}.
  *
  * `ListEntity` takes a full `EntityData` (not a bare `{ id, type }` ref) and the
  * task pills read `entity.properties`. Both come from the soup item query: we
@@ -116,33 +118,31 @@ function queryItemFilter(source: Query): SoupApiItemFilter {
   return (item) => soupItemMatchesQuery(item, source);
 }
 
-/**
- * One row: a real `ListEntity`, rendered flush the way SoupView / the unified
- * list do. The row's own `Entity.Root` supplies its height, the rounded inset
- * `bg-hover/30` highlight pill (`w-[calc(100%-0.5rem)] mx-1`), and hover state —
- * so it must sit in a flush container, NOT a bordered/`divide-y` card, or the
- * pill ends up boxed in by per-row dividers. `hideCheckbox` drops the
- * multi-select checkbox (read-only embed), leaving just the icon / unread dot.
- *
- * Clicking opens the entity in a split, exactly like the real unified list
- * (`soup-view.tsx`) and the other standalone `ListEntity` embeds (e.g.
- * `ContactEmailsSection`) — via `openEntityInSplitFromUnifiedList`, which
- * dispatches per `entity.type` and works for every type here already,
- * `email` included.
- */
+/** Keep task titles readable while retaining live properties and split navigation. */
 function Row(props: { entity: WithNotification<EntityData> }) {
   const notificationSource = useGlobalNotificationSource();
+  const open = () =>
+    openEntityInSplitFromUnifiedList(props.entity, { notificationSource });
   return (
     <div data-card-row class="min-w-0">
-      <ListEntity
-        entity={props.entity}
-        hideCheckbox
-        onClick={() =>
-          openEntityInSplitFromUnifiedList(props.entity, {
-            notificationSource,
-          })
+      <Show
+        when={isTaskEntity(props.entity) && props.entity}
+        fallback={
+          <ListEntity entity={props.entity} hideCheckbox onClick={open} />
         }
-      />
+      >
+        {(task) => (
+          <TaskResultRow
+            title={formatDocumentName(task().name, task().fileType, {
+              fullyQualifiedBlockName: true,
+            })}
+            icon={<Entity.Icon entity={task()} />}
+            metadata={<Entity.Properties entity={task()} />}
+            timestamp={<Entity.Timestamp entity={task()} />}
+            onOpen={open}
+          />
+        )}
+      </Show>
     </div>
   );
 }
@@ -252,8 +252,8 @@ function Rows(props: ListProps) {
 }
 
 /**
- * Many workspace items as one collection card. Rows are the unified list's
- * own, live from the soup query; a long list holds a fixed height and says
+ * Many workspace items as one collection card. Rows use live soup data with
+ * wrapping task titles; a long list holds a fixed height and says
  * how much is below it, and while the query loads the card keeps its
  * height with skeleton rows.
  */
