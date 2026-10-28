@@ -726,9 +726,11 @@ body.tauri-ios {
   --button-elevated-top-edge: var(--glass-desktop-top-edge);
   --button-elevated-inner-edge: var(--glass-desktop-inner-edge);
 
-  --button-secondary-bg: oklch(1 0 0 / 4%);
-  --button-secondary-hover: oklch(1 0 0 / 6%);
-  --button-secondary-pressed: oklch(1 0 0 / 8%);
+  /* Tint the face before applying opacity so dark state strengths stay fixed. */
+  --button-secondary-face: color-mix(in srgb, white 98%, var(--color-accent) 2%);
+  --button-secondary-bg: oklch(from var(--button-secondary-face) l c h / 4%);
+  --button-secondary-hover: oklch(from var(--button-secondary-face) l c h / 6%);
+  --button-secondary-pressed: oklch(from var(--button-secondary-face) l c h / 8%);
   --button-outline-hover: oklch(1 0 0 / 8%);
   --button-outline-pressed: oklch(1 0 0 / 10%);
   --button-tertiary-bg: transparent;
@@ -747,10 +749,10 @@ body.tauri-ios {
 }
 
 [data-theme-light='true'] {
-  /* White neutral faces retain black shading for hover and pressed states. */
-  --button-secondary-bg: white;
-  --button-secondary-hover: color-mix(in srgb, white, black 4%);
-  --button-secondary-pressed: color-mix(in srgb, white, black 8%);
+  /* Keep hover and pressed shading neutral over the lightly tinted face. */
+  --button-secondary-bg: var(--button-secondary-face);
+  --button-secondary-hover: color-mix(in srgb, var(--button-secondary-face), black 4%);
+  --button-secondary-pressed: color-mix(in srgb, var(--button-secondary-face), black 8%);
   /* Raised light controls keep the outer frame without inset highlights. */
   --button-elevated-top-edge: transparent;
   --button-elevated-inner-edge: transparent;
