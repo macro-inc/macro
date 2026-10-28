@@ -1,5 +1,7 @@
 import { getCallExitPath } from '@channel/Call/call-exit';
+import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import type { BackgroundEffect } from '@core/media/background-effect';
+import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowLeft from '@icon/system/regular/arrow-left.svg';
 import Phone from '@icon/system/regular/phone-call.svg';
@@ -27,11 +29,11 @@ import type {
   MeetingPageState,
   MeetingSessionCapabilities,
 } from '../context/meeting-session';
+import { useMeetingSessionOwner } from '../context/meeting-session-owner';
 import {
   createMeetingMedia,
   type MeetingMediaAccess,
 } from '../primitives/meeting-media';
-import { createMeetingSession } from '../primitives/meeting-session';
 import { MeetingMediaSetup } from './meeting-media-setup';
 
 export function MeetingPage(props: {
@@ -52,6 +54,8 @@ export function MeetingPage(props: {
   onCallStateChange?: (connected: boolean) => void;
   /** Explicit hangup, distinct from losing the connection or cancelling setup. */
   onLeave?: (path: string) => void;
+  /** Dismiss the route without leaving a connected call. */
+  onBack?: () => void;
   /** Supplied only for the creator's New Call setup flow. */
   renderInvite?: (joining: Accessor<boolean>) => JSX.Element;
   /** Login redirect for channel-linked calls, which are members-only. */
@@ -63,7 +67,10 @@ export function MeetingPage(props: {
     copyButton: JSX.Element
   ) => JSX.Element;
 }) {
-  const session = createMeetingSession(props.session);
+  const owner = useMeetingSessionOwner();
+  const owned = owner.acquire(props.session);
+  const session = owned.session;
+  onCleanup(owned.detach);
   const [name, setName] = createSignal('');
   const [leaving, setLeaving] = createSignal(false);
   let disposed = false;
@@ -80,7 +87,9 @@ export function MeetingPage(props: {
   const membersOnly = () =>
     ready()?.channelId != null && props.authenticated() !== true;
   const displayName = () =>
-    props.authenticated() ? props.author() : name().trim();
+    props.authenticated()
+      ? props.author()
+      : (session.joinedName() ?? name().trim());
   const inCall = () =>
     session.joinedCallId() !== undefined &&
     props.session.activeCallId() === session.joinedCallId() &&
@@ -161,37 +170,81 @@ export function MeetingPage(props: {
   }
 
   return (
-    <main class="ph-no-capture flex h-dvh min-h-0 flex-col bg-surface p-4 text-ink sm:p-6">
-      <header class="flex flex-wrap items-center gap-4 pb-4">
-        <Show when={!inCall()}>
-          <a
-            href="/app"
-            class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-ink-muted hover:bg-hover focus-visible:outline-2 focus-visible:outline-accent"
+    <main
+      class="ph-no-capture relative flex h-dvh min-h-0 flex-col bg-surface p-4 text-ink sm:p-6"
+      classList={{ 'mobile:p-0': inCall() }}
+      style={
+        isMobile() && inCall()
+          ? {
+              '--mobile-content-inset-top': 'calc(var(--safe-top, 0px) + 72px)',
+            }
+          : undefined
+      }
+    >
+      <Show when={isMobile() && inCall()}>
+        <header class="absolute inset-x-0 top-[calc(var(--safe-top,0px)+12px)] z-30 flex items-center justify-between px-(--mobile-chrome-gutter)">
+          <HeaderIsland class="h-11 px-1">
+            <Button
+              variant="ghost"
+              size="icon-lg"
+              depth={3}
+              label="Back"
+              onClick={props.onBack}
+            >
+              <ArrowLeft class="size-6" />
+            </Button>
+          </HeaderIsland>
+          <Show when={props.url}>
+            {(url) => <MeetingCopyButton url={url()} onCopy={props.onCopy} />}
+          </Show>
+        </header>
+      </Show>
+      <Show when={!(isMobile() && inCall())}>
+        <header class="flex flex-wrap items-center gap-4 pb-4">
+          <Show
+            when={!inCall() && props.onBack}
+            fallback={
+              <Show when={!inCall()}>
+                <a
+                  href="/app"
+                  class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-ink-muted hover:bg-hover focus-visible:outline-2 focus-visible:outline-accent"
+                >
+                  <ArrowLeft class="size-4" />
+                  Back to Macro
+                </a>
+              </Show>
+            }
           >
-            <ArrowLeft class="size-4" />
-            Back to Macro
-          </a>
-        </Show>
-        <Show
-          when={inCall()}
-          fallback={
-            <div class="flex items-center gap-3">
-              <Phone class="size-6 text-accent" />
-              <div>
-                <p class="text-xs font-medium text-ink-muted">Macro Calls</p>
-                <h1 class="text-lg font-semibold">
-                  {ready()?.title || 'Call'}
-                </h1>
+            <button
+              type="button"
+              onClick={props.onBack}
+              class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-ink-muted hover:bg-hover focus-visible:outline-2 focus-visible:outline-accent"
+            >
+              <ArrowLeft class="size-4" />
+              Back to Macro
+            </button>
+          </Show>
+          <Show
+            when={inCall()}
+            fallback={
+              <div class="flex items-center gap-3">
+                <Phone class="size-6 text-accent" />
+                <div>
+                  <p class="text-xs font-medium text-ink-muted">Macro Calls</p>
+                  <h1 class="text-lg font-semibold">
+                    {ready()?.title || 'Call'}
+                  </h1>
+                </div>
               </div>
-            </div>
-          }
-        >
-          <MeetingCallHeading
-            title={ready()?.title || 'Call'}
-            onRename={props.onRename}
-          />
-        </Show>
-      </header>
+            }
+          >
+            <MeetingCallHeading
+              title={ready()?.title || 'Call'}
+              onRename={props.onRename}
+            />
+          </Show>
+        </header>
+      </Show>
       <Switch>
         <Match when={leaving()}>
           <div
@@ -207,7 +260,7 @@ export function MeetingPage(props: {
               () => fireAndForget(leave(), 'meetings'),
               displayName,
               session.credentials,
-              <Show when={props.url}>
+              <Show when={!isMobile() && props.url}>
                 {(url) => (
                   <MeetingCopyButton url={url()} onCopy={props.onCopy} />
                 )}

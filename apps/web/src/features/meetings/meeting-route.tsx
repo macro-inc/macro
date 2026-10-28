@@ -85,6 +85,7 @@ export function MeetingRouteContent(props: {
       participants={participantState()}
       onCallStateChange={props.onCallStateChange}
       onLeave={props.onLeave}
+      onBack={() => navigate('/app')}
       mediaAccess={browserMeetingMedia}
       initialBackground={call.backgroundEffect()}
       readBackgroundImage={readBackgroundImage}
