@@ -1,8 +1,20 @@
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
+import {
+  initializeEditorEmpty,
+  initializeEditorWithState,
+} from '@core/component/LexicalMarkdown/utils';
 import type { DiffStatus } from '@macro-inc/lexical-core';
+import { Telemetry } from '@macro-inc/observability';
 import type { SerializedEditorState } from 'lexical';
-import { createMemo, createSignal, Show } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  on,
+  Show,
+  untrack,
+} from 'solid-js';
 import { diffAuthorColorPlugin } from './diffAuthorColorPlugin';
 import { useHistory } from './HistoryContext';
 import { UserHoverTag } from './UserHoverTag';
@@ -29,6 +41,32 @@ export function HistoryOverlay(props: {
     if (ms === undefined) return currentEditorState();
     return history.checkoutAt(ms) ?? currentEditorState();
   });
+
+  // One read-only editor for every version: scrubbing swaps its state rather
+  // than building a new editor per version.
+  const config = buildConfig('markdown')
+    .withMentions()
+    .withMedia()
+    .withLinks()
+    .withCode()
+    .use(diffAuthorColorPlugin);
+  const editor = config.buildHandle().lexical;
+  createEffect(
+    on(
+      previewState,
+      (state) => {
+        const span = Telemetry.span('doc.history.render');
+        span.setAttr('history.block_count', state?.root.children.length ?? 0);
+        if (state && state.root.children.length > 0) {
+          initializeEditorWithState(editor, state);
+        } else {
+          initializeEditorEmpty(editor);
+        }
+        span.end();
+      },
+      { defer: true }
+    )
+  );
 
   // Tint inline diff markers with the session author's color
   const diffAuthorColor = createMemo(() => {
@@ -83,25 +121,13 @@ export function HistoryOverlay(props: {
       onPointerMove={onDiffPointerMove}
       onPointerLeave={() => setHoverAuthor(null)}
     >
-      <Show keyed when={previewState()}>
-        {(state) => {
-          const config = buildConfig('markdown')
-            .withMentions()
-            .withMedia()
-            .withLinks()
-            .withCode()
-            .use(diffAuthorColorPlugin);
-          return (
-            <MarkdownShell
-              config={config}
-              initialState={state}
-              placeholder=""
-              disabled
-              class="ph-no-capture w-full max-w-full pb-20 [&>*:first-child>*:first-child]:mt-0"
-            />
-          );
-        }}
-      </Show>
+      <MarkdownShell
+        config={config}
+        initialState={untrack(previewState)}
+        placeholder=""
+        disabled
+        class="ph-no-capture w-full max-w-full pb-20 [&>*:first-child>*:first-child]:mt-0"
+      />
       <Show when={hoverAuthor()}>
         {(hover) => (
           <UserHoverTag
