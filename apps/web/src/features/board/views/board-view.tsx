@@ -39,6 +39,9 @@ export function BoardView(props: {
   const memory = createBoardMemory(board.storage);
   const scene = createBoardScene(board, memory);
   const [openKey, setOpenKey] = createSignal<string>();
+  // A modal dialog returns focus to its trigger, and this one opens from
+  // board state, so it hands focus back to whatever opened it.
+  let opener: HTMLElement | undefined;
 
   const closeModal = () => {
     const key = openKey();
@@ -71,7 +74,12 @@ export function BoardView(props: {
     memory,
     onOpen: (key) => {
       memory.markSeen(key, board.now());
-      if (board.open(key) === 'modal') setOpenKey(key);
+      if (board.open(key) !== 'modal') return;
+      opener =
+        document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : undefined;
+      setOpenKey(key);
     },
     onDismiss: (key, activityAt) => {
       memory.dismiss(key, activityAt);
@@ -164,6 +172,11 @@ export function BoardView(props: {
       <BoardModal
         item={openItem()}
         onClose={closeModal}
+        onCloseAutoFocus={(event) => {
+          if (!opener?.isConnected) return;
+          event.preventDefault();
+          opener.focus({ preventScroll: true });
+        }}
         onDismiss={(key) => {
           const item = scene.item(key);
           if (item) variantProps.onDismiss(key, item.lastActivityAt);

@@ -15,6 +15,7 @@ import type { BoardItem } from '../core/item';
 export function BoardModal(props: {
   item: BoardItem | undefined;
   onClose: () => void;
+  onCloseAutoFocus: (event: Event) => void;
   onDismiss: (key: string) => void;
   onOpenInSplit: (key: string, newSplit: boolean) => void;
 }) {
@@ -25,6 +26,7 @@ export function BoardModal(props: {
       onOpenChange={(open) => {
         if (!open) props.onClose();
       }}
+      onCloseAutoFocus={props.onCloseAutoFocus}
       position="center"
       animate
       contentOwnsScroll
