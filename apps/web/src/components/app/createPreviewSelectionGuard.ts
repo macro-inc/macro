@@ -76,12 +76,17 @@ export function createPreviewSelectionGuard(): PreviewSelectionGuard {
               Telemetry.span('channel.navigate_from_preview', async (span) => {
                 span.setAttr('channel.id', target.blockId);
                 span.setAttr('message.id', messageId);
-                await goToChannelMessage(
-                  manager.getOrchestrator(),
-                  target.blockId,
-                  messageId,
-                  typeof threadId === 'string' ? threadId : undefined
-                );
+                try {
+                  await goToChannelMessage(
+                    manager.getOrchestrator(),
+                    target.blockId,
+                    messageId,
+                    typeof threadId === 'string' ? threadId : undefined
+                  );
+                } catch (error) {
+                  span.error(error);
+                  throw error;
+                }
               }),
               'preview-selection'
             );
