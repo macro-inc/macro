@@ -23,8 +23,10 @@ import { Tooltip } from './Tooltip';
 const buttonFrames = {
   primary:
     'bg-button-primary-bg text-button-primary-ink border-transparent shadow-button',
-  secondary:
+  secondary: cn(
     'bg-button-secondary-bg text-ink border-border-secondary dark-mode:border-transparent shadow-button',
+    'light-mode:not-data-disabled:active:border-border-secondary light-mode:aria-pressed:border-border-secondary light-mode:aria-expanded:border-border-secondary'
+  ),
   outline:
     'bg-transparent text-ink border-border-secondary bg-none shadow-none',
   ghost:
