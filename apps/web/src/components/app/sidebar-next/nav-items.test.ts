@@ -22,6 +22,7 @@ const defaultGates = (overrides: Partial<NavItemGates> = {}): NavItemGates => ({
   showCalls: true,
   showReviews: true,
   showActivity: true,
+  showBoard: true,
   showExternal: true,
   prefs: defaultPrefs(),
   ...overrides,
@@ -72,6 +73,26 @@ describe('sidebar visibility preferences', () => {
       moreMenuItems(gates),
     ]) {
       expect(items.some((item) => item.id === 'activity')).toBe(false);
+    }
+  });
+
+  it('puts Board on the rail right after Home only while its flag is on', () => {
+    expect(
+      visibleNavItems(defaultGates())
+        .slice(0, 2)
+        .map((item) => item.id)
+    ).toEqual(['home', 'board']);
+
+    const gates = defaultGates({
+      showBoard: false,
+      prefs: defaultPrefs({ hidden: new Set() }),
+    });
+    for (const items of [
+      customizableNavItems(gates),
+      visibleNavItems(gates),
+      moreMenuItems(gates),
+    ]) {
+      expect(items.some((item) => item.id === 'board')).toBe(false);
     }
   });
 

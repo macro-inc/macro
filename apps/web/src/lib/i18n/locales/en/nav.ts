@@ -18,6 +18,7 @@ export default {
   scheduling: 'Scheduling',
   external: 'External',
   activity: 'Activity',
+  board: 'Board',
   recent: 'Recent',
   settings: 'Settings',
 

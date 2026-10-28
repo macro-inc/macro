@@ -1,6 +1,7 @@
 import { agentsRouteSegments } from '@app/features/agents-view/core/route';
 import { agentDetailSearch } from '@app/features/block-agent/agent-route';
 import { SPREADSHEET_COMMENT_PARAMS } from '@app/features/block-spreadsheet/core/spreadsheet-comments';
+import { boardSearch } from '@app/features/board/board-search';
 import {
   CALENDAR_ROUTE_ID,
   CALENDAR_SEARCH_NAMESPACE,
@@ -461,6 +462,13 @@ export const activityRoute = defineRoute({
   path: 'activity',
   search: '*' as const,
   claim: () => ({ namespace: 'component', id: 'activity' }),
+});
+
+export const boardRoute = defineRoute({
+  id: 'view-board',
+  path: 'board',
+  search: [boardSearch.namespace],
+  claim: () => ({ namespace: 'component', id: 'board' }),
 });
 
 export const routinesRoute = defineRoute({

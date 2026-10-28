@@ -782,6 +782,17 @@ export const enableActivityFeed = defineFlag({
   default: onInDev,
 });
 
+// The Board view: Home's feed as a pannable, zoomable map of what is
+// happening, with layout variants to compare side by side. Gates the
+// /board route (which redirects Home when off), its sidebar entry and its
+// go-to shortcut. PostHog-gated with a dev-mode default; override with
+// VITE_ENABLE_COMPANY_BOARD.
+export const enableCompanyBoard = defineFlag({
+  key: 'enable-company-board',
+  env: 'ENABLE_COMPANY_BOARD',
+  default: onInDev,
+});
+
 // AI agents: the folded agent-session view in channels, and which bot the
 // single `@macro` mention targets — the agent session when on, the classic
 // in-channel reply when off.

@@ -1,4 +1,5 @@
 import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-flag';
+import { useBoardFlag } from '@app/features/board/use-board-flag';
 import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
@@ -23,6 +24,7 @@ export function useNavItemGates(): Accessor<NavItemGates> {
   const crm = useFeatureFlag(enableCrm);
   const reviews = useFeatureFlag(enableTasksReviews);
   const activity = useActivityFeedFlag();
+  const board = useBoardFlag();
   const external = useFeatureFlag(enableWhatsappLinked);
   const { prefs } = useSidebarPrefs();
 
@@ -33,6 +35,7 @@ export function useNavItemGates(): Accessor<NavItemGates> {
     showCalls: ENABLE_CALLS,
     showReviews: reviews().enabled,
     showActivity: activity(),
+    showBoard: board(),
     showExternal: external().enabled,
     prefs: prefs(),
   }));
