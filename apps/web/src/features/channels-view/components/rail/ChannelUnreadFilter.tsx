@@ -1,20 +1,18 @@
-import { ViewSidebar } from '@app/components/view-shell';
 import EmptyStateChannelsGraphic from '@design/empty-state-channels.svg';
-import EyeIcon from '@icon/system/regular/eye.svg';
-import { EmptyStatePanel } from '@ui';
+import { EmptyStatePanel, ToggleSwitch } from '@ui';
 import { useChannelsRail } from './ChannelsRailContext';
 
 export function ChannelUnreadFilterToggle() {
   const rail = useChannelsRail();
 
   return (
-    <ViewSidebar.Control
-      label="Show unread only"
-      aria-pressed={rail.unreadOnly()}
-      onClick={() => rail.setUnreadOnly(!rail.unreadOnly())}
-    >
-      <EyeIcon class="size-3.5" />
-    </ViewSidebar.Control>
+    <ToggleSwitch
+      label="Unread"
+      labelClass="text-xs font-medium text-ink-muted"
+      class="shrink-0 gap-1.5"
+      checked={rail.unreadOnly()}
+      onChange={rail.setUnreadOnly}
+    />
   );
 }
 

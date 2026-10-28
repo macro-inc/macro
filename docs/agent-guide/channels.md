@@ -801,9 +801,8 @@ Deferred navigation waits until the destination is applied; an unavailable split
 must leave unread state unchanged. Join-only channels remain
 blocked after hydration, including on mobile.
 
-The eye control after the tabs, **Show unread only**, is a pressed toggle
-that lists only conversations with an unread dot in every tab: Favorites,
-Channels (labels without unread channels are hidden), DMs, Recent, and the
+The **Unread** switch after the tabs lists only conversations with an unread
+dot in every tab: Favorites, Channels (labels without unread channels are hidden), DMs, Recent, and the
 Threads tab's Conversations. Search results are not filtered. The open
 conversation stays listed after it is read and drops out once another is
 opened. Unread state comes from the loaded pages, like the section counts. An
