@@ -142,7 +142,9 @@ export default function DocxBlock(props: { share?: string }) {
             { op: 'moveToProject' },
             {
               group: 'file',
-              label: () => t('entityActions.downloadDocx'),
+              get label() {
+                return t('entityActions.downloadDocx');
+              },
               icon: DownloadSimple,
               action: () =>
                 fireAndForget(docxDownload.download(), 'docx-download'),
