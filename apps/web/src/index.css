@@ -641,9 +641,6 @@ body.tauri-ios {
   --border-tertiary: oklch(1 0 0 / 8%);
   --divider: oklch(1 0 0 / 4%);
 
-  /* Selection controls. The thumb stays visible on a transparent off track. */
-  --switch-thumb: white;
-
   /* Button materials. */
   --button-primary-bg: var(--color-accent);
   --button-primary-ink: white;
@@ -781,7 +778,6 @@ body.tauri-ios {
   --color-border-secondary: var(--border-secondary);
   --color-border-tertiary: var(--border-tertiary);
   --color-divider: var(--divider);
-  --color-switch-thumb: var(--switch-thumb);
   --color-button-primary-bg: var(--button-primary-bg);
   --color-button-primary-hover: var(--button-primary-hover);
   --color-button-primary-pressed: var(--button-primary-pressed);
