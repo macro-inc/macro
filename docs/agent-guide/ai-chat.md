@@ -927,7 +927,7 @@ For Macro's in-process agent, the backend evaluates the session owner's
 `ai-code-mode` flag once per conversational turn. Enabled users get a smaller
 direct toolset: SDK-supported searches, reads, listing, and data operations run
 through the SDK. Document editing keeps the direct `EditDocument` tool, and
-`DisplayResults` remains available for rendering results. Workspace feeds and
+`PresentView` remains available for presenting results. Workspace feeds and
 mixed-entity name searches keep the direct `ListEntities` and `NameSearch` tools,
 including agent sessions. `ContentSearch` supports session history. The legacy
 chat and workspace SDK namespaces are excluded from agent documentation. Methods
@@ -1463,23 +1463,32 @@ row opens; syntax highlighting may appear after the diff text. Opening a session
 or expanding a group should leave the app responsive, even when the session
 contains many file edits.
 
-`DisplayResults` renders its dynamic view directly in the reply and stays visible
-without opening a tool row. It breaks tool groups before and after itself,
-including while pending; later calls start a separate group.
-Its dashboard supports markdown, timelines, entity lists, and channel messages,
-using the same full-width view as AI chat. Incomplete arguments stay hidden while
-streaming; a valid view updates as arguments arrive. Malformed completed views
+Agent sessions present views with `PresentView`, a review with nothing saved.
+The agent decides when to present one without being asked, usually at the end
+of a turn that made, changed or sent something, or to answer a question about
+workspace data, and it does not mention again in its reply what the view shows.
+The view is checked against the renderer's schema before it is drawn: a view
+that does not match is never presented, and the agent is told what to fix.
+The agent's own call is a receipt row; the call the harness presents
+(`view_<id>`) draws the view directly in the reply and stays visible without
+opening a tool row. Code presents the same view with
+`execution.views.present(view)` while the program runs. Every agent chain,
+including external coding agents connected through Macro's MCP server, gets
+the tool. Older sessions' `DisplayResults` calls, and AI chat's, still render
+the same way.
+
+A presented view breaks tool groups before and after itself; later calls start
+a separate group. Its dashboard supports markdown, timelines, entity lists, and
+channel messages, using the same full-width view as AI chat. Malformed views
 show **Couldn't render dashboard**; failed calls show a **Failed** summary row
-without a disclosure. Macro's built-in agents receive the complete view schema
-with the tool definition. External coding agents connected through Macro's MCP
-server do not currently receive this tool.
+without a disclosure.
 
 The development gallery at `/app/component/agent-ui` includes **Replay tool
 calls** and **Replay fast batch**, both using the message renderer. Check that
 ongoing rows accumulate in the five-row window, completed calls stop shimmering,
 fast batches stay compact, and the group collapses smoothly after completion.
 Its carets should still expand the results, and reduced motion disables animation.
-Check that rich result controls still work and `DisplayResults` stays visible
+Check that rich result controls still work and a presented view stays visible
 between surrounding groups. In **AgentMessage (end-to-end)**, expand the group
 and confirm unknown tools have no individual disclosure or JSON payload. Repeat
 at a narrow viewport width.

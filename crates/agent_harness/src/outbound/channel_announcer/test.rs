@@ -453,18 +453,21 @@ async fn shared_thread_and_dm_snapshots_omit_raw_tool_details() {
                     label: "Ran".into(),
                     detail: Some("TOKEN=private-value run-report".into()),
                     status: ActivityStatus::Completed,
+                    card: None,
                 },
                 ActivityRow {
                     id: "search".into(),
                     label: "Searched".into(),
                     detail: Some("confidential acquisition".into()),
                     status: ActivityStatus::Completed,
+                    card: None,
                 },
                 ActivityRow {
                     id: "request".into(),
                     label: "Fetched".into(),
                     detail: Some("https://internal.example/?token=private-value".into()),
                     status: ActivityStatus::Failed,
+                    card: None,
                 },
             ],
         },
@@ -553,4 +556,38 @@ async fn shared_thread_and_dm_snapshots_omit_raw_tool_details() {
         Some("TOKEN=private-value run-report"),
         "snapshot serialization leaves live session details intact"
     );
+}
+
+/// A view is part of the reply, as its passages are: the stored step keeps
+/// it, while the step's detail stays in authorized live views.
+#[test]
+fn a_stored_step_keeps_the_view_it_presented() {
+    use agent_fold::domain::model::{ActivityCard, ActivityRow, Segment};
+    let view = serde_json::json!({
+        "title": "Launch notes",
+        "widgets": [{ "type": "md", "markdown": "Shipped." }]
+    });
+    let segments = vec![ProjectedSegment {
+        segment: Segment {
+            index: 0,
+            kind: SegmentKind::Activity,
+            start: 0,
+            end: 1,
+            sealed: true,
+            rows: vec![ActivityRow {
+                id: "view_1".into(),
+                label: "Present view".into(),
+                detail: Some("Launch notes".into()),
+                status: ActivityStatus::Completed,
+                card: Some(ActivityCard::View { view: view.clone() }),
+            }],
+        },
+        text: None,
+    }];
+    let stored = reply_segments(TurnId(0), &segments);
+    let [AgentReplySegment::Activity { rows, .. }] = stored.as_slice() else {
+        panic!("one run of steps");
+    };
+    assert_eq!(rows[0].card, Some(ActivityCard::View { view }));
+    assert_eq!(rows[0].detail, None);
 }

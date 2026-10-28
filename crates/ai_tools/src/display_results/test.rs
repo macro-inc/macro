@@ -62,26 +62,25 @@ fn provider_schema_contains_the_recursive_view_contract_at_the_tool_root() {
 }
 
 #[test]
-fn agent_sessions_advertise_the_same_complete_contract_as_chat() {
-    for host in [AiHost::Chat, AiHost::AgentSession] {
-        let toolset = tools_for(host);
-        let display = toolset
-            .toolset
-            .request_schemas()
-            .expect("request schemas")
-            .into_iter()
-            .find(|tool| tool.name == "DisplayResults")
-            .expect("DisplayResults available");
-        let schema = serde_json::to_value(display.schema).expect("serialize schema");
-        assert!(schema["properties"]["view"]["properties"]["widgets"].is_object());
-        assert!(schema["$defs"].is_object());
-        assert_local_refs_resolve(&schema, &schema);
-    }
+fn chat_advertises_the_complete_contract() {
+    let toolset = tools_for(AiHost::Chat);
+    let display = toolset
+        .toolset
+        .request_schemas()
+        .expect("request schemas")
+        .into_iter()
+        .find(|tool| tool.name == "DisplayResults")
+        .expect("DisplayResults available");
+    let schema = serde_json::to_value(display.schema).expect("serialize schema");
+    assert!(schema["properties"]["view"]["properties"]["widgets"].is_object());
+    assert!(schema["$defs"].is_object());
+    assert_local_refs_resolve(&schema, &schema);
 }
 
 #[test]
-fn display_results_is_omitted_on_hosts_without_a_view_renderer() {
-    for host in [AiHost::ChannelBot, AiHost::Mcp] {
+fn display_results_is_chat_only() {
+    // Agent sessions present views with the harness's PresentView instead.
+    for host in [AiHost::AgentSession, AiHost::ChannelBot, AiHost::Mcp] {
         let toolset = tools_for(host);
         assert!(
             !toolset.toolset.tools.contains_key("DisplayResults"),

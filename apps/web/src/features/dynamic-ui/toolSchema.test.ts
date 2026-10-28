@@ -3,11 +3,15 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { ViewSchema } from './schema';
-import { displayResultsToolSchema } from './toolSchema';
+import { displayResultsToolSchema, presentViewToolSchema } from './toolSchema';
 
 const GENERATED = resolve(
   import.meta.dirname,
   '../../../../../crates/ai_tools/src/display_results/schema.generated.json'
+);
+const PRESENT_VIEW_GENERATED = resolve(
+  import.meta.dirname,
+  '../../../../../crates/dynamic_ui/src/present_view.schema.generated.json'
 );
 
 describe('DisplayResults tool contract', () => {
@@ -92,6 +96,30 @@ describe('DisplayResults tool contract', () => {
     expect(schema.title).toBe('DisplayResults');
     expect(schema.description).toContain('ReadActivity');
     expect(schema.description).toContain('never invent ids');
+    expect(schema.required).toEqual(['view']);
+  });
+});
+
+describe('PresentView tool contract', () => {
+  it('matches the complete schema included by the Rust tool', () => {
+    expect(readFileSync(PRESENT_VIEW_GENERATED, 'utf8')).toBe(
+      `${JSON.stringify(presentViewToolSchema(), null, 2)}\n`
+    );
+  });
+
+  it('takes the same view as DisplayResults', () => {
+    const present = presentViewToolSchema();
+    const display = displayResultsToolSchema();
+    expect(present.properties).toEqual(display.properties);
+    expect(present.$defs).toEqual(display.$defs);
+  });
+
+  it('tells the agent to present without being asked', () => {
+    const schema = presentViewToolSchema();
+    expect(schema.title).toBe('PresentView');
+    expect(schema.description).toContain('the user will not ask');
+    expect(schema.description).toContain('never invent ids');
+    expect(schema.description).toContain('checked against this schema');
     expect(schema.required).toEqual(['view']);
   });
 });

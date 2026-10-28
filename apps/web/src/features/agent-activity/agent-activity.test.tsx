@@ -25,6 +25,11 @@ vi.mock('./queries/live-session', () => ({
 vi.mock('@app/features/block-agent/ui', () => ({
   TextShimmer: (props: { text: string }) => <>{props.text}</>,
 }));
+vi.mock('@app/features/dynamic-ui/DashboardToolView.lazy', () => ({
+  DashboardToolView: (props: { view: { title?: string } }) => (
+    <section aria-label={props.view.title} />
+  ),
+}));
 
 import type { AgentActivityData } from '@macro-inc/lexical-core';
 import { AgentActivity as Activity } from './agent-activity';
@@ -108,6 +113,56 @@ it('ticks an open run live from the session, keeping the snapshot until it loads
     ['Rancargo', 'completed'],
     ['Readinglib.rs', 'running'],
   ]);
+});
+
+it('draws a presented view in place of its step, after the run’s steps', () => {
+  const view = render(() => (
+    <AgentActivity
+      agentSessionId="session"
+      turn={2}
+      segment={1}
+      rows={[
+        { id: 't1', label: 'Present view', status: 'completed' },
+        {
+          id: 'view_1',
+          label: 'Present view',
+          detail: 'Launch notes',
+          status: 'completed',
+          card: { kind: 'view', view: { title: 'Launch notes', widgets: [] } },
+        },
+      ]}
+      sealed
+    />
+  ));
+  expect(steps(view)).toEqual([['Present view', 'completed']]);
+  expect(view.getByRole('region', { name: 'Launch notes' })).toBeTruthy();
+});
+
+it('keeps a presented view in view however long its run', () => {
+  const rows = [
+    {
+      id: 'view_1',
+      label: 'Present view',
+      status: 'completed' as const,
+      card: { kind: 'view' as const, view: { title: 'First', widgets: [] } },
+    },
+    ...Array.from({ length: 8 }, (_, index) => ({
+      id: `t${index}`,
+      label: `Step ${index}`,
+      status: 'completed' as const,
+    })),
+  ];
+  const view = render(() => (
+    <AgentActivity
+      agentSessionId="session"
+      turn={2}
+      segment={1}
+      rows={rows}
+      sealed
+    />
+  ));
+  expect(view.getByRole('button', { name: '2 earlier steps' })).toBeTruthy();
+  expect(view.getByRole('region', { name: 'First' })).toBeTruthy();
 });
 
 it('folds a long run behind a count of its earlier steps', () => {

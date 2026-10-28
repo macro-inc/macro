@@ -8862,20 +8862,6 @@ export interface DispatchCodingAgent {
   prompt: string;
 }
 /**
- * Present results to the user as a rich view. The `view` argument is a dynamic-UI view object (a title plus an ordered list of widgets) following the dynamic-UI schema provided to you. The view is rendered immediately in the chat; this tool returns as soon as it is dispatched.
- */
-export interface DisplayResults {
-  /**
-   * The dynamic-UI view to render: an object with an optional `title` and a `widgets` array, per the provided dynamic-UI schema.
-   */
-  view: {
-    [k: string]: unknown;
-  };
-}
-export interface DisplayResultsResponse {
-  message: string;
-}
-/**
  * Make a copy of a document (including a task), owned by the user, as the Duplicate action in the app does. Requires view access to the original. Returns the copy's id.
  */
 export interface DuplicateItem {
@@ -16101,6 +16087,20 @@ export interface WebSearchToolError {
   error_code: string;
 }
 /**
+ * Present results to the user as a rich view. The `view` argument is a dynamic-UI view object (a title plus an ordered list of widgets) following the dynamic-UI schema provided to you. The view is rendered immediately in the chat; this tool returns as soon as it is dispatched.
+ */
+export interface DisplayResults {
+  /**
+   * The dynamic-UI view to render: an object with an optional `title` and a `widgets` array, per the provided dynamic-UI schema.
+   */
+  view: {
+    [k: string]: unknown;
+  };
+}
+export interface DisplayResultsResponse {
+  message: string;
+}
+/**
  * Find Macro SDK methods for ExecuteCode. Before writing a program, pass task, a short description of what the program must do, to receive the index of every relevant SDK entity in one call; skip it only when the indexes you need are already in context. An index lists each class, method and type by symbol with its signature; read the symbols you need with ReadCodeDocs. Request up to five entity names together for their indexes, e.g. entities omitted for size. Request topics for workflow guides. With no arguments, returns the compact entity catalog.
  */
 export interface DescribeCodeTools {
@@ -16189,7 +16189,7 @@ export interface CodeGuide {
  *
  * Prefer ExecuteCode for supported Macro work, including a single precise call. Entity indexes in context list each method with its signature. Before writing a program, read the symbols it needs with ReadCodeDocs for their parameters, options and return types, all together in one call, unless their reference is already in context; do not guess option names. Use DescribeCodeTools for the index of an entity not in context or for workflow guides, requesting entities together (e.g. documents, email, ai, core).
  *
- * For editable email/calendar drafts, persist them with execution.reviews.create({kind, title, drafts}), then return reviews: [await review.reference()]. This does not send emails or create calendar events. Creation immediately presents a completed PresentReview ACP tool call, even while main continues. "Presented to the user" means saved in the conversation, not approved or sent. The saved cards remain usable after this execution and chat continues. User decisions arrive as typed system events referring to the same review ID. Use GetReview to read final drafts and confirmed outcomes; notifications never authorize repeating an action. Use the direct EditDocument tool for AI document edits. Direct human-interactive tools, subagents and unsupported SDK operations remain available.
+ * For editable email/calendar drafts, persist them with execution.reviews.create({kind, title, drafts}), then return reviews: [await review.reference()]. This does not send emails or create calendar events. Creation immediately presents a completed PresentReview ACP tool call, even while main continues. "Presented to the user" means saved in the conversation, not approved or sent. The saved cards remain usable after this execution and chat continues. User decisions arrive as typed system events referring to the same review ID. Use GetReview to read final drafts and confirmed outcomes; notifications never authorize repeating an action. To show the user what the program made, changed or found, present a view with await execution.views.present(view), where view is the object the PresentView tool takes as view. It is checked and drawn at once, while main continues; nothing is saved and nothing comes back. A view that does not match throws with what to fix: present it again rather than running the program again. Use the direct EditDocument tool for AI document edits. Direct human-interactive tools, subagents and unsupported SDK operations remain available.
  *
  * Use nested SDK entities, e.g. macro.documents.search(query) is an async iterator and document.content() is a promise. Use for await...of, break, conditions and ordinary JavaScript freely. Batch useful independent work with Promise.all or Promise.allSettled; inspect partial failures and await every started operation. Use bounded concurrency for large inputs. Preserve user source scope on every search and retry: macro.documents.search searches documents; macro.email.search searches emails. Return compact evidence with source IDs, explicit failures and coverage limits; do not return SDK objects, raw large batches, or claim a stopped iterator is exhaustive.
  *

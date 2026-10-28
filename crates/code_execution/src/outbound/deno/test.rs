@@ -198,6 +198,63 @@ export async function main({token, hosts, macro: supplied, session, execution}) 
 
 #[tokio::test]
 #[ignore = "requires pinned Deno runtime"]
+async fn a_program_presents_a_view_through_its_session() {
+    let (_root, service) = setup(Limits::default()).await;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.unwrap();
+        let request = read_request(&mut stream).await;
+        let response = "HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n";
+        stream.write_all(response.as_bytes()).await.unwrap();
+        request
+    });
+    let environment = RunEnvironment {
+        token: "fixture-run-token".into(),
+        trace_headers: BTreeMap::new(),
+        session_id: Some(uuid::Uuid::from_u128(1)),
+        execution_id: Some(uuid::Uuid::from_u128(2)),
+        hosts: BTreeMap::from([("agent-harness".into(), format!("http://{address}"))]),
+    };
+    let source = r#"
+export async function main({execution}) {
+  await execution.views.present({ title: 'Launch notes', widgets: [{ type: 'md', markdown: 'Shipped.' }] });
+  return { data: 'presented' };
+}
+"#;
+    let (_, outcome) = collect(
+        service
+            .execute(
+                ExecuteRequest {
+                    source: source.into(),
+                    timeout_ms: 5000,
+                },
+                environment,
+            )
+            .unwrap(),
+    )
+    .await;
+    assert!(
+        matches!(outcome, Outcome::Succeeded { ref value } if value["data"] == "presented"),
+        "{outcome:?}"
+    );
+    let request = tokio::time::timeout(Duration::from_secs(5), server)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(
+        request.starts_with("POST /agent-sessions/00000000-0000-0000-0000-000000000001/views "),
+        "{request}"
+    );
+    let body = request.split("\r\n\r\n").nth(1).unwrap();
+    let body: serde_json::Value = serde_json::from_str(body).unwrap();
+    assert_eq!(body["view"]["title"], "Launch notes");
+    assert_eq!(body["executionId"], "00000000-0000-0000-0000-000000000002");
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
 async fn javascript_logs_result_and_cleanup() {
     let (root, service) = setup(Limits::default()).await;
     let (events, outcome) = run(&service, "export async function main() { console.log('working'); await Promise.resolve(); return 6 * 7; }", 5000).await;

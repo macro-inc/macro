@@ -598,6 +598,12 @@ Re-exports [SessionReview](../entities/agent-sessions/review/classes/SessionRevi
 
 ***
 
+### SessionView
+
+Re-exports [SessionView](../entities/agent-sessions/view/type-aliases/SessionView.md)
+
+***
+
 ### SharePermissionOptions
 
 Re-exports [SharePermissionOptions](../entities/sharing/permissions/type-aliases/SharePermissionOptions.md)

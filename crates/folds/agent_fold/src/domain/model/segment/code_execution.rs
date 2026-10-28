@@ -55,6 +55,7 @@ pub(super) fn rows(
                     Status::Failed => ActivityStatus::Failed,
                     Status::Running | Status::Unknown => ActivityStatus::Interrupted,
                 },
+                card: None,
             })
             .collect(),
     )

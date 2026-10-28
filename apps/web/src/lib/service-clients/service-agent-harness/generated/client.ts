@@ -37,6 +37,7 @@ import type {
   ListAgentRepositoryBranchesParams,
   LoadAgentModelsRequest,
   LoadAgentModelsResponse,
+  PresentView,
   PreviewAgentSessionsRequest,
   PreviewAgentSessionsResponse,
   PullRequestSessionsResponse,
@@ -3121,6 +3122,65 @@ export const answerAgentSessionToolApproval = async (
     status: res.status,
     headers: res.headers,
   } as answerAgentSessionToolApprovalResponse;
+};
+
+/**
+ * @summary Present a view in the session: a review with nothing saved.
+ */
+export type presentSessionViewResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type presentSessionViewResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type presentSessionViewResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type presentSessionViewResponseSuccess =
+  presentSessionViewResponse204 & {
+    headers: Headers;
+  };
+export type presentSessionViewResponseError = (
+  | presentSessionViewResponse400
+  | presentSessionViewResponse403
+) & {
+  headers: Headers;
+};
+
+export type presentSessionViewResponse =
+  | presentSessionViewResponseSuccess
+  | presentSessionViewResponseError;
+
+export const getPresentSessionViewUrl = (sessionId: string) => {
+  return `/agent-sessions/${sessionId}/views`;
+};
+
+export const presentSessionView = async (
+  sessionId: string,
+  presentView: PresentView,
+  options?: RequestInit
+): Promise<presentSessionViewResponse> => {
+  const res = await fetch(getPresentSessionViewUrl(sessionId), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(presentView),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: presentSessionViewResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as presentSessionViewResponse;
 };
 
 /**

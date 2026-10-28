@@ -83,6 +83,7 @@ where
             get(get_code_execution::<Access, Auth>),
         )
         .route("/{session_id}/reviews", post(create_review::<Access, Auth>))
+        .route("/{session_id}/views", post(present_view::<Access, Auth>))
         .route(
             "/{session_id}/reviews/{review_id}",
             get(get_review::<Access, Auth>).post(decide_review::<Access, Auth>),
@@ -157,6 +158,25 @@ pub async fn create_review<Access: EntityAccessService, Auth: MacroAuthorization
         )
         .await
         .map(Json)
+        .map_err(CodeExecutionApiError)
+}
+#[utoipa::path(post, path = "/agent-sessions/{session_id}/views", tag = "agent-sessions", operation_id = "present_session_view", params(("session_id" = Uuid, Path)), request_body = PresentView, responses((status = 204), (status = 403), (status = 400)))]
+/// Present a view in the session: a review with nothing saved.
+pub async fn present_view<Access: EntityAccessService, Auth: MacroAuthorizationService>(
+    access: AgentSessionAccessLevelExtractor<EditAccessLevel, Access, Auth>,
+    caller: MacroAuthorizationExtractor<Auth, ActingUser>,
+    State(state): State<CodeExecutionRouterState<Access, Auth>>,
+    Json(input): Json<PresentView>,
+) -> Result<StatusCode, CodeExecutionApiError> {
+    state
+        .reviews
+        .present_view(
+            &access.entity_access_receipt,
+            &caller.authorization.user.macro_user_id,
+            input,
+        )
+        .await
+        .map(|()| StatusCode::NO_CONTENT)
         .map_err(CodeExecutionApiError)
 }
 #[utoipa::path(get, path = "/agent-sessions/{session_id}/reviews/{review_id}", tag = "agent-sessions", operation_id = "get_session_review", params(("session_id" = Uuid, Path), ("review_id" = Uuid, Path)), responses((status = 200, body = ReviewRecord), (status = 403), (status = 404)))]

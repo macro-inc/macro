@@ -22,6 +22,10 @@ to the browser via `inbound/wasm`.
   into SDK activity rows for conversation snapshots, independent of harness.
 - `src/domain/model.rs`: the renderable vocabulary (`FoldedMessage`,
   `ToolStatus`, …) folds produce.
+- `src/domain/model/segment.rs`: activity rows for conversations. A row's
+  `card` is what its step put in front of the person; only the call the
+  harness presents for `PresentView` (`view_<id>`) carries one, never the
+  agent's own call.
 - `src/domain/log.rs`: the raw log vocabulary folds consume.
 - `src/domain/ports.rs`: `FoldedMessageRepo`, the driving port services call
   directly — there is no HTTP adapter; only the browser gets `inbound/wasm`.

@@ -1,6 +1,11 @@
-import type { AgentActivityData } from '@macro-inc/lexical-core';
+import {
+  type AgentActivityData,
+  isAgentActivityCard,
+} from '@macro-inc/lexical-core';
+import { Key } from '@solid-primitives/keyed';
 import { Show } from 'solid-js';
-import { ActivityRows } from './components/activity-rows';
+import { ActivityRows, type ActivityRowView } from './components/activity-rows';
+import { PresentedView } from './components/presented-view';
 import { replyToTurn, segmentRows } from './core/live-reply';
 import { createCodeActivityRows } from './queries/code-activity';
 import { createLiveSession } from './queries/live-session';
@@ -17,7 +22,7 @@ import { createLiveSession } from './queries/live-session';
 export function AgentActivity(props: AgentActivityData) {
   return (
     <div class="min-w-0 max-w-full" data-agent-activity={props.agentSessionId}>
-      <Show when={!props.sealed} fallback={<ActivityRows rows={props.rows} />}>
+      <Show when={!props.sealed} fallback={<Run rows={props.rows} />}>
         <LiveActivity {...props} />
       </Show>
     </div>
@@ -37,5 +42,29 @@ function LiveActivity(props: AgentActivityData) {
     () => props.segment,
     rows
   );
-  return <ActivityRows rows={activity()} />;
+  return <Run rows={activity()} />;
+}
+
+/**
+ * A run's steps, then the views it presented. A view is the answer, so it
+ * stands in for the step that presented it and never folds behind the
+ * earlier steps.
+ */
+function Run(props: { rows: readonly ActivityRowView[] }) {
+  const steps = () =>
+    props.rows.filter((row) => !isAgentActivityCard(row.card));
+  const views = () =>
+    props.rows.flatMap((row) =>
+      isAgentActivityCard(row.card) ? [{ id: row.id, view: row.card.view }] : []
+    );
+  return (
+    <>
+      <Show when={steps().length > 0}>
+        <ActivityRows rows={steps()} />
+      </Show>
+      <Key each={views()} by="id">
+        {(presented) => <PresentedView view={presented().view} />}
+      </Key>
+    </>
+  );
 }

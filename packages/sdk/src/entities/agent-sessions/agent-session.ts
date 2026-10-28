@@ -25,6 +25,7 @@ import { CodeExecution } from './code-execution';
 import { QueuedAction } from './queued-action';
 import { type CreateReviewOptions, SessionReview } from './review';
 import { ToolApproval } from './tool-approval';
+import { presentView, type SessionView } from './view';
 
 /** A session's history folded into readable messages, oldest first. */
 export type FoldedAgentSessionLog = {
@@ -482,6 +483,11 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     create: (input: CreateReviewOptions) =>
       SessionReview.createForSession(this.client, this, input),
     byId: (id: string) => SessionReview.byId(this.client, this, id),
+  };
+
+  /** Views shown in this session at once, with nothing saved. */
+  readonly views = {
+    present: (view: SessionView) => presentView(this.client, this, view),
   };
 
   /** Saved code executions scoped to this session. Handle construction makes no request. */

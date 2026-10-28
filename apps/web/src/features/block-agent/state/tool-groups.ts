@@ -29,7 +29,8 @@ export type PartSegment = {
 
 /**
  * Macro tools whose call renders the answer itself rather than a card about
- * it: `DisplayResults` renders the dynamic-UI view the model composed, the
+ * it: `DisplayResults` renders the dynamic-UI view the model composed (as a
+ * presented `PresentView` call does, see {@link presentedView}), the
  * same full-width dashboard the chat shows. `GenerateImage` shows the generated
  * image document. `DispatchCodingAgent` shows the dispatched session's Magic Chip.
  *
@@ -50,7 +51,8 @@ const SELF_RENDERING_TOOLS: ReadonlySet<string> = new Set([
  */
 export function rendersOwnView(part: MessagePart | undefined): boolean {
   if (part?.kind !== 'tool_use') return false;
-  if (isCodeExecution(part) || presentedReviewId(part)) return true;
+  if (isCodeExecution(part) || presentedReviewId(part) || presentedView(part))
+    return true;
   const macroTool =
     part.detail.kind === 'macro' ||
     (part.detail.kind === 'other' &&
@@ -137,4 +139,23 @@ export function presentedReviewId(part: MessagePart): string | undefined {
   )
     return;
   return part.id === `review_${input.reviewId}` ? input.reviewId : undefined;
+}
+
+/** The view a server-authored PresentView call presents, as the model wrote
+ * it. The agent's own PresentView call is its receipt, like PresentReview's.
+ */
+export function presentedView(part: MessagePart): object | undefined {
+  if (
+    part.kind !== 'tool_use' ||
+    part.name.kind !== 'mcp' ||
+    part.name.server !== 'macro_internal' ||
+    part.name.tool !== 'PresentView' ||
+    !part.id.startsWith('view_') ||
+    !('input' in part.detail)
+  )
+    return;
+  const input = part.detail.input;
+  if (!input || typeof input !== 'object' || !('view' in input)) return;
+  const view = input.view;
+  return view && typeof view === 'object' ? view : undefined;
 }

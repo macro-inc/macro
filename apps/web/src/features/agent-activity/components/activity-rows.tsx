@@ -12,6 +12,8 @@ export type ActivityRowView = {
   label: string;
   detail?: string | null;
   status: 'running' | 'completed' | 'failed' | 'interrupted';
+  /** What the step put in front of the person; see `AgentActivity`. */
+  card?: unknown;
 };
 
 /** Steps shown before the earlier ones fold behind a count. */

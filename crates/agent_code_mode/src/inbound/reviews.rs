@@ -1,4 +1,5 @@
 //! A saved review presentation is a completed tool call, never a suspended approval.
+//! A view is presented the same way, with nothing saved.
 use crate::domain::reviews::{CreateReview, ReviewDecision, ReviewId, ReviewService};
 use agent_session::domain::model::AgentSession;
 use ai_toolset::{
@@ -6,9 +7,10 @@ use ai_toolset::{
     ToolCallError, ToolResult,
 };
 use async_trait::async_trait;
-use schemars::JsonSchema;
+use schemars::{JsonSchema, Schema, SchemaGenerator};
 use serde::Deserialize;
 use serde_json::{Value, json};
+use std::borrow::Cow;
 
 /// Authenticated session facts and the shared persisted review service.
 #[derive(Clone)]
@@ -23,6 +25,7 @@ pub struct ReviewToolContext {
 pub fn toolset() -> AsyncToolCollection<ReviewToolContext> {
     AsyncToolCollection::new()
         .add_tool::<PresentReview, ReviewToolContext>()
+        .add_tool::<PresentView, ReviewToolContext>()
         .add_tool::<GetReview, ReviewToolContext>()
         .add_tool::<DecideReview, ReviewToolContext>()
 }
@@ -59,6 +62,58 @@ impl AsyncTool<ReviewToolContext> for PresentReview {
                 internal_error: anyhow::anyhow!(error.to_string()),
             })?;
         Ok(json!({"reviewId": record.id, "kind": record.kind, "message": "Presented to the user"}))
+    }
+}
+
+/// Present a view: a review with nothing saved and nothing to decide.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PresentView {
+    /// Kept as JSON: the service checks it against the generated schema.
+    view: Value,
+}
+
+impl JsonSchema for PresentView {
+    fn schema_name() -> Cow<'static, str> {
+        "PresentView".into()
+    }
+
+    /// The generated schema whole. Its recursive widget refs point into its
+    /// own `$defs`, so it stays the tool's root schema; its title and
+    /// description name and describe the tool.
+    fn json_schema(_: &mut SchemaGenerator) -> Schema {
+        serde_json::from_str(dynamic_ui::PRESENT_VIEW_SCHEMA_JSON)
+            .expect("the generated PresentView schema must be valid JSON Schema")
+    }
+}
+
+impl ToolAnnotated for PresentView {
+    const ANNOTATIONS: ToolAnnotations =
+        ToolAnnotations::additive("Present view").without_idempotent();
+}
+
+#[async_trait]
+impl AsyncTool<ReviewToolContext> for PresentView {
+    type Output = Value;
+
+    async fn call(
+        &self,
+        context: ServiceContext<ReviewToolContext>,
+        request: RequestContext,
+    ) -> ToolResult<Self::Output> {
+        context
+            .service
+            .present_view_for_session(
+                &context.session,
+                &request.user_id,
+                crate::domain::reviews::PresentView {
+                    view: self.view.clone(),
+                    execution_id: None,
+                },
+            )
+            .await
+            .map_err(review_error)?;
+        Ok(json!({"message": "Presented to the user"}))
     }
 }
 
@@ -144,3 +199,6 @@ fn review_error(error: crate::domain::CodeModeError) -> ToolCallError {
         internal_error: anyhow::anyhow!(error.to_string()),
     }
 }
+
+#[cfg(test)]
+mod test;

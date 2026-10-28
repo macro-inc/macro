@@ -24,6 +24,7 @@
 - [src/entities/agent-sessions/queued-action](src/entities/agent-sessions/queued-action/README.md)
 - [src/entities/agent-sessions/review](src/entities/agent-sessions/review/README.md)
 - [src/entities/agent-sessions/tool-approval](src/entities/agent-sessions/tool-approval/README.md)
+- [src/entities/agent-sessions/view](src/entities/agent-sessions/view/README.md)
 - [src/entities/agents/agent](src/entities/agents/agent/README.md)
 - [src/entities/agents/namespace](src/entities/agents/namespace/README.md)
 - [src/entities/ai/namespace](src/entities/ai/namespace/README.md)

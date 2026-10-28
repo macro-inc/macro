@@ -18,6 +18,8 @@ A saved code execution belonging to one agent session.
 | `reviews.list` | `public` | () => `Promise`\<[`SessionReview`](../../review/classes/SessionReview.md)[]\> | - | - |
 | <a id="property-source"></a> `source` | `readonly` | () => `Promise`\<`string`\> | The submitted JavaScript module source. | - |
 | <a id="property-status"></a> `status` | `readonly` | () => `Promise`\<[`ExecutionStatus`](../../../../../generated/agent-harness/types.gen/type-aliases/ExecutionStatus.md)\> | Saved execution state. Call refresh to observe subsequent changes. | - |
+| <a id="property-views"></a> `views` | `readonly` | \{ `present`: (`view`) => `Promise`\<`void`\>; \} | Views: shown to the user at once, with nothing saved. | - |
+| `views.present` | `public` | (`view`) => `Promise`\<`void`\> | - | - |
 
 ## Methods
 

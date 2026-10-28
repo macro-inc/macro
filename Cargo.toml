@@ -11,6 +11,7 @@ members = [
   "crates/trigger_context",
   "crates/agent_preview",
   "crates/agent_code_mode",
+  "crates/dynamic_ui",
   "crates/agent_inmem",
   "crates/agent_runtime_protocol", "crates/agent_session", "crates/agent_session_realtime",
   "crates/agent_trigger",

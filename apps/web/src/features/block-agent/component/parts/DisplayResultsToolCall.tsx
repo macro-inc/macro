@@ -1,4 +1,7 @@
-/** DisplayResults is message content, rendered directly from the call's view. */
+/**
+ * A view is message content, rendered directly from the call's view: a
+ * DisplayResults call, or the call the harness presents for PresentView.
+ */
 
 import { DashboardToolView } from '@app/features/dynamic-ui/DashboardToolView.lazy';
 import { Telemetry } from '@macro-inc/observability';

@@ -2731,6 +2731,45 @@
         }
       }
     },
+    "/agent-sessions/{session_id}/views": {
+      "post": {
+        "tags": ["agent-sessions"],
+        "summary": "Present a view in the session: a review with nothing saved.",
+        "operationId": "present_session_view",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PresentView"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": ""
+          },
+          "403": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/universal_input/classify": {
       "post": {
         "tags": ["universal_input::inbound::axum_router"],
@@ -5168,6 +5207,29 @@
           }
         ],
         "description": "The decision carried by an [`AgentPermissionAction`]."
+      },
+      "PresentView": {
+        "type": "object",
+        "description": "A view to present.",
+        "required": ["view"],
+        "properties": {
+          "executionId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ExecutionId",
+                "description": "The code execution presenting it, when one does."
+              }
+            ]
+          },
+          "view": {
+            "type": "object",
+            "description": "A dynamic-UI view: the object the `PresentView` tool takes as `view`."
+          }
+        },
+        "additionalProperties": false
       },
       "PreviewAgentSessionsRequest": {
         "type": "object",

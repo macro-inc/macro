@@ -286,6 +286,10 @@ pub struct AgentActivityRow {
     pub detail: Option<String>,
     /// Where it got to.
     pub status: AgentActivityStatus,
+    /// What the step put in front of the person, in the session fold's card
+    /// shape: a view the agent presented.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub card: Option<agent_fold::domain::model::ActivityCard>,
 }
 
 /// Where one step of an agent's work got to.

@@ -232,6 +232,7 @@ async fn each_harness_gets_only_internal_tools_and_writes_only_its_session() {
                 "DecideReview",
                 "GetReview",
                 "PresentReview",
+                "PresentView",
                 "link_task",
                 "set_pull_request",
                 "task_pull_requests"

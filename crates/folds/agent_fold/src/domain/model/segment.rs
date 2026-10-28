@@ -74,6 +74,23 @@ pub struct ActivityRow {
     pub detail: Option<String>,
     /// Where it got to.
     pub status: ActivityStatus,
+    /// What the step put in front of the person, shown where it ran.
+    #[serde(default)]
+    pub card: Option<ActivityCard>,
+}
+
+/// What a step put in front of the person.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum ActivityCard {
+    /// A view the agent presented: the `view` of a presented `PresentView`
+    /// call, as the model wrote it. Its widgets name the items they show, and
+    /// readers load those with their own access.
+    View {
+        /// The dynamic-UI view.
+        #[specta(type = specta_typescript::Unknown)]
+        view: serde_json::Value,
+    },
 }
 
 /// A run of a reply's parts that reads as one unit.
@@ -275,6 +292,7 @@ fn activity_rows(parts: &[MessagePart], closed: bool) -> Vec<ActivityRow> {
                     label: "Updated the plan".to_owned(),
                     detail: Some(format!("{done}/{} done", entries.len())),
                     status: ActivityStatus::Completed,
+                    card: None,
                 }]
             }
             _ => Vec::new(),
@@ -352,6 +370,7 @@ fn tool_row(
         };
         (label.to_owned(), detail)
     };
+    let card = presented_view(&id, name, status, detail);
     let (label, detail) = match detail {
         ToolDetail::Terminal { command, .. } => {
             verbed(&RUN, command.as_deref().map(command_detail))
@@ -382,12 +401,50 @@ fn tool_row(
         ToolDetail::UserTool { outcome, .. } => (user_tool_label(&named, outcome), None),
         ToolDetail::Subagent { title, .. } => verbed(&DELEGATE, Some(truncate(title))),
     };
+    let detail = match &card {
+        Some(ActivityCard::View { view }) => view
+            .get("title")
+            .and_then(serde_json::Value::as_str)
+            .map(truncate)
+            .or(detail),
+        None => detail,
+    };
     ActivityRow {
         id,
         label,
         detail,
         status,
+        card,
     }
+}
+
+/// The view a presented `PresentView` call shows. Only the call the harness
+/// presents, `view_<id>`, carries one: the agent's own call is its receipt,
+/// and a view it turned back was never presented.
+fn presented_view(
+    id: &str,
+    name: &ToolName,
+    status: ActivityStatus,
+    detail: &ToolDetail,
+) -> Option<ActivityCard> {
+    let ToolName::Mcp { server, tool } = name else {
+        return None;
+    };
+    if server != "macro_internal"
+        || tool != "PresentView"
+        || !id.starts_with("view_")
+        || status != ActivityStatus::Completed
+    {
+        return None;
+    }
+    let ToolDetail::Other {
+        input: Some(input), ..
+    } = detail
+    else {
+        return None;
+    };
+    let view = input.get("view").filter(|view| view.is_object())?;
+    Some(ActivityCard::View { view: view.clone() })
 }
 
 /// A tool known only by name reads as its name in every state; the status

@@ -172,6 +172,31 @@ impl<S: AgentSessionRepo, H: AgentSessionNotificationRecipient> ReviewActions fo
             },
         ).await.map_err(|_| CodeModeError::Invalid(format!("Review {} was saved, but presentation is pending. Read this review to retry presentation without creating another draft.", record.id.0)))
     }
+    async fn present_view(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        session: agent_session::domain::model::AgentSessionId,
+        view: &PresentedView,
+    ) -> Result<(), CodeModeError> {
+        self.harness
+            .present_tool(
+                session,
+                owner.clone(),
+                agent_session::domain::model::SessionToolPresentation {
+                    tool_call_id: format!("view_{}", view.id),
+                    title: "mcp__macro_internal__PresentView".into(),
+                    raw_input: serde_json::json!({"view": view.view}),
+                    raw_output: serde_json::json!({"message": "Presented to the user"}),
+                },
+            )
+            .await
+            .map_err(|_| {
+                CodeModeError::Invalid(
+                    "The view was not presented: the session could not take it. Present it again."
+                        .into(),
+                )
+            })
+    }
 }
 
 impl<S, H> Actions<S, H> {

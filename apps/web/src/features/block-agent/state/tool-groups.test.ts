@@ -4,7 +4,7 @@ import type {
   ToolName,
 } from '@service-agent-fold/generated/types';
 import { describe, expect, it } from 'vitest';
-import { rendersOwnView, segmentParts } from './tool-groups';
+import { presentedView, rendersOwnView, segmentParts } from './tool-groups';
 
 const text = (): MessagePart => ({ kind: 'text', text: 'hi' });
 type ToolUsePart = Extract<MessagePart, { kind: 'tool_use' }>;
@@ -492,5 +492,42 @@ describe('persistent review presentation', () => {
       rendersOwnView(presentation('macro_internal', 'ordinary-call'))
     ).toBe(false);
     expect(rendersOwnView(presentation('untrusted'))).toBe(false);
+  });
+});
+
+describe('presented views', () => {
+  const view = { title: 'Launch notes', widgets: [] };
+  const presentation = (
+    server = 'macro_internal',
+    callId = 'view_019a0000-0000-7000-8000-000000000006'
+  ): ToolUsePart =>
+    tool({
+      id: callId,
+      name: { kind: 'mcp', server, tool: 'PresentView' },
+      detail: {
+        kind: 'other',
+        acpKind: 'other',
+        input: { view },
+        output: null,
+        result: { message: 'Presented to the user' },
+        error: null,
+      },
+    });
+  it('draws the view the harness presented, outside collapsed tool groups', () => {
+    expect(presentedView(presentation())).toEqual(view);
+    expect(segmentParts([tool(), presentation(), tool()])).toEqual([
+      { kind: 'tools', start: 0, end: 1 },
+      { kind: 'part', start: 1, end: 2 },
+      { kind: 'tools', start: 2, end: 3 },
+    ]);
+  });
+  it('leaves the agent’s own call as its receipt, and ignores other servers', () => {
+    expect(
+      presentedView(presentation('macro_internal', 'ordinary-call'))
+    ).toBeUndefined();
+    expect(
+      rendersOwnView(presentation('macro_internal', 'ordinary-call'))
+    ).toBe(false);
+    expect(presentedView(presentation('untrusted'))).toBeUndefined();
   });
 });
