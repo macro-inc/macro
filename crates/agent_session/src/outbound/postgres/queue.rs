@@ -4,14 +4,18 @@ use super::*;
 use crate::domain::model::StoredQueuedAction;
 use sqlx::types::Json;
 
-impl PgAgentSessionRepo {
+impl<B> PgAgentSessionRepo<B> {
     pub(super) async fn load_queued_actions(
         &self,
         id: AgentSessionId,
     ) -> Result<Vec<StoredQueuedAction>> {
         let row = sqlx::query!(
             r#"
-            SELECT entries AS "entries: Json<Vec<StoredQueuedAction>>"
+            SELECT COALESCE((
+                SELECT jsonb_agg(entry ORDER BY position)
+                FROM jsonb_array_elements(entries) WITH ORDINALITY AS queued(entry, position)
+                WHERE entry->'action'->>'privateContext' IS NULL
+            ), '[]'::jsonb) AS "entries!: Json<Vec<StoredQueuedAction>>"
             FROM agent_session_queue
             WHERE agent_session_id = $1
             "#,

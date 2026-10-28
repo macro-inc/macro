@@ -1,0 +1,9 @@
+{
+  "fixture_notice": "Synthetic enterprise export roots; no customer data.",
+  "channels.json": [{"id":"C300","name":"enterprise-synthetic","members":["W100","W200","U999"],"created":1700000004}],
+  "org_users.json": [
+    {"id":"W100","name":"enterprise-alice","profile":{"real_name":"Enterprise Example","email":"ENTERPRISE+Alias@Example.Test"},"enterprise_user":{"id":"W100","teams":["T100"]}},
+    {"id":"W200","name":"phantom","profile":null,"is_stranger":true},
+    {"id":"U999","name":"connect-guest","profile":{"display_name":"Connect Guest"},"team_id":"T999","is_stranger":true}
+  ]
+}

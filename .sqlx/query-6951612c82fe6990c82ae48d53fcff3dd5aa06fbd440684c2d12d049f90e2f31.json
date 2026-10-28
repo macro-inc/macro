@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT count(*) AS \"count!\", max(u.part_index) AS last_index,\n                  encode(digest(coalesce(string_agg(\n                    u.part_index::text || ':' || u.sha256 || ':' || u.byte_length::text || ':' || u.record_count::text || E'\\n',\n                    '' ORDER BY u.part_index), ''), 'sha256'), 'hex') AS \"sha256!\"\n           FROM slack_import_upload u JOIN slack_import_job j ON j.id = u.job_id\n           WHERE j.team_id = $1 AND j.id = $2 AND u.slack_channel_id = $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "last_index",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "sha256!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "6951612c82fe6990c82ae48d53fcff3dd5aa06fbd440684c2d12d049f90e2f31"
+}

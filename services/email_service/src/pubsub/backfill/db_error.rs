@@ -43,6 +43,12 @@ where
     }
 }
 
+/// Whether a write failed on its own data, failing identically on every
+/// retry. Backfill skips such a message instead of failing its whole thread.
+pub(crate) fn is_unstorable(error: &anyhow::Error) -> bool {
+    deterministic_sqlstate(error).is_some()
+}
+
 /// Returns the SQLSTATE of the first database error in the chain that no
 /// amount of retrying will get past.
 fn deterministic_sqlstate(error: &anyhow::Error) -> Option<String> {

@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { HomeSectionBoundary } from '../home-section-boundary';
 import { useHomeRecommendations } from '../use-home-recommendations';
 import { HomeSuggestions } from './home-suggestions';
@@ -8,7 +9,9 @@ function RecommendedActions() {
     <HomeSuggestions
       view={recommendations.view()}
       onSelect={recommendations.selectRecommendation}
-      onOpen={(item) => void recommendations.openRecommendation(item)}
+      onOpen={(item) =>
+        fireAndForget(recommendations.openRecommendation(item), 'home')
+      }
       onRetry={recommendations.retry}
       onConnect={() => recommendations.openSettings('Email')}
     />

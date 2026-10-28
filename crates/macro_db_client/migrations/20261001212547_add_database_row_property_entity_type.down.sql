@@ -1,0 +1,3 @@
+-- Postgres cannot drop an enum value, so `property_entity_type` keeps
+-- DATABASE_ROW. Reverting 20261001064036_add_databases first removes every
+-- table and trigger that uses it.

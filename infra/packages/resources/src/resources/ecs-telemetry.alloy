@@ -1,0 +1,103 @@
+logging { level = "warn" }
+
+otelcol.receiver.otlp "applications" {
+  grpc { endpoint = "127.0.0.1:14317" }
+  http { endpoint = "127.0.0.1:14318" }
+  output {
+    traces = [otelcol.processor.batch.grafana.input]
+    metrics = [otelcol.processor.batch.grafana.input]
+    logs = [otelcol.processor.batch.grafana.input]
+  }
+}
+
+otelcol.receiver.fluentforward "application_logs" {
+  endpoint = "127.0.0.1:24225"
+  output { logs = [otelcol.processor.batch.grafana.input] }
+}
+
+otelcol.receiver.awsecscontainermetrics "task" {
+  collection_interval = "60s"
+  output { metrics = [otelcol.processor.batch.grafana.input] }
+}
+
+otelcol.processor.memory_limiter "grafana" {
+  check_interval = "1s"
+  limit = "384MiB"
+  spike_limit = "64MiB"
+  output {
+    logs = [otelcol.processor.transform.grafana.input]
+    traces = [otelcol.processor.transform.grafana.input]
+    metrics = [otelcol.processor.transform.grafana.input]
+  }
+}
+
+otelcol.processor.transform "grafana" {
+  error_mode = "ignore"
+  log_statements {
+    context = "log"
+    statements = [
+      `set(resource.attributes["service.name"], "` + sys.env("TELEMETRY_SERVICE") + `") where resource.attributes["service.name"] == nil`,
+      `set(resource.attributes["deployment.environment.name"], "dev")`,
+      `set(resource.attributes["deployment.environment"], "dev")`,
+      `set(attributes["container_name"], body["container_name"]) where IsMap(body)`,
+      `set(attributes["ecs_task_arn"], body["ecs_task_arn"]) where IsMap(body)`,
+      `set(body, body["log"]) where IsMap(body) and body["log"] != nil`,
+    ]
+  }
+  trace_statements {
+    context = "resource"
+    statements = [
+      `set(attributes["deployment.environment.name"], "dev")`,
+      `set(attributes["deployment.environment"], "dev")`,
+    ]
+  }
+  metric_statements {
+    context = "resource"
+    statements = [
+      `set(attributes["service.name"], "` + sys.env("TELEMETRY_SERVICE") + `") where attributes["service.name"] == nil`,
+      `set(attributes["deployment.environment.name"], "dev")`,
+      `set(attributes["deployment.environment"], "dev")`,
+    ]
+  }
+  // Preserve series identity when the destination converts OTLP to Prometheus.
+  metric_statements {
+    context = "datapoint"
+    statements = [
+      `set(attributes["deployment.environment"], "dev")`,
+      `set(attributes["aws.ecs.task.arn"], resource.attributes["aws.ecs.task.arn"]) where resource.attributes["aws.ecs.task.arn"] != nil`,
+      `set(attributes["container.id"], resource.attributes["container.id"]) where resource.attributes["container.id"] != nil`,
+      `set(attributes["container.name"], resource.attributes["container.name"]) where resource.attributes["container.name"] != nil`,
+    ]
+  }
+  output {
+    logs = [otelcol.exporter.otlphttp.grafana.input]
+    traces = [otelcol.exporter.otlphttp.grafana.input]
+    metrics = [otelcol.exporter.otlphttp.grafana.input]
+  }
+}
+
+// Buffer only the independent Grafana copy; Datadog bypasses this collector.
+otelcol.processor.batch "grafana" {
+  timeout = "5s"
+  send_batch_size = 256
+  send_batch_max_size = 512
+  output {
+    logs = [otelcol.processor.memory_limiter.grafana.input]
+    traces = [otelcol.processor.memory_limiter.grafana.input]
+    metrics = [otelcol.processor.memory_limiter.grafana.input]
+  }
+}
+
+otelcol.auth.bearer "grafana" {
+  token = sys.env("GRAFANA_OTLP_TOKEN")
+}
+
+otelcol.exporter.otlphttp "grafana" {
+  client {
+    endpoint = "https://otlp.macro-internal.com"
+    auth = otelcol.auth.bearer.grafana.handler
+    timeout = "5s"
+  }
+  sending_queue { queue_size = 128 }
+  retry_on_failure { max_elapsed_time = "60s" }
+}

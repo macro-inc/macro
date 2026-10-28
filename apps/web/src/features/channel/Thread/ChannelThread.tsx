@@ -23,6 +23,7 @@ import { createTargetReplyScroller } from './create-target-reply-scroller';
 import { createThreadHotkeys } from './create-thread-hotkeys';
 import { createThreadRepliesFetchGate } from './create-thread-replies-fetch-gate';
 import { createThreadReplyView } from './create-thread-reply-view';
+import { notifyElementOnMount } from './message-element-lifecycle';
 import { Thread } from './Thread';
 import type { ThreadReplyListHandle } from './ThreadReplyList';
 import { ThreadTypingIndicator } from './ThreadTypingIndicator';
@@ -43,6 +44,7 @@ export function ChannelThread(props: ThreadProps) {
   const hasReplies = () => thread().reply_count > 0;
   const fetchRepliesEnabled = createThreadRepliesFetchGate({
     threadId: () => props.data().id,
+    replyCount: () => thread().reply_count,
     isExpanded: props.isExpanded,
     isFindBarOpen: props.isFindBarOpen,
     targetThreadId: () => props.targetNavigation?.targetThreadId(),
@@ -179,6 +181,12 @@ export function ChannelThread(props: ThreadProps) {
     activeReplies()
       .slice(visibleReplyCount())
       .some((reply: EntityMessage) => props.isNewMessage?.(reply));
+  const collapsedRepliesHaveUnreadNotifications = () =>
+    props.unreadMessageIds?.some(
+      (id) =>
+        id !== props.data().id &&
+        !displayReplies().some((reply) => reply.id === id)
+    ) ?? false;
   const collapsedReplyUsers = () =>
     getUniqueReplyUserIds(activeReplies().slice(visibleReplyCount()));
   const collapsedLatestReplyAt = () =>
@@ -188,6 +196,8 @@ export function ChannelThread(props: ThreadProps) {
     props.isReplying() || unifiedReplyBinding() !== undefined;
   const hasInlineReplyInput = () =>
     props.isReplying() && props.inputMode !== 'unified';
+  const rootRailVisible = () =>
+    !props.hideRail && (hasReplies() || hasInlineReplyInput());
   const shouldShowCollapsedIndicator = () =>
     !isReplyingToThread() && !props.isExpanded() && collapsedRepliesCount() > 0;
   const replyAction = () => props.getMessageActions?.(props.data())?.onReply;
@@ -209,7 +219,11 @@ export function ChannelThread(props: ThreadProps) {
 
   createEffect(
     on(
-      [() => props.targetNavigation?.targetMessageId(), threadRowElement],
+      [
+        () => props.targetNavigation?.targetMessageId(),
+        threadRowElement,
+        () => props.targetNavigation?.requestKey?.(),
+      ],
       ([targetMessageId]) => {
         if (!targetMessageId || targetMessageId !== props.data().id) {
           targetMessageScroller.cancel();
@@ -254,8 +268,9 @@ export function ChannelThread(props: ThreadProps) {
         replyListHandle,
         canScrollToTargetReply,
         props.isExpanded,
+        () => props.targetNavigation?.requestKey?.(),
       ],
-      ([targetReplyId, handle, canScroll, isExpanded]) => {
+      ([targetReplyId, handle, canScroll, isExpanded, requestKey]) => {
         // Untracked: channel-message reconciles must not re-fire scroll.
         const replies =
           targetReplyId && canScroll && handle
@@ -264,6 +279,7 @@ export function ChannelThread(props: ThreadProps) {
               : untrack(displayReplies)
             : [];
         targetReplyNavigation.update({
+          requestKey,
           targetReplyId,
           handle,
           canScroll,
@@ -290,6 +306,7 @@ export function ChannelThread(props: ThreadProps) {
         onDismissNewMessages={props.threadActions?.onDismissNewMessages}
       >
         <div class="flex flex-col w-full">
+          {props.beforeMessage}
           {/* Rail segment along the root message: from the avatar's center
               (masked by the avatar's fill until its lower edge) to the
               message's bottom, where the reply-branch elbow takes over. A
@@ -297,9 +314,18 @@ export function ChannelThread(props: ThreadProps) {
               top (fed by the run's pass-through rails) and a fork node on
               the spine marks which message the thread replies to. Plain
               messages carry no rail. */}
-          <div class="relative">
+          <div
+            class="relative"
+            ref={(element) =>
+              notifyElementOnMount(
+                props.onMessageMount,
+                props.data().id,
+                element
+              )
+            }
+          >
             <Thread.RootRail
-              visible={hasReplies() || hasInlineReplyInput()}
+              visible={rootRailVisible()}
               grouped={props.listMeta?.isGroupedWithPrevious}
             />
             <MarkMessageNotifications
@@ -308,6 +334,8 @@ export function ChannelThread(props: ThreadProps) {
             >
               <DebugSuspense name="ChannelThread.message">
                 <ChannelMessage
+                  renderContent={props.renderMessageContent}
+                  hideTriggeredBy={props.hideTriggeredBy}
                   parent={props.parent()}
                   message={props.data()}
                   actions={props.getMessageActions?.(props.data())}
@@ -325,14 +353,18 @@ export function ChannelThread(props: ThreadProps) {
               </DebugSuspense>
             </MarkMessageNotifications>
           </div>
+          {props.afterMessage}
           <Show when={hasReplies() || hasInlineReplyInput()}>
             <div class="relative w-full">
-              <Thread.RepliesBridgeRail />
+              <Show when={!props.hideRail}>
+                <Thread.RepliesBridgeRail />
+              </Show>
               {/* Terminal branch: the spine's final curve into the footer
                   button's left edge. Its vertical part starts exactly at the
                   last reply row's bottom (button h-8 + mb-2 + container pb). */}
               <Show
                 when={
+                  !props.hideRail &&
                   !props.monorail &&
                   (shouldShowCollapsedIndicator() || shouldShowReplyButton())
                 }
@@ -346,6 +378,7 @@ export function ChannelThread(props: ThreadProps) {
                       parent={props.parent()}
                       threadId={props.data().id}
                       replies={displayReplies()}
+                      onMessageMount={props.onMessageMount}
                       getMessageActions={props.getMessageActions}
                       inputMode={props.inputMode}
                       messageEditor={props.messageEditor}
@@ -360,6 +393,7 @@ export function ChannelThread(props: ThreadProps) {
                       isThreadFocused={isThreadFocused}
                       onSelectReply={selectReply}
                       monorail={props.monorail}
+                      hideRail={props.hideRail}
                       railContinues={
                         hasInlineReplyInput() ||
                         shouldShowCollapsedIndicator() ||
@@ -380,7 +414,7 @@ export function ChannelThread(props: ThreadProps) {
                           composer, so this branch turns at the avatar's
                           center. Once replies exist, it instead joins the
                           composer at its vertical center. */}
-                      <Show when={!props.monorail}>
+                      <Show when={!props.hideRail && !props.monorail}>
                         <div
                           class="pointer-events-none absolute top-0 -z-1 channel-rail-left channel-rail-bottom border-thread-rail rounded-bl-[14px]"
                           style={{
@@ -426,6 +460,14 @@ export function ChannelThread(props: ThreadProps) {
                     <Thread.ActionsFooter>
                       <Show when={shouldShowCollapsedIndicator()}>
                         <Thread.CollapsedIndicator
+                          ref={(element) =>
+                            notifyElementOnMount(
+                              props.onDisclosureMount,
+                              props.data().id,
+                              element
+                            )
+                          }
+                          hasUnreadNotifications={collapsedRepliesHaveUnreadNotifications()}
                           collapsedRepliesCount={collapsedRepliesCount()}
                           participants={collapsedReplyUsers()}
                           latestReplyAt={collapsedLatestReplyAt()}

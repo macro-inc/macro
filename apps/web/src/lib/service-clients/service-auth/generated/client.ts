@@ -5,10 +5,12 @@
  * OpenAPI spec version: 0.1.0
  */
 import type {
+  AgentApiKey,
   AiBillingErrorBody,
   AppleLoginRequest,
   ChangePlanRequest,
   ChangePlanResponse,
+  CheckoutSessionV2Response,
   CodexConfigRequest,
   CodexConnectionStatus,
   CodexEnvironment,
@@ -16,15 +18,17 @@ import type {
   CodexLoginStart,
   CreateAccountMergeRequest,
   CreateCheckoutSessionV2Request,
+  CreatedTeamInviteLinkResponse,
   CreateGtmInviteLinkRequest,
   CreateInProgressLinkResponse,
   CreatePortalSessionRequest,
   CreateTeamRequest,
-  CreateUserRequest,
   CreditCheckoutRequestBody,
   CreditCheckoutResponse,
   CursorApiKeyStatus,
   CursorModelsResponse,
+  EmailConnectionProviders,
+  EmailConnectionProvidersParams,
   EmptyResponse,
   EnrichGithubPullRequestsProxyRequest,
   EnrichGithubPullRequestsResponse,
@@ -37,6 +41,8 @@ import type {
   GetUserInfo,
   GetUserLinkExistsParams,
   GithubLinkStatusResponse,
+  GithubPullRequestMergeabilityRequest,
+  GithubPullRequestMergeabilityResponse,
   GmailLinkStatusResponse,
   GtmInviteLink,
   GtmInviteLinkList,
@@ -49,9 +55,12 @@ import type {
   InitOutlookLinkParams,
   InitOutlookLinkResponse,
   InviteToTeamRequest,
+  JoinTeamByInviteLinkResponse,
   ListGtmInviteLinksParams,
   MacroApiTokenParams,
   MacroApiTokenResponse,
+  MergeGithubPullRequestRequest,
+  MergeGithubPullRequestResponse,
   PasswordlessCallbackParams,
   PasswordlessRequest,
   PasswordlessStartedResponse,
@@ -68,6 +77,7 @@ import type {
   PostGetNamesRequestBody,
   ProfilePictures,
   PublicGtmInviteLink,
+  PutAgentApiKeyRequest,
   PutCursorApiKeyRequest,
   PutCursorDefaultModelRequest,
   PutProfilePictureParams,
@@ -77,17 +87,28 @@ import type {
   SendInviteBody,
   SendMobileWelcomeEmailRequest,
   SendMobileWelcomeEmailResponse,
+  SetGithubPullRequestDraftRequest,
+  SetGithubPullRequestDraftResponse,
+  SetGithubPullRequestStateRequest,
+  SetGithubPullRequestStateResponse,
   SsoLoginParams,
   SsoRequiredResponse,
   StripeSessionResponse,
+  SubscriptionStatus,
   Team,
+  TeamInviteLinkResponse,
+  TeamInviteLinkTeam,
+  TeamInviteLinkTokenRequest,
   TeamInvitesResponse,
   TeamMember,
   TeamWithMembers,
   ToggleAutoJoinDomainResponse,
   ToggleNonAdminInvitesResponse,
+  TrialEligibility,
+  UpdateAutoReloadRequest,
   UpdateOverageRequest,
   UsageSnapshot,
+  UserLanguage,
   UserLinkResponse,
   UserName,
   UserNames,
@@ -95,6 +116,280 @@ import type {
   UserQuota,
   UserTokensResponse,
 } from './schemas';
+
+/**
+ * @summary The agent's API key, if it has one, and whether its plan allows one.
+ */
+export type getAgentApiKeyResponse200 = {
+  data: AgentApiKey;
+  status: 200;
+};
+
+export type getAgentApiKeyResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type getAgentApiKeyResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type getAgentApiKeyResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type getAgentApiKeyResponseSuccess = getAgentApiKeyResponse200 & {
+  headers: Headers;
+};
+export type getAgentApiKeyResponseError = (
+  | getAgentApiKeyResponse401
+  | getAgentApiKeyResponse403
+  | getAgentApiKeyResponse404
+) & {
+  headers: Headers;
+};
+
+export type getAgentApiKeyResponse =
+  | getAgentApiKeyResponseSuccess
+  | getAgentApiKeyResponseError;
+
+export const getGetAgentApiKeyUrl = (agentId: string) => {
+  return `/agents/${agentId}/api-key`;
+};
+
+export const getAgentApiKey = async (
+  agentId: string,
+  options?: RequestInit
+): Promise<getAgentApiKeyResponse> => {
+  const res = await fetch(getGetAgentApiKeyUrl(agentId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAgentApiKeyResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getAgentApiKeyResponse;
+};
+
+/**
+ * @summary Registers or replaces the agent's API key, for its model's provider.
+Only in-memory agents on an Anthropic or OpenAI model, on a paid plan.
+ */
+export type putAgentApiKeyResponse200 = {
+  data: AgentApiKey;
+  status: 200;
+};
+
+export type putAgentApiKeyResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type putAgentApiKeyResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type putAgentApiKeyResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type putAgentApiKeyResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type putAgentApiKeyResponseSuccess = putAgentApiKeyResponse200 & {
+  headers: Headers;
+};
+export type putAgentApiKeyResponseError = (
+  | putAgentApiKeyResponse400
+  | putAgentApiKeyResponse401
+  | putAgentApiKeyResponse403
+  | putAgentApiKeyResponse404
+) & {
+  headers: Headers;
+};
+
+export type putAgentApiKeyResponse =
+  | putAgentApiKeyResponseSuccess
+  | putAgentApiKeyResponseError;
+
+export const getPutAgentApiKeyUrl = (agentId: string) => {
+  return `/agents/${agentId}/api-key`;
+};
+
+export const putAgentApiKey = async (
+  agentId: string,
+  putAgentApiKeyRequest: PutAgentApiKeyRequest,
+  options?: RequestInit
+): Promise<putAgentApiKeyResponse> => {
+  const res = await fetch(getPutAgentApiKeyUrl(agentId), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(putAgentApiKeyRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: putAgentApiKeyResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as putAgentApiKeyResponse;
+};
+
+/**
+ * @summary Forgets the agent's API key. Does not revoke it at the provider; succeeds
+when there was none.
+ */
+export type deleteAgentApiKeyResponse200 = {
+  data: AgentApiKey;
+  status: 200;
+};
+
+export type deleteAgentApiKeyResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type deleteAgentApiKeyResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type deleteAgentApiKeyResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type deleteAgentApiKeyResponseSuccess = deleteAgentApiKeyResponse200 & {
+  headers: Headers;
+};
+export type deleteAgentApiKeyResponseError = (
+  | deleteAgentApiKeyResponse401
+  | deleteAgentApiKeyResponse403
+  | deleteAgentApiKeyResponse404
+) & {
+  headers: Headers;
+};
+
+export type deleteAgentApiKeyResponse =
+  | deleteAgentApiKeyResponseSuccess
+  | deleteAgentApiKeyResponseError;
+
+export const getDeleteAgentApiKeyUrl = (agentId: string) => {
+  return `/agents/${agentId}/api-key`;
+};
+
+export const deleteAgentApiKey = async (
+  agentId: string,
+  options?: RequestInit
+): Promise<deleteAgentApiKeyResponse> => {
+  const res = await fetch(getDeleteAgentApiKeyUrl(agentId), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: deleteAgentApiKeyResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as deleteAgentApiKeyResponse;
+};
+
+/**
+ * @summary Turn automatic credit reloads on with the given
+thresholds, or off. Payer only. Enabling settles right away, so a balance
+already under the minimum reloads immediately.
+ */
+export type updateAiBillingAutoReloadResponse200 = {
+  data: UsageSnapshot;
+  status: 200;
+};
+
+export type updateAiBillingAutoReloadResponse400 = {
+  data: AiBillingErrorBody;
+  status: 400;
+};
+
+export type updateAiBillingAutoReloadResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type updateAiBillingAutoReloadResponse402 = {
+  data: AiBillingErrorBody;
+  status: 402;
+};
+
+export type updateAiBillingAutoReloadResponse403 = {
+  data: AiBillingErrorBody;
+  status: 403;
+};
+
+export type updateAiBillingAutoReloadResponse500 = {
+  data: AiBillingErrorBody;
+  status: 500;
+};
+
+export type updateAiBillingAutoReloadResponseSuccess =
+  updateAiBillingAutoReloadResponse200 & {
+    headers: Headers;
+  };
+export type updateAiBillingAutoReloadResponseError = (
+  | updateAiBillingAutoReloadResponse400
+  | updateAiBillingAutoReloadResponse401
+  | updateAiBillingAutoReloadResponse402
+  | updateAiBillingAutoReloadResponse403
+  | updateAiBillingAutoReloadResponse500
+) & {
+  headers: Headers;
+};
+
+export type updateAiBillingAutoReloadResponse =
+  | updateAiBillingAutoReloadResponseSuccess
+  | updateAiBillingAutoReloadResponseError;
+
+export const getUpdateAiBillingAutoReloadUrl = () => {
+  return `/ai-billing/auto-reload`;
+};
+
+export const updateAiBillingAutoReload = async (
+  updateAutoReloadRequest: UpdateAutoReloadRequest,
+  options?: RequestInit
+): Promise<updateAiBillingAutoReloadResponse> => {
+  const res = await fetch(getUpdateAiBillingAutoReloadUrl(), {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(updateAutoReloadRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: updateAiBillingAutoReloadResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as updateAiBillingAutoReloadResponse;
+};
 
 /**
  * @summary Start a Stripe Checkout for a credit pack. Payer only.
@@ -175,7 +470,7 @@ export const createAiCreditCheckout = async (
 };
 
 /**
- * @summary Turn overage billing on or off and set the per-period cap. Payer only.
+ * @summary Retired direct-usage opt-in. Enabling is rejected; disabling remains supported.
  */
 export type updateAiBillingOverageResponse200 = {
   data: UsageSnapshot;
@@ -253,7 +548,8 @@ export const updateAiBillingOverage = async (
 };
 
 /**
- * @summary The plan catalog, credit packs, and overage cap bounds.
+ * @summary The plan catalog, credit packs, overage cap bounds, and automatic reload
+defaults and bounds.
  */
 export type getAiBillingPlansResponse200 = {
   data: PlanCatalogResponse;
@@ -1123,6 +1419,91 @@ export const verifyEmailLink = async (
 };
 
 /**
+ * @summary Converts a GitHub pull request to a draft, or marks it ready for review,
+as the authenticated user with their own GitHub grant.
+ */
+export type setGithubPullRequestDraftResponse200 = {
+  data: SetGithubPullRequestDraftResponse;
+  status: 200;
+};
+
+export type setGithubPullRequestDraftResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type setGithubPullRequestDraftResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type setGithubPullRequestDraftResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type setGithubPullRequestDraftResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type setGithubPullRequestDraftResponse428 = {
+  data: ErrorResponse;
+  status: 428;
+};
+
+export type setGithubPullRequestDraftResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type setGithubPullRequestDraftResponseSuccess =
+  setGithubPullRequestDraftResponse200 & {
+    headers: Headers;
+  };
+export type setGithubPullRequestDraftResponseError = (
+  | setGithubPullRequestDraftResponse401
+  | setGithubPullRequestDraftResponse403
+  | setGithubPullRequestDraftResponse404
+  | setGithubPullRequestDraftResponse422
+  | setGithubPullRequestDraftResponse428
+  | setGithubPullRequestDraftResponse500
+) & {
+  headers: Headers;
+};
+
+export type setGithubPullRequestDraftResponse =
+  | setGithubPullRequestDraftResponseSuccess
+  | setGithubPullRequestDraftResponseError;
+
+export const getSetGithubPullRequestDraftUrl = () => {
+  return `/github_pull_requests/draft`;
+};
+
+export const setGithubPullRequestDraft = async (
+  setGithubPullRequestDraftRequest: SetGithubPullRequestDraftRequest,
+  options?: RequestInit
+): Promise<setGithubPullRequestDraftResponse> => {
+  const res = await fetch(getSetGithubPullRequestDraftUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(setGithubPullRequestDraftRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: setGithubPullRequestDraftResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as setGithubPullRequestDraftResponse;
+};
+
+/**
  * @summary Enriches GitHub pull request references with live GitHub data for the authenticated user.
  */
 export type enrichGithubPullRequestsResponse200 = {
@@ -1192,6 +1573,263 @@ export const enrichGithubPullRequests = async (
     status: res.status,
     headers: res.headers,
   } as enrichGithubPullRequestsResponse;
+};
+
+/**
+ * @summary Merges a GitHub pull request as the authenticated user, with their own
+GitHub grant. GitHub applies the user's permissions and the repository's
+branch protections; a refusal is returned with GitHub's message.
+ */
+export type mergeGithubPullRequestResponse200 = {
+  data: MergeGithubPullRequestResponse;
+  status: 200;
+};
+
+export type mergeGithubPullRequestResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type mergeGithubPullRequestResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type mergeGithubPullRequestResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type mergeGithubPullRequestResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type mergeGithubPullRequestResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type mergeGithubPullRequestResponse428 = {
+  data: ErrorResponse;
+  status: 428;
+};
+
+export type mergeGithubPullRequestResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type mergeGithubPullRequestResponseSuccess =
+  mergeGithubPullRequestResponse200 & {
+    headers: Headers;
+  };
+export type mergeGithubPullRequestResponseError = (
+  | mergeGithubPullRequestResponse401
+  | mergeGithubPullRequestResponse403
+  | mergeGithubPullRequestResponse404
+  | mergeGithubPullRequestResponse409
+  | mergeGithubPullRequestResponse422
+  | mergeGithubPullRequestResponse428
+  | mergeGithubPullRequestResponse500
+) & {
+  headers: Headers;
+};
+
+export type mergeGithubPullRequestResponse =
+  | mergeGithubPullRequestResponseSuccess
+  | mergeGithubPullRequestResponseError;
+
+export const getMergeGithubPullRequestUrl = () => {
+  return `/github_pull_requests/merge`;
+};
+
+export const mergeGithubPullRequest = async (
+  mergeGithubPullRequestRequest: MergeGithubPullRequestRequest,
+  options?: RequestInit
+): Promise<mergeGithubPullRequestResponse> => {
+  const res = await fetch(getMergeGithubPullRequestUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(mergeGithubPullRequestRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: mergeGithubPullRequestResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as mergeGithubPullRequestResponse;
+};
+
+/**
+ * @summary Reads whether each GitHub pull request merges cleanly into its base, as
+the authenticated user sees it. Pull requests the user cannot see are
+left out.
+ */
+export type getGithubPullRequestMergeabilityResponse200 = {
+  data: GithubPullRequestMergeabilityResponse;
+  status: 200;
+};
+
+export type getGithubPullRequestMergeabilityResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type getGithubPullRequestMergeabilityResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type getGithubPullRequestMergeabilityResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type getGithubPullRequestMergeabilityResponse428 = {
+  data: ErrorResponse;
+  status: 428;
+};
+
+export type getGithubPullRequestMergeabilityResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getGithubPullRequestMergeabilityResponseSuccess =
+  getGithubPullRequestMergeabilityResponse200 & {
+    headers: Headers;
+  };
+export type getGithubPullRequestMergeabilityResponseError = (
+  | getGithubPullRequestMergeabilityResponse401
+  | getGithubPullRequestMergeabilityResponse404
+  | getGithubPullRequestMergeabilityResponse422
+  | getGithubPullRequestMergeabilityResponse428
+  | getGithubPullRequestMergeabilityResponse500
+) & {
+  headers: Headers;
+};
+
+export type getGithubPullRequestMergeabilityResponse =
+  | getGithubPullRequestMergeabilityResponseSuccess
+  | getGithubPullRequestMergeabilityResponseError;
+
+export const getGetGithubPullRequestMergeabilityUrl = () => {
+  return `/github_pull_requests/mergeability`;
+};
+
+export const getGithubPullRequestMergeability = async (
+  githubPullRequestMergeabilityRequest: GithubPullRequestMergeabilityRequest,
+  options?: RequestInit
+): Promise<getGithubPullRequestMergeabilityResponse> => {
+  const res = await fetch(getGetGithubPullRequestMergeabilityUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(githubPullRequestMergeabilityRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getGithubPullRequestMergeabilityResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getGithubPullRequestMergeabilityResponse;
+};
+
+/**
+ * @summary Closes a GitHub pull request, or reopens it, as the authenticated user
+with their own GitHub grant.
+ */
+export type setGithubPullRequestStateResponse200 = {
+  data: SetGithubPullRequestStateResponse;
+  status: 200;
+};
+
+export type setGithubPullRequestStateResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type setGithubPullRequestStateResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type setGithubPullRequestStateResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type setGithubPullRequestStateResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type setGithubPullRequestStateResponse428 = {
+  data: ErrorResponse;
+  status: 428;
+};
+
+export type setGithubPullRequestStateResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type setGithubPullRequestStateResponseSuccess =
+  setGithubPullRequestStateResponse200 & {
+    headers: Headers;
+  };
+export type setGithubPullRequestStateResponseError = (
+  | setGithubPullRequestStateResponse401
+  | setGithubPullRequestStateResponse403
+  | setGithubPullRequestStateResponse404
+  | setGithubPullRequestStateResponse422
+  | setGithubPullRequestStateResponse428
+  | setGithubPullRequestStateResponse500
+) & {
+  headers: Headers;
+};
+
+export type setGithubPullRequestStateResponse =
+  | setGithubPullRequestStateResponseSuccess
+  | setGithubPullRequestStateResponseError;
+
+export const getSetGithubPullRequestStateUrl = () => {
+  return `/github_pull_requests/state`;
+};
+
+export const setGithubPullRequestState = async (
+  setGithubPullRequestStateRequest: SetGithubPullRequestStateRequest,
+  options?: RequestInit
+): Promise<setGithubPullRequestStateResponse> => {
+  const res = await fetch(getSetGithubPullRequestStateUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(setGithubPullRequestStateRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: setGithubPullRequestStateResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as setGithubPullRequestStateResponse;
 };
 
 /**
@@ -1869,6 +2507,68 @@ export const createInProgressLink = async (
   } as createInProgressLinkResponse;
 };
 
+export type emailConnectionProvidersResponse200 = {
+  data: EmailConnectionProviders;
+  status: 200;
+};
+
+export type emailConnectionProvidersResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type emailConnectionProvidersResponseSuccess =
+  emailConnectionProvidersResponse200 & {
+    headers: Headers;
+  };
+export type emailConnectionProvidersResponseError =
+  emailConnectionProvidersResponse400 & {
+    headers: Headers;
+  };
+
+export type emailConnectionProvidersResponse =
+  | emailConnectionProvidersResponseSuccess
+  | emailConnectionProvidersResponseError;
+
+export const getEmailConnectionProvidersUrl = (
+  params?: EmailConnectionProvidersParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/link/email/providers?${stringifiedParams}`
+    : `/link/email/providers`;
+};
+
+export const emailConnectionProviders = async (
+  params?: EmailConnectionProvidersParams,
+  options?: RequestInit
+): Promise<emailConnectionProvidersResponse> => {
+  const res = await fetch(getEmailConnectionProvidersUrl(params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: emailConnectionProvidersResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as emailConnectionProvidersResponse;
+};
+
 /**
  * @summary Initiates a link for a user
  */
@@ -2249,6 +2949,11 @@ export type initOutlookLinkResponse401 = {
   status: 401;
 };
 
+export type initOutlookLinkResponse402 = {
+  data: ErrorResponse;
+  status: 402;
+};
+
 export type initOutlookLinkResponse404 = {
   data: ErrorResponse;
   status: 404;
@@ -2270,6 +2975,7 @@ export type initOutlookLinkResponseSuccess = initOutlookLinkResponse200 & {
 export type initOutlookLinkResponseError = (
   | initOutlookLinkResponse400
   | initOutlookLinkResponse401
+  | initOutlookLinkResponse402
   | initOutlookLinkResponse404
   | initOutlookLinkResponse429
   | initOutlookLinkResponse500
@@ -2736,9 +3442,9 @@ export const verifyMergeRequest = async (
 };
 
 /**
- * @summary Enrolls a mobile lead in the Loops nurture sequence, which sends the welcome
-email inviting them to register on desktop. No-ops if the address was already
-enrolled, and rejects blocked addresses.
+ * @summary Emails a mobile lead a link to continue onboarding on desktop and enrolls
+them in the Loops welcome sequence. No-ops if the address was already
+captured, and rejects blocked addresses.
  */
 export type sendMobileWelcomeEmailResponse200 = {
   data: SendMobileWelcomeEmailResponse;
@@ -2951,6 +3657,11 @@ export type oauth2CallbackResponse200 = {
   status: 200;
 };
 
+export type oauth2CallbackResponse303 = {
+  data: void;
+  status: 303;
+};
+
 export type oauth2CallbackResponse304 = {
   data: ErrorResponse;
   status: 304;
@@ -2980,6 +3691,7 @@ export type oauth2CallbackResponseSuccess = oauth2CallbackResponse200 & {
   headers: Headers;
 };
 export type oauth2CallbackResponseError = (
+  | oauth2CallbackResponse303
   | oauth2CallbackResponse304
   | oauth2CallbackResponse307
   | oauth2CallbackResponse400
@@ -3857,6 +4569,333 @@ export const inviteToTeam = async (
 };
 
 /**
+ * @summary Gets the team's invite link. Anyone who may invite people to the team may
+see it.
+ */
+export type getTeamInviteLinkResponse200 = {
+  data: TeamInviteLinkResponse;
+  status: 200;
+};
+
+export type getTeamInviteLinkResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type getTeamInviteLinkResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type getTeamInviteLinkResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getTeamInviteLinkResponseSuccess = getTeamInviteLinkResponse200 & {
+  headers: Headers;
+};
+export type getTeamInviteLinkResponseError = (
+  | getTeamInviteLinkResponse401
+  | getTeamInviteLinkResponse403
+  | getTeamInviteLinkResponse500
+) & {
+  headers: Headers;
+};
+
+export type getTeamInviteLinkResponse =
+  | getTeamInviteLinkResponseSuccess
+  | getTeamInviteLinkResponseError;
+
+export const getGetTeamInviteLinkUrl = () => {
+  return `/team/invite-link`;
+};
+
+export const getTeamInviteLink = async (
+  options?: RequestInit
+): Promise<getTeamInviteLinkResponse> => {
+  const res = await fetch(getGetTeamInviteLinkUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getTeamInviteLinkResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getTeamInviteLinkResponse;
+};
+
+/**
+ * @summary Creates the team's invite link, replacing any existing one. Anyone who may
+invite people may create the first link; replacing one requires a team
+admin or owner.
+ */
+export type createTeamInviteLinkResponse201 = {
+  data: CreatedTeamInviteLinkResponse;
+  status: 201;
+};
+
+export type createTeamInviteLinkResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type createTeamInviteLinkResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type createTeamInviteLinkResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type createTeamInviteLinkResponseSuccess =
+  createTeamInviteLinkResponse201 & {
+    headers: Headers;
+  };
+export type createTeamInviteLinkResponseError = (
+  | createTeamInviteLinkResponse401
+  | createTeamInviteLinkResponse403
+  | createTeamInviteLinkResponse500
+) & {
+  headers: Headers;
+};
+
+export type createTeamInviteLinkResponse =
+  | createTeamInviteLinkResponseSuccess
+  | createTeamInviteLinkResponseError;
+
+export const getCreateTeamInviteLinkUrl = () => {
+  return `/team/invite-link`;
+};
+
+export const createTeamInviteLink = async (
+  options?: RequestInit
+): Promise<createTeamInviteLinkResponse> => {
+  const res = await fetch(getCreateTeamInviteLinkUrl(), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: createTeamInviteLinkResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as createTeamInviteLinkResponse;
+};
+
+/**
+ * @summary Turns off the team's invite link. Requires a team admin or owner.
+ */
+export type deleteTeamInviteLinkResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type deleteTeamInviteLinkResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type deleteTeamInviteLinkResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type deleteTeamInviteLinkResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type deleteTeamInviteLinkResponseSuccess =
+  deleteTeamInviteLinkResponse204 & {
+    headers: Headers;
+  };
+export type deleteTeamInviteLinkResponseError = (
+  | deleteTeamInviteLinkResponse401
+  | deleteTeamInviteLinkResponse403
+  | deleteTeamInviteLinkResponse500
+) & {
+  headers: Headers;
+};
+
+export type deleteTeamInviteLinkResponse =
+  | deleteTeamInviteLinkResponseSuccess
+  | deleteTeamInviteLinkResponseError;
+
+export const getDeleteTeamInviteLinkUrl = () => {
+  return `/team/invite-link`;
+};
+
+export const deleteTeamInviteLink = async (
+  options?: RequestInit
+): Promise<deleteTeamInviteLinkResponse> => {
+  const res = await fetch(getDeleteTeamInviteLinkUrl(), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: deleteTeamInviteLinkResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as deleteTeamInviteLinkResponse;
+};
+
+/**
+ * @summary Joins the team an invite link belongs to.
+ */
+export type joinTeamByInviteLinkResponse200 = {
+  data: JoinTeamByInviteLinkResponse;
+  status: 200;
+};
+
+export type joinTeamByInviteLinkResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type joinTeamByInviteLinkResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type joinTeamByInviteLinkResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type joinTeamByInviteLinkResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type joinTeamByInviteLinkResponseSuccess =
+  joinTeamByInviteLinkResponse200 & {
+    headers: Headers;
+  };
+export type joinTeamByInviteLinkResponseError = (
+  | joinTeamByInviteLinkResponse401
+  | joinTeamByInviteLinkResponse404
+  | joinTeamByInviteLinkResponse409
+  | joinTeamByInviteLinkResponse500
+) & {
+  headers: Headers;
+};
+
+export type joinTeamByInviteLinkResponse =
+  | joinTeamByInviteLinkResponseSuccess
+  | joinTeamByInviteLinkResponseError;
+
+export const getJoinTeamByInviteLinkUrl = () => {
+  return `/team/invite-link/join`;
+};
+
+export const joinTeamByInviteLink = async (
+  teamInviteLinkTokenRequest: TeamInviteLinkTokenRequest,
+  options?: RequestInit
+): Promise<joinTeamByInviteLinkResponse> => {
+  const res = await fetch(getJoinTeamByInviteLinkUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(teamInviteLinkTokenRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: joinTeamByInviteLinkResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as joinTeamByInviteLinkResponse;
+};
+
+/**
+ * @summary Gets the team an invite link joins, so the user can see it before joining.
+ */
+export type getTeamByInviteLinkResponse200 = {
+  data: TeamInviteLinkTeam;
+  status: 200;
+};
+
+export type getTeamByInviteLinkResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type getTeamByInviteLinkResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type getTeamByInviteLinkResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getTeamByInviteLinkResponseSuccess =
+  getTeamByInviteLinkResponse200 & {
+    headers: Headers;
+  };
+export type getTeamByInviteLinkResponseError = (
+  | getTeamByInviteLinkResponse401
+  | getTeamByInviteLinkResponse404
+  | getTeamByInviteLinkResponse500
+) & {
+  headers: Headers;
+};
+
+export type getTeamByInviteLinkResponse =
+  | getTeamByInviteLinkResponseSuccess
+  | getTeamByInviteLinkResponseError;
+
+export const getGetTeamByInviteLinkUrl = () => {
+  return `/team/invite-link/team`;
+};
+
+export const getTeamByInviteLink = async (
+  teamInviteLinkTokenRequest: TeamInviteLinkTokenRequest,
+  options?: RequestInit
+): Promise<getTeamByInviteLinkResponse> => {
+  const res = await fetch(getGetTeamByInviteLinkUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(teamInviteLinkTokenRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getTeamByInviteLinkResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getTeamByInviteLinkResponse;
+};
+
+/**
  * @summary Deletes a team invite from a team.
  */
 export type deleteTeamInviteHandlerResponse200 = {
@@ -4439,69 +5478,6 @@ export const getUserInvites = async (
 };
 
 /**
- * @summary Creates a new user.
- */
-export type createUserResponse200 = {
-  data: EmptyResponse;
-  status: 200;
-};
-
-export type createUserResponse400 = {
-  data: ErrorResponse;
-  status: 400;
-};
-
-export type createUserResponse403 = {
-  data: ErrorResponse;
-  status: 403;
-};
-
-export type createUserResponse500 = {
-  data: ErrorResponse;
-  status: 500;
-};
-
-export type createUserResponseSuccess = createUserResponse200 & {
-  headers: Headers;
-};
-export type createUserResponseError = (
-  | createUserResponse400
-  | createUserResponse403
-  | createUserResponse500
-) & {
-  headers: Headers;
-};
-
-export type createUserResponse =
-  | createUserResponseSuccess
-  | createUserResponseError;
-
-export const getCreateUserUrl = () => {
-  return `/user`;
-};
-
-export const createUser = async (
-  createUserRequest: CreateUserRequest,
-  options?: RequestInit
-): Promise<createUserResponse> => {
-  const res = await fetch(getCreateUserUrl(), {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(createUserRequest),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: createUserResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as createUserResponse;
-};
-
-/**
  * @summary Retrieves user names in bulk
  */
 export type getUserNamesResponse200 = {
@@ -4685,6 +5661,136 @@ export const patchUserGroup = async (
     status: res.status,
     headers: res.headers,
   } as patchUserGroupResponse;
+};
+
+/**
+ * @summary Get the caller's interface language.
+ */
+export type getUserLanguageResponse200 = {
+  data: UserLanguage;
+  status: 200;
+};
+
+export type getUserLanguageResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type getUserLanguageResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type getUserLanguageResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getUserLanguageResponseSuccess = getUserLanguageResponse200 & {
+  headers: Headers;
+};
+export type getUserLanguageResponseError = (
+  | getUserLanguageResponse401
+  | getUserLanguageResponse404
+  | getUserLanguageResponse500
+) & {
+  headers: Headers;
+};
+
+export type getUserLanguageResponse =
+  | getUserLanguageResponseSuccess
+  | getUserLanguageResponseError;
+
+export const getGetUserLanguageUrl = () => {
+  return `/user/language`;
+};
+
+export const getUserLanguage = async (
+  options?: RequestInit
+): Promise<getUserLanguageResponse> => {
+  const res = await fetch(getGetUserLanguageUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getUserLanguageResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getUserLanguageResponse;
+};
+
+/**
+ * @summary Set the caller's interface language, or clear it to follow their team's,
+else their browser's.
+ */
+export type putUserLanguageResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type putUserLanguageResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type putUserLanguageResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type putUserLanguageResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type putUserLanguageResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type putUserLanguageResponseSuccess = putUserLanguageResponse204 & {
+  headers: Headers;
+};
+export type putUserLanguageResponseError = (
+  | putUserLanguageResponse400
+  | putUserLanguageResponse401
+  | putUserLanguageResponse404
+  | putUserLanguageResponse500
+) & {
+  headers: Headers;
+};
+
+export type putUserLanguageResponse =
+  | putUserLanguageResponseSuccess
+  | putUserLanguageResponseError;
+
+export const getPutUserLanguageUrl = () => {
+  return `/user/language`;
+};
+
+export const putUserLanguage = async (
+  userLanguage: UserLanguage,
+  options?: RequestInit
+): Promise<putUserLanguageResponse> => {
+  const res = await fetch(getPutUserLanguageUrl(), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(userLanguage),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: putUserLanguageResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as putUserLanguageResponse;
 };
 
 /**
@@ -5374,7 +6480,7 @@ export const getUserQuota = async (
  * @summary Creates a Stripe checkout session for the user to subscribe.
  */
 export type createCheckoutSessionV2Response200 = {
-  data: StripeSessionResponse;
+  data: CheckoutSessionV2Response;
   status: 200;
 };
 
@@ -5443,14 +6549,72 @@ export const createCheckoutSessionV2 = async (
 };
 
 /**
- * On a team billed per seat this moves only the caller's seat (team admins
-and the owner may do so; teammates' seats are managed from team
-settings). Members of a free team, and solo subscribers, get the price on
-their own subscription's seat item swapped. The proration is invoiced
-immediately either way; roles and the AI allowance follow at once on a
-team and from the `customer.subscription.updated` webhook for a personal
-subscription.
- * @summary Moves the caller's own seat between paid plans.
+ * @summary Read subscription state for the authenticated user's seat.
+ */
+export type getSubscriptionStatusResponse200 = {
+  data: SubscriptionStatus;
+  status: 200;
+};
+
+export type getSubscriptionStatusResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type getSubscriptionStatusResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type getSubscriptionStatusResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getSubscriptionStatusResponseSuccess =
+  getSubscriptionStatusResponse200 & {
+    headers: Headers;
+  };
+export type getSubscriptionStatusResponseError = (
+  | getSubscriptionStatusResponse401
+  | getSubscriptionStatusResponse409
+  | getSubscriptionStatusResponse500
+) & {
+  headers: Headers;
+};
+
+export type getSubscriptionStatusResponse =
+  | getSubscriptionStatusResponseSuccess
+  | getSubscriptionStatusResponseError;
+
+export const getGetSubscriptionStatusUrl = () => {
+  return `/user/stripe/plan`;
+};
+
+export const getSubscriptionStatus = async (
+  options?: RequestInit
+): Promise<getSubscriptionStatusResponse> => {
+  const res = await fetch(getGetSubscriptionStatusUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getSubscriptionStatusResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getSubscriptionStatusResponse;
+};
+
+/**
+ * @summary Changes the caller's paid plan. Upgrades are prorated immediately;
+downgrades retain the active plan until renewal. Selecting the active plan
+cancels a pending downgrade without charging or resetting usage.
  */
 export type changePlanResponse200 = {
   data: ChangePlanResponse;
@@ -5588,6 +6752,69 @@ export const createPortalSession = async (
     status: res.status,
     headers: res.headers,
   } as createPortalSessionResponse;
+};
+
+/**
+ * @summary Read the caller's eligibility; checkout revalidates before granting a trial.
+ */
+export type getTrialEligibilityResponse200 = {
+  data: TrialEligibility;
+  status: 200;
+};
+
+export type getTrialEligibilityResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type getTrialEligibilityResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type getTrialEligibilityResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getTrialEligibilityResponseSuccess =
+  getTrialEligibilityResponse200 & {
+    headers: Headers;
+  };
+export type getTrialEligibilityResponseError = (
+  | getTrialEligibilityResponse400
+  | getTrialEligibilityResponse401
+  | getTrialEligibilityResponse500
+) & {
+  headers: Headers;
+};
+
+export type getTrialEligibilityResponse =
+  | getTrialEligibilityResponseSuccess
+  | getTrialEligibilityResponseError;
+
+export const getGetTrialEligibilityUrl = () => {
+  return `/user/stripe/trial_eligibility`;
+};
+
+export const getTrialEligibility = async (
+  options?: RequestInit
+): Promise<getTrialEligibilityResponse> => {
+  const res = await fetch(getGetTrialEligibilityUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getTrialEligibilityResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getTrialEligibilityResponse;
 };
 
 /**

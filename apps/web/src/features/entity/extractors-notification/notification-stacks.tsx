@@ -1,7 +1,9 @@
+import { t } from '@app/lib/i18n';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
+import CheckIcon from '@icon/system/regular/check.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import {
   getMostRecentNotification,
@@ -9,7 +11,6 @@ import {
   openNotification,
   stackNotifications,
 } from '@notifications';
-import CheckIcon from '@phosphor/check.svg';
 import { Button, cn } from '@ui';
 import { createEffect, type JSX, Show } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
@@ -21,7 +22,10 @@ import {
   filterValidNotifications,
   isNotificationUnread,
 } from '../utils/notification';
-import { useNotificationStackActions } from './notification-actions';
+import {
+  reportNotificationActionError,
+  useNotificationStackActions,
+} from './notification-actions';
 import { NotificationContent } from './notification-content';
 import { copyNotificationLink } from './notification-copy-link';
 import { NotificationDescription } from './notification-description';
@@ -102,7 +106,7 @@ export function NotificationStackRow(props: {
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault();
-              handleClick(e);
+              handleClick(e).catch(reportNotificationActionError);
             }
             if (e.key === 'e' && canMarkDone()) {
               e.preventDefault();
@@ -149,8 +153,10 @@ export function NotificationStackRow(props: {
             </span>
             <Show when={canMarkDone()}>
               <Button
+                variant="ghost"
                 onClick={handleMarkAsDone}
-                tooltip={'Mark done'}
+                aria-label={t('entityActions.markDone')}
+                tooltip={t('entityActions.markDoneCommand')}
                 class="text-ink-muted hover:text-accent hover:bg-accent/10 hidden group-hover/notif:grid p-0 place-items-center size-5"
               >
                 <CheckIcon class="size-3" />
@@ -163,10 +169,19 @@ export function NotificationStackRow(props: {
         <div onClick={(e) => e.stopPropagation()}>
           <ContextMenuContent class="text-xs text-ink-muted">
             <Show when={canMarkDone()}>
-              <MenuItem text="Mark Done" onClick={() => handleMarkAsDone()} />
+              <MenuItem
+                text={t('entityActions.markDone')}
+                onClick={() => handleMarkAsDone()}
+              />
             </Show>
-            <MenuItem text="Mark Read" onClick={handleMarkAsRead} />
-            <MenuItem text="Copy Link" onClick={handleCopyLink} />
+            <MenuItem
+              text={t('entityActions.markRead')}
+              onClick={handleMarkAsRead}
+            />
+            <MenuItem
+              text={t('entityActions.copyLink')}
+              onClick={handleCopyLink}
+            />
           </ContextMenuContent>
         </div>
       </ContextMenu.Portal>

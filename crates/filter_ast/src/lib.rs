@@ -64,7 +64,7 @@ pub enum ExprFrame<A, B> {
     Literal(B),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Expr<B> {
     #[serde(rename = "&")]
     And(Box<Self>, Box<Self>),

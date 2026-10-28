@@ -1,4 +1,5 @@
 # syntax=docker/dockerfile:1
+FROM denoland/deno:2.9.6 AS deno
 FROM rust:latest AS chef
 ARG SERVICE_NAME
 ENV SQLX_OFFLINE=true
@@ -37,6 +38,12 @@ RUN : \
   && rm -rf /var/lib/apt/lists/*
 
 COPY --chmod=755 --from=builder /app/svc /app/svc
+
+# Only the agent harness hosts code-mode subprocesses.
+RUN --mount=from=deno,source=/usr/bin/deno,target=/tmp/deno,ro \
+  if [ "$SERVICE_NAME" = "agent_harness_service" ]; then \
+    install -m 755 /tmp/deno /usr/local/bin/deno; \
+  fi
 
 ENV PORT=8080
 EXPOSE ${PORT}

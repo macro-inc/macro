@@ -179,7 +179,7 @@ describe('deterministic spreadsheet worker runtime', () => {
             {
               type: 'set_cells',
               sheetId: 'sheet1',
-              cells: [{ address: 'AA1', value: '5' }],
+              cells: [{ address: 'XFE1', value: '5' }],
             },
           ],
         },
@@ -369,4 +369,99 @@ it('accepts imported financial styles in AI edits while rejecting unknown border
   expect(spreadsheetBodySchema.safeParse(body).success).toBe(true);
   body.request.operations[0].style.borderBottomStyle = 'bogus';
   expect(spreadsheetBodySchema.safeParse(body).success).toBe(false);
+});
+
+it('accepts the accounting number format in AI edits', () => {
+  const edit = (format: string) =>
+    spreadsheetBodySchema.safeParse({
+      documentId: crypto.randomUUID(),
+      documentToken: 'token',
+      request: {
+        action: 'edit',
+        expectedRevision: 'rev',
+        operations: [
+          {
+            type: 'format_cells',
+            sheetId: 'sheet1',
+            range: 'B2:B9',
+            style: { format, decimals: 0 },
+          },
+        ],
+      },
+    }).success;
+  expect(edit('accounting')).toBe(true);
+  expect(edit('ledger')).toBe(false);
+});
+
+it('accepts indent levels up to Excel’s limit in AI edits', () => {
+  const edit = (indent: number) =>
+    spreadsheetBodySchema.safeParse({
+      documentId: crypto.randomUUID(),
+      documentToken: 'token',
+      request: {
+        action: 'edit',
+        expectedRevision: 'rev',
+        operations: [
+          {
+            type: 'format_cells',
+            sheetId: 'sheet1',
+            range: 'A2:A9',
+            style: { indent, horizontalAlign: 'left' },
+          },
+        ],
+      },
+    }).success;
+  expect(edit(0)).toBe(true);
+  expect(edit(250)).toBe(true);
+  expect(edit(251)).toBe(false);
+  expect(edit(1.5)).toBe(false);
+});
+
+it('accepts dropdown operations and rejects unknown dropdown fields', () => {
+  const edit = (operation: Record<string, unknown>) =>
+    spreadsheetBodySchema.safeParse({
+      documentId: crypto.randomUUID(),
+      documentToken: 'token',
+      request: {
+        action: 'edit',
+        expectedRevision: 'rev',
+        operations: [{ sheetId: 'sheet1', range: 'B2:B50', ...operation }],
+      },
+    }).success;
+  expect(edit({ type: 'set_dropdown', items: ['Open', 'Done'] })).toBe(true);
+  expect(
+    edit({ type: 'set_dropdown', source: 'Lists!A1:A9', rejectInvalid: false })
+  ).toBe(true);
+  expect(edit({ type: 'clear_validation' })).toBe(true);
+  expect(edit({ type: 'set_dropdown', items: [] })).toBe(false);
+  expect(edit({ type: 'set_dropdown', items: ['a'], formula: '=1' })).toBe(
+    false
+  );
+  const colored = (colors: unknown) =>
+    edit({ type: 'set_dropdown', items: ['Open', 'Done'], colors });
+  expect(colored([{ item: 'Done', color: '#B7E1CD' }])).toBe(true);
+  expect(colored([{ item: 'Done', color: 'green' }])).toBe(false);
+  expect(colored([{ item: 'Done', color: '#b7e1cd', text: '#000' }])).toBe(
+    false
+  );
+  expect(colored({ Done: '#b7e1cd' })).toBe(false);
+});
+
+it('accepts checkbox insertion and the checkbox style in AI edits', () => {
+  const edit = (operation: Record<string, unknown>) =>
+    spreadsheetBodySchema.safeParse({
+      documentId: crypto.randomUUID(),
+      documentToken: 'token',
+      request: {
+        action: 'edit',
+        expectedRevision: 'rev',
+        operations: [{ sheetId: 'sheet1', range: 'C2:C20', ...operation }],
+      },
+    }).success;
+  expect(edit({ type: 'insert_checkboxes' })).toBe(true);
+  expect(edit({ type: 'insert_checkboxes', checked: true })).toBe(false);
+  expect(edit({ type: 'format_cells', style: { checkbox: false } })).toBe(true);
+  expect(edit({ type: 'format_cells', style: { checkbox: 'yes' } })).toBe(
+    false
+  );
 });

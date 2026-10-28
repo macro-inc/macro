@@ -3,15 +3,17 @@ import { buildPostMessageSendPayload } from '@channel/Input/message-payload';
 import { useMessageBotMentionUsers } from '@channel/use-channel-bot-mention-users';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { useUserId } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { thrownResultErrorHasCode } from '@core/util/result';
-import CaretDown from '@phosphor/caret-down.svg';
-import CaretRight from '@phosphor/caret-right.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
 import { useMessageLink } from '@queries/messages/document-messages';
 import {
   newMessageId,
   useSendMessageMutation,
 } from '@queries/messages/mutations';
 import { useMessageTimelineQuery } from '@queries/messages/timeline';
+import { timelineMessages } from '@queries/messages/timeline-entries';
 import type { MessageParent } from '@service-storage/messages';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { MessageThread } from './MessageThread';
@@ -56,6 +58,8 @@ export function EntityConversationComposer(props: {
 export function EntityConversation(props: {
   parent: MessageParent;
   canWrite: boolean;
+  /** Delete comments the caller did not write. Document owners set this. */
+  canModerate?: boolean;
   targetId?: string | null;
   /** The linked view stays around `targetId`, but its message is no longer highlighted. */
   targetCleared?: boolean;
@@ -88,7 +92,7 @@ export function EntityConversation(props: {
   const messages = () =>
     target.resolved() && !query.isPending && !unavailable()
       ? (query.data?.pages
-          .flatMap((page) => page.items)
+          .flatMap(timelineMessages)
           // Only known unanchored roots belong in Discussion. Live roots have
           // undefined anchors until their thread metadata is fetched.
           .filter(
@@ -123,8 +127,9 @@ export function EntityConversation(props: {
             <Show when={query.isError || unavailable()}>
               <button
                 onClick={() => {
-                  void query.refetch();
-                  if (props.targetId) void target.refetch();
+                  fireAndForget(query.refetch(), 'entity-conversation');
+                  if (props.targetId)
+                    fireAndForget(target.refetch(), 'entity-conversation');
                 }}
               >
                 Could not load comments. Retry
@@ -134,7 +139,9 @@ export function EntityConversation(props: {
               <button
                 class="text-xs"
                 disabled={query.isFetching}
-                onClick={() => void query.fetchNextPage()}
+                onClick={() =>
+                  fireAndForget(query.fetchNextPage(), 'entity-conversation')
+                }
               >
                 Load earlier comments
               </button>
@@ -144,6 +151,7 @@ export function EntityConversation(props: {
                 <MessageThread
                   data={messagesById().get(id)!}
                   canWrite={props.canWrite}
+                  canModerate={props.canModerate}
                   targetId={
                     target.rootId() === id && !props.targetCleared
                       ? target.messageId()
@@ -158,7 +166,12 @@ export function EntityConversation(props: {
               <button
                 class="text-xs"
                 disabled={query.isFetching}
-                onClick={() => void query.fetchPreviousPage()}
+                onClick={() =>
+                  fireAndForget(
+                    query.fetchPreviousPage(),
+                    'entity-conversation'
+                  )
+                }
               >
                 Load newer comments
               </button>

@@ -1,0 +1,392 @@
+use super::super::test_util::*;
+use super::super::*;
+use crate::test_support::{Parts, fonts};
+
+const TRACKING: &str = "<w:trackRevisions/>";
+
+fn tracked(body: &str) -> Session {
+    let mut s = open_with(
+        body,
+        &Parts {
+            settings: Some(TRACKING),
+            ..Parts::default()
+        },
+    );
+    s.set_author("Alice");
+    s.set_now("2026-10-04T12:00:00Z");
+    s
+}
+
+fn xml(s: &Session) -> String {
+    s.document().document_xml()
+}
+
+fn count(haystack: &str, needle: &str) -> usize {
+    haystack.matches(needle).count()
+}
+
+#[test]
+fn typing_is_recorded_as_the_authors_insertion() {
+    let mut s = tracked(&p("Hello"));
+    caret_at(&mut s, 0, 5);
+    type_text(&mut s, " world");
+    type_text(&mut s, "!");
+    let out = xml(&s);
+    // One insertion, continued by the second keystroke.
+    assert_eq!(count(&out, "<w:ins "), 1, "{out}");
+    assert!(out.contains("w:author=\"Alice\""), "{out}");
+    assert!(out.contains("w:date=\"2026-10-04T12:00:00Z\""), "{out}");
+    assert!(
+        out.contains("<w:t xml:space=\"preserve\"> world!</w:t>"),
+        "{out}"
+    );
+    assert_eq!(texts(&s), vec!["Hello world!"]);
+    let r = s.state(fonts());
+    assert!(r.format.tracking);
+    assert!(r.format.revision);
+}
+
+#[test]
+fn deleting_marks_text_deleted_but_removes_the_authors_own_insertions() {
+    let mut s = tracked(&p("Hello"));
+    caret_at(&mut s, 0, 5);
+    type_text(&mut s, "XY");
+    // Backspace over the author's own insertion removes it.
+    run(
+        &mut s,
+        EditOp::Delete {
+            forward: false,
+            unit: Unit::Char,
+        },
+    );
+    assert_eq!(texts(&s), vec!["HelloX"]);
+    // Backspace over original text marks it deleted; the caret steps
+    // before it.
+    run(
+        &mut s,
+        EditOp::Delete {
+            forward: false,
+            unit: Unit::Char,
+        },
+    );
+    let r = run(
+        &mut s,
+        EditOp::Delete {
+            forward: false,
+            unit: Unit::Char,
+        },
+    );
+    assert_eq!(texts(&s), vec!["Hello"]);
+    assert_eq!(r.selection.focus.offset, 4);
+    let out = xml(&s);
+    assert!(out.contains("<w:del "), "{out}");
+    assert!(out.contains("<w:delText>o</w:delText>"), "{out}");
+    // Deleting a selection over a mix: own text goes, the rest is marked.
+    let mut s = tracked(&p("one two"));
+    caret_at(&mut s, 0, 3);
+    type_text(&mut s, " new");
+    select(&mut s, (0, 0), (0, 11));
+    let r = run(
+        &mut s,
+        EditOp::Delete {
+            forward: true,
+            unit: Unit::Char,
+        },
+    );
+    assert_eq!(texts(&s), vec!["one two"]);
+    assert_eq!(r.selection.focus.offset, 7);
+    assert!(!xml(&s).contains("<w:ins "));
+}
+
+#[test]
+fn enter_records_an_inserted_paragraph_mark_and_backspace_takes_it_back() {
+    let mut s = tracked(&p("Hello world"));
+    caret_at(&mut s, 0, 5);
+    run(&mut s, EditOp::InsertParagraph);
+    assert_eq!(texts(&s), vec!["Hello", " world"]);
+    let out = xml(&s);
+    assert!(out.contains("<w:rPr><w:ins "), "{out}");
+    // Backspace at the start of the second paragraph removes the mark the
+    // author inserted.
+    run(
+        &mut s,
+        EditOp::Delete {
+            forward: false,
+            unit: Unit::Char,
+        },
+    );
+    assert_eq!(texts(&s), vec!["Hello world"]);
+    assert!(!xml(&s).contains("<w:ins "));
+    // Another author's mark is marked deleted instead.
+    let mut s = tracked(&format!("{}{}", p("First"), p("Second")));
+    caret_at(&mut s, 1, 0);
+    run(
+        &mut s,
+        EditOp::Delete {
+            forward: false,
+            unit: Unit::Char,
+        },
+    );
+    assert_eq!(texts(&s), vec!["First", "Second"]);
+    assert!(xml(&s).contains("<w:rPr><w:del "), "{}", xml(&s));
+}
+
+#[test]
+fn accepting_and_rejecting_changes() {
+    let mut s = tracked(&p("The fee is ten dollars."));
+    // Replace "ten" with "twenty".
+    select(&mut s, (0, 11), (0, 14));
+    type_text(&mut s, "twenty");
+    assert_eq!(texts(&s), vec!["The fee is tentwenty dollars."]);
+    let before = xml(&s);
+    assert!(before.contains("<w:delText>ten</w:delText>"), "{before}");
+
+    // Rejecting everything restores the original.
+    let mut rejected = tracked(&p("The fee is ten dollars."));
+    select(&mut rejected, (0, 11), (0, 14));
+    type_text(&mut rejected, "twenty");
+    run(&mut rejected, EditOp::RejectChanges { all: true });
+    assert_eq!(texts(&rejected), vec!["The fee is ten dollars."]);
+    assert!(!xml(&rejected).contains("<w:ins "));
+    assert!(!xml(&rejected).contains("<w:del "));
+
+    // Accepting at the caret takes just the change there.
+    caret_at(&mut s, 0, 12);
+    let r = run(&mut s, EditOp::AcceptChanges { all: false });
+    assert!(r.changed);
+    assert_eq!(texts(&s), vec!["The fee is twenty dollars."]);
+    // The insertion was a separate revision; it is still there.
+    assert!(xml(&s).contains("<w:ins "));
+    run(&mut s, EditOp::AcceptChanges { all: true });
+    assert!(!xml(&s).contains("<w:ins "));
+    assert_eq!(texts(&s), vec!["The fee is twenty dollars."]);
+}
+
+#[test]
+fn accepting_a_deleted_paragraph_mark_joins_the_paragraphs() {
+    let mut s = tracked(&format!("{}{}", p("First"), p("Second")));
+    caret_at(&mut s, 1, 0);
+    run(
+        &mut s,
+        EditOp::Delete {
+            forward: false,
+            unit: Unit::Char,
+        },
+    );
+    run(&mut s, EditOp::AcceptChanges { all: true });
+    assert_eq!(texts(&s), vec!["FirstSecond"]);
+}
+
+#[test]
+fn word_revisions_by_other_authors_resolve_by_id() {
+    let body = r#"<w:p><w:r><w:t xml:space="preserve">Pay </w:t></w:r><w:del w:id="7" w:author="Bob" w:date="2025-01-01T00:00:00Z"><w:r><w:delText>30</w:delText></w:r></w:del><w:ins w:id="8" w:author="Bob" w:date="2025-01-01T00:00:00Z"><w:r><w:t>45</w:t></w:r></w:ins><w:r><w:t xml:space="preserve"> days</w:t></w:r></w:p>"#;
+    let mut s = tracked(body);
+    assert_eq!(texts(&s), vec!["Pay 3045 days"]);
+    // The caret inside "45" is in revision 8 only.
+    caret_at(&mut s, 0, 7);
+    run(&mut s, EditOp::RejectChanges { all: false });
+    assert_eq!(texts(&s), vec!["Pay 30 days"]);
+    let out = xml(&s);
+    assert!(out.contains("<w:del w:id=\"7\""), "{out}");
+    caret_at(&mut s, 0, 5);
+    run(&mut s, EditOp::RejectChanges { all: false });
+    assert_eq!(texts(&s), vec!["Pay 30 days"]);
+    assert!(!xml(&s).contains("<w:del "));
+}
+
+#[test]
+fn turning_tracking_on_writes_the_shared_setting() {
+    let mut s = open_with(
+        &p("Text"),
+        &Parts {
+            settings: Some("<w:defaultTabStop w:val=\"720\"/>"),
+            ..Parts::default()
+        },
+    );
+    let r = run(&mut s, EditOp::SetTracking { on: true });
+    assert!(r.format.tracking);
+    let entry = r.changes.iter().find_map(|c| match c {
+        Change::Entry {
+            key,
+            value: Some(v),
+            ..
+        } if key.ends_with("settings.xml") => Some(v.clone()),
+        _ => None,
+    });
+    let settings = entry.expect("settings entry");
+    // In schema order: before the default tab stop.
+    let track = settings.find("<w:trackRevisions/>").expect("setting");
+    assert!(
+        track < settings.find("defaultTabStop").unwrap(),
+        "{settings}"
+    );
+    // Typing is now tracked.
+    caret_at(&mut s, 0, 4);
+    type_text(&mut s, "!");
+    assert!(xml(&s).contains("<w:ins "));
+    let r = run(&mut s, EditOp::SetTracking { on: false });
+    assert!(!r.format.tracking);
+    type_text(&mut s, "?");
+    assert_eq!(count(&xml(&s), "<w:ins "), 1);
+    assert_eq!(texts(&s), vec!["Text!?"]);
+}
+
+#[test]
+fn formatting_while_tracking_is_recorded_and_can_be_rejected() {
+    let mut s = tracked(&p("Pay the Seller"));
+    select(&mut s, (0, 8), (0, 14));
+    run(
+        &mut s,
+        EditOp::ToggleFormat {
+            format: Toggle::Bold,
+        },
+    );
+    let out = xml(&s);
+    assert!(out.contains("<w:rPrChange"), "{out}");
+    assert!(out.contains("w:author=\"Alice\""), "{out}");
+    assert_eq!(count(&out, "<w:b/>"), 1, "{out}");
+    let r = s.state(fonts());
+    assert!(r.format.revision);
+    // A second change keeps the first record (the formatting before both).
+    run(
+        &mut s,
+        EditOp::SetFormat {
+            patch: RunPatch {
+                color: Some(Some("FF0000".into())),
+                ..RunPatch::default()
+            },
+        },
+    );
+    let out = xml(&s);
+    assert_eq!(count(&out, "<w:rPrChange"), 1, "{out}");
+    // Rejecting restores the plain text.
+    run(&mut s, EditOp::RejectChanges { all: true });
+    let out = xml(&s);
+    assert!(
+        !out.contains("rPrChange") && !out.contains("<w:b/>"),
+        "{out}"
+    );
+    assert!(!out.contains("FF0000"), "{out}");
+    assert_eq!(texts(&s), vec!["Pay the Seller"]);
+}
+
+#[test]
+fn formatting_new_text_records_nothing() {
+    let mut s = tracked(&p("Hello"));
+    caret_at(&mut s, 0, 5);
+    type_text(&mut s, " world");
+    select(&mut s, (0, 6), (0, 11));
+    run(
+        &mut s,
+        EditOp::ToggleFormat {
+            format: Toggle::Italic,
+        },
+    );
+    let out = xml(&s);
+    assert!(!out.contains("rPrChange"), "{out}");
+    assert!(out.contains("<w:i/>"), "{out}");
+}
+
+fn align(s: &mut Session, a: Alignment) {
+    run(
+        s,
+        EditOp::SetParagraph {
+            patch: ParaPatch {
+                align: Some(a),
+                ..ParaPatch::default()
+            },
+        },
+    );
+}
+
+#[test]
+fn paragraph_formatting_while_tracking_is_recorded_and_can_be_rejected() {
+    let mut s = tracked(&p("Recitals"));
+    caret_at(&mut s, 0, 3);
+    align(&mut s, Alignment::Center);
+    let out = xml(&s);
+    assert_eq!(count(&out, "<w:pPrChange"), 1, "{out}");
+    assert!(out.contains(r#"<w:jc w:val="center"/>"#), "{out}");
+    // Accepting keeps the new alignment and drops the record.
+    run(&mut s, EditOp::AcceptChanges { all: true });
+    let out = xml(&s);
+    assert!(!out.contains("pPrChange"), "{out}");
+    assert!(out.contains(r#"<w:jc w:val="center"/>"#), "{out}");
+    // Two more changes keep one record; rejecting the change at the caret
+    // goes back to centered.
+    align(&mut s, Alignment::Right);
+    align(&mut s, Alignment::Justify);
+    assert_eq!(count(&xml(&s), "<w:pPrChange"), 1);
+    assert!(s.state(fonts()).format.revision);
+    run(&mut s, EditOp::RejectChanges { all: false });
+    let out = xml(&s);
+    assert!(!out.contains("pPrChange"), "{out}");
+    assert!(out.contains(r#"<w:jc w:val="center"/>"#), "{out}");
+}
+
+#[test]
+fn formatting_changed_back_leaves_no_change() {
+    let mut s = tracked(&p("Pay the Seller"));
+    select(&mut s, (0, 8), (0, 14));
+    for _ in 0..2 {
+        run(
+            &mut s,
+            EditOp::ToggleFormat {
+                format: Toggle::Bold,
+            },
+        );
+    }
+    let out = xml(&s);
+    assert!(
+        !out.contains("rPrChange") && !out.contains("<w:b/>"),
+        "{out}"
+    );
+    for _ in 0..2 {
+        run(
+            &mut s,
+            EditOp::ToggleList {
+                kind: ListKind::Bullet,
+            },
+        );
+    }
+    let out = xml(&s);
+    assert!(
+        !out.contains("pPrChange") && !out.contains("numPr"),
+        "{out}"
+    );
+}
+
+#[test]
+fn list_changes_in_new_paragraphs_record_nothing() {
+    let mut s = tracked(&p("Terms"));
+    caret_at(&mut s, 0, 5);
+    run(&mut s, EditOp::InsertParagraph);
+    type_text(&mut s, "Price");
+    // The first paragraph's mark is the new one.
+    caret_at(&mut s, 0, 2);
+    run(
+        &mut s,
+        EditOp::ToggleList {
+            kind: ListKind::Number,
+        },
+    );
+    let out = xml(&s);
+    assert!(out.contains("numPr") && !out.contains("pPrChange"), "{out}");
+}
+
+#[test]
+fn replacing_an_attribute_leaves_others_with_the_same_value() {
+    let tag = r#"<w:footnoteReference w:customMarkFollows="1" w:id="1"/>"#;
+    assert_eq!(
+        super::with_attribute(tag, "id", "7").as_deref(),
+        Some(r#"<w:footnoteReference w:customMarkFollows="1" w:id="7"/>"#)
+    );
+    assert_eq!(super::attribute(tag, "id").as_deref(), Some("1"));
+    // A longer name ending in the same letters is not the attribute.
+    let para = r#"<w:p w14:paraId="1" w:id='2'>"#;
+    assert_eq!(
+        super::with_attribute(para, "id", "3").as_deref(),
+        Some(r#"<w:p w14:paraId="1" w:id='3'>"#)
+    );
+    assert_eq!(super::with_attribute("<w:b/>", "id", "3"), None);
+}

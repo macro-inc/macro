@@ -43,6 +43,8 @@ use agent_client_protocol::{Agent, Client, ConnectTo, Error, LineDirection, Line
 use tokio::process::{Child, ChildStderr, ChildStdin, ChildStdout};
 use tokio_util::compat::{TokioAsyncReadCompatExt as _, TokioAsyncWriteCompatExt as _};
 
+#[cfg(windows)]
+mod job;
 #[cfg(test)]
 mod test;
 
@@ -105,7 +107,7 @@ impl AcpProcess {
     }
 
     fn spawn(&self) -> Result<SpawnedChild, Error> {
-        let mut command = std::process::Command::new(&self.command);
+        let mut command = std::process::Command::new(crate::executable::launchable(&self.command));
         command
             .args(&self.args)
             .current_dir(&self.cwd)
@@ -125,7 +127,9 @@ impl AcpProcess {
             command.process_group(0);
         }
 
+        // `kill_on_drop` covers a child dropped before `ChildGuard` holds it.
         let mut child = tokio::process::Command::from(command)
+            .kill_on_drop(true)
             .spawn()
             .map_err(|error| internal_error(format!("Failed to spawn process: {error}")))?;
         let stdin = child
@@ -145,7 +149,8 @@ impl AcpProcess {
             stdin,
             stdout,
             stderr,
-            guard: ChildGuard::new(child),
+            guard: ChildGuard::new(child)
+                .map_err(|error| internal_error(format!("Failed to supervise process: {error}")))?,
         })
     }
 }
@@ -157,26 +162,36 @@ struct SpawnedChild {
     guard: ChildGuard,
 }
 
-/// Kills the child - and, on Unix, its whole process group - when dropped.
+/// Kills the child - and its whole process group (Unix) or job (Windows) -
+/// when dropped.
 struct ChildGuard {
     child: Child,
     /// Captured at spawn: tokio forgets the pid once the child is reaped, and
     /// the group kill must still reach descendants a wrapper left behind.
     #[cfg(unix)]
     process_group: Option<rustix::process::Pid>,
+    #[cfg(windows)]
+    job: job::Job,
 }
 
 impl ChildGuard {
-    fn new(child: Child) -> Self {
+    fn new(child: Child) -> std::io::Result<Self> {
         #[cfg(unix)]
         let process_group = child
             .id()
             .and_then(|id| rustix::process::Pid::from_raw(id.cast_signed()));
-        Self {
+        #[cfg(windows)]
+        let job = child
+            .raw_handle()
+            .ok_or_else(|| std::io::Error::other("the child exited before it could be supervised"))
+            .and_then(job::Job::containing)?;
+        Ok(Self {
             child,
             #[cfg(unix)]
             process_group,
-        }
+            #[cfg(windows)]
+            job,
+        })
     }
 
     async fn wait(&mut self) -> std::io::Result<std::process::ExitStatus> {
@@ -193,8 +208,9 @@ impl ChildGuard {
             let _result =
                 rustix::process::kill_process_group(process_group, rustix::process::Signal::KILL);
         }
-        // Fallback for platforms without group semantics, and a no-op double
-        // tap on Unix.
+        #[cfg(windows)]
+        self.job.terminate();
+        // A no-op double tap: the group or job already held the child.
         drop(self.child.start_kill());
     }
 }

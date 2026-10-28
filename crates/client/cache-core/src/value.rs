@@ -32,6 +32,16 @@ impl EntityKey<'static> {
 }
 
 impl<'a> EntityKey<'a> {
+    /// The `Typename` half of an entity key; `None` for the root record.
+    pub fn typename(&self) -> Option<&str> {
+        self.0.split_once(':').map(|(typename, _)| typename)
+    }
+
+    /// The key-value half of an entity key; `None` for the root record.
+    pub fn id(&self) -> Option<&str> {
+        self.0.split_once(':').map(|(_, id)| id)
+    }
+
     pub fn is_root(&self) -> bool {
         self.0 == ROOT_QUERY
     }

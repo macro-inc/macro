@@ -9,7 +9,7 @@ use macro_event_topics::MacroInitiativesTopic;
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 
-use super::models::{AssignTasksResult, InitiativeError, InitiativeId};
+use super::models::{InitiativeError, InitiativeId};
 
 /// Actor and optional delegating user retained on a committed mutation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -29,26 +29,6 @@ impl From<Attribution> for InitiativeEventActor {
     }
 }
 
-/// The exact before/after membership committed by the repository.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct TaskMembershipChange {
-    /// Task whose membership changed. Names are never stored in membership events.
-    pub task_id: String,
-    /// Previous initiative, absent for first assignment.
-    pub from: Option<InitiativeId>,
-    /// New initiative, absent for removal.
-    pub to: Option<InitiativeId>,
-}
-
-/// Assignment results plus the exact committed transitions for publication.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct AssignedTasks {
-    /// Public per-task outcomes.
-    pub results: Vec<AssignTasksResult>,
-    /// Only actual changes; repeated assignment to the same project is omitted.
-    pub changes: Vec<TaskMembershipChange>,
-}
-
 /// Attributed lifecycle event for one initiative.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InitiativeChange {
@@ -57,17 +37,6 @@ pub struct InitiativeChange {
     /// Actor, absent for unattributable internal operations.
     pub attribution: Option<InitiativeEventActor>,
     /// Time reported by the committed operation.
-    pub occurred_at: DateTime<Utc>,
-}
-
-/// One atomic membership operation, including both sides of moves.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct InitiativeTasksChanged {
-    /// Actor, absent for unattributable internal operations.
-    pub attribution: Option<InitiativeEventActor>,
-    /// Committed membership transitions in deterministic request order.
-    pub changes: Vec<TaskMembershipChange>,
-    /// Time of the operation.
     pub occurred_at: DateTime<Utc>,
 }
 
@@ -81,9 +50,6 @@ pub enum InitiativeTopicEvent {
     /// A project name, sharing policy, or collaborators changed.
     #[serde(rename = "initiative.updated")]
     Updated(InitiativeChange),
-    /// Tasks were assigned, moved, or removed.
-    #[serde(rename = "initiative.tasks_changed")]
-    TasksChanged(InitiativeTasksChanged),
     /// An initiative was permanently deleted and its history must be removed.
     #[serde(rename = "initiative.purged")]
     Purged {

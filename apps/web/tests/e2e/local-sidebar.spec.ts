@@ -14,7 +14,7 @@ const SIDEBAR_LIST_VIEWS = [
   {
     id: 'agents',
     label: 'Agents',
-    tabs: ['Owned', 'Running', 'Shared', 'Automations'],
+    tabs: ['Owned', 'Running', 'Shared', 'Routines'],
   },
   {
     id: 'mail',

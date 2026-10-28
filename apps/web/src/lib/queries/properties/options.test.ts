@@ -6,6 +6,7 @@ const cachedOption = {
   id: 'status-in-progress',
   property_definition_id: 'status',
   display_order: 1,
+  color: null,
   created_at: '2025-01-01T00:00:00Z',
   updated_at: '2025-01-01T00:00:00Z',
   value: { type: 'string', value: 'In Progress' },

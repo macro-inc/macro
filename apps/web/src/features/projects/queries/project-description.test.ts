@@ -34,7 +34,7 @@ import {
 } from './project-description';
 
 function transport(
-  authorize: () => Promise<string>
+  authorize: ProjectDescriptionTransport<string>['authorize']
 ): ProjectDescriptionTransport<string> {
   return {
     authorize,
@@ -75,12 +75,18 @@ describe('project description sessions', () => {
     const permission = new Promise<string>((resolve) => {
       authorize = resolve;
     });
-    const port = transport(() => permission);
+    let authorization: AbortSignal | undefined;
+    const port = transport((_, signal) => {
+      authorization = signal;
+      return permission;
+    });
     const { session, cleanup } = createRoot((cleanup) => ({
       cleanup,
       session: createProjectDescriptionSession('description', port),
     }));
+    expect(authorization?.aborted).toBe(false);
     session.dispose();
+    expect(authorization?.aborted).toBe(true);
     authorize('token');
     try {
       await session.loaded;
@@ -91,7 +97,7 @@ describe('project description sessions', () => {
     }
   });
 
-  it('joins the existing document and closes its socket on disposal', async () => {
+  it('joins the description surface and closes its socket on disposal', async () => {
     const port = transport(async () => 'token');
     const { session, cleanup } = createRoot((cleanup) => ({
       cleanup,

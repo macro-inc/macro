@@ -1,5 +1,4 @@
-import { batch, createSignal, onCleanup } from 'solid-js';
-import type { MobileSwipeLayout } from './createMobileSwipeLayout';
+import { createSignal, onCleanup } from 'solid-js';
 
 type ForwardAnimationPhase = 'idle' | 'preparing' | 'animating';
 
@@ -12,9 +11,9 @@ type SplitTransformStyle = {
 type MobileForwardAnimationOptions = {
   animationMs: number;
   bgPeekOffset: number;
-  mobileSwipeLayout: MobileSwipeLayout;
 };
 
+/** Slides a pane that just landed in front over the one now behind it. */
 export function createMobileForwardAnimation(
   options: MobileForwardAnimationOptions
 ) {
@@ -58,8 +57,6 @@ export function createMobileForwardAnimation(
   }
 
   function trigger() {
-    if (phase() !== 'idle') return;
-
     clearScheduledAnimation();
     setPhase('preparing');
     scheduleAnimationStart();
@@ -67,28 +64,22 @@ export function createMobileForwardAnimation(
 
   function scheduleAnimationCompletion() {
     clearTimeout(forwardCompletionTimer);
-    forwardCompletionTimer = setTimeout(() => {
-      if (phase() === 'idle') return;
-      completeForwardNavigation();
-    }, options.animationMs + 250);
+    forwardCompletionTimer = setTimeout(complete, options.animationMs + 250);
   }
 
-  function completeForwardNavigation() {
+  function complete() {
     if (phase() === 'idle') return;
     clearScheduledAnimation();
-    batch(() => {
-      setPhase('idle');
-      options.mobileSwipeLayout.completeNavigateForward();
-    });
+    setPhase('idle');
   }
 
-  function handleTransitionEnd(e: TransitionEvent, isForeground: boolean) {
+  function handleTransitionEnd(e: TransitionEvent, isFront: boolean) {
     if (e.target !== e.currentTarget) return;
-    if (isForeground) return;
+    if (!isFront) return;
     if (e.propertyName !== 'transform') return;
     if (phase() !== 'animating') return;
 
-    completeForwardNavigation();
+    complete();
   }
 
   function incomingStyle(): SplitTransformStyle {
@@ -116,14 +107,16 @@ export function createMobileForwardAnimation(
     };
   }
 
-  function styleForSlot(isForeground: boolean) {
-    return isForeground ? outgoingStyle() : incomingStyle();
+  /** The front pane slides in; the pane behind it slides back to its peek offset. */
+  function styleFor(isFront: boolean) {
+    return isFront ? incomingStyle() : outgoingStyle();
   }
 
   return {
     phase,
     trigger,
+    reset: complete,
     handleTransitionEnd,
-    styleForSlot,
+    styleFor,
   };
 }

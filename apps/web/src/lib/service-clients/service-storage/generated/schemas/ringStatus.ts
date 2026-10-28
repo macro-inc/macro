@@ -15,5 +15,6 @@ export type RingStatus = (typeof RingStatus)[keyof typeof RingStatus];
 export const RingStatus = {
   ringing: 'ringing',
   answered: 'answered',
+  declined: 'declined',
   ended: 'ended',
 } as const;

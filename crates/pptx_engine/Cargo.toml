@@ -1,0 +1,56 @@
+[package]
+edition = "2024"
+name = "pptx_engine"
+publish = false
+version = "0.1.0"
+
+[lib]
+# `cdylib` for the browser build; `rlib` so native tools and tests link it.
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["wasm-bindings"]
+# The wasm-bindgen API in `wasm` (the presentation editor's worker module).
+# Crates that build their own wasm module on top of this one (the DOCX engine
+# reuses its containers, fonts and rasterizer) turn it off, so the
+# presentation exports are not linked into their module.
+wasm-bindings = []
+# Compile the bundled font set into native builds (AI tools, the corpus CLI).
+# The wasm build always includes it: the browser worker has no font directory.
+embedded-fonts = []
+# The `pptx_corpus` developer CLI (rendering reports, fidelity scoring).
+cli = ["dep:clap", "embedded-fonts"]
+# JSON Schemas for the edit operations (AI tool definitions).
+schema = ["dep:schemars"]
+
+[[bin]]
+name = "pptx_corpus"
+required-features = ["cli"]
+
+[dependencies]
+base64 = { workspace = true }
+clap = { workspace = true, optional = true }
+gif = { workspace = true }
+miniz_oxide = { workspace = true }
+png = { workspace = true }
+schemars = { workspace = true, optional = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+skrifa = { workspace = true }
+thiserror = { workspace = true }
+tiny-skia = { workspace = true }
+zune-core = { workspace = true }
+zune-jpeg = { workspace = true }
+
+# The wasm-bindgen shell in `wasm`, which only exists on wasm32. Target-gated
+# rather than behind a feature so a native build never resolves any of it.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+console_error_panic_hook = { workspace = true }
+js-sys = { workspace = true }
+wasm-bindgen = { workspace = true }
+
+# wasm-opt saves only ~7% here (most of the module is font data), and
+# binaryen releases older than wasm-bindgen's output mis-handle its externref
+# table, so the module ships as rustc + wasm-bindgen produce it.
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false

@@ -1,4 +1,5 @@
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { isMutedItem, muteItemForRef } from '@entity/utils/notification';
 import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
@@ -32,7 +33,10 @@ export function useChannelRailItemState(
 
     return {
       domId: domIdForRow(rail.railId, rowId),
-      selected: rail.selectedChannel()?.id === id,
+      selected:
+        rail.tab() === 'threads'
+          ? rail.threadsChannelId() === id
+          : rail.selectedChannel()?.id === id,
       focused: rail.list.focus.key() === rowId,
       muted: isMutedItem(notificationSource.mutedEntities(), {
         item_id: id,
@@ -86,7 +90,9 @@ export function useChannelRailFavoritesState() {
   });
 }
 
-export function useChannelRailScopeState(scope: Accessor<ChannelsQueryScope>) {
+export function useChannelRailScopeState(
+  scope: Accessor<ChannelsQueryScope | 'threads'>
+) {
   const rail = useChannelsRail();
 
   return createMemo(() => {
@@ -105,7 +111,7 @@ export function useChannelRailScopeState(scope: Accessor<ChannelsQueryScope>) {
         ? focusedRow.localIndex
         : -1;
     const targetChannelId =
-      currentScope === 'recents'
+      currentScope === 'recents' || currentScope === 'threads'
         ? undefined
         : rail.channelActivity.targetChannelId(currentScope);
     const activityIndex =
@@ -167,7 +173,7 @@ export function useChannelRailVirtualizer(
       return;
     }
 
-    void source.loadMore();
+    fireAndForget(source.loadMore(), 'channels-view');
   };
 
   return { registerVirtualizer, loadMoreNearEnd };

@@ -1,3 +1,5 @@
+import type { CalendarEvent } from '../../calendar/types';
+
 /** One calendar occurrence, with an optional safe conference link. */
 export type UpcomingCalendarEvent = {
   id: string;
@@ -9,7 +11,25 @@ export type UpcomingCalendarEvent = {
   allDay: boolean;
   eventId: string;
   occurrenceKey: string;
+  /** Whether the event is a busy meeting rather than a status or solo block. */
+  isMeeting: boolean;
 };
+
+/**
+ * A meeting is a regular event that shows the viewer as busy and has a call
+ * link or someone else invited. Out of office, focus time, birthdays, Gmail
+ * reservations, free events, and solo blocks are not meetings.
+ */
+export function isMeetingEvent(
+  event: Pick<CalendarEvent, 'eventType' | 'transparency' | 'attendees'>,
+  url: string | undefined
+): boolean {
+  if (event.eventType !== undefined && event.eventType !== 'default') {
+    return false;
+  }
+  if (event.transparency === 'transparent') return false;
+  return Boolean(url) || event.attendees.some((person) => !person.isSelf);
+}
 
 function timestamp(value: string, allDay: boolean) {
   return Date.parse(allDay ? `${value}T00:00:00` : value);
@@ -35,7 +55,12 @@ export function selectUpcomingCalendarEvents(
   for (const event of events) {
     const start = timestamp(event.start, event.allDay);
     const end = timestamp(event.end, event.allDay);
-    if (!Number.isFinite(start) || end <= start || !(end > now.getTime())) {
+    if (
+      !Number.isFinite(start) ||
+      end < start ||
+      (event.allDay && end === start) ||
+      !(end > now.getTime())
+    ) {
       continue;
     }
     occurrences.set(

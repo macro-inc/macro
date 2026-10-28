@@ -2,6 +2,7 @@
 // Kept separate from vite.config.ts so the main client build is untouched.
 
 import path from 'node:path';
+import tailwind from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 import solidPlugin from 'vite-plugin-solid';
 import solidSvg from 'vite-plugin-solid-svg';
@@ -13,6 +14,7 @@ export default defineConfig({
   root: import.meta.dirname,
   plugins: [
     standaloneBoundary(),
+    tailwind(),
     tsconfigPaths({ projects: ['./tsconfig.json'] }),
     solidPlugin({ ssr: true, solid: { hydratable: true } }),
     solidSvg(solidSvgOptions),

@@ -291,6 +291,13 @@ impl FakeAgent {
                     ClientRequest::InitializeRequest(_) => {
                         progress.initializing = Some(request.id.clone());
                     }
+                    // Resuming the open session again is how a live agent
+                    // is handed new MCP servers.
+                    ClientRequest::ResumeSessionRequest(_)
+                        if progress.stage == Stage::SessionOpen =>
+                    {
+                        progress.opening = Some(request.id.clone());
+                    }
                     ClientRequest::NewSessionRequest(_)
                     | ClientRequest::LoadSessionRequest(_)
                     | ClientRequest::ResumeSessionRequest(_) => {

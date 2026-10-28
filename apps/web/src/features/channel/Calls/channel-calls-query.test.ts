@@ -31,7 +31,6 @@ describe('buildChannelCallsQuery', () => {
     expect(body.fef).toEqual({ l: { id: NIL_UUID } });
     expect(body.ccf).toEqual({ l: { id: NIL_UUID } });
     expect(body.asf).toEqual({ l: { id: NIL_UUID } });
-    expect(body.remf).toEqual({ l: { id: NIL_UUID } });
   });
 });
 

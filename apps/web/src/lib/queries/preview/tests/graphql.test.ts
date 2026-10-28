@@ -328,6 +328,23 @@ describe('GraphQL item previews', () => {
     expect(graphqlRecordToPreview(record)).toBeUndefined();
   });
 
+  it('maps an initiative record to a task project preview', () => {
+    const record = {
+      __typename: 'GraphqlSoupInitiative',
+      id: 'initiative-1',
+      displayName: 'Roadmap',
+    } satisfies ItemPreviewFieldsFragment;
+
+    expect(graphqlRecordToPreview(record)).toEqual({
+      id: 'initiative-1',
+      type: 'initiative',
+      access: 'access',
+      loading: false,
+      rawName: 'Roadmap',
+      name: 'Roadmap',
+    });
+  });
+
   it('reads the exact normalized key through the minimal fragment', async () => {
     const readRecordsByKeys = vi.fn(async (args: ReadRecordsByKeysArgs) => [
       {

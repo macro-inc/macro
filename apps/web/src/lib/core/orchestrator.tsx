@@ -219,7 +219,9 @@ function createBlockElement({
           id={id}
           handle={ownedHandle}
         />
-        <Suspense fallback={<LoadingBlock />}>
+        <Suspense
+          fallback={<Dynamic component={definition.loading ?? LoadingBlock} />}
+        >
           <Dynamic component={definition.component} {...opts?.params} />
         </Suspense>
         <BlockEffectRunner />

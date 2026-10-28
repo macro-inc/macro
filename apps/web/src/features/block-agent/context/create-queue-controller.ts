@@ -13,6 +13,7 @@
  */
 
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   subscribeAgentSessionQueue,
   subscribeSocketSessionStarted,
@@ -38,11 +39,19 @@ export type QueueController = {
    * so the queue must not.
    */
   entries: Accessor<QueuedActionDto[]>;
+  /** Whether the server queue still holds this action, shown or not. */
+  waiting: (actionId: string) => boolean;
   /** Replace a queued prompt's text. A 404 means it already dispatched —
    *  the gateway's snapshot reconciles it, not an error. */
   edit: (actionId: string, prompt: string) => Promise<void>;
   /** Remove a queued action. Same 404 semantics as `edit`. */
   remove: (actionId: string) => Promise<void>;
+  /**
+   * Run this queued action next: the server moves it to the front and
+   * cancels the turn in flight. `false` when it was not waiting anymore or
+   * the request failed; the caller reports the failure.
+   */
+  steer: (actionId: string) => Promise<boolean>;
 };
 
 export function createQueueController(options: {
@@ -83,7 +92,7 @@ export function createQueueController(options: {
     on(options.sessionId, () => {
       socketAuthoritative = false;
       setQueued([]);
-      void baseline();
+      fireAndForget(baseline(), 'agent-queue');
     })
   );
 
@@ -102,12 +111,12 @@ export function createQueueController(options: {
   onCleanup(
     subscribeSocketSessionStarted(() => {
       socketAuthoritative = false;
-      baseline();
+      fireAndForget(baseline(), 'agent-queue');
     })
   );
 
-  // A pending message retires a row too. `sendNext` speculates the queue
-  // head under the id this list knows it by, and the whole point is that it
+  // A pending message retires a row too. A force-send speculates the entry
+  // under the id this list knows it by, and the whole point is that it
   // reads as sent; a prompt the server queued after the client speculated
   // it is retracted by the response, so its row comes back on its own.
   const dispatchedIds = createMemo(() => {
@@ -148,10 +157,22 @@ export function createQueueController(options: {
     }
   };
 
+  const steer = async (actionId: string) => {
+    const sessionId = untrack(options.sessionId);
+    if (!sessionId) return false;
+    const result = await agentHarnessServiceClient
+      .steerQueued(sessionId, actionId)
+      .catch(() => undefined);
+    return result !== undefined && result.isOk();
+  };
+
   return {
     entries: () =>
       queued().filter((entry) => !dispatchedIds().has(entry.actionId)),
+    waiting: (actionId) =>
+      queued().some((entry) => entry.actionId === actionId),
     edit,
     remove,
+    steer,
   };
 }

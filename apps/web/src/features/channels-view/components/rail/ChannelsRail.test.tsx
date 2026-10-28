@@ -32,6 +32,8 @@ const mocks = vi.hoisted(() => ({
   activate: (_event: MouseEvent) => {},
   row: undefined as ChannelEntity | undefined,
   failure: vi.fn(),
+  prefetch: vi.fn(),
+  tab: 'browse' as 'browse' | 'threads',
 }));
 vi.mock('@app/components/list', () => ({
   createListController: (options: {
@@ -117,6 +119,9 @@ vi.mock('@core/component/Toast/Toast', () => ({
   toast: { failure: mocks.failure },
 }));
 vi.mock('@core/constant/featureFlags', () => ({ enableChannelTags: {} }));
+vi.mock('@channel/queries/prefetch-channel-target', () => ({
+  prefetchLatestChannelMessages: mocks.prefetch,
+}));
 vi.mock('@core/hotkey/hotkeys', () => ({
   createHotkeyGroup: () => ({ dispose: vi.fn() }),
   registerHotkey: () => ({ withGroup: vi.fn() }),
@@ -161,6 +166,8 @@ vi.mock('../../channels-view-context', () => ({
       expandedGroups: { channels: true, direct_messages: true },
       collapsedLabels: [],
     },
+    tab: () => mocks.tab,
+    threadsEnabled: () => false,
     selectedChannel: () => mocks.selected,
     setSelectedChannel: mocks.select,
   }),
@@ -172,6 +179,8 @@ vi.mock('../../queries', () => ({
     ).values(),
   ],
   useChannelsByIdsQuery: () => ({ isEnabled: false }),
+  // What the real helper answers for the disabled lookup above.
+  resolveReferencedChannels: (previous: ChannelEntity[]) => previous,
 }));
 vi.mock('./ChannelLabelNameDialog', () => ({ promptLabelName: vi.fn() }));
 vi.mock('./SmartTagDialog', () => ({ promptSmartTag: vi.fn() }));
@@ -179,13 +188,22 @@ vi.mock('./hooks/useChannelCalls', () => ({ useChannelCalls: () => ({}) }));
 vi.mock('./hooks/useChannelRailActivity', () => ({
   useChannelRailActivity: () => ({}),
 }));
-vi.mock('./ExpandedChannelsRail', () => ({
-  ExpandedChannelsRail: () => (
-    <button onClick={(event) => mocks.activate(event)}>
-      Open conversation
-    </button>
-  ),
-}));
+vi.mock('./ExpandedChannelsRail', async () => {
+  const { useChannelsRail } = await import('./ChannelsRailContext');
+  return {
+    ExpandedChannelsRail: () => {
+      const rail = useChannelsRail();
+      return (
+        <button
+          onPointerDown={(event) => rail.prefetchRow('channel:one', event)}
+          onClick={(event) => mocks.activate(event)}
+        >
+          Open conversation
+        </button>
+      );
+    },
+  };
+});
 
 import { ChannelsRail } from './ChannelsRail';
 
@@ -206,7 +224,7 @@ const hydrated: WithNotification<ChannelEntity> = {
   notifications: () => [],
 };
 const source = {
-  items: () => [channel],
+  items: () => [mocks.row ?? channel],
   isLoading: () => false,
   isFetching: () => false,
   error: () => undefined,
@@ -220,6 +238,7 @@ const sources: ChannelsSources = {
   direct_messages: source,
   recents: source,
   search: source,
+  threads: source,
 };
 const mount = () =>
   render(() => (
@@ -236,6 +255,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.row = channel;
   mocks.favoriteId = undefined;
+  mocks.tab = 'browse';
   mocks.selected = { type: 'channel', id: channel.id };
   mocks.select.mockReturnValue(true);
   mocks.hydrate.mockReturnValue(hydrated);
@@ -497,4 +517,40 @@ describe('explicit channel activation read marking', () => {
       }
     }
   );
+});
+
+describe('channel row presses', () => {
+  // jsdom has no PointerEvent, so a press is a MouseEvent tagged as one.
+  const press = (init: { pointerType: string; button: number }) => {
+    const event = new MouseEvent('pointerdown', {
+      bubbles: true,
+      button: init.button,
+    });
+    Object.defineProperty(event, 'pointerType', { value: init.pointerType });
+    screen.getByRole('button').dispatchEvent(event);
+  };
+
+  it('starts the latest messages on a primary mouse press', () => {
+    mount();
+    press({ pointerType: 'mouse', button: 0 });
+    expect(mocks.prefetch).toHaveBeenCalledExactlyOnceWith('one');
+  });
+
+  it('leaves touch presses, other buttons, and the Threads tab alone', () => {
+    mount();
+    press({ pointerType: 'touch', button: 0 });
+    press({ pointerType: 'mouse', button: 2 });
+    cleanup();
+    mocks.tab = 'threads';
+    mount();
+    press({ pointerType: 'mouse', button: 0 });
+    expect(mocks.prefetch).not.toHaveBeenCalled();
+  });
+
+  it('leaves a row that opens at a message to the target prefetch', () => {
+    mocks.row = { ...channel, target: { messageId: 'message' } };
+    mount();
+    press({ pointerType: 'mouse', button: 0 });
+    expect(mocks.prefetch).not.toHaveBeenCalled();
+  });
 });

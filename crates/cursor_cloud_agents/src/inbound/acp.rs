@@ -654,6 +654,11 @@ async fn advertise_slash_commands(notifier: &AcpNotifier, session: &SessionId) {
 fn prompt_error(error: &SessionError) -> AcpError {
     let acp_error = AcpError::new(-32603, error.to_string());
     match error {
+        #[cfg(feature = "postgres")]
+        SessionError::Admission(error) => acp_error.data(Some(serde_json::json!({
+            "code": error.code(),
+            "retryable": error.is_retryable(),
+        }))),
         SessionError::Rejected(refusal) => acp_error.data(
             refusal
                 .notice

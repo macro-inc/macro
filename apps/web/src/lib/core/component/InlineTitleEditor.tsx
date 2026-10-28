@@ -60,6 +60,7 @@ export function InlineTitleEditor(props: {
         props.onExit?.();
       }}
       onKeyDown={(e) => {
+        if (e.isComposing) return;
         if (e.key === 'Enter') {
           e.preventDefault();
           e.currentTarget.blur();

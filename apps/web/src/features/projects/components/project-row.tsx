@@ -4,7 +4,7 @@ import {
 } from '@app/features/tasks-view/components/task-list/task-grid-template';
 import '@app/features/tasks-view/components/task-list/task-list.css';
 import { Entity, MultiSelectCheckbox } from '@entity';
-import StackIcon from '@phosphor/stack.svg';
+import StackIcon from '@icon/system/regular/stack.svg';
 import { ListPropertyValue } from '@property/component/ListPropertyValue';
 import { Modals } from '@property/component/modal';
 import { PropertiesProvider } from '@property/context/PropertiesContext';
@@ -13,6 +13,7 @@ import type { Property, PropertyApiValues } from '@property/types';
 import { cn } from '@ui';
 import { For, Show, Suspense } from 'solid-js';
 import type { ProjectRow as ProjectRowData } from '../context/projects-context';
+import { canEditProject } from '../core/project';
 
 // Projects reuse the task grid; its project column holds the due date.
 const gridStyle = taskGridTemplate({ indicator: true, project: true });
@@ -65,8 +66,7 @@ export function ProjectRow(props: {
   onChecked(selected: boolean, shiftKey: boolean): void;
   onSave(property: Property, value: PropertyApiValues): Promise<void>;
 }) {
-  const canEdit = () =>
-    props.row.project.access === 'edit' || props.row.project.access === 'owner';
+  const canEdit = () => canEditProject(props.row.project);
   const properties = () => [...props.row.properties];
   const propertyFor = (id: string) =>
     props.row.properties.find(

@@ -9,6 +9,9 @@ name = "macrod"
 path = "src/main.rs"
 
 [dependencies]
+agent_fold = { path = "../folds/agent_fold", default-features = false }
+claude_fold = { path = "../folds/claude_fold" }
+codex_fold = { path = "../folds/codex_fold" }
 messages = { path = "../messages", features = ["broker"] }
 # Direct crate imports are the whole typegen story: the protocol envelope,
 # the trigger event vocabulary, and the delivery signature all come from the
@@ -19,6 +22,7 @@ agent_session = { path = "../agent_session" }
 agent_trigger = { path = "../agent_trigger" }
 arboard = { workspace = true }
 bot_id = { path = "../bot_id" }
+trigger_context = { path = "../trigger_context" }
 chrono = { workspace = true }
 clap = { workspace = true }
 crossterm = { workspace = true }
@@ -27,6 +31,7 @@ eventsource-stream = { workspace = true }
 futures = { workspace = true }
 harness_id = { path = "../harness_id" }
 harnesses = { path = "../harnesses", default-features = false }
+lazy-regex = { workspace = true }
 macro_event_broker = { path = "../macro_event_broker", default-features = false }
 macro_env_var = { path = "../macro_env_var" }
 macro_user_id = { path = "../macro_user_id" }
@@ -42,7 +47,7 @@ serde_json = { workspace = true }
 shell-words = { workspace = true }
 strum = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["macros", "process", "rt-multi-thread", "signal", "time"] }
+tokio = { workspace = true, features = ["io-util", "macros", "net", "process", "rt-multi-thread", "signal", "time"] }
 tokio-retry = { workspace = true }
 tokio-util = { workspace = true, features = ["compat", "rt"] }
 tokio-tungstenite = { workspace = true }
@@ -58,6 +63,18 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [target.'cfg(unix)'.dependencies]
 rustix = { workspace = true }
+
+# Stripe (agent_session -> ai_billing) reaches native-tls, which is OpenSSL on
+# Linux, and a musl build has no system OpenSSL to link: compile it in.
+[target.'cfg(target_env = "musl")'.dependencies]
+openssl-sys = { workspace = true, features = ["vendored"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = [
+  "Win32_Foundation",
+  "Win32_Security",
+  "Win32_System_JobObjects",
+] }
 
 [dev-dependencies]
 bot_id = { path = "../bot_id", features = ["test-utils"] }

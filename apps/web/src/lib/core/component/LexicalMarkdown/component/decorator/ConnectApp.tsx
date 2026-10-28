@@ -2,11 +2,12 @@ import { openAgentsPage } from '@app/features/agents-view/primitives/open-page';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { HarnessIcon } from '@core/component/HarnessIcon';
 import { useSettingsState } from '@core/constant/SettingsState';
-import { useUserId } from '@core/context/user';
 import { PipedreamConnectorIcon } from '@core/pipedream/ConnectorIcon';
+import { AppConnectionContext } from '@core/pipedream/connection-context';
 import { requestConnectApp } from '@core/pipedream/pendingConnect';
+import { fireAndForget } from '@core/util/fireAndForget';
+import ArrowUpRightIcon from '@icon/system/regular/arrow-up-right.svg';
 import type { ConnectAppDecoratorProps } from '@macro-inc/lexical-core';
-import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
 import { useHarnessConnectionStatus } from '@queries/harnesses/connections';
 import { usePipedreamConnectedSlugs } from '@queries/pipedream-connectors';
 import { cn } from '@ui/utils/classname';
@@ -29,6 +30,7 @@ export function ConnectApp(props: ConnectAppDecoratorProps) {
 }
 
 function ConnectPipedreamApp(props: ConnectAppDecoratorProps) {
+  const inChat = useContext(AppConnectionContext);
   const layout = useSplitLayout();
   const connections = usePipedreamConnectedSlugs();
   return (
@@ -38,7 +40,15 @@ function ConnectPipedreamApp(props: ConnectAppDecoratorProps) {
         connections.ready() && connections.slugs().has(props.appSlug)
       }
       icon={<PipedreamConnectorIcon appSlug={props.appSlug} class="size-3.5" />}
+      disabled={inChat?.disabled}
       onConnect={() => {
+        if (inChat) {
+          fireAndForget(
+            inChat.connect({ appSlug: props.appSlug, name: props.name }),
+            'connect-app'
+          );
+          return;
+        }
         // Connections picks this up and starts the Connect flow.
         requestConnectApp(props.appSlug);
         openAgentsPage(layout, 'connections');
@@ -49,10 +59,7 @@ function ConnectPipedreamApp(props: ConnectAppDecoratorProps) {
 
 function ConnectHarness(props: ConnectAppDecoratorProps) {
   const { openSettings } = useSettingsState();
-  const connected = useHarnessConnectionStatus(
-    () => props.appSlug,
-    useUserId()
-  );
+  const connected = useHarnessConnectionStatus(() => props.appSlug);
   return (
     <ConnectChip
       {...props}
@@ -68,6 +75,7 @@ function ConnectChip(
     connected: Accessor<boolean>;
     icon: JSX.Element;
     onConnect: () => void;
+    disabled?: Accessor<boolean>;
   }
 ) {
   const lexicalWrapper = useContext(LexicalWrapperContext);
@@ -87,6 +95,7 @@ function ConnectChip(
   return (
     <button
       type="button"
+      disabled={props.disabled?.()}
       data-connect-app={props.appSlug}
       data-connect-target={props.target}
       aria-label={

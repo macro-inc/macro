@@ -47,3 +47,40 @@ fn initiative_round_trips_as_snake_case() {
 fn initiative_is_not_an_entity_access_entity() {
     assert!(!EntityType::Initiative.is_valid_entity_access_entity());
 }
+
+#[test]
+fn database_row_round_trips_as_snake_case() {
+    let encoded = serde_json::to_string(&EntityType::DatabaseRow).unwrap();
+    assert_eq!(encoded, "\"database_row\"");
+    assert_eq!(
+        serde_json::from_str::<EntityType>(&encoded).unwrap(),
+        EntityType::DatabaseRow
+    );
+    assert_eq!(EntityType::DatabaseRow.as_ref(), "database_row");
+    assert_eq!(
+        EntityType::from_str("database_row").unwrap(),
+        EntityType::DatabaseRow
+    );
+}
+
+#[test]
+fn database_row_is_not_an_entity_access_entity() {
+    assert!(!EntityType::DatabaseRow.is_valid_entity_access_entity());
+}
+
+#[test]
+fn form_round_trips_as_snake_case() {
+    let encoded = serde_json::to_string(&EntityType::Form).unwrap();
+    assert_eq!(encoded, "\"form\"");
+    assert_eq!(
+        serde_json::from_str::<EntityType>(&encoded).unwrap(),
+        EntityType::Form
+    );
+    assert_eq!(EntityType::Form.as_ref(), "form");
+    assert_eq!(EntityType::from_str("form").unwrap(), EntityType::Form);
+}
+
+#[test]
+fn form_is_not_an_entity_access_entity() {
+    assert!(!EntityType::Form.is_valid_entity_access_entity());
+}

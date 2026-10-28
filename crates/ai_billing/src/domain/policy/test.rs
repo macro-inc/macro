@@ -57,6 +57,7 @@ fn allocate_call(
     enabled: bool,
 ) -> UsageAllocation {
     let mut reservation = reserve(
+        AiPricing::testing(),
         authorization(enabled),
         AllocationSequence::from_raw(0),
         actual,
@@ -94,17 +95,23 @@ fn pricing_table_and_enabled_does_not_mean_consumed() {
 #[test]
 fn opt_out_stops_at_exact_funded_capacity() {
     let available = availability(ZERO_PUBLIC, money(1_000));
-    let capacity = funded_capacity(&authorization(false), public_cents(3_000), available).unwrap();
+    let capacity = funded_capacity(
+        AiPricing::testing(),
+        &authorization(false),
+        public_cents(3_000),
+        available,
+    )
+    .unwrap();
     assert_eq!(capacity.units(), 29_523_809_523_809);
     assert!(matches!(
-        reserve(authorization(false), AllocationSequence::from_raw(0), public_cents(3_000), available),
+        reserve(AiPricing::testing(), authorization(false), AllocationSequence::from_raw(0), public_cents(3_000), available),
         Err(PolicyError::InsufficientFunding { maximum_public_usage }) if maximum_public_usage == capacity
     ));
     let allocation = allocate_call(ZERO_PUBLIC, capacity, money(1_000), false);
     assert!(allocation.prepaid <= money(1_000));
     assert_eq!(allocation.postpaid, ZERO_MONEY);
     assert!(matches!(
-        reserve(authorization(false), AllocationSequence::from_raw(0), PublicUsage::from_units(1), availability(public_cents(2_000), ZERO_MONEY)),
+        reserve(AiPricing::testing(), authorization(false), AllocationSequence::from_raw(0), PublicUsage::from_units(1), availability(public_cents(2_000), ZERO_MONEY)),
         Err(PolicyError::InsufficientFunding { maximum_public_usage }) if maximum_public_usage == ZERO_PUBLIC
     ));
 }
@@ -122,7 +129,7 @@ fn threshold_crossing_and_fractional_credit_boundary_are_lossless() {
     assert_eq!(allocation.prepaid.units(), 1);
     assert_eq!(allocation.postpaid.units(), 1_050_000_000_000 - 1);
     let tiny = allocate_call(
-        PublicUsage::from_units(INCLUDED_PUBLIC_USAGE.units() - 1),
+        PublicUsage::from_units(included_public_usage(AiPricing::testing()).units() - 1),
         PublicUsage::from_units(2),
         ZERO_MONEY,
         true,
@@ -141,8 +148,9 @@ fn threshold_crossing_and_fractional_credit_boundary_are_lossless() {
 fn unused_holds_never_turn_included_usage_into_extra() {
     for credits in [ZERO_MONEY, money(1_050)] {
         let mut available = availability(ZERO_PUBLIC, credits);
-        available.seat_public_held = INCLUDED_PUBLIC_USAGE;
+        available.seat_public_held = included_public_usage(AiPricing::testing());
         let mut later = reserve(
+            AiPricing::testing(),
             authorization(true),
             AllocationSequence::from_raw(1),
             public_cents(1_000),
@@ -172,6 +180,7 @@ fn unused_holds_never_turn_included_usage_into_extra() {
 #[test]
 fn release_is_terminal_and_unresolved_attempts_must_keep_their_holds() {
     let mut reservation = reserve(
+        AiPricing::testing(),
         authorization(false),
         AllocationSequence::from_raw(0),
         public_cents(100),
@@ -199,6 +208,7 @@ fn release_is_terminal_and_unresolved_attempts_must_keep_their_holds() {
 #[test]
 fn overshoot_is_macro_absorbed_not_unauthorized_debt() {
     let mut reservation = reserve(
+        AiPricing::testing(),
         authorization(false),
         AllocationSequence::from_raw(0),
         public_cents(2_000),
@@ -217,10 +227,11 @@ fn overshoot_is_macro_absorbed_not_unauthorized_debt() {
 fn holds_and_incurred_liability_reduce_only_postpaid_cap_not_prepaid() {
     let mut auth = authorization(true);
     auth.postpaid = PostpaidAuthorization::Enabled { limit: money(500) };
-    let mut available = availability(INCLUDED_PUBLIC_USAGE, money(105));
+    let mut available = availability(included_public_usage(AiPricing::testing()), money(105));
     available.postpaid_incurred = money(300);
     available.postpaid_held = money(200);
     let mut reservation = reserve(
+        AiPricing::testing(),
         auth,
         AllocationSequence::from_raw(0),
         public_cents(100),
@@ -230,7 +241,10 @@ fn holds_and_incurred_liability_reduce_only_postpaid_cap_not_prepaid() {
     assert_eq!(reservation.holds().prepaid, money(105));
     assert_eq!(reservation.holds().postpaid, ZERO_MONEY);
     let allocation = reservation
-        .allocate(position(0, INCLUDED_PUBLIC_USAGE), public_cents(200))
+        .allocate(
+            position(0, included_public_usage(AiPricing::testing())),
+            public_cents(200),
+        )
         .unwrap();
     assert_eq!(allocation.prepaid, money(105));
     assert_eq!(allocation.postpaid, ZERO_MONEY);
@@ -241,23 +255,28 @@ fn holds_and_incurred_liability_reduce_only_postpaid_cap_not_prepaid() {
 fn captured_authorization_survives_toggle_changes_without_retroactive_funding() {
     let mut auth = authorization(true);
     let mut reservation = reserve(
+        AiPricing::testing(),
         auth.clone(),
         AllocationSequence::from_raw(0),
         public_cents(100),
-        availability(INCLUDED_PUBLIC_USAGE, ZERO_MONEY),
+        availability(included_public_usage(AiPricing::testing()), ZERO_MONEY),
     )
     .unwrap();
     auth.postpaid = PostpaidAuthorization::Disabled;
     let allocation = reservation
-        .allocate(position(0, INCLUDED_PUBLIC_USAGE), public_cents(100))
+        .allocate(
+            position(0, included_public_usage(AiPricing::testing())),
+            public_cents(100),
+        )
         .unwrap();
     assert_eq!(allocation.postpaid, money(105));
     assert!(matches!(
         reserve(
+            AiPricing::testing(),
             auth,
             AllocationSequence::from_raw(1),
             public_cents(100),
-            availability(INCLUDED_PUBLIC_USAGE, ZERO_MONEY)
+            availability(included_public_usage(AiPricing::testing()), ZERO_MONEY)
         ),
         Err(PolicyError::InsufficientFunding { .. })
     ));
@@ -269,9 +288,10 @@ fn captured_authorization_survives_toggle_changes_without_retroactive_funding() 
 
 #[test]
 fn released_earlier_credits_replace_provisional_postpaid_not_finalized_liability() {
-    let mut available = availability(INCLUDED_PUBLIC_USAGE, ZERO_MONEY);
+    let mut available = availability(included_public_usage(AiPricing::testing()), ZERO_MONEY);
     available.prepaid_held = money(105);
     let mut later = reserve(
+        AiPricing::testing(),
         authorization(true),
         AllocationSequence::from_raw(1),
         public_cents(100),
@@ -280,7 +300,7 @@ fn released_earlier_credits_replace_provisional_postpaid_not_finalized_liability
     .unwrap();
     assert_eq!(later.holds().postpaid, money(105));
     assert_eq!(later.prepaid_reclaim_limit(), money(105));
-    let mut at_turn = position(1, INCLUDED_PUBLIC_USAGE);
+    let mut at_turn = position(1, included_public_usage(AiPricing::testing()));
     at_turn.prepaid_released_before = money(105);
     let allocation = later.allocate(at_turn, public_cents(200)).unwrap();
     assert_eq!(allocation.prepaid, money(105));
@@ -304,15 +324,16 @@ fn released_earlier_credits_replace_provisional_postpaid_not_finalized_liability
 #[test]
 fn new_credits_cannot_reclassify_captured_or_settled_sources() {
     let mut reservation = reserve(
+        AiPricing::testing(),
         authorization(true),
         AllocationSequence::from_raw(0),
         public_cents(100),
-        availability(INCLUDED_PUBLIC_USAGE, ZERO_MONEY),
+        availability(included_public_usage(AiPricing::testing()), ZERO_MONEY),
     )
     .unwrap();
     // No earlier credits existed at admission, so even an erroneous release input
     // cannot use a subsequent purchase to displace the captured postpaid funding.
-    let mut at_turn = position(0, INCLUDED_PUBLIC_USAGE);
+    let mut at_turn = position(0, included_public_usage(AiPricing::testing()));
     at_turn.prepaid_released_before = money(105);
     let allocation = reservation.allocate(at_turn, public_cents(100)).unwrap();
     assert_eq!(allocation.prepaid, ZERO_MONEY);
@@ -324,7 +345,7 @@ fn new_credits_cannot_reclassify_captured_or_settled_sources() {
 }
 
 #[test]
-fn captured_suspension_and_zero_cap_deny_only_new_postpaid() {
+fn legacy_opt_in_never_authorizes_new_postpaid_but_prepaid_still_works() {
     let mut settings = BillingSettings {
         overage_enabled: true,
         overage_limit_cents: 500,
@@ -332,26 +353,28 @@ fn captured_suspension_and_zero_cap_deny_only_new_postpaid() {
     };
     assert_eq!(
         PostpaidAuthorization::from_settings(&settings).unwrap(),
-        PostpaidAuthorization::Enabled { limit: money(500) }
+        PostpaidAuthorization::Disabled
     );
     settings.overage_suspended_at = Some(Utc::now());
     let mut auth = authorization(true);
     auth.postpaid = PostpaidAuthorization::from_settings(&settings).unwrap();
-    assert_eq!(auth.postpaid, PostpaidAuthorization::Suspended);
+    assert_eq!(auth.postpaid, PostpaidAuthorization::Disabled);
     assert!(matches!(
         reserve(
+            AiPricing::testing(),
             auth.clone(),
             AllocationSequence::from_raw(0),
             public_cents(100),
-            availability(INCLUDED_PUBLIC_USAGE, ZERO_MONEY)
+            availability(included_public_usage(AiPricing::testing()), ZERO_MONEY)
         ),
         Err(PolicyError::InsufficientFunding { .. })
     ));
     let prepaid = reserve(
+        AiPricing::testing(),
         auth,
         AllocationSequence::from_raw(0),
         public_cents(100),
-        availability(INCLUDED_PUBLIC_USAGE, money(105)),
+        availability(included_public_usage(AiPricing::testing()), money(105)),
     )
     .unwrap();
     assert_eq!(prepaid.holds().prepaid, money(105));
@@ -418,6 +441,7 @@ fn checked_arithmetic_fails_without_partial_allocation_or_collection() {
     ));
     assert!(matches!(
         reserve(
+            AiPricing::testing(),
             authorization(true),
             AllocationSequence::from_raw(0),
             ZERO_PUBLIC,
@@ -426,22 +450,23 @@ fn checked_arithmetic_fails_without_partial_allocation_or_collection() {
         Err(PolicyError::EmptyBudget)
     ));
     let mut reservation = reserve(
+        AiPricing::testing(),
         authorization(true),
         AllocationSequence::from_raw(0),
         public_cents(1),
-        availability(INCLUDED_PUBLIC_USAGE, ZERO_MONEY),
+        availability(included_public_usage(AiPricing::testing()), ZERO_MONEY),
     )
     .unwrap();
     assert!(matches!(
         reservation.allocate(
-            position(0, INCLUDED_PUBLIC_USAGE),
+            position(0, included_public_usage(AiPricing::testing())),
             PublicUsage::from_units(u64::MAX)
         ),
         Err(PolicyError::Arithmetic(_))
     ));
     assert_eq!(reservation.state(), ReservationState::Held);
     assert!(matches!(
-        extra_price(PublicUsage::from_units(u64::MAX)),
+        extra_price(AiPricing::testing(), PublicUsage::from_units(u64::MAX)),
         Err(PolicyError::Arithmetic(_))
     ));
     let mut collection =
@@ -450,7 +475,10 @@ fn checked_arithmetic_fails_without_partial_allocation_or_collection() {
     assert_eq!(collection.exact_total().units(), u64::MAX);
     // Measured zero is allocated, not silently treated as non-execution.
     let zero = reservation
-        .allocate(position(0, INCLUDED_PUBLIC_USAGE), ZERO_PUBLIC)
+        .allocate(
+            position(0, included_public_usage(AiPricing::testing())),
+            ZERO_PUBLIC,
+        )
         .unwrap();
     assert_eq!(zero.extra_money().unwrap(), ZERO_MONEY);
     assert_eq!(reservation.state(), ReservationState::Consumed);
@@ -556,12 +584,26 @@ fn legacy_free_enterprise_and_exempt_features_keep_their_paths() {
         AccountingRoute::Unmetered
     );
     assert_eq!(PlanTier::Premium.monthly_price_cents(), 4_000);
-    assert_eq!(PlanTier::Max.included_ai_cents_per_seat(), 20_000);
-    assert_eq!(super::super::models::list_rate_cents(1.0), 250);
+    // Both accounting paths read the same configured Premium allowance.
+    let pricing = AiPricing::testing();
+    let allowance = pricing.included_allowance_cents();
+    assert_eq!(
+        PlanTier::Premium.included_ai_cents_per_seat(pricing),
+        allowance
+    );
+    assert_eq!(
+        PlanTier::Max.included_ai_cents_per_seat(pricing),
+        pricing.included_allowance_cents_for(PlanTier::Max)
+    );
+    assert_eq!(
+        included_public_usage(pricing),
+        public_cents(allowance as u64)
+    );
     let mut auth = authorization(true);
     auth.policy = UsagePolicy::Legacy;
     assert!(matches!(
         reserve(
+            AiPricing::testing(),
             auth,
             AllocationSequence::from_raw(0),
             public_cents(100),

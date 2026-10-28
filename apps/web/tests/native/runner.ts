@@ -136,6 +136,8 @@ try {
     ],
     {
       MODE: 'development',
+      // The isolated fixture and Tauri dev URL both use loopback HTTP.
+      MACRO_DEV_HTTPS: 'false',
       PORT: '3009',
       VITE_LOCAL_SERVERS: 'ALL',
       VITE_LOCAL_BACKEND_ORIGIN: fixture.origin,
@@ -170,7 +172,7 @@ try {
     capabilities,
   });
   console.log(`Native session ${browser.sessionId}; opening Email`);
-  const emailNavigation = browser.$('button[aria-label="Go to Email"]');
+  const emailNavigation = browser.$('button[aria-label="Email"]');
   await emailNavigation.waitForDisplayed({ timeout: 120_000 });
   await emailNavigation.click();
   console.log(
@@ -181,7 +183,7 @@ try {
     await browser.waitUntil(
       async () => {
         const lanes = await checkpoints(browser!);
-        return lanes.length === 5 && lanes.every((lane) => lane.completed);
+        return lanes.length === 7 && lanes.every((lane) => lane.completed);
       },
       { timeout: 60_000 }
     );
@@ -229,18 +231,21 @@ try {
   if (matrixMode) {
     await browser.setTimeout({ script: 120_000 });
     const preview = await browser.executeAsync(
-      (view: string | undefined, done: (value: unknown) => void) => {
-        void (async () => {
-          const path = '/tests/native/filter-matrix.ts';
-          const matrix = await import(path);
-          done(matrix.describeCases(1, view));
-        })();
+      (
+        view: string | undefined,
+        done: (value: { cases?: unknown; error?: string }) => void
+      ) => {
+        const path = '/tests/native/filter-matrix.ts';
+        import(path)
+          .then((matrix) => done({ cases: matrix.describeCases(1, view) }))
+          .catch((error: unknown) => done({ error: String(error) }));
       },
       matrixView
     );
+    assert(preview.cases, preview.error ?? 'Matrix returned no initial case');
     await Bun.write(
       resolve(artifacts, 'matrix-first-case.json'),
-      JSON.stringify(preview, null, 2)
+      JSON.stringify(preview.cases, null, 2)
     );
     let progress: {
       done: boolean;
@@ -256,15 +261,11 @@ try {
           view: string | undefined,
           done: (value: { progress?: typeof progress; error?: string }) => void
         ) => {
-          void (async () => {
-            try {
-              const path = '/tests/native/filter-matrix.ts';
-              const matrix = await import(path);
-              done({ progress: await matrix.runBatch(256, view) });
-            } catch (error) {
-              done({ error: String(error) });
-            }
-          })();
+          const path = '/tests/native/filter-matrix.ts';
+          import(path)
+            .then((matrix) => matrix.runBatch(256, view))
+            .then((batch) => done({ progress: batch }))
+            .catch((error: unknown) => done({ error: String(error) }));
         },
         matrixView
       );

@@ -11,11 +11,17 @@ type UseUsersMentionOptions = {
   /** Custom users list if necessary */
   users?: Accessor<IUser[]>;
   searchTerm: Accessor<string>;
+  /**
+   * Whether the composer posts to a channel. Group mentions are an editor
+   * configuration, not a block-context lookup: the channels view hosts a
+   * conversation outside the block system, where `useMaybeBlockId()` is
+   * undefined, and `@here` must still be offered there.
+   */
   isChannelBlock?: boolean;
-  blockId?: string;
 };
 
 type UseUsersMentionResult = {
+  availableUsers: Accessor<UserItem[]>;
   users: Accessor<UserItem[]>;
   currentUserDomain: Accessor<string | undefined>;
   groups: Accessor<GroupMentionItem[]>;
@@ -39,7 +45,7 @@ const BOT_MENTION_BOOST = 10;
 export function useUsersMention(
   options: UseUsersMentionOptions
 ): UseUsersMentionResult {
-  const { users: customUsers, searchTerm, isChannelBlock, blockId } = options;
+  const { users: customUsers, searchTerm, isChannelBlock } = options;
   const quickAccess = useQuickAccess();
   const workspaceUsers = quickAccess.useList('person').items;
   const currentUserEmail = useEmail();
@@ -99,11 +105,11 @@ export function useUsersMention(
   });
 
   /**
-   * Special groups like @here that are only available in channel blocks.
+   * Special groups like @here that are only available in channel composers.
    * These are filtered based on the current search term.
    */
   const groups = (): GroupMentionItem[] => {
-    if (!isChannelBlock || !blockId) return [];
+    if (!isChannelBlock) return [];
 
     const term = searchTerm().toLowerCase();
 
@@ -121,6 +127,7 @@ export function useUsersMention(
   });
 
   return {
+    availableUsers: usersList,
     users,
     currentUserDomain,
     groups,

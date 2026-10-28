@@ -18,15 +18,15 @@ import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useDocumentShareModal } from '@core/component/TopBar/shareModal';
 import { useCopyLink } from '@core/util/useCopyLink';
 import { ErrorBoundary, For, Match, Show, Switch } from 'solid-js';
-import { useDriveView } from '../context/drive-context';
+import { useOptionalDriveView } from '../context/drive-context';
 import { driveLocationBreadcrumbs } from '../core/breadcrumbs';
 import { useDriveDetailNavigation } from '../drive-detail-navigation';
+import { FileDetailBreadcrumbItem } from '../views/FileDetailBreadcrumbItem';
 import {
   MarkdownDetail,
   MarkdownDetailBodyState,
 } from '../views/MarkdownDetail';
 import { DriveBreadcrumbsOutlet } from './DriveBreadcrumbs';
-import { FileDetailBreadcrumbItem } from './FileDetailBreadcrumbItem';
 
 function DriveDetailAncestorBreadcrumbs(props: { orderOffset: number }) {
   const navigationStack = useDriveDetailNavigation();
@@ -50,6 +50,19 @@ function markdownKind(target: DocumentDetailTarget): MarkdownDocumentKind {
   const kind = target.subType?.type;
   if (kind === 'task' || kind === 'snippet' || kind === 'skill') return kind;
   return 'document';
+}
+
+/**
+ * Spreadsheets, databases and forms use their live block in PreviewPanel,
+ * which supplies its own title, sharing controls and the enclosing ViewShell's
+ * sidebar toggle.
+ */
+function hasBlockHeader(target: EntityDetailTarget) {
+  return (
+    target.type === 'database' ||
+    target.type === 'form' ||
+    entityDetailBlockType(target) === 'spreadsheet'
+  );
 }
 
 function DriveDetailTopBar() {
@@ -80,7 +93,8 @@ function DriveDetailTopBar() {
         aria-label="File location"
         fallback={<EntityDetailBreadcrumbSkeleton />}
       />
-      <div class="ml-auto flex shrink-0 items-center gap-2">
+      <div class="ml-auto flex shrink-0 items-center gap-1">
+        <SidePanel.HeaderActionsOutlet />
         <Show when={activeDetail()}>
           {(detail) => (
             <ShareTrigger
@@ -154,19 +168,10 @@ function StackEntityDetail(props: {
         }}
       </Match>
       <Match when={true}>
-        <Show when={props.entry.data.type !== 'document'}>
-          <EntityDetailBreadcrumbItem
-            entry={props.entry}
-            order={props.order}
-            setsSplitDisplayName
-          />
-        </Show>
         <EntityDetail
           target={props.entry.data}
           previewHeaderLeading={
-            <Show
-              when={entityDetailBlockType(props.entry.data) === 'spreadsheet'}
-            >
+            <Show when={hasBlockHeader(props.entry.data)}>
               <DriveBreadcrumbsOutlet
                 aria-label="File location"
                 class="max-w-[min(40vw,24rem)] overflow-hidden"
@@ -180,6 +185,7 @@ function StackEntityDetail(props: {
             if (context.type !== 'document') return null;
             return (
               <FileDetailBreadcrumbItem
+                download={context.download}
                 value={props.entry.value}
                 metadata={props.entry.data}
                 order={props.order}
@@ -211,23 +217,26 @@ function StackEntityDetail(props: {
 }
 
 export function DriveDetailView() {
-  const { state, sidebar } = useDriveView();
+  const drive = useOptionalDriveView();
   const breadcrumbOrderOffset = () =>
-    driveLocationBreadcrumbs(state.value().location, sidebar.folders()).length;
+    drive
+      ? driveLocationBreadcrumbs(
+          drive.state.value().location,
+          drive.sidebar.folders()
+        ).length
+      : 0;
   const navigationStack = useDriveDetailNavigation();
-  // Spreadsheets use their live block in PreviewPanel, which supplies its own
-  // header, sharing controls and the enclosing ViewShell's sidebar toggle.
-  const hasBlockHeader = () => {
+  const activeHasBlockHeader = () => {
     const target = navigationStack.active()?.data;
-    return target && entityDetailBlockType(target) === 'spreadsheet';
+    return target !== undefined && hasBlockHeader(target);
   };
 
   return (
     <>
       <DriveDetailAncestorBreadcrumbs orderOffset={breadcrumbOrderOffset()} />
-      <SidePanel.Root>
+      <SidePanel.Root floating>
         <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
-          <Show when={!hasBlockHeader()}>
+          <Show when={!activeHasBlockHeader()}>
             <DriveDetailTopBar />
           </Show>
           <div class="relative min-h-0 min-w-0 flex-1">

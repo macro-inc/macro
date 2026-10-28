@@ -10,6 +10,7 @@ export function Tooltip(
     placement?: Placement;
     as?: 'div' | 'span';
     class?: string;
+    mount?: HTMLElement;
     hotkey?: string | string[];
     shortcut?: string | string[];
   }>
@@ -28,14 +29,21 @@ export function Tooltip(
         >
           {props.children}
         </KTooltip.Trigger>
-        <KTooltip.Portal>
+        <KTooltip.Portal mount={props.mount}>
           <KTooltip.Content class="z-tool-tip">
             <Surface
               depth={3}
               hideBorder
-              class="flex items-center justify-center rounded-lg bg-tooltip p-2 text-xs text-ink-muted wrap-break-word"
+              class="flex items-center justify-center gap-2 rounded-lg bg-tooltip p-2 text-xs text-ink-muted wrap-break-word"
             >
               {props.label}
+              <Show when={props.shortcut}>
+                <kbd class="text-ink-extra-muted font-sans">
+                  {Array.isArray(props.shortcut)
+                    ? props.shortcut.join(' ')
+                    : props.shortcut}
+                </kbd>
+              </Show>
             </Surface>
           </KTooltip.Content>
         </KTooltip.Portal>

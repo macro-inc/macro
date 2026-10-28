@@ -323,7 +323,6 @@ fn bootstrap_from_update(args: &UpdateArgs) -> Result<()> {
                 binaries_dir: args.binaries_dir.clone(),
             },
             no_frontend: false,
-            enable_onboarding: false,
             verbose: args.verbose,
             no_snapshot: false,
             traces: super::cli::TracesBackend::default(),

@@ -1,7 +1,61 @@
 import { CombinedError } from '@urql/core';
 import { describe, expect, it } from 'vitest';
-import { isTransientRequestError } from './request-error';
+import {
+  isResponseFreeNetworkError,
+  isTransientRequestError,
+} from './request-error';
 import { ThrownResultError } from './result';
+
+describe('isResponseFreeNetworkError', () => {
+  it('accepts a known response-free GraphQL transport failure', () => {
+    expect(
+      isResponseFreeNetworkError(
+        new CombinedError({ networkError: new TypeError('Failed to fetch') })
+      )
+    ).toBe(true);
+  });
+
+  it.each([401, 403, 404, 500, 503])('rejects HTTP %s responses', (status) => {
+    expect(
+      isResponseFreeNetworkError(
+        new CombinedError({
+          networkError: new Error('Request failed'),
+          response: new Response(null, { status }),
+        })
+      )
+    ).toBe(false);
+  });
+
+  it.each([undefined, new TypeError('Failed to fetch')])(
+    'preserves GraphQL errors with or without a transport failure',
+    (networkError) => {
+      expect(
+        isResponseFreeNetworkError(
+          new CombinedError({ networkError, graphQLErrors: ['Denied'] })
+        )
+      ).toBe(false);
+    }
+  );
+
+  it.each([
+    { codes: ['NETWORK_ERROR'], expected: true },
+    { codes: ['NETWORK_ERROR', 'NETWORK_ERROR'], expected: true },
+    { codes: ['NETWORK_ERROR', 'SERVER_ERROR'], expected: false },
+    { codes: ['FORBIDDEN'], expected: false },
+    { codes: [], expected: false },
+  ])('classifies structured REST errors $codes', ({ codes, expected }) => {
+    expect(
+      isResponseFreeNetworkError(
+        new ThrownResultError(codes.map((code) => ({ code, message: code })))
+      )
+    ).toBe(expected);
+  });
+
+  it.each([undefined, null, new Error('Application failed'), 'offline'])(
+    'does not hide an unknown error: %s',
+    (error) => expect(isResponseFreeNetworkError(error)).toBe(false)
+  );
+});
 
 describe('isTransientRequestError', () => {
   it.each([null, undefined])('does not classify %s as a failure', (error) => {

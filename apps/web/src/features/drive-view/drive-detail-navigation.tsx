@@ -4,9 +4,11 @@ import type {
   EntityDetailNavigationOptions,
   EntityDetailTarget,
 } from '@app/components/entity-detail/entity-detail-target';
-import { useNavigate, useParams, useRouteState } from '@app/split-router';
+import { useNavigate, useParams, useRouteState } from '@app/lib/split-router';
+import { driveSplitRoute } from '@app/routes/routes';
 import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type Accessor,
   createContext,
@@ -19,9 +21,9 @@ import {
 import type { DriveLocation } from './core/types';
 import { driveDestination } from './drive-route-navigation';
 import {
-  type DriveDocumentTarget,
-  documentRouteFromTarget,
-  documentTargetFromRoute,
+  type DriveDetailTarget,
+  detailRouteFromTarget,
+  detailTargetFromRoute,
   sameDocumentRoute,
 } from './primitives/drive-detail-trail';
 import {
@@ -30,7 +32,6 @@ import {
   driveDocumentFromParams,
   driveDocumentRoute,
 } from './primitives/drive-route';
-import { driveSplitRoute } from './route';
 
 type DriveDetailRootOptions = EntityDetailNavigationOptions & {
   location?: DriveLocation;
@@ -77,17 +78,17 @@ export function DriveDetailNavigationProvider(
   const activeDocument = createMemo(() => driveDocumentFromParams(params));
   const activeCallId = () => params.callId;
   const activeTarget = createMemo(() =>
-    documentTargetFromRoute(activeDocument())
+    detailTargetFromRoute(activeDocument())
   );
 
   createEffect(on(activeTarget, (target) => selectPreview(target)));
 
-  const trail = (): DriveDocumentTarget[] => {
+  const trail = (): DriveDetailTarget[] => {
     const restored = routeTrail();
     const endpoint = restored?.at(-1);
     const endpointMatches =
       endpoint !== undefined &&
-      sameDocumentRoute(documentRouteFromTarget(endpoint), activeDocument());
+      sameDocumentRoute(detailRouteFromTarget(endpoint), activeDocument());
     if (restored && endpointMatches) return restored;
 
     const target = activeTarget();
@@ -97,7 +98,7 @@ export function DriveDetailNavigationProvider(
 
   const entries = createMemo<EntityDetailNavigationEntry[]>(() =>
     trail().map((target, index) => ({
-      value: `drive-detail:${index}:${documentRouteFromTarget(target).type}:${target.id}`,
+      value: `drive-detail:${index}:${detailRouteFromTarget(target).type}:${target.id}`,
       data: target,
     }))
   );
@@ -107,10 +108,22 @@ export function DriveDetailNavigationProvider(
     target: EntityDetailTarget,
     options?: EntityDetailNavigationOptions
   ):
-    | { target: DriveDocumentTarget; document: DriveDocumentRoute }
+    | { target: DriveDetailTarget; document: DriveDocumentRoute }
     | undefined => {
-    if (target.type !== 'document') return;
     if (!opensInline(options)) return;
+
+    if (target.type === 'database' || target.type === 'form') {
+      if (!selectPreview(target)) return;
+      return {
+        target: {
+          type: target.type,
+          id: target.id,
+          fallbackName: target.fallbackName,
+        },
+        document: { id: target.id, type: target.type },
+      };
+    }
+    if (target.type !== 'document') return;
 
     const blockType = entityDetailBlockType(target);
     if (!blockType) return;
@@ -139,12 +152,15 @@ export function DriveDetailNavigationProvider(
       const endpoint = currentTrail.at(-1);
       const endpointMatches =
         endpoint !== undefined &&
-        sameDocumentRoute(documentRouteFromTarget(endpoint), resolved.document);
+        sameDocumentRoute(detailRouteFromTarget(endpoint), resolved.document);
       if (endpointMatches) return true;
 
-      navigate(driveDestination(props.location(), resolved.document), {
-        state: [...currentTrail, resolved.target],
-      });
+      fireAndForget(
+        navigate(driveDestination(props.location(), resolved.document), {
+          state: [...currentTrail, resolved.target],
+        }),
+        'drive-view'
+      );
       return true;
     },
 
@@ -152,12 +168,15 @@ export function DriveDetailNavigationProvider(
       const resolved = resolveTarget(target, options);
       if (!resolved) return false;
 
-      navigate(
-        driveDestination(
-          options?.location ?? props.location(),
-          resolved.document
+      fireAndForget(
+        navigate(
+          driveDestination(
+            options?.location ?? props.location(),
+            resolved.document
+          ),
+          { state: [resolved.target] }
         ),
-        { state: [resolved.target] }
+        'drive-view'
       );
       return true;
     },
@@ -183,15 +202,20 @@ export function DriveDetailNavigationProvider(
         .slice(0, entryIndex + 1)
         .map((candidate) => candidate.data)
         .filter(
-          (candidate): candidate is DriveDocumentTarget =>
-            candidate.type === 'document'
+          (candidate): candidate is DriveDetailTarget =>
+            candidate.type === 'document' ||
+            candidate.type === 'database' ||
+            candidate.type === 'form'
         );
       const target = nextTrail.at(-1);
       if (!target) return;
 
-      navigate(
-        driveDestination(props.location(), documentRouteFromTarget(target)),
-        { state: nextTrail }
+      fireAndForget(
+        navigate(
+          driveDestination(props.location(), detailRouteFromTarget(target)),
+          { state: nextTrail }
+        ),
+        'drive-view'
       );
     },
 
@@ -200,9 +224,12 @@ export function DriveDetailNavigationProvider(
       // not climb out of the folder/tab the user just selected.
       if (!activeDocument() && !activeCallId()) return;
       selectPreview(undefined);
-      navigate(driveDestination(props.location()), {
-        replace: options?.replace,
-      });
+      fireAndForget(
+        navigate(driveDestination(props.location()), {
+          replace: options?.replace,
+        }),
+        'drive-view'
+      );
     },
   };
 

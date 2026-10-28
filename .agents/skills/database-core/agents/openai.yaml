@@ -1,0 +1,3 @@
+interface:
+  display_name: "Database Core"
+  short_description: "Build features on the reusable database engine"

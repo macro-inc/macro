@@ -56,6 +56,8 @@ impl<S: InitiativeService, A: EntityAccessService, R: EntityActivityReads>
                     description: self.description.clone(),
                     member_ids: self.member_ids.clone(),
                     share_with_team: self.share_with_team,
+                    // Properties are set with SetEntityProperty after the create.
+                    property_values: Vec::new(),
                 },
                 activity::Attribution::delegated(
                     activity::Actor::new_from_bot(context.actor),
@@ -73,7 +75,7 @@ impl<S: InitiativeService, A: EntityAccessService, R: EntityActivityReads>
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "UpdateInitiative",
-    description = "Rename a project with edit access, or replace its collaboration member list as the owner. Members control sharing independently of the assignee property. Assigning a user grants collaboration access; removing an assignment retains that access. For status, priority, assignees and due date use SetEntityProperty with entity_type='initiative'. ReadInitiative returns the description document id for document editing tools."
+    description = "Rename a project with edit access, or replace its collaboration member list as the owner. Members control sharing independently of the assignee property. Assigning a user grants collaboration access; removing an assignment retains that access. For status, priority, assignees and due date use SetEntityProperty with entity_type='initiative'."
 )]
 pub struct UpdateInitiative {
     /// Project identifier.

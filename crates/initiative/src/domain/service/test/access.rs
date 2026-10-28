@@ -13,11 +13,7 @@ async fn create_defaults_to_team_sharing_and_preserves_explicit_opt_out() {
         repo.expect_create()
             .withf(move |_, _, intent| *intent == expected)
             .return_once(|_, _, _| Box::pin(async { Ok(detail(Vec::new())) }));
-        let mut documents = MockInitiativeDescriptionDocuments::new();
-        documents
-            .expect_create()
-            .return_once(|_| Box::pin(async { Ok(description_document_id()) }));
-        let created = service_with_documents(repo, documents)
+        let created = service(repo)
             .create(
                 &user(OWNER),
                 CreateInitiativeRequest {
@@ -106,65 +102,6 @@ async fn editors_cannot_replace_or_clear_collaborators_but_can_rename() {
 }
 
 #[tokio::test]
-async fn assignment_rejects_task_capability_for_another_principal() {
-    let result = service(MockInitiativeRepo::new())
-        .assign_tasks(
-            edit_receipt(),
-            vec![TaskAssignment::Authorized {
-                receipt: task_receipt(OTHER, "task-1"),
-            }],
-        )
-        .await;
-    assert!(matches!(result, Err(InitiativeError::Unauthorized)));
-}
-
-#[tokio::test]
-async fn assignment_rejects_non_document_task_capability() {
-    let result = service(MockInitiativeRepo::new())
-        .assign_tasks(
-            edit_receipt(),
-            vec![TaskAssignment::Authorized {
-                receipt: edit_receipt(),
-            }],
-        )
-        .await;
-    assert!(matches!(result, Err(InitiativeError::BadRequest(_))));
-}
-
-#[tokio::test]
-async fn removal_rejects_task_capability_for_another_principal() {
-    let result = service(MockInitiativeRepo::new())
-        .unassign_task(edit_receipt(), task_receipt(OTHER, "task-1"))
-        .await;
-    assert!(matches!(result, Err(InitiativeError::Unauthorized)));
-}
-
-#[tokio::test]
-async fn removal_requires_a_task_document_capability() {
-    let result = service(MockInitiativeRepo::new())
-        .unassign_task(edit_receipt(), edit_receipt())
-        .await;
-    assert!(matches!(result, Err(InitiativeError::BadRequest(_))));
-    let clear = service(MockInitiativeRepo::new())
-        .clear_task(edit_receipt())
-        .await;
-    assert!(matches!(clear, Err(InitiativeError::BadRequest(_))));
-}
-
-#[tokio::test]
-async fn task_side_clear_needs_no_source_initiative_receipt() {
-    let mut repo = MockInitiativeRepo::new();
-    repo.expect_clear_task()
-        .withf(|id| id == "task-1")
-        .times(1)
-        .return_once(|_| Box::pin(async { Ok(None) }));
-    service(repo)
-        .clear_task(task_receipt(OWNER, "task-1"))
-        .await
-        .expect("cleared");
-}
-
-#[tokio::test]
 async fn all_lifecycle_operations_validate_initiative_entity_type() {
     let svc = service(MockInitiativeRepo::new());
     assert!(matches!(
@@ -201,49 +138,4 @@ async fn assignee_sharing_deduplicates_and_keeps_owner_assignable() {
         )
         .await
         .expect("granted");
-}
-
-#[tokio::test]
-async fn batch_clear_preserves_successes_and_continues_after_independent_failures() {
-    use crate::domain::service::{ClearTaskStatus, clear_task_batch};
-    let mut repo = MockInitiativeRepo::new();
-    repo.expect_clear_task().times(4).returning(|id| {
-        let result = match id {
-            "first" | "last" => Ok(None),
-            "not-task" => Err(InitiativeError::NotATask),
-            "broken" => Err(InitiativeError::Internal(rootcause::report!(
-                "storage unavailable"
-            ))),
-            _ => panic!("unauthorized or missing IDs must not reach persistence"),
-        };
-        Box::pin(async move { result })
-    });
-    let assignments = vec![
-        assignment("first"),
-        assignment("broken"),
-        assignment("not-task"),
-        TaskAssignment::NotFound {
-            task_id: "missing".into(),
-        },
-        TaskAssignment::SkippedNoPermission {
-            task_id: "denied".into(),
-        },
-        assignment("last"),
-    ];
-    let result = clear_task_batch(&service(repo), assignments).await.unwrap();
-    let actual: Vec<_> = result
-        .into_iter()
-        .map(|row| (row.task_id, row.status))
-        .collect();
-    assert_eq!(
-        actual,
-        vec![
-            ("first".into(), ClearTaskStatus::Cleared),
-            ("broken".into(), ClearTaskStatus::Failed),
-            ("not-task".into(), ClearTaskStatus::NotATask),
-            ("missing".into(), ClearTaskStatus::NotFound),
-            ("denied".into(), ClearTaskStatus::SkippedNoPermission),
-            ("last".into(), ClearTaskStatus::Cleared),
-        ]
-    );
 }

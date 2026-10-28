@@ -1,21 +1,79 @@
-import type { GetCallRecordResponses } from '../../../generated/storage/types.gen';
+import type {
+  EditCallTranscriptRequest,
+  GetCallRecordResponses,
+} from '../../../generated/storage/types.gen';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { Channel } from '../channels/channel';
 import { FavoritableEntity } from '../entity';
+import { Meeting } from '../meetings/meeting';
+import {
+  MessageThread,
+  type TimelineOptions,
+  timeline,
+} from '../messages/thread';
 import { entitySearch } from '../search';
+import { EntityAccess } from '../sharing/access';
 import { User } from '../users/user';
+import { CallMessage } from './message';
 
 type CallRecordDetail = GetCallRecordResponses[200];
 
 /** A Macro call record (an archived or still active call). */
 export class CallRecord extends FavoritableEntity<CallRecordDetail> {
+  /** A shared message thread scoped to this resource. */
+  messageThreadById(id: string): MessageThread {
+    return MessageThread.byId(this.client, { type: 'call', entity: this }, id);
+  }
+
+  /** A mixed message and activity timeline page. */
+  timelinePage(selection?: TimelineOptions<CallMessage>) {
+    return timeline(
+      this.client,
+      { type: 'call', entity: this },
+      (record) => CallMessage.from(this.client, this.id, record),
+      selection,
+    );
+  }
+
+  /** Access requests and direct user grants. */
+  readonly access = new EntityAccess(this.client, 'call', this);
+
+  /** Get or create a shareable meeting for this call. */
+  async meeting(): Promise<Meeting> {
+    return Meeting.from(
+      this.client,
+      unwrap(
+        await this.client.storage.meetingShare({ path: { call_id: this.id } }),
+      ),
+    );
+  }
+
+  /** Update custom speaker assignments in the transcript. */
+  async editTranscript(
+    assignments: EditCallTranscriptRequest['assignments'],
+  ): Promise<void> {
+    await this.mutate((c) =>
+      c.storage.editCallTranscript({
+        path: { call_id: this.id },
+        body: { assignments },
+      }),
+    );
+  }
+
+  /** Toggle the server's share-with-team setting and return its new value. */
+  async toggleTeamShare(): Promise<boolean> {
+    return this.mutate((c) =>
+      c.storage.toggleShareWithTeam({ path: { call_id: this.id } }),
+    );
+  }
+
   /** Favorites identify call records as `call`. */
   readonly entityType = 'call';
 
   protected async fetch(): Promise<CallRecordDetail> {
     return unwrap(
-      await this.client.storage.getCallRecord({ path: { call_id: this.id } })
+      await this.client.storage.getCallRecord({ path: { call_id: this.id } }),
     );
   }
 
@@ -24,12 +82,17 @@ export class CallRecord extends FavoritableEntity<CallRecordDetail> {
     return new CallRecord(client, id);
   }
 
+  /** A message in this call's persistent chat. Fields load on first access. */
+  message(id: string): CallMessage {
+    return CallMessage.byId(this.client, this.id, id);
+  }
+
   /** The call's display name (user-supplied or AI-generated; unset while active). */
   readonly name = this.field('customName');
 
   /** The channel the call belongs to, if it is a channel call. */
   readonly channel = this.mappedField('channelId', (id) =>
-    id ? Channel.byId(this.client, id) : undefined
+    id ? Channel.byId(this.client, id) : undefined,
   );
 
   /** The display name of the channel the call belongs to. */
@@ -37,7 +100,7 @@ export class CallRecord extends FavoritableEntity<CallRecordDetail> {
 
   /** The user who started the call. */
   readonly creator = this.mappedField('createdBy', (id) =>
-    User.byId(this.client, id)
+    User.byId(this.client, id),
   );
 
   /** Whether the call is still in progress. */
@@ -99,7 +162,7 @@ export class CallRecord extends FavoritableEntity<CallRecordDetail> {
       c.storage.editCallRecord({
         path: { call_id: this.id },
         body: { customName: name ?? '' },
-      })
+      }),
     );
   }
 
@@ -116,14 +179,14 @@ export class CallRecord extends FavoritableEntity<CallRecordDetail> {
         body: {
           sharePermission: { teamShareAccessLevel: shared ? 'view' : null },
         },
-      })
+      }),
     );
   }
 
   /** Delete the call record. */
   async delete(): Promise<void> {
     await this.mutate((c) =>
-      c.storage.deleteCallRecord({ path: { call_id: this.id } })
+      c.storage.deleteCallRecord({ path: { call_id: this.id } }),
     );
   }
 

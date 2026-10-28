@@ -98,6 +98,13 @@ export type MentionSpec =
   | { kind: 'agent_session'; id: string; label?: string; expanded?: boolean }
   | { kind: 'pr'; id: string; label?: string }
   | {
+      kind: 'booking_link';
+      profileId: string;
+      url: string;
+      slug?: string;
+      label?: string;
+    }
+  | {
       kind: 'tag';
       optionId: string;
       propertyDefinitionId: string;

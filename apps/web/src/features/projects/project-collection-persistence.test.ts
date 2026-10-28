@@ -27,7 +27,6 @@ it('restores collection grouping, filters, collapsed groups, focus and scroll af
               project: {
                 id: 'one',
                 name: 'One',
-                descriptionDocumentId: 'doc',
                 updatedAt: '',
               },
               properties: [],

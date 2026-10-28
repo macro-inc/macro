@@ -1,0 +1,76 @@
+/* Keep the onboarding palette local; the app's theme selection owns light/dark. */
+.onboarding-flow {
+  color-scheme: dark;
+  --color-surface: #000;
+  --color-ink: #fff;
+  --color-ink-muted: #a8a8a8;
+  --color-ink-extra-muted: #737373;
+  --color-edge: #292929;
+  --color-edge-muted: #1c1c1c;
+  --color-accent: var(--color-ink);
+  --color-accent-contrast: #000;
+  --color-accent-contrast-muted: #292929;
+  --color-input: #171717;
+  --color-ink-placeholder: #737373;
+  --glass-tint: #fff;
+  --glass-shade-color: #000;
+  --glass-highlight-base: 6%;
+  --glass-rim-strong-base: 13.5%;
+  --glass-rim-soft-base: 9%;
+  --glass-rim-shade-base: 0%;
+}
+
+html[data-theme-light='true'] .onboarding-flow {
+  color-scheme: light;
+  --onboarding-intro-background: linear-gradient(145deg, #fdfcfb, #faf8f3);
+  --onboarding-intro-shadow: 0 8px 30px -12px #1d1c1a20;
+  --color-surface: #f5f1e8;
+  --color-surface-0: #f5f1e8;
+  --color-surface-1: #faf8f3;
+  --color-surface-2: #fcfbf8;
+  --color-surface-3: #fdfcfb;
+  --color-surface-4: #fefefd;
+  --color-panel: #faf8f3;
+  --color-ink: #1d1c1a;
+  --color-ink-muted: #54524f;
+  --color-ink-extra-muted: #72706c;
+  --color-ink-placeholder: #8f8c86;
+  --color-edge: #d9d4ca;
+  --color-edge-muted: #e6e1d7;
+  --color-accent-contrast: #f5f1e8;
+  --color-accent-contrast-muted: #e6e1d7;
+  --color-input: #faf8f3;
+  --glass-highlight-base: 18%;
+  --glass-rim-strong-base: 18%;
+  --glass-rim-soft-base: 12%;
+  --glass-rim-shade-base: 3%;
+  --glass-shade-base: 3%;
+}
+
+html[data-theme-light='true'] .onboarding-flow h1,
+html[data-theme-light='true'] .onboarding-flow h2 {
+  color: #000;
+}
+
+html[data-theme-light='true'] .onboarding-flow .onboarding-tool-icon {
+  background: #faf8f3;
+}
+
+html[data-theme-light='true'] .onboarding-flow :is(.feature-flow-icon, .feature-flow-core) {
+  background: linear-gradient(145deg, #fffdf5a6, #f5f1e833);
+}
+
+html[data-theme-light='true'] [data-workspace-intro] {
+  --workspace-grain-opacity: 0.42;
+  --workspace-accent-ring-width: 2.667px;
+  --workspace-accent-ring-color: #8c8478;
+}
+
+html[data-theme-light='true'] [data-workspace-intro] [data-accent-option='Pearl'] {
+  display: none;
+}
+
+/* Slightly stronger cream display type; keep the existing font metrics/layout. */
+html[data-theme-light='true'] .onboarding-flow [class*='font-[Roboto_Slab'] {
+  font-weight: 330;
+}

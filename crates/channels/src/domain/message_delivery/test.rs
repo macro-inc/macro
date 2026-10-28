@@ -4,7 +4,8 @@ use crate::domain::{
     ports::MockChannelRepo,
 };
 use chrono::Utc;
-use messages::domain::models::SimpleMention;
+use macro_user_id::user_id::MacroUserIdStr;
+use messages::domain::models::{MessageAttachment, SimpleMention};
 use std::{
     collections::HashSet,
     sync::{Arc, Mutex},
@@ -52,7 +53,7 @@ impl ChannelReferenceSharePermissions for Log {
         _: MacroUserIdStr<'static>,
         _: Uuid,
         _: Vec<ReferencedShareItem>,
-    ) -> Result<(), Self::Err> {
+    ) -> Result<Vec<crate::domain::models::ReferenceShareResult>, Self::Err> {
         *self.shares.lock().unwrap() += 1;
         anyhow::bail!("sharing temporarily unavailable")
     }
@@ -113,6 +114,7 @@ fn message() -> Message {
         triggered_by: None,
         bot_profile: None,
         mentions: vec![],
+        guest_name: None,
         imported_author: None,
         content: "Message".into(),
         created_at: Utc::now(),
@@ -152,7 +154,7 @@ fn live_users() -> HashSet<String> {
 }
 
 #[tokio::test]
-async fn a_post_emits_the_legacy_channel_event_and_the_common_payload() {
+async fn a_post_emits_the_channel_notification_event_and_the_common_payload() {
     let log = Log::default();
     let delivery = ChannelMessageDelivery::new(repo(), log.clone(), log.clone(), log.clone());
     assert!(
@@ -172,9 +174,7 @@ async fn a_post_emits_the_legacy_channel_event_and_the_common_payload() {
         ChannelEvent::MessagePosted {
             channel_id,
             message,
-            attachments,
             has_attachments,
-            nonce,
             participants,
             ..
         },
@@ -186,8 +186,6 @@ async fn a_post_emits_the_legacy_channel_event_and_the_common_payload() {
     assert_eq!(message.id, Uuid::from_u128(1));
     assert_eq!(message.channel_id, CHANNEL);
     assert!(has_attachments);
-    assert_eq!(attachments[0].channel_id, CHANNEL);
-    assert_eq!(nonce.as_deref(), Some("n1"));
     assert_eq!(participants.len(), 2);
     assert_eq!(
         *log.live.lock().unwrap(),
@@ -196,7 +194,7 @@ async fn a_post_emits_the_legacy_channel_event_and_the_common_payload() {
 }
 
 #[tokio::test]
-async fn edits_emit_attachment_changes_before_the_message_change() {
+async fn an_edit_that_notifies_as_a_post_emits_the_posted_event() {
     let log = Log::default();
     let delivery = ChannelMessageDelivery::new(repo(), log.clone(), log.clone(), log.clone());
     let previous = MessageAttachment {
@@ -221,26 +219,29 @@ async fn edits_emit_attachment_changes_before_the_message_change() {
     );
     let events = log.events.lock().unwrap();
     let [
-        ChannelEvent::AttachmentsChanged { added, removed, .. },
-        ChannelEvent::MessageChanged {
-            posted_notification,
+        ChannelEvent::MessagePosted {
+            notification_policy,
             ..
         },
     ] = events.as_slice()
     else {
-        panic!("expected attachment and message events, got {events:?}");
+        panic!("expected one posted event, got {events:?}");
     };
-    assert_eq!(added[0].id, Uuid::from_u128(4));
-    assert_eq!(removed[0].id, Uuid::from_u128(5));
-    assert!(posted_notification.is_some());
+    assert_eq!(*notification_policy, PostMessageNotificationPolicy::Default);
     assert_eq!(log.live.lock().unwrap()[0].0, "edited");
 }
 
 #[tokio::test]
-async fn deletions_reactions_and_typing_map_to_their_legacy_events() {
+async fn plain_edits_deletions_reactions_and_typing_only_send_the_common_payload() {
     let log = Log::default();
     let delivery = ChannelMessageDelivery::new(repo(), log.clone(), log.clone(), log.clone());
     for change in [
+        MessageChange::Edited {
+            notification_policy: PatchMessageNotificationPolicy::Default,
+            message: message(),
+            mentions: vec![],
+            previous_attachments: vec![],
+        },
         MessageChange::MessageDeleted { message: message() },
         MessageChange::ReactionChanged {
             message: message(),
@@ -250,23 +251,13 @@ async fn deletions_reactions_and_typing_map_to_their_legacy_events() {
         MessageChange::Typing {
             thread_id: Some(Uuid::from_u128(9)),
             active: false,
+            agent: None,
         },
     ] {
-        delivery.publish(event(change)).await.unwrap();
+        // The plain edit still records sharing, whose failure is reported.
+        let _ = delivery.publish(event(change)).await;
     }
-    let events = log.events.lock().unwrap();
-    assert!(matches!(
-        events.as_slice(),
-        [
-            ChannelEvent::MessageDeleted { .. },
-            ChannelEvent::ReactionChanged { .. },
-            ChannelEvent::TypingChanged {
-                action: TypingAction::Stop,
-                thread_id: Some(thread),
-                ..
-            },
-        ] if *thread == Uuid::from_u128(9)
-    ));
+    assert!(log.events.lock().unwrap().is_empty());
     assert_eq!(
         log.live
             .lock()
@@ -274,7 +265,7 @@ async fn deletions_reactions_and_typing_map_to_their_legacy_events() {
             .iter()
             .map(|(kind, _)| kind.as_str())
             .collect::<Vec<_>>(),
-        ["message_deleted", "reaction_changed", "typing"]
+        ["edited", "message_deleted", "reaction_changed", "typing"]
     );
 }
 
@@ -292,13 +283,7 @@ async fn added_reaction_carries_author_notification_context() {
     delivery.publish(reaction).await.unwrap();
 
     let events = log.events.lock().unwrap();
-    let [
-        ChannelEvent::ReactionChanged {
-            notification: Some(notification),
-            ..
-        },
-    ] = events.as_slice()
-    else {
+    let [ChannelEvent::ReactionAdded { notification, .. }] = events.as_slice() else {
         panic!("expected reaction notification context, got {events:?}");
     };
     assert_eq!(notification.emoji, "👍");
@@ -307,7 +292,7 @@ async fn added_reaction_carries_author_notification_context() {
 }
 
 #[tokio::test]
-async fn removed_reaction_has_no_author_notification_context() {
+async fn removed_reaction_sends_no_author_notification() {
     let log = Log::default();
     let delivery = ChannelMessageDelivery::new(repo(), log.clone(), log.clone(), log.clone());
     let mut reaction = event(MessageChange::ReactionChanged {
@@ -319,13 +304,7 @@ async fn removed_reaction_has_no_author_notification_context() {
 
     delivery.publish(reaction).await.unwrap();
 
-    assert!(matches!(
-        log.events.lock().unwrap().as_slice(),
-        [ChannelEvent::ReactionChanged {
-            notification: None,
-            ..
-        }]
-    ));
+    assert!(log.events.lock().unwrap().is_empty());
 }
 
 #[tokio::test]
@@ -351,7 +330,7 @@ async fn thread_updates_stay_off_the_channel_side_effect_path() {
 }
 
 #[tokio::test]
-async fn realtime_failure_is_reported_after_legacy_effects_were_dispatched() {
+async fn realtime_failure_is_reported() {
     let log = Log {
         fail_live: true,
         ..Default::default()
@@ -363,7 +342,6 @@ async fn realtime_failure_is_reported_after_legacy_effects_were_dispatched() {
             .await
             .is_err()
     );
-    assert_eq!(log.events.lock().unwrap().len(), 1);
 }
 
 #[tokio::test]

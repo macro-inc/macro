@@ -1,5 +1,6 @@
 import { DOCS_BASE } from '@app/constants/docs-links';
 import { useAddInboxFlow, useEmailLinksStatus } from '@core/email-link';
+import { fireAndForget } from '@core/util/fireAndForget';
 import EmptyStateEmailGraphic from '@design/empty-state-email.svg';
 import EmptyStateInboxTrayGraphic from '@design/empty-state-inbox-tray.svg';
 import EmptyStateNoFilterMatchGraphic from '@design/empty-state-no-filter-match.svg';
@@ -36,6 +37,10 @@ function tabCopy(tab: EmailTab): { title: string; description: string } {
       title: 'No scheduled email',
       description: 'Email you schedule to send later will appear here.',
     }))
+    .with('reminders', () => ({
+      title: 'No email reminders',
+      description: 'Use Remind me on an email to return to it later.',
+    }))
     .with('calendar', () => ({
       title: 'No calendar email',
       description: 'Invitations and event updates will appear here.',
@@ -47,6 +52,10 @@ function tabCopy(tab: EmailTab): { title: string; description: string } {
     .with('shared', () => ({
       title: 'No shared email',
       description: 'Threads teammates share with you will appear here.',
+    }))
+    .with('archived', () => ({
+      title: 'No archived email',
+      description: 'Email you archive will appear here.',
     }))
     .with('all', () => ({
       title: 'No email yet',
@@ -61,7 +70,9 @@ export function EmailEmptyState() {
   const startAddInbox = useAddInboxFlow();
   // Scheduled has no search or filters; text typed on another tab stays behind.
   const searchText = () =>
-    state.tab === 'scheduled' ? '' : state.search.trim();
+    state.tab === 'scheduled' || state.tab === 'reminders'
+      ? ''
+      : state.search.trim();
   const noInboxesSelected = () => state.inboxIds?.length === 0;
   const hasActiveFilters = () =>
     Object.values(state.facets).some((optionIds) => optionIds.length > 0);
@@ -75,7 +86,7 @@ export function EmailEmptyState() {
           description="Bring your inbox into Macro to triage signal from noise, reply faster, and let agents work alongside your mail."
           primaryAction={{
             label: 'Connect email',
-            onClick: () => void startAddInbox(),
+            onClick: () => fireAndForget(startAddInbox(), 'add-inbox'),
           }}
           documentationUrl={EMAIL_DOCS_URL}
         />

@@ -83,7 +83,7 @@ const Caption = (p: { team: Team }) => (
         // column is the largest that still fits it on one line. Capped at the
         // 19px it used to be fixed at, floored so it never gets silly; on a
         'font-size': '21px',
-        'font-weight': '315',
+        'font-weight': 'calc(315 + var(--cream-slab-weight-increase, 0))',
         'letter-spacing': '-0.01em',
         'line-height': 1.2,
         margin: 0,

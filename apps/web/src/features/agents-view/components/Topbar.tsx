@@ -1,24 +1,37 @@
 import { ViewShell } from '@app/components/view-shell/ViewShell';
-import { SplitPanel } from '@components/app/split-panel';
-import type { JSX } from 'solid-js';
+import { ViewSidebar } from '@app/components/view-shell/ViewSidebar';
+import ArrowLeft from '@icon/system/regular/arrow-left.svg';
+import { Button } from '@ui';
+import { type JSX, Show } from 'solid-js';
 
 /** Shared workspace chrome for conversation and new-session pages. */
 export function Topbar(props: {
-  title: string;
+  title?: string;
+  onBack?: () => void;
   titleContent?: JSX.Element;
   children?: JSX.Element;
 }) {
   return (
     <ViewShell.TopBar class="touch:flex">
-      <SplitPanel.CloseButton class="hidden shrink-0 @max-[720px]/view-shell:flex" />
+      <Show when={props.onBack}>
+        <Button
+          aria-label="Back to conversations"
+          tooltip="Back to conversations"
+          variant="ghost"
+          size="icon-md"
+          onClick={props.onBack}
+        >
+          <ArrowLeft class="size-4 touch:size-6 shrink-0 pointer-events-none" />
+        </Button>
+      </Show>
       <div class="flex min-w-0 items-center gap-1">
         {props.titleContent ?? (
-          <h1 class="min-w-0 truncate text-sm font-semibold tracking-[-0.03em] text-ink">
-            {props.title}
-          </h1>
+          <Show when={props.title}>
+            <ViewSidebar.Title caret={false}>{props.title}</ViewSidebar.Title>
+          </Show>
         )}
       </div>
-      <div class="header-actions ml-auto flex shrink-0 items-center gap-2">
+      <div class="header-actions ml-auto flex shrink-0 items-center gap-2 touch:gap-1">
         {props.children}
       </div>
     </ViewShell.TopBar>

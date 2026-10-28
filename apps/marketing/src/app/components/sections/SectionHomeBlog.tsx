@@ -335,7 +335,7 @@ export function SectionHomeBlog() {
         class="home-blog-title"
         style={{
           'font-family': 'display',
-          'font-weight': '420',
+          'font-weight': 'calc(315 + var(--cream-slab-weight-increase, 0))',
           'letter-spacing': '-0.015em',
           'line-height': 1.1,
           'text-wrap': 'balance',

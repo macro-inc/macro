@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO scheduling_booking (id, profile_id, request_id, event_type_id, starts_at, ends_at, status, record, recovery_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Timestamptz",
+        "Timestamptz",
+        "Text",
+        "Jsonb",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7a7367fddcf0c9549099d20ebbe7d1d2841a6f16bb100c017ca8be59a0abc2c5"
+}

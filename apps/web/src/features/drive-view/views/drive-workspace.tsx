@@ -1,9 +1,9 @@
 import { useViewTabHotkeys, ViewShell } from '@app/components/view-shell';
-import { SplitRouter } from '@app/split-router';
+import { SplitRouter } from '@app/lib/split-router';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
-import SpinnerIcon from '@phosphor/spinner.svg';
-import { createMemo, Show, Suspense } from 'solid-js';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
+import { createMemo, type JSX, Show, Suspense } from 'solid-js';
 import { DriveFileDropzone } from '../components/drive-file-dropzone';
 import { useDriveView } from '../context/drive-context';
 import { driveLocationBreadcrumbs } from '../core/breadcrumbs';
@@ -17,12 +17,16 @@ import { DriveSidebar } from './drive-sidebar';
 export function DriveLoading() {
   return (
     <div class="grid size-full place-items-center text-ink-muted">
-      <SpinnerIcon aria-label="Loading files" class="size-5 animate-spin" />
+      <SpinnerIcon
+        aria-hidden={false}
+        aria-label="Loading files"
+        class="size-5 animate-spin"
+      />
     </div>
   );
 }
 
-export function DriveWorkspace() {
+export function DriveWorkspace(props: { tour?: JSX.Element }) {
   const { state, sidebar, actions } = useDriveView();
 
   const breadcrumbs = createMemo(() =>
@@ -67,6 +71,7 @@ export function DriveWorkspace() {
                 fallback={
                   <>
                     <DriveHeader />
+                    {props.tour}
                     <ViewShell.Content>
                       <Suspense fallback={<DriveLoading />}>
                         <DriveFileDropzone onDrop={actions.dropFiles}>

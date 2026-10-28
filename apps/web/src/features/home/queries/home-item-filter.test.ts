@@ -14,11 +14,6 @@ const taskItem = {
   data: { id: 'task-1', subType: { type: 'task' } },
 } as unknown as SoupApiItem;
 
-const reminderItem = {
-  tag: 'reminder',
-  data: { id: 'reminder-1' },
-} as unknown as SoupApiItem;
-
 // The macro-3272 shape: a noise email (server is_signal = false) restored
 // into the cache by a websocket notification must not enter the Signal feed.
 const noiseEmail = emailItem({ isSignal: false });
@@ -57,13 +52,5 @@ describe('noise tab', () => {
 
   it('rejects non-email items', () => {
     expect(soupItemMatchesHomeTab(taskItem, 'noise')).toBe(false);
-  });
-});
-
-describe('reminders tab', () => {
-  it('accepts only reminders', () => {
-    expect(soupItemMatchesHomeTab(reminderItem, 'reminders')).toBe(true);
-    expect(soupItemMatchesHomeTab(taskItem, 'reminders')).toBe(false);
-    expect(soupItemMatchesHomeTab(noiseEmail, 'reminders')).toBe(false);
   });
 });

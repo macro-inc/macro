@@ -63,6 +63,7 @@ const soupProperty: SoupProperty = {
     display_name: definition.displayName,
     data_type: 'TAG',
     is_multi_select: true,
+    specific_entity_type: null,
     is_metadata: false,
     is_system: false,
     owner: { scope: 'system' },

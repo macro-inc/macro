@@ -465,6 +465,16 @@ export function auditStandalone(websiteRoot: string) {
             : node.initializer;
         const url = staticString(literal);
         if (url !== undefined) {
+          // The sample workspace is a website-owned client route, not a public asset.
+          const element = node.parent.parent;
+          const isDemoFrame =
+            (ts.isJsxOpeningElement(element) ||
+              ts.isJsxSelfClosingElement(element)) &&
+            element.tagName.getText(source) === 'iframe' &&
+            node.name.getText(source) === 'src' &&
+            clean(url) === '/demo' &&
+            fs.existsSync(path.join(website, 'src/app/routes/RouteDemo.tsx'));
+          if (isDemoFrame) return;
           if (node.name.getText(source) === 'srcset') {
             for (const candidate of url.split(','))
               assetReference(

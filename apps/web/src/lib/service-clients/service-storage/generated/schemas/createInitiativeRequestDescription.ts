@@ -6,7 +6,7 @@
  */
 
 /**
- * Initial markdown for the description document. Not stored on the initiative; later
-edits happen in the document editor.
+ * Initial markdown for the description surface. Not stored on the initiative; later
+edits happen in the collaborative description editor.
  */
 export type CreateInitiativeRequestDescription = string | null;

@@ -1,4 +1,5 @@
 import { useEmail } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { useNonPrimaryEmailLinkIdHeader } from '@queries/email/link';
 import {
   blockSenderWithToast,
@@ -32,16 +33,25 @@ export function createThreadActionAdapter(
   const blockSender = () => {
     const senderEmail = getSenderEmail();
     if (!senderEmail) return false;
-    blockSenderWithToast(senderEmail, toHeaderLinkId(threadSource()?.link_id));
+    fireAndForget(
+      blockSenderWithToast(
+        senderEmail,
+        toHeaderLinkId(threadSource()?.link_id)
+      ),
+      'email-thread'
+    );
     return true;
   };
 
   const markSenderSignal = () => {
     const senderEmail = getSenderEmail();
     if (!senderEmail) return false;
-    markSenderSignalWithToast(
-      senderEmail,
-      toHeaderLinkId(threadSource()?.link_id)
+    fireAndForget(
+      markSenderSignalWithToast(
+        senderEmail,
+        toHeaderLinkId(threadSource()?.link_id)
+      ),
+      'email-thread'
     );
     return true;
   };
@@ -49,9 +59,12 @@ export function createThreadActionAdapter(
   const markSenderNoise = () => {
     const senderEmail = getSenderEmail();
     if (!senderEmail) return false;
-    markSenderNoiseWithToast(
-      senderEmail,
-      toHeaderLinkId(threadSource()?.link_id)
+    fireAndForget(
+      markSenderNoiseWithToast(
+        senderEmail,
+        toHeaderLinkId(threadSource()?.link_id)
+      ),
+      'email-thread'
     );
     return true;
   };

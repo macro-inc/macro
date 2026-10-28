@@ -3,6 +3,26 @@ use agent_egress::domain::model::SessionToken;
 use axum::http::StatusCode;
 
 #[test]
+fn task_tools_accept_only_a_task() {
+    let tools = toolset();
+    for name in ["link_task", "task_pull_requests"] {
+        let tool = tools.tools.get(name).unwrap();
+        assert_eq!(tool.input_schema["additionalProperties"], false, "{name}");
+        assert_eq!(
+            tool.input_schema["required"],
+            serde_json::json!(["task"]),
+            "{name}"
+        );
+    }
+    assert!(
+        tools.tools["task_pull_requests"]
+            .annotations
+            .kind
+            .read_only_hint()
+    );
+}
+
+#[test]
 fn tool_schema_accepts_only_a_url() {
     let tools = toolset();
     let tool = tools.tools.get("set_pull_request").unwrap();
@@ -19,6 +39,10 @@ use agent_session::{
         model::{AgentSessionId, SessionStatus},
         ports::{AgentSessionLogRepo, AgentSessionRepo},
         pull_request::SessionPullRequestService,
+        session_task::{
+            LinkedTask, PullRequestState, SessionTaskError, SessionTasks, TaskPullRequest,
+            TaskPullRequests,
+        },
     },
     testing::{InMemoryAgentSessionRepo, RecordingRealtime, test_agent_session},
 };
@@ -28,12 +52,73 @@ use axum::{
 };
 use tower::ServiceExt;
 
+type BoxFuture<'a, T> = std::pin::Pin<Box<dyn Future<Output = T> + Send + 'a>>;
+
+/// Answers task tools with fixed values and records which session linked what.
+#[derive(Clone, Default)]
+struct FixedTasks {
+    linked: Arc<std::sync::Mutex<Vec<(AgentSessionId, String)>>>,
+}
+
+impl SessionTasks for FixedTasks {
+    fn link_task<'a>(
+        &'a self,
+        session: AgentSessionId,
+        _owner: &'a macro_user_id::user_id::MacroUserIdStr<'static>,
+        task: &'a str,
+    ) -> BoxFuture<'a, Result<LinkedTask, SessionTaskError>> {
+        self.linked.lock().unwrap().push((session, task.to_owned()));
+        Box::pin(async move {
+            Ok(LinkedTask {
+                task_id: task.to_owned(),
+                title: "Fix the thing".into(),
+                url: format!("https://macro.com/app/task/{task}"),
+                reference: "ENG-42".into(),
+                pull_request: None,
+            })
+        })
+    }
+
+    fn task_pull_requests<'a>(
+        &'a self,
+        _owner: &'a macro_user_id::user_id::MacroUserIdStr<'static>,
+        task: &'a str,
+    ) -> BoxFuture<'a, Result<TaskPullRequests, SessionTaskError>> {
+        Box::pin(async move {
+            Ok(TaskPullRequests {
+                task_id: task.to_owned(),
+                pull_requests: vec![TaskPullRequest {
+                    url: "https://github.com/org/repo/pull/1".into(),
+                    title: Some("Fix the thing".into()),
+                    state: Some(PullRequestState::Open),
+                }],
+            })
+        })
+    }
+
+    fn link_session_pull_request<'a>(
+        &'a self,
+        _session: AgentSessionId,
+        _owner: &'a macro_user_id::user_id::MacroUserIdStr<'static>,
+    ) -> BoxFuture<'a, Result<(), SessionTaskError>> {
+        Box::pin(async { Ok(()) })
+    }
+}
+
 async fn rpc(
     app: Router,
     token: Option<&str>,
     method: &str,
-    params: serde_json::Value,
+    mut params: serde_json::Value,
 ) -> (StatusCode, serde_json::Value) {
+    if method == "tools/call"
+        && !matches!(
+            params["name"].as_str(),
+            Some("DescribeCodeTools" | "ReadCodeDocs")
+        )
+    {
+        params["arguments"]["acting_as"] = serde_json::json!("owner");
+    }
     let mut request = Request::builder()
         .method("POST")
         .uri("/mcp/internal")
@@ -74,13 +159,22 @@ async fn each_harness_gets_only_internal_tools_and_writes_only_its_session() {
         repo.set_egress_token_hash(session.id, &SessionToken::new("secret").hash())
             .await
             .unwrap();
+        let tasks = FixedTasks::default();
         let app = router(
             Arc::new(repo.clone()),
-            Arc::new(SessionPullRequestService::new(
-                repo.clone(),
-                RecordingRealtime::new(),
-            )),
             "localhost".into(),
+            InternalTools {
+                service: Arc::new(SessionPullRequestService::new(
+                    repo.clone(),
+                    RecordingRealtime::new(),
+                    Arc::new(tasks.clone()),
+                )),
+                tasks: Arc::new(tasks.clone()),
+                code_mode: None,
+                cognition: None,
+                reviews: Arc::new(OnceLock::new()),
+                gate: Arc::new(agent_inmem::domain::tool_gate::UngatedNativeTools),
+            },
         );
         assert_eq!(
             rpc(app.clone(), None, "tools/list", serde_json::json!({}))
@@ -114,6 +208,9 @@ async fn each_harness_gets_only_internal_tools_and_writes_only_its_session() {
         let instructions = initialized["result"]["instructions"].as_str().unwrap();
         assert!(instructions.contains("macro_internal.set_pull_request"));
         assert!(instructions.contains("register its URL"));
+        assert!(instructions.contains(prompt::pull_requests::READY_PULL_REQUEST));
+        assert!(instructions.contains("submit it with macro_internal.DecideReview"));
+        assert!(instructions.contains("Should I kick it off?"));
         let (status, listed) = rpc(
             app.clone(),
             Some("secret"),
@@ -122,8 +219,113 @@ async fn each_harness_gets_only_internal_tools_and_writes_only_its_session() {
         )
         .await;
         assert_eq!(status, StatusCode::OK, "{listed}");
-        assert_eq!(listed["result"]["tools"].as_array().unwrap().len(), 1);
-        assert_eq!(listed["result"]["tools"][0]["name"], "set_pull_request");
+        let mut names: Vec<&str> = listed["result"]["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|tool| tool["name"].as_str().unwrap())
+            .collect();
+        names.sort_unstable();
+        assert_eq!(
+            names,
+            [
+                "DecideReview",
+                "GetReview",
+                "PresentReview",
+                "link_task",
+                "set_pull_request",
+                "task_pull_requests"
+            ]
+        );
+        let description = |name: &str| {
+            listed["result"]["tools"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|tool| tool["name"] == name)
+                .and_then(|tool| tool["description"].as_str())
+                .unwrap()
+                .to_owned()
+        };
+        assert!(description("PresentReview").contains("Should I kick it off?"));
+        assert!(description("DecideReview").contains("Should I kick it off?"));
+        assert!(description("DecideReview").contains("not ready yet"));
+        let read_review = listed["result"]["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|tool| tool["name"] == "GetReview")
+            .unwrap();
+        assert_eq!(read_review["annotations"]["readOnlyHint"], true);
+        // The presentation tool is advertised without code mode, but startup
+        // wiring must be complete before a call can create a saved review.
+        let (_, unavailable) = rpc(
+            app.clone(),
+            Some("secret"),
+            "tools/call",
+            serde_json::json!({
+                "name": "PresentReview", "arguments": {
+                    "kind": "email", "title": "Draft", "drafts": [{"subject":"Review", "body":"Draft body", "to":[{"email":"preview@example.test"}]}]
+                },
+            }),
+        )
+        .await;
+        assert_eq!(
+            unavailable["error"]["message"],
+            "Review service is unavailable"
+        );
+        let (_, linked) = rpc(
+            app.clone(),
+            Some("secret"),
+            "tools/call",
+            serde_json::json!({
+                "name": "link_task", "arguments": {"task": "MACRO-abc"},
+            }),
+        )
+        .await;
+        assert_ne!(linked["result"]["isError"], true, "{linked}");
+        let linked: serde_json::Value =
+            serde_json::from_str(linked["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+        assert_eq!(
+            linked,
+            serde_json::json!({
+                "task_id": "MACRO-abc",
+                "title": "Fix the thing",
+                "url": "https://macro.com/app/task/MACRO-abc",
+                "reference": "ENG-42",
+                "pull_request": null,
+            })
+        );
+        assert_eq!(
+            *tasks.linked.lock().unwrap(),
+            [(session.id, "MACRO-abc".to_owned())]
+        );
+        let (_, pull_requests) = rpc(
+            app.clone(),
+            Some("secret"),
+            "tools/call",
+            serde_json::json!({
+                "name": "task_pull_requests", "arguments": {"task": "MACRO-abc"},
+            }),
+        )
+        .await;
+        let pull_requests: serde_json::Value = serde_json::from_str(
+            pull_requests["result"]["content"][0]["text"]
+                .as_str()
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            pull_requests,
+            serde_json::json!({
+                "task_id": "MACRO-abc",
+                "pull_requests": [{
+                    "url": "https://github.com/org/repo/pull/1",
+                    "title": "Fix the thing",
+                    "state": "open",
+                }],
+            })
+        );
         let (_, bad) = rpc(app.clone(), Some("secret"), "tools/call", serde_json::json!({
             "name": "set_pull_request", "arguments": {"url": "https://github.com/org/repo/pull/1", "session": other.id.as_uuid()},
         })).await;
@@ -168,3 +370,5 @@ async fn each_harness_gets_only_internal_tools_and_writes_only_its_session() {
         );
     }
 }
+
+mod code_mode;

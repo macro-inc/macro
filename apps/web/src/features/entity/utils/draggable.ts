@@ -1,4 +1,4 @@
-import { useDragOperation } from '@components/app/ItemDragAndDrop';
+import { useOptionalDragOperation } from '@components/app/ItemDragAndDrop';
 import { createSubRoot } from '@solid-primitives/rootless';
 import { createDraggable } from '@thisbeyond/solid-dnd';
 import {
@@ -6,6 +6,7 @@ import {
   createEffect,
   createUniqueId,
   getOwner,
+  mergeProps,
   onCleanup,
   untrack,
 } from 'solid-js';
@@ -18,16 +19,20 @@ export function createEntityDraggable(options: {
   /** Opt-in by the owning view; legacy rows register eagerly. */
   deferUntilInteraction?: Accessor<boolean>;
 }): (element: HTMLElement) => void {
-  const { isAltKey } = useDragOperation();
+  const operation = useOptionalDragOperation();
+  if (!operation) return () => {};
+  const { isAltKey } = operation;
   const draggableId = `${options.entity.id}-${options.splitId ?? createUniqueId()}`;
 
   const create = () => {
-    const dragData: EntityDragData = {
-      dragType: 'entity',
+    // Rows now survive entity updates. Keep the payload reactive without
+    // re-registering the draggable (which measures layout). Project the fields
+    // rather than forwarding the source store's internal symbols into DnD's store.
+    const dragData: EntityDragData = mergeProps(() => ({ ...options.entity }), {
+      dragType: 'entity' as const,
       splitId: options.splitId,
-      ...options.entity,
       operation: () => (isAltKey() ? 'copy' : 'move'),
-    };
+    });
     return createDraggable(draggableId, dragData);
   };
 

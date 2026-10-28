@@ -1,0 +1,7 @@
+name: website-infra
+description: Infra as Code for Website
+runtime: nodejs
+config:
+  pulumi:tags:
+    value:
+      pulumi:template: aws-typescript

@@ -1,0 +1,6 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <activity android:name="com.macro.mobile.ShareTestActivity" android:exported="false" />
+        <provider android:name="com.macro.mobile.ShareTestProvider" android:authorities="com.macro.mobile.test.provider" android:exported="false" android:grantUriPermissions="true" />
+    </application>
+</manifest>

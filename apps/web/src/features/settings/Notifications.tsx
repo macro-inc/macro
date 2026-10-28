@@ -1,6 +1,8 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { toast } from '@core/component/Toast/Toast';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { isTauri } from '@core/util/platform';
 import {
   EMAIL_DIGEST_NOTIFICATION_TYPE,
   NOTIFICATION_EVENT_GROUPS,
@@ -16,8 +18,9 @@ import {
   useMutedEntitiesQuery,
   useUnmuteItemMutation,
 } from '@queries/notification/unsubscribes';
+import { type as osType } from '@tauri-apps/plugin-os';
 import { ToggleSwitch } from '@ui';
-import { For, getOwner, Show } from 'solid-js';
+import { createSignal, For, getOwner, Show } from 'solid-js';
 import { MutedItemRow } from './MutedItemRow';
 import {
   SettingsCard,
@@ -30,6 +33,7 @@ export function Notifications() {
   const dialogOwner = getOwner();
   const analytics = useAnalytics();
   const platformSettings = useNotificationSettings();
+  const [pushPending, setPushPending] = createSignal(false);
   const preferencesQuery = useNotificationTypePreferencesQuery();
   const setTypeEnabled = useSetNotificationTypeEnabledMutation();
   const mutedEntitiesQuery = useMutedEntitiesQuery({ limit: 100 });
@@ -53,6 +57,27 @@ export function Notifications() {
     mutedEntities().filter((item) => !item.snoozed_until);
 
   const isTypeEnabled = (type: string) => !disabledTypes().has(type);
+
+  const togglePush = async (enabled: boolean) => {
+    if (!platformSettings.isSupported || pushPending()) return;
+    setPushPending(true);
+    try {
+      analytics.track('notifications_toggled');
+      await platformSettings.toggle(enabled);
+      if (enabled && !platformSettings.isEnabled()) {
+        toast.failure(
+          isTauri() && osType() === 'macos'
+            ? 'Open System Settings → Notifications → Macro and turn on Allow notifications.'
+            : 'Allow notification permissions, then try again.'
+        );
+      }
+    } catch (error) {
+      console.error('Could not update notification permission', error);
+      toast.failure('Could not update notifications. Try again.');
+    } finally {
+      setPushPending(false);
+    }
+  };
 
   const toggleType = async (type: string, enabled: boolean) => {
     try {
@@ -104,11 +129,13 @@ export function Notifications() {
               <SettingsRow label={pushLabel} description={pushDescription}>
                 <ToggleSwitch
                   size="md"
+                  label={pushLabel}
+                  labelClass="sr-only"
                   checked={settings().isEnabled()}
-                  onChange={(enabled) => {
-                    analytics.track('notifications_toggled');
-                    void settings().toggle(enabled);
-                  }}
+                  disabled={pushPending()}
+                  onChange={(enabled) =>
+                    fireAndForget(togglePush(enabled), 'notification-settings')
+                  }
                 />
               </SettingsRow>
             )}
@@ -162,7 +189,12 @@ export function Notifications() {
             <SettingsRow label="Could not load snoozed items">
               <button
                 type="button"
-                onClick={() => void mutedEntitiesQuery.refetch()}
+                onClick={() =>
+                  fireAndForget(
+                    mutedEntitiesQuery.refetch(),
+                    'notification-settings'
+                  )
+                }
               >
                 Retry
               </button>
@@ -191,7 +223,9 @@ export function Notifications() {
                 {(item) => (
                   <MutedItemRow
                     item={item}
-                    onUnmute={() => void unmuteEntity(item)}
+                    onUnmute={() =>
+                      fireAndForget(unmuteEntity(item), 'notification-settings')
+                    }
                     onSnooze={() =>
                       openSnoozeNotifications([item], { owner: dialogOwner })
                     }
@@ -222,7 +256,9 @@ export function Notifications() {
               {(item) => (
                 <MutedItemRow
                   item={item}
-                  onUnmute={() => void unmuteEntity(item)}
+                  onUnmute={() =>
+                    fireAndForget(unmuteEntity(item), 'notification-settings')
+                  }
                   onSnooze={() =>
                     openSnoozeNotifications([item], { owner: dialogOwner })
                   }

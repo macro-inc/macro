@@ -83,6 +83,30 @@ function InvitationStates() {
 }
 // #endregion
 
+// #region demo:descriptions
+function InvitationDescriptions() {
+  return (
+    <div class="w-full max-w-2xl">
+      <CalendarInviteCard
+        invitation={{
+          ...invitationFixture,
+          description:
+            '<p>Meeting details with <strong>bold text</strong> and <a href="https://example.com">meeting notes</a>.</p><ul><li>Review the proposal</li><li>Agree on next steps</li></ul><p>Bring your questions.</p>',
+        }}
+        timeZone="America/Los_Angeles"
+      />
+      <CalendarInviteCard
+        invitation={{
+          ...invitationFixture,
+          description: 'Email <bob@example.com> for questions\nOwner: <TBD>',
+        }}
+        timeZone="America/Los_Angeles"
+      />
+    </div>
+  );
+}
+// #endregion
+
 export default defineDoc({
   name: 'EmailInvitation',
   category: 'Data Display',
@@ -100,6 +124,12 @@ export default defineDoc({
     ],
   },
   demos: [
+    {
+      id: 'descriptions',
+      title: 'Rich HTML and plain text descriptions',
+      render: InvitationDescriptions,
+      fill: true,
+    },
     {
       id: 'interactive',
       title: 'Selected, pending, and failed responses',

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE import_target_reservation\n            SET state = 'ready', channel_id = $3, updated_at = now()\n            WHERE team_id = $1 AND source = 'slack' AND foreign_id = $2 AND state = 'pending'\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1cdb98ff007c44a911e786904d2657589b685a342dd6ce620594b6c32944f187"
+}

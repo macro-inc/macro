@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE scheduling_profile SET configuration = $2, revision = revision + 1 WHERE id = $1 AND revision = $3 RETURNING revision",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "revision",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Jsonb",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "7b4c2fbb0736aea43f2351d6c154404bbec20eb285a95fb8a346977b5ab3d52b"
+}

@@ -12,8 +12,10 @@ mod update_thread_labels;
 mod test;
 
 use crate::domain::{
-    models::Link,
-    ports::{EmailService, GmailTokenProvider},
+    models::{EmailErr, Link, ResolvedSendingInbox, SendingInboxRequest},
+    ports::{
+        EmailAttachmentSendService, EmailService, GmailTokenProvider, NoOpEmailAttachmentSender,
+    },
 };
 use ai_toolset::{AsyncToolCollection, ToolCallError};
 use base64::Engine;
@@ -26,7 +28,7 @@ pub use get_thread::{GetThread, GetThreadResponse};
 pub use list_inboxes::{ListInboxes, ListInboxesResponse, ToolInbox};
 pub use list_labels::{ListLabels, ListLabelsResponse, ToolLabel};
 pub use send_confirmed_email::SendConfirmedEmail;
-pub use send_email::{SendEmail, SendEmailResponse};
+pub use send_email::{EmailAttachment, SendEmail, SendEmailResponse};
 pub use set_sender_policy::{SetSenderPolicy, SetSenderPolicyResponse, ToolSenderPolicy};
 pub use update_thread_labels::{UpdateThreadLabels, UpdateThreadLabelsResponse};
 
@@ -100,6 +102,11 @@ pub struct EmailToolContext<
     pub entity_access_service: Arc<E>,
     /// Renders model-authored markdown into the HTML an email body carries.
     pub lexical_client: Arc<lexical_client::LexicalClient>,
+    /// Sends a `SendEmail` call, staging its Macro-document attachments
+    /// first. [`new`](Self::new) installs a sender that refuses attachments;
+    /// hosts with attachment infrastructure swap in a real one through
+    /// [`with_attachment_sender`](Self::with_attachment_sender).
+    pub attachment_sender: Arc<dyn EmailAttachmentSendService>,
 }
 
 impl<T: EmailService, G: GmailTokenProvider, E: EntityAccessService> Clone
@@ -111,6 +118,7 @@ impl<T: EmailService, G: GmailTokenProvider, E: EntityAccessService> Clone
             token_provider: self.token_provider.clone(),
             entity_access_service: self.entity_access_service.clone(),
             lexical_client: self.lexical_client.clone(),
+            attachment_sender: self.attachment_sender.clone(),
         }
     }
 }
@@ -124,6 +132,7 @@ impl<T: EmailService, G: GmailTokenProvider, E: EntityAccessService> EmailToolCo
         lexical_client: Arc<lexical_client::LexicalClient>,
     ) -> Self {
         Self {
+            attachment_sender: Arc::new(NoOpEmailAttachmentSender(service.clone())),
             service,
             token_provider,
             entity_access_service,
@@ -131,20 +140,38 @@ impl<T: EmailService, G: GmailTokenProvider, E: EntityAccessService> EmailToolCo
         }
     }
 
-    /// Resolve the user's email link from their macro ID.
+    /// Replace the sender `SendEmail` finishes through with one that can
+    /// stage attachments.
+    pub fn with_attachment_sender(
+        mut self,
+        attachment_sender: Arc<dyn EmailAttachmentSendService>,
+    ) -> Self {
+        self.attachment_sender = attachment_sender;
+        self
+    }
+
+    /// Resolve the inbox a composed email goes out from, together with every
+    /// inbox the caller can reach.
     ///
-    /// This is shared across all email tools that need an authenticated link.
-    pub async fn resolve_link(&self, macro_id: MacroUserIdStr<'_>) -> Result<Link, ToolCallError> {
+    /// The choice is the domain's; this only turns its refusals into
+    /// something the model can act on - the error already names the
+    /// connected addresses, which is exactly the correction it needs.
+    pub async fn resolve_sending_inbox(
+        &self,
+        macro_id: MacroUserIdStr<'_>,
+        request: SendingInboxRequest<'_>,
+    ) -> Result<ResolvedSendingInbox, ToolCallError> {
         self.service
-            .get_link_by_macro_id(macro_id)
+            .resolve_sending_inbox(macro_id, request)
             .await
             .map_err(|e| ToolCallError {
-                description: format!("Failed to resolve email link: {e}"),
+                description: match e {
+                    EmailErr::InboxNotFound => {
+                        "No email account is linked for this user.".to_owned()
+                    }
+                    ref other => other.to_string(),
+                },
                 internal_error: e.into(),
-            })?
-            .ok_or_else(|| ToolCallError {
-                description: "No email account linked for this user.".to_string(),
-                internal_error: anyhow::anyhow!("No email link found for user"),
             })
     }
 

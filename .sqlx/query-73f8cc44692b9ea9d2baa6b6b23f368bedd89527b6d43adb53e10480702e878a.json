@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT j.id FROM slack_import_job j WHERE j.status IN ('uploading', 'processing', 'cancelling')\n               AND (j.staging_expires_at <= clock_timestamp() + interval '1 day'\n                 OR EXISTS (SELECT 1 FROM slack_import_conversation c WHERE c.job_id = j.id\n                            AND c.status = 'importing' AND c.lease_expires_at <= clock_timestamp()))\n               ORDER BY j.staging_expires_at, j.id LIMIT $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "73f8cc44692b9ea9d2baa6b6b23f368bedd89527b6d43adb53e10480702e878a"
+}

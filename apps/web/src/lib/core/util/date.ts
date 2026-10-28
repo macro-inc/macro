@@ -2,7 +2,7 @@ import { tz } from '@date-fns/tz';
 import {
   compareAsc,
   compareDesc,
-  differenceInWeeks,
+  differenceInCalendarDays,
   isToday,
   isYesterday,
   toDate,
@@ -82,7 +82,7 @@ export const formatDate = (
     return `${shortWeekday ? 'Yest' : 'Yesterday'} at ${time}`;
   }
 
-  if (differenceInWeeks(now, date) < 1) {
+  if (differenceInCalendarDays(now, d, timeZoneOpts) < 7) {
     const weekday = d.toLocaleDateString(undefined, {
       weekday: shortWeekday ? 'short' : 'long',
       timeZone,

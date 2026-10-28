@@ -1,0 +1,70 @@
+[
+  [
+    "2fce5ee0f48a5e6e7fda6ce76f93bd8f",
+    "<w:p xmlns:p18=\"http://powertools.codeplex.com/2011\" xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\" p18:Unid=\"2fce5ee0f48a5e6e7fda6ce76f93bd8f\"><w:pPr p18:Unid=\"6bffe1b02258911b548326d8cbd1e705\"><w:pStyle w:val=\"Title\" p18:Unid=\"d7e0f112f1ab79505021fef3b858a226\" /><w:jc w:val=\"center\" p18:Unid=\"1a5013cf76e5a6f10555d1098cae58d2\" /></w:pPr><w:r p18:Unid=\"9535532cdd03112b5292cfb1dabdc1ea\"><w:t p18:Unid=\"20697ca9dd0f03a0d1367e2cd6ffeb61\">MUTUAL NON-DISCLOSURE AGREEMENT</w:t></w:r></w:p>"
+  ],
+  [
+    "c22f305294de5a5033336cc6e2e69262",
+    "<w:p xmlns:p18=\"http://powertools.codeplex.com/2011\" xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\" p18:Unid=\"c22f305294de5a5033336cc6e2e69262\"><w:r p18:Unid=\"bdc63da0a9ca60ddcf634bd7f99ff5ae\"><w:t p18:Unid=\"4cca39d5a6a1cad490ba6f129325a561\">This Mutual Non-Disclosure Agreement (the \"</w:t></w:r><w:r p18:Unid=\"8bc5bb04a8c6844fcf65b903d110dd92\"><w:rPr p18:Unid=\"77e19ee325da0800eb36102f0c2d53ec\"><w:b p18:Unid=\"5d206037f9dcbfc27a02ab926f98d3d1\" /></w:rPr><w:t p18:Unid=\"2f3289e7edc08345cfd82694e5453e87\">Agreement</w:t></w:r><w:r p18:Unid=\"bb8860f563a4c52ca809e93036d7ca78\"><w:t p18:Unid=\"c92ce229025d9ca2106526962eefbadd\">\") is entered into as of October 1, 2026 (the \"Effective Date\") by and between Acme Corporation, a Delaware corporation (\"Acme\"), and Globex Industries LLC, a New York limited liability company (\"Globex\").</w:t></w:r></w:p>"
+  ],
+  [
+    "aa4de9cb84e51e96de8d77abaa679175",
+    "<w:p xmlns:p18=\"http://powertools.codeplex.com/2011\" xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\" p18:Unid=\"aa4de9cb84e51e96de8d77abaa679175\"><w:pPr p18:Unid=\"257447f78846f611e4d10c6d51732da9\"><w:pStyle w:val=\"Heading1\" p18:Unid=\"08e451453a0a70203856c31f23fd4cc9\" /></w:pPr><w:r p18:Unid=\"e68065ab2c6353819ea8d0a7b3d1245d\"><w:t p18:Unid=\"fa0ce60450a4e12f00a5b1c4df240f18\">1. Definitions</w:t></w:r></w:p>"
+  ],
+  [
+    "8c581db9578d33f53e909791667afa7c",
+    "<w:p xmlns:p18=\"http://powertools.codeplex.com/2011\" xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\" p18:Unid=\"8c581db9578d33f53e909791667afa7c\"><w:r p18:Unid=\"07a1b236d78bb94356078a5b71576d32\"><w:t p18:Unid=\"c98af4b1ea6b0bd402825ec351163f83\">\"Confidential Information\" means any non-public information disclosed by either party to the other, whether orally, in writing, or by inspection of tangible objects, that is designated as confidential or that reasonably should be understood to be confidential given the nature of the information and the circumstances of disclosure.</w:t></w:r></w:p>"
+  ],
+  [
+    "b644bc211b7744587d873230e843970c",
+    "<w:p xmlns:p18=\"http://powertools.codeplex.com/2011\" xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\" p18:Unid=\"b644bc211b7744587d873230e843970c\"><w:r p18:Unid=\"1ae7b797f826ed7414bd9a530e766098\"><w:t p18:Unid=\"1343e1257884cb5066717e23221a8127\">\"Representatives\" means a party's directors, officers, employees, agents, and professional advisors who have a need to know the Confidential Information.</w:t></w:r></w:p>"
+  ],
+  [
+    "1ff6ad0dd3c084fc1a766dd35cb3990f",
+    "<w:p xmlns:p18=\"http://powertools.codeplex.com/2011\" xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\" p18:Unid=\"1ff6ad0dd3c084fc1a766dd35cb3990f\"><w:pPr p18:Unid=\"635c50320bfc42b30847819910141dd0\"><w:pStyle w:val=\"Heading1\" p18:Unid=\"08c6ff5462b397ae4d24cf833873e27a\" /></w:pPr><w:r p18:Unid=\"7947c632abbe39a2bfab86e7ef0f8118\"><w:t p18:Unid=\"4058a41cb6b8f9a71964c1fc3a17693a\">2. Obligations</w:t></w:r></w:p>"
+  ],
+  [
+    "30290002ed1c9f5e71a6ffda6bd74013",
+    "<w:p xmlns:p18=\"http://powertools.codeplex.com/2011\" xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\" p18:Unid=\"30290002ed1c9f5e71a6ffda6bd74013\"><w:pPr p18:Unid=\"a8e5e83105198092f39f6fc79ebdc1f1\"><w:pStyle w:val=\"ListNumber\" p18:Unid=\"177455baf2c0ca5594f5eb48a16208db\" /></w:pPr><w:r p18:Unid=\"0f61ad860b9baf7ac412bc7bc636a067\"><w:t p18:Unid=\"76189b298256bae0202a0aa3ff73516e\">Each party shall hold the other party's Confidential Information in strict confidence and shall not disclose it to any third party other than its Representatives.</w:t></w:r></w:p>"
+  ],
+  [
+    "441586fe6ca21c264692b15314488902",
+    "<w:p xmlns:p18=\"http://powertools.codeplex.com/2011\" xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\" p18:Unid=\"441586fe6ca21c264692b15314488902\"><w:pPr p18:Unid=\"d68b2fc876c196c8a9171d1de40f6250\"><w:pStyle w:val=\"ListNumber\" p18:Unid=\"d4ce5f9bb8eb418dcbdbe34be127153e\" /></w:pPr><w:r p18:Unid=\"77a929b989f5308c69f9bfdb648e98f8\"><w:t p18:Unid=\"9e316f1599bc1571cfc5ed241471c9fb\">Each party shall use the Confidential Information solely for the purpose of evaluating a potential business relationship between the parties.</w:t></w:r></w:p>"
+  ],
+  [
+    "6f4c9455c90bc2c588003b2fa5b49c4d",
+    "<w:p xmlns:p18=\"http://powertools.codeplex.com/2011\" xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\" p18:Unid=\"6f4c9455c90bc2c588003b2fa5b49c4d\"><w:pPr p18:Unid=\"f0ebdd965f14978201b7d086bed4f775\"><w:pStyle w:val=\"ListNumber\" p18:Unid=\"d089984133e2827316ab230b88a64efe\" /></w:pPr><w:r p18:Unid=\"73724b74d281cfa03d93510131e0cf19\"><w:t p18:Unid=\"bdf67c17b08648dcde25072471310ab4\">Each party shall protect the Confidential Information using at least the same degree of care it uses to protect its own confidential information, but no less than reasonable care.</w:t></w:r></w:p>"
+  ],
+  [
+    "7f714b6de4267dcaabb6d4145fbda441",
+    "<w:p xmlns:p18=\"http://powertools.codeplex.com/2011\" xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\" p18:Unid=\"7f714b6de4267dcaabb6d4145fbda441\"><w:pPr p18:Unid=\"2726b0050f4fd9e9d87bb8474d1e79f4\"><w:pStyle w:val=\"Heading1\" p18:Unid=\"f2f8e4f6539523b3852ef3623dd342f3\" /></w:pPr><w:r p18:Unid=\"4e273431b2ee61b727c461cd9a4e6ccd\"><w:t p18:Unid=\"59c304ffd455c1bacd1ea452f8233b66\">3. Term</w:t></w:r></w:p>"
+  ],
+  [
+    "a66e68f38f4a2769298856239ea1df69",
+    "<w:p xmlns:p18=\"http://powertools.codeplex.com/2011\" xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\" p18:Unid=\"a66e68f38f4a2769298856239ea1df69\"><w:r p18:Unid=\"151ea49c310ca133f550ef8a79c507b6\"><w:t p18:Unid=\"4c084de930019146b6285695c0c4cf50\">This Agreement shall remain in effect for a period of two (2) years from the Effective Date, unless terminated earlier by either party upon thirty (30) days' written notice.</w:t></w:r></w:p>"
+  ],
+  [
+    "1bd7c33367bcb0a7092cca75475d515d",
+    "<w:p xmlns:p18=\"http://powertools.codeplex.com/2011\" xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\" p18:Unid=\"1bd7c33367bcb0a7092cca75475d515d\"><w:pPr p18:Unid=\"b9ead298e683f9449b94d21db8840302\"><w:pStyle w:val=\"Heading1\" p18:Unid=\"1adf178f3b85dbadca62b5d99e657c55\" /></w:pPr><w:r p18:Unid=\"3de042738bdd3f6d55660dfb75e9aaee\"><w:t p18:Unid=\"3f2ca622f830763de479cf247abc5e0f\">4. Fees</w:t></w:r></w:p>"
+  ],
+  [
+    "c8d7175430d2890a576660d37129f163",
+    "<w:tbl xmlns:p18=\"http://powertools.codeplex.com/2011\" xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\" p18:Unid=\"c8d7175430d2890a576660d37129f163\"><w:tblPr p18:Unid=\"bfa7142d5d13ed22ec2f7badb2c49a6d\"><w:tblStyle w:val=\"TableGrid\" p18:Unid=\"10b1abf97f1db7e9fda9b7a4ff907dcd\" /><w:tblW w:type=\"auto\" w:w=\"0\" p18:Unid=\"2416c2808c70796b87ba357cdd42486c\" /><w:tblLook w:firstColumn=\"1\" w:firstRow=\"1\" w:lastColumn=\"0\" w:lastRow=\"0\" w:noHBand=\"0\" w:noVBand=\"1\" w:val=\"04A0\" p18:Unid=\"bb1f972d0414df7a6bb59902f45b26b9\" /></w:tblPr><w:tblGrid p18:Unid=\"4566ed2ef7aad5dcc4102608ec9bf95f\"><w:gridCol w:w=\"2880\" p18:Unid=\"c1a7a14d14eef6efc71d21cf6821cce1\" /><w:gridCol w:w=\"2880\" p18:Unid=\"badf580ccc81c190466c61ca211e3dd1\" /><w:gridCol w:w=\"2880\" p18:Unid=\"6401e8768088cbc5a5d0ddb307d648af\" /></w:tblGrid><w:tr p18:Unid=\"e8bdb46a6049b85bf736a116172aa698\"><w:tc p18:Unid=\"7e5725c56b3c6a509d2e7f94eb039700\"><w:tcPr p18:Unid=\"e468ba69ee23284dfe70f8f7c01e0b84\"><w:tcW w:type=\"dxa\" w:w=\"2880\" p18:Unid=\"e595f0938b7323cb4da4c5b4ce26ff82\" /></w:tcPr><w:p p18:Unid=\"ae910e9edc036835c48474c2a6382552\"><w:r p18:Unid=\"9189b8da73c0c7ee52e6fbd329c237c1\"><w:t p18:Unid=\"3f872fc0da6f954583df8b94cff5e3fc\">Item</w:t></w:r></w:p></w:tc><w:tc p18:Unid=\"2dd410b9b660c7d324f4fd9b821728d9\"><w:tcPr p18:Unid=\"25ca6a89b4d3ee57894d6964f500084a\"><w:tcW w:type=\"dxa\" w:w=\"2880\" p18:Unid=\"dc075b6186c30a6f31b50f5fb99cfd61\" /></w:tcPr><w:p p18:Unid=\"11d0afad4e25d40affdee85fff1a2b65\"><w:r p18:Unid=\"61fa2d379f50111d8441e70bd7470430\"><w:t p18:Unid=\"9305d1dd549fa5e22b54dc43d33a750b\">Amount</w:t></w:r></w:p></w:tc><w:tc p18:Unid=\"cd1109d22610639c5b2e9bd4ae570c7a\"><w:tcPr p18:Unid=\"f14449534ce663404d7d939448e51334\"><w:tcW w:type=\"dxa\" w:w=\"2880\" p18:Unid=\"9bd58bb12b4d561bf796e8786fae0629\" /></w:tcPr><w:p p18:Unid=\"18a93ab272686d19898af09ccdb2630d\"><w:r p18:Unid=\"4c8659201da87c1eed27f7883faa0f60\"><w:t p18:Unid=\"f9664363c3c9f48afdd98f37d60ee8f9\">Due</w:t></w:r></w:p></w:tc></w:tr><w:tr p18:Unid=\"0ccf61cd16ddae9157a69e40b104eac2\"><w:tc p18:Unid=\"53b3533e536d099b8499e0bb6378d9f3\"><w:tcPr p18:Unid=\"05f93bfd83018aa79698cb8586158520\"><w:tcW w:type=\"dxa\" w:w=\"2880\" p18:Unid=\"b45f017b368349886dfc2c9349fc07cc\" /></w:tcPr><w:p p18:Unid=\"151d2af1899941bf54c8bc5e349c702c\"><w:r p18:Unid=\"4e179750859b2524a146a3af13bcc722\"><w:t p18:Unid=\"cbd300bd49401942ba8dc6975c45dcd1\">Retainer</w:t></w:r></w:p></w:tc><w:tc p18:Unid=\"5b1f231bc6b184f28049076c504e4d8f\"><w:tcPr p18:Unid=\"999c11c8b06b5111df1fd6be3b78a85b\"><w:tcW w:type=\"dxa\" w:w=\"2880\" p18:Unid=\"851ff1ae95ce09fd290f489a78e58538\" /></w:tcPr><w:p p18:Unid=\"e24b7f171f42eee25a43b5da2cc4488c\"><w:r p18:Unid=\"2d6eec87d6272196ab84f1b3493d7039\"><w:t p18:Unid=\"e14ce6270388e0cc0ae924fdb6566882\">$5,000</w:t></w:r></w:p></w:tc><w:tc p18:Unid=\"f765cecb87d2cd42a046af82e92eebfc\"><w:tcPr p18:Unid=\"a084d9ca22d7f4fa04060f6743d32c40\"><w:tcW w:type=\"dxa\" w:w=\"2880\" p18:Unid=\"c42d9d88e197b49dbb2ce21bdde445a4\" /></w:tcPr><w:p p18:Unid=\"836adb85a6a67b4f28c928d45cd80c4c\"><w:r p18:Unid=\"677caa1193a2a6af4014a78efe467339\"><w:t p18:Unid=\"ba3b4fb9880ae3ccfffcbe8755b783a8\">On signing</w:t></w:r></w:p></w:tc></w:tr><w:tr p18:Unid=\"e8c370dc2c43583b20481cfb2b918429\"><w:tc p18:Unid=\"39010edcc6d54555dd8c656c367ffb06\"><w:tcPr p18:Unid=\"30c9a5e4bcfa965e857d337553b178aa\"><w:tcW w:type=\"dxa\" w:w=\"2880\" p18:Unid=\"a4ed5b69c304f8c8650ee1692cd11296\" /></w:tcPr><w:p p18:Unid=\"cb335264df2e3c7b6bb7d463ae8ae8b8\"><w:r p18:Unid=\"7aa08e657673ad50e2497b11a79ab512\"><w:t p18:Unid=\"1358c3da07616c7e3a8cebd7131fd978\">Monthly review</w:t></w:r></w:p></w:tc><w:tc p18:Unid=\"d5a84d32439852fc15eb385ac76aff8e\"><w:tcPr p18:Unid=\"534e72d9454a50a2d8bf4cca51241731\"><w:tcW w:type=\"dxa\" w:w=\"2880\" p18:Unid=\"f033e60591c9b1eb44763a57a735cf5b\" /></w:tcPr><w:p p18:Unid=\"7d9f15f074faeca01bea33e2a0d48182\"><w:r p18:Unid=\"c2ec2d10dc17d7647de051574d81d77e\"><w:t p18:Unid=\"e775ce69cc548d2bb8121dab0c28b06a\">$1,200</w:t></w:r></w:p></w:tc><w:tc p18:Unid=\"2f65ebbcfd15e3adfd3bb021c639bc19\"><w:tcPr p18:Unid=\"265d14a97193d030eca743bb652fdb83\"><w:tcW w:type=\"dxa\" w:w=\"2880\" p18:Unid=\"20ef1025880099e300f1f22893f9855b\" /></w:tcPr><w:p p18:Unid=\"ad5cd1be987f0e1bfd3eb4cb23cab87d\"><w:r p18:Unid=\"5cdd4412649669f43465d5e6b064186c\"><w:t p18:Unid=\"e156ca704de67545f016d780a71d02b7\">Net 30</w:t></w:r></w:p></w:tc></w:tr></w:tbl>"
+  ],
+  [
+    "0d30dc372ec779d1a7b697a2d237edb8",
+    "<w:p xmlns:p18=\"http://powertools.codeplex.com/2011\" xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\" p18:Unid=\"0d30dc372ec779d1a7b697a2d237edb8\"><w:pPr p18:Unid=\"9708b03b1c4fc6e8240773fc9ccdfd33\"><w:pStyle w:val=\"Heading1\" p18:Unid=\"21773a73b9ae85aff1a18d4b427ba7c8\" /></w:pPr><w:r p18:Unid=\"e6a715b6557bceb1bb534f7eae027930\"><w:t p18:Unid=\"038cd40a06a1f9031ddc2de5e2b29a5e\">5. Governing Law</w:t></w:r></w:p>"
+  ],
+  [
+    "f63eca4bf1bef56098b8d6979c18dfa5",
+    "<w:p xmlns:p18=\"http://powertools.codeplex.com/2011\" xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\" p18:Unid=\"f63eca4bf1bef56098b8d6979c18dfa5\"><w:r p18:Unid=\"60492db8f4c0153e11b66dbf352b2f9b\"><w:t p18:Unid=\"33ad7692939d0f8b5a7c31355bfaa010\">This Agreement shall be governed by and construed in accordance with the laws of the State of New York, without regard to its conflict of laws principles.</w:t></w:r></w:p>"
+  ],
+  [
+    "933923954acd4ae619d469db0dd3a51f",
+    "<w:p xmlns:p18=\"http://powertools.codeplex.com/2011\" xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\" p18:Unid=\"933923954acd4ae619d469db0dd3a51f\" />"
+  ],
+  [
+    "bbc3cea5765a3a52be95c9d9261e2a4d",
+    "<w:p xmlns:p18=\"http://powertools.codeplex.com/2011\" xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\" p18:Unid=\"bbc3cea5765a3a52be95c9d9261e2a4d\"><w:r p18:Unid=\"69a11ac5ca1134771c25ba5a87fb4341\"><w:t p18:Unid=\"e476977aa4adb0ddb02af10a343c72ea\">IN WITNESS WHEREOF, the parties have executed this Agreement as of the Effective Date.</w:t></w:r></w:p>"
+  ]
+]

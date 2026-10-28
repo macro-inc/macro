@@ -1,5 +1,13 @@
 #![cfg(not(target_arch = "wasm32"))]
 
+#[path = "shared_conformance/calendar_points.rs"]
+mod calendar_points;
+
+use cache_core::calendar::{
+    CalendarCommit, CalendarFreshness, CalendarLinkWatermark, CalendarRangeRequest,
+    CalendarRangeStorage, CalendarReplacedEvent, CalendarSpan, CalendarSpanKind, CalendarSyncState,
+    CalendarWatermarkUpdate,
+};
 use cache_core::normalize::RecordUpdates;
 use cache_core::queue::{
     MutationClaimRequest, MutationClaimToken, MutationRequest, NewQueuedMutation,
@@ -12,7 +20,7 @@ use cache_turso::{TursoMemoryDatabase, TursoStorage, TursoStorageCloseOutcome};
 use pollster::block_on;
 
 trait BackendFactory: Sized {
-    type Backend: Storage;
+    type Backend: CalendarRangeStorage;
 
     fn create() -> (Self, Self::Backend);
     fn reopen(&mut self, storage: Self::Backend) -> Self::Backend;
@@ -43,7 +51,10 @@ impl BackendFactory for TursoFactory {
     type Backend = TursoStorage;
 
     fn create() -> (Self, Self::Backend) {
-        let database = TursoMemoryDatabase::new("shared-conformance.db");
+        // Turso tracks open databases by path, even with separate MemoryIO
+        // instances. Concurrent contracts must own distinct physical names.
+        let database =
+            TursoMemoryDatabase::new(format!("shared-conformance-{}.db", uuid::Uuid::now_v7()));
         let storage = database.open("shared-conformance").unwrap();
         (Self { database }, storage)
     }
@@ -106,6 +117,7 @@ fn fully_populated_queued() -> NewQueuedMutation {
                 identity: Some("identity-witness".into()),
             },
             attempt_count: 7,
+            server_failure_count: 3,
             next_attempt_at_ms: Some(-2),
             lease_owner: Some("expired-owner".into()),
             lease_generation: 11,
@@ -221,7 +233,7 @@ async fn search_projection_contract<S: Storage>(storage: &mut S) {
         .await
         .unwrap();
     let loaded = storage
-        .load_search_documents(SearchProfile::QuickAccessV1)
+        .load_search_documents(SearchProfile::QuickAccessV1, "document")
         .await
         .unwrap();
     assert!(
@@ -242,7 +254,7 @@ async fn search_projection_contract<S: Storage>(storage: &mut S) {
         .unwrap();
     assert!(
         storage
-            .load_search_documents(SearchProfile::QuickAccessV1)
+            .load_search_documents(SearchProfile::QuickAccessV1, "document")
             .await
             .unwrap()
             .iter()
@@ -343,7 +355,7 @@ async fn queue_contract<S: Storage>(storage: &mut S) {
     let absent = token("absent", 1);
     assert!(
         !storage
-            .defer_mutation(999, absent.clone(), 2, "absent".into())
+            .defer_mutation(999, absent.clone(), 2, "absent".into(), true)
             .await
             .unwrap()
     );
@@ -397,6 +409,7 @@ async fn queue_contract<S: Storage>(storage: &mut S) {
                 token("runner-a", first_claim.lease_generation),
                 20,
                 "stale".into(),
+                true,
             )
             .await
             .unwrap()
@@ -414,6 +427,7 @@ async fn queue_contract<S: Storage>(storage: &mut S) {
                 token("runner-b", expired_reclaim.lease_generation),
                 20,
                 "retry".into(),
+                true,
             )
             .await
             .unwrap()
@@ -471,6 +485,7 @@ async fn queue_contract<S: Storage>(storage: &mut S) {
                 token("runner-d", second_claim.lease_generation),
                 30,
                 "second retry".into(),
+                false,
             )
             .await
             .unwrap()
@@ -527,6 +542,58 @@ async fn queue_contract<S: Storage>(storage: &mut S) {
     );
 }
 
+async fn retry_budget_contract<F: BackendFactory>(
+    factory: &mut F,
+    mut storage: F::Backend,
+) -> F::Backend {
+    let id = storage
+        .enqueue_mutation(queued("RetryBudget"))
+        .await
+        .unwrap();
+    for (index, (server_failure, expected_count)) in
+        [(true, 1), (false, 1), (true, 2)].into_iter().enumerate()
+    {
+        let now = index as i64;
+        let claimed = storage
+            .claim_next_mutation(claim_request("runner", now, now + 1))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(claimed.queued.id, id);
+        assert_eq!(claimed.queued.mutation.attempt_count, index as u32 + 1);
+        let claim = token("runner", claimed.lease_generation);
+        assert!(
+            storage
+                .defer_mutation(id, claim.clone(), now + 1, "retry".into(), server_failure)
+                .await
+                .unwrap()
+        );
+        // A duplicate result must not charge the same attempt twice.
+        assert!(
+            !storage
+                .defer_mutation(id, claim, now + 1, "duplicate".into(), true)
+                .await
+                .unwrap()
+        );
+        storage = factory.reopen(storage);
+        let queue = storage.load_mutation_queue().await.unwrap();
+        assert_eq!(queue[0].mutation.server_failure_count, expected_count);
+    }
+    let claimed = storage
+        .claim_next_mutation(claim_request("next-tab", 3, 4))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(claimed.queued.mutation.server_failure_count, 2);
+    assert!(
+        storage
+            .discard_mutation(id, token("next-tab", claimed.lease_generation))
+            .await
+            .unwrap()
+    );
+    storage
+}
+
 async fn clear_contract<S: Storage>(storage: &mut S) {
     let before_clear = storage.enqueue_mutation(queued("Clear")).await.unwrap();
     storage.clear().await.unwrap();
@@ -562,6 +629,163 @@ async fn clear_contract<S: Storage>(storage: &mut S) {
     assert!(storage.load_mutation_queue().await.unwrap().is_empty());
 }
 
+fn occurrence(event: &str, link: &str, time: &[(&str, &str)]) -> Record {
+    let mut record = Record::default();
+    for (field, value) in [
+        (
+            "__typename",
+            CacheValue::String("GraphqlCalendarOccurrence".into()),
+        ),
+        ("eventId", CacheValue::String(event.into())),
+        ("linkId", CacheValue::String(link.into())),
+        ("isCancelled", CacheValue::Bool(false)),
+        (
+            "time",
+            CacheValue::Object(
+                time.iter()
+                    .map(|(field, value)| {
+                        ((*field).to_owned(), CacheValue::String((*value).into()))
+                    })
+                    .collect(),
+            ),
+        ),
+    ] {
+        record.fields.insert(field.into(), value);
+    }
+    record
+}
+
+async fn calendar_contract<F: BackendFactory>(
+    factory: &mut F,
+    mut storage: F::Backend,
+) -> F::Backend {
+    // 2026-10-05T00:00:00Z through 2026-10-12, and the same dates for all-day rows.
+    let week = CalendarRangeRequest {
+        start_ms: 1_791_158_400_000,
+        end_ms: 1_791_763_200_000,
+        start_day: 20_731,
+        end_day: 20_738,
+        event_key: None,
+    };
+    let standup = key("GraphqlCalendarOccurrence:e1:2026-10-06T09:00:00+00:00");
+    let moved = key("GraphqlCalendarOccurrence:e1:2026-10-07T09:00:00+00:00");
+    let holiday = key("GraphqlCalendarOccurrence:e2:2026-10-09");
+    let other_link = key("GraphqlCalendarOccurrence:e3:2026-10-08T09:00:00+00:00");
+    let timed = |starts_at, ends_at| {
+        [
+            ("__typename", "GraphqlTimedEventTime"),
+            ("startsAt", starts_at),
+            ("endsAt", ends_at),
+        ]
+    };
+    storage
+        .put_batch(vec![
+            (
+                standup.clone(),
+                occurrence(
+                    "e1",
+                    "l1",
+                    &timed("2026-10-06T09:00:00+00:00", "2026-10-06T09:30:00+00:00"),
+                ),
+            ),
+            (
+                moved.clone(),
+                occurrence(
+                    "e1",
+                    "l1",
+                    &timed("2026-10-07T09:00:00+00:00", "2026-10-07T09:30:00+00:00"),
+                ),
+            ),
+            (
+                holiday.clone(),
+                occurrence(
+                    "e2",
+                    "l1",
+                    &[
+                        ("__typename", "GraphqlAllDayEventTime"),
+                        ("startDate", "2026-10-09"),
+                        ("endDate", "2026-10-10"),
+                    ],
+                ),
+            ),
+            (
+                other_link.clone(),
+                occurrence(
+                    "e3",
+                    "l2",
+                    &timed("2026-10-08T09:00:00+00:00", "2026-10-08T10:00:00+00:00"),
+                ),
+            ),
+        ])
+        .await
+        .unwrap();
+    let outcome = storage
+        .calendar_commit(&CalendarCommit {
+            coverage: week.spans().to_vec(),
+            replaced_events: vec![CalendarReplacedEvent {
+                event_key: key("GraphqlCalendarEvent:e1"),
+                occurrence_keys: vec![standup.clone()],
+            }],
+            removed_link_ids: vec!["l2".into()],
+            watermark: Some(CalendarWatermarkUpdate::Merge {
+                links: vec![CalendarLinkWatermark {
+                    link_id: "l1".into(),
+                    seq: 4,
+                }],
+            }),
+            freshness: Some(CalendarFreshness::Fresh),
+            ..CalendarCommit::default()
+        })
+        .await
+        .unwrap();
+    let mut expected_deleted = vec![moved, other_link];
+    expected_deleted.sort();
+    assert_eq!(outcome.deleted_keys, expected_deleted);
+
+    let storage = factory.reopen(storage);
+    let mut snapshot = storage.query_calendar_ranges(&week).await.unwrap();
+    snapshot
+        .rows
+        .sort_by(|left, right| left.record_key.cmp(&right.record_key));
+    assert_eq!(
+        snapshot
+            .rows
+            .iter()
+            .map(|row| (row.record_key.clone(), row.span))
+            .collect::<Vec<_>>(),
+        [
+            (
+                standup,
+                CalendarSpan {
+                    kind: CalendarSpanKind::Timed,
+                    start: 1_791_277_200_000,
+                    end: 1_791_279_000_000,
+                }
+            ),
+            (
+                holiday,
+                CalendarSpan {
+                    kind: CalendarSpanKind::AllDay,
+                    start: 20_735,
+                    end: 20_736,
+                }
+            ),
+        ]
+    );
+    assert_eq!(snapshot.coverage, week.spans());
+    assert_eq!(
+        snapshot.sync,
+        CalendarSyncState {
+            watermark: Some(vec![CalendarLinkWatermark {
+                link_id: "l1".into(),
+                seq: 4,
+            }]),
+            freshness: CalendarFreshness::Fresh,
+        }
+    );
+    storage
+}
+
 async fn common_contract<F: BackendFactory>(
     factory: &mut F,
     mut storage: F::Backend,
@@ -570,7 +794,22 @@ async fn common_contract<F: BackendFactory>(
     search_projection_contract(&mut storage).await;
     let mut storage = reopen_contract(factory, storage).await;
     queue_contract(&mut storage).await;
+    let storage = retry_budget_contract(factory, storage).await;
+    let mut storage = calendar_contract(factory, storage).await;
     clear_contract(&mut storage).await;
+    assert_eq!(
+        storage
+            .query_calendar_ranges(&CalendarRangeRequest {
+                start_ms: 0,
+                end_ms: i64::MAX,
+                start_day: 0,
+                end_day: i64::MAX,
+                event_key: None,
+            })
+            .await
+            .unwrap(),
+        Default::default()
+    );
     storage
 }
 

@@ -7,6 +7,11 @@ export const SPREADSHEET_LORO_SCHEMA = schema({
   spreadsheetSheetMetadata: schema.LoroMap(
     {} as Record<string, ReturnType<typeof schema.String>>
   ),
+  // One entry per table, keyed by sheet and table id, so collaborators can
+  // change different tables of a sheet at once.
+  spreadsheetTables: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.String>>
+  ),
   spreadsheetSheetNames: schema.LoroMap(
     {} as Record<string, ReturnType<typeof schema.String>>
   ),
@@ -73,6 +78,9 @@ export const SPREADSHEET_LORO_SCHEMA = schema({
   spreadsheetWrap: schema.LoroMap(
     {} as Record<string, ReturnType<typeof schema.Boolean>>
   ),
+  spreadsheetCheckboxes: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.Boolean>>
+  ),
   spreadsheetBorderTop: schema.LoroMap(
     {} as Record<string, ReturnType<typeof schema.Boolean>>
   ),
@@ -100,6 +108,9 @@ export const SPREADSHEET_LORO_SCHEMA = schema({
   spreadsheetVerticalAlign: schema.LoroMap(
     {} as Record<string, ReturnType<typeof schema.String>>
   ),
+  spreadsheetIndent: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.Number>>
+  ),
   spreadsheetFontSize: schema.LoroMap(
     {} as Record<string, ReturnType<typeof schema.Number>>
   ),
@@ -111,5 +122,13 @@ export const SPREADSHEET_LORO_SCHEMA = schema({
   ),
   spreadsheetRowAdditions: schema.LoroMap(
     {} as Record<string, ReturnType<typeof schema.Number>>
+  ),
+  spreadsheetColumnAdditions: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.Number>>
+  ),
+  // Images drawn over sheets, as data URLs keyed by a hash of their content,
+  // so each is stored once and sheet metadata stays small.
+  spreadsheetImages: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.String>>
   ),
 });

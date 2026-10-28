@@ -1,6 +1,11 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
-import { PopupPreview } from '@core/component/DocumentPreview';
+import {
+  type DocumentPreviewContentProps,
+  PopupPreview,
+} from '@core/component/DocumentPreview';
+import { DocumentPreviewSheet } from '@core/component/DocumentPreviewSheet';
 import { HoverCard } from '@core/component/HoverCard';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { useNativeSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import {
@@ -14,7 +19,7 @@ import {
   COMMAND_PRIORITY_NORMAL,
   KEY_ENTER_COMMAND,
 } from 'lexical';
-import { onMount, Show, Suspense, useContext } from 'solid-js';
+import { createSignal, onMount, Show, Suspense, useContext } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import { autoRegister } from '../../plugins';
 import { AgentSessionMentionLabel } from './AgentSessionMentionLabel';
@@ -44,6 +49,11 @@ export function AgentSessionMention(props: AgentSessionMentionDecoratorProps) {
     const current = preview();
     return current?.access === 'access' ? current.data : undefined;
   };
+  // A deleted or private session has nothing to open; its card says which.
+  const isUnavailable = () => {
+    const access = preview()?.access;
+    return access === 'no_access' || access === 'does_not_exist';
+  };
   const label = () => {
     const current = preview();
     if (current?.access === 'no_access') return 'Private agent session';
@@ -54,7 +64,14 @@ export function AgentSessionMention(props: AgentSessionMentionDecoratorProps) {
   const selected = () =>
     wrapper?.selection?.type === 'node' &&
     wrapper.selection.nodeKeys.has(props.key);
+  const [previewCardOpen, setPreviewCardOpen] = createSignal(false);
+  const [previewSheetOpen, setPreviewSheetOpen] = createSignal(false);
   const open = (event: MouseEvent | KeyboardEvent | null) => {
+    if (isUnavailable()) {
+      if (isTouchDevice()) setPreviewSheetOpen(true);
+      else setPreviewCardOpen(true);
+      return;
+    }
     if (!session()) return;
     layout?.openWithSplit(
       { type: 'agent', id: props.id },
@@ -71,7 +88,7 @@ export function AgentSessionMention(props: AgentSessionMentionDecoratorProps) {
       wrapper.editor.registerCommand(
         KEY_ENTER_COMMAND,
         (event) => {
-          if (!selected() || !session()) return false;
+          if (!selected() || !(session() || isUnavailable())) return false;
           open(event);
           return true;
         },
@@ -92,46 +109,63 @@ export function AgentSessionMention(props: AgentSessionMentionDecoratorProps) {
       if ($isAgentSessionMentionNode(node)) node.setExpanded(expanded);
     });
   };
+  // One set of preview props for the hover card and the touch sheet.
+  const previewContentProps: DocumentPreviewContentProps = {
+    get documentInfo(): DocumentPreviewContentProps['documentInfo'] {
+      return { id: props.id, type: 'agent', params: {}, isOpenable: true };
+    },
+    get previewInfo() {
+      return {
+        isPreviewable: false,
+        showPreview: canExpand(),
+        handlePreviewToggle: () => setExpanded(true),
+      };
+    },
+  };
 
   return (
     <Show
       when={props.expanded && session()}
       fallback={
-        <HoverCard
-          disabled={!session()}
-          trigger={
-            <span
-              data-agent-session-mention="true"
-              data-agent-session-id={props.id}
-              data-agent-session-label={label()}
-              class="py-0.5 rounded-xs hover:bg-hover focus:bg-active"
-              classList={{ 'bg-active': selected() }}
-              title={label()}
-              {...navigation}
-            >
-              <AgentSessionMentionLabel label={label()} />
-            </span>
-          }
-          content={
-            <Suspense>
-              <PopupPreview
-                mouseEnter={() => {}}
-                mouseLeave={() => {}}
-                documentInfo={{
-                  id: props.id,
-                  type: 'agent',
-                  params: {},
-                  isOpenable: true,
-                }}
-                previewInfo={{
-                  isPreviewable: false,
-                  showPreview: canExpand(),
-                  handlePreviewToggle: () => setExpanded(true),
-                }}
-              />
-            </Suspense>
-          }
-        />
+        <>
+          <Show
+            when={isTouchDevice() && (isUnavailable() || previewSheetOpen())}
+          >
+            <DocumentPreviewSheet
+              open={previewSheetOpen()}
+              onOpenChange={setPreviewSheetOpen}
+              {...previewContentProps}
+            />
+          </Show>
+          <HoverCard
+            disabled={!session() && !isUnavailable()}
+            open={previewCardOpen()}
+            onOpenChange={setPreviewCardOpen}
+            keepOpenOnTriggerPress={isUnavailable()}
+            trigger={
+              <span
+                data-agent-session-mention="true"
+                data-agent-session-id={props.id}
+                data-agent-session-label={label()}
+                class="py-0.5 rounded-xs hover:bg-hover focus:bg-active"
+                classList={{ 'bg-active': selected() }}
+                title={label()}
+                {...navigation}
+              >
+                <AgentSessionMentionLabel label={label()} />
+              </span>
+            }
+            content={
+              <Suspense>
+                <PopupPreview
+                  mouseEnter={() => {}}
+                  mouseLeave={() => {}}
+                  {...previewContentProps}
+                />
+              </Suspense>
+            }
+          />
+        </>
       }
     >
       <div class="block w-full" data-agent-session-expanded="true">

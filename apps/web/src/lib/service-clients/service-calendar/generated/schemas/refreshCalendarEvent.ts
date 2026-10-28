@@ -5,8 +5,11 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { RefreshCalendarEventOneOf } from './refreshCalendarEventOneOf';
+import type { RefreshCalendarEventOneOfThree } from './refreshCalendarEventOneOfThree';
 
 /**
  * Realtime signal that a connected inbox's calendar projection changed.
  */
-export type RefreshCalendarEvent = RefreshCalendarEventOneOf;
+export type RefreshCalendarEvent =
+  | RefreshCalendarEventOneOf
+  | RefreshCalendarEventOneOfThree;

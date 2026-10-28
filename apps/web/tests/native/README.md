@@ -46,8 +46,10 @@ file-backed native Turso cache.
 
 Fixtures replace the **remote services**, not the client cache. `fixtures/server.ts`
 serves the normal `/dss/items/soup/graphql` path, executes the app's generated
-queries against `static_assets/schema.graphql`, and returns three pages of Mail
-metadata. Projection capsules reuse the existing Rust-encoded fixtures.
+queries against `static_assets/schema.graphql`, and returns two pages each of
+signal and noise Mail metadata. Metadata requests must carry a recency cutoff,
+but fixture timestamps are fixed, so the server does not apply it. Projection
+capsules reuse the existing Rust-encoded fixtures.
 Unrelated app-chrome reads return explicit empty resources. Unexpected requests,
 unknown cursors and GraphQL validation errors are recorded and fail the smoke
 suite; nothing forwards to hosted services. This does not test the Rust HTTP
@@ -61,12 +63,53 @@ The six threads are IDs ending in 4, 6, 8, 9, 10, and 12:
 | Offline Noise | 4, 8, 10 |
 | Offline All | 4, 6, 8, 9, 10, 12 |
 
-Only the initial Signal view may receive an online Mail response. The other rows
-arrive via metadata backfill. Tests wait for the real three-page completion
-checkpoint, then read the six normalized records through native IPC before
-changing filters. Tab changes use the app's public numeric hotkeys (2 / 7) and
-verify `aria-current` before checking results. Assertions compare exact row
-identities, not just counts.
+Only the initial Signal view and its sidebar unread badge may receive an online
+Mail response. The badge gets only unread Signal rows; Noise and All remain
+unavailable online. The other rows arrive via metadata backfill. Tests wait for
+the real signal and noise completion checkpoints (four pages), then read the six
+normalized records through native IPC before changing filters. Tab changes
+activate the labeled sidebar buttons with DOM `click()` and verify
+`aria-current` before checking results. This exercises the real UI handlers, but
+not pointer hit-testing: WebKitWebDriver's native clicks can land on an adjacent
+row in the Tauri window, and All is now beyond the numeric tab shortcuts.
+Assertions compare exact row identities, not just counts.
+
+## Native external-link regression
+
+After rebuilding the native binary, run `bun run native:e2e:links` inside the
+same `.#tauri-e2e` shell. This focused suite serves a small HTML fixture instead
+of the full frontend; it uses the real app's window creation, navigation plugin,
+Tauri event IPC, and Linux WebKit. No login, backend, or frontend WASM is used at
+runtime. A disposable `xdg-open` executable records launches at the OS process
+boundary so no real browser or external network request is started.
+
+Checks include the plain PR anchor inside a propagation-stopping panel, pointer
+and keyboard activation, a normal `_blank` link, same-frame external navigation,
+`window.open`, and absolute/relative Macro app links. Each external activation
+must launch exactly once and retain the original webview. Prevented clicks and
+browser-only/local-file popup URLs must not launch anything. The desktop JS click
+interceptor must be absent. A trusted standalone HTML document must open in a
+separate native window, not be converted to an SPA navigation or external launch.
+Artifacts are under `test-results/native/links-*`.
+This is Linux coverage; macOS/Windows native popup handling and the unchanged
+mobile JS fallback need platform-specific verification.
+
+## Native notification activation regression
+
+After `bun run native:e2e:build`, run `bun run native:e2e:notifications` in the
+same `.#tauri-e2e` shell. A disposable Rust notification daemon owns only the
+isolated session bus. The production Linux notification adapter runs in the real
+WebKit window and calls the actual native commands; no IPC is mocked. The suite
+checks the advertised default action, two independent notification handles,
+activation-token/click delivery through GTK to the correct JS callback, dismissal
+without navigation, and explicit close. Artifacts are in
+`test-results/native/notifications-*`.
+
+This is not a compositor focus test: Xvfb has no Wayland activation protocol. On a
+real desktop, separately check clicking a notification with Macro minimized,
+hidden, or on another workspace. Both the shell and GTK must support activation
+tokens for Wayland focus. It also does not test process relaunch or authenticated
+notification-target rendering (the callback navigates a local fixture).
 
 ## Exhaustive filter-selection matrix
 
@@ -74,20 +117,37 @@ identities, not just counts.
 bun run native:e2e:matrix
 ```
 
-This uses the new Email, Tasks and Channels views and the current Files view.
-It generates requests with their **production query builders**, including the
-real Files presets/type refinements and GraphQL translation. Grouping is pinned
-to `none` and sorting to `UPDATED_AT DESC`; neither selector is covered yet.
+This exercises the Soup-backed Email, Tasks and Channels views and the current
+Files view. It generates requests with their **production query builders**,
+including the real Files presets/type refinements and GraphQL translation.
+Grouping is pinned to `none` and sorting to `UPDATED_AT DESC`; neither selector
+is covered yet.
+
+All registered Email and Tasks tabs must have an explicit source classification.
+The nine Soup-backed Email tabs include Favorites and Archived; the three task
+predicate tabs are My tasks, Created by me and All tasks. Scheduled email uses
+the scheduled-message service, Reminders gets membership from its reminder
+collection, and Tasks → Projects uses a project collection. Those separate
+surfaces are reported in `outsidePredicateMatrix`, not exercised through their
+dormant Soup queries or claimed as offline predicate coverage. They need separate
+source-specific tests. Adding an unclassified tab fails the registry guard.
 
 The Cartesian product includes every static option and every subset of the
 bounded fixture domains (two people, two tags and two linked inboxes, including
 both All inboxes and an explicit empty inbox selection). Registry assertions
 fail when a UI gains an option/facet that has not been added to the matrix.
-The corpus has 75 entities and fits within one initial page: this suite does
-not claim coverage of non-Mail offline pagination or every possible real-world
-user/tag/file value.
+The corpus has 77 entities and fits within one initial page. Every file type,
+including Spreadsheet, has owned and shared examples; snippet and skill subtypes
+are keyed by category rather than array position. Mail includes both favorited
+and non-favorited threads across linked inboxes and shared-thread scope. The
+app chrome may fetch the favorites collection and ID-scoped label previews, but
+no preview or filtered-page membership baseline is supplied to native evaluation.
+The independent fixture oracle checks Favorites membership and Archived/done
+intersections without using the production compiler or cache results.
+This suite does not claim coverage of non-Mail offline pagination or every
+possible real-world user/tag/file value.
 
-After all five real backfill lanes finish, the fixture API and WebSockets are
+After all seven real backfill lanes finish, the fixture API and WebSockets are
 closed. The browser-side runner calls the real Tauri cache host in bounded
 read-only batches and asserts exact matching IDs against fixture truth. No
 query-specific network baselines are supplied. Mail attachment selections also
@@ -97,12 +157,17 @@ chips intentionally do not change the server AST); every selection is asserted.
 
 Progress and failing inputs are saved to `filter-matrix.json`; the first request
 is also saved before native evaluation. Exact per-view count assertions guard
-against silently omitted selections: Email 20,160; Tasks 98,304; Files 69,632;
-Channels 3. The exhaustive suite has a 90-minute watchdog (individual native
+against silently omitted selections: Email 25,920 (9 × 2,880); Tasks 98,304
+(3 × 32,768); Files 139,264 (11 type options, including every subset); Channels 3.
+The complete matrix has **263,491 selections**. The exhaustive suite has a
+90-minute watchdog (individual native
 command timeouts are unchanged), rather than the smoke suite's four minutes.
 To isolate a failure, use `bun run native:e2e:matrix --matrix-view=tasks`
 (or `email`, `files`, `channels`). A focused run is not a full-matrix pass.
-The test build keeps the development UI protocol but optimizes the Turso VM.
+The test build keeps the development UI protocol but optimizes the Turso VM and
+SQL parser, like production. Unoptimized parser stack frames can exhaust the
+native worker stack on valid compound selections; do not reduce matrix coverage
+to avoid them.
 `filter-corpus.ts` owns fixture facts; `filter-capsules.json` is generated by the
 canonical Rust capsule encoder, not a hand-built wire format. After changing
 fixture document IDs or server-only facts, regenerate inside Nix:
@@ -166,6 +231,8 @@ bun run native:e2e:check      # standalone harness TypeScript check
 ```
 
 - Missing WebKitWebDriver/Xvfb: enter `.#tauri-e2e`, not the default shell.
+  This shell also pins the software EGL renderer to the same Nix package set;
+  loading a newer host Mesa can otherwise abort WebKit with `EGL_BAD_PARAMETER`.
 - `unshare: Operation not permitted`: the host/CI runner must permit unprivileged
   user namespaces. Fail closed; do not remove isolation or run against hosted data.
 - Startup timeout: inspect Vite/native logs and request errors first. Never reset

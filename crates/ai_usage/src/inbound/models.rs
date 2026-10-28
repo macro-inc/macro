@@ -15,6 +15,12 @@ pub struct Price {
     pub price_per_million_in: f32,
     /// Price per million output tokens (USD); zero for audio billing.
     pub price_per_million_out: f32,
+    /// Price per million cache-read input tokens (USD), absent when the model
+    /// has no published rate and for audio billing.
+    pub price_per_million_cache_read: Option<f32>,
+    /// Price per million cache-write input tokens (USD), absent when the model
+    /// has no published rate and for audio billing.
+    pub price_per_million_cache_write: Option<f32>,
     /// Price per audio minute (USD), absent for token billing.
     pub price_per_audio_minute: Option<f32>,
     /// Total cost (USD).
@@ -23,13 +29,20 @@ pub struct Price {
 
 impl From<domain::Price> for Price {
     fn from(price: domain::Price) -> Self {
-        let (input, output, audio) = match price.pricing {
-            ModelPricing::Tokens { input, output } => (input, output, None),
-            ModelPricing::Audio { per_minute } => (0.0, 0.0, Some(per_minute)),
+        let (input, output, cache_read, cache_write, audio) = match price.pricing {
+            ModelPricing::Tokens {
+                input,
+                output,
+                cache_read,
+                cache_write,
+            } => (input, output, cache_read, cache_write, None),
+            ModelPricing::Audio { per_minute } => (0.0, 0.0, None, None, Some(per_minute)),
         };
         Self {
             price_per_million_in: input,
             price_per_million_out: output,
+            price_per_million_cache_read: cache_read,
+            price_per_million_cache_write: cache_write,
             price_per_audio_minute: audio,
             total: price.total,
         }
@@ -39,10 +52,14 @@ impl From<domain::Price> for Price {
 /// Measured usage for one invocation.
 #[derive(Serialize, ToSchema)]
 pub struct Usage {
-    /// Input tokens; zero for audio billing.
+    /// Uncached input tokens; zero for audio billing.
     pub input_tokens: u64,
     /// Output tokens; zero for audio billing.
     pub output_tokens: u64,
+    /// Input tokens read from a prompt cache; zero for audio billing.
+    pub cache_read_input_tokens: u64,
+    /// Input tokens written to a prompt cache; zero for audio billing.
+    pub cache_write_input_tokens: u64,
     /// Audio duration in seconds, absent for token billing.
     pub audio_seconds: Option<f64>,
     /// Provider model identifier.
@@ -55,14 +72,22 @@ pub struct Usage {
 
 impl From<domain::Usage> for Usage {
     fn from(usage: domain::Usage) -> Self {
-        let (input_tokens, output_tokens, audio_seconds) = match usage.amount {
-            UsageAmount::Tokens { input, output } => (input, output, None),
-            UsageAmount::Audio { duration } => (0, 0, Some(duration.as_secs_f64())),
-        };
+        let (input_tokens, output_tokens, cache_read_input_tokens, cache_write_input_tokens, audio) =
+            match usage.amount {
+                UsageAmount::Tokens {
+                    input,
+                    output,
+                    cache_read,
+                    cache_write,
+                } => (input, output, cache_read, cache_write, None),
+                UsageAmount::Audio { duration } => (0, 0, 0, 0, Some(duration.as_secs_f64())),
+            };
         Self {
             input_tokens,
             output_tokens,
-            audio_seconds,
+            cache_read_input_tokens,
+            cache_write_input_tokens,
+            audio_seconds: audio,
             model: usage.model,
             price: usage.price.map(Into::into),
             created_at: usage.created_at,

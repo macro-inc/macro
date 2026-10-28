@@ -16,8 +16,63 @@ use super::*;
 use ai_toolset::ToolSet as _;
 
 #[test]
+fn connector_discovery_is_eager_only_in_agent_sessions() {
+    assert!(EAGER_TOOLS.contains(&"DiscoverConnectors"));
+    assert!(
+        tools_for(AiHost::AgentSession)
+            .toolset
+            .tools
+            .contains_key("DiscoverConnectors")
+    );
+    for host in [AiHost::Chat, AiHost::ChannelBot, AiHost::Mcp] {
+        assert!(
+            !tools_for(host)
+                .toolset
+                .tools
+                .contains_key("DiscoverConnectors")
+        );
+    }
+}
+
+#[test]
 fn subagent_toolset_passes_schema_validation() {
-    let _ = subagent_toolset();
+    let tools = subagent_toolset();
+    for name in [
+        "ListDatabases",
+        "DescribeDatabase",
+        "QueryDatabase",
+        "SaveDatabaseView",
+    ] {
+        assert!(
+            tools.tools.contains_key(name),
+            "delegated agents need {name}"
+        );
+    }
+}
+
+#[test]
+fn database_only_toolset_exposes_exactly_its_database_capabilities() {
+    let tools = database_tools();
+    let names = tools
+        .tools
+        .keys()
+        .map(String::as_str)
+        .collect::<std::collections::BTreeSet<_>>();
+    let expected = [
+        "ListDatabases",
+        "DescribeDatabase",
+        "QueryDatabase",
+        "SaveDatabaseView",
+        "DeleteDatabaseView",
+        "SaveDatabaseQuery",
+    ]
+    .into_iter()
+    .collect();
+    assert_eq!(names, expected);
+    assert!(
+        tools.user_tools.is_empty(),
+        "database actions must not expose email/calendar composers"
+    );
 }
 
 #[test]
@@ -28,7 +83,31 @@ fn every_host_toolset_passes_schema_validation() {
         AiHost::ChannelBot,
         AiHost::Mcp,
     ] {
-        let _ = tools_for(host);
+        let tools = tools_for(host);
+        assert!(
+            tools.toolset.tools.contains_key("GenerateImage"),
+            "{host:?} must expose image generation"
+        );
+    }
+}
+
+#[test]
+fn coding_dispatch_is_available_to_every_host_but_not_internal_subagents() {
+    for host in [
+        AiHost::Chat,
+        AiHost::AgentSession,
+        AiHost::ChannelBot,
+        AiHost::Mcp,
+    ] {
+        let tools = tools_for(host);
+        for name in ["ListCodingAgents", "DispatchCodingAgent"] {
+            assert!(tools.toolset.tools.contains_key(name), "{host:?}: {name}");
+            assert!(tools.prompt.to_string().contains(name), "{host:?}: {name}");
+        }
+    }
+    let subagent = subagent_toolset();
+    for name in ["ListCodingAgents", "DispatchCodingAgent"] {
+        assert!(!subagent.tools.contains_key(name));
     }
 }
 
@@ -41,12 +120,12 @@ fn project_workflows_are_available_in_every_host_alongside_folder_and_property_t
         "UpdateInitiative",
         "DeleteInitiative",
         "UpdateInitiativeSharing",
-        "SetTaskInitiative",
-        "ReadTaskInitiatives",
         "ReadInitiativeActivity",
         "SetEntityProperty",
-        "CommentOnDocument",
-        "ResolveDocumentComment",
+        "ReadDiscussion",
+        "Comment",
+        "CommentOnText",
+        "ResolveComment",
         "CreateProject",
         "ReadProject",
     ];
@@ -72,6 +151,106 @@ fn project_workflows_are_available_in_every_host_alongside_folder_and_property_t
     }
 }
 
+/// Every host, including MCP, can take the item actions the app's menus
+/// offer: editing channel messages and comments, trashing, duplicating,
+/// renaming, sharing, favoriting, and muting items, DMs, CRM records, calls,
+/// skills, and routines.
+#[test]
+fn app_item_actions_are_available_in_every_host() {
+    let names = [
+        "EditChannelMessage",
+        "DeleteChannelMessage",
+        "ReactToChannelMessage",
+        "OpenDirectMessage",
+        "EditComment",
+        "DeleteComment",
+        "CreateSkill",
+        "MoveToTrash",
+        "DuplicateItem",
+        "RenameItem",
+        "UpdateSharing",
+        "SetFavorite",
+        "MuteNotifications",
+        "RunRoutine",
+        "DeleteRoutine",
+        "CreateCompany",
+        "CreateContact",
+        "UpdateCallRecord",
+        "DeleteCallRecord",
+    ];
+    for host in [
+        AiHost::Chat,
+        AiHost::AgentSession,
+        AiHost::ChannelBot,
+        AiHost::Mcp,
+    ] {
+        let tools = tools_for(host);
+        for name in names {
+            assert!(
+                tools.toolset.tools.contains_key(name),
+                "{host:?} must expose {name}"
+            );
+        }
+    }
+}
+
+/// Every host reads the design files the native engines open, and its
+/// prompt says which tool reads which format.
+#[test]
+fn design_file_readers_are_available_in_every_host_with_their_guidance() {
+    for host in [
+        AiHost::Chat,
+        AiHost::AgentSession,
+        AiHost::ChannelBot,
+        AiHost::Mcp,
+    ] {
+        let tools = tools_for(host);
+        let prompt = tools.prompt.to_string();
+        for name in [
+            "ReadDesign",
+            "ReadPhotoshopDocument",
+            "ReadIllustratorDocument",
+        ] {
+            assert!(tools.toolset.tools.contains_key(name), "{host:?}: {name}");
+            assert!(prompt.contains(name), "{host:?}: {name}");
+        }
+    }
+    assert!(
+        subagent_toolset()
+            .tools
+            .contains_key("ReadPhotoshopDocument")
+    );
+    assert!(
+        subagent_toolset()
+            .tools
+            .contains_key("ReadIllustratorDocument")
+    );
+}
+
+/// Document answers get the one SQL tool, not a read-only twin: the access
+/// they run over refuses the writes (see `databases_sql`'s view-only tests).
+#[test]
+fn document_answers_expose_discovery_and_the_one_query_tool() {
+    let tools = database_read_only_tools();
+    let names = tools
+        .tools
+        .keys()
+        .map(String::as_str)
+        .collect::<std::collections::BTreeSet<_>>();
+    assert_eq!(
+        names,
+        ["ListDatabases", "DescribeDatabase", "QueryDatabase"]
+            .into_iter()
+            .collect()
+    );
+    assert_eq!(
+        tools.tools["QueryDatabase"].annotations,
+        database_tools().tools["QueryDatabase"].annotations,
+        "the same QueryDatabase every host gets"
+    );
+    assert!(tools.user_tools.is_empty());
+}
+
 /// An agent session finishes user tools in the turn, so it keeps chat's
 /// deferring registrations - and gets the prompt that says a review card,
 /// not a pending composer, is what follows the call.
@@ -85,19 +264,28 @@ fn the_agent_session_host_keeps_chats_user_tools_with_the_review_prompt() {
             .contains_key("CreateCalendarEvent")
     );
     assert!(session.toolset.user_tools.contains_key("SendEmail"));
+    // The confirmed twins execute in the loop, beside the deferring tools,
+    // for the prompts a session reads out of a thread.
+    assert!(session.toolset.tools.contains_key("SendConfirmedEmail"));
+    assert!(
+        session
+            .toolset
+            .tools
+            .contains_key("CreateConfirmedCalendarEvent")
+    );
     let prompt = session.prompt.to_string();
     assert!(prompt.contains("review card"));
     assert!(!prompt.contains("PendingUserExecution"));
     assert_eq!(
-        session
-            .toolset
-            .request_schemas()
-            .map(|schemas| schemas.len()),
+        session.toolset.request_schemas().map(|schemas| schemas
+            .into_iter()
+            .filter(|schema| schema.name != "DiscoverConnectors")
+            .count()),
         tools_for(AiHost::Chat)
             .toolset
             .request_schemas()
             .map(|schemas| schemas.len()),
-        "the same tools as chat"
+        "the same tools as chat except agent-session connector discovery"
     );
 }
 
@@ -126,6 +314,14 @@ fn composerless_hosts_execute_calendar_create_directly_and_omit_send_email() {
             !tools.iter().any(|tool| tool["name"] == "SendEmail"),
             "{host:?} toolset must not expose SendEmail"
         );
+        // The confirmed twins are for the in-process agent's thread turns;
+        // these hosts already create directly and keep their own policy.
+        for name in ["SendConfirmedEmail", "CreateConfirmedCalendarEvent"] {
+            assert!(
+                !tools.iter().any(|tool| tool["name"] == name),
+                "{host:?} toolset must not expose {name}"
+            );
+        }
     }
 }
 
@@ -141,7 +337,37 @@ fn search_toolset_passes_schema_validation() {
 
 #[test]
 fn frontend_schemas_build() {
-    let _ = all_tool_frontend_schemas();
+    let json = all_tool_frontend_schemas().to_json_pretty().unwrap();
+    let schemas: serde_json::Value = serde_json::from_str(&json).unwrap();
+    let mut names = std::collections::HashSet::new();
+    for tool in schemas["tools"].as_array().unwrap() {
+        let name = tool["name"].as_str().unwrap();
+        assert!(names.insert(name), "duplicate frontend tool: {name}");
+    }
+    assert!(names.contains("QueryDatabase"));
+    assert!(names.contains("DiscoverConnectors"));
+    for name in tools_for(AiHost::Chat).toolset.tools.keys() {
+        assert!(names.contains(name.as_str()), "missing chat tool: {name}");
+    }
+    for name in [
+        "CreateDatabase",
+        "CreateTable",
+        "RenameDatabase",
+        "RenameTable",
+        "ReorderTables",
+        "DeleteTable",
+        "AddColumn",
+        "AddColumnOptions",
+        "RenameColumn",
+        "ChangeColumnType",
+        "DeleteColumn",
+        "ReorderColumns",
+    ] {
+        assert!(
+            !names.contains(name),
+            "removed tool {name} must not be generated"
+        );
+    }
 }
 
 #[test]
@@ -169,6 +395,26 @@ fn frontend_schemas_distinguish_user_tool_response_types() {
     );
 }
 
+/// The configure-agent system skill walks an agent through `ListAgents` and
+/// `ConfigureAgent`; a host that reads the skill must be able to follow it.
+#[test]
+fn every_host_exposes_agent_configuration() {
+    for host in [
+        AiHost::Chat,
+        AiHost::AgentSession,
+        AiHost::ChannelBot,
+        AiHost::Mcp,
+    ] {
+        let tools = tools_for(host);
+        for name in ["ListAgents", "ConfigureAgent", "ConfigureBot"] {
+            assert!(
+                tools.toolset.tools.contains_key(name),
+                "{host:?} missing {name}"
+            );
+        }
+    }
+}
+
 #[test]
 fn every_host_exposes_skill_discovery_and_reading() {
     for host in [
@@ -189,4 +435,364 @@ fn every_host_exposes_skill_discovery_and_reading() {
             "{host:?} missing skill reading instructions"
         );
     }
+}
+
+#[test]
+fn hosts_with_tool_search_defer_all_but_the_core_tools() {
+    for host in [AiHost::Chat, AiHost::AgentSession, AiHost::ChannelBot] {
+        let tools = tools_for(host);
+        let lazy = DeferredToolSet::new(tools.toolset.clone(), tools.deferred.clone());
+        let sent: Vec<String> = lazy
+            .request_schemas()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|schema| schema.name)
+            .collect();
+        let catalog: Vec<String> = lazy
+            .searchable_catalog()
+            .into_iter()
+            .map(|tool| tool.name)
+            .collect();
+        let prompt = tools.prompt.to_string();
+
+        for name in ["ReadContent", "ContentSearch", "LoadTools", "SearchTools"] {
+            assert!(sent.contains(&name.to_string()), "{host:?} sends {name}");
+        }
+        for name in ["EditPresentation", "EditSpreadsheet", "QueryDatabase"] {
+            assert!(!sent.contains(&name.to_string()), "{host:?} defers {name}");
+            assert!(
+                catalog.contains(&name.to_string()),
+                "{host:?} catalogs {name}"
+            );
+            assert!(
+                prompt.contains(&format!("\n- {name}: ")),
+                "{host:?} lists {name} in the prompt"
+            );
+        }
+        assert_eq!(
+            sent.len() + catalog.len(),
+            tools.toolset.tools.len(),
+            "{host:?}: every tool is either sent or catalogued"
+        );
+    }
+}
+
+#[test]
+fn the_mcp_host_defers_nothing() {
+    let tools = tools_for(AiHost::Mcp);
+
+    assert!(tools.deferred.is_empty());
+    assert!(!tools.prompt.to_string().contains("LoadTools"));
+}
+
+/// Only an MCP client can PUT bytes to the upload URL, so the tool is not
+/// offered to in-app hosts, which would call it and then have no way to use it.
+#[test]
+fn channel_media_uploads_are_mcp_only() {
+    assert!(
+        tools_for(AiHost::Mcp)
+            .toolset
+            .tools
+            .contains_key("CreateChannelMediaUpload")
+    );
+    for host in [AiHost::Chat, AiHost::AgentSession, AiHost::ChannelBot] {
+        assert!(
+            !tools_for(host)
+                .toolset
+                .tools
+                .contains_key("CreateChannelMediaUpload"),
+            "{host:?}"
+        );
+    }
+}
+
+#[test]
+fn every_eager_tool_exists() {
+    let tools = tools_for(AiHost::AgentSession);
+    for name in EAGER_TOOLS {
+        assert!(
+            tools.toolset.tools.contains_key(*name),
+            "{name} is not a tool"
+        );
+    }
+}
+
+#[test]
+fn forms_are_discoverable_and_execute_directly_on_every_host() {
+    for host in [
+        AiHost::Chat,
+        AiHost::AgentSession,
+        AiHost::ChannelBot,
+        AiHost::Mcp,
+    ] {
+        let tools = tools_for(host);
+        for name in [
+            "CreateForm",
+            "ReadForm",
+            "EditForm",
+            "ListForms",
+            "SetFormAccess",
+        ] {
+            assert!(tools.toolset.tools.contains_key(name), "{host:?}: {name}");
+            if !matches!(host, AiHost::Mcp) {
+                assert!(tools.prompt.to_string().contains(name), "{host:?}: {name}");
+            }
+        }
+        assert!(!tools.toolset.user_tools.contains_key("SetFormAccess"));
+    }
+    let delegated = subagent_toolset();
+    for name in ["CreateForm", "ReadForm", "EditForm", "ListForms"] {
+        assert!(delegated.tools.contains_key(name));
+    }
+    assert!(!delegated.tools.contains_key("SetFormAccess"));
+}
+
+#[test]
+fn booking_link_mutations_execute_without_a_review_on_every_host() {
+    for host in [
+        AiHost::Chat,
+        AiHost::AgentSession,
+        AiHost::ChannelBot,
+        AiHost::Mcp,
+    ] {
+        let tools = tools_for(host).toolset;
+        assert!(tools.tools.contains_key("ListBookingLinks"));
+        for name in ["CreateBookingLink", "EditBookingLink"] {
+            assert!(tools.tools.contains_key(name));
+            assert!(!tools.user_tools.contains_key(name));
+        }
+    }
+}
+
+mod booking_links;
+
+#[test]
+fn booking_management_has_mcp_and_chat_parity() {
+    let names = [
+        "ReadBookingSettings",
+        "UpdateBookingSettings",
+        "ListBookings",
+        "GetBookingInsights",
+        "GetBookingRescheduleSlots",
+        "ChangeBooking",
+    ];
+    for host in [
+        AiHost::Chat,
+        AiHost::AgentSession,
+        AiHost::ChannelBot,
+        AiHost::Mcp,
+    ] {
+        let tools = tools_for(host);
+        for name in names {
+            assert!(
+                tools.toolset.tools.contains_key(name),
+                "{host:?} must expose {name}"
+            );
+        }
+    }
+}
+
+#[test]
+fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery() {
+    let standard = tools_for(AiHost::AgentSession);
+    let direct = tools_for_agent_code_mode();
+    let sdk = code_mode_tools();
+    assert!(direct.toolset.tools.len() < standard.toolset.tools.len());
+    for name in ["ReadContent"] {
+        assert!(standard.toolset.tools.contains_key(name), "{name}");
+        assert!(sdk.tools.contains_key(name), "{name}");
+        assert!(!direct.toolset.tools.contains_key(name), "{name}");
+        assert!(!direct.deferred.iter().any(|t| t.name == name), "{name}");
+    }
+    for name in [
+        "DisplayResults",
+        "NameSearch",
+        "ListEntities",
+        "ContentSearch",
+        "CreateDocument",
+        "ListSkills",
+        "SearchSkills",
+        "ReadSkill",
+        "GenerateImage",
+        "CreateRoutine",
+        "EditSpreadsheet",
+        "ReadCanvas",
+        "RenderCanvas",
+        "ApplyCanvasEdits",
+        "EditCanvas",
+        "EditPresentation",
+        "EditDocument",
+        "Subagent",
+        "DispatchCodingAgent",
+        "SearchTools",
+        "LoadTools",
+        "DiscoverConnectors",
+        "BashCodeExecution",
+        "TextEditorCodeExecution",
+    ] {
+        assert!(direct.toolset.tools.contains_key(name), "{name}");
+    }
+    for name in standard.toolset.user_tools.keys() {
+        assert!(direct.toolset.user_tools.contains_key(name), "{name}");
+        if matches!(name.as_str(), "SendEmail" | "CreateCalendarEvent") {
+            assert!(!direct.toolset.tools.contains_key(name), "{name}");
+            assert!(
+                !direct.deferred.iter().any(|tool| tool.name == *name),
+                "{name}"
+            );
+        } else {
+            assert!(direct.toolset.tools.contains_key(name), "{name}");
+        }
+    }
+    let standard_deferred =
+        DeferredToolSet::new(standard.toolset.clone(), standard.deferred.clone());
+    assert!(
+        standard_deferred
+            .request_schemas()
+            .unwrap()
+            .iter()
+            .any(|schema| schema.name == "ListEntities")
+    );
+    let deferred = DeferredToolSet::new(direct.toolset.clone(), direct.deferred.clone());
+    let eager = deferred.request_schemas().unwrap();
+    for name in [
+        "ListEntities",
+        "NameSearch",
+        "ContentSearch",
+        "EditDocument",
+    ] {
+        assert!(eager.iter().any(|schema| schema.name == name), "{name}");
+    }
+    for name in ["SendEmail", "CreateCalendarEvent"] {
+        assert!(standard.toolset.tools.contains_key(name));
+        assert!(sdk.tools.contains_key(name));
+        assert!(!eager.iter().any(|tool| tool.name == name));
+        assert!(deferred.routing_description(name).is_none());
+    }
+    let prompt = direct.prompt.to_string();
+    assert!(!prompt.contains("the turn waits while the user"));
+    assert!(!prompt.contains("you MUST use the `SendEmail` tool"));
+    assert!(prompt.contains("Do not wait for the user to act on a saved review"));
+    assert!(!prompt.contains("- ReadMetadata:"));
+    let routing = prompt::tool_usage::CODE_MODE_ROUTING.to_string();
+    assert!(prompt.contains(&routing));
+    assert!(!standard.prompt.to_string().contains(&routing));
+    for host in [AiHost::Chat, AiHost::ChannelBot, AiHost::Mcp] {
+        assert!(!tools_for(host).prompt.to_string().contains(&routing));
+    }
+}
+
+#[test]
+fn session_reader_is_available_to_every_conversation_host_and_mcp() {
+    for host in [
+        AiHost::Chat,
+        AiHost::AgentSession,
+        AiHost::ChannelBot,
+        AiHost::Mcp,
+    ] {
+        let tools = tools_for(host);
+        assert!(tools.toolset.tools.contains_key("ReadAgentSession"));
+        assert!(
+            !tools
+                .deferred
+                .iter()
+                .any(|tool| tool.name == "ReadAgentSession")
+        );
+    }
+    assert!(subagent_toolset().tools.contains_key("ReadAgentSession"));
+    let code_mode = tools_for_agent_code_mode();
+    assert!(code_mode.toolset.tools.contains_key("ReadAgentSession"));
+    assert!(
+        !code_mode
+            .deferred
+            .iter()
+            .any(|tool| tool.name == "ReadAgentSession")
+    );
+}
+
+#[test]
+fn conversation_tools_only_advertise_new_sessions() {
+    for tools in [
+        tools_for(AiHost::Chat),
+        tools_for(AiHost::AgentSession),
+        tools_for(AiHost::ChannelBot),
+        tools_for(AiHost::Mcp),
+        tools_for_agent_code_mode(),
+    ] {
+        assert!(!tools.toolset.tools.contains_key("ReadChat"));
+        assert!(!tools.prompt.to_string().contains("ReadChat"));
+        for name in [
+            "ReadAgentSession",
+            "ReadAgentSessionSharing",
+            "UpdateAgentSessionSharing",
+            "CreateAgentSession",
+            "ManageAgentSession",
+        ] {
+            assert!(tools.toolset.tools.contains_key(name), "missing {name}");
+        }
+        for schema in tools.toolset.request_schemas().unwrap() {
+            let json = serde_json::to_string(&schema.schema).unwrap();
+            if [
+                "NameSearch",
+                "ContentSearch",
+                "ListEntities",
+                "RenameItem",
+                "MoveToTrash",
+                "MoveToProject",
+                "DuplicateItem",
+                "UpdateSharing",
+                "ShareWithChannel",
+                "SetFavorite",
+                "GetEntityProperties",
+                "SetEntityProperty",
+                "BulkSetEntityPropertyOptions",
+                "ListNotifications",
+            ]
+            .contains(&schema.name.as_str())
+            {
+                assert!(
+                    !json.contains("\"chat\""),
+                    "{} advertises legacy chats",
+                    schema.name
+                );
+                assert!(
+                    !json.contains("\"chats\""),
+                    "{} advertises legacy chat search",
+                    schema.name
+                );
+                assert!(
+                    !json.contains("\"ai_chat\""),
+                    "{} advertises legacy chat listing",
+                    schema.name
+                );
+            }
+        }
+    }
+    assert!(!subagent_toolset().tools.contains_key("ReadChat"));
+}
+
+#[test]
+fn mcp_code_mode_hides_sdk_covered_tools_and_keeps_the_rest() {
+    let standard = tools_for(AiHost::Mcp).toolset;
+    let code = tools_for_mcp_code_mode().toolset;
+    for hidden in ["ReadContent", "ReadChannelMessages", "ListCalendarEvents"] {
+        assert!(standard.tools.contains_key(hidden));
+        assert!(
+            !code.tools.contains_key(hidden),
+            "{hidden} should be hidden"
+        );
+    }
+    for kept in [
+        "NameSearch",
+        "ContentSearch",
+        "ListEntities",
+        "EditDocument",
+    ] {
+        assert!(code.tools.contains_key(kept), "{kept} should stay direct");
+    }
+    assert!(
+        code.tools
+            .keys()
+            .all(|name| standard.tools.contains_key(name))
+    );
 }

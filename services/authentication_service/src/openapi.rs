@@ -1,17 +1,6 @@
-#![allow(unused)]
-
-mod api;
-mod config;
-mod generate_password;
-mod microsoft_token_cipher;
-mod rate_limit_config;
-mod service;
-
+use authentication_service::ApiDoc;
 use utoipa::OpenApi;
 
 fn main() {
-    println!(
-        "{}",
-        api::swagger::ApiDoc::openapi().to_pretty_json().unwrap()
-    );
+    println!("{}", ApiDoc::openapi().to_pretty_json().unwrap());
 }

@@ -4,6 +4,21 @@ import FaviconBadgeSvg from '@icon/macro-logo-badge.svg?raw';
 const FAVICON_SIZE = 48;
 
 let currentFaviconLink: HTMLLinkElement | null = null;
+let requestedIcon = '';
+const renderedIcons = new Map<string, string>();
+
+function setFavicon(url: string): void {
+  if (!currentFaviconLink?.isConnected) {
+    document
+      .querySelectorAll('link[rel*="icon"]')
+      .forEach((link) => link.remove());
+    currentFaviconLink = document.createElement('link');
+    currentFaviconLink.rel = 'icon';
+    currentFaviconLink.type = 'image/png';
+    document.head.appendChild(currentFaviconLink);
+  }
+  currentFaviconLink.href = url;
+}
 
 /** escapes a color value for use in SVG */
 function escapeColorForSvg(color: string): string {
@@ -31,9 +46,13 @@ export function updateFavicon(
   badgeColor?: string,
   hasBadge?: boolean
 ): void {
-  if (currentFaviconLink?.parentNode) {
-    currentFaviconLink.parentNode.removeChild(currentFaviconLink);
-    currentFaviconLink = null;
+  const key = JSON.stringify([faviconColor, badgeColor, !!hasBadge]);
+  if (key === requestedIcon && currentFaviconLink?.isConnected) return;
+  requestedIcon = key;
+  const cached = renderedIcons.get(key);
+  if (cached) {
+    setFavicon(cached);
+    return;
   }
 
   const canvas = document.createElement('canvas');
@@ -47,6 +66,7 @@ export function updateFavicon(
   img.src = processSvg(hasBadge ? FaviconBadgeSvg : FaviconSvg, faviconColor);
 
   img.onload = () => {
+    if (requestedIcon !== key) return;
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
     if (hasBadge) {
@@ -65,29 +85,9 @@ export function updateFavicon(
 
     const faviconUrl = canvas.toDataURL();
 
-    if (currentFaviconLink?.parentNode) {
-      currentFaviconLink.parentNode.removeChild(currentFaviconLink);
-    }
-
-    const existingLinks = document.querySelectorAll('link[rel*="icon"]');
-    existingLinks.forEach((link) => {
-      link.remove();
-    });
-
-    // create and add new favicon
-    const link = document.createElement('link');
-    link.rel = 'icon';
-    link.type = 'image/png';
-    link.href = faviconUrl;
-    document.head.appendChild(link);
-    currentFaviconLink = link;
-
-    // update existing shortcut icon if present
-    const existingShortcutIcon = document.querySelector(
-      'link[rel="shortcut icon"]'
-    ) as HTMLLinkElement;
-    if (existingShortcutIcon) {
-      existingShortcutIcon.href = faviconUrl;
-    }
+    if (renderedIcons.size >= 32)
+      renderedIcons.delete(renderedIcons.keys().next().value!);
+    renderedIcons.set(key, faviconUrl);
+    setFavicon(faviconUrl);
   };
 }

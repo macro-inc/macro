@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT last_sync_error, consecutive_sync_failures\n        FROM calendars\n        WHERE id = $1\n        FOR UPDATE\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "last_sync_error",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "consecutive_sync_failures",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      false
+    ]
+  },
+  "hash": "fbbc03499afaa971d0a1a290c734e93f14d7d169e96ed7950345fd386d7e5480"
+}

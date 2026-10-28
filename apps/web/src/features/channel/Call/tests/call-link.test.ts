@@ -4,7 +4,6 @@ import {
   getMeetingPath,
   getMeetingShareToken,
   getMeetingUrl,
-  isMeetingPath,
 } from '../call-link';
 
 vi.mock('@core/util/webOrigin', () => ({
@@ -20,29 +19,6 @@ describe('meeting paths', () => {
       `https://macro.com/app/meet/join/${token}`
     );
     expect(getActiveMeetingPath(token)).toBe(`/meet/${token}`);
-  });
-
-  it.each([
-    `/meet/join/${token}`,
-    `/app/meet/join/${token}/`,
-    `/meet/${token}`,
-    `/app/meet/${token}/`,
-    '/meet/new',
-    '/app/meet/new/',
-  ])('recognizes the meeting shell for %s', (path) => {
-    expect(isMeetingPath(path)).toBe(true);
-  });
-
-  it.each([
-    '/meet',
-    '/meet/join',
-    '/app/meet/join/',
-    '/meet/new/extra',
-    `/meet/join/${token}/extra`,
-    '/app/calendar',
-    '/meet/%invalid',
-  ])('rejects incomplete and unrelated meeting routes: %s', (path) => {
-    expect(isMeetingPath(path)).toBe(false);
   });
 
   it.each([

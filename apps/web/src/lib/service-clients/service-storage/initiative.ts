@@ -1,4 +1,5 @@
 import { catchToResult, ThrownResultError } from '@core/util/result';
+import { optimisticMutationDispositionOf } from '@graphql-cache/exchange/optimistic';
 import type {
   AnyVariables,
   Client,
@@ -6,16 +7,15 @@ import type {
   OperationResult,
 } from '@urql/core';
 import {
-  AssignInitiativeTasksDocument,
-  ClearTaskInitiativeDocument,
   CreateInitiativeDocument,
   type CreateInitiativeInput,
   DeleteInitiativeDocument,
+  EnsureInitiativeDescriptionSurfaceDocument,
   type GraphqlEntityAccessLevel,
   type InitiativeDetailFieldsFragment,
   InitiativeDocument,
+  type InitiativeIdentityFieldsFragment,
   type InitiativeLinkShare,
-  TaskInitiativeReferencesDocument,
   UpdateInitiativeDocument,
   type UpdateInitiativeInput,
 } from './graphql/generated/graphql';
@@ -53,36 +53,31 @@ const ACCESS_TO_GRAPHQL = {
   edit: 'EDIT',
   owner: 'OWNER',
 } as const;
-const ASSIGNMENT_FROM_GRAPHQL = {
-  ASSIGNED: 'assigned',
-  MOVED: 'moved',
-  NOT_A_TASK: 'notATask',
-  NOT_FOUND: 'notFound',
-  SKIPPED_NO_PERMISSION: 'skippedNoPermission',
-} as const;
 const OPERATION_TO_GRAPHQL = {
   add: 'ADD',
   remove: 'REMOVE',
   replace: 'REPLACE',
 } as const;
-const REFERENCE_FROM_GRAPHQL = {
-  NONE: 'none',
-  UNAVAILABLE: 'unavailable',
-  VISIBLE: 'visible',
-} as const;
 
-export function mapInitiativeDetail(project: InitiativeDetailFieldsFragment) {
-  const sharing = project.sharePermission;
+export function mapInitiativeIdentity(
+  project: InitiativeIdentityFieldsFragment
+) {
   const permission = project.viewerPermission;
   return {
     id: project.id,
     name: project.displayName ?? 'Untitled project',
-    descriptionDocumentId: project.descriptionDocumentId ?? '',
-    updatedAt: project.metadata.updatedAt ?? '',
     userAccessLevel:
       permission?.__typename === 'GraphqlAccessLevelPermission'
         ? ACCESS_FROM_GRAPHQL[permission.accessLevel]
         : ('view' as const),
+  };
+}
+
+export function mapInitiativeDetail(project: InitiativeDetailFieldsFragment) {
+  const sharing = project.sharePermission;
+  return {
+    ...mapInitiativeIdentity(project),
+    updatedAt: project.metadata.updatedAt ?? '',
     taskCount: project.taskCount,
     completedTaskCount: project.completedTaskCount,
     properties: mapGraphqlProperties(project.properties),
@@ -194,21 +189,6 @@ export function createInitiativeClient(client: () => Client) {
             .initiative
         )
       ),
-    taskReferences: (taskIds: string[], signal?: AbortSignal) =>
-      catchToResult(async () => ({
-        references: (
-          await query(TaskInitiativeReferencesDocument, { taskIds }, signal)
-        ).user.taskInitiativeReferences.map((reference) => ({
-          taskId: reference.taskId,
-          state: REFERENCE_FROM_GRAPHQL[reference.state],
-          initiative: reference.initiative
-            ? {
-                id: reference.initiative.id,
-                name: reference.initiative.displayName ?? 'Untitled project',
-              }
-            : null,
-        })),
-      })),
     create: (input: CreateInitiativeInput) =>
       catchToResult(async () =>
         mapInitiativeDetail(
@@ -216,39 +196,36 @@ export function createInitiativeClient(client: () => Client) {
         )
       ),
     update: (id: string, input: InitiativeUpdate) =>
-      catchToResult(async () =>
-        mapInitiativeDetail(
+      catchToResult(async () => {
+        const result = await client()
+          .mutation(UpdateInitiativeDocument, {
+            initiativeId: id,
+            input: initiativeUpdateInput(input),
+          })
+          .toPromise();
+        const disposition = optimisticMutationDispositionOf(result);
+        if (disposition?.kind === 'queued') return;
+        if (disposition?.kind === 'permanently-failed')
+          operationData({ ...result, error: disposition.error });
+        // Detail consumers subscribe to the normalized record. A queued partial
+        // response is an acknowledgement, never a complete project snapshot.
+        operationData(result);
+      }),
+    /** Ensure the description surface, which has the project's id, before connecting. */
+    ensureDescriptionSurface: (id: string) =>
+      catchToResult(
+        async () =>
           (
-            await mutation(UpdateInitiativeDocument, {
+            await mutation(EnsureInitiativeDescriptionSurfaceDocument, {
               initiativeId: id,
-              input: initiativeUpdateInput(input),
             })
-          ).updateInitiative
-        )
+          ).ensureInitiativeDescriptionSurface
       ),
     delete: (id: string) =>
       catchToResult(
         async () =>
           (await mutation(DeleteInitiativeDocument, { initiativeId: id }))
             .deleteInitiative
-      ),
-    assignTasks: (id: string, input: { taskIds: string[] }) =>
-      catchToResult(async () => ({
-        results: (
-          await mutation(AssignInitiativeTasksDocument, {
-            initiativeId: id,
-            taskIds: input.taskIds,
-          })
-        ).assignInitiativeTasks.map((result) => ({
-          taskId: result.taskId,
-          status: ASSIGNMENT_FROM_GRAPHQL[result.status],
-        })),
-      })),
-    removeTask: (taskId: string) =>
-      catchToResult(
-        async () =>
-          (await mutation(ClearTaskInitiativeDocument, { taskId }))
-            .clearTaskInitiative
       ),
   };
 }

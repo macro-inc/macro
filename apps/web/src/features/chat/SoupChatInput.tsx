@@ -1,3 +1,4 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
@@ -16,6 +17,8 @@ import {
   storeChatStateImmediate,
   storeSoupInputModel,
 } from '@core/component/AI/util/storage';
+import { toast } from '@core/component/Toast/Toast';
+import { enableChatV3Agents } from '@core/constant/featureFlags';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -23,7 +26,8 @@ import { isPaymentError } from '@core/util/handlePaymentError';
 import { createRenameDssEntityMutation } from '@entity';
 import { invalidateAllSoup } from '@queries/soup/cache';
 import { cognitionApiServiceClient } from '@service-cognition/client';
-import { createEffect } from 'solid-js';
+import { createEffect, Show } from 'solid-js';
+import { MobileAgentComposer } from '../agents-view/mobile-agent-composer';
 
 function SoupChatInputInner() {
   const splitPanelContext = useSplitPanelOrThrow();
@@ -94,14 +98,23 @@ function SoupChatInputInner() {
 
     if (backgroundSend) {
       // Send the message in the background without navigating
-      cognitionApiServiceClient.sendStreamChatMessage({
+      const sent = await cognitionApiServiceClient.sendStreamChatMessage({
         content: request.content,
         model: request.model,
+        speed: request.speed,
         chat_id: chatId,
         attachments:
           request.attachments.length > 0 ? request.attachments : undefined,
         toolset: { type: 'all' },
       });
+      if (sent.isErr()) {
+        input.attachments.setAttached(request.attachments);
+        editor.controls.setMarkdown(request.content);
+        toast.failure(
+          'Could not send the message. Your draft has been restored.'
+        );
+        return;
+      }
       invalidateAllSoup();
     } else {
       // Store the pending send data for the chat to pick up
@@ -109,6 +122,7 @@ function SoupChatInputInner() {
         content: request.content,
         attachments: request.attachments,
         model: request.model,
+        speed: request.speed,
       });
 
       // Replace the soup split with the chat split
@@ -137,6 +151,17 @@ function SoupChatInputInner() {
 }
 
 export function SoupChatInput() {
+  const agents = useFeatureFlag(enableChatV3Agents);
+  return (
+    <Show when={!agents().loading}>
+      <Show when={agents().enabled} fallback={<LegacySoupChatInput />}>
+        <MobileAgentComposer />
+      </Show>
+    </Show>
+  );
+}
+
+function LegacySoupChatInput() {
   // Seed the selector from the persisted soup draft model so the user's last
   // choice in the new-chat composer is restored. ChatInputProvider falls back
   // to DEFAULT_MODEL when this is undefined.

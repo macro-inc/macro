@@ -1,0 +1,37 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH viewer_channels AS (\n            SELECT c.id, c.name, c.channel_type, c.updated_at\n            FROM comms_channel_participants me\n            JOIN comms_channels c ON c.id = me.channel_id\n            WHERE me.user_id = $1\n                AND me.left_at IS NULL\n                AND (cardinality($2::uuid[]) = 0 OR c.id = ANY($2::uuid[]))\n                AND (cardinality($3::text[]) = 0 OR c.channel_type::text = ANY($3::text[]))\n                AND (\n                    $4::timestamptz IS NULL\n                    OR (c.updated_at, c.id) < ($4::timestamptz, $5::uuid)\n                )\n        ),\n        patterns AS (\n            SELECT pattern, ordinality AS term\n            FROM unnest($6::text[]) WITH ORDINALITY AS p(pattern, ordinality)\n        ),\n        other_participant_names AS (\n            SELECT\n                vc.id AS channel_id,\n                CASE\n                    WHEN other.user_id LIKE 'bot|%' THEN COALESCE(system_bot.name, bot.name, 'Bot')\n                    ELSE COALESCE(\n                        NULLIF(\n                            concat_ws(\n                                ' ',\n                                NULLIF(mui.first_name, 'N/A'),\n                                NULLIF(mui.last_name, 'N/A')\n                            ),\n                            ''\n                        ),\n                        split_part(split_part(other.user_id, '|', 2), '@', 1)\n                    )\n                END AS name\n            FROM viewer_channels vc\n            JOIN comms_channel_participants other\n                ON other.channel_id = vc.id\n                AND other.left_at IS NULL\n                AND other.user_id <> $1\n            LEFT JOIN \"User\" u ON u.id = other.user_id\n            LEFT JOIN macro_user_info mui ON mui.macro_user_id = u.macro_user_id\n            LEFT JOIN unnest($8::uuid[], $9::text[]) AS system_bot(id, name)\n                ON other.user_id = 'bot|' || system_bot.id::text\n            LEFT JOIN bots bot\n                ON other.user_id = 'bot|' || bot.id::text\n                AND bot.deleted_at IS NULL\n            WHERE vc.channel_type = 'direct_message'\n                OR (vc.channel_type = 'private' AND NULLIF(BTRIM(vc.name), '') IS NULL)\n        ),\n        matched_terms AS (\n            SELECT vc.id AS channel_id, p.term\n            FROM viewer_channels vc\n            CROSS JOIN patterns p\n            WHERE NULLIF(BTRIM(vc.name), '') IS NOT NULL\n                AND CASE\n                    WHEN $7::bool THEN vc.name ~* p.pattern\n                    ELSE vc.name ILIKE p.pattern\n                END\n            UNION\n            SELECT o.channel_id, p.term\n            FROM other_participant_names o\n            CROSS JOIN patterns p\n            WHERE CASE\n                WHEN $7::bool THEN o.name ~* p.pattern\n                ELSE o.name ILIKE p.pattern\n            END\n        )\n        SELECT vc.id AS \"id!\", vc.updated_at AS \"updated_at!\"\n        FROM viewer_channels vc\n        JOIN matched_terms m ON m.channel_id = vc.id\n        GROUP BY vc.id, vc.updated_at\n        HAVING count(DISTINCT m.term) = cardinality($6::text[])\n        ORDER BY vc.updated_at DESC, vc.id DESC\n        LIMIT $10\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "updated_at!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "UuidArray",
+        "TextArray",
+        "Timestamptz",
+        "Uuid",
+        "TextArray",
+        "Bool",
+        "UuidArray",
+        "TextArray",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "8a1de26889315defbcc28c2fca5be575c947aa4509645530627c7614b87bbae3"
+}

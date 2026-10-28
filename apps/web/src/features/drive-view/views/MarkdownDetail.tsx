@@ -6,7 +6,6 @@ import {
 import { ModalsProvider } from '@block-md/component/ModalsProvider';
 import { MarkdownSidePanelSections } from '@block-md/component/sidepanel/MarkdownSidePanelSections';
 import { createMarkdownDocumentState } from '@block-md/context/markdown-document-state';
-import { OldOverlay } from '@block-md/history/OldOverlay';
 import { createMarkdownRouteNavigation } from '@block-md/primitives/create-markdown-route-navigation';
 import {
   loadMarkdownDocument,
@@ -20,21 +19,15 @@ import {
 } from '@components/app/GlobalAppState';
 import { SidePanel } from '@components/app/side-panel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 import { ENABLE_MARKDOWN_SIDE_PANEL } from '@core/constant/featureFlags';
 import { createMethodRegistration } from '@core/orchestrator';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { DocumentDebouncedNotificationReadMarker } from '@notifications';
-import SpinnerIcon from '@phosphor/spinner.svg';
+import { useItemRawName } from '@queries/preview';
 import { Button } from '@ui';
-import {
-  createComputed,
-  createResource,
-  ErrorBoundary,
-  type JSX,
-  Match,
-  Show,
-  Suspense,
-  Switch,
-} from 'solid-js';
+import { createComputed, type JSX, Match, Show, Switch } from 'solid-js';
+import { FileDetailLoadGate } from '../components/FileDetail';
 import type { FileDetailContext } from '../util/file-detail-context';
 
 export type MarkdownDetailContext = FileDetailContext<MarkdownDocumentData>;
@@ -59,6 +52,7 @@ export function MarkdownDetailBodyState(props: {
       <Switch
         fallback={
           <SpinnerIcon
+            aria-hidden={false}
             aria-label={`Loading ${entityLabel()}`}
             class="size-5 animate-spin"
           />
@@ -70,7 +64,7 @@ export function MarkdownDetailBodyState(props: {
             <pre class="max-h-48 max-w-full overflow-auto whitespace-pre-wrap text-left text-failure text-xs">
               {String(props.error)}
             </pre>
-            <Button variant="outline" size="sm" onClick={props.onAction}>
+            <Button variant="secondary" size="sm" onClick={props.onAction}>
               {props.actionLabel ?? 'Reset'}
             </Button>
           </div>
@@ -93,6 +87,14 @@ function MarkdownDetailContent(props: {
   const state = createMarkdownDocumentState();
   createMarkdownRouteNavigation(() => props.documentId, state.params.navigate);
 
+  // Subscribe to live name updates so the title updates when another person renames it.
+  const liveName = useItemRawName(() => ({
+    id: props.documentId,
+    type: 'document',
+  }));
+  const persistedName = () =>
+    liveName() ?? props.data.metadata.documentName ?? '';
+
   // Mention chips and notifications aim an open document at a comment or node
   // through its block handle; without one the click only activates the view.
   createComputed(() => {
@@ -109,17 +111,16 @@ function MarkdownDetailContent(props: {
       state={state}
       documentSource={{ type: 'sync', source: props.data.source }}
       permissions={props.data.permissions}
-      persistedName={props.data.metadata.documentName}
+      persistedName={persistedName()}
       fallbackName={props.fallbackName}
     >
       <ModalsProvider>
-        <OldOverlay />
         {props.children?.({
           data: props.data,
           documentMetadata: props.data.metadata,
           userAccessLevel: props.data.userAccessLevel,
         })}
-        <SidePanel.Layout headerToggle={false}>
+        <SidePanel.Layout headerToggle={false} floating>
           <Show when={ENABLE_MARKDOWN_SIDE_PANEL}>
             <MarkdownSidePanelSections />
           </Show>
@@ -147,50 +148,27 @@ function MarkdownDetailContent(props: {
 
 /** Renders a markdown document without a block container or split header. */
 export function MarkdownDetail(props: MarkdownDetailProps) {
-  const [document, { refetch }] = createResource(
-    () => props.documentId,
-    loadMarkdownDocument
-  );
-  const entityLabel = () => (props.kind === 'task' ? 'task' : 'document');
-
   return (
-    <Suspense
-      fallback={<MarkdownDetailBodyState entityLabel={entityLabel()} />}
+    <FileDetailLoadGate
+      documentId={props.documentId}
+      entityType="md"
+      label={props.kind === 'task' ? 'task' : 'document'}
+      load={loadMarkdownDocument}
     >
-      <Switch>
-        <Match when={document.error}>
-          {(error) => (
-            <MarkdownDetailBodyState
-              entityLabel={entityLabel()}
-              error={error()}
-              actionLabel="Try again"
-              onAction={() => void refetch()}
-            />
-          )}
-        </Match>
-        <Match when={document()}>
-          {(data) => (
-            <ErrorBoundary
-              fallback={(error, reset) => (
-                <MarkdownDetailBodyState
-                  entityLabel={entityLabel()}
-                  error={error}
-                  actionLabel="Reset"
-                  onAction={reset}
-                />
-              )}
-            >
-              <MarkdownDetailContent
-                documentId={props.documentId}
-                kind={props.kind ?? 'document'}
-                fallbackName={props.fallbackName ?? 'Untitled'}
-                data={data()}
-                children={props.children}
-              />
-            </ErrorBoundary>
-          )}
-        </Match>
-      </Switch>
-    </Suspense>
+      {(data) => (
+        <MarkdownDetailContent
+          documentId={props.documentId}
+          kind={props.kind ?? 'document'}
+          fallbackName={
+            props.fallbackName ||
+            blockNameToDefaultFile(
+              props.kind && props.kind !== 'document' ? props.kind : 'md'
+            )
+          }
+          data={data}
+          children={props.children}
+        />
+      )}
+    </FileDetailLoadGate>
   );
 }

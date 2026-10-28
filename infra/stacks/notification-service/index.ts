@@ -11,11 +11,12 @@ import {
 } from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
 import { PushNotificationEventHandler } from './push';
+import { NotificationRetention } from './retention';
 import { NotificationService } from './service';
 
 const tags = {
   environment: stack,
-  tech_lead: 'hutch',
+  tech_lead: 'teo',
   project: 'notifications',
 };
 
@@ -62,6 +63,19 @@ const authenticationServiceInternalApiKeyArn: pulumi.Output<string> =
     .apply((secret) => secret.arn);
 
 export const coparse_api_vpc = get_coparse_api_vpc();
+
+// Fetch as a secret Pulumi output; never export the database URL.
+const retentionDatabaseUrl = aws.secretsmanager
+  .getSecretVersionOutput({ secretId: config.require('macro_db_secret_key') })
+  .apply((secret) => pulumi.secret(secret.secretString));
+
+new NotificationRetention('notification-retention', {
+  databaseUrl: retentionDatabaseUrl,
+  enabled: config.getBoolean('notification_retention_enabled') ?? false,
+  dryRun: config.getBoolean('notification_retention_dry_run') ?? true,
+  vpc: coparse_api_vpc,
+  tags,
+});
 
 const cloudStorageStack = new pulumi.StackReference('cloud-storage-stack', {
   name: `macro-inc/document-storage/${stack}`,

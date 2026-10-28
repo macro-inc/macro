@@ -183,6 +183,7 @@ fn authoritative_direct_fields_without_projection_schema_field_become_v4_patch()
         }
     }"#;
     let mutations = authoritative_projection_mutations(
+        cache_core::meta::bundled_schema_ref(),
         query,
         Some("LegacySoup"),
         &serde_json::json!({
@@ -213,6 +214,7 @@ fn authoritative_direct_fields_without_projection_schema_field_become_v4_patch()
 fn partial_queries_preserve_v4_authority_and_mark_missing_v4() {
     let id = "00000000-0000-0000-0000-000000000001";
     let base_mutations = authoritative_projection_mutations(
+        cache_core::meta::bundled_schema_ref(),
         SUPPLEMENT_SUBSCRIPTION,
         Some("Supplement"),
         &supplement_subscription_data(selected_document(
@@ -240,6 +242,7 @@ fn partial_queries_preserve_v4_authority_and_mark_missing_v4() {
         }
     }"#;
     let mutations = authoritative_projection_mutations(
+        cache_core::meta::bundled_schema_ref(),
         query,
         Some("SoupNotifications"),
         &serde_json::json!({
@@ -324,6 +327,7 @@ fn empty_query_patch_does_not_overwrite_an_earlier_field_patch() {
         }
     }"#;
     let mutations = authoritative_projection_mutations(
+        cache_core::meta::bundled_schema_ref(),
         query,
         Some("RepeatedSoupEntity"),
         &serde_json::json!({
@@ -473,6 +477,7 @@ fn selected_document_supplement_composes_direct_and_server_owned_facts() {
     let id = "00000000-0000-0000-0000-000000000001";
     let encoded = document_supplement(id, false);
     let mutations = authoritative_projection_mutations(
+        cache_core::meta::bundled_schema_ref(),
         SUPPLEMENT_SUBSCRIPTION,
         Some("Supplement"),
         &supplement_subscription_data(selected_document(
@@ -497,6 +502,7 @@ fn selected_document_supplement_composes_direct_and_server_owned_facts() {
     }));
 
     let attached = authoritative_projection_mutations(
+        cache_core::meta::bundled_schema_ref(),
         SUPPLEMENT_SUBSCRIPTION,
         Some("Supplement"),
         &supplement_subscription_data(selected_document(
@@ -533,6 +539,7 @@ fn selected_document_supplement_composes_importance_and_status_facts() {
     let status_a = uuid::Uuid::from_u128(11);
     let status_b = uuid::Uuid::from_u128(12);
     let mutations = authoritative_projection_mutations(
+        cache_core::meta::bundled_schema_ref(),
         SUPPLEMENT_SUBSCRIPTION,
         Some("Supplement"),
         &supplement_subscription_data(selected_document(
@@ -571,6 +578,7 @@ fn document_subtype_postings_are_composed_from_graphql_typenames() {
     ] {
         let id = format!("00000000-0000-0000-0000-{suffix:012}");
         let mutations = authoritative_projection_mutations(
+            cache_core::meta::bundled_schema_ref(),
             SUPPLEMENT_SUBSCRIPTION,
             Some("Supplement"),
             &supplement_subscription_data(selected_document(
@@ -603,6 +611,7 @@ fn selected_project_and_chat_null_supplements_are_valid_direct_only_v4_hydration
         } } }
     }"#;
     let mutations = authoritative_projection_mutations(
+        cache_core::meta::bundled_schema_ref(),
         query,
         Some("SoupBackfill"),
         &serde_json::json!({
@@ -673,6 +682,7 @@ fn missing_malformed_or_mismatched_document_supplements_remain_incomplete() {
         ),
     ] {
         let mutations = authoritative_projection_mutations(
+            cache_core::meta::bundled_schema_ref(),
             SUPPLEMENT_SUBSCRIPTION,
             Some("Supplement"),
             &supplement_subscription_data(item),
@@ -709,6 +719,7 @@ fn backfill_rejects_invalid_supplements_and_missing_direct_document_fields() {
         missing_owner,
     ] {
         let error = authoritative_projection_mutations(
+            cache_core::meta::bundled_schema_ref(),
             SUPPLEMENT_BACKFILL,
             Some("SoupBackfill"),
             &serde_json::json!({ "user": { "soup": { "items": [item] } } }),
@@ -721,6 +732,7 @@ fn backfill_rejects_invalid_supplements_and_missing_direct_document_fields() {
     }
 
     let mutations = authoritative_projection_mutations(
+        cache_core::meta::bundled_schema_ref(),
         SUPPLEMENT_BACKFILL,
         Some("SoupBackfill"),
         &serde_json::json!({
@@ -786,8 +798,13 @@ fn partial_mutation_payloads_patch_v4_without_fabricating_server_facts() {
             }]
         }
     });
-    let mutations =
-        authoritative_projection_mutations(query, Some("PartialRename"), &data).unwrap();
+    let mutations = authoritative_projection_mutations(
+        cache_core::meta::bundled_schema_ref(),
+        query,
+        Some("PartialRename"),
+        &data,
+    )
+    .unwrap();
     let [
         ProjectionMutation::Patch {
             profile,
@@ -1392,4 +1409,40 @@ fn soup_flat_v3_supplement_goldens_lock_viewer_relative_wire() {
             case.name
         );
     }
+}
+
+#[test]
+fn runtime_schema_traverses_new_fields_for_existing_entity_projections() {
+    let baseline = cache_core::meta::bundled_schema();
+    let mut artifact = baseline.artifact().clone();
+    let query_root = artifact.query_root.clone();
+    artifact
+        .types
+        .iter_mut()
+        .find(|ty| ty.name == query_root)
+        .unwrap()
+        .fields
+        .push(cache_core::meta::OwnedFieldMeta {
+            name: "runtimeDocument".into(),
+            ty: cache_core::meta::OwnedFieldType {
+                name: "GraphqlSoupDocument".into(),
+                kind: cache_core::meta::FieldKind::Composite,
+                nullable: true,
+                list: false,
+                item_nullable: false,
+            },
+        });
+    let schema = cache_core::meta::Schema::from_artifact(artifact).unwrap();
+    let query = "query { runtimeDocument { id name } }";
+    let data = serde_json::json!({"runtimeDocument": {"id": "00000000-0000-4000-8000-000000000001", "name": "OTA document"}});
+    assert!(
+        authoritative_projection_mutations(&baseline, query, None, &data)
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        !authoritative_projection_mutations(&schema, query, None, &data)
+            .unwrap()
+            .is_empty()
+    );
 }

@@ -1,6 +1,9 @@
 //! Service layer for system properties.
 
+use std::collections::HashMap;
+
 use models_properties::EntityType;
+use uuid::Uuid;
 
 #[cfg(test)]
 mod test;
@@ -9,8 +12,8 @@ use crate::{
     StatusOption,
     domain::{
         model::{
-            EmailAttachmentInput, EmailAttachmentProperty, PropertyRow, SystemPropertyError,
-            SystemPropertyKey,
+            CrmRecordLink, EmailAttachmentInput, EmailAttachmentProperty, PropertyRow,
+            SystemPropertyError, SystemPropertyKey,
         },
         port::SystemPropertiesRepository,
     },
@@ -26,6 +29,17 @@ pub trait SystemPropertiesService: Clone + Send + Sync + 'static {
     fn set_email_attachment_properties(
         &self,
         items: Vec<EmailAttachmentInput>,
+    ) -> impl Future<Output = Result<(), SystemPropertyError>> + Send;
+
+    /// Associate an entity with CRM companies and contacts through the
+    /// Companies and Contacts properties.
+    ///
+    /// Existing values are left unchanged, so automatic linking never
+    /// overwrites associations a user already edited. Empty id lists write
+    /// nothing.
+    fn link_crm_records(
+        &self,
+        link: CrmRecordLink,
     ) -> impl Future<Output = Result<(), SystemPropertyError>> + Send;
 
     /// Set empty task system properties for multiple entities.
@@ -60,6 +74,21 @@ pub trait SystemPropertiesService: Clone + Send + Sync + 'static {
         task_id: &str,
         status: StatusOption,
     ) -> impl Future<Output = Result<(), SystemPropertyError>> + Send;
+
+    /// Tasks whose Project property names `project_id`, in id order. Callers
+    /// authorize each task before showing it.
+    fn project_task_ids(
+        &self,
+        project_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<String>, SystemPropertyError>> + Send;
+
+    /// The project each listed task belongs to, from its Project property.
+    /// Tasks without a project are absent. Callers authorize both ends before
+    /// showing it.
+    fn task_projects(
+        &self,
+        task_ids: Vec<String>,
+    ) -> impl Future<Output = Result<HashMap<String, Uuid>, SystemPropertyError>> + Send;
 }
 
 /// Implementation of SystemPropertiesService using a repository.
@@ -96,6 +125,13 @@ where
             .collect();
 
         self.repository.bulk_insert_properties_if_absent(rows).await
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn link_crm_records(&self, link: CrmRecordLink) -> Result<(), SystemPropertyError> {
+        self.repository
+            .bulk_insert_properties_if_absent(collect_crm_record_rows(link))
+            .await
     }
 
     #[tracing::instrument(skip(self, entity_ids))]
@@ -142,6 +178,29 @@ where
         status: StatusOption,
     ) -> Result<(), SystemPropertyError> {
         self.repository.update_task_status(task_id, status).await
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn project_task_ids(&self, project_id: Uuid) -> Result<Vec<String>, SystemPropertyError> {
+        self.repository.project_task_ids(project_id).await
+    }
+
+    #[tracing::instrument(err, skip(self, task_ids))]
+    async fn task_projects(
+        &self,
+        task_ids: Vec<String>,
+    ) -> Result<HashMap<String, Uuid>, SystemPropertyError> {
+        if task_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+        Ok(self
+            .repository
+            .task_projects(&task_ids)
+            .await?
+            .into_iter()
+            // Writes store canonical ids; anything else names no project.
+            .filter_map(|(task_id, project_id)| Some((task_id, project_id.parse().ok()?)))
+            .collect())
     }
 }
 
@@ -216,6 +275,41 @@ fn collect_email_property_rows(
     }
 
     rows
+}
+
+/// Collect the Companies and Contacts rows for one entity, skipping empty lists.
+fn collect_crm_record_rows(link: CrmRecordLink) -> Vec<PropertyRow> {
+    let CrmRecordLink {
+        entity_id,
+        entity_type,
+        company_ids,
+        contact_ids,
+    } = link;
+    [
+        (
+            SystemPropertyKey::Companies,
+            EntityType::Company,
+            company_ids,
+        ),
+        (
+            SystemPropertyKey::Contacts,
+            EntityType::Contact,
+            contact_ids,
+        ),
+    ]
+    .into_iter()
+    .filter(|(_, _, ids)| !ids.is_empty())
+    .map(|(key, ref_type, ids)| {
+        PropertyRow::entity_reference(
+            entity_id.as_str(),
+            entity_type,
+            key.uuid(),
+            ref_type,
+            ids.iter().map(ToString::to_string).collect(),
+            None,
+        )
+    })
+    .collect()
 }
 
 /// Collect property rows for a single entity's task properties.

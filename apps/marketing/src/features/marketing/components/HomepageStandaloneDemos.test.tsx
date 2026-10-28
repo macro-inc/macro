@@ -1,9 +1,16 @@
-import { cleanup, fireEvent, render } from '@solidjs/testing-library';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import HomepageEmailCompose from './HomepageEmailCompose';
 import HomepageSpreadsheet from './HomepageSpreadsheet';
 
 beforeEach(() => {
+  vi.stubGlobal('scrollTo', vi.fn());
   vi.stubGlobal('matchMedia', () => ({
     matches: true,
     addEventListener: vi.fn(),
@@ -13,6 +20,14 @@ beforeEach(() => {
     'IntersectionObserver',
     class {
       observe() {}
+      disconnect() {}
+    }
+  );
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
       disconnect() {}
     }
   );
@@ -31,6 +46,12 @@ afterEach(() => {
 describe('standalone website demos', () => {
   it('opens Bcc, edits the draft, and sends only within the local demo', () => {
     const view = render(() => <HomepageEmailCompose />);
+    expect(
+      (view.getByRole('textbox', { name: 'To' }) as HTMLInputElement).value
+    ).toBe('Valentina <valentina@coparse.com>');
+    expect(
+      (view.getByRole('textbox', { name: 'Cc' }) as HTMLInputElement).value
+    ).toBe('Julia <julia@macro.com>');
     expect(
       view.getByRole('textbox', { name: 'Email body' }).textContent
     ).toContain('Thanks for joining the demo');
@@ -73,34 +94,91 @@ describe('standalone website demos', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it('opens company and person mentions locally and preserves the sheet on return', async () => {
+    const view = render(() => <HomepageSpreadsheet />);
+    const company = view.getByRole('button', { name: 'Open Coparse' });
+    fireEvent.click(company);
+    // The first linked record loads a separate chunk; include its cold test transform.
+    const dialog = await screen.findByRole(
+      'dialog',
+      { name: 'Coparse' },
+      { timeout: 3000 }
+    );
+    expect(
+      (
+        within(dialog).getByRole('textbox', {
+          name: 'Company name',
+        }) as HTMLInputElement
+      ).value
+    ).toBe('Coparse');
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Close linked record' })
+    );
+    expect(
+      view
+        .getByRole('gridcell', { name: 'B2: Coparse' })
+        .getAttribute('aria-selected')
+    ).toBe('true');
+    fireEvent.click(view.getByRole('button', { name: 'Open Valentina' }));
+    const contact = await screen.findByRole('dialog', {
+      name: 'Valentina · Coparse',
+    });
+    expect(within(contact).getByText('valentina@coparse.com')).toBeTruthy();
+    fireEvent.click(
+      within(contact).getByRole('button', { name: 'Close linked record' })
+    );
+    const cell = view.getByRole('gridcell', { name: 'B2: Coparse' });
+    fireEvent.click(cell);
+    fireEvent.dblClick(cell);
+    fireEvent.input(view.getByRole('textbox', { name: 'Edit B2' }), {
+      target: { value: 'New company' },
+    });
+    fireEvent.keyDown(view.getByRole('textbox', { name: 'Edit B2' }), {
+      key: 'Enter',
+    });
+    expect(view.queryByRole('button', { name: 'Open New company' })).toBeNull();
+    fireEvent.click(view.getByRole('button', { name: 'Undo' }));
+    expect(view.getByRole('button', { name: 'Open Coparse' })).toBeTruthy();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it('edits cells, commits keyboard navigation, and restores edits with undo and redo', () => {
     const view = render(() => <HomepageSpreadsheet />);
+    expect(view.getByRole('gridcell', { name: 'B2: Coparse' })).toBeTruthy();
+    expect(
+      view.getByRole('gridcell', { name: 'C3: maya@lumen.example' })
+    ).toBeTruthy();
+    expect(
+      view.getByRole('gridcell', { name: 'C4: owen@fieldnote.example' })
+    ).toBeTruthy();
     const cell = view.getByRole('gridcell', {
-      name: 'A2: Dana Whitfield',
+      name: 'A2: Valentina',
     });
     fireEvent.click(cell);
     fireEvent.dblClick(cell);
     fireEvent.input(view.getByRole('textbox', { name: 'Edit A2' }), {
-      target: { value: 'Dana Test' },
+      target: { value: 'Valentina Test' },
     });
     fireEvent.keyDown(view.getByRole('textbox', { name: 'Edit A2' }), {
       key: 'Enter',
     });
-    expect(view.getByRole('gridcell', { name: 'A2: Dana Test' })).toBeTruthy();
+    expect(
+      view.getByRole('gridcell', { name: 'A2: Valentina Test' })
+    ).toBeTruthy();
     expect(
       view
-        .getByRole('gridcell', { name: 'A3: Maya Chen' })
+        .getByRole('gridcell', { name: 'A3: Maya' })
         .getAttribute('aria-selected')
     ).toBe('true');
     fireEvent.click(view.getByRole('button', { name: 'Undo' }));
-    expect(
-      view.getByRole('gridcell', { name: 'A2: Dana Whitfield' })
-    ).toBeTruthy();
+    expect(view.getByRole('gridcell', { name: 'A2: Valentina' })).toBeTruthy();
     fireEvent.click(view.getByRole('button', { name: 'Redo' }));
-    expect(view.getByRole('gridcell', { name: 'A2: Dana Test' })).toBeTruthy();
+    expect(
+      view.getByRole('gridcell', { name: 'A2: Valentina Test' })
+    ).toBeTruthy();
     fireEvent.click(view.getByRole('button', { name: 'Bold' }));
     expect(
-      view.getByRole('gridcell', { name: 'A3: Maya Chen' }).style.fontWeight
+      view.getByRole('gridcell', { name: 'A3: Maya' }).style.fontWeight
     ).toBe('700');
     expect(fetch).not.toHaveBeenCalled();
   });

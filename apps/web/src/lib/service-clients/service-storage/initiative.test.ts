@@ -1,3 +1,4 @@
+import { withOptimisticMutationDisposition } from '@graphql-cache/exchange/optimistic';
 import {
   CombinedError,
   createClient,
@@ -22,7 +23,6 @@ const project = {
   __typename: 'GraphqlSoupInitiative',
   id: 'project-1',
   displayName: 'Launch',
-  descriptionDocumentId: 'description-1',
   metadata: {
     ownerId: 'macro|owner@example.com',
     updatedAt: '2026-09-22T12:00:00Z',
@@ -49,7 +49,9 @@ const project = {
 } satisfies InitiativeDetailFieldsFragment;
 
 function clientWith(
-  reply: (operation: Operation) => Pick<OperationResult, 'data' | 'error'>
+  reply: (
+    operation: Operation
+  ) => Pick<OperationResult, 'data' | 'error' | 'extensions'>
 ) {
   const requests: Operation[] = [];
   const exchange: Exchange = () => (operations) =>
@@ -69,6 +71,50 @@ function clientWith(
 }
 
 describe('initiative GraphQL transport', () => {
+  it('acknowledges a queued partial update without treating it as a full detail record', async () => {
+    const { client } = clientWith((operation) =>
+      withOptimisticMutationDisposition(
+        {
+          operation,
+          data: {
+            updateInitiative: {
+              __typename: 'GraphqlSoupInitiative',
+              id: 'project-1',
+              displayName: 'Queued',
+            },
+          },
+          stale: false,
+          hasNext: false,
+        },
+        { kind: 'queued', transactionId: 'queued-update' }
+      )
+    );
+    const result = await client.update('project-1', { name: 'Queued' });
+    expect(result.isOk()).toBe(true);
+    expect(result.isOk() && result.value).toBeUndefined();
+  });
+
+  it('reports a rejected edit instead of acknowledging it', async () => {
+    const { client } = clientWith((operation) =>
+      withOptimisticMutationDisposition(
+        {
+          operation,
+          stale: false,
+          hasNext: false,
+          error: new CombinedError({
+            graphQLErrors: [
+              { message: 'Forbidden', extensions: { code: 'FORBIDDEN' } },
+            ],
+          }),
+        },
+        { kind: 'permanently-failed' }
+      )
+    );
+    const result = await client.update('project-1', { name: 'Rejected' });
+    expect(result.isErr() && result.error).toEqual([
+      { code: 'FORBIDDEN', message: 'Forbidden' },
+    ]);
+  });
   it('preserves project identity and sharing levels on detail reads', async () => {
     const { client, requests } = clientWith(() => ({
       data: { user: { initiative: project } },
@@ -85,7 +131,6 @@ describe('initiative GraphQL transport', () => {
       ownerId: 'macro|owner@example.com',
       updatedAt: '2026-09-22T12:00:00Z',
       createdAt: '2026-09-20T12:00:00Z',
-      descriptionDocumentId: 'description-1',
       userAccessLevel: 'comment',
       taskIds: ['task-1'],
       sharePermission: {
@@ -149,57 +194,5 @@ describe('initiative GraphQL transport', () => {
     });
     const result = await client.get('project-1', controller.signal);
     expect(result.isErr()).toBe(true);
-  });
-
-  it('does not expose a restricted task relationship', async () => {
-    const { client, requests } = clientWith(() => ({
-      data: {
-        user: {
-          taskInitiativeReferences: [
-            { taskId: 'task-1', state: 'UNAVAILABLE', initiative: null },
-            {
-              taskId: 'task-2',
-              state: 'VISIBLE',
-              initiative: {
-                __typename: 'GraphqlSoupInitiative',
-                id: 'project-1',
-                displayName: 'Launch',
-              },
-            },
-          ],
-        },
-      },
-    }));
-    const result = await client.taskReferences(['task-1', 'task-2']);
-    expect(requests[0].variables).toEqual({ taskIds: ['task-1', 'task-2'] });
-    expect(result.isOk() && result.value.references).toEqual([
-      { taskId: 'task-1', state: 'unavailable', initiative: null },
-      {
-        taskId: 'task-2',
-        state: 'visible',
-        initiative: { id: 'project-1', name: 'Launch' },
-      },
-    ]);
-  });
-
-  it('preserves per-task failures instead of treating a batch response as full success', async () => {
-    const { client, requests } = clientWith(() => ({
-      data: {
-        assignInitiativeTasks: [
-          { taskId: 'task-1', status: 'MOVED' },
-          { taskId: 'task-2', status: 'SKIPPED_NO_PERMISSION' },
-          { taskId: 'task-3', status: 'NOT_A_TASK' },
-        ],
-      },
-    }));
-    const result = await client.assignTasks('project-1', {
-      taskIds: ['task-1', 'task-2', 'task-3'],
-    });
-    expect(requests[0].kind).toBe('mutation');
-    expect(result.isOk() && result.value.results).toEqual([
-      { taskId: 'task-1', status: 'moved' },
-      { taskId: 'task-2', status: 'skippedNoPermission' },
-      { taskId: 'task-3', status: 'notATask' },
-    ]);
   });
 });

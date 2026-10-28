@@ -1,5 +1,6 @@
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { createSyntheticFileEntry } from '@core/util/dataTransfer';
+import { isPlatform } from '@core/util/platform';
 import { isAndroid, isIOS } from '@solid-primitives/platform';
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import {
@@ -56,7 +57,9 @@ async function readImageEntryFromNativePasteboard(): Promise<FileSystemFileEntry
 
   try {
     const image = await invoke<NativeStagedUploadData>(
-      'plugin:pasteboard|stage_pasteboard_image'
+      isPlatform('android')
+        ? 'plugin:android-mobile|stageClipboardImage'
+        : 'plugin:pasteboard|stage_pasteboard_image'
     );
     const file = createNativeStagedUploadFile('pasteboard', image);
     return file ? createSyntheticFileEntry(file) : null;

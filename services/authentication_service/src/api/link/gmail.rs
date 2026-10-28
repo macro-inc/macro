@@ -8,17 +8,18 @@ use axum::{
 use calendar_events::domain::models::google_calendar_scope_parameter;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_middleware::tracking::ClientIp;
-use macro_user_id::user_id::MacroUserIdStr;
 use model::response::ErrorResponse;
 use roles_and_permissions::domain::model::PermissionId;
 use serde_utils::urlencode::UrlEncoded;
 use url::Url;
 
-use crate::api::{
-    context::{ApiContext, AuthorizationService},
-    link::github::REAUTHENTICATION_REQUIRED_MESSAGE,
-    oauth2::OAuthState,
-    permissions_extractor::DbPermissionsExtractor,
+use crate::{
+    account_link_state::{AccountLinkState, LinkProvider, sign_account_link_state},
+    api::{
+        context::{ApiContext, AuthorizationService},
+        link::github::REAUTHENTICATION_REQUIRED_MESSAGE,
+        permissions_extractor::DbPermissionsExtractor,
+    },
 };
 
 #[cfg(test)]
@@ -31,7 +32,6 @@ const GMAIL_SCOPES: &str = "openid profile email https://www.googleapis.com/auth
 /// that consented from the `sub` and `email` claims on Google's id_token, and
 /// Google only mints one when `openid` is requested.
 const IDENTITY_SCOPES: &str = "openid email";
-const FREE_INBOX_LIMIT: i64 = 2;
 
 /// Which capabilities a consent request covers. Calendar surfaces ask for
 /// [`ConsentScopes::Calendar`] when the mailbox is already connected, so the
@@ -102,6 +102,7 @@ pub(crate) struct InitGmailLinkQueryParams {
     original_url: Option<UrlEncoded<Url>>,
     #[serde(default)]
     scopes: ConsentScopes,
+    reconnect_link_id: Option<uuid::Uuid>,
 }
 
 /// Initiates a Gmail link for a user
@@ -111,6 +112,7 @@ pub(crate) struct InitGmailLinkQueryParams {
         path = "/link/gmail",
         params(
             ("original_url" = String, Query, description = "**OPTIONAL**. The original url to redirect to."),
+            ("reconnect_link_id" = Option<uuid::Uuid>, Query, description = "Existing accessible Gmail inbox being reconnected; does not consume an additional inbox slot."),
             ("scopes" = Option<String>, Query, description = "**OPTIONAL**. Which capabilities to request consent for: `gmail` (default), `gmail_and_calendar`, or `calendar`. The calendar variants are only honored when the deployment allows calendar scope requests.")
         ),
         responses(
@@ -132,21 +134,33 @@ pub async fn init_gmail_link_handler(
     let Query(InitGmailLinkQueryParams {
         original_url,
         scopes,
+        reconnect_link_id,
     }) = query;
     let authorization = &db_permissions.authorization;
+    let fusion_user_id = &authorization.authorization.user.user_context.fusion_user_id;
+    let initiator =
+        macro_uuid::string_to_uuid(fusion_user_id).context("fusion user id must be a uuid")?;
 
-    enforce_inbox_paywall(
-        db_permissions
-            .permissions
-            .contains(&PermissionId::ReadProfessionalFeatures.to_string()),
-        || count_accessible_email_inboxes(&ctx.db, &authorization.authorization.user.macro_user_id),
-    )
-    .await?;
+    if !ctx
+        .inbox_connections
+        .permits_connection(
+            authorization.authorization.user.macro_user_id.clone(),
+            db_permissions
+                .permissions
+                .contains(&PermissionId::ReadProfessionalFeatures.to_string()),
+            email::domain::models::UserProvider::Gmail,
+            reconnect_link_id,
+        )
+        .await
+        .map_err(anyhow::Error::from)?
+    {
+        return Err(InitGmailLinkError::PaymentRequired);
+    }
 
     let count =
         macro_db_client::in_progress_user_link::count_existing_in_progress_user_links_for_user(
             &ctx.db,
-            &authorization.authorization.user.user_context.fusion_user_id,
+            fusion_user_id,
         )
         .await?;
 
@@ -161,7 +175,7 @@ pub async fn init_gmail_link_handler(
         .collect();
     let link_id = macro_db_client::in_progress_user_link::create_in_progress_google_link(
         &ctx.db,
-        &authorization.authorization.user.user_context.fusion_user_id,
+        fusion_user_id,
         &requested_google_scopes,
     )
     .await?;
@@ -172,15 +186,20 @@ pub async fn init_gmail_link_handler(
         .await
         .map_err(|_| InitGmailLinkError::IdentityProviderNotFound)?;
 
-    let state = OAuthState {
-        identity_provider_id: gmail_idp_id,
-        link_id: Some(link_id),
-        original_url: original_url.map(|x| x.0.to_string()),
-        is_mobile: None,
-    };
+    // The state is signed and bound to this user, this link, and the Google
+    // callback: the callback refuses anything else, so the authorization URL
+    // cannot be rewritten to point another user's consent at this link.
+    let state = AccountLinkState::new(
+        LinkProvider::Google,
+        gmail_idp_id,
+        link_id,
+        initiator,
+        original_url.map(|x| x.0.to_string()),
+    );
 
-    let redirect_uri = crate::api::oauth2::format_redirect_uri("google");
-    let state_str = serde_json::to_string(&state).context("failed to serialize OAuth state")?;
+    let redirect_uri = crate::api::oauth2::format_redirect_uri(LinkProvider::Google.as_str());
+    let state_str = sign_account_link_state(&state, &ctx.account_link_state_key)
+        .context("failed to sign OAuth state")?;
 
     let authorization_url = google_authorization_url(
         ctx.auth_client.google_client_id(),
@@ -232,36 +251,6 @@ fn google_authorization_url(
         .append_pair("include_granted_scopes", "true")
         .append_pair("prompt", "consent");
     Ok(authorization_url)
-}
-
-#[tracing::instrument(skip(db, macro_user_id), err)]
-async fn count_accessible_email_inboxes(
-    db: &sqlx::Pool<sqlx::Postgres>,
-    macro_user_id: &MacroUserIdStr<'static>,
-) -> anyhow::Result<i64> {
-    let inboxes =
-        email_db_client::links::get::fetch_inboxes_for_macro_id(db, macro_user_id.as_ref()).await?;
-
-    Ok(inboxes.len() as i64)
-}
-
-/// Enforces the inbox paywall. Free users can connect inboxes until they reach
-/// `FREE_INBOX_LIMIT`; professional users skip the count entirely.
-async fn enforce_inbox_paywall<F, Fut>(
-    has_professional_features: bool,
-    count_connected_inboxes: F,
-) -> Result<(), InitGmailLinkError>
-where
-    F: FnOnce() -> Fut,
-    Fut: std::future::Future<Output = anyhow::Result<i64>>,
-{
-    if !has_professional_features {
-        let connected_inbox_count = count_connected_inboxes().await?;
-        if connected_inbox_count >= FREE_INBOX_LIMIT {
-            return Err(InitGmailLinkError::PaymentRequired);
-        }
-    }
-    Ok(())
 }
 
 #[derive(serde::Deserialize, serde::Serialize, Debug, utoipa::ToSchema)]

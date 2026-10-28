@@ -10,9 +10,9 @@ use messages::domain::{
     api::{MessageCommands, MessageReader},
     models::{
         Message, MessageAttribution, MessageParent, MessageThread, NewThreadAnchor, PostMessage,
-        PostMessageNotificationPolicy, ThreadPatch, ThreadState,
+        ThreadPatch, ThreadState,
     },
-    ports::{MessageError, MessagePage, MessagePatch, MessageTimelineQuery},
+    ports::{MessageError, MessagePage, MessagePatch, MessageTimelinePage, MessageTimelineQuery},
     service::{MessageView, MessageWrite},
 };
 use models_permissions::share_permission::access_level::AccessLevel;
@@ -23,35 +23,19 @@ use crate::domain::permission_token::decode_permission_token;
 
 use super::{
     DocumentToolContext,
-    comment_on_document::CommentOnDocument,
+    comment_on_text::CommentOnText,
     edit_document::test::{FakeDocumentService, FakeEditingWorker, FakeEntityAccessService},
-    resolve_document_comment::ResolveDocumentComment,
 };
 
 const USER: &str = "macro|commenter@example.com";
 const DOCUMENT: Uuid = Uuid::from_u128(0x019fd3b9_3c6c_7c05_89c2_a27f0121813b);
-const THREAD: Uuid = Uuid::from_u128(7);
 
-/// Records the comment writes the tools make; `thread_exists` false answers
-/// them as the message service does for a thread not on the document.
-#[derive(Clone)]
+/// Records the comment threads the tool posts.
+#[derive(Clone, Default)]
 pub(in crate::inbound::toolset) struct FakeMessages {
-    thread_exists: bool,
     /// Refuse every post, as the message service does an anchor it rejects.
     fail_posts: bool,
     posts: Arc<Mutex<Vec<(EntityAccessReceipt<MessageWrite>, PostMessage)>>>,
-    thread_patches: Arc<Mutex<Vec<(EntityAccessReceipt<MessageWrite>, Uuid, ThreadPatch)>>>,
-}
-
-impl Default for FakeMessages {
-    fn default() -> Self {
-        Self {
-            thread_exists: true,
-            fail_posts: false,
-            posts: Arc::default(),
-            thread_patches: Arc::default(),
-        }
-    }
 }
 
 #[async_trait::async_trait]
@@ -77,6 +61,13 @@ impl MessageReader for FakeMessages {
     ) -> Result<MessagePage, MessageError> {
         panic!("unexpected timeline call")
     }
+    async fn timeline_entries(
+        &self,
+        _access: EntityAccessReceipt<MessageView>,
+        _query: MessageTimelineQuery,
+    ) -> Result<MessageTimelinePage, MessageError> {
+        panic!("unexpected timeline call")
+    }
     async fn preceding(
         &self,
         _access: EntityAccessReceipt<MessageView>,
@@ -100,14 +91,20 @@ impl MessageReader for FakeMessages {
 
 #[async_trait::async_trait]
 impl MessageCommands for FakeMessages {
+    async fn post_from_event(
+        &self,
+        _: EntityAccessReceipt<MessageWrite>,
+        _: Uuid,
+        _: PostMessage,
+    ) -> Result<Message, MessageError> {
+        unimplemented!("comment tools do not post broker events")
+    }
+
     async fn post(
         &self,
         access: EntityAccessReceipt<MessageWrite>,
         input: PostMessage,
     ) -> Result<Message, MessageError> {
-        if input.thread_id.is_some() && !self.thread_exists {
-            return Err(MessageError::NotFound);
-        }
         if self.fail_posts {
             return Err(MessageError::Invalid("anchor already in use"));
         }
@@ -120,6 +117,7 @@ impl MessageCommands for FakeMessages {
                 bot_id::MACRO_AI_BOT_ID.into_storage_id().to_string(),
             )
             .unwrap(),
+            guest_name: None,
             imported_author: None,
             bot_profile: None,
             mentions: vec![],
@@ -172,28 +170,11 @@ impl MessageCommands for FakeMessages {
     }
     async fn patch_thread(
         &self,
-        access: EntityAccessReceipt<MessageWrite>,
-        root_id: Uuid,
-        patch: ThreadPatch,
+        _access: EntityAccessReceipt<MessageWrite>,
+        _root_id: Uuid,
+        _patch: ThreadPatch,
     ) -> Result<ThreadState, MessageError> {
-        if !self.thread_exists {
-            return Err(MessageError::NotFound);
-        }
-        let at = Utc.with_ymd_and_hms(2026, 9, 23, 12, 0, 0).unwrap();
-        let state = ThreadState {
-            root_id,
-            user_id: "macro|author@example.com".to_owned(),
-            resolved: patch.resolved.unwrap_or_default(),
-            anchor: None,
-            created_at: at,
-            updated_at: at,
-            deleted_at: None,
-        };
-        self.thread_patches
-            .lock()
-            .unwrap()
-            .push((access, root_id, patch));
-        Ok(state)
+        panic!("unexpected patch_thread call")
     }
     async fn delete_thread(
         &self,
@@ -207,10 +188,6 @@ impl MessageCommands for FakeMessages {
 
 type TestToolContext =
     DocumentToolContext<FakeDocumentService, FakeEntityAccessService, FakeEditingWorker>;
-
-fn context(access_level: AccessLevel, messages: FakeMessages) -> ServiceContext<TestToolContext> {
-    context_with(access_level, messages, "md", FakeEditingWorker::default())
-}
 
 fn context_with(
     access_level: AccessLevel,
@@ -244,195 +221,10 @@ fn assert_bot_on_document(access: &EntityAccessReceipt<MessageWrite>) {
     );
 }
 
-#[tokio::test]
-async fn reply_posts_in_the_thread_as_the_bot_for_the_user() {
-    let messages = FakeMessages::default();
-    let response = CommentOnDocument {
+fn comment_on_text(text: &str, occurrence: Option<u32>) -> CommentOnText {
+    CommentOnText {
         document_id: DOCUMENT,
-        content: "Fixed in the latest draft.".to_owned(),
-        thread_id: Some(THREAD),
-        quote: None,
-        occurrence: None,
-    }
-    .call(context(AccessLevel::Comment, messages.clone()), request())
-    .await
-    .unwrap();
-
-    assert_eq!(response.document_id, DOCUMENT);
-    assert_eq!(response.thread_id, THREAD);
-    assert!(
-        serde_json::to_value(&response)
-            .unwrap()
-            .get("markedText")
-            .is_none()
-    );
-    assert_eq!(response.comment_id, Uuid::from_u128(99));
-    let posts = messages.posts.lock().unwrap();
-    let [(access, post)] = posts.as_slice() else {
-        panic!("expected one post, got {}", posts.len());
-    };
-    assert_bot_on_document(access);
-    assert_eq!(post.thread_id, Some(THREAD));
-    assert_eq!(post.content, "Fixed in the latest draft.");
-    assert_eq!(post.attribution, MessageAttribution::ActingUser);
-    assert_eq!(
-        post.notification_policy,
-        PostMessageNotificationPolicy::Default
-    );
-    assert!(post.anchor.is_none());
-}
-
-#[tokio::test]
-async fn comment_without_a_thread_or_quote_starts_a_discussion_comment() {
-    let messages = FakeMessages::default();
-    let response = CommentOnDocument {
-        document_id: DOCUMENT,
-        content: "Summary of the open questions.".to_owned(),
-        thread_id: None,
-        quote: None,
-        occurrence: None,
-    }
-    .call(context(AccessLevel::Comment, messages.clone()), request())
-    .await
-    .unwrap();
-
-    assert_eq!(response.thread_id, response.comment_id);
-    assert!(
-        serde_json::to_value(&response)
-            .unwrap()
-            .get("markedText")
-            .is_none()
-    );
-    let posts = messages.posts.lock().unwrap();
-    assert_eq!(posts.len(), 1);
-    assert_eq!(posts[0].1.thread_id, None);
-    assert!(posts[0].1.anchor.is_none());
-}
-
-#[tokio::test]
-async fn reply_needs_comment_access() {
-    let messages = FakeMessages::default();
-    let error = CommentOnDocument {
-        document_id: DOCUMENT,
-        content: "Looks good.".to_owned(),
-        thread_id: Some(THREAD),
-        quote: None,
-        occurrence: None,
-    }
-    .call(context(AccessLevel::View, messages.clone()), request())
-    .await
-    .unwrap_err();
-
-    assert!(
-        error.description.contains("comment access"),
-        "{}",
-        error.description
-    );
-    assert!(messages.posts.lock().unwrap().is_empty());
-}
-
-#[tokio::test]
-async fn reply_to_a_thread_not_on_the_document_says_so() {
-    let messages = FakeMessages {
-        thread_exists: false,
-        ..FakeMessages::default()
-    };
-    let error = CommentOnDocument {
-        document_id: DOCUMENT,
-        content: "Done.".to_owned(),
-        thread_id: Some(THREAD),
-        quote: None,
-        occurrence: None,
-    }
-    .call(context(AccessLevel::Edit, messages), request())
-    .await
-    .unwrap_err();
-
-    assert_eq!(
-        error.description,
-        "comment thread not found on this document"
-    );
-}
-
-#[tokio::test]
-async fn resolve_resolves_the_thread_as_the_bot_for_the_user() {
-    let messages = FakeMessages::default();
-    let response = ResolveDocumentComment {
-        document_id: DOCUMENT,
-        thread_id: THREAD,
-        resolved: true,
-    }
-    .call(context(AccessLevel::Comment, messages.clone()), request())
-    .await
-    .unwrap();
-
-    assert_eq!(response.thread_id, THREAD);
-    assert!(response.resolved);
-    let patches = messages.thread_patches.lock().unwrap();
-    let [(access, root, patch)] = patches.as_slice() else {
-        panic!("expected one thread update, got {}", patches.len());
-    };
-    assert_bot_on_document(access);
-    assert_eq!(*root, THREAD);
-    assert_eq!(patch.resolved, Some(true));
-    assert!(!patch.detach_anchor);
-}
-
-#[tokio::test]
-async fn resolve_false_reopens_the_thread() {
-    let messages = FakeMessages::default();
-    let response = ResolveDocumentComment {
-        document_id: DOCUMENT,
-        thread_id: THREAD,
-        resolved: false,
-    }
-    .call(context(AccessLevel::Comment, messages.clone()), request())
-    .await
-    .unwrap();
-
-    assert!(!response.resolved);
-    assert_eq!(
-        messages.thread_patches.lock().unwrap()[0].2.resolved,
-        Some(false)
-    );
-}
-
-#[test]
-fn resolve_defaults_to_resolving() {
-    let tool: ResolveDocumentComment = serde_json::from_value(serde_json::json!({
-        "documentId": DOCUMENT,
-        "threadId": THREAD,
-    }))
-    .unwrap();
-
-    assert!(tool.resolved);
-}
-
-#[tokio::test]
-async fn resolve_needs_comment_access() {
-    let messages = FakeMessages::default();
-    let error = ResolveDocumentComment {
-        document_id: DOCUMENT,
-        thread_id: THREAD,
-        resolved: true,
-    }
-    .call(context(AccessLevel::View, messages.clone()), request())
-    .await
-    .unwrap_err();
-
-    assert!(
-        error.description.contains("comment access"),
-        "{}",
-        error.description
-    );
-    assert!(messages.thread_patches.lock().unwrap().is_empty());
-}
-
-fn comment_on_text(text: &str, occurrence: Option<u32>) -> CommentOnDocument {
-    CommentOnDocument {
-        document_id: DOCUMENT,
-        thread_id: None,
-        quote: Some(text.to_owned()),
+        quote: text.to_owned(),
         occurrence,
         content: "Is this date still right?".to_owned(),
     }
@@ -487,7 +279,7 @@ async fn comment_on_text_places_the_mark_then_posts_a_thread_anchored_to_it() {
     assert_eq!(response.document_id, DOCUMENT);
     assert_eq!(response.thread_id, Uuid::from_u128(99));
     assert_eq!(response.comment_id, Uuid::from_u128(99));
-    assert_eq!(response.marked_text.as_deref(), Some("ships on Friday"));
+    assert_eq!(response.marked_text, "ships on Friday");
     assert_eq!(
         serde_json::to_value(&response).unwrap()["markedText"],
         "ships on Friday"
@@ -577,11 +369,71 @@ async fn comment_on_text_rejects_documents_that_are_not_markdown() {
         .unwrap_err();
 
     assert!(
-        error.description.contains("markdown documents only"),
+        error
+            .description
+            .contains("markdown and Word documents only"),
         "{}",
         error.description
     );
     assert!(editing.added_comment_marks.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn comment_on_docx_text_posts_a_thread_the_editor_places_by_its_quote() {
+    let messages = FakeMessages::default();
+    let editing = FakeEditingWorker::default();
+    let response = comment_on_text("  thirty (30) days  ", Some(1))
+        .call(
+            context_with(
+                AccessLevel::Comment,
+                messages.clone(),
+                "docx",
+                editing.clone(),
+            ),
+            request(),
+        )
+        .await
+        .unwrap();
+
+    // DOCX marks live in the collaborative document, not in Lexical: no
+    // editing-worker round trip.
+    assert!(editing.added_comment_marks.lock().unwrap().is_empty());
+    let posts = messages.posts.lock().unwrap();
+    let [(access, post)] = posts.as_slice() else {
+        panic!("expected one post, got {}", posts.len());
+    };
+    assert_bot_on_document(access);
+    assert_eq!(post.thread_id, None);
+    let Some(NewThreadAnchor::Markdown { marked_text, .. }) = &post.anchor else {
+        panic!("expected a text anchor, got {:?}", post.anchor);
+    };
+    assert_eq!(marked_text.as_deref(), Some("thirty (30) days"));
+    assert_eq!(response.marked_text, "thirty (30) days");
+    assert_eq!(response.thread_id, Uuid::from_u128(99));
+}
+
+#[tokio::test]
+async fn comment_on_docx_text_asks_for_a_unique_quote_instead_of_an_occurrence() {
+    let messages = FakeMessages::default();
+    let error = comment_on_text("the Agreement", Some(2))
+        .call(
+            context_with(
+                AccessLevel::Comment,
+                messages.clone(),
+                "docx",
+                FakeEditingWorker::default(),
+            ),
+            request(),
+        )
+        .await
+        .unwrap_err();
+
+    assert!(
+        error.description.contains("first appearance"),
+        "{}",
+        error.description
+    );
+    assert!(messages.posts.lock().unwrap().is_empty());
 }
 
 #[tokio::test]
@@ -632,113 +484,4 @@ async fn comment_on_text_rejects_occurrence_zero() {
         error.description
     );
     assert!(editing.added_comment_marks.lock().unwrap().is_empty());
-}
-
-#[tokio::test]
-async fn comment_rejects_thread_id_with_quote() {
-    let messages = FakeMessages::default();
-    let editing = FakeEditingWorker::default();
-    let mut tool = comment_on_text("ships on Friday", None);
-    tool.thread_id = Some(THREAD);
-    let error = tool
-        .call(
-            context_with(
-                AccessLevel::Comment,
-                messages.clone(),
-                "md",
-                editing.clone(),
-            ),
-            request(),
-        )
-        .await
-        .unwrap_err();
-
-    assert!(
-        error
-            .description
-            .contains("threadId and quote cannot be combined")
-    );
-    assert!(messages.posts.lock().unwrap().is_empty());
-    assert!(editing.added_comment_marks.lock().unwrap().is_empty());
-}
-
-#[tokio::test]
-async fn comment_rejects_occurrence_without_quote() {
-    for thread_id in [None, Some(THREAD)] {
-        let messages = FakeMessages::default();
-        let editing = FakeEditingWorker::default();
-        let error = CommentOnDocument {
-            document_id: DOCUMENT,
-            content: "Looks good.".to_owned(),
-            thread_id,
-            quote: None,
-            occurrence: Some(1),
-        }
-        .call(
-            context_with(
-                AccessLevel::Comment,
-                messages.clone(),
-                "md",
-                editing.clone(),
-            ),
-            request(),
-        )
-        .await
-        .unwrap_err();
-
-        assert!(
-            error
-                .description
-                .contains("occurrence only applies with quote")
-        );
-        assert!(messages.posts.lock().unwrap().is_empty());
-        assert!(editing.added_comment_marks.lock().unwrap().is_empty());
-    }
-}
-
-#[tokio::test]
-async fn discussion_comments_and_replies_support_non_markdown_documents() {
-    for thread_id in [None, Some(THREAD)] {
-        let messages = FakeMessages::default();
-        let editing = FakeEditingWorker::default();
-        let response = CommentOnDocument {
-            document_id: DOCUMENT,
-            content: "Looks good.".to_owned(),
-            thread_id,
-            quote: None,
-            occurrence: None,
-        }
-        .call(
-            context_with(
-                AccessLevel::Comment,
-                messages.clone(),
-                "pdf",
-                editing.clone(),
-            ),
-            request(),
-        )
-        .await
-        .unwrap();
-
-        assert_eq!(response.thread_id, thread_id.unwrap_or(response.comment_id));
-        assert!(response.marked_text.is_none());
-        let posts = messages.posts.lock().unwrap();
-        assert_eq!(posts.len(), 1);
-        assert_eq!(posts[0].1.thread_id, thread_id);
-        assert!(posts[0].1.anchor.is_none());
-        assert!(editing.added_comment_marks.lock().unwrap().is_empty());
-    }
-}
-
-#[test]
-fn comment_optional_fields_can_be_omitted() {
-    let tool: CommentOnDocument = serde_json::from_value(serde_json::json!({
-        "documentId": DOCUMENT,
-        "content": "Looks good.",
-    }))
-    .unwrap();
-
-    assert!(tool.thread_id.is_none());
-    assert!(tool.quote.is_none());
-    assert!(tool.occurrence.is_none());
 }

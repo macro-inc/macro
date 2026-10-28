@@ -1,6 +1,6 @@
 .mfs-post {
   color: var(--c4);
-  font-family: 'cyberreader', system-ui, sans-serif;
+  font-family: 'Inter', system-ui, sans-serif;
 }
 
 .mfs-post,
@@ -51,7 +51,7 @@
   border: 1px solid color-mix(in srgb, var(--b4) 22%, transparent);
   border-radius: 10px;
   color: var(--c3);
-  font-family: 'rajdhani', body, system-ui, sans-serif;
+  font-family: 'Inter', body, system-ui, sans-serif;
   font-size: 14.5px;
   line-height: 1.8;
   margin: 26px 0;
@@ -98,7 +98,7 @@
 
 .mfs-table {
   border-collapse: collapse;
-  font-family: 'rajdhani', body, system-ui, sans-serif;
+  font-family: 'Inter', body, system-ui, sans-serif;
   font-size: 14px;
   width: 100%;
 }
@@ -125,7 +125,7 @@
 
 .mfs-post code {
   color: var(--c1);
-  font-family: 'rajdhani', body, system-ui, sans-serif;
+  font-family: 'Inter', body, system-ui, sans-serif;
   font-size: 0.95em;
 }
 

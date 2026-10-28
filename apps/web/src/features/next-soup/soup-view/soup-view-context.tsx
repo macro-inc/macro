@@ -2,10 +2,8 @@ import {
   entityMatchesTagFilter,
   isListViewID,
   type ListView,
-  soupItemMatchesListView,
-  soupItemMatchesTagFilter,
 } from '@app/constants/list-views';
-import { useMobileSearchText } from '@app/features/command/mobile/use-mobile-search-text';
+import { SearchState } from '@app/features/command/mobile/mobileSearchState';
 import {
   createSoupState,
   type GroupMeta,
@@ -15,7 +13,6 @@ import {
   type SoupState,
 } from '@app/features/next-soup/create-soup-state';
 import type { FilterContext } from '@app/features/next-soup/filters/configs/';
-import { emailItemMatchesImportance } from '@app/features/next-soup/filters/email-signal';
 import {
   compileToAst,
   NIL_UUID,
@@ -39,21 +36,25 @@ import {
 import { dateBucket } from '@app/features/next-soup/soup-view/group-by-date';
 import { INBOX_FILTER_ENTRY_KEY } from '@app/features/next-soup/soup-view/inbox-filter-controllers';
 import { SORT_CONFIGS } from '@app/features/next-soup/soup-view/sort-options';
+import {
+  createSoupViewItemFilter,
+  emailImportanceInsertFilter,
+  entityMatchesReadFilter,
+  type ReadFilter,
+  type SoupViewItemFilterSnapshot,
+} from '@app/features/next-soup/soup-view/soup-view-item-filter';
 import { useSoupFilterPersistence } from '@app/features/next-soup/use-soup-filter-persistence';
 import { deduplicateEntities } from '@app/features/next-soup/utils';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { makeFlaggedPersisted } from '@app/preferences/make-flagged-persisted';
-import { useDealStages } from '@companies/crm/deal-stages';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useEntryState } from '@components/app/split-layout/entry-state';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import {
   ENABLE_FEATURED_SEARCH_RESULTS,
   enableInboxNotifiedSort,
-  enableReminders,
   enableSupportedSoupForeignEntities,
-  isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -61,16 +62,18 @@ import {
   NATIVE_OFFLINE_ERROR_MESSAGE,
   nativeNetworkStatus,
 } from '@core/mobile/native-network-status';
-import { idToDisplayName } from '@core/user/util';
 import {
-  COMPANY_STAGE_OPTIONS,
   type EntityData,
   getPropertyOptionLabel,
   isWithNotification,
   unreadFilterFn,
 } from '@entity';
-import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { useQueryClient } from '@queries/client';
+import {
+  createLocalDraftSource,
+  localDraftEntities,
+  localDraftMatchesFilters,
+} from '@queries/email/local-draft-source';
 import { invalidateUserNotifications } from '@queries/notification/user-notifications';
 import { createGroupedSoupQueries } from '@queries/soup/grouped/create-grouped-soup-queries';
 import type {
@@ -80,10 +83,6 @@ import type {
 import type { SoupParams } from '@queries/soup/items';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
 import { soupKeys } from '@queries/soup/keys';
-import {
-  isDisplayableSoupItem,
-  mapApiSoupItemToEntity,
-} from '@queries/soup/transform-utils';
 import { useIsTeamAdmin } from '@queries/team/teams';
 import type { SoupApiItem } from '@service-storage/generated/schemas';
 import { makePersisted } from '@solid-primitives/storage';
@@ -103,10 +102,8 @@ import {
   useContext,
 } from 'solid-js';
 import { unwrap } from 'solid-js/store';
-import {
-  applyDocumentTabScope,
-  withDocumentTabItemScope,
-} from './document-tab-scope';
+import { applyDocumentTabScope } from './document-tab-scope';
+import { resolveInitialViewFilters } from './initial-view-filters';
 
 type DataSource<T> = {
   data: Accessor<T[]>;
@@ -162,12 +159,13 @@ type SoupViewInitializeOptions = {
   itemMembershipFilter?: (item: SoupApiItem) => boolean;
 };
 
-export type ReadFilter = 'all' | 'unread' | 'read';
+export type { ReadFilter };
 
 /** List/board display mode — currently only the Customers view offers a board. */
 export type SoupViewMode = 'list' | 'board';
 
-interface SoupViewContextValues {
+export interface SoupViewContextValues {
+  extensions?: CollectionExtensions;
   soup: SoupState;
   initialize: (options?: SoupViewInitializeOptions) => void;
   source: DataSource<EntityData>;
@@ -187,10 +185,6 @@ interface SoupViewContextValues {
   filterByTag: (optionId: string) => void;
   assigneeFilter: Accessor<string[]>;
   setAssigneeFilter: Setter<string[]>;
-  ownerFilter: Accessor<string[]>;
-  setOwnerFilter: Setter<string[]>;
-  stageFilter: Accessor<string[]>;
-  setStageFilter: Setter<string[]>;
   inboxFilter: Accessor<string[] | undefined>;
   setInboxFilter: Setter<string[] | undefined>;
   activeTab: Accessor<string | undefined>;
@@ -199,8 +193,6 @@ interface SoupViewContextValues {
    * it has one the client can reproduce, else the sort state. */
   clientSort: Accessor<SortConfig<SoupEntity>[]>;
   getPersistedActiveTab: (view: ListView) => string | undefined;
-  viewMode: Accessor<SoupViewMode>;
-  setViewMode: Setter<SoupViewMode>;
   readFilter: Accessor<ReadFilter>;
   setReadFilter: Setter<ReadFilter>;
   groupByField: Accessor<GroupByField | undefined>;
@@ -225,9 +217,27 @@ export const useSoupView = () => {
 
 export const useMaybeSoupView = () => useContext(SoupViewContext);
 
-interface SoupViewContextProviderProps extends SoupViewInitializeOptions {
+/** Optional policies supplied by the owning collection surface. */
+export type CollectionExtensions = {
+  propertyGrouping?: {
+    value(entity: EntityData, definitionId: string): string | undefined;
+    label(value: string, definitionId: string): string | undefined;
+    order(definitionId: string): readonly string[];
+  };
+  filterContext?: () => Partial<FilterContext>;
+  selectFilters?: import('./collection-select-filter').CollectionSelectFilter[];
+  groupOptions?: {
+    visible: Accessor<boolean>;
+    options: import('./group-options').GroupOption[];
+  };
+};
+
+export interface SoupViewContextProviderProps
+  extends SoupViewInitializeOptions {
+  extensions?: CollectionExtensions;
   soup?: SoupState;
   initialEnabled?: boolean;
+  filterPersistence?: Accessor<boolean>;
 }
 
 type PersistedQueryFilters = Partial<
@@ -277,16 +287,6 @@ const resolveTabId = (
 ): string => {
   const config = VIEW_TAB_PRESETS[view];
   if (!remembered || !(remembered in config.tabs)) return config.default;
-  // A remembered tab can also be flag-gated out of the tab bar (see
-  // `useVisibleViewTabs`): restoring the inbox onto Reminders with the flag
-  // off would leave a hidden tab active, still querying reminders.
-  if (
-    view === 'home' &&
-    remembered === 'reminders' &&
-    !isFeatureEnabled(enableReminders)
-  ) {
-    return config.default;
-  }
   return remembered;
 };
 
@@ -316,9 +316,7 @@ function nativeOfflineLoadError(hasData: () => boolean): Error | null {
     : null;
 }
 
-export const SoupViewContextProvider: FlowComponent<
-  SoupViewContextProviderProps
-> = (props) => {
+export const createSoupViewState = (props: SoupViewContextProviderProps) => {
   const soup = props.soup ?? createSoupState();
   const [enabled, setEnabled] = createSignal(props.initialEnabled ?? false);
   const [config, setConfig] = createSignal<SoupViewInitializeOptions>({
@@ -334,7 +332,9 @@ export const SoupViewContextProvider: FlowComponent<
   });
 
   const queryClient = useQueryClient();
-  const [persistFilterPreference] = useSoupFilterPersistence();
+  const [persistFilterPreference] = props.filterPersistence
+    ? [props.filterPersistence]
+    : useSoupFilterPersistence();
   const filterPersistenceEnabled = () =>
     config().persistFilters !== false && persistFilterPreference();
 
@@ -372,20 +372,20 @@ export const SoupViewContextProvider: FlowComponent<
       ? persistedPredicatesFor(initialView, initialTab)
       : undefined;
 
-  const store = createQueryStore({
-    initial:
-      initialEntryQuery ??
-      (props.preferInitialFilters ? props.initialQuery : undefined) ??
-      initialPersistedQuery ??
-      props.initialQuery,
+  const initialFilters = resolveInitialViewFilters({
+    entry: { query: initialEntryQuery, predicates: initialEntryPredicates },
+    persisted: {
+      query: initialPersistedQuery,
+      predicates: initialPersistedPredicates,
+    },
+    initial: {
+      query: props.initialQuery,
+      predicates: props.initialClientFilters,
+    },
+    preferInitialFilters: props.preferInitialFilters,
   });
-
-  const initialPredicates =
-    initialEntryPredicates ??
-    (props.preferInitialFilters ? props.initialClientFilters : undefined) ??
-    initialPersistedPredicates ??
-    props.initialClientFilters;
-  if (initialPredicates) soup.predicates.set(initialPredicates);
+  const store = createQueryStore({ initial: initialFilters.query });
+  if (initialFilters.predicates) soup.predicates.set(initialFilters.predicates);
 
   const filterCaptorTeardown = panel.handle.registerEntryStateCaptor(
     'search.filters',
@@ -493,26 +493,15 @@ export const SoupViewContextProvider: FlowComponent<
   const filterByTag = (optionId: string) => tagFilter.onChange([optionId]);
 
   const [searchPaused, setSearchPaused] = createSignal(false);
-  const sourceSearchPaused = createMemo(() => searchPaused() || !enabled());
+  const sourceSearchPaused = createMemo(
+    () =>
+      searchPaused() || !enabled() || (isTouchDevice() && SearchState.isOpen())
+  );
   const [assigneeFilter, setAssigneeFilter] = makeFlaggedPersisted(
     useEntryState<string[]>('soup.assigneeFilter', { default: [] }),
     {
       enabled: filterPersistenceEnabled,
       name: soupViewPersistenceKey('soup-view-assignee-filter'),
-    }
-  );
-  const [ownerFilter, setOwnerFilter] = makeFlaggedPersisted(
-    useEntryState<string[]>('soup.ownerFilter', { default: [] }),
-    {
-      enabled: filterPersistenceEnabled,
-      name: soupViewPersistenceKey('soup-view-owner-filter'),
-    }
-  );
-  const [stageFilter, setStageFilter] = makeFlaggedPersisted(
-    useEntryState<string[]>('soup.stageFilter', { default: [] }),
-    {
-      enabled: filterPersistenceEnabled,
-      name: soupViewPersistenceKey('soup-view-stage-filter'),
     }
   );
   const [inboxFilter, setInboxFilter] = makeFlaggedPersisted(
@@ -614,11 +603,6 @@ export const SoupViewContextProvider: FlowComponent<
     })
   );
 
-  // List/board display mode — per-entry state so back/forward restores the
-  // mode the user left each entry with.
-  const [viewMode, setViewMode] = useEntryState<SoupViewMode>('soup.viewMode', {
-    default: isTouchDevice() ? 'list' : 'board',
-  });
   const [readFilter, setReadFilter] = makeFlaggedPersisted(
     useEntryState<ReadFilter>('soup.readFilter', { default: 'all' }),
     {
@@ -656,17 +640,6 @@ export const SoupViewContextProvider: FlowComponent<
   createEffect(() => {
     if (!soup.predicates.isActive('task')) {
       setAssigneeFilter([]);
-    }
-  });
-
-  // Clear the owner/stage sub-filters when leaving the CRM company presets
-  createEffect(() => {
-    if (
-      !soup.predicates.isActive('crm-company-active') &&
-      !soup.predicates.isActive('crm-company-hidden')
-    ) {
-      setOwnerFilter([]);
-      setStageFilter([]);
     }
   });
 
@@ -731,25 +704,10 @@ export const SoupViewContextProvider: FlowComponent<
         : soup.sort.active()
   );
 
-  // Active deal-stage set (team-customized when present). Drives the
-  // Customers view's stage grouping, stage filter and group labels.
-  const dealStages = useDealStages();
-
-  // `resolveStage` takes the minimal company shape; widen it to any soup
-  // entity (non-companies resolve to undefined since they carry no stage).
-  const resolveCompanyStage = (entity: EntityData): string | undefined =>
-    dealStages.resolveStage(
-      entity as Parameters<typeof dealStages.resolveStage>[0]
-    );
-
-  // CRM companies come back from a dedicated soup request (not the dynamic
-  // query the server-side grouped path is built on), so property grouping on
-  // the Customers view buckets client-side over the flat list — same approach
-  // as date grouping. `groupByField` stays populated so group headers can
-  // resolve icons/labels for the grouping property.
   const isClientPropertyGroup = createMemo(
     () =>
-      activeListView() === 'companies' && groupByField()?.type === 'property'
+      !!props.extensions?.propertyGrouping &&
+      groupByField()?.type === 'property'
   );
 
   // The group-by actually sent to the backend (drives the grouped queries).
@@ -818,22 +776,6 @@ export const SoupViewContextProvider: FlowComponent<
     };
   };
 
-  // A row the status filter admitted stays admitted for the rest of the visit
-  // (see `admittedByStatusFilter`). The inbox opens rows in a preview pane, and
-  // previewing marks the row read — so without this the row the user just
-  // clicked drops out from under the preview they are still reading, taking the
-  // list position with it. The row re-renders in its read styling, it just keeps
-  // its place.
-  const entityMatchesInboxReadFilter = (entity: EntityData): boolean => {
-    const filter = readFilter();
-    if (filter === 'all' || !isHomeView()) return true;
-    const isUnread = unreadFilterFn(entity);
-    return (
-      (filter === 'unread' ? isUnread : !isUnread) ||
-      admittedByStatusFilter().ids.has(entity.id)
-    );
-  };
-
   const applyViewFilters = (state: QueryState): QueryState => {
     let next = applyInboxFilter(state);
     next = applyInboxThreadFilter(next);
@@ -852,25 +794,14 @@ export const SoupViewContextProvider: FlowComponent<
     default: props.initialSearchText ?? '',
   });
 
-  // The split's effective search text — derived, never synchronized: while
-  // the dock search session is open and this split is foregrounded, it IS the
-  // session's query (the dock input lives in the stable app chrome — see
-  // Layout — so navigation never remounts it, and the query never enters
-  // per-split state: nothing to clear on close, nothing to reapply on pill
-  // navigation). Otherwise it is the split's own persisted text, which only
-  // the desktop search bar writes.
-  const effectiveSearchText = useMobileSearchText(
-    searchText,
-    panel.handle.isActive
-  );
-
   const search = createSearchState({
+    surface: () => activeListView() ?? 'soup',
     soup,
     filters: () => applyViewFilters(queryFilters.state),
     assignees: assigneeFilter,
     disableLocalSearch: () => config().disableLocalSearch ?? false,
     searchPaused: sourceSearchPaused,
-    searchText: effectiveSearchText,
+    searchText,
     setSearchText,
   });
 
@@ -906,22 +837,17 @@ export const SoupViewContextProvider: FlowComponent<
             ? persistedPredicatesFor(view, tabId)
             : undefined;
 
-        queryFilters.replace(
-          entryQuery ??
-            (options.preferInitialFilters ? options.initialQuery : undefined) ??
-            persistedQuery ??
-            options.initialQuery ??
-            null
-        );
-        soup.predicates.set(
-          entryPredicates ??
-            (options.preferInitialFilters
-              ? options.initialClientFilters
-              : undefined) ??
-            savedPredicates ??
-            options.initialClientFilters ??
-            {}
-        );
+        const filters = resolveInitialViewFilters({
+          entry: { query: entryQuery, predicates: entryPredicates },
+          persisted: { query: persistedQuery, predicates: savedPredicates },
+          initial: {
+            query: options.initialQuery,
+            predicates: options.initialClientFilters,
+          },
+          preferInitialFilters: options.preferInitialFilters,
+        });
+        queryFilters.replace(filters.query ?? null);
+        soup.predicates.set(filters.predicates ?? {});
         setSearchText(options.initialSearchText ?? '');
         setEnabled(true);
       });
@@ -938,10 +864,7 @@ export const SoupViewContextProvider: FlowComponent<
     userId: userId(),
     notificationSource,
     assignees: assigneeFilter(),
-    owners: ownerFilter(),
-    stages: stageFilter(),
-    resolveCompanyStage,
-    companyStageLabel: dealStages.stageLabel,
+    ...props.extensions?.filterContext?.(),
   });
 
   // This is temporary while we are experimenting/handling
@@ -961,32 +884,28 @@ export const SoupViewContextProvider: FlowComponent<
   const activeTagFilterMode = () =>
     queryFilters.state.include.tagFilterMode ?? 'any';
 
-  const soupItemMatchesActiveFilters = (
-    item: SoupApiItem,
+  // Live, not snapshotted: the cache membership filter reads `.current` when it
+  // runs. Declared before the query hooks below, whose options accessors run
+  // synchronously at setup. Written by `admittedByStatusFilter` once it exists.
+  const admittedIds: { current: ReadonlySet<string> } = { current: new Set() };
+
+  // Everything else the cache membership filter needs, read at options time so
+  // the options accessor tracks it. The filter itself is built at module scope
+  // so the cached query never retains this provider's scope.
+  const itemFilterSnapshot = (
     view: ListView | undefined
-  ): boolean => {
-    if (!soupItemMatchesListView(item, view)) return false;
-
-    if (
-      !soupItemMatchesTagFilter(
-        item,
-        activeTagOptionIds(),
-        activeTagFilterMode()
-      )
-    ) {
-      return false;
-    }
-
-    const membershipFilter = config().itemMembershipFilter;
-    if (membershipFilter && !membershipFilter(item)) return false;
-
-    if (!isDisplayableSoupItem(item)) return false;
-    const entity = mapApiSoupItemToEntity(item) as SoupEntity;
-    return (
-      soup.predicates.test(entity, getFilterContext()) &&
-      entityMatchesInboxReadFilter(entity)
-    );
-  };
+  ): SoupViewItemFilterSnapshot => ({
+    view,
+    tab: view === 'documents' ? activeTab() : undefined,
+    userId: userId(),
+    tagOptionIds: activeTagOptionIds(),
+    tagFilterMode: activeTagFilterMode(),
+    membershipFilter: config().itemMembershipFilter,
+    testPredicates: soup.predicates.test,
+    filterContext: getFilterContext(),
+    readFilter: readFilter(),
+    admittedIds,
+  });
 
   // The Soup query facade owns GraphQL eligibility and REST fallback. Its urql
   // implementation keeps loaded pages subscribed to the normalized cache.
@@ -1010,13 +929,8 @@ export const SoupViewContextProvider: FlowComponent<
         showSupportedForeignEntities: showSupportedForeignEntitiesFF().enabled,
         onBeforeGraphqlRefresh: () => groupQueries.resetToInitialPage(),
         meta: {
-          itemFilter: withDocumentTabItemScope(
-            view === 'documents' ? activeTab() : undefined,
-            userId(),
-            (item) => soupItemMatchesActiveFilters(item, view)
-          ),
-          insertFilter: (item) =>
-            emailItemMatchesImportance(item, emailImportance),
+          itemFilter: createSoupViewItemFilter(itemFilterSnapshot(view)),
+          insertFilter: emailImportanceInsertFilter(emailImportance),
         },
       };
     }
@@ -1031,7 +945,7 @@ export const SoupViewContextProvider: FlowComponent<
   const itemsQueryError = () =>
     itemsQuery.error ?? nativeOfflineLoadError(itemsQueryHasData);
 
-  const itemsSource = {
+  const soupItemsSource = {
     data: itemsQueryData,
     error: itemsQueryError,
     hasData: itemsQueryHasData,
@@ -1044,13 +958,30 @@ export const SoupViewContextProvider: FlowComponent<
     fetchNextPage: () => itemsQuery.fetchNextPage(),
   };
 
+  const itemsSource = () => soupItemsSource;
+
+  const localDrafts = createLocalDraftSource(
+    () => itemsQuery.transport === 'graphql'
+  );
+  const localDraftRows = () => {
+    const filters = applyViewFilters(queryFilters.state);
+    if (!search.isSearching() && filters.emailView !== 'drafts') return [];
+    return localDraftEntities(
+      localDrafts
+        .drafts()
+        .filter((draft) => localDraftMatchesFilters(draft, filters))
+    ).map((entity) => attachNotifications(entity)) as SoupEntity[];
+  };
   const items = createMemo<SoupEntity[]>(
     (prev) => {
       const searching = search.isSearching();
 
       if (!searching) {
-        const data = itemsSource.data();
-        const extras = config().additionalEntities?.() ?? [];
+        const data = itemsSource().data();
+        const extras = [
+          ...(config().additionalEntities?.() ?? []),
+          ...localDraftRows(),
+        ];
         const extraEntities = extras.map((e) =>
           isWithNotification(e) ? e : attachNotifications(e)
         ) as SoupEntity[];
@@ -1061,9 +992,11 @@ export const SoupViewContextProvider: FlowComponent<
           // navigation. Once the active query fails, those rows belong to
           // the previous query and must go so the load-error state can
           // render — only client-local rows remain valid.
-          return itemsSource.error() ? extraEntities : prev;
+          return itemsSource().error()
+            ? extraEntities
+            : deduplicateEntities([...extraEntities, ...prev]);
         }
-        if (data.groups) return prev;
+        if (data.groups) return localDraftRows();
 
         const base = data.entities.map((e) =>
           isWithNotification(e) ? e : attachNotifications(e)
@@ -1071,13 +1004,25 @@ export const SoupViewContextProvider: FlowComponent<
 
         if (extraEntities.length === 0) return base;
 
-        return [...extraEntities, ...base];
+        const extraIds = new Set(
+          extraEntities.map((entity) => `${entity.type}:${entity.id}`)
+        );
+        return [
+          ...extraEntities,
+          ...base.filter(
+            (entity) => !extraIds.has(`${entity.type}:${entity.id}`)
+          ),
+        ];
       }
 
       const local = search.localFuzzyResults();
       const service = search.serviceSearchResults();
 
-      const merged: SoupEntity[] = [...service, ...local];
+      const needle = search.searchText().toLowerCase();
+      const recovery = localDraftRows().filter((entity) =>
+        entity.name.toLowerCase().includes(needle)
+      );
+      const merged: SoupEntity[] = [...recovery, ...service, ...local];
 
       if (
         merged.length === 0 &&
@@ -1102,13 +1047,15 @@ export const SoupViewContextProvider: FlowComponent<
   );
 
   // Ids that have matched the inbox status filter at some point during this
-  // visit, so `entityMatchesInboxReadFilter` can keep admitting a row after the
-  // user reads it.
+  // visit, so `entityMatchesReadFilter` can keep admitting a row after the user
+  // reads it.
   //
   // A visit is one view/tab/filter combination: changing any of them starts a
   // new set, and returning a new object is what re-runs every consumer. An
   // effect that emptied the set in place would not — a plain Set notifies
   // nothing — and the list would keep rendering the previous visit's rows.
+  // The memo also publishes the set to `admittedIds`, so the cache membership
+  // filter reads it without holding this provider's reactive graph.
   const admittedByStatusFilter = createMemo<{
     scope: string;
     ids: Set<string>;
@@ -1124,6 +1071,7 @@ export const SoupViewContextProvider: FlowComponent<
       }
     }
 
+    admittedIds.current = ids;
     return { scope, ids };
   });
 
@@ -1132,13 +1080,20 @@ export const SoupViewContextProvider: FlowComponent<
     const ctx = getFilterContext();
     const tagOptionIds = activeTagOptionIds();
     const tagFilterMode = activeTagFilterMode();
+    const statusFilter = readFilter();
+    const homeView = isHomeView();
+    // Only an active status filter on Home consults the admitted rows.
+    const admitted =
+      statusFilter !== 'all' && homeView
+        ? admittedByStatusFilter().ids
+        : new Set<string>();
 
     const next = [];
     for (const entity of transformed) {
       if (!soup.predicates.test(entity, ctx)) {
         continue;
       }
-      if (!entityMatchesInboxReadFilter(entity)) {
+      if (!entityMatchesReadFilter(entity, statusFilter, homeView, admitted)) {
         continue;
       }
       if (!entityMatchesTagFilter(entity, tagOptionIds, tagFilterMode)) {
@@ -1185,13 +1140,14 @@ export const SoupViewContextProvider: FlowComponent<
   };
 
   const groupQueries = createGroupedSoupQueries({
+    groupedPaging: () => itemsQuery.groupedPaging,
     initialPage: createMemo(() => {
-      if (itemsSource.isPlaceholderData()) return;
+      if (itemsSource().isPlaceholderData()) return;
 
-      const groups = itemsSource.data()?.groups;
-      const items = itemsSource.data()?.itemsById;
+      const groups = itemsSource().data()?.groups;
+      const items = itemsSource().data()?.itemsById;
       if (!groups || !items) return;
-      return { groups, items };
+      return { groups, items, cachedMail: itemsSource().data()?.cachedMail };
     }),
     groupByField: serverGroupByField,
     soupParams,
@@ -1203,13 +1159,8 @@ export const SoupViewContextProvider: FlowComponent<
       return {
         enabled: enabled() && !search.isSearching(),
         meta: {
-          itemFilter: withDocumentTabItemScope(
-            view === 'documents' ? activeTab() : undefined,
-            userId(),
-            (item) => soupItemMatchesActiveFilters(item, view)
-          ),
-          insertFilter: (item) =>
-            emailItemMatchesImportance(item, emailImportance),
+          itemFilter: createSoupViewItemFilter(itemFilterSnapshot(view)),
+          insertFilter: emailImportanceInsertFilter(emailImportance),
         },
       };
     },
@@ -1227,36 +1178,14 @@ export const SoupViewContextProvider: FlowComponent<
   const hasNextGroupPage = (groupKey: string) =>
     groupQueryFor(groupKey)?.hasNextPage() ?? false;
 
-  // True when grouping by the canonical Stage id (the "group by Stage"
-  // presets always use the system definition id, even when the team's own
-  // stage set is active).
-  const isStageGrouping = () => {
-    const field = groupByField();
-    return (
-      field?.type === 'property' &&
-      field.propertyDefinitionId === SYSTEM_PROPERTY_IDS.STAGE
-    );
-  };
-
-  const isOwnerGrouping = () => {
-    const field = groupByField();
-    return (
-      field?.type === 'property' &&
-      field.propertyDefinitionId === SYSTEM_PROPERTY_IDS.COMPANY_OWNER
-    );
-  };
-
-  // Group-key → label, preferring the active deal-stage set for stage
-  // groupings (custom option ids are unknown to the static option table).
   const resolveGroupLabel = (key: string): string | undefined => {
-    if (isStageGrouping()) {
-      return dealStages.stageLabel(key) ?? getPropertyOptionLabel(key);
-    }
-    // Owner group keys are user ids — resolve to the display name.
-    if (isOwnerGrouping()) {
-      return idToDisplayName(key) || undefined;
-    }
-    return getPropertyOptionLabel(key);
+    const field = groupByField();
+    const definitionId =
+      field?.type === 'property' ? field.propertyDefinitionId : '';
+    return (
+      props.extensions?.propertyGrouping?.label(key, definitionId) ??
+      getPropertyOptionLabel(key)
+    );
   };
 
   const buildGroupMeta = (group: ApiGroupMeta): GroupMeta => {
@@ -1298,7 +1227,7 @@ export const SoupViewContextProvider: FlowComponent<
 
   const builtRows = createMemo((): SoupRow[] => {
     const field = groupByField();
-    const groups = itemsSource.data()?.groups;
+    const groups = itemsSource().data()?.groups;
 
     // Client-side property grouping (Customers view): bucket the flat
     // (paginated) list by property value; option order comes from the
@@ -1308,12 +1237,11 @@ export const SoupViewContextProvider: FlowComponent<
         field?.type === 'property' ? field.propertyDefinitionId : '';
       // Stage grouping resolves through the active deal-stage set so legacy
       // system-stage values land in the matching custom-stage bucket.
-      const isStage = definitionId === SYSTEM_PROPERTY_IDS.STAGE;
       const buckets = new Map<string, SoupEntity[]>();
       for (const entity of entities()) {
-        const key = isStage
-          ? (resolveCompanyStage(entity) ?? '')
-          : clientPropertyGroupKey(entity, definitionId);
+        const key =
+          props.extensions?.propertyGrouping?.value(entity, definitionId) ??
+          clientPropertyGroupKey(entity, definitionId);
         const bucket = buckets.get(key);
         if (bucket) {
           bucket.push(entity);
@@ -1322,9 +1250,8 @@ export const SoupViewContextProvider: FlowComponent<
         }
       }
 
-      const stageOrder = isStage
-        ? dealStages.stages().map((stage) => stage.id)
-        : COMPANY_STAGE_OPTIONS.map((o) => o.value as string);
+      const stageOrder =
+        props.extensions?.propertyGrouping?.order(definitionId) ?? [];
       const order = [...buckets.keys()].sort((a, b) => {
         if (a === '') return 1;
         if (b === '') return -1;
@@ -1454,17 +1381,56 @@ export const SoupViewContextProvider: FlowComponent<
 
     const result: SoupRow[] = [];
     let globalIndex = 0;
+    // Local working copies have no server group membership yet. Keep them
+    // discoverable, subject to the same filters as the flat Drafts view.
+    const recovery = entities();
+    const recoveryIds = new Set(
+      recovery.map((entity) => `${entity.type}:${entity.id}`)
+    );
+    if (recovery.length) {
+      const key = 'local-email-drafts';
+      const group: GroupMeta = {
+        key,
+        value: key,
+        label: 'Saved on this device',
+        count: recovery.length,
+        isExpanded: () => soup.grouping.isExpanded(key),
+        toggle: () => soup.grouping.toggle(key),
+      };
+      result.push(
+        soup.buildRow({
+          id: `header:${key}`,
+          index: globalIndex++,
+          original: recovery[0],
+          group,
+          isGrouped: true,
+        })
+      );
+      for (const entity of recovery)
+        result.push(
+          soup.buildRow({
+            id: entity.id,
+            index: globalIndex++,
+            original: entity,
+            group,
+          })
+        );
+    }
 
     for (const apiGroup of groups) {
       const groupMeta = buildGroupMeta(apiGroup);
       const groupData = groupQueryFor(apiGroup.key)?.data();
       const groupEntities =
-        groupData?.entities?.map(
-          (entity) =>
-            (isWithNotification(entity)
-              ? entity
-              : attachNotifications(entity)) as SoupEntity
-        ) ?? [];
+        groupData?.entities
+          ?.map(
+            (entity) =>
+              (isWithNotification(entity)
+                ? entity
+                : attachNotifications(entity)) as SoupEntity
+          )
+          .filter(
+            (entity) => !recoveryIds.has(`${entity.type}:${entity.id}`)
+          ) ?? [];
 
       const firstEntity = groupEntities[0];
       if (!firstEntity) continue;
@@ -1514,8 +1480,15 @@ export const SoupViewContextProvider: FlowComponent<
   const searchSourceError = () =>
     (searchQuery.error as Error | null) ??
     nativeOfflineLoadError(searchSourceHasData);
+  const hasLocalRecoveryRows = () => {
+    const ids = new Set(localDraftRows().map((entity) => entity.id));
+    return entities().some(
+      (entity) => entity.type === 'email' && ids.has(entity.id)
+    );
+  };
 
   const context = {
+    extensions: props.extensions,
     soup,
     initialize,
     source: {
@@ -1525,28 +1498,29 @@ export const SoupViewContextProvider: FlowComponent<
       cachedMail: () =>
         !search.isSearching() && itemsQueryData()?.cachedMail === true,
       error: () =>
-        search.isSearching() ? searchSourceError() : itemsSource.error(),
+        search.isSearching() ? searchSourceError() : itemsSource().error(),
       hasData: () =>
         search.isSearching()
           ? searchSourceHasData()
-          : itemsSource.hasData() ||
+          : itemsSource().hasData() ||
+            hasLocalRecoveryRows() ||
             // Rows retained across a query rebind count as data so the view
             // doesn't flash, but once the query errors only client-local
             // rows remain and must not suppress the load-error state.
-            (!itemsSource.error() &&
-              !itemsSource.isPlaceholderData() &&
+            (!itemsSource().error() &&
+              !itemsSource().isPlaceholderData() &&
               entities().length > 0),
-      isLoading: () => itemsSource.isLoading(),
-      isFetching: () => itemsSource.isFetching() || searchQuery.isFetching,
+      isLoading: () => itemsSource().isLoading(),
+      isFetching: () => itemsSource().isFetching() || searchQuery.isFetching,
       isPlaceholderData: () =>
-        itemsSource.isPlaceholderData() && !search.isSearching(),
+        itemsSource().isPlaceholderData() && !search.isSearching(),
       isFetchingNextPage: () =>
-        itemsSource.isFetchingNextPage() || searchQuery.isFetchingNextPage,
+        itemsSource().isFetchingNextPage() || searchQuery.isFetchingNextPage,
       hasNextPage: () => {
         if (!enabled()) return false;
 
         return (
-          (itemsSource.isEnabled() && itemsSource.hasNextPage()) ||
+          (itemsSource().isEnabled() && itemsSource().hasNextPage()) ||
           (searchQuery.isEnabled && searchQuery.hasNextPage)
         );
       },
@@ -1554,7 +1528,7 @@ export const SoupViewContextProvider: FlowComponent<
         if (!enabled()) return;
 
         await Promise.all([
-          itemsSource.isEnabled() ? itemsSource.fetchNextPage() : undefined,
+          itemsSource().isEnabled() ? itemsSource().fetchNextPage() : undefined,
           searchQuery.isEnabled ? searchQuery.fetchNextPage() : undefined,
         ]);
       },
@@ -1606,18 +1580,12 @@ export const SoupViewContextProvider: FlowComponent<
     filterByTag,
     assigneeFilter,
     setAssigneeFilter,
-    ownerFilter,
-    setOwnerFilter,
-    stageFilter,
-    setStageFilter,
     inboxFilter,
     setInboxFilter,
     activeTab,
     setActiveTab,
     clientSort,
     getPersistedActiveTab,
-    viewMode,
-    setViewMode,
     readFilter,
     setReadFilter,
     groupByField,
@@ -1626,13 +1594,28 @@ export const SoupViewContextProvider: FlowComponent<
     hasNextGroupPage,
   };
 
+  return { context, rows: builtRows };
+};
+
+export const SoupViewStateProvider: FlowComponent<{
+  state: ReturnType<typeof createSoupViewState>;
+}> = (props) => (
+  <SoupViewContext.Provider value={props.state.context}>
+    {props.children}
+    <Suspense>
+      <SyncWithSoup soup={props.state.context.soup} rows={props.state.rows()} />
+    </Suspense>
+  </SoupViewContext.Provider>
+);
+
+export const SoupViewContextProvider: FlowComponent<
+  SoupViewContextProviderProps
+> = (props) => {
+  const state = createSoupViewState(props);
   return (
-    <SoupViewContext.Provider value={context}>
+    <SoupViewStateProvider state={state}>
       {props.children}
-      <Suspense>
-        <SyncWithSoup soup={soup} rows={builtRows()} />
-      </Suspense>
-    </SoupViewContext.Provider>
+    </SoupViewStateProvider>
   );
 };
 

@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT o.job_id, o.slack_channel_id, o.generation FROM slack_import_outbox o\n               JOIN slack_import_job j ON j.id = o.job_id\n               JOIN slack_import_conversation c ON c.job_id = o.job_id AND c.slack_channel_id = o.slack_channel_id\n               WHERE o.kind = 'import' AND o.published_at IS NULL AND o.cancelled_at IS NULL\n                 AND o.available_at <= clock_timestamp() AND j.cancel_requested_at IS NULL\n                 AND j.staging_expires_at > clock_timestamp() + interval '1 day'\n                 AND c.status IN ('queued', 'importing') AND c.event_generation = o.generation\n               ORDER BY o.available_at, o.job_id, o.slack_channel_id LIMIT $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "job_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "slack_channel_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "generation",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "e5296403ab8cb98d690e39dbf06732a1072d29fd739ab9389fdc91633f3c35ae"
+}

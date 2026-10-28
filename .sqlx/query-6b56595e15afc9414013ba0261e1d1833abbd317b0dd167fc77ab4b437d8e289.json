@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT data_key_ciphertext, kms_key_id, encryption_version\n        FROM whatsapp_device\n        WHERE account_id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "data_key_ciphertext",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 1,
+        "name": "kms_key_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "encryption_version",
+        "type_info": "Int2"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "6b56595e15afc9414013ba0261e1d1833abbd317b0dd167fc77ab4b437d8e289"
+}

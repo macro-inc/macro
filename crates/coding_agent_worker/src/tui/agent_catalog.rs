@@ -2,6 +2,8 @@
 
 mod claude_code;
 mod codex;
+#[cfg(unix)]
+mod herdr_tui;
 mod hermes;
 mod npm_adapter;
 mod open_claw;
@@ -19,14 +21,20 @@ mod test;
 
 mod environment {
     macro_env_var::maybe_env_var! {
-        pub struct Path;
-    }
-    macro_env_var::maybe_env_var! {
         pub struct Home;
+    }
+    // Windows sets no `HOME`; this is its home directory.
+    #[cfg(windows)]
+    macro_env_var::maybe_env_var! {
+        pub struct Userprofile;
     }
 }
 
 static PRESETS: &[&dyn AgentPreset] = &[
+    #[cfg(unix)]
+    &herdr_tui::HerdrTui(crate::herdr::acp_agent::TuiAgent::Claude),
+    #[cfg(unix)]
+    &herdr_tui::HerdrTui(crate::herdr::acp_agent::TuiAgent::Codex),
     &hermes::Hermes,
     &claude_code::ClaudeCode,
     &codex::Codex,
@@ -77,6 +85,15 @@ pub struct DetectedAgent {
 }
 
 impl DetectedAgent {
+    /// The name inside its group, where "in herdr" goes without saying.
+    pub fn short_name(&self) -> &'static str {
+        match self.kind {
+            AgentKind::HerdrClaude => "Claude Code",
+            AgentKind::HerdrCodex => "Codex",
+            _ => self.name,
+        }
+    }
+
     /// The installation still to run before `launch` works, if any.
     pub fn pending_install(&self) -> Option<&AdapterInstall> {
         self.install
@@ -90,10 +107,33 @@ impl DetectedAgent {
 pub enum AgentKind {
     Hermes,
     ClaudeCode,
+    HerdrClaude,
+    HerdrCodex,
     Codex,
     OpenClaw,
     OpenCode,
     Custom,
+}
+
+impl AgentKind {
+    /// Whether the agent runs as its own TUI in a herdr tab.
+    pub fn is_herdr(self) -> bool {
+        matches!(self, Self::HerdrClaude | Self::HerdrCodex)
+    }
+
+    /// Stable id used by `macrod detect-agents` and `macrod service --agent`.
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::Hermes => "hermes",
+            Self::ClaudeCode => "claude-code",
+            Self::HerdrClaude => "herdr-claude",
+            Self::HerdrCodex => "herdr-codex",
+            Self::Codex => "codex",
+            Self::OpenClaw => "openclaw",
+            Self::OpenCode => "opencode",
+            Self::Custom => "custom",
+        }
+    }
 }
 
 /// Result of checking one preset against the local machine.
@@ -122,62 +162,33 @@ pub struct PathCommands {
 impl PathCommands {
     /// Scan once for every command understood by the built-in presets.
     pub fn discover() -> Self {
-        let paths = environment::Path::new()
-            .and_then(|path| path.value().map(std::ffi::OsString::from))
-            .map(|path| std::env::split_paths(&path).collect::<Vec<_>>())
-            .unwrap_or_default();
+        let paths = crate::executable::search_paths();
         let mut found = std::collections::HashMap::new();
         for command in [
             "hermes",
             "hermes-acp",
             "claude",
             "codex",
+            "herdr",
             "npm",
             "openclaw",
             "opencode",
         ] {
-            if let Some(path) = find_command(&paths, command) {
+            if let Some(path) = crate::executable::find(&paths, command) {
                 found.insert(command, path);
             }
         }
-        let adapter_root = environment::Home::new()
-            .and_then(|home| home.value().map(PathBuf::from))
-            .map(|home| home.join(".macrod").join("adapters"));
+        let home = environment::Home::new().and_then(|home| home.value().map(PathBuf::from));
+        #[cfg(windows)]
+        let home = home.or_else(|| {
+            environment::Userprofile::new().and_then(|home| home.value().map(PathBuf::from))
+        });
+        let adapter_root = home.map(|home| home.join(".macrod").join("adapters"));
         Self {
             found,
             adapter_root,
         }
     }
-}
-
-fn find_command(paths: &[PathBuf], command: &str) -> Option<PathBuf> {
-    #[cfg(windows)]
-    let names = [
-        command.to_owned(),
-        format!("{command}.exe"),
-        format!("{command}.cmd"),
-        format!("{command}.bat"),
-    ];
-    #[cfg(not(windows))]
-    let names = [command.to_owned()];
-
-    paths
-        .iter()
-        .flat_map(|directory| names.iter().map(move |name| directory.join(name)))
-        .find(|candidate| is_executable(candidate))
-}
-
-#[cfg(unix)]
-fn is_executable(path: &Path) -> bool {
-    use std::os::unix::fs::PermissionsExt as _;
-
-    path.metadata()
-        .is_ok_and(|metadata| metadata.is_file() && metadata.permissions().mode() & 0o111 != 0)
-}
-
-#[cfg(not(unix))]
-fn is_executable(path: &Path) -> bool {
-    path.is_file()
 }
 
 impl CommandLookup for PathCommands {
@@ -257,6 +268,15 @@ pub fn name_for(harness: &Harness) -> Option<&'static str> {
 /// Preset identity of an existing launch configuration.
 pub fn kind_for(harness: &Harness) -> Option<AgentKind> {
     preset_for(harness).map(|preset| preset.kind())
+}
+
+/// Re-detect the preset an existing launch configuration came from, when its
+/// prerequisites are still installed.
+pub fn detected_for(harness: &Harness, commands: &dyn CommandLookup) -> Option<DetectedAgent> {
+    preset_for(harness).and_then(|preset| match preset.detect(commands) {
+        Availability::Available(agent) => Some(agent),
+        Availability::Unavailable { .. } => None,
+    })
 }
 
 /// Parse a custom command line into an ACP launch specification.

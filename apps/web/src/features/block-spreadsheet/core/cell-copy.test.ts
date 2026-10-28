@@ -96,7 +96,7 @@ describe('spreadsheet clipboard and fill regions', () => {
     for (const data of [
       null,
       { version: 1, top: -1, left: 0, cells: [[{ value: 'x' }]] },
-      { version: 1, top: 0, left: 26, cells: [[{ value: 'x' }]] },
+      { version: 1, top: 0, left: 16_384, cells: [[{ value: 'x' }]] },
       { version: 1, top: 0, left: 0, cells: [[{ value: 'x' }], []] },
       { version: 1, top: 0, left: 0, cells: [[{ value: 'x'.repeat(10001) }]] },
     ]) {

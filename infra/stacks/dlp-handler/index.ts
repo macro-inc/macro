@@ -5,7 +5,7 @@ import { DlpHandler } from './dlp-handler';
 if (stack === 'prod') {
   const tags = {
     environment: stack,
-    tech_lead: 'hutch',
+    tech_lead: 'teo',
     project: 'dlp-handler',
   };
 

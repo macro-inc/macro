@@ -18,6 +18,29 @@ export function useMeetingQuery(shareToken: Accessor<string>) {
   }));
 }
 
+/** Poll only while setup is visible, with separate caches for guests and members. */
+export function useMeetingParticipantsQuery(
+  shareToken: Accessor<string>,
+  viewerId: Accessor<string | undefined>,
+  enabled: Accessor<boolean>
+) {
+  return useQuery(() => ({
+    queryKey: callKeys.meetingParticipants(shareToken(), viewerId()).queryKey,
+    queryFn: () =>
+      throwOnErr(() =>
+        callServiceClient.getMeetingParticipants(
+          shareToken(),
+          Boolean(viewerId())
+        )
+      ),
+    enabled: Boolean(shareToken()) && enabled(),
+    refetchInterval: 15_000,
+    staleTime: 0,
+    gcTime: 0,
+    retry: false,
+  }));
+}
+
 export function useInviteMeetingUsersMutation() {
   return useMutation(() => ({
     gcTime: 0,
@@ -45,10 +68,18 @@ export function useCreateMeetingMutation() {
     mutationFn: (body: CreateMeetingRequest) =>
       throwOnErr(() => callServiceClient.createMeeting(body)),
     onSuccess: () => {
-      void queryClient.invalidateQueries(callKeys.meetings);
-      void queryClient.invalidateQueries(callKeys.activeMeetings);
+      queryClient.invalidateQueries(callKeys.meetings);
+      queryClient.invalidateQueries(callKeys.activeMeetings);
     },
   }));
+}
+
+export function prepareMeeting() {
+  return throwOnErr(() => callServiceClient.prepareMeeting());
+}
+
+export function cancelMeetingPreparation(id: string) {
+  return throwOnErr(() => callServiceClient.cancelMeetingPreparation(id));
 }
 
 export function useActiveMeetingsQuery(userId: Accessor<string | undefined>) {
@@ -84,8 +115,8 @@ export function useUpdateMeetingMutation() {
         callKeys.meeting(meeting.shareToken).queryKey,
         meeting
       );
-      void queryClient.invalidateQueries(callKeys.meetings);
-      void queryClient.invalidateQueries(callKeys.activeMeetings);
+      queryClient.invalidateQueries(callKeys.meetings);
+      queryClient.invalidateQueries(callKeys.activeMeetings);
     },
   }));
 }
@@ -95,13 +126,13 @@ export function useCancelMeetingMutation() {
     mutationFn: (meetingId: string) =>
       throwOnErr(() => callServiceClient.cancelMeeting(meetingId)),
     onSuccess: () => {
-      void queryClient.invalidateQueries(callKeys.meetings);
-      void queryClient.invalidateQueries(callKeys.activeMeetings);
+      queryClient.invalidateQueries(callKeys.meetings);
+      queryClient.invalidateQueries(callKeys.activeMeetings);
       // A revoked link must stop rendering as live everywhere: the meeting
       // page holds callKeys.meeting(token) and the copy-link affordances
       // cache callKeys.link(callId) with staleTime: Infinity.
-      void queryClient.invalidateQueries({ queryKey: callKeys.meeting._def });
-      void queryClient.invalidateQueries({ queryKey: callKeys.link._def });
+      queryClient.invalidateQueries({ queryKey: callKeys.meeting._def });
+      queryClient.invalidateQueries({ queryKey: callKeys.link._def });
     },
   }));
 }
@@ -133,7 +164,7 @@ export function useJoinMeetingMutation() {
             )
       ),
     onSuccess: () => {
-      void queryClient.invalidateQueries(callKeys.activeMeetings);
+      queryClient.invalidateQueries(callKeys.activeMeetings);
     },
   }));
 }
@@ -142,6 +173,6 @@ export async function leaveMeeting(shareToken: string, token: string) {
   const result = await throwOnErr(() =>
     callServiceClient.leaveMeeting(shareToken, token)
   );
-  void queryClient.invalidateQueries(callKeys.activeMeetings);
+  queryClient.invalidateQueries(callKeys.activeMeetings);
   return result;
 }

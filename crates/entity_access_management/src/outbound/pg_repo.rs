@@ -104,6 +104,7 @@ impl EntityAccessManagementRepository for PgRepository {
         project_id: &uuid::Uuid,
     ) -> Result<(), Self::Err> {
         let mut transaction = self.pool.begin().await?;
+        entity_access_db_utils::team_share::acquire_guard(&mut transaction).await?;
 
         let walked_up_project_ids = self
             .walk_up_project_tree(&mut transaction, project_id)
@@ -146,6 +147,7 @@ impl EntityAccessManagementRepository for PgRepository {
         old_project_id: &uuid::Uuid,
     ) -> Result<(), Self::Err> {
         let mut transaction = self.pool.begin().await?;
+        entity_access_db_utils::team_share::acquire_guard(&mut transaction).await?;
 
         let walked_up_project_ids = self
             .walk_up_project_tree(&mut transaction, old_project_id)
@@ -184,6 +186,7 @@ impl EntityAccessManagementRepository for PgRepository {
         new_project_id: Option<&uuid::Uuid>,
     ) -> Result<(), Self::Err> {
         let mut transaction = self.pool.begin().await?;
+        entity_access_db_utils::team_share::acquire_guard(&mut transaction).await?;
 
         // The project entities we will need to update (including the project itself)
         let project_entities = self

@@ -1,4 +1,5 @@
 import { UserIcon } from '@core/component/UserIcon';
+import { isBotPrincipalId } from '@core/constant/macroAgent';
 import { useEmail, useUserId } from '@core/context/user';
 import { emailToId, useAugmentUserWithDmActivity } from '@core/user';
 import { createFreshSearch } from '@core/util/freshSort';
@@ -10,8 +11,8 @@ import {
   Entity,
   type EntityData,
 } from '@entity';
-import CheckIcon from '@phosphor/check.svg';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import { useSearchInputFocus } from '@property/utils';
 import { useSearchSoupQuery } from '@queries/soup/search';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
@@ -47,7 +48,7 @@ type EntityInputProps = {
   selectedOptions: () => Set<string>;
   setSelectedOptions: (
     options: Set<string>,
-    entityInfo?: { id: string; entity_type: string }[]
+    entityInfo?: { id: string; entity_type: EntityType }[]
   ) => void;
   onClose?: () => void;
   pinnedOptions?: PinnedOption[];
@@ -70,6 +71,8 @@ function getEntityTypePluralLabel(
       return 'chats';
     case 'COMPANY':
       return 'companies';
+    case 'CONTACT':
+      return 'contacts';
     case 'THREAD':
       return 'emails';
     case 'TASK':
@@ -214,29 +217,28 @@ export function PropertyEntitySelector(props: EntityInputProps) {
       return emails().map(threadMapper);
     }
 
-    // For COMPANY type, return empty (not in quickAccess)
-    if (specificEntityType === 'COMPANY') {
-      return [];
-    }
-
     // Convert quickAccess items to CombinedEntity
     const items = quickAccessItems();
-    const converted: CombinedEntity[] = [];
+    const additionalUsers =
+      specificEntityType === 'USER'
+        ? (props.config.additionalUsers?.() ?? [])
+        : [];
+    const converted: CombinedEntity[] = additionalUsers.map(userToEntity);
+    const additionalIds = new Set(additionalUsers.map((user) => user.id));
 
     for (const item of items) {
+      if (additionalIds.has(item.id)) continue;
       // Augment users with DM activity
       if (item.kind === 'user') {
         const augmentedUser = augmentUserWithDmActivity(item.data);
         converted.push(userToEntity(augmentedUser));
       } else {
         const entity = quickAccessItemToEntity(item);
-        // Filter by specific entity type if needed
-        if (specificEntityType) {
-          const entityType = getEntityType(entity);
-          if (entityType === specificEntityType) {
-            converted.push(entity);
-          }
-        } else {
+        const entityType = getEntityType(entity);
+        if (
+          entityType &&
+          (!specificEntityType || entityType === specificEntityType)
+        ) {
           converted.push(entity);
         }
       }
@@ -278,7 +280,10 @@ export function PropertyEntitySelector(props: EntityInputProps) {
 
   const filteredEntities = createMemo(() => {
     const term = searchTerm();
-    const allEntities = entities();
+    const excludedIds = props.config.excludedIds?.();
+    const allEntities = entities().filter(
+      (entity) => !excludedIds?.has(entity.id)
+    );
     const userId = currentUserId();
 
     // List is unvirtualized — revisit if these caps grow significantly.
@@ -309,6 +314,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     if (needsEmailSearch() && term) {
       const localIds = new Set(localResults.map((e) => e.id));
       const serverResults = serverEmails()
+        .filter((entity) => !excludedIds?.has(entity.id))
         .filter((e) => !localIds.has(e.id))
         .filter(excludeFilter);
       return [...localResults, ...serverResults].slice(0, MAX_SEARCH_RESULTS);
@@ -340,6 +346,8 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     index === selectedEntityCountAtOpen();
 
   const toggleEntity = (entity: CombinedEntity) => {
+    const entityType = getEntityType(entity);
+    if (!entityType) return;
     const newSelected = new Set(props.selectedOptions());
     const isCurrentlySelected = newSelected.has(entity.id);
 
@@ -357,7 +365,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     props.setSelectedOptions(newSelected, [
       {
         id: entity.id,
-        entity_type: getEntityType(entity),
+        entity_type: entityType,
       },
     ]);
 
@@ -562,6 +570,11 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                                   size="sm"
                                   isDeleted={false}
                                   suppressClick={true}
+                                  photoUrl={
+                                    entity.kind === 'user'
+                                      ? entity.data.photoUrl
+                                      : undefined
+                                  }
                                 />
                               }
                             >
@@ -594,6 +607,11 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                               />
                             </Show>
                           </span>
+                          <Show when={isBotPrincipalId(entity.id)}>
+                            <span class="shrink-0 text-xs text-ink-muted">
+                              Agent
+                            </span>
+                          </Show>
                         </div>
                         <Show
                           when={!props.config.isMultiSelect && isSelected()}

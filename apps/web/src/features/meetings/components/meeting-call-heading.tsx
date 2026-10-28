@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { Button } from '@ui';
 import { createSignal, onCleanup, onMount, Show } from 'solid-js';
 
@@ -77,7 +78,7 @@ export function MeetingCallHeading(props: {
             class="flex flex-wrap items-center gap-2"
             onSubmit={(event) => {
               event.preventDefault();
-              void save();
+              fireAndForget(save(), 'meetings');
             }}
           >
             <input
@@ -98,7 +99,11 @@ export function MeetingCallHeading(props: {
                 if (event.key === 'Escape' && !saving()) setEditing(false);
               }}
             />
-            <Button type="submit" disabled={saving() || !draft().trim()}>
+            <Button
+              variant="primary"
+              type="submit"
+              disabled={saving() || !draft().trim()}
+            >
               {saving() ? 'Saving…' : 'Save'}
             </Button>
             <Button

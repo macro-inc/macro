@@ -5,6 +5,10 @@ use sqs_client::search::SearchQueueMessage;
 use thiserror::Error;
 
 /// Reply returned by every backfill port.
+///
+/// For queue-backed backfills, completion means source publication only, not
+/// consumption, indexing, or OpenSearch refresh. Failed/stale jobs can be retried
+/// with the same scope; search upserts are idempotent.
 #[derive(Debug, Clone, Copy, Serialize)]
 pub struct BackfillReceipt {
     /// Total number of source rows the backfill processed.
@@ -144,14 +148,24 @@ pub struct ChatBackfillCursor {
     pub message_id: String,
 }
 
-/// Channel-message backfill filter. No scoping knobs yet — reserved so adding
-/// one later doesn't break the request shape.
+/// Channel-message backfill filter. Explicit scopes read from the primary so
+/// just-committed imported history is not missed due to replica lag.
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
 pub struct ChannelBackfillRequest {
+    /// `None` scans all channels; `Some([])` does no work.
+    pub channel_ids: Option<Vec<uuid::Uuid>>,
     pub deletion_filter: DeletionFilter,
     /// Override the OpenSearch target index for upserts (e.g. blue/green swap).
     pub index_override: Option<String>,
+}
+
+/// Channel messages are enumerated by `(created_at ASC, id ASC)`. The UUID
+/// breaks timestamp ties, and edits do not move messages across page boundaries.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChannelBackfillCursor {
+    pub created_at: DateTime<Utc>,
+    pub message_id: uuid::Uuid,
 }
 
 /// Keyset (seek-method) pagination cursor for document backfills.

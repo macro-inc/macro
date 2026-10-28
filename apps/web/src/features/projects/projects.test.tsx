@@ -1,7 +1,11 @@
 import { cleanup, render } from '@solidjs/testing-library';
 import { QueryClient } from '@tanstack/solid-query';
-import { type Client, createClient, type Exchange } from '@urql/core';
-import { ok } from 'neverthrow';
+import {
+  type Client,
+  createClient,
+  type Exchange,
+  getOperationName,
+} from '@urql/core';
 import {
   createMemo,
   createRoot,
@@ -18,7 +22,6 @@ const mocks = vi.hoisted(() => ({
   soup: vi.fn(),
   graphql: undefined as Client | undefined,
   get: vi.fn(),
-  taskReferences: vi.fn(),
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => createMemo(() => ({ enabled: mocks.enabled() })),
@@ -29,6 +32,8 @@ vi.mock('@app/lib/analytics/posthog', () => ({
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'viewer' }));
 // The list and assignment hosts are outside this provider/query lifecycle test.
 vi.mock('@app/components/list/owned-slots', () => ({}));
+vi.mock('@app/features/next-soup/actions', () => ({}));
+vi.mock('@app/signal/splitLayout', () => ({}));
 vi.mock('@components/app/split-layout/layout', () => ({}));
 vi.mock('@components/app/split-layout/layoutUtils', () => ({}));
 vi.mock('@ui', () => ({
@@ -36,12 +41,18 @@ vi.mock('@ui', () => ({
 }));
 vi.mock('./primitives/project-collection', () => ({}));
 vi.mock('./project-collection-persistence', () => ({}));
+vi.mock('./project-share', () => ({}));
 vi.mock('./views/project-assignment', () => ({}));
 vi.mock('./views/projects-collection', () => ({}));
+vi.mock('@app/features/tasks-view/tasks-create-action', () => ({
+  TasksCreateAction: () => null,
+}));
 vi.mock('@queries/activity/push-registry', () => ({
   registerActivityRevalidator: () => () => {},
+  revalidateActivityQueries: async () => {},
 }));
-vi.mock('@service-storage/initiative', () => ({
+vi.mock('@service-storage/initiative', async (original) => ({
+  ...(await original<typeof import('@service-storage/initiative')>()),
   initiativeClient: mocks,
 }));
 vi.mock('@queries/client', async () => {
@@ -52,8 +63,8 @@ vi.mock('@queries/client', async () => {
     }),
   };
 });
-vi.mock('./queries/create-project-task', () => ({
-  createProjectTaskMutation: () => vi.fn(),
+vi.mock('@block-md/util/taskComposerProperties', () => ({
+  createTaskWithProperties: vi.fn(),
 }));
 // These independent property adapters are not used by this fixture.
 vi.mock('@entity', () => ({ isTaskEntity: () => false }));
@@ -80,7 +91,6 @@ import { createProjectSources } from './queries/project-sources';
 const project = {
   id: 'launch',
   name: 'Launch',
-  descriptionDocumentId: 'description',
   ownerId: 'viewer',
   memberIds: [],
   taskIds: ['task'],
@@ -92,6 +102,56 @@ const project = {
   completedTaskCount: 0,
   sharePermission: {},
 };
+
+function setupGraphql() {
+  const initiative = {
+    __typename: 'GraphqlSoupInitiative',
+    id: project.id,
+    displayName: project.name,
+    metadata: {
+      ownerId: project.ownerId,
+      updatedAt: project.updatedAt,
+      createdAt: project.createdAt,
+    },
+    viewerPermission: {
+      __typename: 'GraphqlAccessLevelPermission',
+      accessLevel: 'OWNER',
+    },
+    properties: [],
+    memberIds: [],
+    taskIds: ['task'],
+    taskCount: 1,
+    completedTaskCount: 0,
+    sharePermission: { id: 'share', owner: 'viewer', linkShare: 'DISABLED' },
+  };
+  mocks.soup.mockImplementation(async (operation) => ({
+    operation,
+    stale: false,
+    hasNext: false,
+    data: {
+      user: {
+        id: 'viewer',
+        ...(['Initiative', 'InitiativeIdentity'].includes(
+          getOperationName(operation.query) ?? ''
+        )
+          ? { initiative }
+          : { soup: { nextCursor: 'next', items: [initiative] } }),
+      },
+    },
+  }));
+  const exchange: Exchange = () => (operations) =>
+    pipe(
+      operations,
+      filter((operation) => operation.kind === 'query'),
+      mergeMap((operation) => fromPromise(mocks.soup(operation)))
+    );
+  mocks.graphql = createClient({
+    url: 'http://test.invalid/graphql',
+    exchanges: [exchange],
+  });
+}
+const callsFor = (name: string) =>
+  mocks.soup.mock.calls.filter(([op]) => getOperationName(op.query) === name);
 
 let disposeSource: (() => void) | undefined;
 afterEach(() => {
@@ -107,49 +167,7 @@ it('keeps retained query sources gated after their view owner is disposed', asyn
   vi.useFakeTimers();
   const [enabled, setEnabled] = createSignal(true);
   mocks.enabled = enabled;
-  mocks.soup.mockImplementation(async (operation) => ({
-    operation,
-    stale: false,
-    hasNext: false,
-    data: {
-      user: {
-        id: 'viewer',
-        soup: {
-          nextCursor: 'next',
-          items: [
-            {
-              __typename: 'GraphqlSoupInitiative',
-              id: project.id,
-              displayName: project.name,
-              descriptionDocumentId: project.descriptionDocumentId,
-              metadata: { updatedAt: project.updatedAt },
-              viewerPermission: {
-                __typename: 'GraphqlAccessLevelPermission',
-                accessLevel: 'OWNER',
-              },
-              properties: [],
-            },
-          ],
-        },
-      },
-    },
-  }));
-  const exchange: Exchange = () => (operations) =>
-    pipe(
-      operations,
-      filter((operation) => operation.kind === 'query'),
-      mergeMap((operation) => fromPromise(mocks.soup(operation)))
-    );
-  mocks.graphql = createClient({
-    url: 'http://test.invalid/graphql',
-    exchanges: [exchange],
-  });
-  mocks.get.mockResolvedValue(ok(project));
-  mocks.taskReferences.mockResolvedValue(
-    ok({
-      references: [{ taskId: 'task', state: 'visible', initiative: project }],
-    })
-  );
+  setupGraphql();
 
   // The context belongs to a view, but split-owned queries are constructed
   // under a separate owner that survives view unmount.
@@ -172,28 +190,23 @@ it('keeps retained query sources gated after their view owner is disposed', asyn
     return {
       collection: retainedContext.createCollectionSource(),
       detail: retainedContext.createProjectSource(() => 'launch'),
-      references: retainedContext.createReferencesSource(() => ['task']),
     };
   });
   await vi.advanceTimersByTimeAsync(60_000);
-  for (const request of [mocks.get, mocks.taskReferences])
-    expect(request).not.toHaveBeenCalled();
+  expect(mocks.get).not.toHaveBeenCalled();
 
   setEnabled(true);
   await vi.waitFor(() => expect(sources.detail.project()?.name).toBe('Launch'));
   await vi.waitFor(() => expect(sources.collection.rows()).toHaveLength(1));
   expect(mocks.page).not.toHaveBeenCalled();
-  expect(mocks.soup).toHaveBeenCalledTimes(1);
-  expect(sources.references.references().size).toBe(1);
+  expect(mocks.soup).toHaveBeenCalledTimes(2);
   await vi.advanceTimersByTimeAsync(30_000);
-  for (const request of [mocks.get, mocks.taskReferences])
-    expect(request).toHaveBeenCalledTimes(2);
+  expect(callsFor('Initiative')).toHaveLength(2);
 
   setEnabled(false);
   const soupRequests = mocks.soup.mock.calls.length;
   expect(sources.collection.rows()).toBeUndefined();
   expect(sources.detail.project()).toBeUndefined();
-  expect(sources.references.references().size).toBe(0);
   await Promise.all([
     sources.collection.loadMore(),
     sources.collection.refresh(),
@@ -201,8 +214,7 @@ it('keeps retained query sources gated after their view owner is disposed', asyn
     queryClient.invalidateQueries(),
   ]);
   await vi.advanceTimersByTimeAsync(60_000);
-  for (const request of [mocks.get, mocks.taskReferences])
-    expect(request).toHaveBeenCalledTimes(2);
+  expect(callsFor('Initiative')).toHaveLength(2);
 
   expect(mocks.soup).toHaveBeenCalledTimes(soupRequests);
   setEnabled(true);
@@ -217,16 +229,145 @@ it('keeps standalone source adapters enabled when no rollout gate is injected', 
     defaultOptions: { queries: { retry: false } },
   });
   const { initiativeClient } = await import('@service-storage/initiative');
-  mocks.get.mockResolvedValue(ok(project));
+  setupGraphql();
   const source = createRoot((dispose) => {
     disposeSource = dispose;
     return createProjectSources(
       initiativeClient,
-      { client: () => mocks.graphql!, cacheHost: () => undefined },
+      { client: () => mocks.graphql! },
       cache,
       () => 'viewer'
     ).createProjectSource(() => 'launch');
   });
   await vi.waitFor(() => expect(source.project()?.name).toBe('Launch'));
   cache.clear();
+});
+
+import {
+  CombinedError,
+  type Operation,
+  type OperationResult,
+  stringifyDocument,
+} from '@urql/core';
+import { makeSubject, takeUntil } from 'wonka';
+import {
+  createProjectDetailQuery,
+  createProjectIdentityQuery,
+} from './queries/project-identity';
+
+it('reads chip identity without the fields that check every task', async () => {
+  setupGraphql();
+  const query = createRoot((dispose) => {
+    disposeSource = dispose;
+    return createProjectIdentityQuery(
+      () => mocks.graphql!,
+      () => 'viewer',
+      () => 'launch'
+    );
+  });
+  await vi.waitFor(() =>
+    expect(query.data).toEqual({
+      id: 'launch',
+      name: 'Launch',
+      access: 'owner',
+    })
+  );
+  expect(callsFor('Initiative')).toHaveLength(0);
+  const [[operation]] = callsFor('InitiativeIdentity');
+  const selection = stringifyDocument(operation.query);
+  for (const field of [
+    'taskCount',
+    'completedTaskCount',
+    'taskIds',
+    'memberIds',
+    'sharePermission',
+  ])
+    expect(selection).not.toContain(field);
+});
+
+function controlledClient() {
+  const requests: {
+    operation: Operation;
+    next: (data?: unknown, error?: CombinedError, cached?: boolean) => void;
+  }[] = [];
+  const exchange: Exchange = () => (source) =>
+    pipe(
+      source,
+      filter((operation) => operation.kind === 'query'),
+      mergeMap((operation) => {
+        const subject = makeSubject<OperationResult>();
+        requests.push({
+          operation,
+          next: (data, error, cached = false) =>
+            subject.next({
+              operation,
+              data,
+              error,
+              stale: false,
+              hasNext: false,
+              ...(cached
+                ? {
+                    extensions: {
+                      __macroNormalizedCache: {
+                        source: 'normalized-cache-hit',
+                      },
+                    },
+                  }
+                : {}),
+            }),
+        });
+        return pipe(
+          subject.source,
+          takeUntil(
+            pipe(
+              source,
+              filter(
+                (next) => next.kind === 'teardown' && next.key === operation.key
+              )
+            )
+          )
+        );
+      })
+    );
+  return {
+    client: createClient({ url: 'http://test.invalid', exchanges: [exchange] }),
+    requests,
+  };
+}
+
+it('keeps permission denials latched across cache hits and hides disabled detail identities', async () => {
+  setupGraphql();
+  const data = (
+    await mocks.soup({
+      query: (
+        await import('@service-storage/graphql/generated/graphql')
+      ).InitiativeDocument,
+    })
+  ).data;
+  const { client, requests } = controlledClient();
+  const [viewer, setViewer] = createSignal<string | undefined>('viewer');
+  const [id, setId] = createSignal('launch');
+  const query = createRoot((dispose) => {
+    disposeSource = dispose;
+    return createProjectDetailQuery(() => client, viewer, id);
+  });
+  requests[0].next(data);
+  expect(query.data?.project.name).toBe('Launch');
+  const denial = new CombinedError({
+    graphQLErrors: [{ message: 'Denied', extensions: { code: 'FORBIDDEN' } }],
+  });
+  requests[0].next(undefined, denial);
+  expect(query.data).toBeUndefined();
+  requests[0].next(data, undefined, true);
+  expect(query.data).toBeUndefined();
+  expect(query.error).toBe(denial);
+  requests[0].next(data);
+  expect(query.data?.project.name).toBe('Launch');
+  setViewer(undefined);
+  expect(query.data).toBeUndefined();
+  expect(query.isSuccess).toBe(false);
+  setViewer('viewer');
+  setId('');
+  expect(query.data).toBeUndefined();
+  expect(query.isSuccess).toBe(false);
 });

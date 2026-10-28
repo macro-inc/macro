@@ -35,20 +35,3 @@ pub enum ExtractError {
     #[error("{0}")]
     Failed(rootcause::Report),
 }
-
-/// Why a GitHub pull request diff could not be read.
-#[derive(Debug, thiserror::Error)]
-pub enum CompareError {
-    /// GitHub cannot find the linked pull request.
-    #[error("the linked pull request does not exist on GitHub")]
-    NotFound,
-    /// The provider refuses to render a diff this large.
-    #[error("the diff is too large for the repository provider to compare")]
-    TooLarge,
-    /// The caller may not reach the repository through the provider.
-    #[error("the repository is not reachable through the configured GitHub App")]
-    Unavailable,
-    /// Anything else.
-    #[error("{0}")]
-    Other(rootcause::Report),
-}

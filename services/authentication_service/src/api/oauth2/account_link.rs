@@ -154,10 +154,30 @@ pub(super) async fn replace_identity_provider_grant(
     swap_result
 }
 
+/// Query keys the callback owns on the return URL. Replaced, never duplicated,
+/// so a return URL that already carries a previous outcome does not keep it.
+const CALLBACK_QUERY_KEYS: [&str; 5] = [
+    "link_id",
+    "token",
+    "email_link_error",
+    "email_link_notice",
+    "provider",
+];
+
 /// Builds the redirect back to an account-link caller with fresh link identifiers.
 pub(super) fn build_callback_redirect(
     original_url: &str,
     link_id: &Uuid,
+) -> Result<Response, CallbackRedirectError> {
+    let link_id = link_id.to_string();
+    build_return_redirect(original_url, &[("link_id", &link_id), ("token", &link_id)])
+}
+
+/// Builds the redirect back to the caller's return URL carrying `outcome`
+/// query pairs, such as a consent error or an admin-consent notice.
+pub(super) fn build_return_redirect(
+    original_url: &str,
+    outcome: &[(&str, &str)],
 ) -> Result<Response, CallbackRedirectError> {
     let decoded_url = urlencoding::decode(original_url).map_err(|error| {
         tracing::error!(error=?error, "unable to decode original url");
@@ -171,17 +191,13 @@ pub(super) fn build_callback_redirect(
 
     let preserved_query_pairs: Vec<(String, String)> = url
         .query_pairs()
-        .filter(|(key, _)| key != "link_id" && key != "token")
+        .filter(|(key, _)| !CALLBACK_QUERY_KEYS.contains(&key.as_ref()))
         .map(|(key, value)| (key.into_owned(), value.into_owned()))
         .collect();
     url.query_pairs_mut()
         .clear()
-        .extend_pairs(preserved_query_pairs);
-
-    let link_id = link_id.to_string();
-    url.query_pairs_mut()
-        .append_pair("link_id", &link_id)
-        .append_pair("token", &link_id);
+        .extend_pairs(preserved_query_pairs)
+        .extend_pairs(outcome);
 
     Ok(Redirect::to(url.as_str()).into_response())
 }

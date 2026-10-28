@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE slack_import_conversation SET status = 'skipped',\n                   settled_at = clock_timestamp(), updated_at = clock_timestamp()\n                   WHERE job_id = $1 AND status IN ('awaiting_uploads', 'queued')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "089deab58d419b15a5c39a9d8af9b0a2afa0e8182e707176a3dbdda3309fd4c4"
+}

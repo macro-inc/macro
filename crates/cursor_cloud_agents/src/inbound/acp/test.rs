@@ -26,6 +26,19 @@ type Service = CursorSessionService<
     crate::domain::ports::NoArtifactStore,
 >;
 
+#[cfg(feature = "postgres")]
+#[test]
+fn admission_error_has_sanitized_retryable_protocol_details() {
+    use agent_session::domain::error::AiAdmissionError;
+    let error = prompt_error(&SessionError::Admission(AiAdmissionError::Unavailable));
+    let value = serde_json::to_value(error).unwrap();
+    assert_eq!(value["message"], AiAdmissionError::Unavailable.to_string());
+    assert_eq!(
+        value["data"],
+        serde_json::json!({"code": "ai_billing_unavailable", "retryable": true})
+    );
+}
+
 /// The client's end of a served connection.
 struct TestClient {
     to_agent: mpsc::UnboundedSender<TransportFrame>,

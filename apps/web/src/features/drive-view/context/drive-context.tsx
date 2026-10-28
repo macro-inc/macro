@@ -1,3 +1,4 @@
+import type { OpenCreatedItem } from '@app/features/command/types';
 import type { EntityData, ProjectEntity, SearchLocation } from '@entity';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import { type Accessor, createContext, useContext } from 'solid-js';
@@ -15,6 +16,7 @@ export type DriveHostActions = {
     newSplit?: boolean
   ) => void;
   openFavorite: (favorite: Favorite, name: string, event: MouseEvent) => void;
+  openCreated: OpenCreatedItem;
   openFolderInNewSplit: (folder: ProjectEntity) => void;
   shareFolder: (folder: ProjectEntity) => void;
   uploadFiles: () => void;
@@ -37,8 +39,12 @@ const Context = createContext<DriveContext>();
 
 export const DriveProvider = Context.Provider;
 
+export function useOptionalDriveView(): DriveContext | undefined {
+  return useContext(Context);
+}
+
 export function useDriveView(): DriveContext {
-  const context = useContext(Context);
+  const context = useOptionalDriveView();
 
   if (!context) throw new Error('DriveProvider is required');
 

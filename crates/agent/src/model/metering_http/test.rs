@@ -120,6 +120,7 @@ fn admission(request: BeginInvocation) -> AuthorizedInvocation {
 struct Transport {
     calls: Arc<AtomicUsize>,
     bodies: Arc<Mutex<Vec<Value>>>,
+    headers: Arc<Mutex<Vec<http_client::HeaderMap>>>,
     response: Bytes,
     remaining: Arc<Mutex<std::collections::VecDeque<Bytes>>>,
     fail: bool,
@@ -146,6 +147,7 @@ impl Transport {
 
     fn called<T: Into<Bytes>>(&self, request: Request<T>) {
         self.calls.fetch_add(1, Ordering::SeqCst);
+        self.headers.lock().unwrap().push(request.headers().clone());
         self.bodies
             .lock()
             .unwrap()
@@ -279,6 +281,18 @@ fn provider_semantics_are_disjoint() {
     for (protocol, usage, expected) in cases {
         assert_eq!(normalize(protocol, &usage), Some(expected));
     }
+}
+
+/// gpt-6-astra reports prompt-cache writes on a cache miss, inside `input_tokens`.
+#[test]
+fn openai_cache_writes_are_a_billed_dimension() {
+    assert_eq!(
+        normalize(
+            WireProtocol::Responses,
+            &json!({"input_tokens":9015,"input_tokens_details":{"cache_write_tokens":9012,"cached_tokens":0},"output_tokens":5,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":9020}),
+        ),
+        Some(TrustedTokenUsage::from_disjoint(3, 5, 0, 9012, 0))
+    );
 }
 
 #[test]
@@ -618,6 +632,7 @@ async fn rig_invalid_tool_retry_is_two_authorized_executions() {
 
 #[tokio::test]
 async fn routing_fallback_is_attributed_to_actual_provider_and_wire_model() {
+    use crate::model::anthropic_prompt_layout::AnthropicPromptLayout;
     use crate::model::router::{ModelRouter, RoutedModel};
     use rig_agent::agent::AgentBuilder;
     use rig_agent::completion::Prompt;
@@ -627,11 +642,11 @@ async fn routing_fallback_is_attributed_to_actual_provider_and_wire_model() {
     let transport = Transport::new(anthropic_response());
     let anthropic = anthropic::Client::builder()
         .api_key("test")
-        .http_client(MeteredHttpClient::new(
+        .http_client(AnthropicPromptLayout::new(MeteredHttpClient::new(
             transport.clone(),
             "anthropic",
             WireProtocol::Anthropic,
-        ))
+        )))
         .build()
         .unwrap();
     let openai = openai::Client::builder()
@@ -777,6 +792,89 @@ fn incomplete_stream_snapshots_are_never_promoted_to_final_usage() {
     assert!(matches!(chat.evidence(), UsageEvidence::Missing(_)));
 }
 
+#[test]
+fn every_protocol_reports_why_the_provider_stopped() {
+    let mut anthropic = Facts::new(WireProtocol::Anthropic, false, None);
+    anthropic.event(
+        br#"{"type":"message_start","message":{"usage":{"input_tokens":10,"output_tokens":1}}}"#,
+    );
+    anthropic.event(
+        br#"{"type":"message_delta","delta":{"stop_reason":"refusal"},"usage":{"output_tokens":0}}"#,
+    );
+    anthropic.event(br#"{"type":"message_stop"}"#);
+    assert_eq!(anthropic.stop_reason.as_deref(), Some("refusal"));
+
+    let mut responses = Facts::new(WireProtocol::Responses, false, None);
+    responses.event(br#"{"type":"response.incomplete","response":{"status":"incomplete","incomplete_details":{"reason":"max_output_tokens"}}}"#);
+    assert_eq!(responses.stop_reason.as_deref(), Some("max_output_tokens"));
+
+    let mut completed = Facts::new(WireProtocol::Responses, false, None);
+    completed.event(br#"{"type":"response.completed","response":{"status":"completed"}}"#);
+    assert_eq!(completed.stop_reason.as_deref(), Some("completed"));
+
+    let mut chat = Facts::new(WireProtocol::ChatCompletions, false, None);
+    chat.event(br#"{"choices":[{"delta":{"content":"hi"},"finish_reason":null}]}"#);
+    chat.event(br#"{"choices":[{"delta":{},"finish_reason":"length"}]}"#);
+    chat.event(br#"{"choices":[],"usage":{"prompt_tokens":10,"completion_tokens":2}}"#);
+    assert_eq!(chat.stop_reason.as_deref(), Some("length"));
+
+    let mut gemini = Facts::new(WireProtocol::Gemini, false, None);
+    gemini.event(br#"{"candidates":[{"finishReason":"SAFETY"}]}"#);
+    assert_eq!(gemini.stop_reason.as_deref(), Some("SAFETY"));
+}
+
+/// Rig's streaming span keeps only usage; the stop reason comes from here.
+#[tokio::test]
+async fn the_stop_reason_lands_on_the_model_call_span() {
+    use opentelemetry::trace::TracerProvider as _;
+    use opentelemetry_sdk::trace::{InMemorySpanExporter, SdkTracerProvider};
+    use tracing::Instrument as _;
+    use tracing_subscriber::layer::SubscriberExt as _;
+
+    let exporter = InMemorySpanExporter::default();
+    let provider = SdkTracerProvider::builder()
+        .with_simple_exporter(exporter.clone())
+        .build();
+    let layer = tracing_opentelemetry::layer().with_tracer(provider.tracer("test"));
+    let _guard = tracing::subscriber::set_default(tracing_subscriber::registry().with(layer));
+    tracing::callsite::rebuild_interest_cache();
+
+    let journal = Arc::new(Journal::default());
+    let sse = concat!(
+        "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg\",\"usage\":{\"input_tokens\":10,\"output_tokens\":1}}}\n\n",
+        "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"refusal\"},\"usage\":{\"output_tokens\":0}}\n\n",
+        "data: {\"type\":\"message_stop\"}\n\n"
+    );
+    let client = MeteredHttpClient::new(Transport::new(sse), "anthropic", WireProtocol::Anthropic);
+    context(
+        journal.clone(),
+        WireProtocol::Anthropic,
+        "anthropic",
+        "model",
+    )
+    .scope(
+        async {
+            let mut body = client.send_streaming(request()).await.unwrap().into_body();
+            while body.next().await.is_some() {}
+        }
+        .instrument(tracing::info_span!("chat_streaming")),
+    )
+    .await;
+
+    provider.force_flush().unwrap();
+    let spans = exporter.get_finished_spans().unwrap();
+    let call = spans
+        .iter()
+        .find(|span| span.name == "chat_streaming")
+        .expect("the model call span finished");
+    let reasons = call
+        .attributes
+        .iter()
+        .find(|kv| kv.key.as_str() == attr::RESPONSE_FINISH_REASONS)
+        .map(|kv| kv.value.to_string());
+    assert_eq!(reasons.as_deref(), Some("[\"refusal\"]"));
+}
+
 #[tokio::test]
 async fn replayed_admission_never_executes_again() {
     let journal = Arc::new(Journal {
@@ -849,3 +947,72 @@ async fn provider_excess_is_not_clipped_to_the_authorized_budget() {
         UsageEvidence::Reported(TrustedTokenUsage::from_disjoint(10, 1000, 0, 0, 0))
     );
 }
+
+#[tokio::test]
+async fn a_reshaped_anthropic_request_is_metered_with_its_cache_usage() {
+    use crate::model::anthropic_prompt_layout::AnthropicPromptLayout;
+
+    let journal = Arc::new(Journal::default());
+    let transport = Transport::new(concat!(
+        "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg\",\"usage\":{\"input_tokens\":4,\"cache_read_input_tokens\":30000,\"cache_creation_input_tokens\":250}}}\n\n",
+        "data: {\"type\":\"message_delta\",\"usage\":{\"output_tokens\":7}}\n\n",
+        "data: {\"type\":\"message_stop\"}\n\n",
+    ));
+    let client = AnthropicPromptLayout::new(MeteredHttpClient::new(
+        transport.clone(),
+        "anthropic",
+        WireProtocol::Anthropic,
+    ));
+    let body = json!({
+        "model": "model",
+        "max_tokens": 50,
+        "tools": [
+            {"name": "LoadTools", "input_schema": {"type": "object"}, "cache_control": {"type": "ephemeral"}},
+            {"name": "EditPresentation", "input_schema": {"type": "object"}, "defer_loading": true},
+        ],
+        "system": [
+            {"type": "text", "text": "Shared"},
+            {"type": "text", "text": "Task A", "cache_control": {"type": "ephemeral"}},
+        ],
+        "messages": [
+            {"role": "user", "content": [{"type": "text", "text": "edit my deck"}]},
+            {"role": "assistant", "content": [{"type": "tool_use", "id": "toolu_load", "name": "LoadTools", "input": {}}]},
+            {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "toolu_load", "content": "loaded"}]},
+        ],
+        "cache_control": {"type": "ephemeral"},
+        "macro_prompt_layout": {
+            "cache_shared_system": true,
+            "tool_references": [{"tool_use_id": "toolu_load", "tool_names": ["EditPresentation"]}],
+        },
+    });
+    context(
+        journal.clone(),
+        WireProtocol::Anthropic,
+        "anthropic",
+        "model",
+    )
+    .scope(async {
+        let request = Request::builder()
+            .uri("https://example.test/v1/messages")
+            .body(Bytes::from(body.to_string()))
+            .unwrap();
+        let mut stream = client.send_streaming(request).await.unwrap().into_body();
+        while stream.next().await.is_some() {}
+    })
+    .await;
+
+    let sent = transport.bodies.lock().unwrap()[0].clone();
+    assert_eq!(sent.get("macro_prompt_layout"), None);
+    assert_eq!(
+        sent["messages"][2]["content"][0]["content"],
+        json!([{"type": "tool_reference", "tool_name": "EditPresentation"}])
+    );
+    let begins = journal.begins.lock().unwrap();
+    assert_eq!(begins.len(), 1, "metering admits the reshaped request");
+    assert_eq!(
+        journal.finals.lock().unwrap()[0].usage,
+        UsageEvidence::Reported(TrustedTokenUsage::from_disjoint(4, 7, 30000, 250, 0))
+    );
+}
+
+mod speed;

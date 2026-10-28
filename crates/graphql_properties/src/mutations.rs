@@ -5,7 +5,7 @@ use graphql_common::{GraphqlCacheDeletion, GraphqlPropertyEntityType, parse_id};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::api::requests::SetPropertyValue;
 use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
-use models_properties::shared::EntityReference;
+use models_properties::shared::{DateRange, EntityReference};
 use properties::PropertiesService;
 use properties::domain::model::EntityPropertyOptionUpdate;
 use std::{marker::PhantomData, sync::Arc};
@@ -251,6 +251,8 @@ pub enum GraphqlPropertyTargetEntityType {
     Chat,
     /// CRM company target.
     Company,
+    /// Row of a Macro database table.
+    DatabaseRow,
     /// Document target, including tasks and snippets.
     Document,
     /// Initiative target, displayed as a Project in the application.
@@ -271,6 +273,7 @@ impl GraphqlPropertyTargetEntityType {
             Self::Channel => model_entity::EntityType::Channel,
             Self::Chat => model_entity::EntityType::Chat,
             Self::Company => model_entity::EntityType::CrmCompany,
+            Self::DatabaseRow => model_entity::EntityType::DatabaseRow,
             Self::Document => model_entity::EntityType::Document,
             Self::Initiative => model_entity::EntityType::Initiative,
             Self::Project => model_entity::EntityType::Project,
@@ -336,7 +339,7 @@ impl EntityPropertyOptionDeltaInput {
 
 /// Input identifying an entity referenced by a property value.
 #[derive(async_graphql::InputObject)]
-struct GraphqlEntityReferenceInput {
+pub struct GraphqlEntityReferenceInput {
     /// Type of the referenced entity.
     entity_type: GraphqlPropertyEntityType,
     /// Identifier of the referenced entity.
@@ -359,13 +362,41 @@ impl GraphqlEntityReferenceInput {
     }
 }
 
+/// A date range accepted when setting an entity property.
+#[derive(async_graphql::InputObject)]
+pub struct GraphqlDateRangeInput {
+    /// Where the range starts, as an RFC 3339 date-time.
+    start: String,
+    /// Where the range ends, as an RFC 3339 date-time no earlier than the start.
+    end: String,
+}
+
+impl GraphqlDateRangeInput {
+    /// Convert the GraphQL range into its properties-domain model.
+    fn try_into_model(self) -> async_graphql::Result<DateRange> {
+        DateRange::new(parse_date(&self.start)?, parse_date(&self.end)?)
+            .map_err(|err| async_graphql::Error::new(err.to_string()))
+    }
+}
+
+/// An RFC 3339 date-time.
+fn parse_date(value: &str) -> async_graphql::Result<chrono::DateTime<chrono::Utc>> {
+    chrono::DateTime::parse_from_rfc3339(value)
+        .map(|date| date.with_timezone(&chrono::Utc))
+        .map_err(|err| {
+            async_graphql::Error::new(format!("invalid RFC3339 property date `{value}`: {err}"))
+        })
+}
+
 /// A typed value accepted when setting an entity property.
 #[derive(async_graphql::OneofObject)]
-enum GraphqlSetPropertyValue {
+pub enum GraphqlSetPropertyValue {
     /// A Boolean value.
     Boolean(bool),
     /// An RFC 3339 date-time value.
     Date(String),
+    /// A span from a start date-time to an end one.
+    DateRange(GraphqlDateRangeInput),
     /// A numeric value.
     Number(f64),
     /// A string value.
@@ -386,17 +417,14 @@ enum GraphqlSetPropertyValue {
 
 impl GraphqlSetPropertyValue {
     /// Convert the GraphQL value into its properties-domain request model.
-    fn try_into_model(self) -> async_graphql::Result<SetPropertyValue> {
+    pub fn try_into_model(self) -> async_graphql::Result<SetPropertyValue> {
         Ok(match self {
             Self::Boolean(value) => SetPropertyValue::Boolean { value },
             Self::Date(value) => SetPropertyValue::Date {
-                value: chrono::DateTime::parse_from_rfc3339(&value)
-                    .map(|date| date.with_timezone(&chrono::Utc))
-                    .map_err(|err| {
-                        async_graphql::Error::new(format!(
-                            "invalid RFC3339 property date `{value}`: {err}"
-                        ))
-                    })?,
+                value: parse_date(&value)?,
+            },
+            Self::DateRange(range) => SetPropertyValue::DateRange {
+                value: range.try_into_model()?,
             },
             Self::Number(value) => SetPropertyValue::Number { value },
             Self::String(value) => SetPropertyValue::String { value },
@@ -431,6 +459,7 @@ where
     T: EntityPropertyWriter,
 {
     /// Remove a property assignment and identify its normalized cache record.
+    #[tracing::instrument(skip_all, err(Debug))]
     async fn delete_entity_property(
         &self,
         ctx: &Context<'_>,
@@ -451,6 +480,7 @@ where
     }
 
     /// Set or attach one property on an entity.
+    #[tracing::instrument(skip_all, err(Debug))]
     async fn set_entity_property(
         &self,
         ctx: &Context<'_>,
@@ -478,6 +508,11 @@ where
     }
 
     /// Add and remove options across one entity's multi-select properties.
+    #[tracing::instrument(
+        skip_all,
+        err(Debug),
+        fields(property_count = input.properties.len())
+    )]
     async fn update_entity_property_options(
         &self,
         ctx: &Context<'_>,

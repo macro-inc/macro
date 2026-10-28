@@ -6,6 +6,7 @@ import {
   screen,
   waitFor,
 } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -15,7 +16,22 @@ const mocks = vi.hoisted(() => ({
   rename: vi.fn(),
   storeModel: vi.fn(),
   sendBackground: vi.fn(),
+  setMarkdown: vi.fn(),
+  setAttached: vi.fn(),
+  failureToast: vi.fn(),
   background: false,
+  agentsEnabled: false,
+  agentsLoading: (): boolean => false,
+}));
+
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({
+    enabled: mocks.agentsEnabled,
+    loading: mocks.agentsLoading(),
+  }),
+}));
+vi.mock('../agents-view/mobile-agent-composer', () => ({
+  MobileAgentComposer: () => <div data-testid="agent-composer" />,
 }));
 
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
@@ -25,7 +41,7 @@ vi.mock('@core/component/AI/component/input/buildChatEditor', () => ({
   buildChatEditor: () => {
     const builder = {
       withAppLinkResolver: () => builder,
-      withMentions: () => ({}),
+      withMentions: () => ({ controls: { setMarkdown: mocks.setMarkdown } }),
     };
     return builder;
   },
@@ -56,7 +72,7 @@ vi.mock('@core/component/AI/context', () => ({
   ChatInputProvider: (props: { children: unknown }) => props.children,
   useChatInputContext: () => ({
     model: () => Model.gpt56,
-    attachments: {},
+    attachments: { setAttached: mocks.setAttached },
   }),
 }));
 vi.mock('@core/component/AI/signal/attachment', () => ({
@@ -95,15 +111,44 @@ vi.mock('@service-cognition/client', () => ({
   },
 }));
 
+vi.mock('@core/component/Toast/Toast', () => ({
+  toast: { failure: mocks.failureToast },
+}));
+
 import { SoupChatInput } from './SoupChatInput';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.sendBackground.mockResolvedValue({ isErr: () => false });
   mocks.background = false;
+  mocks.agentsEnabled = false;
+  mocks.agentsLoading = () => false;
 });
 afterEach(cleanup);
 
 describe('SoupChatInput', () => {
+  it.each([true, false])(
+    'waits for flags before mounting the composer (agents enabled: %s)',
+    (enabled) => {
+      const [loading, setLoading] = createSignal(true);
+      mocks.agentsLoading = loading;
+      render(() => <SoupChatInput />);
+      expect(screen.queryByRole('button', { name: 'Send' })).toBeNull();
+      expect(screen.queryByTestId('agent-composer')).toBeNull();
+      expect(mocks.createChat).not.toHaveBeenCalled();
+      mocks.agentsEnabled = enabled;
+      setLoading(false);
+      expect(!!screen.queryByTestId('agent-composer')).toBe(enabled);
+      expect(!!screen.queryByRole('button', { name: 'Send' })).toBe(!enabled);
+    }
+  );
+  it('uses the new composer when agents are enabled', () => {
+    mocks.agentsEnabled = true;
+    render(() => <SoupChatInput />);
+    expect(screen.getByTestId('agent-composer')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Send' })).toBeNull();
+    expect(mocks.createChat).not.toHaveBeenCalled();
+  });
   it('renders the compact chat input inline without page actions', () => {
     const { container } = render(() => <SoupChatInput />);
     const send = screen.getByRole('button', { name: 'Send' });
@@ -167,4 +212,23 @@ describe('SoupChatInput', () => {
     expect(mocks.replace).not.toHaveBeenCalled();
     expect(mocks.storeModel).not.toHaveBeenCalled();
   });
+});
+
+it('restores a rejected background draft and reports the failure', async () => {
+  mocks.background = true;
+  mocks.createChat.mockResolvedValue({
+    isErr: () => false,
+    value: { id: 'new-chat' },
+  });
+  mocks.sendBackground.mockResolvedValue({ isErr: () => true });
+  render(() => <SoupChatInput />);
+  fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+  await waitFor(() =>
+    expect(mocks.setMarkdown).toHaveBeenCalledWith('Summarize this document')
+  );
+  expect(mocks.setAttached).toHaveBeenCalledWith([
+    { entity_id: 'document-id', entity_type: 'document' },
+  ]);
+  expect(mocks.failureToast).toHaveBeenCalledOnce();
+  expect(mocks.replace).not.toHaveBeenCalled();
 });

@@ -1,15 +1,15 @@
 import { createSignal, onCleanup, onMount } from 'solid-js';
+import { observeDemoTakeover } from './observeDemoTakeover';
 
 export type EmailDemoToken = string | { kind: 'pdf' | 'md'; label: string };
 const parts: EmailDemoToken[] = [
-  'Hi Dana,\n',
+  'Hi Valentina,\n',
   'Thanks for joining the demo on September 14. Great meeting your team!\n',
   'Here’s our ',
   { kind: 'pdf', label: 'Macro sales overview.pdf' },
   ' and the ',
   { kind: 'md', label: 'Team rollout plan' },
   '.\n',
-  'I’ve cc’d Julia to help with setup. Does Thursday at 9 AM work for a follow-up?\n',
   'Best,\nJacob',
 ];
 const tokens = parts.flatMap((part): EmailDemoToken[] =>
@@ -34,6 +34,7 @@ export function createEmailDemoGeneration(
   let index = 0;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let reduced: MediaQueryList | undefined;
+  let takenOver = false;
 
   const stop = () => {
     clearTimeout(timer);
@@ -41,7 +42,7 @@ export function createEmailDemoGeneration(
   };
   const run = () => {
     stop();
-    if (phase() === 'complete') return;
+    if (takenOver || phase() === 'complete') return;
     if (reduced?.matches) {
       append(tokens.slice(index));
       index = tokens.length;
@@ -62,24 +63,32 @@ export function createEmailDemoGeneration(
     );
   };
   onMount(() => {
+    const root = element();
+    if (!root) return;
+    const takeOver = () => {
+      takenOver = true;
+      stop();
+      setPhase('complete');
+    };
+    const releaseTakeover = observeDemoTakeover(root, takeOver);
     reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
     reduced.addEventListener('change', run);
     document.addEventListener('visibilitychange', run);
     const observer = new IntersectionObserver(
       ([entry]) => {
-        visible = entry.isIntersecting;
+        visible = entry.isIntersecting && entry.intersectionRatio >= 0.2;
         run();
       },
       { threshold: 0.2 }
     );
-    const root = element();
-    if (root) observer.observe(root);
+    observer.observe(root);
     run();
     onCleanup(() => {
       stop();
       observer.disconnect();
       reduced?.removeEventListener('change', run);
       document.removeEventListener('visibilitychange', run);
+      releaseTakeover();
     });
   });
   return { phase };

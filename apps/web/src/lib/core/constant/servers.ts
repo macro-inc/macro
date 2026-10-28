@@ -6,7 +6,7 @@ const serverHostLocal: Servers = {
   'pdf-service': 'http://localhost:4567',
   'document-storage-service': 'http://localhost:8086',
   'websocket-service': 'ws://localhost:6969',
-  'cognition-service': 'http://localhost:8085',
+  'cognition-service': 'http://localhost:8101/cognition',
   'connection-gateway': 'ws://localhost:8082',
   'notification-service': 'http://localhost:8089',
   'static-file': 'http://localhost:8100',
@@ -18,9 +18,9 @@ const serverHostLocal: Servers = {
   // that prefix is carried here.
   'calendar-service': 'http://localhost:8088/calendar',
   'image-proxy-service': 'http://localhost:8097',
-  'scheduled-action': 'http://localhost:8099',
+  'scheduled-action': 'http://localhost:8101/scheduled-action',
   'agent-harness': 'http://localhost:8101',
-  preview: 'http://localhost:8110',
+  preview: 'http://localhost:8101/preview',
 } as const;
 
 const devServerSuffix = import.meta.env.MODE === 'development' ? '-dev' : '';
@@ -232,6 +232,14 @@ export function staticFileIdEndpoint(id: string): string {
   return `${SERVER_HOSTS['static-file']}/file/${id}`;
 }
 
+/** A static-file reference consumed by a backend, outside the browser proxy. */
+export function staticFileReferenceEndpoint(id: string): string {
+  const host = SERVER_HOSTS['static-file'];
+  const remote = directServerHostRemote['static-file'];
+  const referenceHost = host === developmentProxyUrl(remote) ? remote : host;
+  return `${referenceHost}/file/${id}`;
+}
+
 type StaticFileSize = 'small' | 'medium';
 
 const staticFileSizes: Record<StaticFileSize, number> = {
@@ -247,5 +255,8 @@ export function staticFileSizedEndpoint(
 }
 
 export function staticFileSizedUrl(url: string, size: StaticFileSize): string {
+  // Embedded and local previews are not image-service URLs. A query string
+  // changes their contents instead of requesting a resized image.
+  if (url.startsWith('data:') || url.startsWith('blob:')) return url;
   return `${url}?size=${staticFileSizes[size]}`;
 }

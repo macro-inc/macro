@@ -15,8 +15,6 @@ pub struct SoupInitiative<T = ()> {
     /// Initiative owner.
     #[cfg_attr(feature = "schema", schema(value_type = String))]
     pub owner_id: Owner,
-    /// Document holding the initiative description.
-    pub description_document_id: Option<Uuid>,
     /// Creation timestamp.
     pub created_at: DateTime<Utc>,
     /// Last modification timestamp.

@@ -73,7 +73,7 @@ impl AgentProjectionGenerator {
             .session(
                 toolset,
                 Arc::new(tool_context),
-                &self.system_prompt,
+                &*self.system_prompt,
                 usage_ctx,
             )
             .await;

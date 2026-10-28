@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO comms_messages\n               (id, parent_entity_type, parent_entity_id, thread_id,\n                sender_id, imported_author, content, created_at, updated_at, edited_at,\n                import_metadata, import_order)\n           SELECT input.id, 'channel', $1, input.thread_id, input.sender_id,\n               input.imported_author, input.content, input.created_at, input.updated_at,\n               input.edited_at, input.import_metadata, input.import_order\n           FROM UNNEST($2::uuid[], $3::uuid[], $4::text[], $5::text[], $6::text[],\n               $7::timestamptz[], $8::timestamptz[], $9::timestamp[], $10::jsonb[], $11::bigint[])\n               AS input(id, thread_id, sender_id, imported_author, content, created_at,\n                        updated_at, edited_at, import_metadata, import_order)\n           ON CONFLICT (id) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "UuidArray",
+        "UuidArray",
+        "TextArray",
+        "TextArray",
+        "TextArray",
+        "TimestamptzArray",
+        "TimestamptzArray",
+        "TimestampArray",
+        "JsonbArray",
+        "Int8Array"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6ad281c07800007bd048990b1d839838e9f059b92690acc84a22b9720e7abd35"
+}

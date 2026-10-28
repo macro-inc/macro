@@ -1,5 +1,9 @@
-import type { ListController } from '@app/components/list';
+import {
+  createListController,
+  type ListController,
+} from '@app/components/list';
 import { isListViewID } from '@app/constants/list-views';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { EntityData } from '@entity';
 import type { SoupRow, SoupState } from '../create-soup-state';
 import { canExecuteMarkDoneOnView } from './make-mark-done-action';
@@ -10,6 +14,7 @@ export type EntityActionSenderBucket = 'signal' | 'noise';
 
 export type EntityActionViewContext = {
   supportsMarkDone: boolean;
+  supportsOpenInNewSplit: boolean;
   senderBucket: EntityActionSenderBucket | undefined;
 };
 
@@ -58,19 +63,23 @@ type AdaptedRow = {
   entity: EntityData;
 };
 
+/** The Signal or Noise bucket an email is in, when the server said. */
+export function emailSenderBucket(
+  entity: EntityData | undefined
+): EntityActionSenderBucket | undefined {
+  if (entity?.type !== 'email' || entity.isSignal === undefined) return;
+  return entity.isSignal ? 'signal' : 'noise';
+}
+
+/**
+ * The sender bucket a view's tab shows. Views without a Signal or Noise tab
+ * (Search, folders, Recent) have none, so their rows offer no sender moves.
+ */
 function resolveSenderBucket(
   activeTab: string | undefined
 ): EntityActionSenderBucket | undefined {
   if (activeTab === 'noise') return 'noise';
-
-  if (
-    activeTab === undefined ||
-    activeTab === 'signal' ||
-    activeTab === 'important'
-  ) {
-    return 'signal';
-  }
-
+  if (activeTab === 'signal' || activeTab === 'important') return 'signal';
   return undefined;
 }
 
@@ -85,6 +94,7 @@ export function resolveEntityActionViewContext(options: {
       activeTab !== undefined &&
       isListViewID(activeListView) &&
       canExecuteMarkDoneOnView(activeListView, activeTab),
+    supportsOpenInNewSplit: true,
     senderBucket: resolveSenderBucket(activeTab),
   };
 }
@@ -141,7 +151,7 @@ export function toEntityActionListState<TItem, TMetadata>(
   const setFocus = (id: string | undefined) => {
     if (id === undefined) {
       controller.focus.clear({ reason: 'programmatic' });
-      void options.onFocus?.(undefined);
+      fireAndForget(options.onFocus?.(undefined), 'next-soup');
       return;
     }
 
@@ -154,11 +164,14 @@ export function toEntityActionListState<TItem, TMetadata>(
     });
     if (!focused) return;
 
-    void options.onFocus?.({
-      key: focused.key,
-      index: target.controllerIndex,
-      entity: target.entity,
-    });
+    fireAndForget(
+      options.onFocus?.({
+        key: focused.key,
+        index: target.controllerIndex,
+        entity: target.entity,
+      }),
+      'next-soup'
+    );
   };
 
   const peekOffset: EntityActionListState['navigate']['peekOffset'] = (
@@ -250,4 +263,24 @@ export function toEntityActionListState<TItem, TMetadata>(
       shouldCollapse: () => options.collapse?.enabled() ?? false,
     },
   };
+}
+
+/**
+ * List state for a surface that shows a single entity rather than a list of
+ * them, such as a detail header's action menu. Actions that would advance or
+ * clear a list find only this entity, so they leave the surface as it is.
+ */
+export function toSingleEntityActionListState(
+  entity: () => EntityData | undefined
+): EntityActionListState {
+  const controller = createListController({
+    items: () => {
+      const only = entity();
+      return only ? [only] : [];
+    },
+    getKey: (item) => item.id,
+    isSelectable: () => false,
+  });
+
+  return toEntityActionListState({ controller, getEntity: (item) => item });
 }

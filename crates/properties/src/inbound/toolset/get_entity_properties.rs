@@ -25,7 +25,6 @@ pub enum ToolEntityType {
     Task,
     Initiative,
     Project,
-    Chat,
     // Listing and search tools report email threads as `email`. A doc comment
     // here would turn the schema enum into a named type, so this stays a plain
     // comment.
@@ -35,6 +34,7 @@ pub enum ToolEntityType {
     Call,
     User,
     Company,
+    Contact,
 }
 
 impl From<ToolEntityType> for EntityType {
@@ -44,12 +44,12 @@ impl From<ToolEntityType> for EntityType {
             ToolEntityType::Task => EntityType::Task,
             ToolEntityType::Initiative => EntityType::Initiative,
             ToolEntityType::Project => EntityType::Project,
-            ToolEntityType::Chat => EntityType::Chat,
             ToolEntityType::Thread => EntityType::Thread,
             ToolEntityType::Channel => EntityType::Channel,
             ToolEntityType::Call => EntityType::CallRecord,
             ToolEntityType::User => EntityType::User,
             ToolEntityType::Company => EntityType::Company,
+            ToolEntityType::Contact => EntityType::Contact,
         }
     }
 }
@@ -63,7 +63,6 @@ pub enum ToolPropertyTargetEntityType {
     Document,
     Initiative,
     Project,
-    Chat,
     // Listing and search tools report email threads as `email`. A doc comment
     // here would turn the schema enum into a named type, so this stays a plain
     // comment.
@@ -81,7 +80,6 @@ impl From<ToolPropertyTargetEntityType> for model_entity::EntityType {
             ToolPropertyTargetEntityType::Document => Self::Document,
             ToolPropertyTargetEntityType::Initiative => Self::Initiative,
             ToolPropertyTargetEntityType::Project => Self::Project,
-            ToolPropertyTargetEntityType::Chat => Self::Chat,
             ToolPropertyTargetEntityType::Thread => Self::EmailThread,
             ToolPropertyTargetEntityType::Channel => Self::Channel,
             ToolPropertyTargetEntityType::Call => Self::Call,
@@ -229,6 +227,7 @@ fn to_tool_property(info: EntityPropertyInfo) -> ToolPropertyItem {
     let data_type = match info.data_type {
         DataType::Boolean => "boolean",
         DataType::Date => "date",
+        DataType::DateRange => "date_range",
         DataType::Number => "number",
         DataType::String => "string",
         DataType::SelectNumber => "select_number",
@@ -261,7 +260,7 @@ fn to_tool_property(info: EntityPropertyInfo) -> ToolPropertyItem {
         .then_some(match info.owner {
             PropertyOwner::User { .. } => Some(TagScope::Personal),
             PropertyOwner::Team { .. } => Some(TagScope::Team),
-            PropertyOwner::System => None,
+            PropertyOwner::Database { .. } | PropertyOwner::System => None,
         })
         .flatten();
 

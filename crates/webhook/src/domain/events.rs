@@ -186,7 +186,7 @@ impl MacroEvent for WebhookMacroEvent {
 /// Any entity event deliverable to a webhook endpoint.
 ///
 /// Serialized bodies carry an `event_type` tag naming the event (for example
-/// `document.created` or `channel.message_posted`) and a `metadata` object
+/// `document.created` or `message.posted`) and a `metadata` object
 /// with the event payload. Endpoint validation additionally sends a
 /// `WebhookValidationTestEvent`, which is not part of this union.
 #[cfg(any(feature = "ingestion", feature = "inbound"))]
@@ -196,8 +196,10 @@ impl MacroEvent for WebhookMacroEvent {
 pub enum WebhookEvent {
     /// Document lifecycle events from the `macro.documents` topic.
     Document(documents::domain::events::DocumentTopicEvent),
-    /// Channel and message events from the `macro.channels` topic.
+    /// Channel lifecycle events from the `macro.channels` topic.
     Channel(channels::domain::broker_events::ChannelTopicEvent),
+    /// Message facts for channels and documents from the `macro.messages` topic.
+    Message(messages::outbound::broker::MessageTopicEvent),
     /// Agent session lifecycle events from the `macro.agent_session_lifecycle`
     /// topic.
     AgentSession(agent_session::domain::events::AgentSessionLifecycleEvent),

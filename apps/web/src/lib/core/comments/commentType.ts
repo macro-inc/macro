@@ -1,18 +1,10 @@
 import type { DateValue } from '@core/util/date';
-import type {
-  CreateCommentRequest,
-  EditCommentRequest,
-} from '@service-storage/generated/schemas';
-import type { Comment } from '@service-storage/generated/schemas/comment';
-import type { CreateCommentResponse } from '@service-storage/generated/schemas/createCommentResponse';
 import type { Message, PostMessage } from '@service-storage/messages';
 
 /**
- * Legacy annotation comments carry numeric ids; comments read through the
- * shared message API are messages with UUIDs. Both flow through the same
- * margin, drawer, and layout code until the legacy path is removed.
+ * Comments are messages with UUIDs; drafts carry numeric or prefixed sentinel
+ * ids until the server assigns one.
  */
-export type IComment = Comment | Message;
 export type CommentId = string | number;
 export type ThreadId = string | number;
 
@@ -23,16 +15,8 @@ export function isDraftThreadId(id: ThreadId | null | undefined): boolean {
   return id === DRAFT_THREAD_ID;
 }
 
-export function isMessageComment(comment: IComment): comment is Message {
-  return 'sender_id' in comment;
-}
-
-export function isLegacyComment(comment: IComment): comment is Comment {
-  return !isMessageComment(comment);
-}
-
-/** Presentation fields shared by both comment sources. */
-export function commentView(comment: IComment): {
+/** Presentation fields of a comment message. */
+export function commentView(comment: Message): {
   id: CommentId;
   createdAt: DateValue | null | undefined;
   owner: string;
@@ -40,25 +24,16 @@ export function commentView(comment: IComment): {
   text: string;
   message?: Message;
 } {
-  if (isMessageComment(comment)) {
-    return {
-      id: comment.id,
-      createdAt: comment.created_at,
-      owner: comment.sender_id,
-      author:
-        comment.imported_author?.name?.trim() ||
-        comment.sender?.name ||
-        comment.sender_id,
-      text: comment.content,
-      message: comment,
-    };
-  }
   return {
-    id: comment.commentId,
-    createdAt: comment.createdAt,
-    owner: comment.owner,
-    author: comment.sender || comment.owner,
-    text: comment.text,
+    id: comment.id,
+    createdAt: comment.created_at,
+    owner: comment.sender_id,
+    author:
+      comment.imported_author?.name?.trim() ||
+      comment.sender?.name ||
+      comment.sender_id,
+    text: comment.content,
+    message: comment,
   };
 }
 
@@ -73,7 +48,7 @@ type CommentBase = {
   createdAt: DateValue | null | undefined;
   // TODO: deprecated, adding for type compatibility
   resolved?: boolean;
-  /** The shared message behind this comment; absent for legacy comments and drafts. */
+  /** The shared message behind this comment; absent for drafts. */
   message?: Message;
 };
 
@@ -90,24 +65,8 @@ export type Root = ThreadedComment & {
 
 export type Reply = ThreadedComment & {};
 
-export type DeleteCommentInfo = {
-  commentId: CommentId;
-  removeAnchorThreadOnly?: boolean;
-};
-
 export type Layout = {
   calculatedYPos: number;
-};
-
-export type CommentOperations = {
-  createComment: (
-    info: Omit<CreateCommentRequest, 'threadId'> & { threadId: ThreadId }
-  ) => Promise<CreateCommentResponse | null>;
-  deleteComment: (info: DeleteCommentInfo) => Promise<boolean> | undefined;
-  updateComment: (
-    commentId: CommentId,
-    info: Omit<EditCommentRequest, 'threadId'> & { threadId: ThreadId }
-  ) => Promise<boolean>;
 };
 
 /** Comment writes through the shared message API; a draft thread posts a new root. */

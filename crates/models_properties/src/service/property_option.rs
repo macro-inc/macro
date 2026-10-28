@@ -47,6 +47,7 @@ pub struct PropertyOption {
     pub property_definition_id: Uuid,
     pub display_order: i32,
     pub value: PropertyOptionValue,
+    #[schema(required = true)]
     pub color: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,

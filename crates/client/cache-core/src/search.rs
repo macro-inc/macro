@@ -12,6 +12,13 @@ use std::cmp::Ordering;
 use std::collections::BTreeSet;
 use thiserror::Error;
 
+mod catalog;
+mod changes;
+mod ranking;
+pub(crate) use catalog::SearchCatalogs;
+pub(crate) use changes::{collect_search_changes, snapshot_search_fields};
+pub(crate) use ranking::rank_documents;
+
 /// Current compact projection profile used by Quick Access, Cmd-K and entity
 /// mention pickers. Profile names are persisted and therefore versioned.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -45,6 +52,7 @@ impl SearchProfile {
                 "project",
                 "email",
                 "crm_company",
+                "crm_contact",
             ],
         }
     }
@@ -124,7 +132,7 @@ pub enum SearchError {
 
 /// Revision of the derived Quick Access rows. Storage adapters rebuild existing
 /// rows when this changes; normalized records and pending writes remain valid.
-pub const QUICK_ACCESS_PROJECTION_VERSION: u32 = 2;
+pub const QUICK_ACCESS_PROJECTION_VERSION: u32 = 3;
 
 /// Normalized entity types used by the Quick Access projection. Storage rebuilds
 /// restrict decoding to this set so unrelated payloads do not delay readiness.
@@ -135,6 +143,7 @@ pub const QUICK_ACCESS_TYPENAMES: &[&str] = &[
     "GraphqlSoupEmailThread",
     "GraphqlSoupChannel",
     "GraphqlSoupCrmCompany",
+    "GraphqlSoupCrmContact",
     "GraphqlUser",
     "User",
 ];
@@ -178,7 +187,10 @@ pub fn project_search_documents(key: &EntityKey<'static>, record: &Record) -> Ve
     project_quick_access(key, record).into_iter().collect()
 }
 
-fn project_quick_access(key: &EntityKey<'static>, record: &Record) -> Option<SearchDocument> {
+fn quick_access_fields<'a>(
+    key: &'a EntityKey<'_>,
+    record: &'a Record,
+) -> Option<(&'a str, &'static str, &'static [&'static str])> {
     if key.is_root() || key.as_ref().starts_with("__meta:") || !is_present(record) {
         return None;
     }
@@ -192,14 +204,23 @@ fn project_quick_access(key: &EntityKey<'static>, record: &Record) -> Option<Sea
         "GraphqlSoupProject" => ("project", &["projectName", "name"]),
         "GraphqlSoupEmailThread" => (
             "email",
-            &["emailName", "name", "senderName", "senderEmail", "snippet"],
+            &["emailName", "name", "senderName", "senderEmail", "senders"],
         ),
         "GraphqlSoupChannel" => (channel_bucket(record), &["channelName", "name"]),
         "GraphqlSoupCrmCompany" => ("crm_company", &["crmCompanyName", "name", "domains"]),
+        "GraphqlSoupCrmContact" => ("crm_contact", &["crmContactName", "name", "email"]),
         "GraphqlUser" | "User" => ("person", &["name", "email"]),
         _ => return None,
     };
 
+    text_fields
+        .iter()
+        .any(|field| record.fields.contains_key(*field))
+        .then_some((typename, bucket, text_fields))
+}
+
+fn project_quick_access(key: &EntityKey<'static>, record: &Record) -> Option<SearchDocument> {
+    let (typename, bucket, text_fields) = quick_access_fields(key, record)?;
     let search_text = normalize_search_text(
         text_fields
             .iter()
@@ -209,14 +230,6 @@ fn project_quick_access(key: &EntityKey<'static>, record: &Record) -> Option<Sea
             .join(" | ")
             .as_str(),
     );
-    if search_text.is_empty()
-        && !text_fields
-            .iter()
-            .any(|field| record.fields.contains_key(*field))
-    {
-        return None;
-    }
-
     Some(SearchDocument {
         profile: SearchProfile::QuickAccessV1,
         record_key: key.clone(),
@@ -297,6 +310,12 @@ fn normalize_search_text(value: &str) -> String {
 }
 
 fn quick_access_timestamp(typename: &str, record: &Record) -> i64 {
+    if typename == "GraphqlSoupCrmContact" {
+        return ["lastInteraction", "updatedAt", "createdAt"]
+            .into_iter()
+            .find_map(|field| record.fields.get(field).and_then(value_timestamp))
+            .unwrap_or(0);
+    }
     // Match VIEWED_UPDATED and the menu before applying a browse limit. Using
     // max(viewedAt, updatedAt) would let newly updated, long-unopened records
     // displace recently viewed records into later pages.
@@ -367,7 +386,10 @@ pub fn compare_recent(left: &SearchDocument, right: &SearchDocument) -> Ordering
 /// match as an ordered subsequence. Fuzzy relevance contributes 70%, freshness
 /// contributes 30%, and matching direct messages receive the legacy 1.8x boost.
 pub fn fuzzy_freshness_score(document: &SearchDocument, query: &str, now_ms: i64) -> Option<f64> {
-    let normalized = normalize_search_text(query);
+    score_normalized_query(document, &normalize_search_text(query), now_ms)
+}
+
+fn score_normalized_query(document: &SearchDocument, normalized: &str, now_ms: i64) -> Option<f64> {
     if normalized.is_empty() {
         return Some(1.0);
     }

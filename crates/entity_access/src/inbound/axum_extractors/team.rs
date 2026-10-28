@@ -29,6 +29,7 @@ use macro_authorization::{
     MacroAuthorizationService, MacroAuthorizationState,
 };
 use macro_user_id::user_id::MacroUserIdStr;
+use tracing::Level;
 
 enum TeamAccessOutcome<T: RequiredPermission> {
     Qualifying(EntityAccessReceipt<T>),
@@ -87,6 +88,23 @@ where
         entity_permission: permission,
         _marker: PhantomData,
     }))
+}
+
+/// The team receipt an authenticated user qualifies for, minted the way
+/// [`OptionalMacroUserTeamExtractorV2`] mints it for users. For transports
+/// without request parts to extract from, such as GraphQL subscriptions,
+/// whose user was authenticated when the connection was established.
+pub async fn user_team_receipt<T, Svc>(
+    service: &Svc,
+    macro_user_id: MacroUserIdStr<'static>,
+) -> Result<Option<EntityAccessReceipt<T>>, ExtractorError>
+where
+    T: RequiredPermission,
+    Svc: EntityAccessService,
+{
+    Ok(user_team_access_outcome::<T, Svc>(service, macro_user_id)
+        .await?
+        .into_optional_receipt())
 }
 
 async fn bot_team_access_outcome<T, Svc>(
@@ -184,7 +202,7 @@ where
 {
     type Rejection = ExtractorError;
 
-    #[tracing::instrument(err, skip(state, parts))]
+    #[tracing::instrument(err(level = Level::INFO), skip(state, parts))]
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
         let authorization: MacroAuthorizationExtractor<Auth, AnyPrincipal> = parts
@@ -226,7 +244,7 @@ where
 {
     type Rejection = ExtractorError;
 
-    #[tracing::instrument(err, skip(state, parts))]
+    #[tracing::instrument(err(level = Level::INFO), skip(state, parts))]
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
         let authorization: MacroAuthorizationExtractor<Auth, AnyPrincipal> = parts

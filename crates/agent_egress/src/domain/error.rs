@@ -1,6 +1,6 @@
 //! Failures a proxied call can end in.
 
-use crate::domain::model::{McpServerSlug, RepoSlug};
+use crate::domain::model::{CustomMcpServerKey, McpServerSlug, RepoSlug};
 
 /// Everything that can stop a sandbox's request from reaching its upstream.
 ///
@@ -42,6 +42,13 @@ pub enum EgressError {
     /// is forwarded for them.
     #[error("no MCP server named {0}")]
     UnknownServer(McpServerSlug),
+
+    /// The key names none of the owner's enabled custom servers. Unlike a
+    /// Pipedream slug there is nothing to address without a row: the URL
+    /// *is* the row, so a key that matches none - or matches one the owner
+    /// turned off - has nowhere to go.
+    #[error("no custom MCP server with key {0}")]
+    UnknownCustomServer(CustomMcpServerKey),
 
     /// A request body the proxy had to read was bigger than it will read.
     /// Only reachable on the path that answers `tools/call` for an

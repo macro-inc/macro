@@ -1,12 +1,17 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
-import { useSplitRouter } from '@app/lib/split-router';
-import { parseSearchState } from '@app/lib/split-router/search';
-import { isRecord } from '@app/lib/split-router/utils';
+import { isRecord, type PaneId, useSplitRouter } from '@app/lib/split-router';
 import { useIsAuthenticated } from '@core/auth';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { type Component, type JSX, onMount, Show } from 'solid-js';
-import type { SplitContent, SplitId } from '../layoutManager';
+import {
+  type Component,
+  type JSX,
+  Match,
+  onMount,
+  Show,
+  Switch,
+} from 'solid-js';
+import type { SplitContent } from '../layoutManager';
 import { useSplitPanelOrThrow } from '../layoutUtils';
 
 export function usePageViewTracking(pageTitle: string) {
@@ -17,32 +22,47 @@ export function usePageViewTracking(pageTitle: string) {
   });
 }
 
-export function withAuth<P extends object>(View: Component<P>): Component<P> {
+/** Renders `View` once signed in; `Pending`, if given, draws while sign-in is confirmed. */
+export function withAuth<P extends object>(
+  View: Component<P>,
+  Pending?: Component
+): Component<P> {
   return (props) => {
     const authenticated = useIsAuthenticated();
     return (
-      <Show when={authenticated()} fallback={<LoadingBlock />}>
-        <View {...props} />
-      </Show>
+      <Switch fallback={<LoadingBlock />}>
+        <Match when={authenticated()}>
+          <View {...props} />
+        </Match>
+        <Match when={Pending && authenticated() === undefined}>
+          {Pending && <Pending />}
+        </Match>
+      </Switch>
     );
   };
 }
 
-export function RedirectSplit(props: { to: SplitContent }) {
+export function RedirectSplit(props: {
+  to: SplitContent;
+  mergeHistory?: boolean;
+}) {
   const panel = useSplitPanelOrThrow();
-  const router = useSplitRouter<SplitId>();
+  const router = useSplitRouter();
   onMount(() => {
     const metadata = isRecord(props.to.entryMetadata)
       ? props.to.entryMetadata
       : {};
+    const pane = panel.handle.id as string as PaneId;
+    const savedSearch = isRecord(metadata.search) ? metadata.search : {};
     panel.handle.replace({
+      mergeHistory: props.mergeHistory,
       next: {
         ...props.to,
         entryMetadata: {
           ...metadata,
           search: {
-            ...router.location(panel.handle.id)?.search,
-            ...parseSearchState(metadata.search),
+            ...router.entry(pane)?.location.search,
+            ...savedSearch,
           },
         },
       },

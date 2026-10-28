@@ -1,9 +1,10 @@
 #![recursion_limit = "256"]
 
-use ai_tools::{AiHost, build_tool_service_context_from_env, tools_for};
+use ai_tools::{AiHost, tools_for};
 use anyhow::Context;
 use macro_user_id::user_id::MacroUserIdStr;
 use memory::config::Config;
+use memory::context::build_tool_service_context;
 use memory::domain::{MemoryService, service::MemoryServiceImpl};
 use memory::outbound::pg_memory_repo::PgMemoryRepo;
 use sqlx::postgres::PgPoolOptions;
@@ -27,14 +28,22 @@ async fn main() -> anyhow::Result<()> {
         .await?;
 
     let event_broker_tracker = TaskTracker::new();
-    let tool_context =
-        build_tool_service_context_from_env(pool.clone(), event_broker_tracker.clone()).await?;
+    let import_jobs = ai_tools::ImportJobs::new();
+    let tool_context = build_tool_service_context(
+        pool.clone(),
+        &config,
+        event_broker_tracker.clone(),
+        import_jobs.clone(),
+    )
+    .await?;
     let tools = tools_for(AiHost::Chat);
     let memory_repo = PgMemoryRepo::new(pool);
     let memory_service = MemoryServiceImpl::new(memory_repo, tool_context, tools);
 
     tracing::info!("Generating memory for {user}...");
     let memory_result = memory_service.get_or_generate_memory(user).await;
+
+    import_jobs.hand_over().await;
 
     tracing::info!("waiting for event broker publishes to drain");
     event_broker_tracker.close();

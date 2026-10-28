@@ -77,3 +77,42 @@ it('does not dispatch a second send while the first one is pending', async () =>
     dispose();
   }
 });
+
+it('preserves a new draft typed while a failed send is pending', async () => {
+  let rejectSend!: (error: Error) => void;
+  let dispose!: () => void;
+  const restoreEditor = vi.fn();
+  const composer = createRoot((cleanup) => {
+    dispose = cleanup;
+    return createMessageComposer({
+      input: { mode: 'channel', value: 'first message' },
+      callbacks: {
+        onSend: () =>
+          new Promise<void>((_resolve, reject) => {
+            rejectSend = reject;
+          }),
+      },
+      clearEditor: () => {},
+      restoreEditor,
+      attachFiles: async () => {},
+      onSendError: vi.fn(),
+    });
+  });
+  try {
+    const sending = composer.inputState.commands.send();
+    composer.onChange('next message');
+    composer.attachmentTracker.setAttachments([
+      { id: 'next-doc', kind: 'document', name: 'Document' },
+    ]);
+    rejectSend(new Error('offline'));
+    expect(await sending).toBe(false);
+    expect(composer.inputState.snapshot()).toEqual({
+      value: 'next message',
+      attachments: [{ id: 'next-doc', kind: 'document', name: 'Document' }],
+      mentions: [],
+    });
+    expect(restoreEditor).not.toHaveBeenCalled();
+  } finally {
+    dispose();
+  }
+});

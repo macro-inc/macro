@@ -293,7 +293,7 @@ function BarContent(props: BarProps) {
                 setInitialized: context.setLeftInitialized,
               }}
               class={cn(
-                'pl-2 flex items-center justify-self-start col-start-1 row-start-1 border-b border-edge',
+                'pl-2 flex items-center justify-self-start col-start-1 row-start-1',
                 truncation().stage.popCenter && !context.suppressPop
                   ? 'w-full'
                   : 'w-fit'
@@ -312,7 +312,7 @@ function BarContent(props: BarProps) {
           <Show when={centerComponent()}>
             <div
               class={cn(
-                'flex justify-center items-center border-b border-edge',
+                'flex justify-center items-center',
                 truncation().stage.popCenter && !context.suppressPop
                   ? 'col-start-1 col-end-4 bg-edge row-start-2 px-2 w-full'
                   : 'col-start-2 col-end-3 row-start-1! bg-[revert] px-0'
@@ -336,7 +336,7 @@ function BarContent(props: BarProps) {
               setInitialized: context.setRightInitialized,
             }}
             class={cn(
-              'justify-self-end flex justify-end items-center row-start-1 pr-2 border-b border-edge',
+              'justify-self-end flex justify-end items-center row-start-1 pr-2',
               truncation().stage.popCenter && !context.suppressPop
                 ? 'col-start-2 w-full'
                 : 'col-start-3 w-fit'

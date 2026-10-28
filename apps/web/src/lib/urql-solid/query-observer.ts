@@ -8,7 +8,12 @@ import {
   type OperationResultSource,
 } from '@urql/core';
 import { onEnd, pipe, type Subscription, subscribe } from 'wonka';
+import { liveQueryData } from '../graphql-cache/exchange/live-query';
 import type { ObserverEndReason, UrqlObserver } from './observer';
+import {
+  createReactiveSelection,
+  type ReactiveSelection,
+} from './reactive-selection';
 import type {
   UrqlQueryOptions,
   UrqlQueryRefetchOptions,
@@ -72,6 +77,17 @@ export class QueryObserver<
   };
   private readonly result = new ObserverResult(() => this.getCurrentResult());
   private destroyed = false;
+  private selection?: ReactiveSelection<Data>;
+  private selectionInput?: QueryData;
+  private select?: (data: QueryData) => Data;
+  private selectionNetworkError: CombinedError | null = null;
+
+  private clearSelection(): void {
+    this.selection?.dispose();
+    this.selection = undefined;
+    this.selectionInput = undefined;
+    this.select = undefined;
+  }
 
   constructor(
     client: Client,
@@ -159,6 +175,7 @@ export class QueryObserver<
     if (this.destroyed) return;
 
     this.destroyed = true;
+    this.clearSelection();
 
     if (this.execution) {
       this.onEnd(this.execution, 'cancelled');
@@ -297,6 +314,7 @@ export class QueryObserver<
     this.execution = undefined;
 
     if (reason === 'cancelled') {
+      this.clearSelection();
       this.settle(execution, reason);
       execution.subscription?.unsubscribe();
 
@@ -323,13 +341,44 @@ export class QueryObserver<
     const hasNext = nextResult.hasNext === true;
     let data: Data | undefined;
     let error = nextResult.error ?? null;
+    this.selectionNetworkError = error;
 
     if (nextResult.data != null) {
       try {
+        const queryData = liveQueryData(nextResult) as QueryData;
         const select = execution.options.select;
-        data = select
-          ? select(nextResult.data as QueryData)
-          : (nextResult.data as Data);
+        if (select) {
+          if (
+            !this.selection ||
+            this.selectionInput !== queryData ||
+            this.select !== select
+          ) {
+            this.clearSelection();
+            const input = queryData;
+            this.selectionInput = input;
+            this.select = select;
+            this.selection = createReactiveSelection(
+              () => select(input),
+              () => {
+                const selected = this.selection?.current();
+                if (!selected || this.destroyed) return;
+                this.setState({
+                  ...(selected.data !== undefined
+                    ? { data: selected.data }
+                    : {}),
+                  error: selected.error ?? this.selectionNetworkError,
+                });
+                this.result.notify();
+              }
+            );
+          }
+          const selected = this.selection.current();
+          data = selected.data;
+          error = selected.error ?? error;
+        } else {
+          this.clearSelection();
+          data = queryData as unknown as Data;
+        }
       } catch (cause) {
         error = toCombinedError(cause);
       }

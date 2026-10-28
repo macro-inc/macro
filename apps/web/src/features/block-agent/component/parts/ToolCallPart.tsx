@@ -11,8 +11,14 @@
 
 import { hasToolRenderer } from '@core/component/AI/component/tool/handler';
 import { type JSX, Match, Show, Switch } from 'solid-js';
-import { rendersOwnView } from '../../state/tool-groups';
+import {
+  isCodeExecution,
+  presentedReviewId,
+  rendersOwnView,
+} from '../../state/tool-groups';
 import { settledToolStatus } from '../../ui';
+import { CodeExecutionPart } from '../../views/CodeExecutionPart';
+import { PresentedReviewPart } from '../../views/PresentedReviewPart';
 import { DisplayResultsToolCall } from './DisplayResultsToolCall';
 import { EditToolCall } from './EditToolCall';
 import { ExchangeToolCall } from './ExchangeToolCall';
@@ -33,34 +39,52 @@ import { UserToolCall } from './UserToolCall';
 export function ToolCallPart(props: {
   part: ToolUsePart;
   /** Where the part sits, for the chat components Macro tools render with. */
-  context?: ToolCallContext;
+  context: ToolCallContext;
 }): JSX.Element {
   const failed = () => props.part.status === 'failed';
   // A call the log still has running once its turn is over is not running
-  // (see `settledToolStatus`). Without a turn to place it in there is no
-  // live turn either, so it settles too.
+  // (see `settledToolStatus`).
   const status = () =>
-    settledToolStatus(props.part.status, props.context?.inFlight ?? false);
+    settledToolStatus(props.part.status, props.context.inFlight);
   // The chat block's failed-tool treatment: the same row, faded, with a quiet
   // trailing label — not a separate error card.
+  const stopped = () =>
+    (props.part.status === 'pending' || props.part.status === 'running') &&
+    status() === 'completed';
   const common = (): ToolCallCommon => ({
     id: props.part.id,
     label: toolLabel(props.part.name),
     status: status(),
     muted: failed(),
-    trailing: failed()
-      ? 'Failed'
-      : (props.part.status === 'pending' || props.part.status === 'running') &&
-          status() === 'completed'
-        ? 'Stopped'
-        : undefined,
+    stopped: stopped(),
+    trailing: failed() ? 'Failed' : stopped() ? 'Stopped' : undefined,
   });
 
   // Non-keyed matches preserve the disclosure when a streamed update replaces
   // its detail object; each child receives the current detail through an accessor.
   return (
     <Switch>
-      <Match when={rendersOwnView(props.part)}>
+      <Match when={presentedReviewId(props.part)}>
+        {(id) => (
+          <PresentedReviewPart
+            sessionId={props.context.sessionId}
+            reviewId={id()}
+          />
+        )}
+      </Match>
+      <Match when={isCodeExecution(props.part)}>
+        <CodeExecutionPart
+          part={props.part}
+          common={common()}
+          context={props.context}
+        />
+      </Match>
+      <Match
+        when={
+          rendersOwnView(props.part) &&
+          toolLabel(props.part.name) === 'DisplayResults'
+        }
+      >
         <DisplayResultsToolCall
           input={
             'input' in props.part.detail ? props.part.detail.input : undefined
@@ -104,7 +128,10 @@ export function ToolCallPart(props: {
           <Show
             when={
               props.part.name.kind === 'mcp' &&
-              props.part.name.server === 'macro' &&
+              (props.part.name.server === 'macro' ||
+                (props.part.name.server === 'macro_internal' &&
+                  (props.part.name.tool === 'DescribeCodeTools' ||
+                    props.part.name.tool === 'ReadCodeDocs'))) &&
               hasToolRenderer(props.part.name.tool)
             }
             fallback={<ExchangeToolCall detail={detail()} common={common()} />}
@@ -117,6 +144,7 @@ export function ToolCallPart(props: {
                 error: detail().error,
               }}
               common={common()}
+              grouped={!rendersOwnView(props.part)}
               context={props.context}
             />
           </Show>
@@ -127,6 +155,7 @@ export function ToolCallPart(props: {
           <MacroToolCall
             detail={detail()}
             common={common()}
+            grouped={!rendersOwnView(props.part)}
             context={props.context}
           />
         )}
@@ -136,7 +165,7 @@ export function ToolCallPart(props: {
           <UserToolCall
             detail={detail()}
             common={common()}
-            context={props.context}
+            inFlight={props.context.inFlight}
           />
         )}
       </Match>

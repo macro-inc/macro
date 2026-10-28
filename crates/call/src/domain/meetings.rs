@@ -6,7 +6,8 @@ use uuid::Uuid;
 
 use super::models::CallError;
 
-/// A bearer capability that grants access only to a meeting's RTC room.
+/// An invitation capability for joining a meeting's RTC room. Chat additionally
+/// requires the resulting participant credential and current guest membership.
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(try_from = "String", into = "String")]
@@ -77,11 +78,16 @@ pub struct Meeting {
     pub channel_call_id: Option<Uuid>,
 }
 
+/// Longest accepted meeting title, in characters.
+pub const MAX_MEETING_TITLE_CHARS: usize = 200;
+
 /// Inputs for creating a meeting without starting its RTC room.
 #[derive(Debug, serde::Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct CreateMeetingRequest {
+    /// Optional unused room reserved by this actor on the setup screen.
+    pub preparation_id: Option<Uuid>,
     /// Optional display title.
     pub title: Option<String>,
     /// Optional scheduled start.
@@ -98,10 +104,13 @@ impl CreateMeetingRequest {
             .unwrap_or_else(|| "Macro call".to_string())
             .trim()
             .to_string();
-        if title.is_empty() || title.chars().count() > 200 || title.chars().any(char::is_control) {
-            return Err(CallError::InvalidRequest(
-                "Meeting title must contain 1–200 characters".to_string(),
-            ));
+        if title.is_empty()
+            || title.chars().count() > MAX_MEETING_TITLE_CHARS
+            || title.chars().any(char::is_control)
+        {
+            return Err(CallError::InvalidRequest(format!(
+                "Meeting title must contain 1–{MAX_MEETING_TITLE_CHARS} characters"
+            )));
         }
         match (self.scheduled_start, self.scheduled_end) {
             (None, None) => {}
@@ -293,6 +302,7 @@ impl UpdateMeetingRequest {
         }
         let has_title = self.title.is_some();
         let validated = CreateMeetingRequest {
+            preparation_id: None,
             title: self.title,
             scheduled_start: self.scheduled_start,
             scheduled_end: self.scheduled_end,
@@ -305,4 +315,43 @@ impl UpdateMeetingRequest {
             scheduled_end: validated.scheduled_end,
         })
     }
+}
+
+/// An empty room reservation, not a started call or an invitation.
+#[derive(Debug, Clone, serde::Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct MeetingPreparation {
+    /// Also the reserved RTC room's UUID and prospective call ID.
+    pub id: Uuid,
+    /// After this deadline Start falls back to ordinary room creation.
+    pub expires_at: DateTime<Utc>,
+}
+
+/// Connected RTC participant facts; never expose identities in public previews.
+#[derive(Debug, Clone)]
+pub struct MeetingRtcParticipant {
+    /// RTC identity used to distinguish members, guests, and service agents.
+    pub identity: String,
+    /// Room display name, used for guests.
+    pub name: String,
+}
+
+/// Minimal waiting-room display data, without account identities or call content.
+#[derive(Debug, Clone, serde::Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct MeetingParticipant {
+    /// Name displayed in the waiting room.
+    pub display_name: String,
+    /// Profile image, when available for a Macro member.
+    pub avatar_url: Option<String>,
+}
+
+/// People currently connected to a meeting's room.
+#[derive(Debug, serde::Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct MeetingParticipants {
+    /// Human attendees only; transcription agents are excluded.
+    pub participants: Vec<MeetingParticipant>,
 }

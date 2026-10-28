@@ -22,9 +22,23 @@ const htmlFor = (route: string) =>
 const typesIn = (html: string) =>
   [...html.matchAll(/"@type"\s*:\s*"([^"]+)"/g)].map((match) => match[1]);
 
+// Intentional copy updates; retain the captured migration baseline unchanged.
+const updatedTitles: Record<string, string> = {
+  '/github': 'GitHub in Macro | Pull Requests, Code Changes, and Tasks',
+  '/agents': 'Macro Agents | Agents That Know What Your Team Is Doing',
+  '/calls': 'Macro Calls — Turn Conversations into Tasks and Updates',
+  '/channels': 'Macro Chat: Bring the Work into the Conversation',
+  '/documents': 'Macro Docs | Write With Your Team and Your Agents',
+  '/migrate': 'Switch your company to Macro | Migration guide',
+  '/tasks': 'Macro Tasks — Task management that keeps up with your team',
+};
+
 const linksByRoute = new Map<string, string[]>();
 const documentsByRoute = new Map<string, ReturnType<typeof parse>>();
-for (const previous of baseline.routes) {
+const indexedRoutes = baseline.routes.filter(
+  ({ path }) => !baseline.retiredPaths.includes(path)
+);
+for (const previous of indexedRoutes) {
   assert(
     routes.includes(previous.path),
     `Lost indexed route: ${previous.path}`
@@ -77,8 +91,10 @@ for (const previous of baseline.routes) {
     (doc.getElementById('root')?.textContent?.length ?? 0) > 200,
     `${previous.path}: empty HTML shell`
   );
-  if (previous.path !== '/')
-    assert.equal(doc.title, previous.title, `${previous.path}: title changed`);
+  if (previous.path !== '/') {
+    const expectedTitle = updatedTitles[previous.path] ?? previous.title;
+    assert.equal(doc.title, expectedTitle, `${previous.path}: title changed`);
+  }
   for (const type of previous.schemaTypes)
     assert(
       typesIn(html).includes(type),
@@ -92,6 +108,33 @@ for (const previous of baseline.routes) {
     .querySelector('meta[property="og:image"]')
     ?.getAttribute('content');
   assert(og, `${previous.path}: missing social card`);
+  assert.equal(
+    doc.querySelector('meta[name="twitter:card"]')?.getAttribute('content'),
+    'summary_large_image',
+    `${previous.path}: preserve X image card`
+  );
+  assert.equal(
+    doc.querySelector('meta[name="twitter:image"]')?.getAttribute('content'),
+    og,
+    `${previous.path}: X image matches Open Graph image`
+  );
+  const video = doc
+    .querySelector('meta[property="og:video"]')
+    ?.getAttribute('content');
+  if (previous.path === '/') {
+    assert(video, 'Homepage: missing Open Graph video');
+    const videoUrl = new URL(video);
+    assert.equal(videoUrl.origin, origin);
+    const videoFile = path.join(directory, videoUrl.pathname);
+    assert(fs.existsSync(videoFile), 'Homepage: missing Open Graph MP4');
+    assert(
+      fs.statSync(videoFile).size < 2_000_000,
+      'Homepage: keep preview video small'
+    );
+  } else {
+    assert(!video, `${previous.path}: video must remain homepage-only`);
+  }
+
   if (new URL(og).origin === origin)
     assert(
       fs.existsSync(path.join(directory, new URL(og).pathname)),
@@ -159,10 +202,33 @@ while (pending.length) {
     }
   }
 }
-for (const route of baseline.routes)
+for (const route of indexedRoutes)
   assert(reachable.has(route.path), `Orphaned page: ${route.path}`);
 
 const home = parse(htmlFor('/'));
+for (const route of baseline.retiredPaths) {
+  assert(
+    !routes.includes(route),
+    `Retired route leaked into sitemap: ${route}`
+  );
+  const doc = parse(htmlFor(route));
+  assert.equal(
+    doc.querySelector('meta[http-equiv="refresh"]')?.getAttribute('content'),
+    '0;url=/',
+    `${route}: missing homepage redirect`
+  );
+  assert(
+    doc
+      .querySelector('meta[name="robots"]')
+      ?.getAttribute('content')
+      ?.includes('noindex'),
+    `${route}: retired route must stay noindex`
+  );
+  assert(
+    !home.querySelector(`a[href="${route}"]`),
+    `${route}: retired navigation link`
+  );
+}
 for (const route of [
   '/email',
   '/tasks',
@@ -182,8 +248,16 @@ for (const route of [
     `Homepage lacks a crawlable link to ${route}`
   );
 }
-for (const route of ['/start', '/mobile-signup', '/mobile-signup-sent']) {
-  assert(!routes.includes(route), `Signup route leaked into sitemap: ${route}`);
+for (const route of [
+  '/start',
+  '/mobile-signup',
+  '/mobile-signup-sent',
+  '/demo',
+]) {
+  assert(
+    !routes.includes(route),
+    `Noindex route leaked into sitemap: ${route}`
+  );
   assert(
     parse(htmlFor(route))
       .querySelector('meta[name="robots"]')
@@ -222,7 +296,7 @@ assert(
   `Homepage initial JS exceeds 225 KB gzip: ${bytes}; check for eager demo or analytics imports`
 );
 console.log(
-  `[seo] Preserved ${baseline.routes.length} live URLs, static content, schema, metadata, internal links and crawler rules.`
+  `[seo] Preserved ${indexedRoutes.length} live URLs, static content, schema, metadata, internal links and crawler rules.`
 );
 console.log(
   `[seo] Validated ${internalLinks} internal links and ${localAssets} local assets.`

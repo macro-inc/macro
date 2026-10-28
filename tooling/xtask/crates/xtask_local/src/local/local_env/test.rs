@@ -12,8 +12,63 @@ fn local_env() -> BTreeMap<String, String> {
     env
 }
 
+#[test]
+fn local_macro_api_tokens_can_be_signed_and_verified() {
+    use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    let env = local_env();
+    let claims = serde_json::json!({
+        "iss": env["MACRO_API_TOKEN_ISSUER"],
+        "exp": SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() + 60,
+        "macro_user_id": "macro|local@example.test",
+    });
+    let mut header = Header::new(Algorithm::RS256);
+    header.kid = Some("macro".into());
+    let token = jsonwebtoken::encode(
+        &header,
+        &claims,
+        &EncodingKey::from_rsa_pem(env["MACRO_API_TOKEN_PRIVATE_SECRET_KEY"].as_bytes()).unwrap(),
+    )
+    .unwrap();
+    let mut validation = Validation::new(Algorithm::RS256);
+    validation.set_issuer(&[&env["MACRO_API_TOKEN_ISSUER"]]);
+    let decoded = jsonwebtoken::decode::<serde_json::Value>(
+        &token,
+        &DecodingKey::from_rsa_pem(env["MACRO_API_TOKEN_PUBLIC_KEY"].as_bytes()).unwrap(),
+        &validation,
+    )
+    .unwrap();
+    assert_eq!(decoded.claims, claims);
+}
+
 /// Every key a local service relies on must be present — this is the test that
 /// replaces "someone remembers to update defaults.env".
+#[test]
+fn slack_import_worker_uses_local_resources_and_starts_paused() {
+    let env = local_env();
+    assert_eq!(
+        env["OVERRIDE_SLACK_IMPORT_QUEUE"],
+        resources::queue_url(macro_queues::SlackImportQueue::LOCAL)
+    );
+    assert_eq!(
+        env["OVERRIDE_SLACK_IMPORT_DLQ"],
+        resources::queue_url(macro_queues::SlackImportDlq::LOCAL)
+    );
+    assert_eq!(env["UPLOAD_STAGING_BUCKET"], "bulk-upload-staging");
+    assert_eq!(
+        env["OVERRIDE_SEARCH_PROCESSING_SERVICE_URL"],
+        "http://search-processing-service:8080"
+    );
+    assert_eq!(
+        env["OVERRIDE_CONNECTION_GATEWAY_URL"],
+        "http://connection-gateway:8080"
+    );
+    assert_eq!(env["INTERNAL_API_KEY"], env["INTERNAL_API_SECRET_KEY"]);
+    assert_eq!(env["SLACK_IMPORT_ENABLED"], "false");
+    assert_eq!(env["SLACK_IMPORT_CONCURRENCY"], "1");
+}
+
 #[test]
 fn emits_required_keys() {
     let env = local_env();
@@ -38,13 +93,16 @@ fn emits_required_keys() {
         "FUSIONAUTH_API_KEY_SECRET_KEY",
         "FUSIONAUTH_PUBLIC_URL",
         "FUSIONAUTH_OAUTH_REDIRECT_URI",
-        "MCP_PUBLIC_URL",
+        "OVERRIDE_COGNITION_PUBLIC_URL",
         "JWT_SECRET_KEY",
         // Boot-blocking stubs — service config loaders require these even in a
         // no-doppler stack (see `BootStubEnv`).
         "REDIS_HOST",
         "MACRO_DB_URL",
         "INTERNAL_API_KEY",
+        "PIPEDREAM_CLIENT_ID",
+        "PIPEDREAM_CLIENT_SECRET",
+        "PIPEDREAM_PROJECT_ID",
         "AUTHENTICATION_SERVICE_SECRET_KEY",
         "OPENSEARCH_USERNAME",
         "OPENSEARCH_PASSWORD",
@@ -57,6 +115,7 @@ fn emits_required_keys() {
         "GITHUB_CLIENT_ID",
         "GITHUB_CLIENT_SECRET",
         "GITHUB_IDP_ID",
+        "ACCOUNT_LINK_STATE_SECRET",
         "STRIPE_SECRET_KEY",
         "STRIPE_PRICE_ID",
         "STRIPE_WEBHOOK_SECRET_KEY",
@@ -212,12 +271,25 @@ fn emits_in_network_service_url_overrides() {
             "http://document-storage-service:8080",
         ),
         (
+            "OVERRIDE_DOCUMENT_COGNITION_SERVICE_URL",
+            "http://agent-harness-service:8080/cognition",
+        ),
+        (
+            "OVERRIDE_NOTIFICATION_SERVICE_URL",
+            "http://notification-service:8080",
+        ),
+        (
+            "OVERRIDE_CONTACTS_SERVICE_URL",
+            "http://contacts-service:8080",
+        ),
+        ("OVERRIDE_UNFURL_SERVICE_URL", "http://unfurl-service:8080"),
+        (
             "OVERRIDE_AGENT_HARNESS_SERVICE_URL",
-            "http://agent-harness-service:8101",
+            "http://agent-harness-service:8080",
         ),
         (
             "OVERRIDE_SCHEDULED_ACTION_SERVICE_URL",
-            "http://scheduled-action-service:8080",
+            "http://agent-harness-service:8080/scheduled-action",
         ),
         (
             "OVERRIDE_STATIC_FILE_SERVICE_URL",
@@ -247,7 +319,7 @@ fn emits_in_network_service_url_overrides() {
 fn static_file_permalinks_go_through_the_instance_proxy() {
     let env = local_env();
     let permalink_base = env
-        .get("STATIC_FILE_SERVICE_URL")
+        .get("OVERRIDE_STATIC_FILE_PUBLIC_URL")
         .expect("static file permalink base");
     assert!(
         permalink_base.starts_with("https://localhost:"),
@@ -267,6 +339,19 @@ fn auth_service_internal_key_matches_dss_auth_key() {
     assert_eq!(
         env.get("SERVICE_INTERNAL_AUTH_KEY"),
         env.get("DOCUMENT_STORAGE_SERVICE_AUTH_KEY"),
+    );
+}
+
+/// The auth service also presents `SERVICE_INTERNAL_AUTH_KEY` to the connection
+/// gateway, the agent harness, and the scheduled-action service (account
+/// deletion), which validate `INTERNAL_API_KEY`. Deployed environments point
+/// both at one secret; locally they must match too.
+#[test]
+fn auth_service_internal_key_matches_the_shared_internal_key() {
+    let env = local_env();
+    assert_eq!(
+        env.get("SERVICE_INTERNAL_AUTH_KEY"),
+        env.get("INTERNAL_API_KEY"),
     );
 }
 
@@ -297,8 +382,8 @@ fn instance_secrets_are_scoped_but_identity_is_fixed() {
         .to_env();
 
     assert_ne!(
-        a.get("SERVICE_INTERNAL_AUTH_KEY"),
-        b.get("SERVICE_INTERNAL_AUTH_KEY"),
+        a.get("INTERNAL_CALL_SECRET"),
+        b.get("INTERNAL_CALL_SECRET"),
         "per-instance secrets should differ between instances"
     );
     assert_eq!(
@@ -354,6 +439,14 @@ fn the_agent_harness_uses_local_containers_and_wipes_daytona() {
     );
 }
 
+#[test]
+fn the_whatsapp_session_service_never_points_at_the_fake_server() {
+    let env = local_env();
+    // Tests point the client at a fake server; a local stack never does.
+    assert!(!env.contains_key("OVERRIDE_WHATSAPP_WEBSOCKET_URL"));
+    assert!(!env.contains_key("OVERRIDE_WHATSAPP_MEDIA_HOST"));
+}
+
 /// Sandboxes and the harness are both containers, so they reach each other on a
 /// shared Compose network and never over the host's loopback. The network name
 /// has to track the instance, or a named stack's sandboxes join the wrong one.
@@ -389,7 +482,7 @@ fn local_sandboxes_join_the_instances_compose_network() {
 }
 
 #[test]
-fn mcp_public_url_uses_the_proxy_cognition_route() {
+fn mcp_client_public_url_uses_the_proxy_cognition_route() {
     let default = Instance::derive(None, None).unwrap();
     let named = Instance::derive(Some("2508"), None).unwrap();
     let default_env = LocalEnv::for_instance(Mode::Local, &default, true, Tunnels::default())
@@ -401,11 +494,15 @@ fn mcp_public_url_uses_the_proxy_cognition_route() {
     let named_public_url = format!("https://localhost:{}/cognition", named.port(Port::Proxy));
 
     assert_eq!(
-        default_env.get("MCP_PUBLIC_URL").map(String::as_str),
+        default_env
+            .get("OVERRIDE_COGNITION_PUBLIC_URL")
+            .map(String::as_str),
         Some("https://localhost:8090/cognition")
     );
     assert_eq!(
-        named_env.get("MCP_PUBLIC_URL").map(String::as_str),
+        named_env
+            .get("OVERRIDE_COGNITION_PUBLIC_URL")
+            .map(String::as_str),
         Some(named_public_url.as_str())
     );
 }
@@ -429,19 +526,17 @@ fn frontend_origin_tracks_how_the_app_is_served() {
             for key in [
                 "FRONTEND_ORIGIN",
                 "PIPEDREAM_ALLOWED_ORIGINS",
-                "PREVIEW_APP_ORIGIN",
+                "OVERRIDE_APP_SERVICE_URL",
             ] {
                 assert_eq!(env[key], origin, "{key}");
             }
-            assert_eq!(env["MCP_PUBLIC_URL"], format!("{origin}/cognition"));
             assert_eq!(
-                env["STATIC_FILE_SERVICE_URL"],
-                format!("{origin}/static-file")
+                env["OVERRIDE_COGNITION_PUBLIC_URL"],
+                format!("{origin}/cognition")
             );
-            assert!(
-                env["PREVIEW_CONTROL_HOSTS"]
-                    .split(',')
-                    .any(|host| host == super::super::tls::hostname().unwrap())
+            assert_eq!(
+                env["OVERRIDE_STATIC_FILE_PUBLIC_URL"],
+                format!("{origin}/static-file")
             );
         }
     }
@@ -472,7 +567,7 @@ fn the_mcp_service_override_is_an_in_network_base_url() {
     let env = local_env();
     assert_eq!(
         env.get("OVERRIDE_MCP_SERVICE_URL").map(String::as_str),
-        Some("http://mcp-service:8080")
+        Some("http://agent-harness-service:8080")
     );
     assert!(!env.contains_key("MACRO_MCP_URL"));
 }
@@ -510,7 +605,11 @@ fn named_instance_separates_browser_and_container_aws_endpoints() {
     assert_eq!(env["LOCAL_AWS_URL"], "http://localstack:4566");
     assert_eq!(
         env["LOCAL_AWS_PUBLIC_URL"],
-        format!("http://localhost:{}", instance.port(Port::LocalStack))
+        format!("{}/local-storage", env["FRONTEND_ORIGIN"])
+    );
+    assert_eq!(
+        env["DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL"],
+        format!("{}/local-storage/doc-storage", env["FRONTEND_ORIGIN"])
     );
 }
 
@@ -578,4 +677,20 @@ fn the_preview_ssh_proxy_host_is_empty_without_a_published_tunnel() {
     );
     // The on-machine endpoint stays first; the tunnel is a fallback, not a swap.
     assert_eq!(env["PREVIEW_SSH_HOST"], "localhost");
+}
+
+#[test]
+fn a_static_stack_presigns_files_for_this_machines_name() {
+    let instance = Instance::derive(Some("image"), None).expect("named instance derives");
+    let env = LocalEnv::for_instance(Mode::Local, &instance, true, Tunnels::default())
+        .unwrap()
+        .to_env();
+    assert_eq!(env["FRONTEND_ORIGIN"], proxy::url(&instance));
+    assert_eq!(
+        env["LOCAL_AWS_PUBLIC_URL"],
+        format!(
+            "{}/local-storage",
+            super::super::frontend::https_origin(&instance).unwrap()
+        )
+    );
 }

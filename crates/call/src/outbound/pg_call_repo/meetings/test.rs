@@ -7,6 +7,121 @@ const OWNER: &str = "macro|user-b@test.com";
 const PARTICIPANT_EMAIL: &str = "user-c@test.com";
 const UNRELATED: &str = "macro|user-d@test.com";
 
+#[sqlx::test(
+    fixtures(path = "../../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn room_preparations_are_owner_bound_and_consumed_once(pool: PgPool) {
+    let repo = repo(pool).await;
+    let meeting = repo.create_meeting(meeting()).await.unwrap();
+    let preparation = crate::domain::meetings::MeetingPreparation {
+        id: Uuid::now_v7(),
+        expires_at: Utc::now() + Duration::minutes(5),
+    };
+    repo.insert_meeting_preparation(OWNER, &preparation)
+        .await
+        .unwrap();
+    repo.claim_meeting_preparation(&preparation.id, UNRELATED, &meeting.id)
+        .await
+        .unwrap();
+    assert!(
+        repo.get_meeting_preparation(&meeting.id)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        !repo
+            .cancel_meeting_preparation(&preparation.id, UNRELATED)
+            .await
+            .unwrap()
+    );
+    repo.claim_meeting_preparation(&preparation.id, OWNER, &meeting.id)
+        .await
+        .unwrap();
+    assert_eq!(
+        repo.get_meeting_preparation(&meeting.id)
+            .await
+            .unwrap()
+            .unwrap()
+            .id,
+        preparation.id
+    );
+    assert!(
+        !repo
+            .cancel_meeting_preparation(&preparation.id, OWNER)
+            .await
+            .unwrap()
+    );
+    let (call, created) = repo
+        .get_or_create_meeting_call(&meeting.id, &preparation.id)
+        .await
+        .unwrap();
+    assert!(created);
+    assert_eq!(call.id, preparation.id);
+    assert!(
+        repo.get_meeting_preparation(&meeting.id)
+            .await
+            .unwrap()
+            .is_none()
+    );
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn cancellation_racing_claim_never_deletes_a_claimed_room(pool: PgPool) {
+    let repo = repo(pool).await;
+    for _ in 0..10 {
+        let meeting = repo.create_meeting(meeting()).await.unwrap();
+        let preparation = crate::domain::meetings::MeetingPreparation {
+            id: Uuid::now_v7(),
+            expires_at: Utc::now() + Duration::minutes(5),
+        };
+        repo.insert_meeting_preparation(OWNER, &preparation)
+            .await
+            .unwrap();
+        let (claim, cancel) = tokio::join!(
+            repo.claim_meeting_preparation(&preparation.id, OWNER, &meeting.id),
+            repo.cancel_meeting_preparation(&preparation.id, OWNER),
+        );
+        claim.unwrap();
+        assert_eq!(
+            repo.get_meeting_preparation(&meeting.id)
+                .await
+                .unwrap()
+                .is_some(),
+            !cancel.unwrap()
+        );
+    }
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn expired_preparation_is_not_claimed(pool: PgPool) {
+    let repo = repo(pool).await;
+    let meeting = repo.create_meeting(meeting()).await.unwrap();
+    let preparation = crate::domain::meetings::MeetingPreparation {
+        id: Uuid::now_v7(),
+        expires_at: Utc::now() - Duration::seconds(1),
+    };
+    repo.insert_meeting_preparation(OWNER, &preparation)
+        .await
+        .unwrap();
+    repo.claim_meeting_preparation(&preparation.id, OWNER, &meeting.id)
+        .await
+        .unwrap();
+    assert!(
+        repo.get_meeting_preparation(&meeting.id)
+            .await
+            .unwrap()
+            .is_none()
+    );
+}
+
 async fn repo(pool: PgPool) -> PgCallRepo {
     for user in [
         MacroUserIdStr::parse_from_str(OWNER).unwrap(),

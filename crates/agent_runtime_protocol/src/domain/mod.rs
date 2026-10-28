@@ -8,10 +8,17 @@ pub mod channel;
 /// Role-oriented connections over a logical Agent Runtime Protocol stream.
 #[cfg(feature = "transport")]
 pub mod connection;
+/// The log frame an agent leaves when it summarizes its own context.
+pub mod context;
 /// The physical transport port.
 pub mod ports;
 /// Versioned protocol message types.
 pub mod schema;
+/// The log frame an MCP tool call held for the owner's approval leaves.
+pub mod tool_approval;
 
 /// Agent-neutral reconstructed turn lifecycle.
 pub mod turn;
+
+/// Typed durable system events.
+pub mod notification;

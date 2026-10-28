@@ -1,3 +1,4 @@
+use super::SimpleMessage;
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
@@ -73,6 +74,28 @@ pub struct LinkLabel {
 pub struct UpdateThreadLabelsResult {
     pub successful_ids: Vec<Uuid>,
     pub failed_ids: Vec<Uuid>,
+}
+
+/// A label change staged on a thread for Gmail, read in the same transaction
+/// that applied it.
+#[derive(Debug, Clone)]
+pub struct StagedLabelChange {
+    /// Every message of the thread.
+    pub messages: Vec<SimpleMessage>,
+    /// The messages that gained or lost the label.
+    pub changed_ids: Vec<Uuid>,
+}
+
+/// The most threads one bulk archive request may change.
+pub const MAX_BULK_ARCHIVE_THREADS: usize = 100;
+
+/// Result of archiving or unarchiving many threads.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SetThreadsArchivedResult {
+    /// Threads whose archive state now matches the request.
+    pub updated_thread_ids: Vec<Uuid>,
+    /// Threads left unchanged because they could not be updated.
+    pub failed_thread_ids: Vec<Uuid>,
 }
 
 /// Well-known system label identifiers.

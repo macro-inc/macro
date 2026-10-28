@@ -90,6 +90,7 @@ pub(crate) fn target_entity_type(entity_type: PropertyTargetEntityType) -> Acces
         PropertyTargetEntityType::Channel => AccessEntityType::Channel,
         PropertyTargetEntityType::Chat => AccessEntityType::Chat,
         PropertyTargetEntityType::Company => AccessEntityType::CrmCompany,
+        PropertyTargetEntityType::DatabaseRow => AccessEntityType::DatabaseRow,
         PropertyTargetEntityType::Document => AccessEntityType::Document,
         PropertyTargetEntityType::Project => AccessEntityType::Project,
         PropertyTargetEntityType::Initiative => AccessEntityType::Initiative,

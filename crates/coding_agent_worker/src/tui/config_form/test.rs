@@ -290,3 +290,56 @@ fn permission_bypass_edits_preserve_credentials_and_comments() {
         );
     }
 }
+
+#[test]
+fn native_settings_round_trip_and_agent_switch_resets_provider_defaults() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("macrod.toml");
+    let agent = discover(&HermesOnly).remove(0);
+    ConfigForm::create_for_deployment(&path, &agent, directory.path(), Deployment::Production)
+        .unwrap();
+    let mut form = ConfigForm::load(&path).unwrap();
+    form.apply_text(Setting::HerdrModel, "custom-model")
+        .unwrap();
+    form.apply_text(
+        Setting::HerdrArguments,
+        "--config 'model_reasoning_effort=\"high\"'",
+    )
+    .unwrap();
+    assert!(
+        form.apply_text(Setting::HerdrArguments, "'unclosed")
+            .is_err()
+    );
+    assert!(form.apply_text(Setting::HerdrStorage, "relative").is_err());
+    let storage = directory.path().join("new-storage");
+    form.apply_text(Setting::HerdrStorage, storage.to_str().unwrap())
+        .unwrap();
+    form.toggle_herdr_focus(&Config::load(&path).unwrap());
+    form.save().unwrap();
+    let config = Config::load(&path).unwrap();
+    assert_eq!(config.herdr.model.as_deref(), Some("custom-model"));
+    assert_eq!(
+        config.herdr.arguments,
+        ["--config", "model_reasoning_effort=\"high\""]
+    );
+    assert_eq!(config.herdr.storage_path.as_ref(), Some(&storage));
+    assert!(!config.herdr.focus);
+    assert!(!settings(&config).contains(&Setting::HerdrModel));
+    let mut native = agent;
+    native.launch.args = vec![
+        "herdr-acp".to_owned(),
+        "--kind".to_owned(),
+        "codex".to_owned(),
+    ];
+    form.apply_agent(&native);
+    form.save().unwrap();
+    let config = Config::load(&path).unwrap();
+    assert!(config.herdr.model.is_none());
+    assert!(config.herdr.arguments.is_empty());
+    assert_eq!(config.herdr.storage_path, Some(storage));
+    assert!(settings(&config).contains(&Setting::HerdrModel));
+    form.apply_text(Setting::HerdrModel, "").unwrap();
+    form.apply_text(Setting::HerdrStorage, "").unwrap();
+    form.save().unwrap();
+    assert!(Config::load(&path).unwrap().herdr.storage_path.is_none());
+}

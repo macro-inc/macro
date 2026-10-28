@@ -1,8 +1,5 @@
 use super::*;
-use crate::domain::events::{
-    AssignedTasks, InitiativeEventPublisher, InitiativeMacroEvent, InitiativeTopicEvent,
-    TaskMembershipChange,
-};
+use crate::domain::events::{InitiativeEventPublisher, InitiativeMacroEvent, InitiativeTopicEvent};
 use macro_event_broker::MacroEvent;
 use std::{
     future::Future,
@@ -21,16 +18,12 @@ async fn attributed_creation_preserves_the_bot_and_delegating_owner() {
         .return_once(|_| Box::pin(async { Ok(None) }));
     repo.expect_create()
         .return_once(|_, _, _| Box::pin(async { Ok(detail(Vec::new())) }));
-    let mut documents = MockInitiativeDescriptionDocuments::new();
-    documents
-        .expect_create()
-        .return_once(|_| Box::pin(async { Ok(description_document_id()) }));
     let events = Arc::new(Events::default());
     let attribution = activity::Attribution::delegated(
         activity::Actor::new_from_bot(bot_id::MACRO_AI_BOT_ID),
         user(OWNER),
     );
-    service_with_documents(repo, documents)
+    service(repo)
         .with_event_publisher(events.clone())
         .create_attributed(
             &user(OWNER),
@@ -87,59 +80,13 @@ impl InitiativeEventPublisher for Events {
 }
 
 #[tokio::test]
-async fn assignment_publishes_only_committed_membership_changes() {
-    let mut repo = MockInitiativeRepo::new();
-    repo.expect_assign_tasks().times(1).return_once(|id, _| {
-        Box::pin(async move {
-            Ok(AssignedTasks {
-                results: vec![AssignTasksResult {
-                    task_id: "task-1".into(),
-                    status: AssignTaskStatus::Assigned,
-                }],
-                changes: vec![TaskMembershipChange {
-                    task_id: "task-1".into(),
-                    from: None,
-                    to: Some(id),
-                }],
-            })
-        })
-    });
-    let events = Arc::new(Events::default());
-    let svc = service(repo).with_event_publisher(events.clone());
-    svc.assign_tasks(edit_receipt(), vec![assignment("task-1")])
-        .await
-        .unwrap();
-    let events = events.0.lock().unwrap();
-    let [InitiativeTopicEvent::TasksChanged(change)] = events.as_slice() else {
-        panic!("expected one committed membership event")
-    };
-    assert_eq!(change.changes[0].task_id, "task-1");
-    assert!(change.attribution.is_some());
-}
-
-#[tokio::test]
-async fn repeated_assignment_has_no_activity() {
-    let mut repo = MockInitiativeRepo::new();
-    repo.expect_assign_tasks()
-        .times(1)
-        .return_once(|_, _| Box::pin(async { Ok(AssignedTasks::default()) }));
-    let events = Arc::new(Events::default());
-    service(repo)
-        .with_event_publisher(events.clone())
-        .assign_tasks(edit_receipt(), vec![assignment("task-1")])
-        .await
-        .unwrap();
-    assert!(events.0.lock().unwrap().is_empty());
-}
-
-#[tokio::test]
 async fn committed_deletion_purges_activity_even_when_description_cleanup_fails() {
     let mut repo = MockInitiativeRepo::new();
     repo.expect_delete()
         .times(1)
-        .return_once(|_| Box::pin(async { Ok(description_document_id()) }));
-    let mut documents = MockInitiativeDescriptionDocuments::new();
-    documents.expect_purge().times(1).return_once(|_| {
+        .return_once(|_| Box::pin(async { Ok(()) }));
+    let mut surfaces = MockInitiativeDescriptionSurfaces::new();
+    surfaces.expect_delete().times(1).return_once(|_| {
         Box::pin(async {
             Err(InitiativeError::Internal(rootcause::report!(
                 "storage unavailable"
@@ -147,7 +94,7 @@ async fn committed_deletion_purges_activity_even_when_description_cleanup_fails(
         })
     });
     let events = Arc::new(Events::default());
-    let result = service_with_documents(repo, documents)
+    let result = service_with(repo, surfaces)
         .with_event_publisher(events.clone())
         .delete(owner_receipt())
         .await;

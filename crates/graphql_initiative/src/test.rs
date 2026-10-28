@@ -1,6 +1,7 @@
 use crate::context::{ApiFuture, InitiativeApi};
 use crate::*;
 use async_graphql::{Context, EmptySubscription, ID, Object, Request, Schema, SimpleObject};
+use entity_access::domain::models::{EntityAccessReceipt, EntityType};
 use graphql_common::require_authenticated_user;
 use graphql_soup::{GraphqlSoupInitiative, SoupEntityEdges};
 use initiative::domain::{models::*, reads::*};
@@ -12,7 +13,6 @@ use models_permissions::share_permission::{
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
-mod access;
 mod soup;
 
 use self::soup::RecordingSoupService;
@@ -88,6 +88,7 @@ impl SoupEntityEdges for TestSoupEdges {
     type NotificationFilter = String;
     type ActivityEvent = String;
     type EmailThreadEdges = TestEmailThreadEdges;
+    type CrmRecordEdges = TestEmailThreadEdges;
     type AgentSessionEdges = TestAgentSessionEdges;
     type InitiativeEdges = TestInitiativeEdges;
 
@@ -103,6 +104,10 @@ impl SoupEntityEdges for TestSoupEdges {
         TestEmailThreadEdges { available: true }
     }
 
+    fn crm_record_edges(_record: model_entity::Entity<'static>) -> Self::CrmRecordEdges {
+        TestEmailThreadEdges { available: true }
+    }
+
     async fn resolve_email_cache_projection(
         &self,
         _ctx: &Context<'_>,
@@ -111,7 +116,10 @@ impl SoupEntityEdges for TestSoupEdges {
         Ok(None)
     }
 
-    fn agent_session_edges(_bot_id: uuid::Uuid) -> Self::AgentSessionEdges {
+    fn agent_session_edges(
+        _session_id: uuid::Uuid,
+        _bot_id: uuid::Uuid,
+    ) -> Self::AgentSessionEdges {
         TestAgentSessionEdges { available: true }
     }
 
@@ -173,14 +181,6 @@ impl Viewer {
     ) -> async_graphql::Result<GraphqlSoupInitiative<TestSoupEdges>> {
         resolve_initiative(ctx, initiative_id).await
     }
-
-    async fn task_initiative_references(
-        &self,
-        ctx: &Context<'_>,
-        task_ids: Vec<ID>,
-    ) -> async_graphql::Result<Vec<GraphqlTaskInitiativeReference<TestSoupEdges>>> {
-        resolve_task_initiative_references(ctx, self.0.clone(), task_ids).await
-    }
 }
 
 const PROJECT_ID: &str = "00000000-0000-4000-8000-000000000001";
@@ -193,7 +193,6 @@ fn detail() -> InitiativeDetail {
     InitiativeDetail {
         id: InitiativeId::from_uuid(Uuid::parse_str(PROJECT_ID).unwrap()),
         name: "Launch".into(),
-        description_document_id: DescriptionDocumentId::from_uuid(Uuid::from_u128(2)),
         owner_id: user(),
         member_ids: vec![],
         task_ids: vec![],
@@ -210,7 +209,6 @@ fn row() -> InitiativePageRow {
         initiative: InitiativeSummary {
             id: detail.id,
             name: detail.name,
-            description_document_id: detail.description_document_id,
             updated_at: detail.updated_at,
         },
         user_access_level: AccessLevel::Edit,
@@ -259,23 +257,37 @@ impl RecordingApi {
 }
 
 impl InitiativeApi for RecordingApi {
-    fn get(&self, user: MacroUserIdStr<'static>, id: Uuid) -> ApiFuture<'_, InitiativeDetail> {
+    fn read(&self, user: MacroUserIdStr<'static>, id: Uuid) -> ApiFuture<'_, InitiativeRead> {
         Box::pin(async move {
-            self.record(&user, "get")?;
+            self.record(&user, "read")?;
             if self.denied_ids.lock().unwrap().contains(&id) {
                 return Err(InitiativeError::Unauthorized);
             }
             let mut detail = self.current_detail();
             detail.id = InitiativeId::from_uuid(id);
-            Ok(detail)
+            Ok(InitiativeRead::new(
+                EntityAccessReceipt::dangerously_assert_internal_user(
+                    &id.to_string(),
+                    EntityType::Initiative,
+                ),
+                detail,
+                Vec::new(),
+            ))
         })
     }
-    fn summary(&self, user: MacroUserIdStr<'static>, id: Uuid) -> ApiFuture<'_, InitiativePageRow> {
+    fn ensure_description_surface(
+        &self,
+        user: MacroUserIdStr<'static>,
+        _id: Uuid,
+    ) -> ApiFuture<'_, ()> {
         Box::pin(async move {
-            self.record(&user, "summary")?;
-            if self.denied_ids.lock().unwrap().contains(&id) {
-                return Err(InitiativeError::Unauthorized);
-            }
+            self.record(&user, "ensure_description_surface")?;
+            Ok(())
+        })
+    }
+    fn summarize<'a>(&'a self, _read: &'a InitiativeRead) -> ApiFuture<'a, InitiativePageRow> {
+        Box::pin(async move {
+            self.calls.lock().unwrap().push("summarize".to_string());
             let mut summary = row();
             if let Some(count) = *self.task_count.lock().unwrap() {
                 summary.task_count = count;
@@ -330,56 +342,8 @@ impl InitiativeApi for RecordingApi {
             })
         })
     }
-    fn references(
-        &self,
-        user: MacroUserIdStr<'static>,
-        _ids: Vec<String>,
-    ) -> ApiFuture<'_, TaskInitiativeReferences> {
-        Box::pin(async move {
-            self.record(&user, "references")?;
-            Ok(TaskInitiativeReferences {
-                references: vec![
-                    TaskInitiativeReference::Visible {
-                        task_id: "visible".into(),
-                        initiative: InitiativeReference {
-                            id: detail().id,
-                            name: "Launch".into(),
-                        },
-                    },
-                    TaskInitiativeReference::Unavailable {
-                        task_id: "hidden".into(),
-                    },
-                    TaskInitiativeReference::None {
-                        task_id: "unassigned".into(),
-                    },
-                ],
-            })
-        })
-    }
     fn delete(&self, user: MacroUserIdStr<'static>, _id: Uuid) -> ApiFuture<'_, ()> {
         Box::pin(async move { self.record(&user, "delete") })
-    }
-    fn assign(
-        &self,
-        user: MacroUserIdStr<'static>,
-        _id: Uuid,
-        _ids: Vec<String>,
-    ) -> ApiFuture<'_, AssignTasksResponse> {
-        Box::pin(async move {
-            self.record(&user, "assign")?;
-            Ok(AssignTasksResponse { results: vec![] })
-        })
-    }
-    fn unassign(
-        &self,
-        user: MacroUserIdStr<'static>,
-        _id: Uuid,
-        _task: String,
-    ) -> ApiFuture<'_, ()> {
-        Box::pin(async move { self.record(&user, "unassign") })
-    }
-    fn clear(&self, user: MacroUserIdStr<'static>, _task: String) -> ApiFuture<'_, ()> {
-        Box::pin(async move { self.record(&user, "clear") })
     }
 }
 
@@ -408,8 +372,7 @@ fn schema_with_readers(
         .data(context.clone())
         .data(replica.loader())
         .data(InitiativeEntityLoader(primary.loader()))
-        .data(initiative_detail_loader(context.clone(), user()))
-        .data(initiative_summary_loader(context, user()))
+        .data(initiative_loader(context, user()))
         .finish()
 }
 
@@ -420,11 +383,34 @@ async fn anonymous_queries_and_mutations_never_call_domain() {
     for query in [
         "{ user { id initiative(initiativeId: \"00000000-0000-4000-8000-000000000001\") { id } } }",
         "mutation { createInitiative(input: { name: \"Launch\" }) { id } }",
+        "mutation { ensureInitiativeDescriptionSurface(initiativeId: \"00000000-0000-4000-8000-000000000001\") }",
     ] {
         let response = schema.execute(query).await;
         assert_eq!(response.errors[0].message, "authentication required");
     }
     assert!(api.calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn ensure_description_surface_returns_the_project_id_as_the_surface_id() {
+    let api = Arc::new(RecordingApi::default());
+    let response = schema(api.clone())
+        .execute(
+            Request::new(format!(
+                "mutation {{ ensureInitiativeDescriptionSurface(initiativeId: \"{PROJECT_ID}\") }}"
+            ))
+            .data(user()),
+        )
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(
+        response.data.into_json().unwrap()["ensureInitiativeDescriptionSurface"],
+        PROJECT_ID
+    );
+    assert_eq!(
+        *api.calls.lock().unwrap(),
+        vec!["ensure_description_surface".to_string()]
+    );
 }
 
 #[tokio::test]
@@ -529,36 +515,37 @@ async fn detail_fields_load_only_when_selected_and_share_one_domain_read() {
     let data = response.data.into_json().unwrap();
     assert_eq!(data["user"]["initiative"]["taskCount"], 3);
     assert_eq!(data["user"]["initiative"]["completedTaskCount"], 2);
-    let mut calls = api.calls.lock().unwrap().clone();
-    calls.sort();
-    assert_eq!(calls, ["get", "summary"]);
+    assert_eq!(*api.calls.lock().unwrap(), ["read", "summarize"]);
 }
 
 #[tokio::test]
-async fn task_references_use_the_canonical_soup_entity_and_hide_inaccessible_projects() {
+async fn detail_only_selection_skips_progress_summary() {
     let api = Arc::new(RecordingApi::default());
-    let replica = RecordingSoupService::replica();
-    let primary = RecordingSoupService::primary(api.clone());
-    let response = schema_with_readers(api.clone(), replica.clone(), primary.clone()).execute(Request::new(
-        "{ user { taskInitiativeReferences(taskIds: [\"visible\",\"hidden\",\"unassigned\"]) { taskId state initiative { __typename id displayName metadata { ownerId } } } } }"
-    ).data(user())).await;
+    let response = schema(api.clone())
+        .execute(
+            Request::new(format!(
+                "{{ user {{ initiative(initiativeId: \"{PROJECT_ID}\") {{ memberIds taskIds sharePermission {{ owner }} }} }} }}"
+            ))
+            .data(user()),
+        )
+        .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
-    let data = response.data.into_json().unwrap();
-    let references = &data["user"]["taskInitiativeReferences"];
-    assert_eq!(references[0]["state"], "VISIBLE");
-    assert_eq!(references[1]["state"], "UNAVAILABLE");
-    assert_eq!(references[2]["state"], "NONE");
-    assert_eq!(
-        references[0]["initiative"]["__typename"],
-        "GraphqlSoupInitiative"
-    );
-    assert_eq!(references[0]["initiative"]["id"], PROJECT_ID);
-    assert_eq!(references[0]["initiative"]["displayName"], "Launch");
-    assert!(references[1]["initiative"].is_null());
-    assert!(references[2]["initiative"].is_null());
-    assert_eq!(*api.calls.lock().unwrap(), ["references"]);
-    assert!(replica.calls.lock().unwrap().is_empty());
-    assert_eq!(primary.calls.lock().unwrap().len(), 1);
+    assert_eq!(*api.calls.lock().unwrap(), ["read"]);
+}
+
+#[tokio::test]
+async fn progress_only_selection_reads_once_and_summarizes_once() {
+    let api = Arc::new(RecordingApi::default());
+    let response = schema(api.clone())
+        .execute(
+            Request::new(format!(
+                "{{ user {{ initiative(initiativeId: \"{PROJECT_ID}\") {{ taskCount completedTaskCount }} }} }}"
+            ))
+            .data(user()),
+        )
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(*api.calls.lock().unwrap(), ["read", "summarize"]);
 }
 
 #[tokio::test]
@@ -584,7 +571,7 @@ async fn mutation_replies_use_primary_state_and_preserve_viewed_metadata() {
     assert!(replica.calls.lock().unwrap().is_empty());
     assert_eq!(
         *api.calls.lock().unwrap(),
-        ["update", "get", "update", "get"]
+        ["update", "read", "update", "read"]
     );
     let response = schema.execute(Request::new(format!(
         "{{ user {{ initiative(initiativeId: \"{PROJECT_ID}\") {{ displayName memberIds }} }} }}"
@@ -632,7 +619,7 @@ async fn newly_created_project_uses_primary_hydration_before_replica_catches_up(
 }
 
 #[tokio::test]
-async fn missing_or_revoked_project_is_not_exposed_by_detail_or_reference() {
+async fn missing_or_revoked_project_is_not_exposed_by_detail() {
     let api = Arc::new(RecordingApi::default());
     let replica = RecordingSoupService::replica();
     let primary = RecordingSoupService::empty();
@@ -647,32 +634,9 @@ async fn missing_or_revoked_project_is_not_exposed_by_detail_or_reference() {
         .await;
     assert_eq!(response.errors[0].message, "initiative not found");
     assert!(api.calls.lock().unwrap().is_empty());
-    primary.calls.lock().unwrap().clear();
-
-    let response = schema.execute(Request::new(
-        "{ user { taskInitiativeReferences(taskIds: [\"visible\"]) { state initiative { id displayName } } } }"
-    ).data(user())).await;
-    assert!(response.errors.is_empty(), "{:?}", response.errors);
-    let data = response.data.into_json().unwrap();
-    let reference = &data["user"]["taskInitiativeReferences"][0];
-    assert!(reference["initiative"].is_null());
-    assert_eq!(reference["state"], "UNAVAILABLE");
-    assert_eq!(primary.calls.lock().unwrap().len(), 1);
     assert!(
         replica.calls.lock().unwrap().is_empty(),
         "revoked primary access must not fall back to stale replica data"
-    );
-
-    let response = schema
-        .execute(
-            Request::new("{ user { taskInitiativeReferences(taskIds: [\"visible\"]) { state } } }")
-                .data(user()),
-        )
-        .await;
-    assert!(response.errors.is_empty(), "{:?}", response.errors);
-    assert_eq!(
-        response.data.into_json().unwrap()["user"]["taskInitiativeReferences"][0]["state"],
-        "UNAVAILABLE"
     );
 }
 
@@ -684,15 +648,11 @@ async fn detail_loaders_isolate_viewers_failures_and_subsequent_reads() {
     api.denied_ids.lock().unwrap().push(hidden);
     let other = MacroUserIdStr::try_from_email("other@example.com").unwrap();
     let context = InitiativeGraphqlContext(api.clone());
-    let viewer_loader = initiative_detail_loader(context.clone(), user());
-    let other_loader = initiative_detail_loader(context.clone(), other);
-    let summary_loader = initiative_summary_loader(context, user());
+    let viewer_loader = initiative_loader(context.clone(), user());
+    let other_loader = initiative_loader(context, other);
     let results = viewer_loader.load_many([project, hidden]).await.unwrap();
     assert!(results[&project].is_ok());
     assert!(results[&hidden].is_err());
-    let summaries = summary_loader.load_many([project, hidden]).await.unwrap();
-    assert_eq!(summaries[&project].as_ref().unwrap().task_count, 3);
-    assert!(summaries[&hidden].is_err());
     other_loader
         .load_one(project)
         .await
@@ -714,13 +674,20 @@ async fn detail_loaders_isolate_viewers_failures_and_subsequent_reads() {
         .unwrap()
         .unwrap()
         .unwrap();
-    assert_eq!(refreshed.name, "Updated after first read");
+    assert_eq!(refreshed.detail.name, "Updated after first read");
+
+    let schema = schema(api.clone());
+    let progress =
+        format!("{{ user {{ initiative(initiativeId: \"{PROJECT_ID}\") {{ taskCount }} }} }}");
+    let response = schema.execute(Request::new(&progress).data(user())).await;
+    assert_eq!(
+        response.data.into_json().unwrap()["user"]["initiative"]["taskCount"],
+        3
+    );
     *api.task_count.lock().unwrap() = Some(4);
-    let refreshed_summary = summary_loader
-        .load_one(project)
-        .await
-        .unwrap()
-        .unwrap()
-        .unwrap();
-    assert_eq!(refreshed_summary.task_count, 4);
+    let response = schema.execute(Request::new(&progress).data(user())).await;
+    assert_eq!(
+        response.data.into_json().unwrap()["user"]["initiative"]["taskCount"],
+        4
+    );
 }

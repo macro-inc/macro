@@ -13,7 +13,7 @@ use tokio_tungstenite::tungstenite;
 use tokio_util::task::AbortOnDropHandle;
 
 use crate::config::{Harness, HarnessCredentials, MacroApi};
-use crate::harness;
+use crate::harness::{self, LineTap};
 use crate::outbound::link;
 
 #[cfg(test)]
@@ -40,6 +40,7 @@ impl Runtime {
         credentials: &HarnessCredentials,
         harness: Harness,
         cwd: &Path,
+        tap: Option<LineTap>,
     ) -> Self {
         let (connected_tx, connected) = watch::channel(false);
         let task = tokio::spawn(serve(
@@ -47,6 +48,7 @@ impl Runtime {
             credentials.token.clone(),
             harness,
             cwd.to_owned(),
+            tap,
             connected_tx,
         ));
         Self {
@@ -78,6 +80,7 @@ async fn serve(
     token: String,
     harness: Harness,
     cwd: PathBuf,
+    tap: Option<LineTap>,
     connected: watch::Sender<bool>,
 ) {
     let mut backoff = reconnect_strategy();
@@ -87,7 +90,7 @@ async fn serve(
                 connected.send_replace(true);
                 tracing::info!("harness bridge starting");
                 let started = Instant::now();
-                match harness::bridge(&harness, &cwd, channel).await {
+                match harness::bridge(&harness, &cwd, channel, tap.clone()).await {
                     Ok(()) => tracing::info!("harness bridge ended; reconnecting"),
                     Err(error) => {
                         tracing::warn!(error = ?error, "harness bridge ended; reconnecting");

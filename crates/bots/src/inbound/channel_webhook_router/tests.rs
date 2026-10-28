@@ -1,15 +1,15 @@
 use super::*;
 use crate::domain::models::{
-    Agent, AuthenticatedBot, Bot, BotChannel, BotChannelListCaller, BotKind, BotOwner, BotToken,
-    CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest, CreateBotTokenResponse,
-    PatchBotRequest, UpdateAgentRequest,
+    Agent, AuthenticatedBot, Bot, BotChannel, BotChannelListCaller, BotKind, BotOwner,
+    BotOwnerProfile, BotToken, CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest,
+    CreateBotTokenResponse, PatchAgentRequest, PatchBotRequest, UpdateAgentRequest,
 };
 use axum::{
     Router,
     body::Body,
     http::{Request, StatusCode, header},
 };
-use channels::domain::models::{PostMessageRequest, Sender};
+use channels::domain::models::Sender;
 use entity_access::domain::models::TeamRole;
 use entity_access::domain::{
     models::{
@@ -173,6 +173,23 @@ impl BotService for TestBotService {
         unimplemented!()
     }
 
+    async fn manageable_agent(
+        &self,
+        _caller: MacroUserIdStr<'static>,
+        _bot_id: BotId,
+    ) -> Result<Agent, BotError> {
+        unimplemented!()
+    }
+
+    async fn patch_agent(
+        &self,
+        _caller: MacroUserIdStr<'static>,
+        _bot_id: BotId,
+        _req: PatchAgentRequest,
+    ) -> Result<Agent, BotError> {
+        unimplemented!()
+    }
+
     async fn list_agents(&self, _caller: MacroUserIdStr<'static>) -> Result<Vec<Agent>, BotError> {
         unimplemented!()
     }
@@ -211,6 +228,10 @@ impl BotService for TestBotService {
         _bot_id: BotId,
     ) -> Result<Bot, BotError> {
         unimplemented!()
+    }
+
+    async fn get_owner_profiles(&self, _ids: &[BotId]) -> Result<Vec<BotOwnerProfile>, BotError> {
+        Ok(Vec::new())
     }
 
     async fn get_self(&self, _bot_id: BotId) -> Result<Bot, BotError> {
@@ -467,11 +488,22 @@ impl EntityAccessService for TestAccessService {
     }
 }
 
+/// The post as the shared message service received it.
+#[derive(Debug, Clone)]
+struct PostedRequest {
+    content: String,
+    mentions: Vec<messages::domain::models::SimpleMention>,
+    thread_id: Option<Uuid>,
+    attachments: Vec<messages::domain::models::NewAttachment>,
+    nonce: Option<String>,
+    triggered_by: Option<String>,
+}
+
 #[derive(Debug, Clone)]
 struct PostedMessage {
     actor: Sender,
     channel_id: Uuid,
-    req: PostMessageRequest,
+    req: PostedRequest,
 }
 
 #[derive(Clone, Copy)]
@@ -496,6 +528,15 @@ impl TestChannelPoster {
 
 #[async_trait::async_trait]
 impl messages::domain::api::MessageCommands for TestChannelPoster {
+    async fn post_from_event(
+        &self,
+        _: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        _: Uuid,
+        _: messages::domain::models::PostMessage,
+    ) -> Result<messages::domain::models::Message, messages::domain::ports::MessageError> {
+        unimplemented!("channel webhooks do not post broker events")
+    }
+
     async fn post(
         &self,
         access: EntityAccessReceipt<messages::domain::service::MessageWrite>,
@@ -517,13 +558,12 @@ impl messages::domain::api::MessageCommands for TestChannelPoster {
             .push(PostedMessage {
                 actor: actor.clone(),
                 channel_id,
-                req: PostMessageRequest {
+                req: PostedRequest {
                     content: input.content.clone(),
                     mentions: input.mentions.clone(),
                     thread_id: input.thread_id,
-                    attachments: Vec::new(),
+                    attachments: input.attachments.clone(),
                     nonce: input.nonce.clone(),
-                    notification_policy: input.notification_policy,
                     triggered_by: triggered_by.clone(),
                 },
             });
@@ -533,6 +573,7 @@ impl messages::domain::api::MessageCommands for TestChannelPoster {
                 parent: messages::domain::models::MessageParent::Channel(channel_id),
                 thread_id: input.thread_id,
                 sender_id: actor,
+                guest_name: None,
                 imported_author: None,
                 bot_profile: None,
                 mentions: Vec::new(),
@@ -692,12 +733,19 @@ impl BotAuthorizer for TestBotAuthorizer {
 struct FakeJwtValidator;
 
 impl JwtValidator for FakeJwtValidator {
-    fn validate(&self, jwt: &str) -> Result<ValidatedIdentity, Report<MacroAuthorizationError>> {
-        Ok(ValidatedIdentity {
-            user_id: jwt.to_string(),
-            fusion_user_id: "fusion-user".to_string(),
-            organization_id: None,
-            permissions: None,
+    fn validate_credential(
+        &self,
+        jwt: &str,
+    ) -> Result<macro_authorization::ValidatedCredential, Report<MacroAuthorizationError>> {
+        Ok(macro_authorization::ValidatedCredential {
+            origin: macro_authorization::CredentialOrigin::Session,
+            identity: ValidatedIdentity {
+                agent_id: None,
+                user_id: jwt.to_string(),
+                fusion_user_id: "fusion-user".to_string(),
+                organization_id: None,
+                permissions: None,
+            },
         })
     }
 }
@@ -781,6 +829,8 @@ fn bot_authentication_with_acting_user(bot_id: BotId) -> BotAuthentication {
         bot_scope: BotScope::User,
         team_id: None,
         acting_user: Some(MacroUserAuthentication {
+            origin: macro_authorization::CredentialOrigin::Bot,
+            agent_id: None,
             macro_user_id: MacroUserIdStr::parse_from_str("macro|acting-bot@example.com").unwrap(),
             user_context: Default::default(),
         }),

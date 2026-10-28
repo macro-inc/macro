@@ -10,6 +10,58 @@
 <tr>
 <td>
 
+`call-kit:allow-abort-join`
+
+</td>
+<td>
+
+Enables the abort_join command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`call-kit:deny-abort-join`
+
+</td>
+<td>
+
+Denies the abort_join command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`call-kit:allow-can-use-full-screen-intent`
+
+</td>
+<td>
+
+Enables the can_use_full_screen_intent command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`call-kit:deny-can-use-full-screen-intent`
+
+</td>
+<td>
+
+Denies the can_use_full_screen_intent command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
 `call-kit:allow-end-active-call`
 
 </td>
@@ -107,6 +159,58 @@ Enables the get_voip_token command without any pre-configured scope.
 <td>
 
 Denies the get_voip_token command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`call-kit:allow-open-full-screen-intent-settings`
+
+</td>
+<td>
+
+Enables the open_full_screen_intent_settings command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`call-kit:deny-open-full-screen-intent-settings`
+
+</td>
+<td>
+
+Denies the open_full_screen_intent_settings command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`call-kit:allow-prepare-join`
+
+</td>
+<td>
+
+Enables the prepare_join command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`call-kit:deny-prepare-join`
+
+</td>
+<td>
+
+Denies the prepare_join command without any pre-configured scope.
 
 </td>
 </tr>

@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO database_rows (id, table_id, position, created_by) VALUES ($1, $2, $3, $4)\n             ON CONFLICT (id) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "39fa49b876488ba43c839481209dd5ff63a0b7ef92355854bc8188681719fa49"
+}

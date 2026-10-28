@@ -11,12 +11,15 @@
  * Edits debounce and autosave through `onEdit`, with a flush on blur; there
  * are no save/cancel affordances. Non-prompt entries (compact) are
  * read-only text but keep their remove affordance, which is always visible.
+ * While a turn is in flight, each row offers Steer: that message jumps the
+ * queue and the current turn is cancelled so it runs next. A row whose
+ * steer the server refused stays queued and says it was not sent.
  */
 
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
-import CaretUpIcon from '@phosphor-icons/core/regular/caret-up.svg?component-solid';
-import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
+import CaretUpIcon from '@icon/system/regular/caret-up.svg?component-solid';
+import XIcon from '@icon/system/regular/x.svg?component-solid';
 import { Button, Surface } from '@ui';
 import {
   createEffect,
@@ -40,6 +43,8 @@ export type QueuedPromptItem = {
   attachments?: { name: string; mimeType?: string | null }[];
   /** Who queued it, when it was somebody other than the current user. */
   queuedBy?: string;
+  /** A force-send of it was refused; it is still queued and can be retried. */
+  sendFailed?: boolean;
 };
 
 export interface QueuedPromptsProps {
@@ -51,6 +56,12 @@ export interface QueuedPromptsProps {
   onEdit: (actionId: string, prompt: string) => void;
   /** Remove a queued action before it dispatches. */
   onRemove: (actionId: string) => void;
+  /**
+   * Interrupt the turn in flight and run this queued action next. Absent
+   * when nothing is in flight: the queue drains on its own once the turn
+   * ends, and the composer's flush control sends the oldest entry.
+   */
+  onSteer?: (actionId: string) => void;
   /** Down past the bottom (next-to-send) row — focus returns to the composer. */
   onNavigateBelow?: () => void;
   /**
@@ -127,6 +138,9 @@ export function QueuedPrompts(props: QueuedPromptsProps) {
                   onMoveDown={() => moveFocus(id, 1)}
                   onEdit={(prompt) => props.onEdit(id, prompt)}
                   onRemove={() => props.onRemove(id)}
+                  onSteer={
+                    props.onSteer ? () => props.onSteer?.(id) : undefined
+                  }
                 />
               )}
             </Show>
@@ -148,6 +162,8 @@ type QueuedRowProps = {
   onMoveDown: () => void;
   onEdit: (prompt: string) => void;
   onRemove: () => void;
+  /** Interrupt the current turn and send this row next. */
+  onSteer?: () => void;
 };
 
 function QueuedRow(props: QueuedRowProps) {
@@ -205,16 +221,43 @@ function QueuedRow(props: QueuedRowProps) {
             />
             <span class="truncate">{preview()}</span>
           </button>
-          <span class="shrink-0 text-xs text-ink-extra-muted">
-            Queued
-            <Show when={props.item.queuedBy}>
-              {(name) => <> by {name()}</>}
-            </Show>
-          </span>
+          <Show
+            when={props.item.sendFailed}
+            fallback={
+              <span class="shrink-0 text-xs text-ink-extra-muted">
+                Queued
+                <Show when={props.item.queuedBy}>
+                  {(name) => <> by {name()}</>}
+                </Show>
+              </span>
+            }
+          >
+            <span
+              class="shrink-0 text-xs text-failure-ink"
+              role="status"
+              title="This message could not be sent. It is still queued."
+            >
+              Not sent
+            </span>
+          </Show>
+          <Show when={props.onSteer}>
+            <Button
+              aria-label="Steer"
+              variant="ghost"
+              size="xs"
+              tooltip="Interrupt the current turn and send this message next"
+              disabled={props.disabled}
+              onClick={() => props.onSteer?.()}
+              class="shrink-0"
+            >
+              Steer
+            </Button>
+          </Show>
           <Button
+            aria-label="Remove queued message"
+            tooltip="Remove queued message"
             variant="ghost"
             size="icon-sm"
-            label="Remove queued message"
             disabled={props.disabled}
             onClick={() => props.onRemove()}
             class="shrink-0"

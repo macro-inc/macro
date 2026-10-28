@@ -15,7 +15,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::domain::models::{ChannelType, MutatedAttachment};
+use crate::domain::models::ChannelType;
 use messages::domain::models::SimpleMention;
 
 /// Attachment payload carried by channel wire events.
@@ -30,17 +30,6 @@ pub struct ChannelEventAttachment {
     pub entity_id: String,
     /// Creation timestamp of the attachment row.
     pub created_at: DateTime<Utc>,
-}
-
-impl From<&MutatedAttachment> for ChannelEventAttachment {
-    fn from(attachment: &MutatedAttachment) -> Self {
-        Self {
-            attachment_id: attachment.id,
-            entity_type: attachment.entity_type.clone(),
-            entity_id: attachment.entity_id.clone(),
-            created_at: attachment.created_at,
-        }
-    }
 }
 
 /// Metadata for [`ChannelTopicEvent::Created`].
@@ -76,6 +65,16 @@ pub struct ChannelUpdatedMetadata {
     pub channel_name: Option<String>,
 }
 
+/// Metadata for a channel picture update, including removals.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct ChannelPictureChangedMetadata {
+    /// Channel whose picture changed.
+    pub channel_id: Uuid,
+    /// User who changed the picture.
+    pub actor: MacroUserIdStr<'static>,
+}
+
 /// Metadata for [`ChannelTopicEvent::Deleted`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
@@ -86,7 +85,12 @@ pub struct ChannelDeletedMetadata {
     pub actor: ChannelSender<'static>,
 }
 
-/// Metadata for [`ChannelTopicEvent::MessagePosted`].
+/// The channel-only shape of a posted message.
+///
+/// No longer published on `macro.channels`: message facts travel on
+/// `macro.messages` with their parent. The shape survives because the first
+/// schema version of `macro.agent_sessions` embeds it, and user-run agent
+/// daemons that decode that topic cannot be rolled with a deploy.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct ChannelMessagePostedMetadata {
@@ -110,94 +114,6 @@ pub struct ChannelMessagePostedMetadata {
     pub attachments: Vec<ChannelEventAttachment>,
     /// Creation timestamp reported by the repository.
     pub created_at: DateTime<Utc>,
-}
-
-/// Metadata for [`ChannelTopicEvent::Mentioned`].
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-pub struct ChannelMentionedMetadata {
-    /// Channel containing the message.
-    pub channel_id: Uuid,
-    /// The id of the message carrying the mention.
-    pub message_id: Uuid,
-    /// Thread parent id when the message is a thread reply.
-    pub thread_id: Option<Uuid>,
-    /// Message author; may be a bot.
-    pub sender: ChannelSender<'static>,
-    /// Type of channel containing the message.
-    pub channel_type: ChannelType,
-    /// Message body.
-    pub content: String,
-    /// The mentioned entity this event is about (`user`, `bot`, `document`, …).
-    ///
-    /// The message's full mention list travels on `channel.message_posted`.
-    pub mentioned: SimpleMention,
-    /// Creation timestamp reported by the repository.
-    pub created_at: DateTime<Utc>,
-}
-
-/// Metadata for [`ChannelTopicEvent::MessagePatched`].
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-pub struct ChannelMessagePatchedMetadata {
-    /// Channel containing the message.
-    pub channel_id: Uuid,
-    /// The id of the patched message.
-    pub message_id: Uuid,
-    /// Thread parent id when the message is a thread reply.
-    pub thread_id: Option<Uuid>,
-    /// Actor that patched the message.
-    pub actor: ChannelSender<'static>,
-    /// Message body after the patch.
-    pub content: String,
-    /// Edit timestamp, when the patch marked the message edited.
-    pub edited_at: Option<DateTime<Utc>>,
-    /// Update timestamp reported by the repository.
-    pub updated_at: DateTime<Utc>,
-}
-
-/// Metadata for [`ChannelTopicEvent::MessageDeleted`].
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-pub struct ChannelMessageDeletedMetadata {
-    /// Channel containing the message.
-    pub channel_id: Uuid,
-    /// The id of the deleted message.
-    pub message_id: Uuid,
-    /// Thread parent id when the message is a thread reply.
-    pub thread_id: Option<Uuid>,
-    /// Actor that deleted the message; not necessarily the author.
-    pub actor: ChannelSender<'static>,
-    /// Deletion (tombstone) timestamp reported by the repository.
-    pub deleted_at: Option<DateTime<Utc>>,
-}
-
-/// Metadata for [`ChannelTopicEvent::MessageAttachmentCreated`].
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-pub struct ChannelMessageAttachmentCreatedMetadata {
-    /// Channel containing the message.
-    pub channel_id: Uuid,
-    /// Message the attachments were added to.
-    pub message_id: Uuid,
-    /// Actor that added the attachments.
-    pub actor: ChannelSender<'static>,
-    /// Attachments created by this mutation.
-    pub attachments: Vec<ChannelEventAttachment>,
-}
-
-/// Metadata for [`ChannelTopicEvent::MessageAttachmentRemoved`].
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-pub struct ChannelMessageAttachmentRemovedMetadata {
-    /// Channel containing the message.
-    pub channel_id: Uuid,
-    /// Message the attachments were removed from.
-    pub message_id: Uuid,
-    /// Actor that removed the attachments.
-    pub actor: ChannelSender<'static>,
-    /// Attachments removed by this mutation.
-    pub attachments: Vec<ChannelEventAttachment>,
 }
 
 /// Metadata for [`ChannelTopicEvent::ParticipantAdded`].
@@ -235,6 +151,9 @@ pub struct ChannelParticipantRemovedMetadata {
 #[serde(tag = "event_type", content = "metadata")]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub enum ChannelTopicEvent {
+    /// A channel's profile picture changed.
+    #[serde(rename = "channel.picture_changed")]
+    PictureChanged(ChannelPictureChangedMetadata),
     /// A channel was created.
     #[serde(rename = "channel.created")]
     Created(ChannelCreatedMetadata),
@@ -244,24 +163,6 @@ pub enum ChannelTopicEvent {
     /// A channel was deleted.
     #[serde(rename = "channel.deleted")]
     Deleted(ChannelDeletedMetadata),
-    /// A message was posted.
-    #[serde(rename = "channel.message_posted")]
-    MessagePosted(ChannelMessagePostedMetadata),
-    /// An entity (user, bot, document, …) was mentioned in a message.
-    #[serde(rename = "channel.mentioned")]
-    Mentioned(ChannelMentionedMetadata),
-    /// A message's content was patched.
-    #[serde(rename = "channel.message_patched")]
-    MessagePatched(ChannelMessagePatchedMetadata),
-    /// A message was soft-deleted.
-    #[serde(rename = "channel.message_deleted")]
-    MessageDeleted(ChannelMessageDeletedMetadata),
-    /// Attachments were added to a message.
-    #[serde(rename = "channel.message_attachment_created")]
-    MessageAttachmentCreated(ChannelMessageAttachmentCreatedMetadata),
-    /// Attachments were removed from a message.
-    #[serde(rename = "channel.message_attachment_removed")]
-    MessageAttachmentRemoved(ChannelMessageAttachmentRemovedMetadata),
     /// Participants were added to a channel (admin invite or self-join).
     #[serde(rename = "channel.participant_added")]
     ParticipantAdded(ChannelParticipantAddedMetadata),
@@ -283,6 +184,13 @@ pub struct ChannelMacroEvent {
 }
 
 impl ChannelMacroEvent {
+    /// Build a picture update event keyed by the channel id.
+    pub fn picture_changed(metadata: ChannelPictureChangedMetadata) -> Self {
+        Self::new(
+            metadata.channel_id,
+            ChannelTopicEvent::PictureChanged(metadata),
+        )
+    }
     /// Build a created event keyed by the created channel id.
     pub fn created(metadata: ChannelCreatedMetadata) -> Self {
         Self::new(metadata.channel_id, ChannelTopicEvent::Created(metadata))
@@ -296,51 +204,6 @@ impl ChannelMacroEvent {
     /// Build a deleted event keyed by the deleted channel id.
     pub fn deleted(metadata: ChannelDeletedMetadata) -> Self {
         Self::new(metadata.channel_id, ChannelTopicEvent::Deleted(metadata))
-    }
-
-    /// Build a message posted event keyed by the containing channel id.
-    pub fn message_posted(metadata: ChannelMessagePostedMetadata) -> Self {
-        Self::new(
-            metadata.channel_id,
-            ChannelTopicEvent::MessagePosted(metadata),
-        )
-    }
-
-    /// Build a mentioned event keyed by the containing channel id.
-    pub fn mentioned(metadata: ChannelMentionedMetadata) -> Self {
-        Self::new(metadata.channel_id, ChannelTopicEvent::Mentioned(metadata))
-    }
-
-    /// Build a message patched event keyed by the containing channel id.
-    pub fn message_patched(metadata: ChannelMessagePatchedMetadata) -> Self {
-        Self::new(
-            metadata.channel_id,
-            ChannelTopicEvent::MessagePatched(metadata),
-        )
-    }
-
-    /// Build a message deleted event keyed by the containing channel id.
-    pub fn message_deleted(metadata: ChannelMessageDeletedMetadata) -> Self {
-        Self::new(
-            metadata.channel_id,
-            ChannelTopicEvent::MessageDeleted(metadata),
-        )
-    }
-
-    /// Build an attachment created event keyed by the containing channel id.
-    pub fn message_attachment_created(metadata: ChannelMessageAttachmentCreatedMetadata) -> Self {
-        Self::new(
-            metadata.channel_id,
-            ChannelTopicEvent::MessageAttachmentCreated(metadata),
-        )
-    }
-
-    /// Build an attachment removed event keyed by the containing channel id.
-    pub fn message_attachment_removed(metadata: ChannelMessageAttachmentRemovedMetadata) -> Self {
-        Self::new(
-            metadata.channel_id,
-            ChannelTopicEvent::MessageAttachmentRemoved(metadata),
-        )
     }
 
     /// Build a participant added event keyed by the channel id.

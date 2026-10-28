@@ -34,7 +34,7 @@ describe('canonical offline Mail preview', () => {
         snippet: `${subject} snippet`,
         isDraft: draft,
         senderEmail: `${subject}@example.com`,
-        sortTs: '2025-01-01T00:00:00Z',
+        createdAt: '2025-01-01T00:00:00Z',
       });
     }
     expect(record).toMatchObject({

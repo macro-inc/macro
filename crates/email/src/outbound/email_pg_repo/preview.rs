@@ -199,7 +199,7 @@ pub(super) async fn labels_by_thread_ids(
         l.type as "type_: _"
     FROM
          email_messages m
-    JOIN email_message_labels ml ON m.id = ml.message_id
+    JOIN email_effective_message_labels ml ON m.id = ml.message_id
     JOIN email_labels l ON ml.label_id = l.id
     WHERE m.thread_id = ANY($1)
     "#,

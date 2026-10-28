@@ -7,6 +7,7 @@
 import type { MessageParentOneOf } from './messageParentOneOf';
 import type { MessageParentOneOfFive } from './messageParentOneOfFive';
 import type { MessageParentOneOfNine } from './messageParentOneOfNine';
+import type { MessageParentOneOfOneone } from './messageParentOneOfOneone';
 import type { MessageParentOneOfSeven } from './messageParentOneOfSeven';
 import type { MessageParentOneOfThree } from './messageParentOneOfThree';
 
@@ -18,4 +19,5 @@ export type MessageParent =
   | MessageParentOneOfThree
   | MessageParentOneOfFive
   | MessageParentOneOfSeven
-  | MessageParentOneOfNine;
+  | MessageParentOneOfNine
+  | MessageParentOneOfOneone;

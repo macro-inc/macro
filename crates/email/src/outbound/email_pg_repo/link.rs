@@ -1,6 +1,7 @@
 use crate::domain::models::{
     EmailBackfillStatus, EmailInboxDetails, Link, UserEmailLinkSettings, UserProvider,
 };
+use calendar_events::domain::models::GoogleScopeSet;
 use chrono::{DateTime, Utc};
 use macro_user_id::{email::EmailStr, user_id::MacroUserIdStr};
 use sqlx::PgPool;
@@ -17,6 +18,7 @@ pub(super) async fn link_by_fusionauth_and_macro_id(
 ) -> Result<Option<Link>, sqlx::Error> {
     let provider: DbUserProvider = match provider {
         UserProvider::Gmail => DbUserProvider::Gmail,
+        UserProvider::Outlook => DbUserProvider::Outlook,
     };
 
     let db_link = sqlx::query_as!(
@@ -50,6 +52,7 @@ pub(super) async fn link_by_fusionauth_email_provider(
 ) -> Result<Option<Link>, sqlx::Error> {
     let provider: DbUserProvider = match provider {
         UserProvider::Gmail => DbUserProvider::Gmail,
+        UserProvider::Outlook => DbUserProvider::Outlook,
     };
 
     let db_link = sqlx::query_as!(
@@ -104,31 +107,6 @@ pub(super) async fn owned_link_for_thread(
 
     db_link
         .map(|v| v.try_into_model())
-        .transpose()
-        .map_err(|e| sqlx::Error::Decode(Box::new(e)))
-}
-
-#[tracing::instrument(err, skip(pool))]
-pub(super) async fn link_by_macro_id(
-    pool: &PgPool,
-    macro_id: MacroUserIdStr<'_>,
-) -> Result<Option<Link>, sqlx::Error> {
-    let db_link: Option<DbLink> = sqlx::query_as!(
-        DbLink,
-        r#"
-        SELECT id, macro_id, fusionauth_user_id, email_address, provider as "provider: _",
-               is_sync_active, is_primary, created_at, updated_at
-        FROM email_links
-        WHERE macro_id = $1
-        LIMIT 1
-        "#,
-        macro_id.as_ref()
-    )
-    .fetch_optional(pool)
-    .await?;
-
-    db_link
-        .map(|v: DbLink| v.try_into_model())
         .transpose()
         .map_err(|e| sqlx::Error::Decode(Box::new(e)))
 }
@@ -221,6 +199,12 @@ struct DbInboxDetailsRow {
     latest_backfill_status: Option<DbEmailBackfillStatus>,
     /// SFS URL of the inbox's self-contact photo.
     photo_url: Option<String>,
+    /// Google scopes recorded for the link's grant.
+    google_granted_scopes: Vec<String>,
+    /// Whether the owner turned the inbox's calendar off.
+    calendar_disabled: bool,
+    /// Whether a calendar account has been provisioned for the inbox.
+    has_calendar_data: bool,
 }
 
 impl DbInboxDetailsRow {
@@ -233,6 +217,7 @@ impl DbInboxDetailsRow {
             photo_url: self.photo_url,
             provider: match self.provider {
                 DbUserProvider::Gmail => UserProvider::Gmail,
+                DbUserProvider::Outlook => UserProvider::Outlook,
             },
             is_sync_active: self.is_sync_active,
             needs_reauth: self.needs_reauth,
@@ -248,6 +233,10 @@ impl DbInboxDetailsRow {
                 DbEmailBackfillStatus::Cancelled => EmailBackfillStatus::Cancelled,
                 DbEmailBackfillStatus::Failed => EmailBackfillStatus::Failed,
             }),
+            needs_calendar_permission: !GoogleScopeSet::from_scopes(self.google_granted_scopes)
+                .has_calendar_capability(),
+            calendar_disabled: self.calendar_disabled,
+            has_calendar_data: self.has_calendar_data,
             created_at: self.created_at,
             updated_at: self.updated_at,
         })
@@ -274,22 +263,35 @@ pub(super) async fn inbox_details_for_macro_id(
                l.updated_at as "updated_at!",
                s.signature_on_replies_forwards as "signature_on_replies_forwards?",
                s.signature,
-               bj.status as "latest_backfill_status?: _",
-               c.sfs_photo_url as "photo_url?"
+               CASE WHEN l.provider = 'OUTLOOK' THEN
+                   CASE WHEN NOT EXISTS (SELECT 1 FROM email_sync_streams ss WHERE ss.link_id = l.id AND ss.generation = l.sync_generation AND ss.kind IN ('folder_catalog','mail_folder'))
+                       THEN 'Init'::email_backfill_job_status
+                   WHEN EXISTS (SELECT 1 FROM email_sync_streams ss WHERE ss.link_id = l.id AND ss.generation = l.sync_generation AND ss.kind IN ('folder_catalog','mail_folder') AND NOT ss.initial_complete)
+                       OR EXISTS (SELECT 1 FROM email_message_reconciliation mr WHERE mr.link_id = l.id AND mr.generation = l.sync_generation AND mr.is_import)
+                       THEN 'InProgress'::email_backfill_job_status
+                   ELSE 'Complete'::email_backfill_job_status END
+               ELSE bj.status END as "latest_backfill_status?: _",
+               c.sfs_photo_url as "photo_url?",
+               COALESCE(g.granted_scopes, '{}') AS "google_granted_scopes!",
+               (g.calendar_disabled_at IS NOT NULL) AS "calendar_disabled!",
+               EXISTS (
+                   SELECT 1 FROM calendar_accounts ca WHERE ca.email_link_id = l.id
+               ) AS "has_calendar_data!"
         FROM (
             SELECT el.id, el.macro_id, el.email_address, el.provider,
                    el.is_sync_active, el.needs_reauth, el.is_primary,
-                   el.created_at, el.updated_at
+                   el.created_at, el.updated_at, el.sync_generation
             FROM email_links el
             WHERE el.macro_id = $1
             UNION
             SELECT el.id, el.macro_id, el.email_address, el.provider,
                    el.is_sync_active, el.needs_reauth, el.is_primary,
-                   el.created_at, el.updated_at
+                   el.created_at, el.updated_at, el.sync_generation
             FROM email_links el
             JOIN macro_user_links mul ON el.id = mul.link_id
             WHERE mul.primary_macro_id = $1
         ) l
+        LEFT JOIN email_link_google_scopes g ON g.link_id = l.id
         LEFT JOIN email_settings s ON s.link_id = l.id
         LEFT JOIN LATERAL (
             SELECT status FROM email_backfill_jobs

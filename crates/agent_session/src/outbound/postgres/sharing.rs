@@ -8,6 +8,7 @@ use crate::domain::{
 };
 use anyhow::Context;
 use entity_access_db_utils::update_entity_access_channel_share_permissions;
+use entity_registry::BotFacts;
 use model_entity::EntityType;
 use models_permissions::share_permission::{
     LinkShare, SharePermissionV2, UpdateSharePermissionRequestV2,
@@ -29,7 +30,13 @@ fn team_error(error: rootcause::Report<TeamShareError>) -> AgentSessionError {
     }
 }
 
-impl SessionSharingRepo for PgAgentSessionRepo {
+impl<B: BotFacts + 'static> SessionSharingRepo for PgAgentSessionRepo<B> {
+    async fn is_private_conversation(&self, id: AgentSessionId) -> Result<bool> {
+        Ok(sqlx::query_scalar!(
+            "SELECT EXISTS(SELECT 1 FROM agent_conversation_sessions session JOIN comms_channel_agents agent ON agent.channel_id = session.channel_id AND agent.bot_id = session.bot_id WHERE session.session_id = $1 AND agent.kind = 'direct') AS \"exists!\"",
+            id.as_uuid()
+        ).fetch_one(&self.pool).await.context("read session conversation provenance")?)
+    }
     #[tracing::instrument(skip(self), err)]
     async fn permissions(&self, id: AgentSessionId) -> Result<SharePermissionV2> {
         let row = sqlx::query!(

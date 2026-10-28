@@ -6,6 +6,8 @@ import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { toEntityLoadError } from '@core/component/EntityLoadGate';
+import { TOKENS } from '@core/hotkey/tokens';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { buildEntityData } from '@entity';
 import { useThreadQuery } from '@queries/email/thread';
 import { representativeThreadMessage } from '@queries/email/thread-subject';
@@ -22,6 +24,7 @@ export default function BlockEmail() {
     enabled: !!threadId(),
   }));
   const source = createEmailThreadSource(threadId, threadQuery);
+  const threadData = source.thread;
 
   // Email threads are absent from quick access, so the entity the block-level
   // commands act on has to come from here. Gated on isSuccess so the
@@ -29,7 +32,7 @@ export default function BlockEmail() {
   // never touch pending query data.
   const commandEntity = createMemo(() => {
     if (!threadQuery.isSuccess) return undefined;
-    const thread = threadQuery.data?.thread;
+    const thread = threadData();
     if (!thread) return undefined;
     return buildEntityData({
       id: thread.db_id,
@@ -42,17 +45,17 @@ export default function BlockEmail() {
     });
   });
 
-  useBlockEntityCommands({ resolveEntity: commandEntity });
+  useBlockEntityCommands({
+    resolveEntity: commandEntity,
+    extraFavoriteHotkey: { hotkey: 's', hotkeyToken: TOKENS.email.star },
+    extraMuteHotkey: { hotkey: 'shift+m', hotkeyToken: TOKENS.email.mute },
+  });
 
   // The gate owns the load policy: structural errors are authoritative even
   // over cached data, a transport failure over cached data still renders the
   // thread, and an offline load with nothing cached gates as the retryable
   // state. Loader-level errors (e.g. an invalid source) still reach
   // DocumentBlockContainer through blockErrorSignal.
-  const threadData = createMemo(
-    (previous: typeof threadQuery.data | undefined) =>
-      threadQuery.isSuccess || threadQuery.isError ? threadQuery.data : previous
-  );
   const threadLoadResult = {
     data: threadData,
     error: () =>
@@ -64,10 +67,8 @@ export default function BlockEmail() {
 
   const title = () => {
     const data = threadData();
-    if (!data || !data.thread || data.thread.messages.length === 0) return '';
-    return displaySubject(
-      representativeThreadMessage(data.thread.messages)?.subject
-    );
+    if (!data || data.messages.length === 0) return '';
+    return displaySubject(representativeThreadMessage(data.messages)?.subject);
   };
 
   return (
@@ -78,9 +79,10 @@ export default function BlockEmail() {
             result={threadLoadResult}
             notificationSource={notificationSource}
             threadId={threadId()}
-            linkId={threadData()?.thread?.link_id}
+            isLocalDraft={source.isLocalDraft()}
+            linkId={threadData()?.link_id}
             debounceTime={100}
-            onRetry={() => void threadQuery.refetch()}
+            onRetry={() => fireAndForget(threadQuery.refetch(), 'email-thread')}
           >
             <Show when={threadId()}>
               {(id) => (

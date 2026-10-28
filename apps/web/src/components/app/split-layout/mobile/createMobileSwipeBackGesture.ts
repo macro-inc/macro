@@ -1,5 +1,5 @@
 import { batch, createSignal, onCleanup } from 'solid-js';
-import type { MobileSwipeLayout } from './createMobileSwipeLayout';
+import type { MobilePaneStack } from './createMobilePaneStack';
 
 type SplitTransformStyle = {
   transform: string;
@@ -13,7 +13,7 @@ type MobileSwipeBackGestureOptions = {
   edgeThreshold: number;
   velocityThreshold: number;
   distanceThreshold: number;
-  mobileSwipeLayout: MobileSwipeLayout;
+  stack: MobilePaneStack;
   canStart: () => boolean;
 };
 
@@ -68,15 +68,20 @@ export function createMobileSwipeBackGesture(
 
   function trigger() {
     if (!options.canStart() || isAnimatingOut()) return;
-    if (!options.mobileSwipeLayout.canGoBack()) return;
-    animateComplete(() => options.mobileSwipeLayout.completeSwipeBack());
+    if (!options.stack.canGoBack()) return;
+    animateComplete(() => options.stack.completeGoBack());
   }
 
   function handleTouchStart(e: TouchEvent) {
     if (!options.canStart() || isAnimatingOut()) return;
-    if (!options.mobileSwipeLayout.canGoBack()) return;
+    if (!options.stack.canGoBack()) return;
     const touch = e.touches[0];
-    if (!touch || touch.clientX > options.edgeThreshold) return;
+    if (!touch) return;
+    const left =
+      e.currentTarget instanceof Element
+        ? e.currentTarget.getBoundingClientRect().left
+        : 0;
+    if (touch.clientX - left > options.edgeThreshold) return;
     // Buttons can sit inside the swipe-edge zone. If we start the gesture, the preventDefault() in touchmove suppresses the synthesized click on iOS.
     if (
       e.target instanceof Element &&

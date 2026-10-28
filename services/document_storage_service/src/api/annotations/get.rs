@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use crate::api::context::{AuthorizationService, EntityAccessService};
-use crate::model::response::annotations::{AnchorResponse, ThreadResponse};
+use crate::model::response::annotations::AnchorResponse;
 use axum::{
     Json,
     extract::{Extension, Path, State},
@@ -9,7 +9,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
-use macro_db_client::annotations::get::{get_document_comments, get_pdf_anchors};
+use macro_db_client::annotations::get::get_pdf_anchors;
 use model::{
     annotations::Anchor,
     document::{DocumentBasic, FileType},
@@ -18,39 +18,11 @@ use model::{
 use models_permissions::share_permission::access_level::ViewAccessLevel;
 use sqlx::PgPool;
 
-use super::comment_error_response;
+use super::annotation_error_response;
 
 #[derive(serde::Deserialize)]
 pub struct Params {
     pub document_id: String,
-}
-
-/// Gets a set of comment threads for a document
-#[utoipa::path(
-        get,
-        path = "/annotations/comments/document/{document_id}",
-        operation_id = "get_document_comments",
-        params(
-            ("document_id" = String, Path, description = "Document ID")
-        ),
-        responses(
-            (status = 200, body=ThreadResponse),
-            (status = 401, body=ErrorResponse),
-            (status = 404, body=ErrorResponse),
-            (status = 500, body=ErrorResponse),
-        )
-    )]
-#[axum::debug_handler(state = crate::api::context::ApiContext)]
-#[tracing::instrument(skip(_access, db))]
-pub async fn get_document_comments_handler(
-    Path(Params { document_id }): Path<Params>,
-    _access: DocumentAccessExtractor<ViewAccessLevel, EntityAccessService, AuthorizationService>,
-    State(db): State<PgPool>,
-) -> Result<Response, Response> {
-    match get_document_comments(&db, &document_id).await {
-        Ok(threads) => Ok((StatusCode::OK, Json(ThreadResponse { data: threads })).into_response()),
-        Err(e) => comment_error_response(e, "Error retrieving comments"),
-    }
 }
 
 /// Gets a set of comment anchors for a document
@@ -68,7 +40,7 @@ pub async fn get_document_comments_handler(
             (status = 500, body=ErrorResponse),
         )
     )]
-#[tracing::instrument(skip(_access, db))]
+#[tracing::instrument(err(Debug), skip(_access, db))]
 pub async fn get_document_anchors_handler(
     _access: DocumentAccessExtractor<ViewAccessLevel, EntityAccessService, AuthorizationService>,
     Path(Params { document_id }): Path<Params>,
@@ -85,7 +57,7 @@ pub async fn get_document_anchors_handler(
                 let anchors: Vec<Anchor> = pdf_anchors.into_iter().map(Anchor::Pdf).collect();
                 Ok((StatusCode::OK, Json(AnchorResponse { data: anchors })).into_response())
             }
-            Err(e) => comment_error_response(e, "Error retrieving anchors"),
+            Err(e) => Err(annotation_error_response(e, "Error retrieving anchors")),
         },
         _ => Err((
             StatusCode::METHOD_NOT_ALLOWED,

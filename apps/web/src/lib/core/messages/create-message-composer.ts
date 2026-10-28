@@ -45,6 +45,10 @@ export function createMessageComposer(options: ComposerOptions) {
       mentionsTracker.setMentions([]);
       options.clearEditor();
     },
+    restoreEditor: (snapshot) => {
+      mentionsTracker.setMentions(snapshot.mentions);
+      options.restoreEditor?.(snapshot);
+    },
     callbacks: {
       onChange: options.callbacks.onChange,
       onToggleFormatRibbon: options.callbacks.onToggleFormatRibbon,
@@ -52,18 +56,12 @@ export function createMessageComposer(options: ComposerOptions) {
       onSend: options.callbacks.onSend
         ? async (snapshot) => {
             typingTracker.stop();
-            try {
-              await options.callbacks.onSend?.(snapshot);
-            } catch (error) {
-              mentionsTracker.setMentions(snapshot.mentions);
-              options.restoreEditor?.(snapshot);
-              throw error;
-            }
+            await options.callbacks.onSend?.(snapshot);
           }
         : undefined,
       onClose: (snapshot) => {
         typingTracker.stop();
-        options.callbacks.onClose?.(snapshot);
+        return options.callbacks.onClose?.(snapshot);
       },
     },
   });

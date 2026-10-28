@@ -212,7 +212,7 @@ function AddBox() {
     >
       <span
         style={{
-          'font-family': 'Rajdhani, sans-serif',
+          'font-family': 'Inter, sans-serif',
           'font-size': '14px',
           'line-height': '1',
         }}
@@ -258,7 +258,7 @@ function Avatar(props: { label: string; size?: number }) {
         'justify-content': 'center',
         background: palette.accent,
         color: palette.bg,
-        'font-family': 'Rajdhani, sans-serif',
+        'font-family': 'Inter, sans-serif',
         'font-weight': '700',
         'font-size': `${Math.max(9, size * 0.5)}px`,
         'text-transform': 'uppercase',
@@ -347,7 +347,7 @@ function EmailCard() {
               <span
                 style={{
                   width: '140px',
-                  'font-family': 'Rajdhani, sans-serif',
+                  'font-family': 'Inter, sans-serif',
                   'font-size': '12px',
                   'font-weight': '600',
                   'letter-spacing': '2.5px',
@@ -382,7 +382,7 @@ function EmailCard() {
               <span
                 style={{
                   width: '140px',
-                  'font-family': 'Rajdhani, sans-serif',
+                  'font-family': 'Inter, sans-serif',
                   'font-size': '12px',
                   'font-weight': '600',
                   'letter-spacing': '2.5px',
@@ -421,7 +421,7 @@ function EmailCard() {
                 <div style={{ display: 'grid', 'line-height': '1' }}>
                   <span
                     style={{
-                      'font-family': 'Rajdhani, sans-serif',
+                      'font-family': 'Inter, sans-serif',
                       'font-size': '13px',
                       'font-weight': '600',
                       'letter-spacing': '2px',
@@ -432,7 +432,7 @@ function EmailCard() {
                   </span>
                   <span
                     style={{
-                      'font-family': 'Rajdhani, sans-serif',
+                      'font-family': 'Inter, sans-serif',
                       'font-size': '11px',
                       'font-weight': '600',
                       'letter-spacing': '2px',
@@ -444,9 +444,9 @@ function EmailCard() {
                 </div>
                 <span
                   style={{
-                    'font-family': 'Rajdhani, sans-serif',
-                    'font-size': '36px',
-                    'font-weight': '300',
+                    'font-family': 'Inter, sans-serif',
+                    'font-size': '33px',
+                    'font-weight': '400',
                     'line-height': '0.85',
                     color: palette.text,
                   }}
@@ -476,7 +476,7 @@ function EmailCard() {
                 </p>
                 <p
                   style={{
-                    'font-family': 'Rajdhani, sans-serif',
+                    'font-family': 'Inter, sans-serif',
                     'font-size': '12px',
                     'line-height': '1.4',
                     color: palette.body,
@@ -504,7 +504,7 @@ function EmailCard() {
                 <div style={{ display: 'grid', 'line-height': '1' }}>
                   <span
                     style={{
-                      'font-family': 'Rajdhani, sans-serif',
+                      'font-family': 'Inter, sans-serif',
                       'font-size': '13px',
                       'font-weight': '600',
                       'letter-spacing': '2px',
@@ -515,7 +515,7 @@ function EmailCard() {
                   </span>
                   <span
                     style={{
-                      'font-family': 'Rajdhani, sans-serif',
+                      'font-family': 'Inter, sans-serif',
                       'font-size': '11px',
                       'font-weight': '600',
                       'letter-spacing': '2px',
@@ -527,9 +527,9 @@ function EmailCard() {
                 </div>
                 <span
                   style={{
-                    'font-family': 'Rajdhani, sans-serif',
-                    'font-size': '36px',
-                    'font-weight': '300',
+                    'font-family': 'Inter, sans-serif',
+                    'font-size': '33px',
+                    'font-weight': '400',
                     'line-height': '0.85',
                     color: palette.text,
                   }}
@@ -559,7 +559,7 @@ function EmailCard() {
                 </p>
                 <p
                   style={{
-                    'font-family': 'Rajdhani, sans-serif',
+                    'font-family': 'Inter, sans-serif',
                     'font-size': '12px',
                     'line-height': '1.4',
                     color: palette.body,
@@ -624,7 +624,7 @@ function CreateTaskCard() {
             <CloseGlyph />
             <p
               style={{
-                'font-family': 'Rajdhani, sans-serif',
+                'font-family': 'Inter, sans-serif',
                 'font-size': '14px',
                 'font-weight': '450',
                 'letter-spacing': '0.7px',
@@ -673,8 +673,8 @@ function CreateTaskCard() {
               <TaskGlyph />
               <span
                 style={{
-                  'font-family': 'Rajdhani, sans-serif',
-                  'font-size': '18px',
+                  'font-family': 'Inter, sans-serif',
+                  'font-size': '15px',
                   'font-weight': '500',
                   color: palette.text,
                 }}
@@ -686,7 +686,7 @@ function CreateTaskCard() {
             <div style={{ display: 'grid', gap: '8px' }}>
               <p
                 style={{
-                  'font-family': 'Rajdhani, sans-serif',
+                  'font-family': 'Inter, sans-serif',
                   'font-size': '11px',
                   'font-weight': '600',
                   'letter-spacing': '0.5px',
@@ -698,7 +698,7 @@ function CreateTaskCard() {
               </p>
               <p
                 style={{
-                  'font-family': 'Rajdhani, sans-serif',
+                  'font-family': 'Inter, sans-serif',
                   'font-size': '14px',
                   'font-weight': '400',
                   'line-height': '1.4',
@@ -724,7 +724,7 @@ function CreateTaskCard() {
             >
               <p
                 style={{
-                  'font-family': 'Rajdhani, sans-serif',
+                  'font-family': 'Inter, sans-serif',
                   'font-size': '11px',
                   'font-weight': '600',
                   'letter-spacing': '0.5px',
@@ -742,7 +742,7 @@ function CreateTaskCard() {
                     <Avatar label="S" />
                     <p
                       style={{
-                        'font-family': 'Rajdhani, sans-serif',
+                        'font-family': 'Inter, sans-serif',
                         'font-size': '11px',
                         'font-weight': '400',
                         'line-height': '1',
@@ -760,7 +760,7 @@ function CreateTaskCard() {
                     <Avatar label="N" />
                     <p
                       style={{
-                        'font-family': 'Rajdhani, sans-serif',
+                        'font-family': 'Inter, sans-serif',
                         'font-size': '11px',
                         'font-weight': '400',
                         'line-height': '1',
@@ -788,7 +788,7 @@ function CreateTaskCard() {
             >
               <p
                 style={{
-                  'font-family': 'Rajdhani, sans-serif',
+                  'font-family': 'Inter, sans-serif',
                   'font-size': '11px',
                   'font-weight': '600',
                   'letter-spacing': '0.5px',
@@ -803,7 +803,7 @@ function CreateTaskCard() {
                   <CalendarGlyph />
                   <p
                     style={{
-                      'font-family': 'Rajdhani, sans-serif',
+                      'font-family': 'Inter, sans-serif',
                       'font-size': '11px',
                       'font-weight': '600',
                       'letter-spacing': '0.5px',
@@ -830,7 +830,7 @@ function CreateTaskCard() {
             >
               <p
                 style={{
-                  'font-family': 'Rajdhani, sans-serif',
+                  'font-family': 'Inter, sans-serif',
                   'font-size': '11px',
                   'font-weight': '600',
                   'letter-spacing': '0.5px',
@@ -845,7 +845,7 @@ function CreateTaskCard() {
                   <StatusGlyph />
                   <p
                     style={{
-                      'font-family': 'Rajdhani, sans-serif',
+                      'font-family': 'Inter, sans-serif',
                       'font-size': '11px',
                       'font-weight': '600',
                       'letter-spacing': '0.5px',
@@ -872,7 +872,7 @@ function CreateTaskCard() {
             >
               <p
                 style={{
-                  'font-family': 'Rajdhani, sans-serif',
+                  'font-family': 'Inter, sans-serif',
                   'font-size': '11px',
                   'font-weight': '600',
                   'letter-spacing': '0.5px',
@@ -896,7 +896,7 @@ function CreateTaskCard() {
             >
               <p
                 style={{
-                  'font-family': 'Rajdhani, sans-serif',
+                  'font-family': 'Inter, sans-serif',
                   'font-size': '11px',
                   'font-weight': '600',
                   'letter-spacing': '0.5px',
@@ -995,7 +995,7 @@ function MentionRow(props: {
       />
       <div style={{ 'padding-top': '10px', color: palette.text }}>
         <span
-          style={{ 'font-family': 'Rajdhani, sans-serif', 'font-size': '13px' }}
+          style={{ 'font-family': 'Inter, sans-serif', 'font-size': '13px' }}
         >
           @
         </span>
@@ -1019,7 +1019,7 @@ function MentionRow(props: {
             </div>
             <span
               style={{
-                'font-family': 'Rajdhani, sans-serif',
+                'font-family': 'Inter, sans-serif',
                 'font-size': '12px',
                 'font-weight': '400',
                 'text-transform': 'lowercase',
@@ -1031,7 +1031,7 @@ function MentionRow(props: {
           </div>
           <span
             style={{
-              'font-family': 'Rajdhani, sans-serif',
+              'font-family': 'Inter, sans-serif',
               'font-size': '12px',
               'font-weight': '400',
               'text-transform': 'lowercase',
@@ -1042,7 +1042,7 @@ function MentionRow(props: {
           </span>
           <span
             style={{
-              'font-family': 'Rajdhani, sans-serif',
+              'font-family': 'Inter, sans-serif',
               'font-size': '12px',
               'font-weight': '400',
               'letter-spacing': '0.04em',
@@ -1059,7 +1059,7 @@ function MentionRow(props: {
             'align-items': 'center',
             gap: '6px',
             overflow: 'hidden',
-            'font-family': 'Rajdhani, sans-serif',
+            'font-family': 'Inter, sans-serif',
             'font-size': '16px',
             'font-weight': '400',
             color: palette.text,
@@ -1110,7 +1110,7 @@ function ChannelsCard() {
           >
             <p
               style={{
-                'font-family': 'Rajdhani, sans-serif',
+                'font-family': 'Inter, sans-serif',
                 'font-size': '14px',
                 'font-weight': '450',
                 'letter-spacing': '0.7px',
@@ -1284,7 +1284,7 @@ function ChannelsCard() {
             </svg>
             <p
               style={{
-                'font-family': 'Rajdhani, sans-serif',
+                'font-family': 'Inter, sans-serif',
                 'font-size': '11px',
                 'font-weight': '600',
                 'letter-spacing': '0.5px',
@@ -1439,7 +1439,7 @@ function CreateGraphic() {
               left: '50%',
               transform: 'translateX(-50%)',
               'max-width': '320px',
-              'font-family': 'Rajdhani, sans-serif',
+              'font-family': 'Inter, sans-serif',
               'font-size': '12px',
               'line-height': '1.35',
               'text-align': 'center',
@@ -1455,7 +1455,7 @@ function CreateGraphic() {
               left: '14%',
               bottom: '0',
               'max-width': '240px',
-              'font-family': 'Rajdhani, sans-serif',
+              'font-family': 'Inter, sans-serif',
               'font-size': '12px',
               'line-height': '1.35',
               'text-align': 'center',
@@ -1471,7 +1471,7 @@ function CreateGraphic() {
               right: '14%',
               bottom: '0',
               'max-width': '240px',
-              'font-family': 'Rajdhani, sans-serif',
+              'font-family': 'Inter, sans-serif',
               'font-size': '12px',
               'line-height': '1.35',
               'text-align': 'center',

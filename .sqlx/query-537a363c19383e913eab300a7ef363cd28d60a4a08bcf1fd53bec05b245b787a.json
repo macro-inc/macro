@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE slack_import_outbox SET\n               published_at = CASE WHEN $4 = 'completed' THEN coalesce(published_at, clock_timestamp()) ELSE published_at END,\n               available_at = clock_timestamp() + interval '60 seconds'\n               WHERE job_id = $1 AND slack_channel_id = ANY($2) AND kind = 'search' AND generation = $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "537a363c19383e913eab300a7ef363cd28d60a4a08bcf1fd53bec05b245b787a"
+}

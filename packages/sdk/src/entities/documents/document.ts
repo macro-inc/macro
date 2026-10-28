@@ -1,27 +1,50 @@
 import type { PropertyTargetEntityType as PropertyEntityType } from '../../../generated/properties/types.gen';
 import type {
-  Thread as CommentThreadRecord,
   DocumentTeamShareResponse,
   GetDocumentResponses,
   GetUserDocumentsHandlerData,
   GithubPullRequest,
+  MessageCursor,
+  MessageListItem,
+  PdfHighlightAnchorRequest,
+  PreSaveDocumentRequest,
+  SaveDocumentRequest,
+  ThreadState,
 } from '../../../generated/storage/types.gen';
-import { type Mentionable, type MentionPart, wrapXml } from '../../mentions';
-import { MacroApiError, MacroError, paginate, unwrap } from '../../utils';
+import {
+  type Mentionable,
+  type MentionPart,
+  type RichMessage,
+  toBody,
+  wrapXml,
+} from '../../mentions';
+import { MacroApiError, mapConcurrently, paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
+import { CalendarNote } from '../calendar/note';
 import { PropertiedEntity } from '../entity';
+import {
+  MessageThread,
+  type TimelineOptions,
+  timeline,
+} from '../messages/thread';
 import { Project } from '../projects/project';
 import { entitySearch } from '../search';
+import { EntityAccess } from '../sharing/access';
 import { User } from '../users/user';
+import { DocumentAnchor } from './anchor';
 import { Comment } from './comment';
+import { DocumentVersion } from './version';
 
 type DocumentDetail = GetDocumentResponses[200]['data']['documentMetadata'];
 
-/** One of a document's comment threads: the thread record and its comments. */
+/** Thread reads in flight at once while `comments()` expands a document's roots. */
+const THREAD_FETCH_CONCURRENCY = 8;
+
+/** One of a document's comment threads: its state and its comments. */
 export interface CommentThread {
-  /** The thread record: id, resolved state, owner, timestamps. */
-  thread: CommentThreadRecord;
-  /** The thread's comments, in order. */
+  /** The thread state: root id, resolved flag, owner, anchor, timestamps. */
+  thread: ThreadState;
+  /** The root comment followed by its replies, in order. */
   comments: Comment[];
 }
 
@@ -33,6 +56,121 @@ export class Document
   extends PropertiedEntity<DocumentDetail>
   implements Mentionable
 {
+  /** Meeting links visible to the reader. Owners also receive unavailable grants and may unlink them to revoke meeting/team access. */
+  async meetingNotes(): Promise<
+    Array<{ note: CalendarNote; eventTitle: string }>
+  > {
+    const links = unwrap(
+      await this.client.calendar.documentNoteLinks({
+        path: { document_id: this.id },
+      }),
+    );
+    return links.map((link) => ({
+      note: CalendarNote.fromDocumentLink(this.client, this, link),
+      eventTitle: link.eventTitle,
+    }));
+  }
+  /** PDF annotations in this document. */
+  async anchors(): Promise<DocumentAnchor[]> {
+    return unwrap(
+      await this.client.storage.getDocumentAnchors({
+        path: { document_id: this.id },
+      }),
+    ).data.map((a) => DocumentAnchor.from(this.client, this, a));
+  }
+
+  /** Create a standalone PDF highlight. */
+  async createHighlight(
+    options: Omit<PdfHighlightAnchorRequest, 'uuid'>,
+  ): Promise<DocumentAnchor> {
+    return DocumentAnchor.from(
+      this.client,
+      this,
+      unwrap(
+        await this.client.storage.createAnchor({
+          path: { document_id: this.id },
+          body: { ...options, fileType: 'pdf', anchorType: 'highlight' },
+        }),
+      ),
+    );
+  }
+
+  /** A handle to an immutable version. */
+  version(version: number): DocumentVersion {
+    return DocumentVersion.byId(this.client, this, version);
+  }
+
+  /** Sharing configuration. */
+  async sharePermissions() {
+    return unwrap(
+      await this.client.storage.getDocumentPermissionsV2({
+        path: { document_id: this.id },
+      }),
+    ).documentPermissions;
+  }
+
+  /** Mint a scoped permissions token. */
+  async permissionsToken(): Promise<string> {
+    return unwrap(
+      await this.client.storage.getDocumentPermissionsToken({
+        path: { document_id: this.id },
+      }),
+    ).token;
+  }
+
+  /** Prepare multipart content saving and return the service's upload instructions. */
+  async prepareSave(parts: PreSaveDocumentRequest['newBom']) {
+    return unwrap(
+      await this.client.storage.presaveDocumentHandler({
+        path: { document_id: this.id },
+        body: { newBom: parts },
+      }),
+    ).data;
+  }
+
+  /** Commit uploaded content. Does not retry uncertain writes. */
+  async save(options: SaveDocumentRequest) {
+    return (
+      await this.mutate((c) =>
+        c.storage.saveDocumentHandler({
+          path: { document_id: this.id },
+          body: options,
+        }),
+      )
+    ).data;
+  }
+
+  /** Commit a simple document save. */
+  async simpleSave() {
+    return (
+      await this.mutate((c) =>
+        c.storage.simpleSave({ path: { document_id: this.id } }),
+      )
+    ).data;
+  }
+
+  /** A shared message thread scoped to this resource. */
+  messageThreadById(id: string): MessageThread {
+    return MessageThread.byId(
+      this.client,
+      { type: 'document', entity: this },
+      id,
+    );
+  }
+
+  /** A mixed message and activity timeline page. */
+  timelinePage(selection?: TimelineOptions<Comment>) {
+    return timeline(
+      this.client,
+      { type: 'document', entity: this },
+      (record) => Comment.from(this.client, this.id, record),
+      selection,
+    );
+  }
+
+  /** Access requests and direct user grants. */
+  readonly access = new EntityAccess(this.client, 'document', this);
+
   protected async fetch(): Promise<DocumentDetail> {
     const { data } = unwrap(
       await this.client.storage.getDocument({
@@ -180,10 +318,16 @@ export class Document
   readonly deletedAt = this.field('deletedAt');
 
   /**
-   * The document's raw content (markdown source for markdown documents),
-   * downloaded via a presigned export URL.
+   * Current Markdown for native documents, extracted text for PDF/Word,
+   * or raw file content for other formats. Native reads include live edits.
    */
   async content(): Promise<string> {
+    const { text } = unwrap(
+      await this.client.storage.getDocumentTextContent({
+        path: { document_id: this.id },
+      }),
+    );
+    if (text !== null) return text;
     const { presigned_url } = unwrap(
       await this.client.storage.exportDocument({
         path: { document_id: this.id },
@@ -256,38 +400,53 @@ export class Document
     return new Document(this.client, data.documentMetadata.documentId);
   }
 
-  /** The document's comment threads, each with its comments. */
+  /** The document's live comment threads, each with its comments, newest thread first. */
   async comments(): Promise<CommentThread[]> {
-    const { data } = unwrap(
-      await this.client.storage.getDocumentComments({
-        path: { document_id: this.id },
-      }),
-    );
-    return data.map(({ thread, comments }) => ({
-      thread,
-      comments: comments.map((c) => Comment.from(this.client, this, c)),
-    }));
+    const parent = { parent_type: 'document', parent_id: this.id };
+    const roots = paginate<MessageListItem, MessageCursor>(async (cursor) => {
+      const page = unwrap(
+        await this.client.storage.messageTimeline({
+          path: parent,
+          query: { selection: JSON.stringify({ limit: 100, cursor }) },
+        }),
+      );
+      return { items: page.items, nextCursor: page.next_cursor };
+    });
+    const items: MessageListItem[] = [];
+    for await (const item of roots) items.push(item);
+    return mapConcurrently(items, THREAD_FETCH_CONCURRENCY, async (item) => {
+      const { state, root, replies } = unwrap(
+        await this.client.storage.entityMessageGetThread({
+          path: { ...parent, id: item.id },
+        }),
+      );
+      return {
+        thread: state,
+        comments: [root, ...replies].map((comment) =>
+          Comment.from(this.client, this.id, comment),
+        ),
+      };
+    });
   }
 
   /**
    * Add a comment. Starts a new unanchored thread, or replies to an existing
-   * one when `threadId` is given. Returns the created comment.
+   * one when `threadId` (the thread's root comment id) is given.
+   *
+   * @param body - Plain text, or a rich body composed with {@link msg}.
+   * @returns The created comment.
    */
-  async comment(text: string, opts?: { threadId?: number }): Promise<Comment> {
-    const { comments } = await this.mutate((c) =>
-      c.storage.createComment({
-        path: { document_id: this.id },
-        body: { text, threadId: opts?.threadId ?? null },
+  async comment(
+    body: string | RichMessage,
+    opts?: { threadId?: string },
+  ): Promise<Comment> {
+    const created = await this.mutate((c) =>
+      c.storage.entityMessageCreate({
+        path: { parent_type: 'document', parent_id: this.id },
+        body: { ...toBody(body), thread_id: opts?.threadId ?? null },
       }),
     );
-    // The response is the whole thread; the new comment has the highest id.
-    const created = comments.reduce<(typeof comments)[number] | undefined>(
-      (a, b) => (!a || b.commentId > a.commentId ? b : a),
-      undefined,
-    );
-    if (!created)
-      throw new MacroError('create comment returned an empty thread');
-    return Comment.from(this.client, this, created);
+    return Comment.from(this.client, this.id, created);
   }
 
   /** The document's short id (used in compact links and branch names). */

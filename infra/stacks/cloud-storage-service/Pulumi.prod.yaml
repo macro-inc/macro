@@ -2,6 +2,7 @@ config:
   aws-native:region: us-east-1
   aws:region: us-east-1
   datadog:apiUrl: https://api.us5.datadoghq.com/
+  cloud-storage-service:deploy_slack_import_worker: true
   cloud-storage-service:waf_account_id: "569036502058"
   cloud-storage-service:waf_web_acl_name: macro-cloud-storage-prod
   cloud-storage-service:waf_web_acl_id: 0f1059a5-1ee4-4b57-a429-88df830d5091

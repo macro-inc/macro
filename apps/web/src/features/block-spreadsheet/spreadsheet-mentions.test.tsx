@@ -1,4 +1,7 @@
-import { encodeCellMention } from '@macro-inc/spreadsheet/cell-mentions';
+import {
+  cellTextParts,
+  encodeCellMention,
+} from '@macro-inc/spreadsheet/cell-mentions';
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import { afterEach, expect, it, vi } from 'vitest';
 
@@ -26,9 +29,30 @@ vi.mock('./spreadsheet-cell-links', () => ({
   SpreadsheetCellLinks: (props: { value: string }) => props.value,
 }));
 
-import { spreadsheetMentions } from './spreadsheet-mentions';
+import { linkMentions, spreadsheetMentions } from './spreadsheet-mentions';
 
 afterEach(cleanup);
+
+it('turns a routine link into a rendered mention chip instead of exposing its encoding', () => {
+  const value = linkMentions(
+    'https://macro.com/app/routines/routine-1',
+    () => ({
+      block: 'routine',
+      id: 'routine-1',
+      params: {},
+    })
+  );
+  expect(cellTextParts(value)[0].mention).toMatchObject({
+    type: 'document',
+    blockName: 'routine',
+    documentId: 'routine-1',
+  });
+  render(() => spreadsheetMentions.renderText(value));
+  expect(
+    document.querySelector('[data-spreadsheet-mention]')?.textContent
+  ).toBe('document mention');
+  expect(document.body.textContent).not.toContain('<m-document-mention>');
+});
 
 it('renders a date pill as a relative chip with the full date as its tooltip', () => {
   const tomorrow = new Date();

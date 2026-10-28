@@ -3,12 +3,8 @@ import {
   EntityPropertiesSection,
   EntityTagsSection,
 } from '@app/features/property/side-panel/properties';
-import {
-  DateValueDisplay,
-  FolderLink,
-  OwnerValue,
-  SidePanel,
-} from '@components/app/side-panel';
+import { FolderLink, SidePanel } from '@components/app/side-panel';
+import { EntityMetadata } from '@components/app/side-panel/EntityMetadata';
 import { useBlockId } from '@core/block';
 import { useCanEdit } from '@core/signal/permissions';
 import { useChatDataQuery } from '@queries/cognition/chat-data';
@@ -21,11 +17,11 @@ export function ChatSidePanelSections() {
 
   return (
     <>
-      <SidePanel.Section id="details" title="Details" defaultOpen order={10}>
+      <SidePanel.Footer>
         <Suspense fallback={<SidePanel.Loading />}>
           <ChatDetailsContent chatId={chatId} />
         </Suspense>
-      </SidePanel.Section>
+      </SidePanel.Footer>
       <EntityTagsSection
         entityId={chatId}
         entityType="CHAT"
@@ -59,14 +55,11 @@ function ChatDetailsContent(props: { chatId: string }) {
   );
 
   return (
-    <SidePanel.Grid>
-      <Show when={chat()?.userId}>
-        {(ownerId) => (
-          <SidePanel.Row label="Owner">
-            <OwnerValue ownerId={ownerId()} />
-          </SidePanel.Row>
-        )}
-      </Show>
+    <EntityMetadata
+      ownerId={chat()?.userId}
+      createdAt={chat()?.createdAt}
+      updatedAt={chat()?.updatedAt}
+    >
       <Show
         when={(() => {
           const id = chat()?.projectId;
@@ -75,26 +68,13 @@ function ChatDetailsContent(props: { chatId: string }) {
         })()}
       >
         {(folder) => (
-          <SidePanel.Row label="Folder">
+          <div class="flex items-center gap-1">
+            Folder
             <FolderLink projectId={folder().id} projectName={folder().name} />
-          </SidePanel.Row>
+          </div>
         )}
       </Show>
-      <Show when={chat()?.createdAt}>
-        {(created) => (
-          <SidePanel.Row label="Created">
-            <DateValueDisplay value={created()} />
-          </SidePanel.Row>
-        )}
-      </Show>
-      <Show when={chat()?.updatedAt}>
-        {(updated) => (
-          <SidePanel.Row label="Last updated">
-            <DateValueDisplay value={updated()} />
-          </SidePanel.Row>
-        )}
-      </Show>
-    </SidePanel.Grid>
+    </EntityMetadata>
   );
 }
 

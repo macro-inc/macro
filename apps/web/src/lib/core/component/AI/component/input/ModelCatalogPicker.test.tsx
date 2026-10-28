@@ -18,18 +18,6 @@ import {
 } from './ModelCatalogPicker';
 import type { CatalogModelOption } from './modelCatalog';
 
-const { isMobileWidth, setMobileWidth } = vi.hoisted(() => {
-  let mobile = false;
-  return {
-    isMobileWidth: () => mobile,
-    setMobileWidth: (value: boolean) => {
-      mobile = value;
-    },
-  };
-});
-
-vi.mock('@core/mobile/mobileWidth', () => ({ isMobileWidth }));
-
 vi.mock('@ui', () => {
   const cn = (...args: unknown[]) =>
     args.flat(Infinity).filter(Boolean).join(' ');
@@ -93,9 +81,7 @@ vi.mock('@ui', () => {
   Dropdown.SubTrigger = (props: { children?: JSX.Element }) => (
     <div>{props.children}</div>
   );
-  Dropdown.SubContent = (props: { children?: JSX.Element }) => (
-    <div>{props.children}</div>
-  );
+  Dropdown.SubContent = () => null;
 
   return { cn, Dropdown };
 });
@@ -103,15 +89,14 @@ vi.mock('@ui', () => {
 const OPTIONS: CatalogModelOption[] = [
   { id: 'auto', label: 'Auto', group: 'Auto' },
   { id: 'grok', label: 'Cursor Grok 4.6 High Fast' },
-  { id: 'opus', label: 'Opus 5 High' },
-  { id: 'sonnet', label: 'Sonnet 5 High' },
+  { id: 'opus', label: 'Opus 5.5 High' },
+  { id: 'sonnet', label: 'Sonnet 5.5 High' },
   { id: 'sol', label: 'GPT-5.6 Sol High' },
   { id: 'gemini', label: 'Gemini 3.8 Flash High' },
 ];
 
 afterEach(() => {
   cleanup();
-  setMobileWidth(false);
 });
 
 function mountPicker() {
@@ -258,25 +243,31 @@ describe('ModelCatalogMenu search focus', () => {
   });
 });
 
-describe('ModelCatalogPicker more models at phone width', () => {
-  it('replaces the list in place and comes back', () => {
-    setMobileWidth(true);
+describe('ModelCatalogPicker frontier and providers', () => {
+  it('shows suggested choices with a full-catalog submenu', () => {
     mountPicker();
-    fireEvent.click(screen.getByRole('button', { name: 'Agent model' }));
-
-    expect(screen.queryByText('Gemini 3.8 Flash High')).toBeNull();
-
-    fireEvent.click(screen.getByText('More models'));
-    expect(screen.getByText('Gemini 3.8 Flash High')).toBeTruthy();
-    expect(screen.queryByText('Opus 5 High')).toBeNull();
-
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Recommended' }));
-    expect(screen.getByText('Opus 5 High')).toBeTruthy();
-    expect(screen.queryByText('Gemini 3.8 Flash High')).toBeNull();
+    expect(screen.getByText('Suggested')).toBeTruthy();
+    expect(screen.getByText('More models')).toBeTruthy();
+    expect(screen.queryByText('Google')).toBeNull();
+    expect(screen.queryByText('Recommended')).toBeNull();
+  });
+  it('includes suggested choices in the full provider catalog', () => {
+    render(() => (
+      <ModelCatalogMenu
+        fullCatalog
+        value="auto"
+        options={OPTIONS}
+        onSelect={() => {}}
+      />
+    ));
+    expect(screen.queryByText('Suggested')).toBeNull();
+    expect(screen.queryByText('More models')).toBeNull();
+    expect(screen.getByText('Google')).toBeTruthy();
+    for (const option of OPTIONS)
+      expect(screen.getByRole('menuitem', { name: option.label })).toBeTruthy();
   });
 
-  it('uses the supplied model row for models beyond the recommended list', () => {
-    setMobileWidth(true);
+  it('uses the supplied model row for both frontier and provider choices', () => {
     const CustomRow = (props: ModelRowProps) => (
       <button type="button" onClick={props.onSelect}>
         Custom {props.option.label}
@@ -294,13 +285,30 @@ describe('ModelCatalogPicker more models at phone width', () => {
         />
       );
     });
-
-    fireEvent.click(screen.getByText('More models'));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Custom Opus 5.5 High' })
+    );
+    expect(
+      screen.getByRole('button', { name: 'Agent model' }).textContent
+    ).toContain('Opus 5.5 High');
+    fireEvent.input(screen.getByRole('textbox', { name: 'Search models' }), {
+      target: { value: 'Google' },
+    });
     fireEvent.click(
       screen.getByRole('button', { name: 'Custom Gemini 3.8 Flash High' })
     );
     expect(
       screen.getByRole('button', { name: 'Agent model' }).textContent
     ).toContain('Gemini 3.8 Flash High');
+  });
+
+  it('searches the entire catalog by provider name', () => {
+    mountPicker();
+    fireEvent.input(screen.getByRole('textbox', { name: 'Search models' }), {
+      target: { value: 'Google' },
+    });
+    expect(screen.getByText('Gemini 3.8 Flash High')).toBeTruthy();
+    expect(screen.queryByText('Opus 5.5 High')).toBeNull();
+    expect(screen.queryByText('Suggested')).toBeNull();
   });
 });

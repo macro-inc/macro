@@ -1,0 +1,49 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT s.ordinality AS \"position!\", r.state AS \"state?\", c.id AS \"id?\", c.name AS \"name?\",\n                      c.channel_type::text AS \"kind?\"\n               FROM unnest($1::text[]) WITH ORDINALITY AS s(id, ordinality)\n               JOIN import_source_binding b ON b.team_id = $2\n                 AND b.slack_workspace_id IS NOT DISTINCT FROM $3\n                 AND b.confirmed_unknown_at IS NOT DISTINCT FROM $4\n               LEFT JOIN import_target_reservation r\n                 ON r.team_id = $2 AND r.source = 'slack' AND r.foreign_id = s.id\n               LEFT JOIN LATERAL (\n                 SELECT count(*) AS count, min(entity_id) AS id,\n                        bool_and(entity_type = 'channel' AND entity_id IS NOT NULL) AS valid\n                 FROM (SELECT DISTINCT entity_id, entity_type FROM import_entity\n                       WHERE team_id = $2 AND source = 'slack' AND foreign_id = s.id\n                         AND status = 'imported' LIMIT 2) mappings\n               ) legacy ON true\n               LEFT JOIN comms_channels c ON c.id =\n                 CASE WHEN r.state = 'ready' AND r.channel_id = r.candidate_channel_id\n                           AND (legacy.count = 0 OR (legacy.count = 1 AND legacy.valid\n                                AND legacy.id = r.channel_id::text)) THEN r.channel_id\n                      WHEN r.state IS NULL AND legacy.count = 1 AND legacy.valid\n                           AND legacy.id ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'\n                      THEN legacy.id::uuid END\n                 AND ((c.channel_type = 'team' AND c.team_id = $2)\n                      OR (r.state = 'ready' AND c.channel_type IN ('private', 'direct_message')\n                          AND c.team_id IS NULL))\n                 AND NOT EXISTS (SELECT 1 FROM import_target_reservation other\n                                 WHERE other.channel_id = c.id AND other.team_id <> $2)\n                 AND NOT EXISTS (SELECT 1 FROM import_entity other\n                                 WHERE other.source = 'slack' AND other.status = 'imported'\n                                   AND other.entity_type = 'channel' AND other.entity_id = c.id::text\n                                   AND other.team_id <> $2)\n               ORDER BY s.ordinality",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "position!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "state?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "name?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "kind?",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Uuid",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      null,
+      false,
+      false,
+      true,
+      null
+    ]
+  },
+  "hash": "2b33ab9211a3c6e7e0fd8cca628898876daad1df82e296fde9050da49845257c"
+}

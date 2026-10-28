@@ -1,6 +1,6 @@
 import { DebugSuspense } from '@channel/DebugSuspense';
-import RefreshIcon from '@phosphor/arrow-clockwise.svg';
-import WarningIcon from '@phosphor/warning.svg';
+import RefreshIcon from '@icon/system/regular/arrow-clockwise.svg';
+import WarningIcon from '@icon/system/regular/warning.svg';
 import { Button } from '@ui';
 import { createSignal, ErrorBoundary, type JSX, Show } from 'solid-js';
 
@@ -45,9 +45,8 @@ function HomeSectionError(props: HomeSectionErrorProps) {
 
           <div class="mt-2 flex gap-2">
             <Button
-              variant="outline"
+              variant="secondary"
               size="sm"
-              depth={2}
               class="w-fit bg-surface"
               onClick={props.reset}
             >

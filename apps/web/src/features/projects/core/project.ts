@@ -2,14 +2,19 @@
 export type Project = {
   id: string;
   name: string;
-  descriptionDocumentId: string;
   updatedAt: string;
+  createdAt?: string;
   access?: ProjectAccess;
   taskCount?: number;
   completedTaskCount?: number;
 };
 
 export type ProjectAccess = 'view' | 'comment' | 'edit' | 'owner';
+
+/** What chips and previews may read; counts and membership stay on the project view. */
+export type ProjectIdentity = Pick<Project, 'id' | 'name'> & {
+  access: ProjectAccess;
+};
 
 export type ProjectDetail = Project & {
   ownerId: string;
@@ -35,8 +40,11 @@ export type TaskProjectReference =
   | { state: 'unavailable' }
   | { state: 'visible'; id: string; name: string };
 
-export const canEditProject = (project: ProjectDetail) =>
+export const canEditProject = (project: Pick<Project, 'access'>) =>
   project.access === 'edit' || project.access === 'owner';
+
+export const canDeleteProject = (project: Pick<Project, 'access'>) =>
+  project.access === 'owner';
 
 export const canDiscussProject = (project: ProjectDetail) =>
   project.access !== 'view';

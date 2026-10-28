@@ -384,16 +384,17 @@ After:
 
 These insert the same @-mention chips the user inserts from the `@` menu. Use the ids and details supplied in the task -- do not invent entity ids. Date/time chips do not need a looked-up id.
 
-Existing chips in the document XML look like `<user-mention>`, `<date-mention>`, `<document-mention>`, `<agent-session-mention>`, `<contact-mention>`, `<group-mention>`, `<pr-mention>`, `<tag-mention>`. Leave them intact unless the task asks to change them.
+Existing chips in the document XML look like `<user-mention>`, `<date-mention>`, `<document-mention>`, `<agent-session-mention>`, `<contact-mention>`, `<group-mention>`, `<pr-mention>`, `<booking-link-mention>`, `<tag-mention>`. Leave them intact unless the task asks to change them.
 
 - `insertDate(blockId, at, isoDate, displayFormat?)` · `mentionDate(...)` — time chip. `isoDate` is ISO 8601; `displayFormat` is the label on the chip (e.g. `'Mon, Dec 1, 2025'`, `'Today'`, `'3:00 PM'`).
 - `insertMention(blockId, at, mention)`
 - `mentionUser(blockId, at, { userId, email })`
 - `mentionContact(blockId, at, { contactId, name, emailOrDomain, isCompany })`
 - `mentionGroup(blockId, at, { groupAlias })`
-- `mentionDocument(blockId, at, { documentId, documentName, blockName, blockParams? })` — documents, channels, chats, projects, tasks, emails, calendar events, skills, calls, automations (`blockName` is `md`/`channel`/`chat`/`project`/`task`/`email`/`calendar`/`skill`/`call`/`automation`/…). `blockParams` is for channel messages (`channel_message_id`) and calendar occurrences (`occurrenceKey`).
+- `mentionDocument(blockId, at, { documentId, documentName, blockName, blockParams? })` — documents, channels, chats, folders, projects, tasks, emails, calendar events, skills, calls, automations (`blockName` is `md`/`channel`/`chat`/`project`/`initiative`/`task`/`email`/`calendar`/`skill`/`call`/`automation`/…). A project (initiative) is `blockName: 'initiative'` with the initiative id as `documentId`; `project` is a folder. `blockParams` is for channel messages (`channel_message_id`) and calendar occurrences (`occurrenceKey`).
 - `mentionAgentSession(blockId, at, { id, label?, expanded? })` — existing agent session. `expanded: true` inserts the card that follows the session's latest turn.
 - `mentionPullRequest(blockId, at, { id, label? })`
+- `mentionBookingLink(blockId, at, { profileId, url, slug?, label? })` — Macro booking page (`/app/book/{profileId}/{slug?}`). Prefer the shareable URL from a booking-link tool.
 - `mentionTag(blockId, at, { optionId, propertyDefinitionId, scope, name, color? })`
 
 ```ts

@@ -1,28 +1,43 @@
 import { cleanup, fireEvent, render } from '@solidjs/testing-library';
 import { type Accessor, createSignal, type ParentProps } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
+import type { ProjectDetail } from './core/project';
+import {
+  failedProjectDraft,
+  type ProjectComposerSubmission,
+} from './primitives/create-project';
 
 const fixtures = vi.hoisted(() => ({
   popover: false,
+  touch: false,
   close: vi.fn(),
-  open: vi.fn(),
-  replace: vi.fn(),
   navigate: vi.fn(),
   routed: (() => true) as Accessor<boolean>,
+  submission: undefined as ProjectComposerSubmission | undefined,
+  manager: {
+    openWithSplit: vi.fn(() => ({ status: 'unavailable' })),
+    createPopoverSplit: vi.fn(),
+  },
+  toast: vi.fn(),
 }));
-vi.mock('@app/features/tasks-view/route', () => ({
+// The real useSplitLayout runs, so its touch-device rule is exercised.
+vi.mock('@app/signal/splitLayout', () => ({
+  globalSplitManager: () => fixtures.manager,
+}));
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: () => fixtures.touch,
+}));
+vi.mock('@core/component/Toast/Toast', () => ({
+  toast: { success: fixtures.toast },
+}));
+vi.mock('@app/routes/routes', () => ({
   projectDetailRoute: {},
   tasksProjectsRoute: {},
 }));
 vi.mock('@app/lib/split-router', () => ({
   useNavigate: () => fixtures.navigate,
-  useSplitHistory: () => () => (fixtures.routed() ? { index: 0 } : undefined),
-}));
-vi.mock('@components/app/split-layout/layout', () => ({
-  useSplitLayout: () => ({
-    openWithSplit: fixtures.open,
-    replaceSplit: fixtures.replace,
-  }),
+  usePaneHistory: () => () =>
+    fixtures.routed() ? { entries: [], index: 0 } : undefined,
 }));
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitPanelOrThrow: () => ({
@@ -43,12 +58,10 @@ vi.mock('./projects', () => ({
   Projects: (props: ParentProps) => props.children,
 }));
 vi.mock('./views/create-project', () => ({
-  CreateProject: (props: { onCreated(id: string): void }) => (
-    <button
-      onClick={() => props.onCreated('01992d2f-8444-7000-8000-000000000001')}
-    >
-      Create
-    </button>
+  CreateProject: (props: {
+    onSubmit(submission: ProjectComposerSubmission): void;
+  }) => (
+    <button onClick={() => props.onSubmit(fixtures.submission!)}>Create</button>
   ),
 }));
 
@@ -57,29 +70,99 @@ import { CreateProjectView, ProjectView } from './project-view';
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  fixtures.touch = false;
 });
+const projectId = '01992d2f-8444-7000-8000-000000000001';
+const draft = {
+  name: 'Launch',
+  description: '',
+  shareWithTeam: true,
+  properties: [],
+};
+const project = { id: projectId } as ProjectDetail;
+function submit(popover: boolean) {
+  fixtures.popover = popover;
+  const result = Promise.withResolvers<ProjectDetail>();
+  fixtures.submission = { draft, result: result.promise };
+  const view = render(() => <CreateProjectView />);
+  fireEvent.click(view.getByRole('button'));
+  return { ...view, resolve: result.resolve, reject: result.reject };
+}
+
+const projectContent = {
+  type: 'component',
+  id: `initiative-view~${projectId}~overview`,
+};
+async function toastActions() {
+  await vi.waitFor(() => expect(fixtures.toast).toHaveBeenCalledOnce());
+  const [message, { actions }] = fixtures.toast.mock.calls[0];
+  expect(message).toBe('Project created');
+  return actions as { label: string; onClick(): void }[];
+}
+
 it.each([true, false])(
-  'opens the created project while respecting popover=%s',
-  (popover) => {
-    fixtures.popover = popover;
-    const view = render(() => <CreateProjectView />);
-    fireEvent.click(view.getByRole('button'));
-    const content = {
-      type: 'component',
-      id: 'initiative-view~01992d2f-8444-7000-8000-000000000001~overview',
-    };
+  'closes on submit and offers the created project without navigating, popover=%s',
+  async (popover) => {
+    const { resolve, unmount } = submit(popover);
     if (popover) {
       expect(fixtures.close).toHaveBeenCalledOnce();
-      expect(fixtures.open).toHaveBeenCalledWith(content, {
-        preferNewSplit: true,
-      });
-      expect(fixtures.replace).not.toHaveBeenCalled();
+      expect(fixtures.manager.openWithSplit).not.toHaveBeenCalled();
     } else {
-      expect(fixtures.replace).toHaveBeenCalledWith({ content });
-      expect(fixtures.open).not.toHaveBeenCalled();
+      // Back must not return to the submitted composer.
+      expect(fixtures.manager.openWithSplit).toHaveBeenCalledWith(
+        { type: 'component', id: 'tasks-projects' },
+        expect.objectContaining({ mergeHistory: true, preferNewSplit: false })
+      );
     }
+    fixtures.manager.openWithSplit.mockClear();
+    // The server answers after the composer, and its panel, are gone.
+    unmount();
+    resolve(project);
+    const [open, openInNewSplit] = await toastActions();
+    expect(fixtures.manager.openWithSplit).not.toHaveBeenCalled();
+    open.onClick();
+    expect(fixtures.manager.openWithSplit).toHaveBeenLastCalledWith(
+      projectContent,
+      expect.objectContaining({ referredFrom: null, preferNewSplit: false })
+    );
+    openInNewSplit.onClick();
+    expect(fixtures.manager.openWithSplit).toHaveBeenLastCalledWith(
+      projectContent,
+      expect.objectContaining({ referredFrom: null, preferNewSplit: true })
+    );
   }
 );
+
+it('never opens a new split from the toast on a touch device', async () => {
+  fixtures.touch = true;
+  const { resolve, unmount } = submit(true);
+  unmount();
+  resolve(project);
+  const [, openInNewSplit] = await toastActions();
+  openInNewSplit.onClick();
+  expect(fixtures.manager.openWithSplit).toHaveBeenLastCalledWith(
+    projectContent,
+    expect.objectContaining({ preferNewSplit: false })
+  );
+});
+
+it('reopens the composer with the draft and the reason after a failure', async () => {
+  const { reject, unmount } = submit(true);
+  unmount();
+  const error = new Error('offline');
+  reject(error);
+  await vi.waitFor(() =>
+    expect(fixtures.manager.createPopoverSplit).toHaveBeenCalledOnce()
+  );
+  expect(fixtures.manager.createPopoverSplit).toHaveBeenCalledWith({
+    content: {
+      type: 'component',
+      id: 'project-compose',
+      params: { initialDraft: failedProjectDraft(draft, error) },
+    },
+  });
+  expect(fixtures.toast).not.toHaveBeenCalled();
+});
 
 it('redirects a project link once the router tracks its newly opened split', () => {
   const [routed, setRouted] = createSignal(false);

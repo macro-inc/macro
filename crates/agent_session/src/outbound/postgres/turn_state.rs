@@ -2,7 +2,24 @@ use super::*;
 use crate::domain::turn_state::SessionTurnProjectionRepo;
 use agent_fold::domain::model::TurnState;
 
-impl SessionTurnProjectionRepo for PgAgentSessionRepo {
+impl<B: BotFacts + 'static> crate::domain::ports::ActiveSessionTurn for PgAgentSessionRepo<B> {
+    async fn active_turn(
+        &self,
+        id: AgentSessionId,
+    ) -> Result<Option<agent_runtime_protocol::domain::action::AgentActionId>> {
+        let turn = sqlx::query_scalar!(
+            "SELECT turn_action_id FROM agent_session WHERE id = $1 AND NOT is_archived AND turn_state IN ('starting', 'running', 'blocked')",
+            id.as_uuid(),
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .context("read active session turn")?
+        .flatten();
+        Ok(turn.map(agent_runtime_protocol::domain::action::AgentActionId::from_uuid))
+    }
+}
+
+impl<B: BotFacts + 'static> SessionTurnProjectionRepo for PgAgentSessionRepo<B> {
     async fn unprojected_sessions(&self, limit: NonZeroUsize) -> Result<Vec<AgentSessionId>> {
         let ids = sqlx::query_scalar!(
             "SELECT id FROM agent_session WHERE turn_state IS NULL ORDER BY id LIMIT $1",

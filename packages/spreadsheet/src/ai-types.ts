@@ -1,3 +1,5 @@
+import type { DataValidation, DropdownColor } from './sheet-rules';
+import type { TableColumnType } from './sheet-tables';
 import type { SpreadsheetCellStyle } from './spreadsheet-document';
 
 export type SpreadsheetCellInput = { address: string; value: string };
@@ -34,6 +36,27 @@ export type SpreadsheetOperation =
       type: 'resize_columns';
       sheetId: string;
       columns: { column: string; width: number }[];
+    }
+  | {
+      type: 'set_dropdown';
+      sheetId: string;
+      range: string;
+      items?: string[];
+      source?: string;
+      rejectInvalid?: boolean;
+      colors?: DropdownColor[];
+    }
+  | { type: 'clear_validation'; sheetId: string; range: string }
+  | { type: 'insert_checkboxes'; sheetId: string; range: string }
+  | {
+      type: 'create_table';
+      sheetId: string;
+      range: string;
+      name?: string;
+      totalsRow?: boolean;
+      /** Types by column name; other columns take the type their values
+       * suggest. */
+      columnTypes?: SpreadsheetTableColumnType[];
     };
 
 export type SpreadsheetReadRequest = {
@@ -79,12 +102,47 @@ export type SpreadsheetSheetSummary = {
   populatedCells: number;
   formulaCells: number;
   errorCells: number;
+  tables?: SpreadsheetTableSummary[];
+};
+/** A named table, which formulas address as `Name[Column]`. */
+export type SpreadsheetTableSummary = {
+  name: string;
+  range: string;
+  columns: string[];
+  totalsRow: boolean;
+  /** Columns whose filters hide rows. */
+  filteredColumns?: string[];
+  /** Typed columns; untyped columns are left out. */
+  columnTypes?: SpreadsheetTableColumnType[];
+};
+/** A table column's type, by column name. */
+export type SpreadsheetTableColumnType = {
+  column: string;
+  type: TableColumnType;
+};
+/** A data validation rule overlapping a read range. */
+export type SpreadsheetReadValidation = {
+  range: string;
+  type: DataValidation['type'];
+  /** A dropdown's typed choices. */
+  items?: string[];
+  /** A dropdown's source range, or another rule's formulas. */
+  source?: string;
+  operator?: DataValidation['operator'];
+  formulas?: string[];
+  /** Whether a dropdown arrow is shown. */
+  dropdown?: boolean;
+  /** Whether entries breaking the rule are rejected. */
+  rejectInvalid: boolean;
+  /** A dropdown's choice colors. */
+  colors?: DropdownColor[];
 };
 export type SpreadsheetReadRange = {
   sheetId: string;
   sheetName: string;
   range: string;
   cells: SpreadsheetReadCell[];
+  validations?: SpreadsheetReadValidation[];
   truncated: boolean;
 };
 export type SpreadsheetReadResponse = {

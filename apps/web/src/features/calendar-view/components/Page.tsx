@@ -19,6 +19,7 @@ import {
   DEFAULT_CALENDAR_SOURCE,
 } from '@app/features/calendar/types';
 import { isCalendarRangeSupported } from '@app/features/calendar/utils/calendar-supported-range';
+import { GUEST_EDITS_RESTRICTED } from '@app/features/calendar/utils/event-guest-editing';
 import {
   type CalendarEventTimeChange,
   calendarEventTimeFromFullCalendar,
@@ -29,15 +30,19 @@ import {
   scrollEventChipIntoView,
   timeGridScroller,
 } from '@app/features/calendar/utils/time-grid-scroller';
+import { mergeCalendarOverlays } from '@app/features/calendar-team/core/merge';
 import { useOpenEventComposer } from '@app/features/calendar-view/components/use-open-event-composer';
 import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
 import { toast } from '@core/component/Toast/Toast';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import { isMobile } from '@core/mobile/isMobile';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { DateSelectArg, DatesSetArg } from '@fullcalendar/core';
-import SpinnerIcon from '@phosphor/spinner-gap.svg';
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
-import { useUpdateCalendarEventMutation } from '@queries/calendar/mutations';
+import {
+  isGuestEditRefused,
+  useUpdateCalendarEventMutation,
+} from '@queries/calendar/mutations';
 import {
   type CalendarOccurrenceQueryRange,
   createCalendarOccurrenceQueryRange,
@@ -53,12 +58,14 @@ import {
   onCleanup,
   onMount,
   Show,
+  untrack,
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import {
   calendarFocusTargetId,
   useCalendarFocus,
 } from '../calendar-focus-target';
+import { CalendarLoadingSkeleton } from './CalendarLoadingSkeleton';
 
 interface CalendarScrollTarget {
   scrollElement: HTMLElement;
@@ -131,7 +138,12 @@ function CalendarScrollIndicators(props: {
   );
 }
 
-function CalendarPageDataStatus(props: { data: CalendarOccurrenceData }) {
+function CalendarPageDataStatus(props: {
+  data: CalendarOccurrenceData;
+  changingView: boolean;
+  grid: CalendarGridHandle;
+  onLoadingBlockingChange: (blocking: boolean) => void;
+}) {
   const isRangeUnavailable = createMemo(() => {
     const range = props.data.range();
     return range !== undefined && !isCalendarRangeSupported(range);
@@ -140,71 +152,44 @@ function CalendarPageDataStatus(props: { data: CalendarOccurrenceData }) {
   const showLoading = () =>
     !isRangeUnavailable() &&
     !props.data.occurrencesQuery.isError &&
-    props.data.isLoading();
-
-  const showBlockingState = () => {
-    if (isRangeUnavailable()) return false;
-    if (props.data.occurrencesQuery.isError) return true;
-    if (showLoading()) return false;
-
-    return props.data.isSyncing() && props.data.events().length === 0;
-  };
+    (props.changingView || props.data.isLoading());
 
   return (
     <>
-      <Show when={showBlockingState()}>
+      <CalendarLoadingSkeleton
+        element={props.grid.element()}
+        dateInfo={props.grid.dateInfo()}
+        loading={showLoading()}
+        disabled={isRangeUnavailable() || props.data.occurrencesQuery.isError}
+        onBlockingChange={props.onLoadingBlockingChange}
+      />
+      <Show when={!isRangeUnavailable() && props.data.occurrencesQuery.isError}>
         <div
           class="absolute inset-0 z-20 flex items-center justify-center rounded-xl bg-surface/90 p-6 text-center"
           aria-live="polite"
         >
-          <Show
-            when={!props.data.occurrencesQuery.isError}
-            fallback={
-              <div class="flex max-w-sm flex-col items-center gap-3">
-                <div class="text-sm font-semibold text-ink">
-                  Calendar unavailable
-                </div>
-                <p class="text-xs text-ink-muted">
-                  We couldn’t load your calendar events. Try again.
-                </p>
-                <Button
-                  variant="accent"
-                  size="sm"
-                  label="Retry loading calendar"
-                  onClick={() => void props.data.occurrencesQuery.refetch()}
-                >
-                  Retry
-                </Button>
-              </div>
-            }
-          >
-            <div class="flex items-center gap-2 text-xs text-ink-muted">
-              <SpinnerIcon class="size-4 animate-spin" />
-              <span>Syncing calendar…</span>
+          <div class="flex max-w-sm flex-col items-center gap-3">
+            <div class="text-sm font-semibold text-ink">
+              Calendar unavailable
             </div>
-          </Show>
-        </div>
-      </Show>
-
-      <Show when={showLoading()}>
-        <div class="absolute top-2 left-2 z-10 flex items-center gap-1.5 rounded-full border border-edge-muted bg-surface px-2.5 py-1 text-xs text-ink-muted shadow-menu">
-          <SpinnerIcon class="size-3 animate-spin" />
-          Loading
-        </div>
-      </Show>
-
-      <Show
-        when={
-          !isRangeUnavailable() &&
-          !showLoading() &&
-          !showBlockingState() &&
-          props.data.isSyncing() &&
-          props.data.events().length > 0
-        }
-      >
-        <div class="absolute right-2 bottom-2 z-10 flex items-center gap-1.5 rounded-full border border-edge-muted bg-surface px-2.5 py-1 text-xs text-ink-muted shadow-menu">
-          <SpinnerIcon class="size-3 animate-spin" />
-          Syncing
+            <p class="text-xs text-ink-muted">
+              We couldn’t load your calendar events. Try again.
+            </p>
+            <Button
+              aria-label="Retry loading calendar"
+              tooltip="Retry loading calendar"
+              variant="primary"
+              size="sm"
+              onClick={() =>
+                fireAndForget(
+                  props.data.occurrencesQuery.refetch(),
+                  'calendar-view'
+                )
+              }
+            >
+              Retry
+            </Button>
+          </div>
         </div>
       </Show>
     </>
@@ -219,11 +204,18 @@ export function Page(props: {
 }) {
   const pager = useCalendarPager();
   const calendarView = useCalendarView();
+  const [loadingDecorationBlocking, setLoadingDecorationBlocking] =
+    createSignal(false);
+  // Keep the settings object independent of route-period changes. Otherwise
+  // reading any grid setting also subscribes FullCalendar to the whole object.
+  const initialView = untrack(() => calendarView.displaySettings.periodView);
   const openEventComposer = useOpenEventComposer();
   const quickCalls = useQuickCallsFlag();
   const calendarsQuery = useVisibleCalendarsQuery();
   const firstWritableCalendar = createMemo(() =>
-    calendarsQuery.data?.find((calendar) => calendar.isWritable)
+    calendarsQuery.isSuccess
+      ? calendarsQuery.data?.find((calendar) => calendar.isWritable)
+      : undefined
   );
   const [range, setRange] = createSignal<CalendarOccurrenceQueryRange>();
   const [selectionColor, setSelectionColor] = createSignal<string>();
@@ -243,6 +235,7 @@ export function Page(props: {
   const data = useCalendarOccurrenceData({
     range,
     sourceById: calendarView.sourceById,
+    sourcesReady: calendarView.sourcesReady,
     isSourceVisible: isRenderedSourceVisible,
     queryOptions: () => ({
       pollWhileSyncing: isActive(),
@@ -254,14 +247,11 @@ export function Page(props: {
     isSourceVisible: isRenderedSourceVisible,
     refetchOnWindowFocus: isActive,
   });
-  const visibleEvents = createMemo(() => [
-    ...data.visibleEvents(),
-    ...teamOoo.visibleEvents(),
-  ]);
-  const eventsById = createMemo(() =>
-    teamOoo.eventsById().size === 0
-      ? data.eventsById()
-      : new Map([...data.eventsById(), ...teamOoo.eventsById()])
+  const visibleEvents = createMemo(() =>
+    mergeCalendarOverlays(data.visibleEvents(), teamOoo.events())
+  );
+  const eventsById = createMemo(
+    () => new Map(visibleEvents().map((event) => [event.id, event]))
   );
   const updateEventTime = useUpdateCalendarEventMutation();
   const handleSelect = (selection: DateSelectArg) => {
@@ -331,6 +321,10 @@ export function Page(props: {
       {
         onError: (error) => {
           change.revert();
+          if (isGuestEditRefused(error)) {
+            toast.failure(GUEST_EDITS_RESTRICTED);
+            return;
+          }
           toast.failure('Failed to update event', {
             subtext: error.message,
           });
@@ -340,40 +334,50 @@ export function Page(props: {
   };
 
   return (
-    <CalendarGrid
-      initialDate={props.initialDate}
-      events={visibleEvents()}
-      eventsById={eventsById()}
-      settings={{
-        initialView: calendarView.displaySettings.periodView,
-        showWeekends: calendarView.displaySettings.showWeekends,
-        weekStartsOn: calendarView.displaySettings.weekStartsOn,
-        timeFormat: calendarView.displaySettings.timeFormat,
-        useNarrowDayHeaders: useNarrowWeekdayHeaders(),
-        useNarrowEventContent: props.useNarrowDayHeaders,
-      }}
-      selection={{
-        color: effectiveSelectionColor(),
-        eventId: isActive() ? calendarView.selectedEvent()?.id : undefined,
-        onDateSelect: isMobile() ? undefined : handleSelect,
-        onEventSelect: (event, element) => {
-          if (isActive()) calendarView.selectEvent(event, element);
-        },
-      }}
-      eventTimeChangePending={updateEventTime.isPending}
-      onDatesSet={handleDatesSet}
-      onEventTimeChange={handleEventTimeChange}
+    <div
+      class="relative size-full min-w-0 min-h-0"
+      aria-busy={
+        data.isLoading() ||
+        (isActive() && pager.isChangingView()) ||
+        loadingDecorationBlocking()
+      }
     >
-      {(grid) => (
-        <CalendarPageHost
-          id={props.id}
-          data={data}
-          teamEvents={teamOoo.visibleEvents}
-          eventsById={eventsById}
-          grid={grid}
-        />
-      )}
-    </CalendarGrid>
+      <CalendarGrid
+        initialDate={props.initialDate}
+        events={visibleEvents()}
+        eventsById={eventsById()}
+        settings={{
+          initialView,
+          showWeekends: calendarView.displaySettings.showWeekends,
+          weekStartsOn: calendarView.displaySettings.weekStartsOn,
+          timeFormat: calendarView.displaySettings.timeFormat,
+          useNarrowDayHeaders: useNarrowWeekdayHeaders(),
+          useNarrowEventContent: props.useNarrowDayHeaders,
+        }}
+        selection={{
+          color: effectiveSelectionColor(),
+          eventId: isActive() ? calendarView.selectedEvent()?.id : undefined,
+          onDateSelect: isMobile() ? undefined : handleSelect,
+          onEventSelect: (event, element) => {
+            if (isActive()) calendarView.selectEvent(event, element);
+          },
+        }}
+        eventTimeChangePending={updateEventTime.isPending}
+        onDatesSet={handleDatesSet}
+        onEventTimeChange={handleEventTimeChange}
+      >
+        {(grid) => (
+          <CalendarPageHost
+            id={props.id}
+            data={data}
+            teamEvents={teamOoo.events}
+            eventsById={eventsById}
+            grid={grid}
+            onLoadingBlockingChange={setLoadingDecorationBlocking}
+          />
+        )}
+      </CalendarGrid>
+    </div>
   );
 }
 
@@ -385,6 +389,7 @@ function CalendarPageHost(props: {
   /** Occurrence events merged with the team out-of-office overlay. */
   eventsById: Accessor<Map<string, CalendarEvent>>;
   grid: CalendarGridHandle;
+  onLoadingBlockingChange: (blocking: boolean) => void;
 }) {
   const pager = useCalendarPager();
   const calendarView = useCalendarView();
@@ -444,10 +449,9 @@ function CalendarPageHost(props: {
         wasActive === false &&
         props.data.occurrencesQuery.isSuccess &&
         props.data.occurrencesQuery.isStale &&
-        !props.data.occurrencesQuery.isFetching &&
-        !props.data.occurrencesQuery.isPlaceholderData
+        !props.data.occurrencesQuery.isFetching
       ) {
-        void props.data.occurrencesQuery.refetch();
+        fireAndForget(props.data.occurrencesQuery.refetch(), 'calendar-view');
       }
     })
   );
@@ -463,12 +467,11 @@ function CalendarPageHost(props: {
       ([active, selectedEventId, eventsById]) => {
         if (!active || !selectedEventId) return;
 
-        // Placeholder data is the previous range, so an absent event proves
-        // nothing yet.
+        // An absent event proves nothing until its occurrences and source
+        // metadata are ready to render.
         calendarView.refreshSelectedEventFromPage(
           eventsById,
-          props.data.occurrencesQuery.isSuccess &&
-            !props.data.occurrencesQuery.isPlaceholderData
+          props.data.occurrencesQuery.isSuccess && !props.data.isLoading()
         );
       }
     )
@@ -477,7 +480,12 @@ function CalendarPageHost(props: {
   return (
     <>
       <CalendarScrollIndicators calendarElement={props.grid.element} />
-      <CalendarPageDataStatus data={props.data} />
+      <CalendarPageDataStatus
+        data={props.data}
+        changingView={isActive() && pager.isChangingView()}
+        grid={props.grid}
+        onLoadingBlockingChange={props.onLoadingBlockingChange}
+      />
     </>
   );
 }

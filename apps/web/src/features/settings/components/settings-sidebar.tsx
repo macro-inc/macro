@@ -1,0 +1,118 @@
+import { SearchBar, ViewSidebar } from '@app/components/view-shell';
+import { t } from '@app/lib/i18n';
+import type { SettingsTab } from '@core/constant/SettingsState';
+import type { SettingsTabGroup } from '@core/constant/settingsTabsConfig';
+import { pressHandlers } from '@ui';
+import { children, For, type JSX, Show } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
+import type { SettingsSearchResult } from '../core/settings-search';
+import { SettingsSearchResults } from './settings-search-results';
+
+/**
+ * Settings' inner navigation, laid out like every other view's sidebar: a
+ * title bar, a search field, the grouped section pills, and an optional
+ * footer action pinned to the bottom.
+ */
+export function SettingsSidebar(props: {
+  groups: SettingsTabGroup[];
+  results: SettingsSearchResult[];
+  selectedResultId?: string;
+  onSelectResult: (result: SettingsSearchResult) => void;
+  searchQuery: string;
+  onSearchQueryChange: (query: string) => void;
+  isItemActive: (tab: SettingsTab) => boolean;
+  onSelect: (tab: SettingsTab) => void;
+  footer?: JSX.Element;
+}) {
+  const footer = children(() => props.footer);
+  let root: HTMLDivElement | undefined;
+  return (
+    <ViewSidebar.Root
+      ref={root}
+      aria-label={t('settingsNav.settingsNavigation')}
+    >
+      <ViewSidebar.Header>
+        <div class="flex min-w-0 items-center gap-1">
+          <ViewSidebar.CloseButton class="shrink-0" />
+          <ViewSidebar.Title>{t('settingsNav.settings')}</ViewSidebar.Title>
+        </div>
+      </ViewSidebar.Header>
+
+      <ViewSidebar.Primary>
+        <SearchBar
+          label={t('settingsNav.searchSettings')}
+          placeholder={t('settingsNav.searchSettings')}
+          autocomplete="off"
+          value={props.searchQuery}
+          onValueChange={props.onSearchQueryChange}
+          size="sm"
+          onEscape={() => props.onSearchQueryChange('')}
+          onKeyDown={(event) => {
+            if (event.key === 'ArrowDown') {
+              const first =
+                root?.querySelector<HTMLButtonElement>('nav button');
+              if (first) {
+                event.preventDefault();
+                first.focus();
+              }
+            }
+          }}
+        />
+      </ViewSidebar.Primary>
+
+      <ViewSidebar.Content>
+        <Show
+          when={!props.searchQuery.trim()}
+          fallback={
+            <SettingsSearchResults
+              results={props.results}
+              selectedId={props.selectedResultId}
+              onSelect={props.onSelectResult}
+            />
+          }
+        >
+          <Show
+            when={props.groups.length > 0}
+            fallback={
+              <div class="py-4 text-center text-sm text-ink-muted">
+                {t('settingsNav.noSettingsFound')}
+              </div>
+            }
+          >
+            <For each={props.groups}>
+              {(group) => (
+                <section class="flex min-w-0 flex-col gap-0.5">
+                  <h2 class="flex h-7 min-w-0 items-center px-(--sidebar-item-inset) text-xs font-medium text-ink/50">
+                    <span class="truncate">{group.label}</span>
+                  </h2>
+                  <ViewSidebar.Nav aria-label={group.label}>
+                    <For each={group.items}>
+                      {(item) => (
+                        <ViewSidebar.Item
+                          active={props.isItemActive(item.tab)}
+                          class="text-ink"
+                          {...pressHandlers(() => props.onSelect(item.tab))}
+                        >
+                          <ViewSidebar.Icon>
+                            <Dynamic component={item.icon} class="size-4" />
+                          </ViewSidebar.Icon>
+                          <span class="truncate">{item.label}</span>
+                        </ViewSidebar.Item>
+                      )}
+                    </For>
+                  </ViewSidebar.Nav>
+                </section>
+              )}
+            </For>
+          </Show>
+        </Show>
+      </ViewSidebar.Content>
+
+      <Show when={footer()}>
+        <ViewSidebar.Footer class="py-(--sidebar-gutter)">
+          {footer()}
+        </ViewSidebar.Footer>
+      </Show>
+    </ViewSidebar.Root>
+  );
+}

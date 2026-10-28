@@ -1,6 +1,6 @@
 import { throwOnErr } from '@core/util/result';
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
-import { useQuery } from '@tanstack/solid-query';
+import { queryOptions, useQuery } from '@tanstack/solid-query';
 import { agentRepositoryKeys } from './keys';
 
 /**
@@ -14,16 +14,15 @@ import { agentRepositoryKeys } from './keys';
 export function useAgentRepositoryBranchesQuery(
   repoUrl: () => string | undefined
 ) {
-  return useQuery(() => {
-    const url = repoUrl();
-    return {
-      queryKey: agentRepositoryKeys.branches(url ?? '').queryKey,
-      queryFn: async () =>
-        throwOnErr(() =>
-          agentHarnessServiceClient.listRepositoryBranches(url ?? '')
-        ),
-      enabled: !!url,
-      staleTime: 2 * 60 * 1000,
-    };
+  return useQuery(() => agentRepositoryBranchesQueryOptions(repoUrl() ?? ''));
+}
+
+function agentRepositoryBranchesQueryOptions(url: string) {
+  return queryOptions({
+    queryKey: agentRepositoryKeys.branches(url).queryKey,
+    queryFn: () =>
+      throwOnErr(() => agentHarnessServiceClient.listRepositoryBranches(url)),
+    enabled: !!url,
+    staleTime: 2 * 60 * 1000,
   });
 }

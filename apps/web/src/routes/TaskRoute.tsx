@@ -1,23 +1,19 @@
 import { isValidTeamTaskSlug } from '@app/features/settings/teamSlug';
 import { useIsAuthenticated } from '@core/auth';
 import { LoadingBlock } from '@core/component/LoadingBlock';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { setPostLoginRedirect } from '@core/util/postLoginRedirect';
 import { thrownResultErrorHasCode } from '@core/util/result';
 import { useTeamTaskQuery } from '@queries/storage/team-task';
-import { Navigate, useNavigate, useParams } from '@solidjs/router';
+import { Navigate, useNavigate } from '@solidjs/router';
 import { Button } from '@ui';
 import { createEffect, createMemo, Match, on, Show, Switch } from 'solid-js';
 
-type TaskRouteParams = {
-  taskSlug: string;
-};
-
 /** Resolves a team-scoped task slug to the existing canonical task route. */
-export function TaskRoute() {
-  const params = useParams<TaskRouteParams>();
+export function TaskRoute(props: { taskSlug: string }) {
   const navigate = useNavigate();
   const isAuthenticated = useIsAuthenticated();
-  const taskSlug = () => params.taskSlug;
+  const taskSlug = () => props.taskSlug;
   const isValidSlug = () => isValidTeamTaskSlug(taskSlug());
   const slugToResolve = createMemo(() =>
     isAuthenticated() === true && isValidSlug() ? taskSlug() : undefined
@@ -54,13 +50,13 @@ export function TaskRoute() {
       <Match when={taskQuery.isError && !taskQuery.isFetching}>
         <TaskRouteError
           notFound={taskNotFound()}
-          onRetry={() => void taskQuery.refetch()}
+          onRetry={() => fireAndForget(taskQuery.refetch(), 'task-route')}
         />
       </Match>
       <Match when={taskQuery.isSuccess}>
         <TaskRouteError
           notFound={false}
-          onRetry={() => void taskQuery.refetch()}
+          onRetry={() => fireAndForget(taskQuery.refetch(), 'task-route')}
         />
       </Match>
     </Switch>
@@ -83,7 +79,7 @@ function TaskRouteError(props: { notFound: boolean; onRetry?: () => void }) {
         </p>
         <div class="flex items-center gap-2">
           <Button
-            variant="outline"
+            variant="secondary"
             size="sm"
             onClick={() => navigate('/tasks')}
           >
@@ -91,7 +87,7 @@ function TaskRouteError(props: { notFound: boolean; onRetry?: () => void }) {
           </Button>
           <Show when={!props.notFound && props.onRetry}>
             {(onRetry) => (
-              <Button variant="outline" size="sm" onClick={onRetry()}>
+              <Button variant="secondary" size="sm" onClick={onRetry()}>
                 Try again
               </Button>
             )}

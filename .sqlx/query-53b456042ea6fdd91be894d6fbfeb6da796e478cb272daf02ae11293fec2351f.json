@@ -1,0 +1,27 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT w.id FROM calendar_outlook_work w JOIN calendar_accounts a ON a.id=w.account_id\n        WHERE w.id=$1 AND w.lease_id=$2 AND w.lease_until>now() AND w.sync_generation=$3 AND w.grant_generation=$4 AND a.email_link_id=$5\n        AND a.id=$6 AND a.sync_status NOT IN ('disabled','reauth_required') FOR UPDATE OF w",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8",
+        "Int8",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "53b456042ea6fdd91be894d6fbfeb6da796e478cb272daf02ae11293fec2351f"
+}

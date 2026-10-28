@@ -97,13 +97,6 @@ async fn initiatives_access_cursor_and_hydration(pool: PgPool) -> anyhow::Result
             Uuid::from_u128(0xad000000000000000000000000000001)
         ]
     );
-    let SoupItem::Initiative(item) = &first[0] else {
-        panic!("expected initiative")
-    };
-    assert_eq!(
-        item.description_document_id,
-        Some(Uuid::from_u128(0xaf000000000000000000000000000004))
-    );
     let ids = (1..=6)
         .map(|id| {
             EntityType::Initiative.with_entity_string(
@@ -123,6 +116,81 @@ async fn initiatives_access_cursor_and_hydration(pool: PgPool) -> anyhow::Result
         hydrated.len(),
         4,
         "by-ID reads preserve the same access rules"
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("mixed_items_expanded")
+    ),
+    fixtures("test/initiatives.sql"),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn initiative_listing_and_candidate_gate_share_access_rules(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    // Visible: 1 direct share, 2 active channel, 3 team grant, 4 owner's team
+    // link, 7 owner, 8 inherited from a folder. Hidden: 5 left channel, 6 no grant.
+    let listed = expanded_dynamic_cursor_soup(
+        &pool,
+        ExpandedDynamicCursorArgs {
+            user_id: user(),
+            limit: 20,
+            cursor: Query::Sort(SimpleSortMethod::UpdatedAt, filters()),
+            exclude_frecency: false,
+        },
+    )
+    .await?;
+    assert_eq!(
+        listed.iter().map(Identify::id).collect::<Vec<_>>(),
+        vec![
+            Uuid::from_u128(0xad000000000000000000000000000004),
+            Uuid::from_u128(0xad000000000000000000000000000003),
+            Uuid::from_u128(0xad000000000000000000000000000002),
+            Uuid::from_u128(0xad000000000000000000000000000001),
+            Uuid::from_u128(0xad000000000000000000000000000008),
+            Uuid::from_u128(0xad000000000000000000000000000007),
+        ]
+    );
+
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "checks the gate SQL that initiative_gate generates"
+    )]
+    let gated: Vec<Uuid> = sqlx::query_scalar(&format!(
+        r#"WITH user_source_ids AS (
+            SELECT cp.channel_id::text AS source_id FROM comms_channel_participants cp
+                WHERE cp.user_id = $1 AND cp.left_at IS NULL
+            UNION ALL
+            SELECT t.team_id::text FROM team_user t WHERE t.user_id = $1
+            UNION ALL
+            SELECT $1
+        )
+        SELECT candidate.id FROM unnest($2::uuid[]) candidate(id)
+        WHERE {}
+        ORDER BY candidate.id"#,
+        crate::outbound::pg_soup_repo::candidate_gates::initiative_gate("candidate.id::text", None)
+    ))
+    .bind(user().as_ref())
+    .bind(
+        (1..=8)
+            .map(|n| Uuid::from_u128(0xad000000000000000000000000000000 + n))
+            .collect::<Vec<_>>(),
+    )
+    .fetch_all(&pool)
+    .await?;
+    assert_eq!(
+        gated,
+        vec![
+            Uuid::from_u128(0xad000000000000000000000000000001),
+            Uuid::from_u128(0xad000000000000000000000000000002),
+            Uuid::from_u128(0xad000000000000000000000000000003),
+            Uuid::from_u128(0xad000000000000000000000000000004),
+            Uuid::from_u128(0xad000000000000000000000000000007),
+            Uuid::from_u128(0xad000000000000000000000000000008),
+        ]
     );
     Ok(())
 }
@@ -155,8 +223,8 @@ async fn initiatives_grouping_and_property_enrichment(pool: PgPool) -> anyhow::R
     )
     .await?
     .collect::<Vec<_>>();
-    assert_eq!(rows.len(), 4);
-    assert_eq!(rows[0].total_group_count, 4);
+    assert_eq!(rows.len(), 6);
+    assert_eq!(rows[0].total_group_count, 6);
     let enriched = crate::outbound::pg_soup_repo::populate_properties(
         &pool,
         user(),

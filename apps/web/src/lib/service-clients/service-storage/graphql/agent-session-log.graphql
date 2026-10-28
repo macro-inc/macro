@@ -1,0 +1,26 @@
+# The raw protocol log of one agent session, as the fold reads it. Entries
+# carry ids, so the normalized cache keeps each row once and serves the whole
+# list from disk on the next open before the network answers.
+query AgentSessionLog($sessionId: ID!) {
+  user {
+    id
+    agentSession(sessionId: $sessionId) {
+      id
+      log {
+        bot {
+          id
+          name
+          handle
+          avatarUrl
+        }
+        entries {
+          id
+          createdAt
+          userId
+          direction
+          content
+        }
+      }
+    }
+  }
+}

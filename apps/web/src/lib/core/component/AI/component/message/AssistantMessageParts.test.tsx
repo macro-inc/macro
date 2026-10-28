@@ -100,7 +100,12 @@ vi.mock('@core/component/AI/component/tool/handler', async () => {
       tool_id: string;
       isComplete: boolean;
       name: string;
-      renderContext: { renderContext: { grouped?: boolean } };
+      renderContext: {
+        renderContext: {
+          grouped?: boolean;
+          followedBy: (name: string) => boolean;
+        };
+      };
     }) => {
       solid.onMount(() => {
         lifecycle.toolMounts.set(
@@ -118,6 +123,9 @@ vi.mock('@core/component/AI/component/tool/handler', async () => {
         <div
           data-complete={String(props.isComplete)}
           data-grouped={String(props.renderContext.renderContext.grouped)}
+          data-followed-by-save={String(
+            props.renderContext.renderContext.followedBy('SaveDatabaseQuery')
+          )}
           data-name={props.name}
           data-testid="tool"
         >
@@ -180,6 +188,76 @@ function StreamedAssistantParts(props: { data: () => ChatStream[] }) {
 }
 
 describe('AssistantMessageParts streaming identity', () => {
+  it.each(['QueryDatabase', 'SaveDatabaseView'])(
+    'keeps %s interactive results outside collapsed activity',
+    (name) => {
+      const parts: AssistantMessagePart[] = [
+        { type: 'thinking', thinking: 'Checking the database' },
+        { type: 'toolCall', id: 'database-tool', name, json: {} },
+        { type: 'toolCallResponseJson', id: 'database-tool', name, json: {} },
+        { type: 'text', text: 'Here is the result.' },
+      ];
+      const rendered = render(() => (
+        <AssistantMessageParts
+          parts={parts}
+          message={{
+            attachments: [],
+            content: parts,
+            id: 'message-db',
+            role: 'assistant',
+          }}
+          isStreaming={false}
+        />
+      ));
+      expect(rendered.getByTestId('tool').dataset.grouped).toBe('false');
+      expect(rendered.getByTestId('tool').textContent).toBe('database-tool');
+      rendered.unmount();
+    }
+  );
+  it('tells each tool whether a later part of the turn saves the query', () => {
+    const parts: AssistantMessagePart[] = [
+      { type: 'toolCall', id: 'query-tool', name: 'QueryDatabase', json: {} },
+      {
+        type: 'toolCallResponseJson',
+        id: 'query-tool',
+        name: 'QueryDatabase',
+        json: {},
+      },
+      {
+        type: 'toolCall',
+        id: 'save-tool',
+        name: 'SaveDatabaseQuery',
+        json: {},
+      },
+      {
+        type: 'toolCallResponseJson',
+        id: 'save-tool',
+        name: 'SaveDatabaseQuery',
+        json: {},
+      },
+      { type: 'text', text: 'Saved the question.' },
+    ];
+    const rendered = render(() => (
+      <AssistantMessageParts
+        parts={parts}
+        message={{
+          attachments: [],
+          content: parts,
+          id: 'message-save',
+          role: 'assistant',
+        }}
+        isStreaming={false}
+      />
+    ));
+    const followedBySave = rendered
+      .getAllByTestId('tool')
+      .map((tool) => [tool.textContent, tool.dataset.followedBySave]);
+    expect(followedBySave).toEqual([
+      ['query-tool', 'true'],
+      ['save-tool', 'false'],
+    ]);
+    rendered.unmount();
+  });
   beforeEach(() => {
     lifecycle.markdownCleanups = 0;
     lifecycle.markdownMounts = 0;
@@ -566,4 +644,40 @@ describe('AssistantMessageParts streaming identity', () => {
     );
     disposeStream();
   });
+});
+
+describe('standalone tool presentation', () => {
+  it.each(['GenerateImage', 'DispatchCodingAgent'])(
+    'keeps %s outside the activity group with adjacent tools',
+    (name) => {
+      const parts: AssistantMessagePart[] = [
+        { type: 'toolCall', id: 'before', name: 'ReadContent', json: {} },
+        {
+          type: 'toolCall',
+          id: 'standalone',
+          name,
+          json: { prompt: 'A frog' },
+        },
+        { type: 'toolCall', id: 'after', name: 'ReadContent', json: {} },
+      ];
+      const view = render(() => (
+        <AssistantMessageParts
+          parts={parts}
+          message={{
+            attachments: [],
+            content: parts,
+            id: 'message-1',
+            role: 'assistant',
+          }}
+          isStreaming={false}
+        />
+      ));
+      const standalone = view
+        .getAllByTestId('tool')
+        .find((tool) => tool.dataset.name === name);
+      expect(standalone?.dataset.grouped).toBe('false');
+      expect(standalone?.textContent).toBe('standalone');
+      expect(view.queryByTestId('activity-toggle')).toBeNull();
+    }
+  );
 });

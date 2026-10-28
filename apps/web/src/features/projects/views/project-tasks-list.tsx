@@ -1,36 +1,34 @@
-import { SearchBar } from '@app/components/view-shell';
 import { TasksControls } from '@app/features/tasks-view/components/TasksControls';
-import { TaskList } from '@app/features/tasks-view/components/task-list/TaskList';
+import { TasksContent } from '@app/features/tasks-view/tasks-content';
 import {
   TasksViewProvider,
   type TasksViewProviderProps,
   useTasksView,
 } from '@app/features/tasks-view/tasks-view-context';
-import { useIsMutating } from '@tanstack/solid-query';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { Button } from '@ui';
-import { type ParentProps, Show } from 'solid-js';
+import { type JSX, type ParentProps, Show } from 'solid-js';
+import { ProjectTaskSearch } from '../components/project-task-search';
 import { useProjectsContext } from '../context/projects-context';
-import { projectKeys } from '../queries/keys';
 import { createProjectTasksDataSource } from '../queries/project-tasks';
 
 export type ProjectTasksProviderProps = ParentProps<{
   projectId: string;
   onOpenTask: NonNullable<TasksViewProviderProps['onOpenTask']>;
+  onCreateTask?: TasksViewProviderProps['onCreateTask'];
 }>;
 
 export type ProjectTasksListProps = Omit<
   ProjectTasksProviderProps,
   'children'
 > & {
-  onCreateTask?: () => void;
+  projectName: string;
+  addTasksAction?: JSX.Element;
 };
 
-/** Embeds the actual Tasks list, including its controllers, menus and row editors. */
+/** Embeds Tasks layouts with project-scoped data, controllers, menus and editors. */
 export function ProjectTasksProvider(props: ProjectTasksProviderProps) {
   const context = useProjectsContext();
-  const creating = useIsMutating(() => ({
-    mutationKey: projectKeys.createTask._def,
-  }));
   return (
     <Show when={props.projectId} keyed>
       {(projectId) => (
@@ -38,13 +36,17 @@ export function ProjectTasksProvider(props: ProjectTasksProviderProps) {
           initialState={{ tab: 'team-tasks', groupBy: 'status', facets: {} }}
           restoreEntryState
           scopeKey={`initiative:${projectId}:tasks`}
+          searchNamespace="projectTasks"
           onOpenTask={props.onOpenTask}
+          onCreateTask={props.onCreateTask}
           onCloseTask={() => {}}
+          hideTaskProject
           sourceFactory={(state, options) =>
             createProjectTasksDataSource(
+              projectId,
               context.createProjectSource(() => projectId),
               state,
-              { ...options, networkPaused: () => creating() > 0 }
+              options
             )
           }
         >
@@ -60,6 +62,7 @@ export function ProjectTasksList(props: ProjectTasksListProps) {
     <ProjectTasksProvider
       projectId={props.projectId}
       onOpenTask={props.onOpenTask}
+      onCreateTask={props.onCreateTask}
     >
       <ProjectTasksListBody {...props} />
     </ProjectTasksProvider>
@@ -67,31 +70,42 @@ export function ProjectTasksList(props: ProjectTasksListProps) {
 }
 
 function ProjectTasksListBody(props: ProjectTasksListProps) {
-  const { state, setState } = useTasksView();
-  let listElement: HTMLDivElement | undefined;
+  const { state, setState, source } = useTasksView();
   return (
     <div class="flex size-full min-h-0 flex-col">
-      <div class="flex min-w-0 flex-wrap items-center gap-3 p-3">
-        <SearchBar
-          label="Search project tasks"
-          placeholder="Search tasks"
-          class="min-w-0 max-w-md flex-1"
+      <div class="flex h-12 min-w-0 shrink-0 items-center gap-3 overflow-x-auto scrollbar-hidden px-4 py-2">
+        <ProjectTaskSearch
+          projectName={props.projectName}
           value={state.search}
           onValueChange={(search) => setState('search', search)}
-          onEscape={() => listElement?.focus()}
         />
-        <div class="ml-auto flex shrink-0 items-center gap-3">
+        <div class="ml-auto flex shrink-0 items-center gap-2">
           <TasksControls />
+          {props.addTasksAction}
           <Show when={props.onCreateTask}>
-            <Button onClick={props.onCreateTask}>New task</Button>
+            <Button variant="secondary" onClick={() => props.onCreateTask?.()}>
+              <PlusIcon class="size-4" />
+              New task
+            </Button>
           </Show>
         </div>
       </div>
-      <TaskList
-        ref={(element) => {
-          listElement = element;
-        }}
-      />
+      <Show when={source.paginationError?.()}>
+        <div
+          role="alert"
+          class="flex items-center gap-3 px-3 pb-2 text-sm text-ink-muted"
+        >
+          Some tasks could not be loaded.
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => source.retryPagination?.()}
+          >
+            Try again
+          </Button>
+        </div>
+      </Show>
+      <TasksContent />
     </div>
   );
 }

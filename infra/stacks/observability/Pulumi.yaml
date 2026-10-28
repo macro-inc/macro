@@ -1,0 +1,3 @@
+name: observability
+runtime: nodejs
+description: Single-host Grafana pilot alongside Datadog

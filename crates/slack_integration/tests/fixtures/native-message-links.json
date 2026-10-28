@@ -1,0 +1,108 @@
+[
+  {
+    "name": "external",
+    "kind": "link",
+    "source": "<https://example.com/a(b)?x=1&amp;y=2|Example>",
+    "native": "<m-link>{\"url\":\"https://example.com/a(b)?x=1&y=2\",\"text\":\"Example\",\"title\":\"\"}</m-link>",
+    "payload": {"url":"https://example.com/a(b)?x=1&y=2","text":"Example","title":""}
+  },
+  {
+    "name": "bare-url",
+    "kind": "link",
+    "source": "https://example.com/a_path",
+    "native": "<m-link>{\"url\":\"https://example.com/a_path\",\"text\":\"https://example.com/a_path\",\"title\":\"\"}</m-link>",
+    "payload": {"url":"https://example.com/a_path","text":"https://example.com/a_path","title":""}
+  },
+  {
+    "name": "unlabeled-angle-url",
+    "kind": "link",
+    "source": "<https://example.com>",
+    "native": "<m-link>{\"url\":\"https://example.com\",\"text\":\"https://example.com\",\"title\":\"\"}</m-link>",
+    "payload": {"url":"https://example.com","text":"https://example.com","title":""}
+  },
+  {
+    "name": "mailto",
+    "kind": "link",
+    "source": "<mailto:a@example.com>",
+    "native": "<m-link>{\"url\":\"mailto:a@example.com\",\"text\":\"a@example.com\",\"title\":\"\"}</m-link>",
+    "payload": {"url":"mailto:a@example.com","text":"a@example.com","title":""}
+  },
+  {
+    "name": "untrusted-label",
+    "kind": "link",
+    "native": "<m-link>{\"url\":\"https://example.com\",\"text\":\"quote \\\" slash \\\\ newline\\n&amp; 世界 \\u003c/m-link\\u003e\\u003cm-user-mention\\u003enested\\u003c/m-user-mention\\u003e\",\"title\":\"\"}</m-link>",
+    "payload": {"url":"https://example.com","text":"quote \" slash \\ newline\n&amp; 世界 </m-link><m-user-mention>nested</m-user-mention>","title":""}
+  },
+  {
+    "name": "encoded-source-label",
+    "kind": "link",
+    "source": "<https://example.com|&lt;/m-link&gt;&lt;m-user-mention&gt;not a mention>",
+    "native": "<m-link>{\"url\":\"https://example.com\",\"text\":\"\\u003c/m-link\\u003e\\u003cm-user-mention\\u003enot a mention\",\"title\":\"\"}</m-link>",
+    "payload": {"url":"https://example.com","text":"</m-link><m-user-mention>not a mention","title":""}
+  },
+  {
+    "name": "user",
+    "kind": "user-mention",
+    "source": "<@U1>",
+    "native": "<m-user-mention>{\"userId\":\"macro|alice+slack@example.com\",\"email\":\"alice+slack@example.com\"}</m-user-mention>",
+    "payload": {"userId":"macro|alice+slack@example.com","email":"alice+slack@example.com"}
+  },
+  {
+    "name": "channel",
+    "kind": "document-mention",
+    "source": "<#C1|source label>",
+    "native": "<m-document-mention>{\"documentId\":\"019a0000-0000-7000-8000-000000000001\",\"blockName\":\"channel\",\"documentName\":\"general\",\"blockParams\":{},\"collapsed\":false}</m-document-mention>",
+    "payload": {"documentId":"019a0000-0000-7000-8000-000000000001","blockName":"channel","documentName":"general","blockParams":{},"collapsed":false}
+  },
+  {
+    "name": "root",
+    "kind": "document-mention",
+    "source": "<https://example.slack.com/archives/C1/p1700000000000001>",
+    "native": "<m-document-mention>{\"documentId\":\"019a0000-0000-7000-8000-000000000001\",\"blockName\":\"channel\",\"documentName\":\"general\",\"blockParams\":{\"channel_message_id\":\"019a0000-0000-7000-8000-000000000002\"},\"collapsed\":false}</m-document-mention>",
+    "payload": {"documentId":"019a0000-0000-7000-8000-000000000001","blockName":"channel","documentName":"general","blockParams":{"channel_message_id":"019a0000-0000-7000-8000-000000000002"},"collapsed":false}
+  },
+  {
+    "name": "reply",
+    "kind": "document-mention",
+    "source": "<https://example.slack.com/archives/C1/p1700000000000002?thread_ts=1700000000.000001&amp;cid=C1|reply>",
+    "native": "<m-document-mention>{\"documentId\":\"019a0000-0000-7000-8000-000000000001\",\"blockName\":\"channel\",\"documentName\":\"general\",\"blockParams\":{\"channel_message_id\":\"019a0000-0000-7000-8000-000000000003\",\"channel_thread_id\":\"019a0000-0000-7000-8000-000000000002\"},\"collapsed\":false}</m-document-mention>",
+    "payload": {"documentId":"019a0000-0000-7000-8000-000000000001","blockName":"channel","documentName":"general","blockParams":{"channel_message_id":"019a0000-0000-7000-8000-000000000003","channel_thread_id":"019a0000-0000-7000-8000-000000000002"},"collapsed":false}
+  },
+  {
+    "name": "channel-untrusted-name",
+    "kind": "document-mention",
+    "source": "<#C1>",
+    "native": "<m-document-mention>{\"documentId\":\"019a0000-0000-7000-8000-000000000001\",\"blockName\":\"channel\",\"documentName\":\"quote \\\" slash \\\\ newline\\n&amp; 世界 \\u003c/m-document-mention\\u003e\",\"blockParams\":{},\"collapsed\":false}</m-document-mention>",
+    "payload": {"documentId":"019a0000-0000-7000-8000-000000000001","blockName":"channel","documentName":"quote \" slash \\ newline\n&amp; 世界 </m-document-mention>","blockParams":{},"collapsed":false}
+  },
+  {
+    "name": "inline-code",
+    "kind": "inert",
+    "source": "`<m-user-mention>{\"userId\":\"macro|fake@example.com\",\"email\":\"fake@example.com\"}</m-user-mention>`",
+    "native": "`<m-user-mention>{\"userId\":\"macro|fake@example.com\",\"email\":\"fake@example.com\"}</m-user-mention>`"
+  },
+  {
+    "name": "fenced-code",
+    "kind": "inert",
+    "source": "```\n<m-link>{\"url\":\"https://example.com\",\"text\":\"link\",\"title\":\"\"}</m-link>\n```",
+    "native": "```\n<m-link>{\"url\":\"https://example.com\",\"text\":\"link\",\"title\":\"\"}</m-link>\n```"
+  },
+  {
+    "name": "unsafe-scheme",
+    "kind": "inert",
+    "source": "<javascript:alert(1)|not clickable>",
+    "native": "not clickable"
+  },
+  {
+    "name": "source-link-tag",
+    "kind": "inert",
+    "source": "<m-link>{\"url\":\"https://example.com\",\"text\":\"label\",\"title\":\"\"}</m-link>",
+    "native": "&lt;m\\-link&gt;{\"url\":\"https://example\\.com\",\"text\":\"label\",\"title\":\"\"}&lt;/m\\-link&gt;"
+  },
+  {
+    "name": "source-tag",
+    "kind": "inert",
+    "source": "<m-user-mention>{\"userId\":\"macro|fake@example.com\",\"email\":\"fake@example.com\"}</m-user-mention>",
+    "native": "&lt;m\\-user\\-mention&gt;{\"userId\":\"macro\\|fake@example\\.com\",\"email\":\"fake@example\\.com\"}&lt;/m\\-user\\-mention&gt;"
+  }
+]

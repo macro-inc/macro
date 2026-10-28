@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE comms_messages SET content = $5\n               WHERE id = $1\n                 AND parent_entity_type = 'channel' AND parent_entity_id = $2::text\n                 AND content = $3 AND content <> $5 AND import_metadata @> $4\n                 AND deleted_at IS NULL AND edited_at IS NULL AND updated_at = created_at\n                 AND NOT EXISTS (SELECT 1 FROM comms_message_threads t\n                     WHERE t.root_id = coalesce(comms_messages.thread_id, comms_messages.id)\n                       AND t.deleted_at IS NOT NULL)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Jsonb",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8d93f45713ffdb3fe4adcb601729b958ee72c830caab6de09e36758eb2a0534b"
+}

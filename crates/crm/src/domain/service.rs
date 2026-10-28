@@ -4,25 +4,44 @@
 mod test;
 
 use crate::domain::{
-    auth::{CrmCommentReceipt, CrmCompanyReceipt, CrmContactReceipt, CrmTeamReceipt},
-    comment::{CrmComment, CrmCommentEntityType, CrmCommentThread, DeleteCrmCommentResult},
+    auth::{CrmCompanyReceipt, CrmContactReceipt, CrmTeamReceipt},
     companies_repo::{CompaniesRepository, CrmCompanyListSort, CrmCompanySoupCursor},
-    company_metadata_resolver::CompanyMetadataResolver,
+    company_metadata_resolver::{CompanyMetadataResolver, DomainResolution},
     generic_email_domains::is_generic_email_domain,
     model::{
         CrmCompanyForSoup, CrmCompanyWithContacts, CrmContact, CrmError, CrmScopePrecheck,
         CrmTeamSettings, CrmTeamSettingsPatch, DepopulateContactOutcome,
     },
 };
-use chrono::{DateTime, Utc};
-use entity_access::domain::models::{
-    AnyEntityPermission, EditAccessLevel, MemberTeamRole, ViewAccessLevel,
-};
-use serde_json::Value;
+use chrono::{DateTime, TimeDelta, Utc};
+use entity_access::domain::models::{EditAccessLevel, MemberTeamRole, ViewAccessLevel};
 
 /// The CrmService exposes operations over CRM records (companies, their
 /// domains and contacts).
 pub trait CrmService: Clone + Send + Sync + 'static {
+    /// List the viewer's accessible contacts, collapsed by normalized email.
+    /// Team-scoped bot receipts remain restricted to their authorized team.
+    fn list_contacts_for_soup(
+        &self,
+        user_id: &str,
+        access: Option<&CrmTeamReceipt<MemberTeamRole>>,
+        query: super::contact_listing::CrmContactListQuery,
+    ) -> impl Future<Output = Result<Vec<super::contact_listing::CrmContactForSoup>, CrmError>> + Send;
+
+    /// Authorize `record` for the viewer and resolve the records whose
+    /// properties and references make an item associated with it: a company
+    /// with every contact the viewer may see, or a single contact. Scoped
+    /// like [`Self::list_contacts_for_soup`]; a record the viewer cannot see
+    /// is reported as not found. Activity resolves all visible records across
+    /// CRM-enabled teams without hidden rows or contact-email deduplication;
+    /// team-scoped bot receipts limit it to their verified team.
+    fn resolve_association(
+        &self,
+        user_id: &str,
+        access: Option<&CrmTeamReceipt<MemberTeamRole>>,
+        record: super::association::CrmAssociation,
+    ) -> impl Future<Output = Result<super::association::CrmRecordAssociation, CrmError>> + Send;
+
     /// Idempotently records that `email` was seen from the mailbox
     /// identified by `link_id`, for the team `team_id`. Upserts
     /// `crm_companies` (+ `crm_domains`), `crm_contacts`, and
@@ -48,10 +67,12 @@ pub trait CrmService: Clone + Send + Sync + 'static {
     /// `crm_domain_directory` has an entry for the email's domain — if
     /// not, it invokes the
     /// [`crate::domain::company_metadata_resolver::CompanyMetadataResolver`]
-    /// and inserts the result (which may be all-NULL on resolver
-    /// failure — that's the negative cache). The directory write is its
-    /// own transaction so the populate tx never holds locks across an
-    /// HTTP fetch.
+    /// and inserts the result (which may be all-NULL when the provider
+    /// knows nothing about the domain — that's the negative cache), or a
+    /// pending entry for [`CrmServiceImpl::enrich_pending_domains`] when
+    /// the resolver is unavailable. The directory write is its own
+    /// transaction so the populate tx never holds locks across an HTTP
+    /// fetch.
     ///
     /// `first_at` / `last_at` are the contact's known activity range
     /// for this populate. Per-message paths pass the message's
@@ -168,7 +189,9 @@ pub trait CrmService: Clone + Send + Sync + 'static {
     /// Like populate, ensures `crm_domain_directory` has an entry for
     /// the domain (resolving via the
     /// [`crate::domain::company_metadata_resolver::CompanyMetadataResolver`]
-    /// on a miss) so the company still picks up icon/description
+    /// on a miss, or leaving it pending for
+    /// [`CrmServiceImpl::enrich_pending_domains`] when the binary has no
+    /// resolver) so the company still picks up icon/description
     /// enrichment; the user's `name` is stored on `crm_companies.custom_name`
     /// (never in the shared directory — it's global across teams) and
     /// overrides the directory name on every read path.
@@ -324,6 +347,17 @@ pub trait CrmService: Clone + Send + Sync + 'static {
         access: &CrmContactReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<Option<CrmContact>, CrmError>> + Send;
 
+    /// Search the caller's team's contacts by email or name, most recently
+    /// interacted first. The caller's role decides whether hidden contacts
+    /// and hidden parent companies are visible. `limit` is clamped to
+    /// [`MAX_CONTACT_SEARCH_LIMIT`].
+    fn search_contacts(
+        &self,
+        access: &CrmTeamReceipt<MemberTeamRole>,
+        query: &str,
+        limit: u16,
+    ) -> impl Future<Output = Result<Vec<CrmContact>, CrmError>> + Send;
+
     /// Fetch the CRM contact matching `email` in the caller's team. The team
     /// receipt keeps the lookup scoped to an authorized team; the caller's
     /// role decides whether hidden contacts and hidden parent companies are
@@ -344,72 +378,6 @@ pub trait CrmService: Clone + Send + Sync + 'static {
         &self,
         access: &CrmCompanyReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<Option<CrmCompanyWithContacts>, CrmError>> + Send;
-
-    /// Create a comment on the CRM entity addressed by `access`,
-    /// optionally as a reply to an existing thread. The owning entity
-    /// (company or contact) and `include_hidden` are derived from the
-    /// receipt; the entity-ownership scoping is enforced in the
-    /// repository. See [`CompaniesRepository::create_crm_comment`].
-    #[allow(clippy::too_many_arguments)]
-    fn create_crm_comment(
-        &self,
-        access: &CrmCommentReceipt<AnyEntityPermission>,
-        owner: &str,
-        thread_id: Option<uuid::Uuid>,
-        thread_metadata: Option<Value>,
-        text: &str,
-        metadata: Option<Value>,
-    ) -> impl Future<Output = Result<CrmCommentThread, CrmError>> + Send;
-
-    /// List the comment threads on the CRM entity addressed by `access`.
-    /// The receipt's role decides whether a hidden parent entity is
-    /// reachable (admin/owner) or 404s (member). See
-    /// [`CompaniesRepository::get_crm_comment_threads`].
-    fn get_crm_comment_threads(
-        &self,
-        access: &CrmCommentReceipt<AnyEntityPermission>,
-    ) -> impl Future<Output = Result<Vec<CrmCommentThread>, CrmError>> + Send;
-
-    /// Edit the text of `comment_id`, scoped to the team in `access`
-    /// (the receipt for the comment's owning entity). A member's receipt
-    /// treats comments on hidden entities as not found. See
-    /// [`CompaniesRepository::edit_crm_comment`].
-    fn edit_crm_comment(
-        &self,
-        access: &CrmCommentReceipt<ViewAccessLevel>,
-        comment_id: &uuid::Uuid,
-        text: &str,
-    ) -> impl Future<Output = Result<CrmComment, CrmError>> + Send;
-
-    /// Soft-delete `comment_id`, scoped to the team in `access`. A
-    /// member's receipt treats comments on hidden entities as not found.
-    /// See [`CompaniesRepository::delete_crm_comment`].
-    fn delete_crm_comment(
-        &self,
-        access: &CrmCommentReceipt<ViewAccessLevel>,
-        comment_id: &uuid::Uuid,
-    ) -> impl Future<Output = Result<DeleteCrmCommentResult, CrmError>> + Send;
-
-    /// Resolve a comment to its owning CRM entity. `None` when the
-    /// comment doesn't exist or is soft-deleted. Takes a raw
-    /// `comment_id` (not a receipt) because it is the minting primitive
-    /// the comment access extractor calls *before* a receipt exists, to
-    /// dispatch the access check to the right entity type. See
-    /// [`CompaniesRepository::get_comment_entity`].
-    fn get_comment_entity(
-        &self,
-        comment_id: &uuid::Uuid,
-    ) -> impl Future<Output = Result<Option<(CrmCommentEntityType, uuid::Uuid)>, CrmError>> + Send;
-
-    /// The discussion root a legacy thread id maps to on the record addressed
-    /// by `access`. See [`CompaniesRepository::legacy_thread_root`].
-    fn legacy_thread_root(
-        &self,
-        _access: &CrmCommentReceipt<AnyEntityPermission>,
-        _thread_id: &uuid::Uuid,
-    ) -> impl Future<Output = Result<Option<uuid::Uuid>, CrmError>> + Send {
-        async { Ok(None) }
-    }
 
     /// Read the team's CRM configuration. Any team member may read;
     /// a team without a settings row gets the defaults. See
@@ -443,6 +411,41 @@ const MAX_DOMAIN_CHARS: usize = 253;
 
 /// Maximum accepted length for a contact email (RFC 3696 errata limit).
 const MAX_EMAIL_CHARS: usize = 320;
+
+/// Most contacts one [`CrmService::search_contacts`] call returns. Large
+/// enough for the Quick Access feed of a team's recent contacts.
+pub const MAX_CONTACT_SEARCH_LIMIT: u16 = 500;
+
+/// The records a viewer-scoped CRM read covers: every enabled team the
+/// viewer belongs to, or the single team of a verified team-scoped bot
+/// receipt. A receipt for another viewer is rejected.
+fn viewer_scope<'a>(
+    user_id: &'a str,
+    access: Option<&CrmTeamReceipt<MemberTeamRole>>,
+) -> Result<super::contact_listing::CrmContactListScope<'a>, CrmError> {
+    use super::contact_listing::CrmContactListScope;
+    use entity_access::domain::models::{BotReceiptScope, EntityAccessAuth};
+    match access.map(|access| (access, access.receipt().auth())) {
+        Some((access, EntityAccessAuth::Bot(bot))) => match bot.scope() {
+            BotReceiptScope::Team { team_id } if *team_id == access.team_id() => {
+                Ok(CrmContactListScope::Team {
+                    team_id: *team_id,
+                    include_hidden: access.include_hidden(),
+                })
+            }
+            BotReceiptScope::User { acting_user } if acting_user.as_ref() == user_id => {
+                Ok(CrmContactListScope::Viewer(user_id))
+            }
+            _ => Err(CrmError::InvalidRequest(
+                "contact listing scope mismatch".into(),
+            )),
+        },
+        Some((_, EntityAccessAuth::Authenticated(user))) if user.as_ref() != user_id => Err(
+            CrmError::InvalidRequest("contact listing viewer mismatch".into()),
+        ),
+        _ => Ok(CrmContactListScope::Viewer(user_id)),
+    }
+}
 
 /// Validates a user-supplied display name: trims whitespace; must be
 /// non-blank and within [`MAX_DISPLAY_NAME_CHARS`].
@@ -519,9 +522,10 @@ where
 {
     /// The underlying companies repository
     companies_repository: CR,
-    /// Resolver consulted only when `crm_domain_directory` has no entry
-    /// for a given domain. The resolver itself is best-effort — its
-    /// failures collapse to a negative-cache row in the directory.
+    /// Resolver consulted when `crm_domain_directory` has no entry for a
+    /// given domain, and for pending entries in
+    /// [`CrmServiceImpl::enrich_pending_domains`]. The resolver itself is
+    /// best-effort — when it is unavailable the entry stays pending.
     metadata_resolver: R,
 }
 
@@ -550,7 +554,100 @@ where
             metadata_resolver,
         }
     }
+
+    /// Resolves one batch of pending `crm_domain_directory` entries
+    /// whose domain some team still tracks, and returns how many were
+    /// claimed. Each entry gets at most [`MAX_ENRICHMENT_ATTEMPTS`]
+    /// attempts, spaced [`ENRICHMENT_RETRY_AFTER`] apart; an entry the
+    /// resolver keeps failing on stays pending (read paths show the
+    /// domain) and is not claimed again. Team-scoped
+    /// `crm_companies.custom_name` overrides are never touched — they win
+    /// over the directory name on every read path.
+    ///
+    /// Only meaningful with a real resolver: with
+    /// [`crate::outbound::no_op_resolver::NoOpCompanyMetadataResolver`]
+    /// every claim would burn an attempt.
+    #[tracing::instrument(
+        name = "crm.enrich_pending_domains",
+        skip(self),
+        fields(claimed, resolved),
+        err
+    )]
+    pub async fn enrich_pending_domains(&self) -> Result<usize, CrmError> {
+        let domains = self
+            .companies_repository
+            .claim_pending_domains(
+                ENRICHMENT_BATCH_SIZE,
+                MAX_ENRICHMENT_ATTEMPTS,
+                Utc::now() - ENRICHMENT_RETRY_AFTER,
+            )
+            .await?;
+
+        let mut resolved = 0;
+        for domain in &domains {
+            let DomainResolution::Resolved(metadata) = self.metadata_resolver.resolve(domain).await
+            else {
+                continue;
+            };
+            // One failed write leaves that entry pending for a later
+            // attempt; it must not drop the rest of the batch.
+            if self
+                .companies_repository
+                .upsert_domain_metadata(domain, &metadata)
+                .await
+                .inspect_err(|error| {
+                    tracing::warn!(?error, domain, "failed to store enriched domain metadata")
+                })
+                .is_ok()
+            {
+                resolved += 1;
+            }
+        }
+
+        let span = tracing::Span::current();
+        span.record("claimed", domains.len());
+        span.record("resolved", resolved);
+        Ok(domains.len())
+    }
+
+    /// Ensures `crm_domain_directory` has an entry for `domain`: resolves
+    /// it when the domain has none, storing a pending entry instead when
+    /// the resolver is unavailable.
+    async fn ensure_domain_directory_entry(&self, domain: &str) -> Result<(), CrmError> {
+        if self
+            .companies_repository
+            .lookup_domain_metadata(domain)
+            .await?
+            .is_some()
+        {
+            return Ok(());
+        }
+        match self.metadata_resolver.resolve(domain).await {
+            DomainResolution::Resolved(metadata) => {
+                self.companies_repository
+                    .upsert_domain_metadata(domain, &metadata)
+                    .await
+            }
+            DomainResolution::Unavailable => {
+                self.companies_repository
+                    .insert_pending_domain(domain)
+                    .await
+            }
+        }
+    }
 }
+
+/// Pending directory entries one [`CrmServiceImpl::enrich_pending_domains`]
+/// pass claims. Passes run on a fixed interval, so this caps the resolver
+/// (Apollo) call rate.
+const ENRICHMENT_BATCH_SIZE: i64 = 10;
+
+/// Enrichment attempts after which a pending directory entry is left alone.
+const MAX_ENRICHMENT_ATTEMPTS: i16 = 5;
+
+/// Minimum gap between enrichment attempts for one directory entry; also
+/// how long a claim by a worker that died mid-batch blocks other workers.
+const ENRICHMENT_RETRY_AFTER: TimeDelta = TimeDelta::hours(6);
 
 impl<CR, R> CrmService for CrmServiceImpl<CR, R>
 where
@@ -630,17 +727,8 @@ where
         // directory entry was written when its first sent message
         // populated; if it isn't tracked, this call will no-op in the
         // repo anyway.
-        if is_sent
-            && self
-                .companies_repository
-                .lookup_domain_metadata(domain)
-                .await?
-                .is_none()
-        {
-            let metadata = self.metadata_resolver.resolve(domain).await;
-            self.companies_repository
-                .upsert_domain_metadata(domain, &metadata)
-                .await?;
+        if is_sent {
+            self.ensure_domain_directory_entry(domain).await?;
         }
 
         self.companies_repository
@@ -728,17 +816,7 @@ where
         // domain so icon/description enrichment resolves. The user's
         // name never goes here — the directory is global across teams;
         // it lands on `crm_companies.custom_name` in the repo instead.
-        if self
-            .companies_repository
-            .lookup_domain_metadata(&domain)
-            .await?
-            .is_none()
-        {
-            let metadata = self.metadata_resolver.resolve(&domain).await;
-            self.companies_repository
-                .upsert_domain_metadata(&domain, &metadata)
-                .await?;
-        }
+        self.ensure_domain_directory_entry(&domain).await?;
 
         self.companies_repository
             .create_company_for_team(&access.team_id(), &domain, name, Utc::now())
@@ -858,6 +936,44 @@ where
             .await
     }
 
+    #[tracing::instrument(skip_all, err)]
+    async fn list_contacts_for_soup(
+        &self,
+        user_id: &str,
+        access: Option<&CrmTeamReceipt<MemberTeamRole>>,
+        mut query: super::contact_listing::CrmContactListQuery,
+    ) -> Result<Vec<super::contact_listing::CrmContactForSoup>, CrmError> {
+        let scope = viewer_scope(user_id, access)?;
+        query.limit = query.limit.clamp(1, MAX_CONTACT_SEARCH_LIMIT);
+        self.companies_repository
+            .list_contacts_for_soup(scope, user_id, &query)
+            .await
+    }
+
+    #[tracing::instrument(skip(self, access), err)]
+    async fn resolve_association(
+        &self,
+        user_id: &str,
+        access: Option<&CrmTeamReceipt<MemberTeamRole>>,
+        record: super::association::CrmAssociation,
+    ) -> Result<super::association::CrmRecordAssociation, CrmError> {
+        use super::association::CrmAssociation;
+        let scope = viewer_scope(user_id, access)?;
+        if record == CrmAssociation::Activity {
+            return self.companies_repository.resolve_activity(scope).await;
+        }
+        self.companies_repository
+            .resolve_association(scope, record)
+            .await?
+            .ok_or(match record {
+                CrmAssociation::Company(_) => CrmError::CompanyNotFoundForTeam,
+                CrmAssociation::Contact(_) => CrmError::ContactNotFoundForTeam,
+                CrmAssociation::Activity => {
+                    CrmError::InvalidRequest("activity scope unavailable".into())
+                }
+            })
+    }
+
     #[tracing::instrument(skip(self, access), err)]
     #[allow(clippy::too_many_arguments)]
     async fn list_companies_for_soup(
@@ -906,6 +1022,23 @@ where
     }
 
     #[tracing::instrument(skip(self, access), err)]
+    async fn search_contacts(
+        &self,
+        access: &CrmTeamReceipt<MemberTeamRole>,
+        query: &str,
+        limit: u16,
+    ) -> Result<Vec<CrmContact>, CrmError> {
+        self.companies_repository
+            .search_contacts_for_team(
+                &access.team_id(),
+                query.trim(),
+                i64::from(limit.clamp(1, MAX_CONTACT_SEARCH_LIMIT)),
+                access.include_hidden(),
+            )
+            .await
+    }
+
+    #[tracing::instrument(skip(self, access), err)]
     async fn get_contact_by_email(
         &self,
         access: &CrmTeamReceipt<MemberTeamRole>,
@@ -927,111 +1060,6 @@ where
         let include_hidden = access.include_hidden();
         self.companies_repository
             .get_company_for_team(&team_id, &company_id, include_hidden)
-            .await
-    }
-
-    #[tracing::instrument(skip(self, access, thread_metadata, text, metadata), err)]
-    #[allow(clippy::too_many_arguments)]
-    async fn create_crm_comment(
-        &self,
-        access: &CrmCommentReceipt<AnyEntityPermission>,
-        owner: &str,
-        thread_id: Option<uuid::Uuid>,
-        thread_metadata: Option<Value>,
-        text: &str,
-        metadata: Option<Value>,
-    ) -> Result<CrmCommentThread, CrmError> {
-        let (entity_type, entity_id) = access.comment_entity()?;
-        let team_id = access.team_id();
-        let include_hidden = access.include_hidden();
-        self.companies_repository
-            .create_crm_comment(
-                &team_id,
-                entity_type,
-                &entity_id,
-                owner,
-                thread_id,
-                thread_metadata,
-                text,
-                metadata,
-                include_hidden,
-            )
-            .await
-    }
-
-    #[tracing::instrument(skip(self, access), err)]
-    async fn get_crm_comment_threads(
-        &self,
-        access: &CrmCommentReceipt<AnyEntityPermission>,
-    ) -> Result<Vec<CrmCommentThread>, CrmError> {
-        let (entity_type, entity_id) = access.comment_entity()?;
-        let team_id = access.team_id();
-        let include_hidden = access.include_hidden();
-        self.companies_repository
-            .get_crm_comment_threads(&team_id, entity_type, &entity_id, include_hidden)
-            .await
-    }
-
-    #[tracing::instrument(skip(self, access, text), err)]
-    async fn edit_crm_comment(
-        &self,
-        access: &CrmCommentReceipt<ViewAccessLevel>,
-        comment_id: &uuid::Uuid,
-        text: &str,
-    ) -> Result<CrmComment, CrmError> {
-        let team_id = access.team_id();
-        let include_hidden = access.include_hidden();
-        let requester = access
-            .receipt()
-            .get_authenticated_user()
-            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-        self.companies_repository
-            .edit_crm_comment(
-                &team_id,
-                comment_id,
-                text,
-                include_hidden,
-                requester.as_ref(),
-            )
-            .await
-    }
-
-    #[tracing::instrument(skip(self, access), err)]
-    async fn delete_crm_comment(
-        &self,
-        access: &CrmCommentReceipt<ViewAccessLevel>,
-        comment_id: &uuid::Uuid,
-    ) -> Result<DeleteCrmCommentResult, CrmError> {
-        let team_id = access.team_id();
-        let include_hidden = access.include_hidden();
-        let requester = access
-            .receipt()
-            .get_authenticated_user()
-            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-        self.companies_repository
-            .delete_crm_comment(&team_id, comment_id, include_hidden, requester.as_ref())
-            .await
-    }
-
-    #[tracing::instrument(skip(self), err)]
-    async fn get_comment_entity(
-        &self,
-        comment_id: &uuid::Uuid,
-    ) -> Result<Option<(CrmCommentEntityType, uuid::Uuid)>, CrmError> {
-        self.companies_repository
-            .get_comment_entity(comment_id)
-            .await
-    }
-
-    #[tracing::instrument(skip(self, access), err)]
-    async fn legacy_thread_root(
-        &self,
-        access: &CrmCommentReceipt<AnyEntityPermission>,
-        thread_id: &uuid::Uuid,
-    ) -> Result<Option<uuid::Uuid>, CrmError> {
-        let (_, entity_id) = access.comment_entity()?;
-        self.companies_repository
-            .legacy_thread_root(&entity_id, thread_id)
             .await
     }
 
@@ -1101,6 +1129,31 @@ where
 pub struct NoOpCrmService;
 
 impl CrmService for NoOpCrmService {
+    async fn list_contacts_for_soup(
+        &self,
+        _user_id: &str,
+        _access: Option<&CrmTeamReceipt<MemberTeamRole>>,
+        _query: super::contact_listing::CrmContactListQuery,
+    ) -> Result<Vec<super::contact_listing::CrmContactForSoup>, CrmError> {
+        Ok(vec![])
+    }
+
+    async fn resolve_association(
+        &self,
+        _user_id: &str,
+        _access: Option<&CrmTeamReceipt<MemberTeamRole>>,
+        record: super::association::CrmAssociation,
+    ) -> Result<super::association::CrmRecordAssociation, CrmError> {
+        use super::association::CrmAssociation;
+        Err(match record {
+            CrmAssociation::Company(_) => CrmError::CompanyNotFoundForTeam,
+            CrmAssociation::Contact(_) => CrmError::ContactNotFoundForTeam,
+            CrmAssociation::Activity => {
+                CrmError::InvalidRequest("activity scope unavailable".into())
+            }
+        })
+    }
+
     async fn populate_contact(
         &self,
         _team_id: &uuid::Uuid,
@@ -1238,6 +1291,15 @@ impl CrmService for NoOpCrmService {
         Ok(None)
     }
 
+    async fn search_contacts(
+        &self,
+        _access: &CrmTeamReceipt<MemberTeamRole>,
+        _query: &str,
+        _limit: u16,
+    ) -> Result<Vec<CrmContact>, CrmError> {
+        Ok(Vec::new())
+    }
+
     async fn get_contact_by_email(
         &self,
         _access: &CrmTeamReceipt<MemberTeamRole>,
@@ -1250,50 +1312,6 @@ impl CrmService for NoOpCrmService {
         &self,
         _access: &CrmCompanyReceipt<ViewAccessLevel>,
     ) -> Result<Option<CrmCompanyWithContacts>, CrmError> {
-        Ok(None)
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    async fn create_crm_comment(
-        &self,
-        _access: &CrmCommentReceipt<AnyEntityPermission>,
-        _owner: &str,
-        _thread_id: Option<uuid::Uuid>,
-        _thread_metadata: Option<Value>,
-        _text: &str,
-        _metadata: Option<Value>,
-    ) -> Result<CrmCommentThread, CrmError> {
-        unimplemented!("NoOpCrmService.create_crm_comment")
-    }
-
-    async fn get_crm_comment_threads(
-        &self,
-        _access: &CrmCommentReceipt<AnyEntityPermission>,
-    ) -> Result<Vec<CrmCommentThread>, CrmError> {
-        Ok(Vec::new())
-    }
-
-    async fn edit_crm_comment(
-        &self,
-        _access: &CrmCommentReceipt<ViewAccessLevel>,
-        _comment_id: &uuid::Uuid,
-        _text: &str,
-    ) -> Result<CrmComment, CrmError> {
-        unimplemented!("NoOpCrmService.edit_crm_comment")
-    }
-
-    async fn delete_crm_comment(
-        &self,
-        _access: &CrmCommentReceipt<ViewAccessLevel>,
-        _comment_id: &uuid::Uuid,
-    ) -> Result<DeleteCrmCommentResult, CrmError> {
-        unimplemented!("NoOpCrmService.delete_crm_comment")
-    }
-
-    async fn get_comment_entity(
-        &self,
-        _comment_id: &uuid::Uuid,
-    ) -> Result<Option<(CrmCommentEntityType, uuid::Uuid)>, CrmError> {
         Ok(None)
     }
 

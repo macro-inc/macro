@@ -1,0 +1,83 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT c.id,c.name,c.sfs_photo_url,p.contact_id AS \"contact_id?\",p.previous_name,p.applied_name,p.previous_photo,p.applied_photo,\n            (SELECT s.display_name FROM email_address_book_sources s WHERE s.link_id = c.link_id AND s.emails @> ARRAY[c.email_address::text]\n                AND s.deleted_at IS NULL AND s.display_name IS NOT NULL ORDER BY s.folder_id,s.provider_id LIMIT 1) AS book_name,\n            (SELECT s.photo_url FROM email_address_book_sources s WHERE s.link_id = c.link_id AND s.emails @> ARRAY[c.email_address::text]\n                AND s.deleted_at IS NULL AND s.photo_url IS NOT NULL ORDER BY s.folder_id,s.provider_id LIMIT 1) AS book_photo,\n            lower(c.email_address) = lower(l.email_address) AS \"is_self!\"\n        FROM email_contacts c JOIN email_links l ON l.id = c.link_id LEFT JOIN email_contact_address_book_projection p ON p.contact_id = c.id\n        WHERE c.link_id = $1 AND c.email_address = ANY($2) ORDER BY c.id FOR UPDATE OF c\n    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "sfs_photo_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "contact_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "previous_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "applied_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "previous_photo",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "applied_photo",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "book_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "book_photo",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "is_self!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "4b2ccb4dd12e922ce95185a1578fae948b347a556b298b189ecb2853ea4d9c4c"
+}

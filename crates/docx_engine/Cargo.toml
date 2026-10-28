@@ -1,0 +1,41 @@
+[package]
+edition = "2024"
+name = "docx_engine"
+publish = false
+version = "0.1.0"
+
+[lib]
+# `cdylib` for the browser build; `rlib` so native tools and tests link it.
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = []
+# Compile the bundled font set into native builds (tests, the corpus CLI).
+# The wasm build always includes it: the browser worker has no font directory.
+embedded-fonts = ["pptx_engine/embedded-fonts"]
+# The `docx_corpus` developer CLI (rendering reports, fidelity scoring).
+cli = ["dep:clap", "embedded-fonts"]
+
+[[bin]]
+name = "docx_corpus"
+required-features = ["cli"]
+
+[dependencies]
+base64 = { workspace = true }
+clap = { workspace = true, optional = true }
+# The PPTX engine supplies the shared Office foundation: the ZIP container,
+# OPC packaging, DrawingML colors/fills/geometry/charts, the font database,
+# image and metafile decoding, and the tiny-skia rasterizer.
+pptx_engine = { path = "../pptx_engine", default-features = false }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+# The wasm-bindgen shell in `wasm`, which only exists on wasm32.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+console_error_panic_hook = { workspace = true }
+js-sys = { workspace = true }
+wasm-bindgen = { workspace = true }
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false

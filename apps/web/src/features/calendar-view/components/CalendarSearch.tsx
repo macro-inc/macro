@@ -6,9 +6,11 @@ import {
   type CalendarTimeFormat,
   DEFAULT_CALENDAR_SOURCE,
 } from '@app/features/calendar/types';
-import { parseLocalDate } from '@app/features/calendar/utils/calendar-date';
 import { isCalendarRangeSupported } from '@app/features/calendar/utils/calendar-supported-range';
-import { safeConferenceUrl } from '@app/features/calendar/utils/conference-link';
+import {
+  conferenceJoinUrl,
+  safeConferenceUrl,
+} from '@app/features/calendar/utils/conference-link';
 import {
   calendarMacroCallUrl,
   macroCallUrl,
@@ -19,22 +21,23 @@ import { IS_MAC } from '@core/constant/isMac';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { debouncedDependent } from '@core/util/debounce';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { parseLocalDate } from '@core/util/local-date';
 import { openExternalUrl } from '@core/util/url';
 import EmptyStateCalendarSearchGraphic from '@design/empty-state-calendar-search.svg';
 import type { EntityData, WithSearch } from '@entity';
+import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
+import QuotesIcon from '@icon/system/regular/quotes.svg';
+import RepeatIcon from '@icon/system/regular/repeat.svg';
+import VideoCameraIcon from '@icon/system/regular/video-camera.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Popover } from '@kobalte/core/popover';
-import CaretLeftIcon from '@phosphor/caret-left.svg';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
-import QuotesIcon from '@phosphor/quotes.svg';
-import RepeatIcon from '@phosphor/repeat.svg';
-import VideoCameraIcon from '@phosphor/video-camera.svg';
-import XIcon from '@phosphor/x.svg';
 import {
   useCalendarMentionPreviewQuery,
   useCalendarSearchPreviewsQuery,
 } from '@queries/calendar/mention-preview';
 import { useSearchSoupQuery } from '@queries/soup/search';
-import type { EntityFilters } from '@service-search/generated/models';
 import { Button, cn, EmptyStatePanel, Layer } from '@ui';
 import {
   createEffect,
@@ -46,6 +49,7 @@ import {
   onMount,
   Show,
 } from 'solid-js';
+import { CALENDAR_ONLY_SEARCH_FILTERS } from '../calendar-only-search-filters';
 import { createCalendarRange } from '../calendar-range';
 import {
   eventTimeFromOccurrenceKey,
@@ -61,25 +65,6 @@ type CalendarSearchResult = WithSearch<
 >;
 type EventTime = NonNullable<CalendarSearchResult['time']>;
 
-const NIL_UUID = '00000000-0000-0000-0000-000000000000';
-
-/**
- * Restrict unified search to calendar events: every other searchable type has
- * a NIL id in its primary field, which the search service reads as "exclude
- * this type", while calendar events carry no id filter and so are the only
- * matches. This mirrors what the Search view's Calendar type produces.
- */
-const CALENDAR_ONLY_FILTERS: EntityFilters = {
-  document_filters: { document_ids: [NIL_UUID] },
-  email_filters: { email_thread_ids: [NIL_UUID] },
-  channel_filters: { channel_ids: [NIL_UUID] },
-  channel_thread_filters: { thread_ids: [NIL_UUID] },
-  chat_filters: { chat_ids: [NIL_UUID] },
-  project_filters: { project_ids: [NIL_UUID] },
-  call_filters: { call_ids: [NIL_UUID] },
-  foreign_entity_filters: { ids: [NIL_UUID] },
-};
-
 const searchEventKey = (eventId: string, occurrenceKey?: string) =>
   JSON.stringify([eventId, occurrenceKey ?? null]);
 
@@ -91,6 +76,7 @@ type CalendarMeetingLink = {
 
 type CalendarSearchEventDetails = {
   conferenceUrl?: string;
+  accountEmail?: string;
   description?: string;
   location?: string;
 };
@@ -245,6 +231,7 @@ function CalendarEventPreviewContent(props: {
           </span>
           <Show when={props.event.isRecurring}>
             <RepeatIcon
+              aria-hidden={false}
               class="size-3 shrink-0 text-ink-muted"
               aria-label="Repeats"
             />
@@ -310,6 +297,7 @@ export function CalendarSearch(
     inline?: boolean;
     compact?: boolean;
     expanded?: boolean;
+    popupReady?: boolean;
     onExpand?: () => void;
     onDismiss?: () => void;
     onOpenChange?: (open: boolean) => void;
@@ -322,6 +310,7 @@ export function CalendarSearch(
         inline={props.inline}
         compact={props.compact}
         expanded={props.expanded}
+        popupReady={props.popupReady}
         onExpand={props.onExpand}
         onDismiss={props.onDismiss}
         onOpenChange={props.onOpenChange}
@@ -334,6 +323,7 @@ function CalendarSearchControl(props: {
   inline?: boolean;
   compact?: boolean;
   expanded?: boolean;
+  popupReady?: boolean;
   onExpand?: () => void;
   onDismiss?: () => void;
   onOpenChange?: (open: boolean) => void;
@@ -345,10 +335,21 @@ function CalendarSearchControl(props: {
   const setOpen = (next: boolean) => {
     setOpenInternal(next);
     props.onOpenChange?.(next);
+    if (!next) {
+      setActiveRow(0);
+      setPreviewTarget(null);
+      props.onDismiss?.();
+    }
   };
   const [rawQuery, setRawQuery] = createSignal('');
   const [filters, setFilters] = createSignal(DEFAULT_CALENDAR_SEARCH_FILTERS);
   let inputRef: HTMLInputElement | undefined;
+  let searchButton: HTMLButtonElement | undefined;
+  const dismissSearch = () => {
+    inputRef?.blur();
+    setOpen(false);
+    if (props.onDismiss) queueMicrotask(() => searchButton?.focus());
+  };
   let listRef: HTMLDivElement | undefined;
   const [activeRow, setActiveRow] = createSignal(0);
   // Set to the chosen result when it falls outside the navigable range: the
@@ -357,6 +358,8 @@ function CalendarSearchControl(props: {
     createSignal<CalendarSearchResult | null>(null);
 
   const query = createMemo(() => rawQuery().trim());
+  const popupVisible = () =>
+    props.popupReady !== false && (!props.inline || query().length > 0);
   const debouncedQuery = debouncedDependent(query, 250);
 
   const searchQuery = useSearchSoupQuery(
@@ -369,7 +372,7 @@ function CalendarSearchControl(props: {
           match_type: selected.matchType,
           query: debouncedQuery(),
           filters: {
-            ...CALENDAR_ONLY_FILTERS,
+            ...CALENDAR_ONLY_SEARCH_FILTERS,
             calendar_event_filters:
               selected.statuses.length ||
               selected.organizers.length ||
@@ -461,6 +464,7 @@ function CalendarSearchControl(props: {
       });
       byOccurrence.set(searchEventKey(event.eventId, event.occurrenceKey), {
         conferenceUrl: event.conferenceUrl,
+        accountEmail: event.calendar.emailAddress,
         description: event.description,
         location: event.location,
       });
@@ -518,11 +522,14 @@ function CalendarSearchControl(props: {
 
     if (range && isCalendarRangeSupported(range)) {
       setOpen(false);
-      void openCalendarEventSplit({
-        eventId: event.id,
-        occurrenceKey: event.occurrenceKey,
-        time: event.occurrenceKey ? undefined : event.time,
-      });
+      fireAndForget(
+        openCalendarEventSplit({
+          eventId: event.id,
+          occurrenceKey: event.occurrenceKey,
+          time: event.occurrenceKey ? undefined : event.time,
+        }),
+        'calendar-view'
+      );
       return;
     }
 
@@ -566,12 +573,12 @@ function CalendarSearchControl(props: {
       <div class="flex shrink-0 items-center gap-1">
         <Show when={rawQuery().trim()}>
           <Button
+            aria-label="Exact match"
+            tooltip="Exact match"
             type="button"
             variant="ghost"
             size="icon-sm"
-            square
             aria-pressed={filters().matchType === 'exact'}
-            label="Exact match"
             class={filters().matchType === 'exact' ? 'bg-active text-ink' : ''}
             onPointerDown={(event) => event.preventDefault()}
             onClick={() =>
@@ -646,13 +653,7 @@ function CalendarSearchControl(props: {
   return (
     <Popover
       open={open()}
-      onOpenChange={(next) => {
-        setOpen(next);
-        if (!next) {
-          setActiveRow(0);
-          setPreviewTarget(null);
-        }
-      }}
+      onOpenChange={setOpen}
       placement={props.inline ? 'bottom-start' : 'bottom-end'}
       gutter={6}
       flip
@@ -671,32 +672,54 @@ function CalendarSearchControl(props: {
           </Popover.Trigger>
         }
       >
-        <div class="min-w-0 max-w-md flex-1">
-          <Popover.Anchor as="div" class="w-full">
-            <SearchBar
-              ref={(element) => (inputRef = element)}
-              label="Search events"
-              onClose={
-                props.onDismiss
-                  ? () => {
-                      inputRef?.blur();
-                      props.onDismiss?.();
-                    }
-                  : undefined
-              }
-              value={rawQuery()}
-              onValueChange={changeQuery}
-              actions={filterActions()}
-              onClick={() => setOpen(true)}
-              onFocus={() => setOpen(true)}
-              onKeyDown={handleSearchKeyDown}
-              onEscape={() => {
-                setOpen(false);
-                props.onDismiss?.();
+        <div class="relative h-[var(--view-search-height,2.5rem)] min-w-0 w-full flex-1">
+          <Popover.Anchor
+            as="div"
+            class="h-[var(--view-search-height,2.5rem)] w-full"
+          >
+            <Show when={props.expanded === false}>
+              <Button
+                aria-label="Search events"
+                tooltip={{
+                  content: 'Search events',
+                  hotkey: TOKENS.calendar.search,
+                }}
+                ref={searchButton}
+                type="button"
+                variant="secondary"
+                size="icon-md"
+                aria-expanded="false"
+                aria-haspopup="dialog"
+                onClick={props.onExpand}
+              >
+                <SearchIcon class="size-4" />
+              </Button>
+            </Show>
+            {/* Keep the input mounted while its width animates; inert removes collapsed controls from keyboard navigation. */}
+            <div
+              aria-hidden={props.expanded === false}
+              inert={props.expanded === false}
+              class="absolute inset-x-0 top-0 overflow-hidden rounded-full transition-opacity duration-150 motion-reduce:transition-none"
+              classList={{
+                'pointer-events-none opacity-0': props.expanded === false,
               }}
-              hotkey="cmd+f"
-              placeholder="Search events"
-            />
+            >
+              <SearchBar
+                ref={(element) => (inputRef = element)}
+                label="Search events"
+                class="has-[input:focus-visible]:ring-inset"
+                onClose={props.onDismiss ? dismissSearch : undefined}
+                value={rawQuery()}
+                onValueChange={changeQuery}
+                actions={filterActions()}
+                onClick={() => setOpen(true)}
+                onFocus={() => setOpen(true)}
+                onKeyDown={handleSearchKeyDown}
+                onEscape={dismissSearch}
+                hotkey="cmd+f"
+                placeholder="Search events"
+              />
+            </div>
           </Popover.Anchor>
         </div>
       </Show>
@@ -704,7 +727,12 @@ function CalendarSearchControl(props: {
       <Popover.Portal>
         <Layer depth={3}>
           <Popover.Content
-            class="portal-scope z-modal outline-none"
+            class="portal-scope z-modal outline-none transition-opacity duration-200 ease-out motion-reduce:transition-none"
+            classList={{
+              'pointer-events-none opacity-0': !popupVisible(),
+            }}
+            aria-hidden={!popupVisible() ? true : undefined}
+            inert={!popupVisible()}
             onOpenAutoFocus={(event) => {
               event.preventDefault();
               if (!props.inline) inputRef?.focus();
@@ -712,12 +740,27 @@ function CalendarSearchControl(props: {
             onCloseAutoFocus={(event) => {
               if (props.inline) event.preventDefault();
             }}
+            onEscapeKeyDown={(event) => {
+              if (!props.inline) return;
+              event.preventDefault();
+              dismissSearch();
+            }}
             onKeyDown={handleContentKeyDown}
             onInteractOutside={(event) => {
               const target = event.detail.originalEvent.target;
               if (
                 target instanceof Element &&
                 target.closest('[data-calendar-search-filters]')
+              ) {
+                event.preventDefault();
+              }
+              // The header dismisses after a period control's click. Collapsing
+              // on pointerdown can move that control before mouseup and lose the click.
+              if (
+                props.inline &&
+                target instanceof Element &&
+                target.closest('[data-calendar-period-controls]') &&
+                inputRef?.closest('[data-view-shell-top-bar]')?.contains(target)
               ) {
                 event.preventDefault();
               }
@@ -732,9 +775,12 @@ function CalendarSearchControl(props: {
           >
             <div
               class={cn(
-                'max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl glass bg-menu-glass text-ink',
+                'menu-surface max-w-[calc(100vw-2rem)] overflow-hidden transition-[translate] duration-200 ease-out motion-reduce:transition-none',
                 props.inline ? 'w-[var(--kb-popper-anchor-width)]' : 'w-80'
               )}
+              classList={{
+                '-translate-y-1': !popupVisible(),
+              }}
             >
               <Show
                 when={previewTarget()}
@@ -757,11 +803,11 @@ function CalendarSearchControl(props: {
                         {filterActions()}
                         <Show when={rawQuery()}>
                           <Button
+                            aria-label="Clear search"
+                            tooltip="Clear search"
                             type="button"
                             variant="ghost"
                             size="icon-sm"
-                            square
-                            label="Clear search"
                             onClick={() => {
                               changeQuery('');
                               inputRef?.focus();
@@ -858,10 +904,11 @@ function CalendarSearchControl(props: {
                                   >
                                     {(link) => (
                                       <Button
+                                        aria-label={`Join ${link().label}`}
+                                        tooltip={`Join ${link().label}`}
                                         type="button"
                                         variant="ghost"
                                         size="sm"
-                                        label={`Join ${link().label}`}
                                         class={cn(
                                           'px-2',
                                           link().kind === 'google'
@@ -869,7 +916,13 @@ function CalendarSearchControl(props: {
                                             : 'bg-hover text-ink not-touch:not-disabled:hover:bg-active not-touch:not-disabled:hover:text-ink'
                                         )}
                                         onClick={() =>
-                                          openExternalUrl(link().url)
+                                          openExternalUrl(
+                                            conferenceJoinUrl(
+                                              link().url,
+                                              detailsForEvent(event)
+                                                ?.accountEmail
+                                            )
+                                          )
                                         }
                                       >
                                         <VideoCameraIcon class="size-3.5" />

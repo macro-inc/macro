@@ -42,7 +42,7 @@ outbound = [
   "ports",
 ]
 ports = ["dep:tokio"]
-service = ["dep:entity_access_management", "ports"]
+service = ["dep:entity_access_management", "dep:shared_entity_registry", "ports"]
 
 [dependencies]
 activity = { path = "../activity", default-features = false }
@@ -78,6 +78,7 @@ models_bulk_upload = { path = "../models_bulk_upload" }
 models_permissions = { path = "../models_permissions" }
 rootcause = { workspace = true }
 s3_key = { path = "../s3_key" }
+shared_entity_registry = { path = "../entity_registry/shared_entity_registry", optional = true }
 
 # Async runtime (for ports)
 tokio = { workspace = true, optional = true }

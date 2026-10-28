@@ -11,8 +11,8 @@
  */
 
 import { ItemPreview } from '@core/component/ItemPreview';
-import CalendarIcon from '@phosphor/calendar-blank.svg';
-import EmailIcon from '@phosphor/envelope.svg';
+import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
+import EmailIcon from '@icon/system/regular/envelope.svg';
 import type {
   ToolDetail,
   UserToolOutcome,
@@ -39,7 +39,7 @@ import {
 } from 'solid-js';
 import { match } from 'ts-pattern';
 import { FoldedOutput, ToolCard } from '../../ui';
-import type { ToolCallCommon, ToolCallContext } from './shared';
+import type { ToolCallCommon } from './shared';
 import { TextPart } from './TextPart';
 
 type UserToolDetail = Extract<ToolDetail, { kind: 'user_tool' }>;
@@ -81,7 +81,8 @@ function typedDraft(
 export function UserToolCall(props: {
   detail: UserToolDetail;
   common: ToolCallCommon;
-  context?: ToolCallContext;
+  /** The turn is still in flight, so a sent draft may still be going out. */
+  inFlight: boolean;
 }): JSX.Element {
   const draft = createMemo(() => typedDraft(props.common, props.detail.input));
   const outcome = () => props.detail.outcome;
@@ -115,7 +116,7 @@ export function UserToolCall(props: {
             {(tool) => (
               <EmailDraft
                 email={tool().data as SendEmail}
-                inFlight={props.context?.inFlight ?? false}
+                inFlight={props.inFlight}
               />
             )}
           </Match>
@@ -198,7 +199,7 @@ function htmlText(html: string): string {
   );
 }
 
-/** The email as drafted, read-only: recipients, subject, body. */
+/** The email as drafted, read-only: sender, recipients, subject, body. */
 export function EmailDraft(props: { email: SendEmail; inFlight: boolean }) {
   const body = createMemo(() => emailBody(props.email.body));
   const recipients = () =>
@@ -210,6 +211,16 @@ export function EmailDraft(props: { email: SendEmail; inFlight: boolean }) {
   return (
     <div class="flex flex-col gap-2">
       <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
+        {/* Only once the draft names a sender: a transcript should not
+            claim an inbox the send would have derived for itself. */}
+        <Show when={props.email.from?.trim()}>
+          {(from) => (
+            <>
+              <dt class="text-ink-muted">From</dt>
+              <dd class="text-ink wrap-break-word">{from()}</dd>
+            </>
+          )}
+        </Show>
         <For each={recipients()}>
           {([field, list]) => (
             <Show when={list.length > 0}>

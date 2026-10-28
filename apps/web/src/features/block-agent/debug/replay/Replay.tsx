@@ -10,6 +10,7 @@
  */
 
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { AgentSessionLogEntryDto } from '@service-agent-harness/generated/schemas';
 import { createSignal, onCleanup, Show } from 'solid-js';
 import { AgentSessionProvider } from '../../agent-session-provider';
@@ -130,7 +131,7 @@ export default function AgentReplay() {
       onDrop={(event) => {
         event.preventDefault();
         const file = event.dataTransfer?.files[0];
-        if (file) void loadFile(file);
+        if (file) fireAndForget(loadFile(file), 'agent-replay');
       }}
     >
       <div class="flex flex-col gap-2 border-b border-edge-muted px-4 py-3">
@@ -141,7 +142,7 @@ export default function AgentReplay() {
             class="text-xs text-ink-muted"
             onChange={(event) => {
               const file = event.currentTarget.files?.[0];
-              if (file) void loadFile(file);
+              if (file) fireAndForget(loadFile(file), 'agent-replay');
             }}
           />
           <Show when={recording()}>

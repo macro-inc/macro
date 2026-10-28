@@ -10,7 +10,7 @@ import type { UpdateInitiativeRequestSharePermission } from './updateInitiativeR
 
 /**
  * Update-initiative HTTP body. Absent fields are left unchanged. `member_ids`
-present is a full replace. The description is edited in its document, not here.
+present is a full replace. The description is edited in its collab surface, not here.
  */
 export interface UpdateInitiativeRequest {
   /** Full replacement collaborator list when present. Only the owner may send this field. */

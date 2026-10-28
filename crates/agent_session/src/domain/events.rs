@@ -22,7 +22,10 @@ use macro_uuid::Uuid;
 use messages::domain::models::MessageParent;
 use serde::{Deserialize, Serialize};
 
-use super::model::{AgentSessionId, TurnId};
+use super::model::{
+    AgentSessionId, AgentSessionLog, LogAppended, Message, SessionSource, StoredAgentSessionLog,
+    TurnId,
+};
 
 /// The thread a session was opened from, when it was.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -47,6 +50,7 @@ impl ThreadOrigin {
         let channel_id = match &parent {
             MessageParent::Channel(channel_id) => Some(*channel_id),
             MessageParent::Document(_)
+            | MessageParent::Call(_)
             | MessageParent::Initiative(_)
             | MessageParent::CrmCompany(_)
             | MessageParent::CrmContact(_) => None,
@@ -110,6 +114,10 @@ pub struct SessionIdentity {
     /// a consumer fanning out never has to read the session's log.
     #[serde(default)]
     pub audience: Vec<MacroUserIdStr<'static>>,
+    /// Who started the session. Events from before it was recorded say
+    /// nothing and read as a person.
+    #[serde(default)]
+    pub source: SessionSource,
 }
 
 /// A turn the runtime answered.
@@ -196,6 +204,45 @@ pub struct TurnEndedMetadata {
     pub stop_reason: String,
     /// Prompts still waiting behind this turn.
     pub queued_remaining: usize,
+}
+
+/// Sanitized public details of a command refused before runtime execution.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct CommandFailure {
+    /// Stable public denial or unavailability code.
+    pub code: String,
+    /// Public explanation, never an internal error report.
+    pub message: String,
+    /// Whether retrying later may succeed without a policy change.
+    pub retryable: bool,
+}
+
+#[cfg(feature = "admission")]
+impl From<ai_billing::AiAdmissionError> for CommandFailure {
+    fn from(error: ai_billing::AiAdmissionError) -> Self {
+        Self {
+            code: error.code().to_owned(),
+            message: error.to_string(),
+            retryable: error.is_retryable(),
+        }
+    }
+}
+
+/// An accepted command was refused before it could start a runtime turn.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct CommandRejectedMetadata {
+    /// The session.
+    pub identity: SessionIdentity,
+    /// The command that will not execute.
+    pub action_id: AgentActionId,
+    /// Who submitted the command, if acting on a user's behalf.
+    pub actor: Option<MacroUserIdStr<'static>>,
+    /// The command's thread announcement, when one was created.
+    pub announcement_message_id: Option<Uuid>,
+    /// Safe details for clients and downstream consumers.
+    pub failure: CommandFailure,
 }
 
 /// A turn ended and nothing is queued: the agent has stopped working.
@@ -315,6 +362,10 @@ pub enum AgentSessionLifecycleEvent {
     #[serde(rename = "agent_session.turn_ended")]
     #[strum_discriminants(strum(serialize = "agent_session.turn_ended"))]
     TurnEnded(TurnEndedMetadata),
+    /// An accepted command was refused before runtime execution.
+    #[serde(rename = "agent_session.command_rejected")]
+    #[strum_discriminants(strum(serialize = "agent_session.command_rejected"))]
+    CommandRejected(CommandRejectedMetadata),
     /// A turn ended with nothing queued behind it.
     #[serde(rename = "agent_session.settled")]
     #[strum_discriminants(strum(serialize = "agent_session.settled"))]
@@ -353,6 +404,7 @@ impl AgentSessionLifecycleEvent {
             Self::Opened(metadata) => &metadata.identity,
             Self::TurnStarted(metadata) => &metadata.identity,
             Self::TurnEnded(metadata) => &metadata.identity,
+            Self::CommandRejected(metadata) => &metadata.identity,
             Self::Settled(metadata) => &metadata.identity,
             Self::WaitingForInput(metadata) => &metadata.identity,
             Self::InputReceived(metadata) => &metadata.identity,
@@ -416,5 +468,70 @@ impl MacroEvent for AgentSessionLifecycleMacroEvent {
 
     fn from_event(key: String, event: Event<Self::EventPayload>) -> Self {
         Self { key, event }
+    }
+}
+
+/// The frames one flush appended, as the log stored them: what the harness
+/// hands to a process serving viewers of its own, such as the GraphQL
+/// subscription in document storage. Each entry is exactly the stored row, so
+/// a subscriber folds the same bytes a reader of the durable log does.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LogAppendedMetadata {
+    /// The session the frames belong to.
+    pub agent_session_id: AgentSessionId,
+    /// The frames, in the order the log holds them.
+    pub entries: Vec<LogAppendedEntry>,
+}
+
+/// One stored frame: the row's identity and time beside the frame itself.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LogAppendedEntry {
+    /// Durable row identity.
+    pub id: Uuid,
+    /// When the log recorded the frame.
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    /// The user whose action produced the frame, absent when no user did.
+    pub user_id: Option<MacroUserIdStr<'static>>,
+    /// The frame, with its direction.
+    pub content: Message,
+}
+
+impl From<&LogAppended> for LogAppendedMetadata {
+    fn from(event: &LogAppended) -> Self {
+        Self {
+            agent_session_id: event.agent_session_id,
+            entries: event
+                .entries
+                .iter()
+                .map(|stored| LogAppendedEntry {
+                    id: stored.id,
+                    created_at: stored.created_at,
+                    user_id: stored.entry.user_id.clone(),
+                    content: stored.entry.content.clone(),
+                })
+                .collect(),
+        }
+    }
+}
+
+impl LogAppendedMetadata {
+    /// The frames as stored rows again, for a consumer that reads them the
+    /// way it reads the durable log.
+    #[must_use]
+    pub fn into_stored(self) -> Vec<StoredAgentSessionLog> {
+        let agent_session_id = self.agent_session_id;
+        self.entries
+            .into_iter()
+            .map(|entry| StoredAgentSessionLog {
+                id: entry.id,
+                created_at: entry.created_at,
+                entry: AgentSessionLog {
+                    agent_session_id,
+                    user_id: entry.user_id,
+                    content: entry.content,
+                    logged_at: Some(entry.created_at),
+                },
+            })
+            .collect()
     }
 }

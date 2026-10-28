@@ -8,9 +8,9 @@ use async_trait::async_trait;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use super::{CalendarToolContext, mutation_tool_error};
+use super::{CalendarToolContext, CopyChange, confirm_copy, mutation_tool_error};
 use crate::domain::ports::{
-    CalendarDeletionScope, CalendarMutationService, CalendarOccurrenceService,
+    CalendarDeletionScope, CalendarMutationService, CalendarOccurrenceService, MeetingLinkProvider,
 };
 
 /// How much of a recurring series a deletion removes.
@@ -42,9 +42,22 @@ pub struct DeleteCalendarEventResponse {
 #[schemars(
     title = "DeleteCalendarEvent",
     description = "\
-Delete an event from the user's calendar. The deletion is written to Google immediately and \
-attendees are notified, so confirm with the user before deleting — it cannot be undone. Get \
-the `eventId` from ListCalendarEvents.\n\
+Delete an event from the user's calendar.\n\
+\n\
+A meeting on more than one of the user's inboxes is one ListCalendarEvents entry per inbox. \
+Before deleting any of them, ask the user which inbox's copy to delete, then pass that \
+copy's `inbox`. Never choose between the user's inboxes yourself, whatever they look like: \
+a test, secondary or unfamiliar address is still the user's own inbox. Skip the question \
+only when the user already named the inbox, or when only one copy can be deleted \
+(`isReadOnly` false); then delete that copy and say why. Without `inbox` the tool refuses, \
+lists each copy and gives the question to ask. Deleting the copy the user organizes cancels \
+the meeting for every guest. Deleting a copy where they are a guest takes the meeting off \
+that inbox's calendar: on Google it also declines the invitation and tells the organizer, \
+while on Outlook the organizer is not told and still sees the invitation unanswered.\n\
+\n\
+The deletion is written to the calendar provider immediately and attendees are notified, so \
+confirm with the user before deleting — it cannot be undone. Get the `eventId` from \
+ListCalendarEvents.\n\
 \n\
 For recurring events, `scope` controls how much is removed: \"all\" (default) removes the \
 whole series, \"this_event\" removes one occurrence, and \"this_and_following\" ends the \
@@ -64,6 +77,16 @@ pub struct DeleteCalendarEvent {
     )]
     #[serde(default)]
     pub calendar_id: Option<uuid::Uuid>,
+
+    /// Inbox holding the copy to delete.
+    #[schemars(
+        description = "The `inbox` of the copy to delete, from its ListCalendarEvents entry. \
+                       Required when the meeting is on more than one of the user's inboxes: \
+                       the tool refuses without it and lists each copy. It must be the inbox \
+                       holding the copy `eventId` names."
+    )]
+    #[serde(default)]
+    pub inbox: Option<String>,
 
     /// Deletion scope.
     #[schemars(
@@ -89,20 +112,27 @@ impl ToolAnnotated for DeleteCalendarEvent {
 }
 
 #[async_trait]
-impl<M, O> AsyncTool<CalendarToolContext<M, O>> for DeleteCalendarEvent
+impl<M, O, L> AsyncTool<CalendarToolContext<M, O, L>> for DeleteCalendarEvent
 where
     M: CalendarMutationService,
     O: CalendarOccurrenceService,
+    L: MeetingLinkProvider,
 {
     type Output = DeleteCalendarEventResponse;
 
     #[tracing::instrument(skip_all, fields(user_id=?request_context.user_id), err)]
     async fn call(
         &self,
-        service_context: ServiceContext<CalendarToolContext<M, O>>,
+        service_context: ServiceContext<CalendarToolContext<M, O, L>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
-        tracing::info!(params=?self, "Delete calendar event");
+        tracing::info!(
+            event_id=%self.event_id,
+            calendar_id=?self.calendar_id,
+            scope=?self.scope,
+            inbox_confirmed=self.inbox.is_some(),
+            "Delete calendar event"
+        );
 
         let requester_id = request_context.user_id.to_string();
         let scoped_occurrence = |kind: &'static str| {
@@ -130,6 +160,14 @@ where
             ),
         };
 
+        confirm_copy(
+            &*service_context.occurrences,
+            &requester_id,
+            self.event_id,
+            self.inbox.as_deref(),
+            CopyChange::Delete,
+        )
+        .await?;
         service_context
             .mutations
             .delete_event(&requester_id, self.event_id, self.calendar_id, scope)

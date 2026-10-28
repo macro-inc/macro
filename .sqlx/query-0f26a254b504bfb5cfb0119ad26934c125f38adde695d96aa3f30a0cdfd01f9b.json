@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT foreign_id, team_id FROM import_entity\n            WHERE user_id = $1 AND id = $2 AND status = 'importing'\n            FOR UPDATE\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "foreign_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "team_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "0f26a254b504bfb5cfb0119ad26934c125f38adde695d96aa3f30a0cdfd01f9b"
+}

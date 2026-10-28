@@ -12,12 +12,15 @@ import {
   LoroDoc,
   type PeerID,
   type Side,
+  type UndoConfig,
+  UndoManager,
   type VersionVector,
 } from 'loro-crdt';
 import { err, ok, type Result } from 'neverthrow';
 import { onCleanup } from 'solid-js';
 import type { ResultError } from '../internal/result';
 import { logSyncService } from './logger';
+import { LoroManagerError } from './manager-error';
 import type { GenericRootSchema, LoroRawUpdate, RawUpdate } from './shared';
 import {
   disposeTelemetryFor,
@@ -26,19 +29,7 @@ import {
   telemetrySpan,
 } from './telemetry';
 
-export enum LoroManagerError {
-  ImportFailed = 'IMPORT_FAILED',
-  /** The update arrived ahead of its causal dependencies. Loro holds it and
-   *  applies it automatically once the gap fills — not a failure. */
-  ImportPending = 'IMPORT_PENDING',
-  NotInitialized = 'NOT_INITIALIZED',
-  InitializeFailed = 'INITIALIZE_FAILED',
-  SyncFailed = 'SYNC_FAILED',
-  ExportFailed = 'EXPORT_FAILED',
-  GetCursorPosFailed = 'GET_CURSOR_POS_FAILED',
-  GetContainerByIdFailed = 'GET_CONTAINER_BY_ID_FAILED',
-  UnknownLoroError = 'UNKNOWN_LORO_ERROR',
-}
+export { LoroManagerError };
 
 export enum LoroStateTag {
   Initialize = 'INITIALIZE',
@@ -63,6 +54,13 @@ export type SnapshotIngest =
 
 export type LoroManagerOptions = {
   documentId: string;
+  /**
+   * Keep a JSON mirror of the schema's state and report it through
+   * `onStateChange` (the default). Editors that read the LoroDoc directly
+   * turn it off: the mirror re-reads the whole document on every change.
+   * State updates then carry no state, only the initialization signal.
+   */
+  mirror?: boolean;
 };
 
 /** Map Loro's {@link ImportStatus} onto our Result: ok(didChange), or
@@ -154,6 +152,12 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
   get doc(): LoroDoc {
     return this._doc;
   }
+
+  /** An undo manager over this document, so callers need not import loro eagerly. */
+  createUndoManager(config: UndoConfig): UndoManager {
+    return new UndoManager(this._doc, config);
+  }
+
   /** The inner Mirror, once initialized. */
   get mirror(): Mirror<S> | undefined {
     return this._mirror;
@@ -295,6 +299,18 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
       return err([{ code: error.code, message: error.message }]);
     }
 
+    if (this.options.mirror === false) {
+      this.emitState({
+        state: {} as InferType<S>,
+        metadata: {
+          direction: SyncDirection.TO_LORO,
+          tags: ['INITIALIZE'],
+        },
+      });
+      this.setInitialized(true);
+      return ok(undefined);
+    }
+
     const mirror = createMirror(this._doc, this.schema);
 
     try {
@@ -331,7 +347,7 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
   getUpdateSince(
     lastVersionVector: VersionVector
   ): Result<Uint8Array | undefined, ResultError<LoroManagerError>[]> {
-    if (!this._initialized || !this._mirror) {
+    if (!this._initialized) {
       return err([
         { code: LoroManagerError.NotInitialized, message: 'Not initialized' },
       ]);
@@ -457,6 +473,18 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
     if (statusResult.isErr()) {
       // A reset snapshot must be self-contained; pending deps mean a bad seed.
       return err(statusResult.error);
+    }
+
+    if (this.options.mirror === false) {
+      this.emitState({
+        state: {} as InferType<S>,
+        metadata: {
+          direction: SyncDirection.TO_LORO,
+          tags: [LoroStateTag.Initialize],
+        },
+      });
+      this.setInitialized(true);
+      return ok(undefined);
     }
 
     const newMirror = createMirror(newDoc, this.schema);

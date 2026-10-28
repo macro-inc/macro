@@ -1,3 +1,5 @@
+import type { MutationInspection } from '../protocol';
+
 /**
  * Tauri CacheHost: talks to the native cache engine living in the Tauri
  * host process (graphql_cache_plugin) over invoke commands. The host
@@ -7,6 +9,7 @@
  * worker-host.ts.
  */
 
+import { fireAndForget } from '@core/util/fireAndForget';
 import { invoke } from '@tauri-apps/api/core';
 import { emit, listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type {
@@ -14,6 +17,10 @@ import type {
   CachedQueryInstanceWire,
   CachedQueryVariantWire,
   CacheRevision,
+  CalendarCommitArgs,
+  CalendarCommitCacheResult,
+  CalendarRangeCacheArgs,
+  CalendarRangeCacheResult,
   ClaimedMutation,
   CommitOptimisticWriteResult,
   DeferOptimisticWriteResult,
@@ -21,23 +28,28 @@ import type {
   EntityFilterCacheArgs,
   EntityFilterCacheResult,
   HydrationResult,
+  HydrationSearchChanges,
   MutationClaim,
   MutationSettlement,
   ReadRecordsByKeysArgs,
   ReadRecordsByKeysResult,
   ReadResult,
+  RecordFieldChange,
   RollbackOptimisticWriteResult,
   SearchCacheArgs,
   SearchCachePage,
   WriteResult,
 } from '../protocol';
 import {
+  isRecordFieldChanges,
   parseCacheRevision,
   parseStorageGeneration,
   validateCacheSearchArgs,
   validateRecordSelectionKeys,
 } from '../protocol';
 import type {
+  AffectedOperationsListener,
+  CacheChangeListener,
   CacheChangeOptions,
   CacheGenerationChange,
   CacheHost,
@@ -60,11 +72,15 @@ const MUTATION_SETTLED_EVENT = 'graphql-cache://mutation-settled';
 
 /** Payload of the ops-affected event (graphql_cache_plugin `OpsAffectedEvent`). */
 type OpsAffectedPayload = {
+  fieldChanges?: RecordFieldChange[];
   opIds: string[];
   keys: string[];
 };
 
-type CacheChangedPayload = { revision: string; reset?: boolean };
+type CacheChangedPayload = {
+  revision: string;
+  reset?: boolean;
+} & HydrationSearchChanges;
 
 // Older native binaries omit the advancement bit and still receive OTA JS.
 type NativeHydrationResult = HydrationResult & { revisionAdvanced?: boolean };
@@ -84,12 +100,26 @@ export interface TauriHostOptions {
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
 const ENTITY_FILTER_COMMAND = 'graphql_cache_entity_filter';
+const WATCH_COMMAND = 'graphql_cache_watch';
+const CALENDAR_RANGE_COMMAND = 'graphql_cache_calendar_range';
+const CALENDAR_COMMIT_COMMAND = 'graphql_cache_calendar_commit';
+const INSPECT_MUTATIONS_COMMAND = 'graphql_cache_inspect_mutations';
+
+/** An OTA bundle cannot safely replay drafts using an older native queue API. */
+export class NativeCacheUpgradeRequiredError extends Error {
+  constructor() {
+    super(
+      'Update Macro to sync drafts saved on this device. Your queued drafts are preserved until the app is updated.'
+    );
+    this.name = 'NativeCacheUpgradeRequiredError';
+  }
+}
 
 export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
   const clientId = crypto.randomUUID();
-  const affectedSubscribers = new Set<(opKeys: number[]) => void>();
-  const cacheChangeSubscribers = new Set<(revision: CacheRevision) => void>();
-  const hydrationSubscribers = new Set<(revision: CacheRevision) => void>();
+  const affectedSubscribers = new Set<AffectedOperationsListener>();
+  const cacheChangeSubscribers = new Set<CacheChangeListener>();
+  const hydrationSubscribers = new Set<CacheChangeListener>();
   const generationChangeSubscribers = new Set<
     (change: CacheGenerationChange) => void
   >();
@@ -104,6 +134,13 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
   // no longer receive these OTA bundles. OTA updates cannot add Rust commands.
   // Keep this per host so a new native binary is probed again after restarting.
   let entityFilterUnavailable = false;
+  // Binaries before incremental watches still serve full reads.
+  let watchUnavailable = false;
+  // Native binaries before the calendar range index answer `unsupported`, so
+  // the calendar keeps reading from the network until the app updates.
+  let calendarUnavailable = false;
+  const isMissingCommand = (error: unknown, command: string): boolean =>
+    error instanceof Error && error.message === `Command ${command} not found`;
 
   // Revisions are monotonic for the native engine's lifetime. This also gates
   // repeated no-op hydrations on older binaries without revisionAdvanced.
@@ -151,7 +188,11 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
         .map((id) => Number(id.slice(prefix.length)))
         .filter((n) => Number.isFinite(n));
       if (opKeys.length > 0) {
-        for (const cb of affectedSubscribers) cb(opKeys);
+        for (const cb of affectedSubscribers) {
+          if (isRecordFieldChanges(event.payload.fieldChanges))
+            cb(opKeys, event.payload.fieldChanges);
+          else cb(opKeys);
+        }
       }
     }).catch((error) => {
       console.warn('graphql cache ops-affected listener failed', error);
@@ -172,7 +213,17 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       if (event.payload.reset) {
         for (const cb of generationChangeSubscribers) cb({ storage: 'reset' });
       }
-      for (const cb of cacheChangeSubscribers) cb(revision);
+      for (const cb of cacheChangeSubscribers) {
+        if (
+          event.payload.reset ||
+          event.payload.searchChangedBuckets === undefined
+        )
+          cb(revision);
+        else
+          cb(revision, {
+            searchChangedBuckets: event.payload.searchChangedBuckets,
+          });
+      }
     }).catch((error) => {
       console.warn('graphql cache change listener failed', error);
       return undefined;
@@ -185,7 +236,13 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
         (event) => {
           const revision = parseCacheRevision(event.payload.revision);
           observeRevision(revision);
-          for (const cb of hydrationSubscribers) cb(revision);
+          for (const cb of hydrationSubscribers) {
+            if (event.payload.searchChangedBuckets === undefined) cb(revision);
+            else
+              cb(revision, {
+                searchChangedBuckets: event.payload.searchChangedBuckets,
+              });
+          }
         }
       );
     } catch (error) {
@@ -194,29 +251,49 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     }
   }
   const unlistenHydration = listenForHydration();
-  async function removeHydrationListener(): Promise<void> {
-    const unlisten = await unlistenHydration;
-    unlisten?.();
-  }
 
-  const ready = request<void>('graphql_cache_init', {
-    scope: options.scope,
-    hotCapacity: options.hotCapacity,
-  });
-  void (async () => {
+  async function initialize(): Promise<void> {
+    const { default: schemaSdl } = await import(
+      '../../../../../../static_assets/schema.graphql?raw'
+    );
+    await request<void>('graphql_cache_init_with_schema', {
+      scope: options.scope,
+      hotCapacity: options.hotCapacity,
+      schemaSdl,
+    });
+    // Probe before any enqueue/claim. Older binaries silently ignore new
+    // metadata arguments, so waiting until a draft fails would lose correlation.
     try {
-      await ready;
+      await request<MutationInspection[]>(INSPECT_MUTATIONS_COMMAND, {});
     } catch (error) {
-      options.onInitializationError?.(
-        error instanceof Error ? error : new Error(String(error))
-      );
+      if (
+        error instanceof Error &&
+        error.message === `Command ${INSPECT_MUTATIONS_COMMAND} not found`
+      ) {
+        throw new NativeCacheUpgradeRequiredError();
+      }
+      throw error;
     }
-  })();
+  }
+  const ready = initialize();
+  fireAndForget(
+    (async () => {
+      try {
+        await ready;
+      } catch (error) {
+        options.onInitializationError?.(
+          error instanceof Error ? error : new Error(String(error))
+        );
+      }
+    })(),
+    'graphql-cache-host'
+  );
 
   const opId = (opKey: number) => `${clientId}:${opKey}`;
 
   return {
     clientId,
+    liveQueries: true,
 
     async currentRevision(): Promise<CacheRevision> {
       await ready;
@@ -241,6 +318,25 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
         variables: args.variables,
         entityResolvers: args.entityResolvers,
       });
+    },
+
+    async watchQuery(args) {
+      await ready;
+      if (watchUnavailable) return { kind: 'unsupported' };
+      try {
+        return await request(WATCH_COMMAND, {
+          opId: opId(args.opKey),
+          query: args.query,
+          operationName: args.operationName,
+          variables: args.variables,
+          entityResolvers: args.entityResolvers,
+          since: args.since,
+        });
+      } catch (error) {
+        if (!isMissingCommand(error, WATCH_COMMAND)) throw error;
+        watchUnavailable = true;
+        return { kind: 'unsupported' };
+      }
     },
 
     async readRecordsByKeys(
@@ -290,6 +386,47 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       }
     },
 
+    async calendarRange(
+      args: CalendarRangeCacheArgs
+    ): Promise<CalendarRangeCacheResult> {
+      await ready;
+      if (calendarUnavailable) return { kind: 'unsupported' };
+      try {
+        const result = await request<CalendarRangeCacheResult>(
+          CALENDAR_RANGE_COMMAND,
+          { request: args }
+        );
+        return result.kind === 'unsupported'
+          ? result
+          : { ...result, revision: parseCacheRevision(result.revision) };
+      } catch (error) {
+        if (!isMissingCommand(error, CALENDAR_RANGE_COMMAND)) throw error;
+        calendarUnavailable = true;
+        return { kind: 'unsupported' };
+      }
+    },
+
+    async calendarCommit(
+      args: CalendarCommitArgs
+    ): Promise<CalendarCommitCacheResult> {
+      await ready;
+      if (calendarUnavailable) return { kind: 'unsupported' };
+      try {
+        const result = await request<WriteResult>(CALENDAR_COMMIT_COMMAND, {
+          commit: args,
+        });
+        return {
+          kind: 'committed',
+          revision: parseCacheRevision(result.revision),
+          changed: result.changed,
+        };
+      } catch (error) {
+        if (!isMissingCommand(error, CALENDAR_COMMIT_COMMAND)) throw error;
+        calendarUnavailable = true;
+        return { kind: 'unsupported' };
+      }
+    },
+
     async writeQuery(args: CacheWriteArgs): Promise<WriteResult> {
       await ready;
       return await request<WriteResult>('graphql_cache_write', {
@@ -328,7 +465,12 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       );
       if (result.revisionAdvanced === false || !newlyObserved) return result;
       try {
-        await emit(CACHE_HYDRATED_EVENT, { revision: result.revision });
+        await emit(CACHE_HYDRATED_EVENT, {
+          revision: result.revision,
+          ...(result.searchChangedBuckets !== undefined
+            ? { searchChangedBuckets: result.searchChangedBuckets }
+            : {}),
+        });
       } catch (error) {
         // Notification failure must not turn a committed hydration into a retry.
         console.warn('graphql cache hydration notification failed', error);
@@ -352,6 +494,9 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
           data: args.data,
           linkPatches: args.linkPatches,
           revalidations: args.revalidations,
+          identityBindings: args.identityBindings,
+          clientMetadata: args.clientMetadata,
+          uncertainCalendarEventKeys: args.uncertainCalendarEventKeys,
           createdAtMs: claim.nowMs,
           owner: claim.owner,
           nowMs: claim.nowMs,
@@ -390,6 +535,10 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       );
     },
 
+    async inspectMutations() {
+      await ready;
+      return await request<MutationInspection[]>(INSPECT_MUTATIONS_COMMAND, {});
+    },
     async claimNextMutation(
       owner: string,
       nowMs: number,
@@ -406,7 +555,8 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       transactionId: string,
       claim: MutationClaim,
       nextAttemptAtMs: number,
-      error: string
+      error: string,
+      serverFailure = false
     ): Promise<DeferOptimisticWriteResult> {
       await ready;
       return await request<DeferOptimisticWriteResult>(
@@ -417,6 +567,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
           leaseGeneration: claim.generation,
           nextAttemptAtMs,
           error,
+          serverFailure,
         }
       );
     },
@@ -444,7 +595,8 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     async rollbackOptimisticWrite(
       transactionId: string,
       claim: MutationClaim,
-      error: string
+      error: string,
+      errorCode?: string
     ): Promise<RollbackOptimisticWriteResult> {
       await ready;
       return await request<RollbackOptimisticWriteResult>(
@@ -454,6 +606,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
           leaseOwner: claim.owner,
           leaseGeneration: claim.generation,
           error,
+          ...(errorCode === undefined ? {} : { errorCode }),
         }
       );
     },
@@ -488,13 +641,13 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       );
     },
 
-    onOpsAffected(cb: (opKeys: number[]) => void): () => void {
+    onOpsAffected(cb: AffectedOperationsListener): () => void {
       affectedSubscribers.add(cb);
       return () => affectedSubscribers.delete(cb);
     },
 
     onCacheChanged(
-      cb: (revision: CacheRevision) => void,
+      cb: CacheChangeListener,
       options?: CacheChangeOptions
     ): () => void {
       cacheChangeSubscribers.add(cb);
@@ -525,10 +678,18 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       hydrationSubscribers.clear();
       generationChangeSubscribers.clear();
       settlementSubscribers.clear();
-      void unlistenOps.then((fn) => fn?.());
-      void unlistenCacheChanges.then((fn) => fn?.());
-      void removeHydrationListener();
-      void unlistenSettlements.then((fn) => fn?.());
+      for (const unlisten of [
+        unlistenOps,
+        unlistenCacheChanges,
+        unlistenHydration,
+        unlistenSettlements,
+      ]) {
+        // UnlistenFn returns the unlisten IPC promise despite its void type.
+        fireAndForget(
+          unlisten.then((fn) => fn?.()),
+          'graphql-cache-host'
+        );
+      }
     },
   };
 }

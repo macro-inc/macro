@@ -13,9 +13,10 @@ use sqs_client::search::{
 use crate::config::BackfillPageSizes;
 use crate::domain::models::{
     BackfillError, CalendarEventBackfillCursor, CalendarEventBackfillRequest, CallBackfillCursor,
-    CallBackfillRequest, ChannelBackfillRequest, ChatBackfillCursor, ChatBackfillRequest,
-    DocumentBackfillCursor, DocumentBackfillRequest, EmailBackfillRequest, ProjectBackfillCursor,
-    ProjectBackfillRequest, PropertiesBackfillRequest, PropertySourcePage, SourcePage,
+    CallBackfillRequest, ChannelBackfillCursor, ChannelBackfillRequest, ChatBackfillCursor,
+    ChatBackfillRequest, DocumentBackfillCursor, DocumentBackfillRequest, EmailBackfillRequest,
+    ProjectBackfillCursor, ProjectBackfillRequest, PropertiesBackfillRequest, PropertySourcePage,
+    SourcePage,
 };
 use crate::domain::ports::BackfillSource;
 
@@ -26,17 +27,21 @@ const DEFAULT_EMAIL_BATCH_SIZE: usize = 50;
 /// reindexed directly.
 const PROPERTIES_PAGE_SIZE: usize = 5000;
 
-/// Postgres-backed [`BackfillSource`] for every search-indexed entity. One
-/// struct, one DB pool, per-entity page sizes — collapses what used to be
-/// five parallel adapters. New entity types just add a method here.
+/// Postgres-backed [`BackfillSource`]. Global scans may use a replica, but
+/// explicit channel scopes use the primary to include just-committed imports.
 pub struct PgBackfillSource {
     db: PgPool,
+    primary_db: PgPool,
     page_sizes: BackfillPageSizes,
 }
 
 impl PgBackfillSource {
-    pub fn new(db: PgPool, page_sizes: BackfillPageSizes) -> Self {
-        Self { db, page_sizes }
+    pub fn new(db: PgPool, primary_db: PgPool, page_sizes: BackfillPageSizes) -> Self {
+        Self {
+            db,
+            primary_db,
+            page_sizes,
+        }
     }
 }
 
@@ -187,33 +192,51 @@ impl BackfillSource for PgBackfillSource {
     async fn fetch_channels(
         &self,
         req: &ChannelBackfillRequest,
-        offset: usize,
-    ) -> Result<SourcePage, BackfillError> {
-        let batch = comms_db_client::messages::get_messages::get_channel_messages(
-            &self.db,
-            self.page_sizes.channels as i64,
-            offset as i64,
-            req.deletion_filter.as_only_deleted(),
-        )
-        .await
-        .map_err(BackfillError::Source)?;
+        cursor: Option<ChannelBackfillCursor>,
+    ) -> Result<(SourcePage, Option<ChannelBackfillCursor>), BackfillError> {
+        if req.channel_ids.as_ref().is_some_and(Vec::is_empty) {
+            return Ok((SourcePage::empty(), None));
+        }
+        let db = if req.channel_ids.is_some() {
+            &self.primary_db
+        } else {
+            &self.db
+        };
+        let db_cursor = cursor.map(|c| (c.created_at, c.message_id));
+        let batch =
+            comms_db_client::messages::get_messages::get_channel_messages_for_search_backfill(
+                db,
+                self.page_sizes.channels as i64,
+                db_cursor,
+                req.channel_ids.as_deref(),
+                req.deletion_filter.as_only_deleted(),
+            )
+            .await
+            .map_err(BackfillError::Source)?;
 
+        let next_cursor = batch.last().map(|row| ChannelBackfillCursor {
+            created_at: row.created_at,
+            message_id: row.message_id,
+        });
         let rows_consumed = batch.len();
-        let messages: Vec<SearchQueueMessage> = batch
+        let messages = batch
             .into_iter()
-            .map(|(channel_id, message_id)| {
+            .map(|row| {
                 SearchQueueMessage::ChannelMessageUpdate(ChannelMessageUpdate {
-                    channel_id: channel_id.to_string(),
-                    message_id: message_id.to_string(),
+                    channel_id: row.channel_id.to_string(),
+                    message_id: row.message_id.to_string(),
                     index_override: req.index_override.clone(),
                 })
             })
             .collect();
 
-        Ok(SourcePage {
-            messages,
-            rows_consumed,
-        })
+        Ok((
+            SourcePage {
+                messages,
+                rows_consumed,
+            },
+            next_cursor,
+        ))
     }
 
     async fn fetch_documents(

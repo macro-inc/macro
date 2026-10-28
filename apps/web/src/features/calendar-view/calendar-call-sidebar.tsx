@@ -26,6 +26,7 @@ export function CalendarCallSidebar() {
   const upcoming = useUpcomingCalendarEventsSource({
     userId,
     sourceById: calendar.sourceById,
+    sourcesReady: calendar.sourcesReady,
     isSourceVisible: isRenderedSourceVisible,
     now,
   });

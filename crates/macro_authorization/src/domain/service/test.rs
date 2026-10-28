@@ -12,9 +12,9 @@ use uuid::Uuid;
 use super::MacroAuthorizationServiceImpl;
 use crate::domain::{
     models::{
-        BotActingUserClaims, BotAuthentication, BotScope, InternalAuthConfig,
+        BotActingUserClaims, BotAuthentication, BotScope, CredentialOrigin, InternalAuthConfig,
         InternalIdentityClaims, MacroAuthorizationError, MacroUserAuthentication,
-        ValidatedIdentity,
+        ValidatedCredential, ValidatedIdentity,
     },
     ports::{
         BotAuthorizer, JwtValidator, MacroAuthorizationService, NoBotAuthorizer,
@@ -24,11 +24,14 @@ use crate::domain::{
 
 #[derive(Clone)]
 struct FakeJwtValidator {
-    result: Result<ValidatedIdentity, MacroAuthorizationError>,
+    result: Result<ValidatedCredential, MacroAuthorizationError>,
 }
 
 impl JwtValidator for FakeJwtValidator {
-    fn validate(&self, _jwt: &str) -> Result<ValidatedIdentity, Report<MacroAuthorizationError>> {
+    fn validate_credential(
+        &self,
+        _jwt: &str,
+    ) -> Result<ValidatedCredential, Report<MacroAuthorizationError>> {
         self.result.clone().map_err(Report::new)
     }
 }
@@ -120,6 +123,15 @@ impl MacroAuthorizationService for DefaultRejectingAuthorizationService {
         Err(Report::new(MacroAuthorizationError::InvalidCredentials))
     }
 
+    async fn authorize_identity(
+        &self,
+        jwt: &str,
+    ) -> Result<ValidatedCredential, Report<MacroAuthorizationError>> {
+        self.authorize(jwt)
+            .await
+            .map(crate::ValidatedCredential::session)
+    }
+
     async fn authorize_internal(
         &self,
         _provided_key: &str,
@@ -161,6 +173,8 @@ fn bot_authentication() -> BotAuthentication {
         bot_scope: BotScope::Team,
         team_id: Some(TEAM_ID),
         acting_user: Some(MacroUserAuthentication {
+            origin: crate::CredentialOrigin::Bot,
+            agent_id: None,
             macro_user_id: MacroUserIdStr::try_from("macro|acting@example.com".to_string())
                 .expect("valid Macro user id"),
             user_context: UserContext {
@@ -307,11 +321,15 @@ async fn authorize_constructs_user_context_from_validated_identity() {
     let permissions = HashSet::from(["documents:read".to_string(), "documents:write".to_string()]);
     let service = MacroAuthorizationServiceImpl::new(
         FakeJwtValidator {
-            result: Ok(ValidatedIdentity {
-                user_id: "macro|user@example.com".to_string(),
-                fusion_user_id: "fusion-user-id".to_string(),
-                organization_id: Some(42),
-                permissions: Some(permissions.clone()),
+            result: Ok(ValidatedCredential {
+                origin: CredentialOrigin::Session,
+                identity: ValidatedIdentity {
+                    agent_id: None,
+                    user_id: "macro|user@example.com".to_string(),
+                    fusion_user_id: "fusion-user-id".to_string(),
+                    organization_id: Some(42),
+                    permissions: Some(permissions.clone()),
+                },
             }),
         },
         internal_auth_config(None),
@@ -522,4 +540,34 @@ async fn authorize_user_api_key_passes_through_authorizer_errors() {
 
         assert_eq!(error.current_context(), &expected);
     }
+}
+
+#[tokio::test]
+async fn authorize_identity_keeps_verified_agent_and_owner() {
+    let service = MacroAuthorizationServiceImpl::new(
+        FakeJwtValidator {
+            result: Ok(ValidatedCredential {
+                origin: CredentialOrigin::MacroApiJwt,
+                identity: ValidatedIdentity {
+                    agent_id: Some(bot_id::MACRO_NEW_BOT_ID),
+                    user_id: "macro|owner@example.com".into(),
+                    fusion_user_id: "fusion-owner".into(),
+                    organization_id: Some(42),
+                    permissions: None,
+                },
+            }),
+        },
+        internal_auth_config(None),
+        NoBotAuthorizer,
+        NoUserApiKeyAuthorizer,
+    );
+    let credential = service.authorize_identity("signed-token").await.unwrap();
+    assert_eq!(credential.origin, CredentialOrigin::MacroApiJwt);
+    let identity = credential.identity;
+    assert_eq!(identity.agent_id, Some(bot_id::MACRO_NEW_BOT_ID));
+    assert_eq!(identity.user_id, "macro|owner@example.com");
+    assert_eq!(
+        service.authorize("signed-token").await.unwrap().user_id,
+        identity.user_id
+    );
 }

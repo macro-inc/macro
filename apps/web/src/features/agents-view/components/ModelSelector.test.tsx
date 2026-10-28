@@ -13,12 +13,6 @@ import { ModelSelector, SessionModelSelector } from './ModelSelector';
 const options = [
   { id: 'gpt-5', name: 'GPT-5', description: null, group: null },
   { id: 'claude-sonnet-4', name: 'Sonnet 4', description: null, group: null },
-  {
-    id: 'anthropic/claude-fable-5-1',
-    name: 'Fable 5.1',
-    description: null,
-    group: null,
-  },
 ];
 
 describe('shared model selector', () => {
@@ -49,7 +43,6 @@ describe('shared model selector', () => {
     ));
     const trigger = screen.getByRole('button', { name: 'Model' });
     fireEvent.keyDown(trigger, { key: 'Enter' });
-    expect(screen.queryByRole('menuitem', { name: /Fable 5.1/ })).toBeNull();
     fireEvent.keyDown(screen.getByRole('menuitem', { name: /Sonnet 4/ }), {
       key: 'Enter',
     });
@@ -86,9 +79,9 @@ describe('shared model selector', () => {
     const select = vi.fn();
     const [changingTo, setChangingTo] = createSignal<string>();
     const ids = [
-      'anthropic/claude-sonnet-5',
-      'anthropic/claude-opus-5',
-      'anthropic/claude-haiku-4-5',
+      'anthropic/claude-sonnet-5-5',
+      'anthropic/claude-opus-5-5',
+      'openai/gpt-5.6-mini',
     ];
     render(() => (
       <SessionModelSelector
@@ -104,18 +97,18 @@ describe('shared model selector', () => {
       />
     ));
     const trigger = screen.getByRole('button', { name: 'Model' });
-    expect(trigger.textContent).toBe('Sonnet 5');
-    expect(trigger.title).toBe('Sonnet 5');
+    expect(trigger.textContent).toBe('Sonnet 5.5');
+    expect(trigger.title).toBe('Sonnet 5.5');
     fireEvent.keyDown(trigger, { key: 'Enter' });
-    expect(screen.getByRole('menuitem', { name: /^Haiku 4.5/ })).toBeTruthy();
+    expect(screen.getByRole('menuitem', { name: 'More models' })).toBeTruthy();
     expect(screen.queryByText(ids[0])).toBeNull();
-    fireEvent.keyDown(screen.getByRole('menuitem', { name: /^Opus 5/ }), {
+    fireEvent.keyDown(screen.getByRole('menuitem', { name: /^Opus 5.5/ }), {
       key: 'Enter',
     });
     expect(select).toHaveBeenCalledWith(ids[1]);
     await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
     setChangingTo(ids[1]);
-    expect(trigger.textContent).toBe('Opus 5');
+    expect(trigger.textContent).toBe('Opus 5.5');
   });
   it('keeps the new-session default selectable before models are available', async () => {
     const selectDefault = vi.fn();
@@ -146,7 +139,7 @@ describe('shared model selector', () => {
     await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
   });
 
-  it('shortlists a large catalog and searches every model with provider icons', async () => {
+  it('groups a large catalog by provider and searches every model with provider icons', async () => {
     const select = vi.fn();
     render(() => (
       <ModelSelector
@@ -163,8 +156,10 @@ describe('shared model selector', () => {
     fireEvent.keyDown(screen.getByRole('button', { name: 'Model' }), {
       key: 'Enter',
     });
-    expect(screen.getAllByRole('menuitem').length).toBeLessThanOrEqual(6);
-    expect(screen.getByRole('menuitem', { name: /More models/ })).toBeTruthy();
+    expect(screen.getAllByRole('menuitem')).toHaveLength(60);
+    expect(screen.queryByRole('menuitem', { name: /More models/ })).toBeNull();
+    expect(screen.getByRole('group', { name: 'OpenAI' })).toBeTruthy();
+    expect(screen.queryByRole('group', { name: 'Suggested' })).toBeNull();
     fireEvent.input(screen.getByRole('textbox', { name: 'Search models' }), {
       target: { value: 'variant 59' },
     });

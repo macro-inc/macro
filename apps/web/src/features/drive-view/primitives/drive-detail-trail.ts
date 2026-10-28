@@ -16,13 +16,24 @@ export const driveDocumentTargetSchema = z.object({
   fallbackName: z.string().optional(),
 });
 
-export const driveDetailTrailSchema = z.array(driveDocumentTargetSchema).min(1);
+const driveDatabaseTargetSchema = z.object({
+  type: z.enum(['database', 'form']),
+  id: z.string().min(1),
+  fallbackName: z.string().optional(),
+});
 
-export type DriveDocumentTarget = z.infer<typeof driveDocumentTargetSchema>;
+const driveDetailTargetSchema = z.union([
+  driveDocumentTargetSchema,
+  driveDatabaseTargetSchema,
+]);
 
-export function documentTargetFromRoute(
+export const driveDetailTrailSchema = z.array(driveDetailTargetSchema).min(1);
+
+export type DriveDetailTarget = z.infer<typeof driveDetailTargetSchema>;
+
+export function detailTargetFromRoute(
   document: DriveDocumentRoute | undefined
-): DriveDocumentTarget | undefined {
+): DriveDetailTarget | undefined {
   if (!document) return;
 
   const target = {
@@ -31,6 +42,9 @@ export function documentTargetFromRoute(
   };
 
   switch (document.type) {
+    case 'database':
+    case 'form':
+      return { type: document.type, id: document.id };
     case 'task':
       return {
         ...target,
@@ -49,9 +63,11 @@ export function documentTargetFromRoute(
   }
 }
 
-export function documentRouteFromTarget(
-  target: DriveDocumentTarget
+export function detailRouteFromTarget(
+  target: DriveDetailTarget
 ): DriveDocumentRoute {
+  if (target.type !== 'document') return { id: target.id, type: target.type };
+
   return driveDocumentRoute({
     id: target.id,
     fileType: target.fileType ?? 'unknown',

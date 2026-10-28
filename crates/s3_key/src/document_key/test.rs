@@ -340,3 +340,50 @@ fn test_build_temp_docx_key() {
     let key = build_temp_docx_key("document-id");
     assert_eq!(key, "temp_files/document-id.docx");
 }
+
+#[test]
+fn upgraded_office_keys_build_and_parse() {
+    for (format, extension) in [
+        (UpgradedOfficeFormat::Docx, "docx"),
+        (UpgradedOfficeFormat::Pptx, "pptx"),
+        (UpgradedOfficeFormat::Xlsx, "xlsx"),
+    ] {
+        for (principal, owner) in owners() {
+            let key = build_upgraded_office_document_key(&owner, DOCUMENT_ID, format);
+            assert_eq!(
+                key,
+                format!("{principal}/{DOCUMENT_ID}/upgraded.{extension}")
+            );
+
+            let parsed = DocumentKey::from_s3_key(&key).unwrap();
+            assert_eq!(
+                parsed,
+                DocumentKey::UpgradedOffice {
+                    owner_segment: principal.to_string(),
+                    document_id: DOCUMENT_ID.to_string(),
+                    format,
+                }
+            );
+            assert!(parsed.is_upgraded_office());
+            assert!(!parsed.is_versioned());
+            assert_eq!(parsed.document_id(), Some(DOCUMENT_ID));
+            assert_eq!(parsed.owner_segment(), Some(principal));
+            assert_eq!(parsed.version_id_string(), None);
+            assert_eq!(parsed.to_key(), key);
+        }
+    }
+}
+
+#[test]
+fn upgraded_office_keys_reject_other_extensions() {
+    for tail in [
+        "upgraded.doc",
+        "upgraded.pdf",
+        "upgraded",
+        "upgraded.DOCX",
+        "upgradedx.docx",
+    ] {
+        let key = format!("{USER_PRINCIPAL}/{DOCUMENT_ID}/{tail}");
+        assert!(DocumentKey::from_s3_key(&key).is_err(), "{key}");
+    }
+}

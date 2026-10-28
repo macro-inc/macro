@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT record FROM scheduling_booking WHERE profile_id = $1 AND starts_at >= $2 AND starts_at < $3 ORDER BY starts_at, id LIMIT 5001",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "record",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "284aad80ccc3909ff55fc54cb3af69e07a9d4fff44c94f5f4ac8bff17db3040b"
+}

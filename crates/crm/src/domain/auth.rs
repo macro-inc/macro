@@ -23,10 +23,7 @@ use entity_access::domain::models::{
 };
 use uuid::Uuid;
 
-use crate::domain::{
-    comment::CrmCommentEntityType,
-    model::{CrmError, CrmPermissionRole},
-};
+use crate::domain::model::{CrmError, CrmPermissionRole};
 
 #[cfg(test)]
 mod test;
@@ -269,97 +266,6 @@ impl<T: RequiredPermission> CrmTeamReceipt<T> {
                 EntityType::Team,
             ),
             team_id,
-        }
-    }
-}
-
-/// Capability token for a CRM comment service call. The `receipt`'s
-/// entity is the comment's owning CRM company or contact; `team_id` is
-/// the owning team and `team_role` the caller's role on it, both
-/// resolved at mint time.
-#[derive(Debug)]
-pub struct CrmCommentReceipt<T: RequiredPermission> {
-    receipt: EntityAccessReceipt<T>,
-    team_id: Uuid,
-    team_role: TeamRole,
-}
-
-impl<T: RequiredPermission> CrmCommentReceipt<T> {
-    /// Mint a comment receipt off a verified access receipt for the
-    /// comment's owning entity. Crate-private. Errors if the receipt is
-    /// not for a CRM company or contact. Unused when the extractor seam
-    /// (`axum`) isn't compiled.
-    #[cfg_attr(not(feature = "axum"), allow(dead_code))]
-    pub(crate) fn new(
-        receipt: EntityAccessReceipt<T>,
-        team_id: Uuid,
-        team_role: TeamRole,
-    ) -> Result<Self, CrmError> {
-        match receipt.entity().entity_type {
-            EntityType::CrmCompany | EntityType::CrmContact => Ok(Self {
-                receipt,
-                team_id,
-                team_role,
-            }),
-            _ => Err(CrmError::InvalidRequest(
-                "receipt is not for a CrmCompany or CrmContact".into(),
-            )),
-        }
-    }
-
-    /// The owning team the repository scopes its query by.
-    pub fn team_id(&self) -> Uuid {
-        self.team_id
-    }
-
-    /// The underlying verified access receipt.
-    pub fn receipt(&self) -> &EntityAccessReceipt<T> {
-        &self.receipt
-    }
-
-    /// Whether the caller's team role reveals comments on hidden parents
-    /// (admin/owner).
-    pub(crate) fn include_hidden(&self) -> bool {
-        self.team_role >= TeamRole::Admin
-    }
-
-    /// The CRM entity (type + id) the comment hangs off, derived from
-    /// the receipt. Used by create / list-threads, which key on the
-    /// owning entity rather than a comment id.
-    pub(crate) fn comment_entity(&self) -> Result<(CrmCommentEntityType, Uuid), CrmError> {
-        let entity_type = match self.receipt.entity().entity_type {
-            EntityType::CrmCompany => CrmCommentEntityType::CrmCompany,
-            EntityType::CrmContact => CrmCommentEntityType::CrmContact,
-            _ => {
-                return Err(CrmError::InvalidRequest(
-                    "receipt is not for a CrmCompany or CrmContact".into(),
-                ));
-            }
-        };
-        let entity_id = Uuid::parse_str(&self.receipt.entity().entity_id)
-            .map_err(|_| CrmError::InvalidRequest("invalid entity id".into()))?;
-        Ok((entity_type, entity_id))
-    }
-
-    /// Test-only: mints an `Owner` receipt with no access check.
-    #[cfg(test)]
-    #[allow(dead_code)]
-    pub(crate) fn dangerously_internal(
-        entity_type: CrmCommentEntityType,
-        entity_id: Uuid,
-        team_id: Uuid,
-    ) -> Self {
-        let et = match entity_type {
-            CrmCommentEntityType::CrmCompany => EntityType::CrmCompany,
-            CrmCommentEntityType::CrmContact => EntityType::CrmContact,
-        };
-        Self {
-            receipt: EntityAccessReceipt::dangerously_assert_internal_user(
-                &entity_id.to_string(),
-                et,
-            ),
-            team_id,
-            team_role: TeamRole::Owner,
         }
     }
 }

@@ -4,6 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { CreateMeetingRequestPreparationId } from './createMeetingRequestPreparationId';
 import type { CreateMeetingRequestScheduledEnd } from './createMeetingRequestScheduledEnd';
 import type { CreateMeetingRequestScheduledStart } from './createMeetingRequestScheduledStart';
 import type { CreateMeetingRequestTitle } from './createMeetingRequestTitle';
@@ -12,6 +13,8 @@ import type { CreateMeetingRequestTitle } from './createMeetingRequestTitle';
  * Inputs for creating a meeting without starting its RTC room.
  */
 export interface CreateMeetingRequest {
+  /** Optional unused room reserved by this actor on the setup screen. */
+  preparationId?: CreateMeetingRequestPreparationId;
   /** Optional scheduled end. */
   scheduledEnd?: CreateMeetingRequestScheduledEnd;
   /** Optional scheduled start. */

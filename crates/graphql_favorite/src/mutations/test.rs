@@ -43,6 +43,7 @@ impl SoupEntityEdges for TestSoupEdges {
     type NotificationFilter = String;
     type ActivityEvent = String;
     type EmailThreadEdges = TestEmailEdges;
+    type CrmRecordEdges = TestEmailEdges;
     type InitiativeEdges = TestEmailEdges;
     type AgentSessionEdges = TestAgentSessionEdges;
 
@@ -58,6 +59,10 @@ impl SoupEntityEdges for TestSoupEdges {
         TestEmailEdges { available: true }
     }
 
+    fn crm_record_edges(_record: model_entity::Entity<'static>) -> Self::CrmRecordEdges {
+        TestEmailEdges { available: true }
+    }
+
     async fn resolve_email_cache_projection(
         &self,
         _ctx: &Context<'_>,
@@ -66,7 +71,7 @@ impl SoupEntityEdges for TestSoupEdges {
         Ok(None)
     }
 
-    fn agent_session_edges(_bot_id: Uuid) -> Self::AgentSessionEdges {
+    fn agent_session_edges(_session_id: Uuid, _bot_id: Uuid) -> Self::AgentSessionEdges {
         TestAgentSessionEdges { available: true }
     }
 

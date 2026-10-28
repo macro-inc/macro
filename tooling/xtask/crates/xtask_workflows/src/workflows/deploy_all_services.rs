@@ -227,7 +227,9 @@ fn build_prebuilt_binaries() -> Step<Run> {
     let script = indoc::indoc! {r#"
         set -euo pipefail
         mkdir -p prebuilt
-        nix build --print-build-logs ".#deploy-service-binaries-${SERVICE}"
+        # DSS bundles two cargo packages; the hand-written nix.conf leaves
+        # max-jobs at 1, which would build them one after the other.
+        nix build --max-jobs auto --print-build-logs ".#deploy-service-binaries-${SERVICE}"
         cp -r result/bin/* prebuilt/
         mkdir -p prebuilt/nix-store
         while IFS= read -r store_path; do

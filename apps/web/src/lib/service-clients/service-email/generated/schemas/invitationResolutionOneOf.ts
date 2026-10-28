@@ -7,7 +7,7 @@
 import type { InvitationResolutionOneOfKind } from './invitationResolutionOneOfKind';
 
 /**
- * Viewer has no active owned Google-backed calendar.
+ * Viewer has no active owned or delegated Google-backed calendar.
  */
 export type InvitationResolutionOneOf = {
   kind: InvitationResolutionOneOfKind;

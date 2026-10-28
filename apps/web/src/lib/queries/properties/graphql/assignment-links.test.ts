@@ -11,6 +11,7 @@ describe('new property assignment links', () => {
     ['CHANNEL', 'GraphqlSoupChannel'],
     ['CALL_RECORD', 'GraphqlSoupCall'],
     ['COMPANY', 'GraphqlSoupCrmCompany'],
+    ['DATABASE_ROW', 'GraphqlSoupDatabaseRow'],
   ] as const)(
     'targets a %s parent without any cache inspection',
     (entityType, typename) => {
@@ -43,6 +44,18 @@ describe('new property assignment links', () => {
   it('does not invent a Soup identity for USER properties', () => {
     expect(
       buildPropertyAssignmentLinks('USER', 'user-1', 'temporary-1', 'priority')
+    ).toEqual([]);
+  });
+
+  it('links nothing for an entity type from a newer server', () => {
+    const fromNewerServer = JSON.parse('"SPREADSHEET"');
+    expect(
+      buildPropertyAssignmentLinks(
+        fromNewerServer,
+        'entity-1',
+        'temporary-1',
+        'priority'
+      )
     ).toEqual([]);
   });
 });

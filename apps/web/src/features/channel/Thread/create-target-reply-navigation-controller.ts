@@ -3,6 +3,7 @@ import type { ThreadReplyListHandle } from './ThreadReplyList';
 type Reply = { id: string };
 
 type TargetReplyNavigation = {
+  requestKey?: string | number;
   targetReplyId?: string;
   handle?: ThreadReplyListHandle;
   canScroll: boolean;
@@ -13,6 +14,8 @@ type TargetReplyNavigation = {
 
 /** Coordinates one-shot reply navigation across async target changes. */
 export function createTargetReplyNavigationController() {
+  let currentRequestKey: string | number | undefined;
+  let requestGeneration = 0;
   let lastScrolledReplyId: string | undefined;
   let inFlightReplyId: string | undefined;
   let inFlightHandle: ThreadReplyListHandle | undefined;
@@ -28,6 +31,7 @@ export function createTargetReplyNavigationController() {
   };
 
   const update = ({
+    requestKey,
     targetReplyId,
     handle,
     canScroll,
@@ -35,6 +39,12 @@ export function createTargetReplyNavigationController() {
     getCurrentTargetReplyId,
     onScrolled,
   }: TargetReplyNavigation) => {
+    if (currentRequestKey !== requestKey) {
+      cancelInFlight();
+      lastScrolledReplyId = undefined;
+      currentRequestKey = requestKey;
+      requestGeneration += 1;
+    }
     if (inFlightReplyId && inFlightReplyId !== targetReplyId) {
       cancelInFlight();
     }
@@ -54,7 +64,9 @@ export function createTargetReplyNavigationController() {
     if (inFlightHandle && inFlightHandle !== handle) cancelInFlight();
     inFlightReplyId = targetReplyId;
     inFlightHandle = handle;
+    const generation = requestGeneration;
     const started = handle.scrollToIndex(index, () => {
+      if (generation !== requestGeneration) return;
       if (inFlightReplyId === targetReplyId && inFlightHandle === handle) {
         clearInFlight();
       }

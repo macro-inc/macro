@@ -20,6 +20,7 @@ const definition = (
   is_system: true,
   is_metadata: false,
   is_multi_select: false,
+  specific_entity_type: null,
   owner: { scope: 'system' },
 });
 
@@ -47,6 +48,7 @@ it('orders composer properties like tasks while preserving supported status and 
         property_definition_id: definition.id,
         value: { type: 'string', value: 'Choice' },
         display_order: 0,
+        color: null,
         created_at: '',
         updated_at: '',
       },

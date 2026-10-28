@@ -1,0 +1,9 @@
+{"type":"user","uuid":"u1","message":{"content":"Read the file."}}
+{"type":"assistant","uuid":"a1","message":{"content":[{"type":"thinking","thinking":"I will inspect it."},{"type":"tool_use","id":"t1","name":"Read","input":{"file_path":"/repo/a.txt"}}],"stop_reason":"tool_use"}}
+{"type":"user","uuid":"u2","message":{"content":[{"type":"tool_result","tool_use_id":"t1","is_error":true,"content":"File missing"}]}}
+{"type":"assistant","uuid":"a2","message":{"content":[{"type":"text","text":"The file is missing."}],"stop_reason":"end_turn"}}
+{"type":"assistant","uuid":"a2","message":{"content":[{"type":"text","text":"The file is missing."}],"stop_reason":"end_turn"}}
+{"type":"user","uuid":"u3","message":{"content":[{"type":"text","text":"Thanks."}]}}
+{"type":"assistant","uuid":"a3","isSidechain":true,"message":{"content":[{"type":"text","text":"Hidden child."}],"stop_reason":"end_turn"}}
+{"type":"assistant","uuid":"a4","message":{"content":[{"type":"text","text":"You are welcome."}],"stop_reason":"max_tokens"}}
+{"type":"future_record","uuid":"f1"}

@@ -3,6 +3,7 @@ import { fetchPresignedBlobWithProgress } from '@service-storage/util/fetchPresi
 import { getPresignedUrl } from '@service-storage/util/presignedUrl';
 import { decodeCsv } from '../core/uploaded-workbook';
 import {
+  CSV_MAX_BYTES,
   type WorkbookFileData,
   XLSX_MAX_BYTES,
 } from '../core/workbook-file-types';
@@ -34,15 +35,13 @@ export function uploadedWorkbookQuery(
           url,
           () => {},
           { signal },
-          csv ? 1_000_000 : XLSX_MAX_BYTES
+          csv ? CSV_MAX_BYTES : XLSX_MAX_BYTES
         )
       );
       if (!blob) throw new Error('This file is empty.');
-      if (blob.size > (csv ? 1_000_000 : XLSX_MAX_BYTES))
+      if (blob.size > (csv ? CSV_MAX_BYTES : XLSX_MAX_BYTES))
         throw new Error(
-          csv
-            ? 'Import a CSV up to 1 MB.'
-            : 'Import an Excel workbook up to 5 MB.'
+          `Import ${csv ? 'a CSV' : 'an Excel workbook'} up to ${(csv ? CSV_MAX_BYTES : XLSX_MAX_BYTES) / 1024 / 1024} MB.`
         );
       if (signal.aborted) throw new Error('Import cancelled.');
       if (csv) return decodeCsv(await blob.text());

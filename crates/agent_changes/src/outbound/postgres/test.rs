@@ -96,7 +96,7 @@ async fn a_session_without_captures_reads_as_empty(pool: PgPool) {
     let repo = PgChangesetRepo::new(pool.clone());
     let session = seed_session(&pool).await;
     assert_eq!(repo.get(session).await.unwrap(), SessionChanges::default());
-    assert!(repo.patch_key(session).await.unwrap().is_none());
+    assert!(repo.patch_location(session).await.unwrap().is_none());
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -183,7 +183,11 @@ async fn a_captured_changeset_round_trips_and_reports_what_it_superseded(pool: P
     let first = changeset(session);
     let first_key = PatchBlobKey::for_changeset(session, first.id);
     let superseded = repo
-        .record_changeset(&first, Some(&first_key), Utc::now())
+        .record_changeset(
+            &first,
+            Some(&PatchLocation::Blob(first_key.clone())),
+            Utc::now(),
+        )
         .await
         .unwrap();
     assert!(superseded.is_none(), "nothing came before");
@@ -203,8 +207,8 @@ async fn a_captured_changeset_round_trips_and_reports_what_it_superseded(pool: P
         Some(AttemptOutcome::Captured)
     );
     assert_eq!(
-        repo.patch_key(session).await.unwrap(),
-        Some(first_key.clone())
+        repo.patch_location(session).await.unwrap(),
+        Some(PatchLocation::Blob(first_key.clone()))
     );
 
     let mut second = changeset(session);
@@ -219,7 +223,7 @@ async fn a_captured_changeset_round_trips_and_reports_what_it_superseded(pool: P
         Some(first_key),
         "the old patch is reported for cleanup"
     );
-    assert!(repo.patch_key(session).await.unwrap().is_none());
+    assert!(repo.patch_location(session).await.unwrap().is_none());
     assert!(
         repo.get(session)
             .await
@@ -228,6 +232,59 @@ async fn a_captured_changeset_round_trips_and_reports_what_it_superseded(pool: P
             .unwrap()
             .files
             .is_empty()
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_shared_pull_request_changeset_replaces_the_sessions_own_patch(pool: PgPool) {
+    let repo = PgChangesetRepo::new(pool.clone());
+    let session = seed_session(&pool).await;
+    let first = changeset(session);
+    let first_key = PatchBlobKey::for_changeset(session, first.id);
+    repo.record_changeset(
+        &first,
+        Some(&PatchLocation::Blob(first_key.clone())),
+        Utc::now(),
+    )
+    .await
+    .unwrap();
+
+    let shared = macro_uuid::generate_uuid_v7();
+    sqlx::query!(
+        r#"
+        INSERT INTO github_pull_request_changeset (
+            id, github_key, repository, number, base_sha, head_sha, captured_at
+        )
+        VALUES ($1, 'github:1:7', 'https://github.com/example/example', 7, 'aaa', 'bbb', now())
+        "#,
+        shared,
+    )
+    .execute(&pool)
+    .await
+    .expect("insert github_pull_request_changeset");
+    let mut second = changeset(session);
+    second.id = ChangesetId::from_uuid(shared);
+    let superseded = repo
+        .record_changeset(
+            &second,
+            Some(&PatchLocation::PullRequest(shared)),
+            Utc::now(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        superseded,
+        Some(first_key),
+        "the session's own patch is reported for cleanup"
+    );
+    assert_eq!(
+        repo.patch_location(session).await.unwrap(),
+        Some(PatchLocation::PullRequest(shared))
+    );
+    assert_eq!(
+        repo.get(session).await.unwrap().changeset.map(|c| c.id),
+        Some(second.id)
     );
 }
 

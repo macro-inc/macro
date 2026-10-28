@@ -102,6 +102,7 @@ impl<S, Svc, Auth> FromRef<CallRouterState<S, Svc, Auth>> for MacroAuthorization
 /// - `GET /{channel_id}/active` — check if an active call exists
 /// - `GET /active` — list all active calls in channels the caller is a member of
 /// - `DELETE /{channel_id}` — leave or end a call
+/// - `POST /record/{call_id}/decline` — decline a ringing call on every device
 /// - `GET /record/{call_id}` — get a full call record (transcript + participants)
 /// - `PATCH /record/{call_id}` — edit a call record (share permissions, team sharing, name)
 /// - `PATCH /record/{call_id}/transcript` — set per-diarized-speaker custom_speaker overrides
@@ -116,6 +117,11 @@ where
     T: Send + Sync,
 {
     Router::new()
+        .route("/meetings/prepare", post(meetings::prepare::<S, Svc, Auth>))
+        .route(
+            "/meetings/prepare/{preparation_id}",
+            axum::routing::delete(meetings::cancel_preparation::<S, Svc, Auth>),
+        )
         .route(
             "/meetings",
             get(meetings::list::<S, Svc, Auth>).post(meetings::create::<S, Svc, Auth>),
@@ -132,6 +138,10 @@ where
         .route(
             "/meetings/join/{token}",
             post(meetings::join::<S, Svc, Auth>),
+        )
+        .route(
+            "/meetings/join/{token}/participants",
+            get(meetings::participants::<S, Svc, Auth>),
         )
         .route(
             "/meetings/invite/{token}",
@@ -159,6 +169,10 @@ where
         .route(
             "/record/preview",
             post(get_batch_call_record_preview_handler::<S, Svc, Auth>),
+        )
+        .route(
+            "/record/{call_id}/decline",
+            post(decline_call_handler::<S, Svc, Auth>),
         )
         .route(
             "/record/{call_id}",
@@ -208,12 +222,22 @@ impl<S: CallService> WebhookRouterState<S> {
 /// - `POST /join/{token}/leave` — RTC-token-authorized leave (per-IP rate limited)
 /// - `POST /webhook` — signed LiveKit events
 /// - `GET /ring-status/{call_id}` — status authorized by the VoIP-delivered RTC token
+/// - `POST /ring-status/{call_id}/decline` — decline authorized by the same token
 pub fn webhook_router<S, R, T>(state: WebhookRouterState<S>, rate_limiter: R) -> Router<T>
 where
     S: CallService,
     R: rate_limit::RateLimitService + Clone + Send + Sync + 'static,
     T: Send + Sync,
 {
+    let preview = Router::new()
+        .route(
+            "/join/{token}/participants",
+            get(meetings::guest_participants::<S>),
+        )
+        .route_layer(axum::middleware::from_fn_with_state(
+            rate_limiter.clone(),
+            meetings::enforce_preview_rate_limit::<R>,
+        ));
     Router::new()
         .route(
             "/join/{token}",
@@ -226,8 +250,13 @@ where
             rate_limiter,
             meetings::enforce_public_rate_limit::<R>,
         ))
+        .merge(preview)
         .route("/webhook", post(webhook_handler::<S>))
         .route("/ring-status/{call_id}", get(ring_status_handler::<S>))
+        .route(
+            "/ring-status/{call_id}/decline",
+            post(decline_ring_handler::<S>),
+        )
         .with_state(state)
 }
 
@@ -684,6 +713,53 @@ pub async fn leave_or_end_call_handler<
     Ok(Json(response))
 }
 
+/// Permission `POST /call/record/{call_id}/decline` requires: whoever can see
+/// the call may turn down its ring for themselves. Call access resolves to an
+/// access level, never a channel role, so a participant-role marker here would
+/// reject every user.
+pub(crate) type DeclineCallPermission = ViewAccessLevel;
+
+/// Handler for `POST /call/record/{call_id}/decline`.
+///
+/// Declines the identified active call for the caller without joining it.
+/// Bound to `call_id` so a stale incoming-call UI cannot decline a newer call
+/// that replaced it in the same channel. The caller's other devices are told
+/// to stop ringing (`call_declined`); the call continues for everyone else.
+#[utoipa::path(
+    post,
+    operation_id = "decline_call",
+    path = "/call/record/{call_id}/decline",
+    params(
+        ("call_id" = Uuid, Path, description = "Call ID"),
+    ),
+    responses(
+        (status = 204, description = "Decline recorded"),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse, description = "The call is no longer active"),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn decline_call_handler<
+    S: CallService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<CallRouterState<S, Svc, Auth>>,
+    access: CallAccessLevelExtractor<DeclineCallPermission, Svc, Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+) -> Result<StatusCode, CallError> {
+    let call_id = Uuid::parse_str(&access.entity_access_receipt.entity().entity_id)
+        .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid call_id in receipt")))?;
+
+    state
+        .service
+        .decline_call(&call_id, user.authorization.user.macro_user_id.clone())
+        .await?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
 /// Handler for `POST /call/webhook`.
 ///
 /// Receives webhook events from the RTC provider (e.g. LiveKit).
@@ -755,6 +831,44 @@ pub async fn ring_status_handler<S: CallService>(
     let response = state.service.get_ring_status(&call_id, bearer).await?;
 
     Ok(Json(response))
+}
+
+/// Handler for `POST /call/ring-status/{call_id}/decline`.
+///
+/// Declines a ringing call from a native client, e.g. the iPhone lock-screen
+/// decline button, so the user's other devices stop ringing. Authorized like
+/// [`ring_status_handler`]: the bearer credential is the recipient's LiveKit
+/// JWT from the VoIP push payload, which identifies both the room and the
+/// declining user.
+#[utoipa::path(
+    post,
+    operation_id = "decline_ring",
+    path = "/call/ring-status/{call_id}/decline",
+    params(
+        ("call_id" = Uuid, Path, description = "Call ID"),
+    ),
+    responses(
+        (status = 204, description = "Decline recorded"),
+        (status = 401, body = ErrorResponse, description = "Missing or invalid bearer token"),
+        (status = 404, body = ErrorResponse, description = "The call is no longer ringing"),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn decline_ring_handler<S: CallService>(
+    State(state): State<WebhookRouterState<S>>,
+    axum::extract::Path(call_id): axum::extract::Path<Uuid>,
+    headers: axum::http::HeaderMap,
+) -> Result<StatusCode, CallError> {
+    let bearer = headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "))
+        .ok_or(CallError::Auth)?;
+
+    state.service.decline_ring(&call_id, bearer).await?;
+
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// Handler for `POST /call/{channel_id}/transcript`.

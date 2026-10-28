@@ -140,3 +140,5 @@
 .homepage-sidebar-section[data-demo-expanded=true] .homepage-sidebar-rail { padding-top: 12px; }
 .homepage-sidebar-section[data-demo-expanded=true][data-main-only=true] .homepage-sidebar-demo-list { visibility: hidden; }
 .homepage-sidebar-section[data-demo-expanded=true][data-main-only=true] .homepage-sidebar-main { left: 56px; width: calc(var(--workspace-width) - 56px); }
+
+.homepage-sidebar-bottom-anchor { position: absolute; left: 50%; bottom: 0; width: 0; height: 0; }

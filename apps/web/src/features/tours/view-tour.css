@@ -1,0 +1,30 @@
+/* One quiet edge and a diffuse shadow keep the card lifted without a lip. */
+.view-tour-card,
+.view-tour-hint {
+  box-shadow: 0 18px 48px rgb(0 0 0 / 35%);
+}
+html[data-theme-light='true'] :is(.view-tour-card, .view-tour-hint) {
+  box-shadow: 0 12px 36px rgb(0 0 0 / 10%);
+}
+/* Appear in place: fade and rise at the first position, never glide in. */
+:is(.view-tour-card, .view-tour-hint)[data-placed] {
+  animation: view-tour-rise 220ms cubic-bezier(.2,.8,.2,1) both;
+}
+/* Later moves between steps glide. */
+.view-tour-card[data-settled] {
+  transition: transform 180ms cubic-bezier(.2,.8,.2,1);
+}
+@keyframes view-tour-rise {
+  from {
+    opacity: 0;
+    translate: 0 8px;
+  }
+}
+.view-tour-highlight {
+  border-color: color-mix(in srgb, var(--color-accent) 70%, var(--color-ink));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 12%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  :is(.view-tour-card, .view-tour-hint)[data-placed] { animation: none; }
+  .view-tour-card[data-settled] { transition: none; }
+}

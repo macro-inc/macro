@@ -75,7 +75,9 @@ export async function importWorkbookFile(
   signal?: AbortSignal
 ): Promise<WorkbookFileData> {
   if (bytes.byteLength > XLSX_MAX_BYTES)
-    throw new Error('Choose an Excel workbook up to 5 MB.');
+    throw new Error(
+      `Choose an Excel workbook up to ${XLSX_MAX_BYTES / 1024 / 1024} MB.`
+    );
   // Transfer a copy: callers may retain the original file until import is confirmed.
   const reply = await requestWorkbookFile(
     { kind: 'decode', bytes: bytes.slice() },
@@ -85,8 +87,10 @@ export async function importWorkbookFile(
     throw new Error('Unexpected Excel import response.');
   return reply.workbook;
 }
+/** Posting to the worker copies the workbook synchronously, so callers may
+ * keep editing cells (which change in place) while the export encodes. */
 export async function exportWorkbookFile(
-  workbook: Pick<WorkbookFileData, 'sheets'>,
+  workbook: Pick<WorkbookFileData, 'sheets' | 'images'>,
   signal?: AbortSignal
 ): Promise<WorkbookFileExport> {
   const reply = await requestWorkbookFile({ kind: 'encode', workbook }, signal);

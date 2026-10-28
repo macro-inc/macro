@@ -1,4 +1,4 @@
-import { throwOnErr } from '@core/util/result';
+import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
 import { invalidateAgents } from '@queries/agents/agents';
 import { queryClient } from '@queries/client';
 import {
@@ -6,7 +6,7 @@ import {
   type HarnessPairing,
   storageServiceClient,
 } from '@service-storage/client';
-import { useMutation, useQuery } from '@tanstack/solid-query';
+import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import { harnessKeys } from './keys';
 
 export type ApproveHarnessPairingParams = {
@@ -20,18 +20,26 @@ export type DeleteHarnessParams = {
   harnessId: string;
 };
 
+// Cached callbacks outlive the hooks; keep hook scope out of these closures.
+const harnessesQueryOptions = queryOptions({
+  queryKey: harnessKeys.list.queryKey,
+  queryFn: async (): Promise<Harness[]> =>
+    await throwOnErr(() => storageServiceClient.getHarnesses()),
+  // A dead session answers every poll with a 401, so wait for the next
+  // successful fetch (login invalidates every query) before polling again.
+  refetchInterval: (query) =>
+    thrownResultErrorHasCode(query.state.error, 'UNAUTHORIZED')
+      ? false
+      : 15_000,
+});
+
 /**
  * The macrod harnesses registered for the signed-in user (and their team).
  * Refetched on a short interval so the connected indicator tracks the daemon
  * heartbeat without a manual refresh.
  */
 export function useHarnessesQuery() {
-  return useQuery(() => ({
-    queryKey: harnessKeys.list.queryKey,
-    queryFn: async (): Promise<Harness[]> =>
-      await throwOnErr(() => storageServiceClient.getHarnesses()),
-    refetchInterval: 15_000,
-  }));
+  return useQuery(() => harnessesQueryOptions);
 }
 
 export function invalidateHarnesses() {
@@ -46,15 +54,17 @@ export function invalidateHarnesses() {
  * expired code), not a transient failure.
  */
 export function useHarnessPairingQuery(code: () => string | undefined) {
-  return useQuery(() => ({
-    queryKey: harnessKeys.pairing(code() ?? '').queryKey,
+  return useQuery(() => harnessPairingQueryOptions(code() ?? ''));
+}
+
+function harnessPairingQueryOptions(code: string) {
+  return queryOptions({
+    queryKey: harnessKeys.pairing(code).queryKey,
     queryFn: async (): Promise<HarnessPairing> =>
-      await throwOnErr(() =>
-        storageServiceClient.getHarnessPairing({ code: code() ?? '' })
-      ),
-    enabled: (code() ?? '').length > 0,
+      await throwOnErr(() => storageServiceClient.getHarnessPairing({ code })),
+    enabled: code.length > 0,
     retry: false,
-  }));
+  });
 }
 
 export function useApproveHarnessPairingMutation() {
@@ -77,6 +87,32 @@ export function useApproveHarnessPairingMutation() {
     },
     onError: (error) =>
       console.error('failed to approve harness pairing', error),
+  }));
+}
+
+/**
+ * Approves a pairing opened by this computer's own daemon, granting exactly
+ * the permission-bypass ceiling the daemon requested from its config, so a
+ * re-pair keeps the access the user chose at setup.
+ */
+export function useApproveOwnHarnessPairingMutation() {
+  return useMutation(() => ({
+    gcTime: 0,
+    mutationFn: async (code: string) => {
+      const pairing = await throwOnErr(() =>
+        storageServiceClient.getHarnessPairing({ code })
+      );
+      return await throwOnErr(() =>
+        storageServiceClient.approveHarnessPairing({
+          code,
+          allow_permission_bypass:
+            pairing.requested_allow_permission_bypass ?? false,
+        })
+      );
+    },
+    onSuccess: async () => await invalidateHarnesses(),
+    onError: (error) =>
+      console.error('failed to approve local harness pairing', error),
   }));
 }
 

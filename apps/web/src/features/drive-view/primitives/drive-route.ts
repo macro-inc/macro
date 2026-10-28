@@ -1,19 +1,19 @@
-import type { SplitRouteParams } from '@app/split-router';
+import type { SplitRouteParams } from '@app/lib/split-router';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { z } from 'zod';
 import type { DriveLocation, DriveTab } from '../core/types';
 import {
   DRIVE_DOCUMENT_TYPES,
-  type DriveDocumentType,
+  type DriveDetailType,
 } from './drive-route-schema';
 
-export type DriveDocumentRoute = { id: string; type: DriveDocumentType };
+export type DriveDocumentRoute = { id: string; type: DriveDetailType };
 export type DriveRouteParams = SplitRouteParams & {
   tab?: DriveTab;
   view?: 'folder';
   folderId?: string;
   documentId?: string;
-  documentType?: DriveDocumentType;
+  documentType?: DriveDetailType;
 };
 
 const documentType = z.enum(DRIVE_DOCUMENT_TYPES);

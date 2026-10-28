@@ -4,6 +4,7 @@ import {
   MAX_RECORDING_MS,
   RECORDING_CHUNK_MS,
 } from '../core/recording';
+import { VOLUME_INTERVAL_MS } from '../core/volume';
 import {
   AudioRecorder,
   AudioRecorderManager,
@@ -12,13 +13,20 @@ import {
 
 let now = 0;
 let deadline: (() => void) | undefined;
+let sampleLevel: (() => void) | undefined;
 const cancelDeadline = vi.fn();
+const stopSampling = vi.fn();
 const clock: RecordingClock = {
   now: () => now,
   schedule: (callback, delay) => {
     expect(delay).toBe(MAX_RECORDING_MS);
     deadline = callback;
     return cancelDeadline;
+  },
+  repeat: (callback, interval) => {
+    expect(interval).toBe(VOLUME_INTERVAL_MS);
+    sampleLevel = callback;
+    return stopSampling;
   },
 };
 let manager: AudioRecorderManager;
@@ -101,6 +109,7 @@ beforeEach(() => {
   frequencyByte = 0;
   now = 0;
   deadline = undefined;
+  sampleLevel = undefined;
   manager = new AudioRecorderManager(clock);
   frames.length = 0;
   FakeMediaRecorder.latest = undefined;
@@ -130,8 +139,39 @@ describe('AudioRecorder', () => {
     expect(AudioRecorder.isSupported()).toBe(false);
   });
 
-  it('collects chunks, meters each one, and delivers the recording on stop', async () => {
+  it('meters on its own cadence, independent of chunk delivery', async () => {
     frequencyByte = 255;
+    const sinks = callbacks();
+    const recorder = manager.createSession(sinks);
+    await recorder.start();
+    const media = latest();
+
+    media.chunk('one');
+    media.chunk('two');
+    expect(sinks.onLevel).not.toHaveBeenCalled();
+
+    sampleLevel?.();
+    frequencyByte = 0;
+    for (const frame of frames.splice(0)) frame(0);
+    sampleLevel?.();
+    sampleLevel?.();
+    expect(sinks.onLevel.mock.calls.map(([level]) => level)).toEqual([1, 0, 0]);
+
+    recorder.stop();
+    sampleLevel?.();
+    expect(sinks.onLevel).toHaveBeenCalledTimes(3);
+    media.finish();
+    expect(stopSampling).toHaveBeenCalledOnce();
+  });
+
+  it('stops metering when cancelled', async () => {
+    const recorder = manager.createSession(callbacks());
+    await recorder.start();
+    recorder.cancel();
+    expect(stopSampling).toHaveBeenCalledOnce();
+  });
+
+  it('collects chunks and delivers the recording on stop', async () => {
     const sinks = callbacks();
     const recorder = manager.createSession(sinks);
     await recorder.start();
@@ -140,10 +180,7 @@ describe('AudioRecorder', () => {
     expect(media.mimeType).toBe('audio/mp4');
 
     media.chunk('one');
-    frequencyByte = 0;
-    for (const frame of frames.splice(0)) frame(0);
     media.chunk('two');
-    expect(sinks.onLevel.mock.calls.map(([level]) => level)).toEqual([1, 0]);
 
     recorder.stop();
     expect(sinks.onRecording).not.toHaveBeenCalled();
@@ -213,9 +250,6 @@ describe('AudioRecorder', () => {
     expect(sinks.onRecording).not.toHaveBeenCalled();
     media.finish();
     expect(sinks.onRecording).toHaveBeenCalledOnce();
-    expect(sinks.onLevel).toHaveBeenCalledTimes(2);
-    media.chunk('late');
-    expect(sinks.onLevel).toHaveBeenCalledTimes(2);
   });
 
   it('stops at its deadline even when no chunks arrive', async () => {

@@ -26,17 +26,22 @@ import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { TOKENS } from '@core/hotkey/tokens';
+import { hapticImpact } from '@core/mobile/haptics';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { handleFileFolderDrop } from '@core/util/upload';
-import PaperclipIcon from '@phosphor/paperclip.svg';
+import PaperclipIcon from '@icon/system/regular/paperclip.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button, ComposerSurface, cn, SendButton as UiSendButton } from '@ui';
 import { createEffect, createMemo, createSignal, Show } from 'solid-js';
+import { speedForModel } from '../../constant/speed';
+import { fastModeEnabled } from '../../signal/speed';
 import { AttachmentList } from './Attachment';
+import { SpeedToggle } from './SpeedToggle';
 import { useAiDataConsentGate } from './useAiDataConsent';
 
 /**
@@ -189,7 +194,7 @@ export function ChatInput(props: ChatInputComponentProps) {
     !isEmptyInput();
 
   const sendMessage = createCallback(
-    async (opts?: { modelOverride?: Model; metaKey?: boolean }) => {
+    (opts?: { modelOverride?: Model; metaKey?: boolean }) => {
       if (!canSendMessage()) return;
 
       if (isNativeMobilePlatform() && !hasConsent()) {
@@ -200,12 +205,14 @@ export function ChatInput(props: ChatInputComponentProps) {
       const sendInput: ChatSendInput = {
         content: markdownText(),
         model: opts?.modelOverride ?? model(),
+        speed: speedForModel(opts?.modelOverride ?? model(), fastModeEnabled()),
         attachments: attachments.attached(),
         toolset: toolsetSignal[0](),
         metaKey: opts?.metaKey,
       };
       props.editor.controls.clear();
       attachments.setAttached([]);
+      hapticImpact('light');
       props.onSend(sendInput);
     }
   );
@@ -217,12 +224,18 @@ export function ChatInput(props: ChatInputComponentProps) {
           toast.failure('Folder upload not supported here');
           return;
         }
-        handleFileFolderDrop(files, directories, (entries) => {
-          uploadQueue.upload(entries.map((e) => e.file));
-        });
+        fireAndForget(
+          handleFileFolderDrop(files, directories, (entries) => {
+            uploadQueue.upload(entries.map((e) => e.file));
+          }),
+          'chat-input'
+        );
       },
     })
     .onEnter((e) => {
+      // On a virtual keyboard Enter is a newline, as in channels; the send
+      // button is the only way to submit.
+      if (isTouchDevice()) return false;
       if (canSendMessage()) {
         sendMessage({ metaKey: e?.metaKey });
       }
@@ -259,29 +272,29 @@ export function ChatInput(props: ChatInputComponentProps) {
 
   const LeftButton = () => (
     <Button
+      tooltip="Attach files"
       variant="ghost"
-      size="icon-composer"
-      class="text-ink not-touch:text-composer-ink touch:size-6"
-      label="Attach files"
+      size="icon-md"
+      class="text-ink not-touch:text-composer-ink"
       aria-label="Attach files"
       onClick={() => {
         // Open synchronously from the tap so the native picker retains user activation.
         fileInputRef?.click();
       }}
     >
-      <PaperclipIcon />
+      <PaperclipIcon class="size-5 touch:size-6 shrink-0 pointer-events-none" />
     </Button>
   );
 
   const StopButton = () => (
     <Button
-      variant={isTouchDevice() ? 'ghost' : 'strong'}
-      size="icon-composer"
-      label="Stop generating"
-      hotkey={TOKENS.chat.stop}
+      aria-label="Stop generating"
+      tooltip={{ content: 'Stop generating', hotkey: TOKENS.chat.stop }}
+      variant={isTouchDevice() ? 'ghost' : 'secondary'}
+      size="icon-md"
       onClick={() => props.onStop?.()}
       class={cn(
-        'touch:size-7.5 [&_svg]:stroke-[4px]',
+        'touch:size-7.5',
         isTouchDevice() &&
           'text-ink-extra-muted not-disabled:bg-ink/5 not-disabled:hover:bg-ink/10',
         'data-disabled:opacity-100 data-disabled:text-ink-extra-muted data-disabled:bg-ink-muted/5'
@@ -294,9 +307,7 @@ export function ChatInput(props: ChatInputComponentProps) {
   const SendButton = () => (
     <UiSendButton
       appearance="composer"
-      tooltip={'Ask AI'}
-      shortcut="enter"
-      tooltipPlacement="top"
+      tooltip={{ content: 'Ask AI', placement: 'top', shortcut: 'enter' }}
       disabled={!canSendMessage()}
       class="touch:rounded-full"
       onClick={() => sendMessage()}
@@ -315,6 +326,7 @@ export function ChatInput(props: ChatInputComponentProps) {
         onLocked={() => showPaywall(PaywallKey.O1_LIMIT)}
         compact={compactSelector()}
       />
+      <SpeedToggle model={model()} />
       <DictationButton dictation={dictation} />
       <Show when={generating() && props.onStop} fallback={<SendButton />}>
         <StopButton />
@@ -428,6 +440,7 @@ export function ChatInput(props: ChatInputComponentProps) {
                   models={modelOptions()}
                   onSelect={() => {}}
                 />
+                <div class="size-7 not-touch:size-[33.75px] shrink-0" />
                 <div class="size-7 not-touch:size-[33.75px] shrink-0" />
                 <div class="size-7 not-touch:size-[33.75px] shrink-0" />
               </div>

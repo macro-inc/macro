@@ -7,18 +7,22 @@
 import type { CreateInitiativeRequestDescription } from './createInitiativeRequestDescription';
 import type { CreateInitiativeRequestMemberIds } from './createInitiativeRequestMemberIds';
 import type { CreateInitiativeRequestShareWithTeam } from './createInitiativeRequestShareWithTeam';
+import type { InitialPropertyValue } from './initialPropertyValue';
 
 /**
  * Create-initiative HTTP body.
  */
 export interface CreateInitiativeRequest {
-  /** Initial markdown for the description document. Not stored on the initiative; later
-edits happen in the document editor. */
+  /** Initial markdown for the description surface. Not stored on the initiative; later
+edits happen in the collaborative description editor. */
   description?: CreateInitiativeRequestDescription;
   /** Optional member user ids. Invalid ids fail at the service boundary. */
   memberIds?: CreateInitiativeRequestMemberIds;
   /** Display name. */
   name: string;
+  /** Property values set as the owner within the create. A value the properties
+service rejects fails the whole create; no initiative is left behind. */
+  propertyValues?: InitialPropertyValue[];
   /** Share with the owner's team at create time. Defaults to true; users without
 a team create an unshared initiative. Explicit false skips the team grant. */
   shareWithTeam?: CreateInitiativeRequestShareWithTeam;

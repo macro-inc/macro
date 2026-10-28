@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT DISTINCT teammate.user_id\n        FROM team_user membership\n        JOIN team_user teammate ON teammate.team_id = membership.team_id\n        WHERE membership.user_id = ANY($1::text[])\n        UNION\n        SELECT unnest($1::text[])\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "34c9000fb1ca9c78cae15dab3b65da27d1f89f1a2cf825523cb96315f38ba850"
+}

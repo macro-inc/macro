@@ -10,8 +10,8 @@ mod test;
 
 use crate::domain::{
     models::{
-        AccessError, AccessLevel, BotId, CallChannelInfo, ChannelRoleResult, CrmEntityAccess,
-        EntityType, UserTeamInfo,
+        AccessError, AccessLevel, AgentSessionParent, BotId, CallChannelInfo, ChannelRoleResult,
+        CrmEntityAccess, EntityType, UserTeamInfo,
     },
     ports::AccessRepository,
 };
@@ -70,22 +70,47 @@ impl AccessRepository for PgAccessRepository {
         let source_ids = queries::get_user_source_ids(&self.pool, user_id)
             .await
             .map_err(anyhow_access_error)?;
-        let Ok(document_uuid) = document_id.parse::<Uuid>() else {
-            return Ok(queries::document_access::get_legacy_document_access(
+        let access = if let Ok(document_uuid) = document_id.parse::<Uuid>() {
+            queries::document_access::get_document_access(
+                &self.pool,
+                &document_uuid,
+                &source_ids,
+                user_id,
+            )
+            .await?
+        } else {
+            queries::document_access::get_legacy_document_access(
                 &self.pool,
                 document_id,
                 &source_ids,
                 user_id,
             )
-            .await?);
+            .await?
         };
-        Ok(queries::document_access::get_document_access(
-            &self.pool,
-            &document_uuid,
-            &source_ids,
-            user_id,
+        if access.is_some() || user_id.is_none() {
+            return Ok(access);
+        }
+        let has_note_access = sqlx::query_scalar!(
+            r#"
+            SELECT EXISTS (
+                SELECT 1 FROM calendar_event_notes note
+                JOIN "Document" d ON d.id = note.document_id
+                  AND d."deletedAt" IS NULL AND d."fileType" = 'md'
+                WHERE note.document_id = $1 AND (
+                    calendar_note_event_visible($2, note.event_id, note.occurrence_key)
+                    OR EXISTS (
+                        SELECT 1 FROM team_user member
+                        WHERE member.team_id = note.team_id AND member.user_id = $2
+                    )
+                )
+            ) AS "visible!"
+        "#,
+            document_id,
+            user_id.map(AsRef::as_ref)
         )
-        .await?)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(has_note_access.then_some(AccessLevel::View))
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -234,24 +259,52 @@ impl AccessRepository for PgAccessRepository {
         Ok(queries::call_access::get_call_access(&self.pool, &call_uuid, &source_ids).await?)
     }
 
-    async fn get_agent_session_document(
+    #[tracing::instrument(err, skip(self))]
+    async fn get_agent_session_parent(
         &self,
         agent_session_id: &str,
-    ) -> Result<Option<String>, AccessError> {
+    ) -> Result<Option<AgentSessionParent>, AccessError> {
+        let session = agent_session_id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid agent session ID format"))?;
+        sqlx::query!(
+            r#"SELECT m.parent_entity_type, m.parent_entity_id FROM agent_session s
+               JOIN comms_messages m ON m.id = s.thread_id
+               JOIN comms_message_threads t ON t.root_id = m.id
+               WHERE s.id = $1 AND m.parent_entity_type IN ('document', 'call')
+               AND t.deleted_at IS NULL"#,
+            session,
+        )
+        .fetch_optional(&self.pool)
+        .await?
+        .map(|parent| match parent.parent_entity_type.as_str() {
+            "document" => Ok(AgentSessionParent::Document(parent.parent_entity_id)),
+            "call" => parent
+                .parent_entity_id
+                .parse()
+                .map(AgentSessionParent::Call)
+                .map_err(|_| AccessError::internal("Agent session has an invalid call parent")),
+            _ => Err(AccessError::internal(
+                "Agent session has an unsupported parent",
+            )),
+        })
+        .transpose()
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn agent_session_exists(&self, agent_session_id: &str) -> Result<bool, AccessError> {
         let session = agent_session_id
             .parse::<Uuid>()
             .map_err(|_| AccessError::BadRequest("Invalid agent session ID format"))?;
         Ok(sqlx::query_scalar!(
-            r#"SELECT m.parent_entity_id FROM agent_session s
-               JOIN comms_messages m ON m.id = s.thread_id
-               JOIN comms_message_threads t ON t.root_id = m.id
-               WHERE s.id = $1 AND m.parent_entity_type = 'document' AND t.deleted_at IS NULL"#,
+            r#"SELECT EXISTS(SELECT 1 FROM agent_session WHERE id = $1) AS "exists!""#,
             session,
         )
-        .fetch_optional(&self.pool)
+        .fetch_one(&self.pool)
         .await?)
     }
 
+    #[tracing::instrument(err, skip(self, user_id))]
     async fn get_agent_session_access(
         &self,
         agent_session_id: &str,
@@ -271,6 +324,7 @@ impl AccessRepository for PgAccessRepository {
         .await?)
     }
 
+    #[tracing::instrument(err, skip(self, user_id))]
     async fn get_initiative_access(
         &self,
         initiative_id: &str,
@@ -288,6 +342,188 @@ impl AccessRepository for PgAccessRepository {
             &source_ids,
         )
         .await?)
+    }
+
+    #[tracing::instrument(err, skip(self, user_id))]
+    async fn get_pipeline_access(
+        &self,
+        id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        let id = id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid pipeline ID"))?;
+        let sources = queries::get_user_source_ids(&self.pool, user_id)
+            .await
+            .map_err(anyhow_access_error)?;
+        Ok(queries::pipeline_access::get_pipeline_access(&self.pool, id, &sources).await?)
+    }
+
+    #[tracing::instrument(err, skip(self, user_id))]
+    async fn list_pipeline_access(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<Vec<(Uuid, AccessLevel)>, AccessError> {
+        let sources = queries::get_user_source_ids(&self.pool, Some(user_id))
+            .await
+            .map_err(anyhow_access_error)?;
+        Ok(queries::pipeline_access::list_pipeline_access(&self.pool, &sources).await?)
+    }
+
+    #[tracing::instrument(err, skip(self, user_id))]
+    async fn get_database_access(
+        &self,
+        database_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        let database_uuid = database_id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid database ID format"))?;
+        let source_ids = queries::get_user_source_ids(&self.pool, user_id)
+            .await
+            .map_err(anyhow_access_error)?;
+        Ok(
+            queries::database_access::get_database_access(&self.pool, &database_uuid, &source_ids)
+                .await?,
+        )
+    }
+
+    #[tracing::instrument(err, skip(self, user_id))]
+    async fn list_database_access(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<Vec<(Uuid, AccessLevel)>, AccessError> {
+        let source_ids = queries::get_user_source_ids(&self.pool, Some(user_id))
+            .await
+            .map_err(anyhow_access_error)?;
+        Ok(queries::database_access::list_database_access(&self.pool, &source_ids).await?)
+    }
+
+    #[tracing::instrument(err, skip(self, user_id))]
+    async fn list_form_access(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<Vec<(Uuid, AccessLevel)>, AccessError> {
+        let source_ids = queries::get_user_source_ids(&self.pool, Some(user_id))
+            .await
+            .map_err(anyhow_access_error)?;
+        Ok(queries::form_access::list_form_access(&self.pool, &source_ids).await?)
+    }
+
+    #[tracing::instrument(err, skip(self, user_id))]
+    async fn get_form_access(
+        &self,
+        form_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        let form_uuid = form_id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid form ID format"))?;
+        let source_ids = queries::get_user_source_ids(&self.pool, user_id)
+            .await
+            .map_err(anyhow_access_error)?;
+        Ok(queries::form_access::get_form_access(&self.pool, &form_uuid, &source_ids).await?)
+    }
+
+    /// Resolve ordinary shares on an external chat.
+    async fn get_external_chat_access(
+        &self,
+        group_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        let group_uuid = group_id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid external chat ID format"))?;
+        let source_ids = queries::get_user_source_ids(&self.pool, user_id)
+            .await
+            .map_err(anyhow_access_error)?;
+        Ok(queries::external_chat_access::get_external_chat_access(
+            &self.pool,
+            &group_uuid,
+            &source_ids,
+        )
+        .await?)
+    }
+
+    #[tracing::instrument(err, skip(self, user_id))]
+    async fn get_database_row_access(
+        &self,
+        row_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        let row_uuid = row_id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid database row ID format"))?;
+        let source_ids = queries::get_user_source_ids(&self.pool, user_id)
+            .await
+            .map_err(anyhow_access_error)?;
+        Ok(queries::database_row_access::get_database_row_access(
+            &self.pool,
+            &row_uuid,
+            &source_ids,
+        )
+        .await?)
+    }
+
+    #[tracing::instrument(err, skip_all, fields(row_count = row_ids.len()))]
+    async fn get_database_rows_access(
+        &self,
+        row_ids: &[Uuid],
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<std::collections::HashMap<Uuid, AccessLevel>, AccessError> {
+        if row_ids.is_empty() {
+            return Ok(std::collections::HashMap::new());
+        }
+        let source_ids = queries::get_user_source_ids(&self.pool, Some(user_id))
+            .await
+            .map_err(anyhow_access_error)?;
+        Ok(
+            queries::database_row_access::get_database_rows_access(
+                &self.pool,
+                row_ids,
+                &source_ids,
+            )
+            .await?,
+        )
+    }
+
+    #[tracing::instrument(err, skip(self, user_id))]
+    async fn get_scheduled_action_access(
+        &self,
+        scheduled_action_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        let Ok(scheduled_action_uuid) = scheduled_action_id.parse::<Uuid>() else {
+            return Ok(None);
+        };
+        let source_ids = queries::get_user_source_ids(&self.pool, user_id)
+            .await
+            .map_err(anyhow_access_error)?;
+        Ok(
+            queries::scheduled_action_access::get_scheduled_action_access(
+                &self.pool,
+                &scheduled_action_uuid,
+                &source_ids,
+            )
+            .await?,
+        )
+    }
+
+    #[tracing::instrument(err, skip(self, user_id))]
+    async fn accessible_scheduled_action_ids(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<Vec<Uuid>, AccessError> {
+        let source_ids = queries::get_user_source_ids(&self.pool, Some(user_id))
+            .await
+            .map_err(anyhow_access_error)?;
+        Ok(
+            queries::scheduled_action_access::accessible_scheduled_action_ids(
+                &self.pool,
+                &source_ids,
+            )
+            .await?,
+        )
     }
 
     // A macro user id embeds the user's email, so it stays out of the span; the
@@ -381,6 +617,31 @@ impl AccessRepository for PgAccessRepository {
                     &source_ids,
                 )
                 .await
+            }
+            EntityType::CrmPipeline => {
+                queries::pipeline_access::get_pipeline_access(&self.pool, entity_uuid, &source_ids).await
+            }
+            EntityType::Database => {
+                queries::database_access::get_database_access(
+                    &self.pool,
+                    &entity_uuid,
+                    &source_ids,
+                )
+                .await
+            }
+            EntityType::DatabaseRow => {
+                queries::database_row_access::get_database_row_access(
+                    &self.pool,
+                    &entity_uuid,
+                    &source_ids,
+                )
+                .await
+            }
+            EntityType::ExternalChat => {
+                queries::external_chat_access::get_external_chat_access(&self.pool, &entity_uuid, &source_ids).await
+            }
+            EntityType::Form => {
+                queries::form_access::get_form_access(&self.pool, &entity_uuid, &source_ids).await
             }
             EntityType::User
             | EntityType::Channel
@@ -644,6 +905,11 @@ impl AccessRepository for PgAccessRepository {
             channel_id: r.channel_id,
             share_permission_id: r.share_permission_id,
         }))
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_database_row_database(&self, row_id: &Uuid) -> Result<Option<Uuid>, AccessError> {
+        Ok(queries::database_row_access::get_database_row_database(&self.pool, row_id).await?)
     }
 
     #[tracing::instrument(err, skip(self))]

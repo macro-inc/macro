@@ -1,14 +1,27 @@
+import { getCollabSurfaceToken } from '@core/collab-surface/token';
 import { throwOnErr } from '@core/util/result';
-import { fetchSyncDocumentOpenContext } from '@queries/storage/documentLoad/sync-document-context';
-import { createSyncServiceSource } from '@service-sync/source';
+import { initiativeClient } from '@service-storage/initiative';
+import { createCollabSurfaceSource } from '@service-sync/source';
 import { createProjectDescriptionSession } from './project-description';
 
-/** Open the backing document the way Markdown detail does, without its block. */
-export function createProductionProjectDescriptionSession(documentId: string) {
-  return createProjectDescriptionSession(documentId, {
-    authorize: (documentId) =>
-      throwOnErr(() => fetchSyncDocumentOpenContext(documentId)),
-    connect: (documentId, { token, authorization }) =>
-      createSyncServiceSource(documentId, token, authorization),
+/**
+ * Open a project's description surface, which has the project's id. The project domain
+ * ensures the surface first; access then derives from project access.
+ */
+export function createProductionProjectDescriptionSession(projectId: string) {
+  return createProjectDescriptionSession(projectId, {
+    authorize: async (surfaceId, signal) => {
+      await throwOnErr(() =>
+        initiativeClient.ensureDescriptionSurface(surfaceId)
+      );
+      signal.throwIfAborted();
+      const token = await getCollabSurfaceToken(surfaceId);
+      if (!token) throw new Error('Could not open the project description.');
+      return token;
+    },
+    connect: (surfaceId, token) =>
+      createCollabSurfaceSource(surfaceId, token, () =>
+        getCollabSurfaceToken(surfaceId)
+      ),
   });
 }

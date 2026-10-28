@@ -18,6 +18,24 @@ export type MeetingLocalTracks = {
   camera?: MediaStreamTrack;
 };
 
+export type MeetingMediaDiagnostics = {
+  setupId: string;
+  microphone:
+    | 'not_requested'
+    | 'pending'
+    | 'granted'
+    | 'blocked'
+    | 'failed'
+    | 'cancelled';
+  camera:
+    | 'not_requested'
+    | 'pending'
+    | 'granted'
+    | 'blocked'
+    | 'failed'
+    | 'cancelled';
+};
+
 export type MeetingMediaPreferences = {
   microphoneEnabled: boolean;
   cameraEnabled: boolean;
@@ -32,13 +50,18 @@ export type MeetingMediaPreferences = {
 /** The session owns only the connection it joined, including late replies. */
 export type MeetingSessionCapabilities = {
   lifecycle: MeetingSessionLifecycle;
+  /** Fetch browser call code during setup, without creating or connecting a call. */
+  warmup?: () => Promise<void>;
   shareToken: Accessor<string>;
   isInCall: Accessor<boolean>;
   activeCallId: Accessor<string | null>;
   /** Prepare a draft before requesting credentials; stop side effects if aborted. */
   prepare?: (signal: AbortSignal) => Promise<void>;
   join: (displayName?: string) => Promise<MeetingCredentials>;
-  release: (shareToken: string, token: string) => Promise<unknown>;
+  release: (
+    shareToken: string,
+    token: string
+  ) => Promise<{ callEnded: boolean } | void>;
   connect: (
     credentials: MeetingCredentials,
     preferences: MeetingMediaPreferences

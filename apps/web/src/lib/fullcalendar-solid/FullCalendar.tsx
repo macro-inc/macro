@@ -27,6 +27,7 @@ import {
   on,
   onCleanup,
   splitProps,
+  untrack,
   useContext,
 } from 'solid-js';
 import { render } from 'solid-js/web';
@@ -150,7 +151,10 @@ const FullCalendarContext = createContext<FullCalendarController>();
  */
 export function FullCalendarRoot(props: FullCalendarRootProps) {
   const [local, options] = splitProps(props, ['children']);
-  const controller = createFullCalendarController(() => ({ ...options }));
+  const controller = createFullCalendarController(
+    () => ({ ...options }),
+    () => options.datesSet
+  );
 
   onCleanup(() => controller.destroy());
 
@@ -259,7 +263,8 @@ function useFullCalendarController(): FullCalendarController {
 }
 
 function createFullCalendarController(
-  getOptions: Accessor<FullCalendarOptions>
+  getOptions: Accessor<FullCalendarOptions>,
+  getDatesSet: Accessor<FullCalendarOptions['datesSet']>
 ): FullCalendarController {
   const [calendar, setCalendar] = createSignal<Calendar>();
   const [dateInfo, setDateInfo] = createSignal<DatesSetArg>();
@@ -272,6 +277,24 @@ function createFullCalendarController(
   >();
   const [listenForContentRegistrationChange, notifyContentRegistrationChange] =
     createSignal<void>(undefined, { equals: false });
+  let appliedOptions: CalendarOptions | undefined;
+  // FullCalendar calls this outside any Solid owner. Reading every option
+  // here would evaluate prop getters into memos that are never disposed.
+  const handleDatesSet = (info: DatesSetArg) => {
+    setDateInfo(info);
+    untrack(getDatesSet)?.(info);
+  };
+  // Metadata identities must stay stable across event-only updates. Rebuilding
+  // them causes FullCalendar to remount unrelated headers and content slots.
+  const customRenderingMetaMap = createMemo(() => {
+    listenForContentRegistrationChange();
+    return Object.fromEntries(
+      [...contentRegistrations].map(([name, registration]) => [
+        name,
+        createSolidRenderingMeta(registration.generator, registration.owner),
+      ])
+    );
+  });
 
   const requestResize = () => {
     if (isUnmounting() || !calendar()) return;
@@ -294,12 +317,11 @@ function createFullCalendarController(
   };
 
   const buildOptions = createMemo(() => {
-    listenForContentRegistrationChange();
     return buildCalendarOptions(
       getOptions(),
-      contentRegistrations,
+      customRenderingMetaMap(),
       handleCustomRendering,
-      setDateInfo
+      handleDatesSet
     );
   });
 
@@ -308,8 +330,23 @@ function createFullCalendarController(
     if (!calendarInstance) return;
 
     const nextOptions = buildOptions();
+    const next = nextOptions.options as Record<string, unknown>;
+    const previous = (appliedOptions ?? {}) as Record<string, unknown>;
+    const changedOptionNames = Object.keys(next).filter(
+      (name) => !Object.is(previous[name], next[name])
+    );
+    const hasRemovedOption = Object.keys(previous).some(
+      (name) => !(name in next)
+    );
+    if (changedOptionNames.length === 0 && !hasRemovedOption) return;
+    appliedOptions = nextOptions.options;
     customRenderingManager.retainGeneratorNames(nextOptions.contentOptionNames);
-    calendarInstance.resetOptions(nextOptions.options);
+    // FullCalendar merges partial updates over existing overrides. Removing a prop
+    // needs a full replacement to restore defaults; otherwise refine only changes.
+    calendarInstance.resetOptions(
+      nextOptions.options,
+      hasRemovedOption ? undefined : changedOptionNames
+    );
   };
 
   createEffect(on(getOptions, resetOptions, { defer: true }));
@@ -324,6 +361,7 @@ function createFullCalendarController(
       setResizeFrame(undefined);
     }
     calendar()?.destroy();
+    appliedOptions = undefined;
     setCalendar(undefined);
     setDateInfo(undefined);
     setHostElement(undefined);
@@ -346,6 +384,7 @@ function createFullCalendarController(
       setIsUnmounting(false);
       setHostElement(element);
       const initialOptions = buildOptions();
+      appliedOptions = initialOptions.options;
       customRenderingManager.retainGeneratorNames(
         initialOptions.contentOptionNames
       );
@@ -389,24 +428,13 @@ function createFullCalendarController(
 
 function buildCalendarOptions(
   rootOptions: FullCalendarOptions,
-  contentRegistrations: Map<SolidContentOptionName, ContentRegistration>,
+  customRenderingMetaMap: Record<string, SolidRenderingMeta>,
   handleCustomRendering: (rendering: AnyCustomRendering) => void,
-  setDateInfo: (dateInfo: DatesSetArg) => void
+  handleDatesSet: (dateInfo: DatesSetArg) => void
 ): BuiltCalendarOptions {
   const options = { ...rootOptions } as Record<string, unknown>;
-  const externalDatesSet = rootOptions.datesSet;
-  const customRenderingMetaMap: Record<string, SolidRenderingMeta> = {};
-
-  options.datesSet = (dateInfo: DatesSetArg) => {
-    setDateInfo(dateInfo);
-    externalDatesSet?.(dateInfo);
-  };
-
-  for (const [optionName, registration] of contentRegistrations) {
-    customRenderingMetaMap[optionName] = createSolidRenderingMeta(
-      registration.generator,
-      registration.owner
-    );
+  options.datesSet = handleDatesSet;
+  for (const optionName of Object.keys(customRenderingMetaMap)) {
     delete options[optionName];
   }
 

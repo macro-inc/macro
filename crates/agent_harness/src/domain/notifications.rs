@@ -10,7 +10,7 @@
 //!
 //! | fact | notification | recipients |
 //! | --- | --- | --- |
-//! | `settled` | [`AgentSessionSettledMetadata`] | the session's audience: owner plus everyone who has driven it - unless the turn was a chat agent's announced reply, whose patched message already notifies the thread |
+//! | `settled` | [`AgentSessionSettledMetadata`] | the session's audience: owner plus everyone who has driven it - unless the turn was a chat agent's announced reply, whose patched message already notifies the thread, or the turn a routine prompted, when it ended normally |
 //! | `waiting_for_input` | [`AgentSessionWaitingForInputMetadata`] | the same audience - anyone with edit access may answer, and these are the people already driving it - with the same exception for a chat agent's announced turn, whose reply is patched to say it is waiting |
 //! | `mentioned` | [`AgentSessionMentionedMetadata`] | the users the prompt named, who can now open the session - unless the prompt was posted as a channel or document message, whose own mention notification already reached them |
 //!
@@ -26,7 +26,9 @@
 //! is patched when the turn stops to ask a question, so `waiting_for_input`
 //! is suppressed for it likewise. A coding agent's chip notifies nobody,
 //! and a chat turn nobody announced - one driven from the session view -
-//! has no message to speak through, so both keep every notification.
+//! has no message to speak through, so both keep every notification. Assignment
+//! announcements also keep notifications: they reuse the originating message as
+//! a session link and never patch it into a discussion answer.
 //!
 //! A mention has the same shape of exception, and the fact does carry it: a
 //! prompt that arrived as a channel or document message names its users in
@@ -36,6 +38,15 @@
 //! origin message plans nothing; the users are still shared into the
 //! session. A prompt typed into the session view has no message to have
 //! spoken for it, so it keeps its notification.
+//!
+//! A routine runs unattended, often many times a day, so a run finishing is
+//! not news: its result is in the routine's history, and whatever the
+//! routine is meant to tell someone it tells them through its own tools. The
+//! turn a routine prompted plans nothing when it ended normally; one that
+//! failed or was cut short still notifies, and so do its questions and
+//! mentions, which need somebody whether or not a routine asked. A turn the
+//! owner prompts afterwards, from the session itself, notifies as in any
+//! other session.
 //!
 //! Retracting a notification once it is stale (the question answered, the
 //! next turn started) is deliberately not done yet: the notification ingress
@@ -58,7 +69,7 @@ use agent_session::domain::events::{
     AgentSessionLifecycleEvent, SessionIdentity, SessionMentionedMetadata, SessionSettledMetadata,
     WaitingForInputMetadata,
 };
-use agent_session::domain::model::TurnId;
+use agent_session::domain::model::{SessionSource, TurnId};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use model_entity::{Entity, EntityType};
@@ -74,6 +85,13 @@ use notification::domain::models::{Notification, SendNotificationRequest};
 /// forever: changing it would orphan every retraction of a notification
 /// created before the change.
 const NOTIFICATION_ID_NAMESPACE: Uuid = Uuid::from_u128(0x6d61_6372_6f2d_6167_656e_742d_6e6f_7469);
+
+/// The ACP stop reason of a turn that ended normally.
+const END_TURN_STOP_REASON: &str = "end_turn";
+
+/// The turn a routine's own prompt opens: a routine run's session accepts
+/// that prompt only while it has no other.
+const ROUTINE_TURN: TurnId = TurnId(0);
 
 /// One notification to create: everything the ingress request is built from,
 /// in the open, so a test can look at it.
@@ -150,11 +168,23 @@ pub fn plan(event: &AgentSessionLifecycleEvent, is_coding: bool) -> Vec<PlannedN
         AgentSessionLifecycleEvent::Opened(_)
         | AgentSessionLifecycleEvent::TurnStarted(_)
         | AgentSessionLifecycleEvent::TurnEnded(_)
+        | AgentSessionLifecycleEvent::CommandRejected(_)
         | AgentSessionLifecycleEvent::InputReceived(_)
         | AgentSessionLifecycleEvent::Stopped(_)
         | AgentSessionLifecycleEvent::Renamed(_)
         | AgentSessionLifecycleEvent::Deleted(_) => Vec::new(),
     }
+}
+
+fn has_discussion_reply(identity: &SessionIdentity, announcement: Option<Uuid>) -> bool {
+    announcement.is_some_and(|message_id| {
+        // Assignment announcements reuse the originating root. A mention or
+        // later discussion prompt creates a separate reply message instead.
+        identity
+            .origin
+            .as_ref()
+            .is_none_or(|origin| origin.originating_message_id != message_id)
+    })
 }
 
 fn plan_settled(settled: &SessionSettledMetadata, is_coding: bool) -> Vec<PlannedNotification> {
@@ -165,7 +195,14 @@ fn plan_settled(settled: &SessionSettledMetadata, is_coding: bool) -> Vec<Planne
     };
     // A chat agent's announced turn already told the thread: its pending
     // reply was patched into the answer, and that patch notifies as a post.
-    if !is_coding && turn.announcement_message_id.is_some() {
+    if !is_coding && has_discussion_reply(&settled.identity, turn.announcement_message_id) {
+        return Vec::new();
+    }
+    // A routine run that did its job is in the routine's history.
+    if settled.identity.source == SessionSource::Routine
+        && turn.turn == ROUTINE_TURN
+        && turn.stop_reason == END_TURN_STOP_REASON
+    {
         return Vec::new();
     }
     let (entity, secondary_entity) = entities(&settled.identity);
@@ -188,7 +225,7 @@ fn plan_waiting(waiting: &WaitingForInputMetadata, is_coding: bool) -> Vec<Plann
     // A chat agent's announced turn tells its thread it is waiting the same
     // way it tells it the answer: by patching its pending reply, which
     // notifies as a post.
-    if !is_coding && waiting.announcement_message_id.is_some() {
+    if !is_coding && has_discussion_reply(&waiting.identity, waiting.announcement_message_id) {
         return Vec::new();
     }
     let (entity, secondary_entity) = entities(&waiting.identity);
@@ -208,6 +245,39 @@ fn plan_waiting(waiting: &WaitingForInputMetadata, is_coding: bool) -> Vec<Plann
             question: waiting.question.clone(),
         },
     })]
+}
+
+/// A tool call held for the owner's approval: only the owner hears, since
+/// only they can answer it. Filed as the waiting-for-input kind - the owner
+/// is being asked something, and every surface already opens the session
+/// from it - under an id of its own, so one held call is one notification
+/// however many turns ask.
+#[must_use]
+pub fn plan_tool_approval(
+    identity: &SessionIdentity,
+    approval_id: Uuid,
+    requested_by: Option<&MacroUserIdStr<'static>>,
+    server_name: &str,
+    tool_name: &str,
+) -> PlannedNotification {
+    let (entity, secondary_entity) = entities(identity);
+    let asker = requested_by.map_or_else(
+        || "A bot".to_owned(),
+        |user| macro_user_id::email::ReadEmailParts::local_part(&user.email_part()).to_owned(),
+    );
+    PlannedNotification::WaitingForInput(Notify {
+        notification_id: tool_approval_notification_id(identity.session_id.as_uuid(), approval_id),
+        entity,
+        secondary_entity,
+        recipients: vec![identity.owner_id.clone()],
+        metadata: AgentSessionWaitingForInputMetadata {
+            session: session_ref(identity, None),
+            turn: 0,
+            question: format!(
+                "{asker} asked it to use {server_name} {tool_name} with your access. Approve or decline it."
+            ),
+        },
+    })
 }
 
 fn plan_mentioned(mentioned: &SessionMentionedMetadata) -> Vec<PlannedNotification> {
@@ -314,4 +384,10 @@ pub fn mentioned_notification_id(session_id: Uuid, action_id: Uuid) -> Uuid {
         "{session_id}:{action_id}:{}",
         AgentSessionMentionedMetadata::TYPE_NAME
     ))
+}
+
+/// The id of the approval notification for one held tool call.
+#[must_use]
+pub fn tool_approval_notification_id(session_id: Uuid, approval_id: Uuid) -> Uuid {
+    derived_id(&format!("{session_id}:{approval_id}:tool_approval"))
 }

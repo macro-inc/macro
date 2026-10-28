@@ -1,6 +1,7 @@
 ---
 title: CreateBot
-description: "Create a bot with a name, stable handle, and optional profile. Omit teamId for a bot owned by the current user; provide teamId to create a team-owned bot, which requires team administrator or owner permission. Pass channelId when the bot should post to a channel immediately: the current user must be a member of that channel. The response then includes that channel's webhook URL and a credential proposal. The user mints the bearer token from the chat card or bot settings; the secret is never returned in this tool result. Omit channelId to create the bot only, then use ManageBotChannelAccess and IssueBotCredential for later setup."
+description: >-
+  Create a bot with a name, stable handle, and optional profile.
 ---
 
 # CreateBot

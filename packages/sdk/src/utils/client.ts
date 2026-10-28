@@ -7,10 +7,12 @@ import { Sdk as ContactsSdk } from '../../generated/contacts/sdk.gen';
 import { Sdk as EmailSdk } from '../../generated/email/sdk.gen';
 import { Sdk as NotificationSdk } from '../../generated/notification/sdk.gen';
 import { Sdk as PropertiesSdk } from '../../generated/properties/sdk.gen';
+import { Sdk as ScheduledActionSdk } from '../../generated/scheduled-action/sdk.gen';
 import { Sdk as SearchSdk } from '../../generated/search/sdk.gen';
 import { createClient } from '../../generated/storage/client';
 import { Sdk as StorageSdk } from '../../generated/storage/sdk.gen';
 import type { Bot } from '../../generated/storage/types.gen';
+import { Sdk as UnfurlSdk } from '../../generated/unfurl/sdk.gen';
 import {
   type Env,
   HOSTS,
@@ -24,9 +26,12 @@ import { BotsNamespace } from '../entities/bots/namespace';
 import { User } from '../entities/users/user';
 import { MacroEvents } from '../events/receiver';
 import { type LocalPortmap, resolveLocalPortmap } from '../local-portmap';
+import { observeSdk } from './activity';
 
 const USER_API_KEY_HEADER = 'x-macro-user-api-key';
+
 const USER_API_KEY_PREFIX = 'mak_';
+
 const BOT_TOKEN_PREFIX = 'mbot_';
 
 type CredentialHeader = readonly [name: string, value: string];
@@ -94,28 +99,50 @@ export async function requestAuthHeaders(
 }
 
 export class MacroClient {
+  readonly scheduledAction: ScheduledActionSdk;
+
+  readonly unfurl: UnfurlSdk;
+
   readonly agentHarness: AgentHarnessSdk;
+
   readonly auth: AuthSdk;
+
   readonly calendar: CalendarSdk;
+
   readonly cognition: CognitionSdk;
+
   readonly contacts: ContactsSdk;
+
   readonly email: EmailSdk;
+
   readonly notification: NotificationSdk;
+
   readonly properties: PropertiesSdk;
+
   readonly search: SearchSdk;
+
   readonly storage: StorageSdk;
+
   readonly webAppUrl: string;
+
   readonly wsVerify?: string;
+
   readonly events: MacroEvents;
+
   /** Resolved authentication config (distinct from `auth`, the auth-service SDK). */
   readonly authConfig: MacroAuth;
+
   /** Resolved service base urls: env defaults, then the local-stack portmap,
    * then `opts.hosts` overrides. */
   readonly hosts: Record<ServiceName, string>;
+
   /** The local stack's generated port map; only set when env is `local`. */
   readonly localPortmap?: LocalPortmap;
+
   private readonly requestedAs?: string;
+
   private selfBotRecord?: Promise<Bot>;
+
   private selfPrincipal?: Promise<string>;
 
   constructor(opts: MacroOpts) {
@@ -140,28 +167,80 @@ export class MacroClient {
     }
     this.wsVerify = opts.wsVerify;
 
-    this.agentHarness = new AgentHarnessSdk({
-      client: this.makeClient(hosts['agent-harness']),
-    });
-    this.auth = new AuthSdk({ client: this.makeClient(hosts.auth) });
-    this.calendar = new CalendarSdk({
-      client: this.makeClient(hosts.calendar),
-    });
-    this.cognition = new CognitionSdk({
-      client: this.makeClient(hosts.cognition),
-    });
-    this.contacts = new ContactsSdk({
-      client: this.makeClient(hosts.contacts),
-    });
-    this.email = new EmailSdk({ client: this.makeClient(hosts.email) });
-    this.notification = new NotificationSdk({
-      client: this.makeClient(hosts.notification),
-    });
-    this.properties = new PropertiesSdk({
-      client: this.makeClient(hosts.properties),
-    });
-    this.search = new SearchSdk({ client: this.makeClient(hosts.search) });
-    this.storage = new StorageSdk({ client: this.makeClient(hosts.storage) });
+    this.scheduledAction = observeSdk(
+      new ScheduledActionSdk({
+        client: this.makeClient(hosts['scheduled-action']),
+      }),
+      'scheduled-action',
+      opts.onRequest,
+    );
+    this.unfurl = observeSdk(
+      new UnfurlSdk({ client: this.makeClient(hosts.unfurl) }),
+      'unfurl',
+      opts.onRequest,
+    );
+    this.agentHarness = observeSdk(
+      new AgentHarnessSdk({
+        client: this.makeClient(hosts['agent-harness']),
+      }),
+      'agent-harness',
+      opts.onRequest,
+    );
+    this.auth = observeSdk(
+      new AuthSdk({ client: this.makeClient(hosts.auth) }),
+      'auth',
+      opts.onRequest,
+    );
+    this.calendar = observeSdk(
+      new CalendarSdk({
+        client: this.makeClient(hosts.calendar),
+      }),
+      'calendar',
+      opts.onRequest,
+    );
+    this.cognition = observeSdk(
+      new CognitionSdk({
+        client: this.makeClient(hosts.cognition),
+      }),
+      'cognition',
+      opts.onRequest,
+    );
+    this.contacts = observeSdk(
+      new ContactsSdk({
+        client: this.makeClient(hosts.contacts),
+      }),
+      'contacts',
+      opts.onRequest,
+    );
+    this.email = observeSdk(
+      new EmailSdk({ client: this.makeClient(hosts.email) }),
+      'email',
+      opts.onRequest,
+    );
+    this.notification = observeSdk(
+      new NotificationSdk({
+        client: this.makeClient(hosts.notification),
+      }),
+      'notification',
+      opts.onRequest,
+    );
+    this.properties = observeSdk(
+      new PropertiesSdk({
+        client: this.makeClient(hosts.properties),
+      }),
+      'properties',
+      opts.onRequest,
+    );
+    this.search = observeSdk(
+      new SearchSdk({ client: this.makeClient(hosts.search) }),
+      'search',
+      opts.onRequest,
+    );
+    this.storage = observeSdk(
+      new StorageSdk({ client: this.makeClient(hosts.storage) }),
+      'storage',
+      opts.onRequest,
+    );
 
     const envWebhookSecret =
       typeof process !== 'undefined'

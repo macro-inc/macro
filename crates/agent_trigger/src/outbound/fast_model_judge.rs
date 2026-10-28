@@ -77,6 +77,9 @@ impl ImplicitTriggerJudge for FastModelTriggerJudge {
         posted: &MessagePostedMetadata,
         transcript: &str,
     ) -> Result<bool> {
+        let Some(user) = posted.sender.as_user() else {
+            return Ok(false);
+        };
         let schema = DynamicSchema {
             name: "ImplicitTriggerJudgeOutput".to_string(),
             description: Some(
@@ -98,13 +101,7 @@ impl ImplicitTriggerJudge for FastModelTriggerJudge {
                 }
             }),
         };
-        // The judge runs on behalf of whoever posted the message, so their
-        // account carries the tokens; a non-user sender never reaches this
-        // point, but attribute it to the system rather than fail if one does.
-        let ctx = match posted.sender.as_user() {
-            Some(user) => UsageContext::new(AiFeature::Automation, user.clone()),
-            None => UsageContext::system(AiFeature::Automation),
-        };
+        let ctx = UsageContext::new(AiFeature::Automation, user.clone());
 
         let blurbs =
             blurbs_for_attachments(self.images.as_ref(), &posted.attachments, ctx.clone()).await;

@@ -1,6 +1,9 @@
 import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
 import { getMeetingPath } from '@channel/Call/call-link';
 import { joinChannelCall } from '@channel/Call/join-channel-call';
+import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { Telemetry } from '@macro-inc/observability';
 import { useCallLinkQuery } from '@queries/call/meetings';
 import { useNavigate } from '@solidjs/router';
 import type { Accessor } from 'solid-js';
@@ -21,10 +24,18 @@ export function useCallAgain(
       ? meeting.data?.shareToken
       : undefined;
   const canCallAgain = () => Boolean(channelId() || shareToken());
+  const rejoin = async (channel: string) => {
+    try {
+      await joinChannelCall(channel);
+    } catch (error) {
+      toast.failure('Failed to join call');
+      Telemetry.error(error, { surface: 'call-again' });
+    }
+  };
   const callAgain = () => {
     const channel = channelId();
     if (channel) {
-      void joinChannelCall(channel);
+      fireAndForget(rejoin(channel), 'call-again');
       return;
     }
     const token = shareToken();

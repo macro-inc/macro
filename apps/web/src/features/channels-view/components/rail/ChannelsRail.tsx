@@ -19,6 +19,7 @@ import {
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { favoriteSplitContent } from '@app/util/favorites';
+import { prefetchLatestChannelMessages } from '@channel/queries/prefetch-channel-target';
 import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
@@ -32,11 +33,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { enableChannelTags } from '@core/constant/featureFlags';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { thrownResultErrorHasCode } from '@core/util/result';
-import {
-  type ChannelEntity,
-  isChannelEntity,
-  type WithNotification,
-} from '@entity';
+import type { ChannelEntity, WithNotification } from '@entity';
 import { notificationIsRead } from '@entity/utils/notification';
 import { ensureNotificationSourceLoaded } from '@notifications/notification-helpers';
 import { hydrateChannelNotificationSelection } from '@queries/channel/notification-selection';
@@ -73,6 +70,7 @@ import {
   type ChannelsSourceScope,
   type ChannelsSources,
   deduplicateChannels,
+  resolveReferencedChannels,
   useChannelsByIdsQuery,
 } from '../../queries';
 import type {
@@ -104,6 +102,7 @@ import { promptSmartTag } from './SmartTagDialog';
 
 export { buildChannelRailRows } from './build-channel-rail-rows';
 
+import { fireAndForget } from '@core/util/fireAndForget';
 import { useChannelCalls } from './hooks/useChannelCalls';
 import { useChannelRailActivity } from './hooks/useChannelRailActivity';
 
@@ -115,6 +114,10 @@ const CHANNEL_RAIL_SECTIONS: ChannelsRailSection[] = [
 const LABEL_KEY_PREFIX = 'label:';
 const BROWSE_QUERY_SCOPES = ['channels', 'direct_messages'] as const;
 const CHANNEL_TAB_IDS: ChannelsTab[] = ['browse', 'recents'];
+const CHANNEL_TAB_IDS_WITH_THREADS: ChannelsTab[] = [
+  ...CHANNEL_TAB_IDS,
+  'threads',
+];
 const DM_LOADING_PREVIEW_OFFSET = 80;
 
 export type ChannelsRailProps = {
@@ -141,6 +144,10 @@ export function ChannelsRail(props: ChannelsRailProps) {
     setSelectedChannel,
     setSortBy,
     setTab,
+    tab,
+    threadsEnabled,
+    threadsChannelId,
+    setThreadsChannelId,
   } = useChannelsView();
 
   const panel = useSplitPanelOrThrow();
@@ -211,7 +218,10 @@ export function ChannelsRail(props: ChannelsRailProps) {
       // Only fetched selections need to join the browser router's transition.
       await startTransition(() => {
         if (request === activation)
-          void selectChannel(channel, channelId, openInNewSplit);
+          fireAndForget(
+            selectChannel(channel, channelId, openInNewSplit),
+            'channels-view'
+          );
       });
     } catch (error) {
       if (request === activation) reportActivationError(error);
@@ -247,9 +257,15 @@ export function ChannelsRail(props: ChannelsRailProps) {
     // Telemetry installs ZoneAwarePromise; native async results are not
     // instances of that constructor. Detect the pending edge structurally.
     if ('then' in selection) {
-      void selectHydratedChannel(selection, request, channelId, openInNewSplit);
+      fireAndForget(
+        selectHydratedChannel(selection, request, channelId, openInNewSplit),
+        'channels-view'
+      );
     } else {
-      void selectChannel(selection, channelId, openInNewSplit);
+      fireAndForget(
+        selectChannel(selection, channelId, openInNewSplit),
+        'channels-view'
+      );
     }
   };
 
@@ -258,7 +274,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
   const listDomId = createUniqueId();
 
   const [sectionScrollRoots, setSectionScrollRoots] = createSignal<
-    Partial<Record<ChannelsRailSection, HTMLDivElement>>
+    Partial<Record<ChannelsRailSection | 'threads', HTMLDivElement>>
   >({});
 
   const [listRoot, setListRoot] = createSignal<HTMLDivElement>();
@@ -339,25 +355,44 @@ export function ChannelsRail(props: ChannelsRailProps) {
     return 'Channel labels are unavailable right now.';
   };
 
-  // A labelled channel renders under its label even before the paginated
-  // Channels source reaches it, so fetch the ones the sources have not loaded.
-  const labelledChannelIds = createMemo(() => [
-    ...new Set(labels().flatMap((label) => label.channelIds)),
+  const favorites = createMemo(() => favoritesData()?.favorites ?? []);
+  const favoriteChannelIds = createMemo(() =>
+    favorites()
+      .filter((favorite) => favorite.entityType === 'channel')
+      .map((favorite) => favorite.entityId)
+  );
+
+  // A labelled or favorited channel has a row before the paginated Channels
+  // source reaches it, so fetch the ones the sources have not loaded: a label
+  // needs them to list its channels, a favorite row to act on its channel.
+  const referencedChannelIds = createMemo(() => [
+    ...new Set([
+      ...labels().flatMap((label) => label.channelIds),
+      ...favoriteChannelIds(),
+    ]),
   ]);
-  const missingLabelledIds = createMemo(() => {
+  const missingChannelIds = createMemo(() => {
     const loaded = new Set(channels().map((channel) => channel.id));
-    return labelledChannelIds().filter((id) => !loaded.has(id));
+    return referencedChannelIds().filter((id) => !loaded.has(id));
   });
-  const labelledChannelsQuery = useChannelsByIdsQuery(missingLabelledIds);
-  const labelledChannels = createMemo<ChannelEntity[]>((previous) => {
+  const referencedChannelsQuery = useChannelsByIdsQuery(missingChannelIds);
+  const referencedChannels = createMemo<ChannelEntity[]>(
+    (previous) =>
+      resolveReferencedChannels(previous, {
+        isEnabled: referencedChannelsQuery.isEnabled,
+        isLoading: referencedChannelsQuery.isLoading,
+        error: referencedChannelsQuery.error,
+        entities: referencedChannelsQuery.data?.entities,
+      }),
+    []
+  );
+  // Only a label puts a fetched channel in a section. A favorited one stays
+  // out of the section lists, and so out of their unread counts.
+  const labelledChannels = createMemo<ChannelEntity[]>(() => {
     if (!channelTagsEnabled()) return [];
-    if (!labelledChannelsQuery.isEnabled || labelledChannelsQuery.isLoading)
-      return previous;
-    return deduplicateChannels([
-      (labelledChannelsQuery.data?.entities ?? []).filter(isChannelEntity),
-      previous,
-    ]);
-  }, []);
+    const labelled = new Set(labels().flatMap((label) => label.channelIds));
+    return referencedChannels().filter((channel) => labelled.has(channel.id));
+  });
 
   const allChannels = createMemo(() =>
     deduplicateChannels([channels(), labelledChannels()])
@@ -365,10 +400,11 @@ export function ChannelsRail(props: ChannelsRailProps) {
   const channelsById = createMemo(
     () => new Map(allChannels().map((channel) => [channel.id, channel]))
   );
+  const channelById = (channelId: string) =>
+    channelsById().get(channelId) ??
+    referencedChannels().find((channel) => channel.id === channelId);
 
   const channelActivity = useChannelRailActivity(allChannels, channelCalls);
-
-  const favorites = createMemo(() => favoritesData()?.favorites ?? []);
 
   const isLabelOpen = (labelId: string) =>
     !state.collapsedLabels.includes(labelId);
@@ -406,13 +442,14 @@ export function ChannelsRail(props: ChannelsRailProps) {
     }
 
     return buildChannelRailRows(
-      state.tab,
+      tab(),
       state.expandedGroups,
       {
         favorites: favorites(),
         channels: props.sources.channels.items(),
         direct_messages: props.sources.direct_messages.items(),
         recents: props.sources.recents.items(),
+        threads: props.sources.threads.items(),
       },
       channelSectionRows()
     );
@@ -434,6 +471,19 @@ export function ChannelsRail(props: ChannelsRailProps) {
         previewAfterNavigation.clear();
         const openInNewSplit =
           metadata?.newSplit === true || metadata?.event?.shiftKey === true;
+
+        if (item.kind === 'all-threads') {
+          setThreadsChannelId(undefined);
+          return;
+        }
+
+        // In the Threads tab, conversation rows (including search results)
+        // filter the thread list; they open only into a new split.
+        if (item.kind === 'conversation' && tab() === 'threads') {
+          if (openInNewSplit) activateChannel(item.channel, true);
+          else setThreadsChannelId(item.channel.id);
+          return;
+        }
 
         if (item.kind === 'section') {
           setGroupOpen(item.group, !state.expandedGroups[item.group]);
@@ -460,18 +510,19 @@ export function ChannelsRail(props: ChannelsRailProps) {
           item.kind === 'favorite' ? item.favorite.entityId : item.channel.id;
 
         const channel =
-          item.kind === 'conversation'
-            ? item.channel
-            : channelsById().get(channelId);
+          item.kind === 'conversation' ? item.channel : channelById(channelId);
         if (channel) activateChannel(channel, openInNewSplit);
         else {
           const request = ++activation;
           if (openInNewSplit) {
-            void selectHydratedChannel(
-              fetchChannelSelectionById(channelId),
-              request,
-              channelId,
-              true
+            fireAndForget(
+              selectHydratedChannel(
+                fetchChannelSelectionById(channelId),
+                request,
+                channelId,
+                true
+              ),
+              'channels-view'
             );
           } else setSelectedChannel({ type: 'channel', id: channelId });
         }
@@ -500,9 +551,11 @@ export function ChannelsRail(props: ChannelsRailProps) {
           ? sectionScrollRoots().favorites
           : row.kind === 'conversation' && row.group
             ? sectionScrollRoots()[row.group]
-            : state.tab === 'recents'
+            : tab() === 'recents'
               ? listRoot()
-              : undefined;
+              : tab() === 'threads'
+                ? sectionScrollRoots().threads
+                : undefined;
       if (!element || !scrollRoot) return;
 
       const elementBounds = element.getBoundingClientRect();
@@ -540,6 +593,19 @@ export function ChannelsRail(props: ChannelsRailProps) {
     const scrollRoot =
       scope === 'recents' ? listRoot() : sectionScrollRoots()[scope];
     if (scrollRoot?.isConnected) scrollRoot.scrollTop = 0;
+  };
+
+  const scrollThreadsToSelectedOrStart = () => {
+    const items = props.sources.threads.items();
+    const selectedIndex = items.findIndex(
+      (channel) => channel.id === threadsChannelId()
+    );
+    const virtualizer = virtualizers().threads;
+    if (!virtualizer || items.length === 0) return;
+
+    virtualizer.scrollToIndex(selectedIndex >= 0 ? selectedIndex : 0, {
+      align: selectedIndex >= 0 ? 'nearest' : 'start',
+    });
   };
 
   const scrollSearchToSelectedOrStart = () => {
@@ -588,11 +654,13 @@ export function ChannelsRail(props: ChannelsRailProps) {
     const searchOpen = props.searchOpen;
     const sourcesReady = searchOpen
       ? !props.sources.search.isLoading()
-      : state.tab === 'recents'
+      : tab() === 'recents'
         ? !props.sources.recents.isLoading()
-        : BROWSE_QUERY_SCOPES.every(
-            (scope) => !props.sources[scope].isLoading()
-          );
+        : tab() === 'threads'
+          ? !props.sources.threads.isLoading()
+          : BROWSE_QUERY_SCOPES.every(
+              (scope) => !props.sources[scope].isLoading()
+            );
     if (!sourcesReady) return;
 
     const frame = requestAnimationFrame(() => {
@@ -600,8 +668,10 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
       if (searchOpen) {
         scrollSearchToSelectedOrStart();
-      } else if (state.tab === 'recents') {
+      } else if (tab() === 'recents') {
         scrollScopeToSelectedOrStart('recents');
+      } else if (tab() === 'threads') {
+        scrollThreadsToSelectedOrStart();
       } else {
         scrollFavoritesToSelectedOrStart();
         for (const scope of BROWSE_QUERY_SCOPES) {
@@ -616,8 +686,9 @@ export function ChannelsRail(props: ChannelsRailProps) {
   useViewTabHotkeys({
     scopeId: panel.splitHotkeyScope,
     enabled: panel.isPanelActive,
-    ids: () => CHANNEL_TAB_IDS,
-    activeId: () => state.tab,
+    ids: () =>
+      threadsEnabled() ? CHANNEL_TAB_IDS_WITH_THREADS : CHANNEL_TAB_IDS,
+    activeId: () => tab(),
     setActiveId: selectTab,
   });
 
@@ -659,7 +730,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
           if (!source.isLoadingMore()) {
             if (!source.hasMore()) return true;
-            void source.loadMore();
+            fireAndForget(source.loadMore(), 'channels-view');
           }
 
           if (row.scope === 'direct_messages') {
@@ -694,7 +765,11 @@ export function ChannelsRail(props: ChannelsRailProps) {
           previewAfterNavigation.clear();
 
           const row = event.result?.item;
-          if (row?.kind === 'conversation') {
+          if (tab() === 'threads') {
+            if (row?.kind === 'all-threads') setThreadsChannelId(undefined);
+            else if (row?.kind === 'conversation')
+              setThreadsChannelId(row.channel.id);
+          } else if (row?.kind === 'conversation') {
             previewAfterNavigation(row.channel);
           } else if (
             row?.kind === 'favorite' &&
@@ -714,6 +789,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
       // Labels disclose like sections: `h`/`l` on a label heading or one of
       // its channels collapse or expand that label; anywhere else, the section.
       disclosure: {
+        isHeader: (row) => row.kind === 'section' || row.kind === 'label',
         getKey: (row) =>
           row.kind === 'label'
             ? row.id
@@ -761,7 +837,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
   const sectionHotkeys = createHotkeyGroup();
   const sectionHotkeysEnabled = () =>
-    panel.isPanelActive() && !props.searchOpen && state.tab === 'browse';
+    panel.isPanelActive() && !props.searchOpen && tab() === 'browse';
 
   registerHotkey({
     hotkey: ']',
@@ -784,6 +860,24 @@ export function ChannelsRail(props: ChannelsRailProps) {
       reason: 'pointer',
       metadata: event ? { event } : undefined,
     });
+  };
+
+  // A mouse press reaches the server before the click that opens its channel.
+  // Touch presses also start scrolls, which would fetch every row they cross.
+  const prefetchRow = (rowId: ChannelRailRow['id'], event: PointerEvent) => {
+    if (event.pointerType !== 'mouse' || event.button !== 0) return;
+    // Threads-tab rows filter the thread list in place.
+    if (tab() === 'threads') return;
+    const row = visibleRows().find((row) => row.id === rowId);
+    if (row?.kind === 'conversation') {
+      // A message target loads around that message instead.
+      if (!row.channel.target) prefetchLatestChannelMessages(row.channel.id);
+    } else if (
+      row?.kind === 'favorite' &&
+      row.favorite.entityType === 'channel'
+    ) {
+      prefetchLatestChannelMessages(row.favorite.entityId);
+    }
   };
 
   // Explain shared versus private scope before creating or changing labels.
@@ -1084,7 +1178,10 @@ export function ChannelsRail(props: ChannelsRailProps) {
       setChannelLabel(drag.channelId, undefined);
       return;
     }
-    void createLabel([drag.channelId, target.channelId]);
+    fireAndForget(
+      createLabel([drag.channelId, target.channelId]),
+      'channels-view'
+    );
   });
 
   const registerVirtualizer = (
@@ -1107,11 +1204,14 @@ export function ChannelsRail(props: ChannelsRailProps) {
   const rail: ChannelsRailContext = {
     railId: listDomId,
     list,
-    tab: () => state.tab,
+    tab,
     selectTab,
     sources: props.sources,
     favorites,
+    channelById,
     selectedChannel,
+    threadsEnabled,
+    threadsChannelId,
     isGroupOpen: (group) => state.expandedGroups[group],
     toggleGroup: (group) => setGroupOpen(group, !state.expandedGroups[group]),
     channelTagsEnabled,
@@ -1134,6 +1234,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     setSortBy,
     registerRootRef: setListRoot,
     activateRow,
+    prefetchRow,
     registerScrollRef: (group, element) => {
       setSectionScrollRoots((current) => ({
         ...current,

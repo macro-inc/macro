@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH credential AS (\n                DELETE FROM agent_preview_credential WHERE hash = $1 AND kind = 'ssh' AND expires_at > now()\n                RETURNING preview_id\n            ) UPDATE agent_preview_lease l SET replica_id = $2 FROM credential c\n              WHERE l.id = c.preview_id AND l.replica_id IS NULL AND l.status = 'starting'\n              AND l.expires_at > now() AND EXISTS (SELECT 1 FROM agent_preview_replica WHERE id = $2 AND expires_at > now())\n              RETURNING l.metadata AS \"metadata: Json<StoredPreview>\", l.status",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "metadata: Json<StoredPreview>",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 1,
+        "name": "status",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bytea",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "739cc7a0d123671905e321b4f9938c8f4523fadb112e78dac266b48b24f0ce3e"
+}

@@ -1,0 +1,180 @@
+{
+  "catalog": {
+    "tables": [
+      {
+        "columns": [
+          {
+            "id": "01990000-0000-7000-8000-00000000c001",
+            "kind": {
+              "kind": "text"
+            },
+            "name": "name",
+            "placement": "01990000-0000-7000-8000-00000000b001"
+          },
+          {
+            "id": "01990000-0000-7000-8000-00000000c002",
+            "kind": {
+              "kind": "number"
+            },
+            "name": "amount",
+            "placement": "01990000-0000-7000-8000-00000000b002"
+          },
+          {
+            "id": "01990000-0000-7000-8000-00000000c003",
+            "kind": {
+              "kind": "select",
+              "multi": false,
+              "options": [
+                {
+                  "id": "01990000-0000-7000-8000-00000000a001",
+                  "label": "Lead"
+                },
+                {
+                  "id": "01990000-0000-7000-8000-00000000a002",
+                  "label": "Won"
+                }
+              ]
+            },
+            "name": "stage",
+            "placement": "01990000-0000-7000-8000-00000000b003"
+          },
+          {
+            "id": "01990000-0000-7000-8000-00000000c004",
+            "kind": {
+              "kind": "entity",
+              "multi": true,
+              "target": "DATABASE_ROW"
+            },
+            "name": "owner",
+            "placement": "01990000-0000-7000-8000-00000000b004"
+          },
+          {
+            "id": "01990000-0000-7000-8000-00000000c005",
+            "kind": {
+              "kind": "text"
+            },
+            "name": "pitch",
+            "placement": "01990000-0000-7000-8000-00000000b006"
+          }
+        ],
+        "database": "crm",
+        "databaseId": "01990000-0000-7000-8000-00000000db01",
+        "id": "01990000-0000-7000-8000-00000000d001",
+        "name": "deals",
+        "source": "database"
+      },
+      {
+        "columns": [
+          {
+            "id": "01990000-0000-7000-8000-00000000c001",
+            "kind": {
+              "kind": "text"
+            },
+            "name": "name",
+            "placement": "01990000-0000-7000-8000-00000000b005"
+          }
+        ],
+        "database": "crm",
+        "databaseId": "01990000-0000-7000-8000-00000000db01",
+        "id": "01990000-0000-7000-8000-00000000d002",
+        "name": "people",
+        "source": "database"
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "bins": [
+        {
+          "count": 2,
+          "key": {
+            "type": "options",
+            "value": [
+              "01990000-0000-7000-8000-00000000a002"
+            ]
+          }
+        },
+        {
+          "count": 1,
+          "key": {
+            "type": "options",
+            "value": [
+              "01990000-0000-7000-8000-00000000a001"
+            ]
+          }
+        },
+        {
+          "count": 4,
+          "key": null
+        }
+      ],
+      "step": {
+        "cursor": null,
+        "id": 0,
+        "limit": 0,
+        "needs": [],
+        "query": {
+          "groupBy": "01990000-0000-7000-8000-00000000c003",
+          "propf": null,
+          "table": "01990000-0000-7000-8000-00000000d001",
+          "type": "groupSoup"
+        },
+        "step": "bins"
+      }
+    }
+  ],
+  "outcome": {
+    "changesApplied": 0,
+    "columns": [
+      {
+        "column": "01990000-0000-7000-8000-00000000c003",
+        "kind": "select",
+        "name": "stage"
+      },
+      {
+        "kind": "number",
+        "name": "COUNT(*)"
+      }
+    ],
+    "insertedRowIds": [],
+    "readTables": [
+      "01990000-0000-7000-8000-00000000d001"
+    ],
+    "rowIds": [],
+    "rows": [
+      [
+        {
+          "type": "options",
+          "value": [
+            "01990000-0000-7000-8000-00000000a002"
+          ]
+        },
+        {
+          "type": "number",
+          "value": 2.0
+        }
+      ],
+      [
+        {
+          "type": "options",
+          "value": [
+            "01990000-0000-7000-8000-00000000a001"
+          ]
+        },
+        {
+          "type": "number",
+          "value": 1.0
+        }
+      ],
+      [
+        null,
+        {
+          "type": "number",
+          "value": 4.0
+        }
+      ]
+    ],
+    "truncated": false
+  },
+  "sql": "SELECT stage, COUNT(*) FROM crm.deals GROUP BY stage"
+}

@@ -1,11 +1,13 @@
-//! Project collection and task-reference read contracts.
+//! Project collection and task read contracts.
 
 use chrono::{DateTime, Utc};
+#[cfg(feature = "ports")]
+use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
 use models_permissions::share_permission::access_level::AccessLevel;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::models::{InitiativeDetail, InitiativeError, InitiativeId, InitiativeSummary};
+use super::models::{InitiativeDetail, InitiativeError, InitiativeSummary};
 
 const DEFAULT_PAGE_SIZE: u16 = 50;
 const MAX_PAGE_SIZE: u16 = 100;
@@ -98,6 +100,57 @@ pub struct InitiativePageRow {
     pub completed_task_count: u32,
 }
 
+/// An authorized project with the tasks its viewer may see, checked once.
+///
+/// Progress is summarized from the retained task receipts, so detail and
+/// counts share one task-access walk.
+#[cfg(feature = "ports")]
+#[derive(Debug, Clone)]
+pub struct InitiativeRead {
+    receipt: EntityAccessReceipt<ViewAccessLevel>,
+    detail: InitiativeDetail,
+    task_receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+}
+
+#[cfg(feature = "ports")]
+impl InitiativeRead {
+    /// Pair a project receipt with its detail and the viewer's task receipts.
+    /// The detail's `task_ids` are replaced by the receipts' entity ids.
+    pub fn new(
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+        mut detail: InitiativeDetail,
+        task_receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+    ) -> Self {
+        detail.task_ids = task_receipts
+            .iter()
+            .map(|task| task.entity().entity_id.clone())
+            .collect();
+        Self {
+            receipt,
+            detail,
+            task_receipts,
+        }
+    }
+
+    /// Project detail with only the viewer's visible task ids.
+    pub fn detail(&self) -> &InitiativeDetail {
+        &self.detail
+    }
+
+    /// Take the project detail.
+    pub fn into_detail(self) -> InitiativeDetail {
+        self.detail
+    }
+
+    pub(crate) fn receipt(&self) -> &EntityAccessReceipt<ViewAccessLevel> {
+        &self.receipt
+    }
+
+    pub(crate) fn task_receipts(&self) -> &[EntityAccessReceipt<ViewAccessLevel>] {
+        &self.task_receipts
+    }
+}
+
 /// One authorized project collection page.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
@@ -170,64 +223,3 @@ impl InitiativeDetail {
         })
     }
 }
-
-/// Bounded batch of task ids to resolve.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
-#[serde(rename_all = "camelCase")]
-pub struct TaskInitiativeReferencesRequest {
-    /// At most one hundred distinct task ids.
-    pub task_ids: Vec<String>,
-}
-
-/// Minimal project display reference.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
-pub struct InitiativeReference {
-    /// Project id.
-    pub id: InitiativeId,
-    /// Authorized project name.
-    pub name: String,
-}
-
-/// A task's project. An inaccessible project never exposes its id or name.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
-#[serde(
-    tag = "state",
-    rename_all = "camelCase",
-    rename_all_fields = "camelCase"
-)]
-pub enum TaskInitiativeReference {
-    /// The visible task has no project.
-    None {
-        /// Task id.
-        #[serde(rename = "taskId")]
-        task_id: String,
-    },
-    /// The task or its project is not visible to the caller.
-    Unavailable {
-        /// Requested task id, with no inaccessible metadata.
-        #[serde(rename = "taskId")]
-        task_id: String,
-    },
-    /// Both task and project are visible.
-    Visible {
-        /// Task id.
-        #[serde(rename = "taskId")]
-        task_id: String,
-        /// Authorized project reference.
-        initiative: InitiativeReference,
-    },
-}
-
-/// Task references in deduplicated request order.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
-pub struct TaskInitiativeReferences {
-    /// Per-task visibility-aware references.
-    pub references: Vec<TaskInitiativeReference>,
-}
-
-#[cfg(all(test, feature = "inbound"))]
-mod test;

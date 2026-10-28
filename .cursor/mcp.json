@@ -23,6 +23,9 @@
         "-t",
         "stdio"
       ]
+    },
+    "posthog": {
+      "url": "https://mcp.posthog.com/mcp"
     }
   }
 }

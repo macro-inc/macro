@@ -1,21 +1,34 @@
+import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
+import { createAiDocument } from '@app/features/block-ai/queries/create-ai';
+import { createFigDocument } from '@app/features/block-fig/queries/create-fig';
+import { createPsdDocument } from '@app/features/block-psd/queries/create-psd';
 import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives/use-spreadsheet-access';
+import { createSpreadsheetDocument } from '@app/features/block-spreadsheet/queries/create-spreadsheet';
+import { openChatWithAgent } from '@app/features/chat/ChatWithAgentButton';
+import { t } from '@app/lib/i18n';
 import type { BlockTool } from '@components/app/ResponsiveBlockToolbar';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import type { BlockAlias, BlockName } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
+import {
+  enableAiEditor,
+  enableChatV3Agents,
+  enableFigViewer,
+  enablePsdEditor,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import { pressedKeys } from '@core/hotkey/state';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import {
-  createCanvasFileFromJsonString,
+  createCanvasFile,
   createChat,
   createMarkdownFile,
   createTask,
 } from '@core/util/create';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { ObjectLike } from '@core/util/result';
-import CaretDown from '@phosphor/caret-down.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import CirclePlus from '@phosphor/plus-circle.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { createProject } from '@queries/storage/projects';
 import { Dialog, Dropdown, Surface } from '@ui';
@@ -39,7 +52,9 @@ type CreateBlockSpec = {
 
 const BLOCK_CREATE_SPECS: CreateBlockSpec[] = [
   {
-    label: 'Spreadsheet',
+    get label() {
+      return t('create.spreadsheetLabel');
+    },
     blockName: 'spreadsheet',
     hotkeyToken: TOKENS.create.spreadsheet,
     icon: () => (
@@ -54,12 +69,14 @@ const BLOCK_CREATE_SPECS: CreateBlockSpec[] = [
     loading: true,
     createFn: async (projectId) => {
       const documentId = await createSpreadsheetDocument({ projectId });
-      if (!documentId) throw new Error('Failed to create spreadsheet');
+      if (!documentId) throw new Error(t('create.failedToCreateSpreadsheet'));
       return documentId;
     },
   },
   {
-    label: 'Note',
+    get label() {
+      return t('create.noteLabel');
+    },
     blockName: 'md' as BlockName,
     hotkeyToken: TOKENS.create.note,
     icon: () => (
@@ -74,13 +91,15 @@ const BLOCK_CREATE_SPECS: CreateBlockSpec[] = [
         content: '',
         projectId,
       });
-      if (!result) throw new Error('Failed to create markdown file');
+      if (!result) throw new Error(t('create.failedToCreateMarkdownFile'));
       return result;
     },
     params: { fromScratch: true },
   },
   {
-    label: 'Task',
+    get label() {
+      return t('create.taskLabel');
+    },
     blockName: 'task' as BlockAlias,
     hotkeyToken: TOKENS.create.task,
     icon: () => (
@@ -104,12 +123,14 @@ const BLOCK_CREATE_SPECS: CreateBlockSpec[] = [
           },
         ],
       });
-      if (!result) throw new Error('Failed to create task');
+      if (!result) throw new Error(t('create.failedToCreateTask'));
       return result;
     },
   },
   {
-    label: 'AI',
+    get label() {
+      return t('create.aiChatLabel');
+    },
     blockName: 'chat' as BlockName,
     hotkeyToken: TOKENS.create.chat,
     icon: () => (
@@ -121,13 +142,15 @@ const BLOCK_CREATE_SPECS: CreateBlockSpec[] = [
       const result = await createChat({ projectId });
       if ('error' in result) {
         console.error(result.error);
-        throw new Error('Failed to create chat');
+        throw new Error(t('create.failedToCreateChat'));
       }
       return result.chatId;
     },
   },
   {
-    label: 'Canvas',
+    get label() {
+      return t('create.canvasLabel');
+    },
     blockName: 'canvas' as BlockName,
     hotkeyToken: TOKENS.create.canvas,
     icon: () => (
@@ -137,20 +160,75 @@ const BLOCK_CREATE_SPECS: CreateBlockSpec[] = [
     ),
     loading: true,
     createFn: async (projectId) => {
-      const result = await createCanvasFileFromJsonString({
-        json: JSON.stringify({ nodes: [], edges: [] }),
+      const result = await createCanvasFile({
         title: 'New Canvas',
         projectId,
       });
       if ('error' in result) {
         console.error(result.error);
-        throw new Error('Failed to create canvas');
+        throw new Error(t('create.failedToCreateCanvas'));
       }
       return result.documentId;
     },
   },
   {
-    label: 'Folder',
+    get label() {
+      return t('create.photoshopLabel');
+    },
+    blockName: 'psd' as BlockName,
+    hotkeyToken: TOKENS.create.photoshop,
+    icon: () => (
+      <div class="size-4 shrink-0">
+        <EntityIcon targetType="psd" size="shrinkFill" theme="monochrome" />
+      </div>
+    ),
+    loading: true,
+    createFn: async (projectId) => {
+      const id = await createPsdDocument({ projectId, source: 'project' });
+      if (!id) throw new Error(t('create.failedToCreatePhotoshopFile'));
+      return id;
+    },
+  },
+  {
+    get label() {
+      return t('create.designLabel');
+    },
+    blockName: 'fig' as BlockName,
+    hotkeyToken: TOKENS.create.design,
+    icon: () => (
+      <div class="size-4 shrink-0">
+        <EntityIcon targetType="fig" size="shrinkFill" theme="monochrome" />
+      </div>
+    ),
+    loading: true,
+    createFn: async (projectId) => {
+      const id = await createFigDocument({ projectId, source: 'project' });
+      if (!id) throw new Error(t('create.failedToCreateDesign'));
+      return id;
+    },
+  },
+  {
+    get label() {
+      return t('create.illustratorLabel');
+    },
+    blockName: 'ai' as BlockName,
+    hotkeyToken: TOKENS.create.illustration,
+    icon: () => (
+      <div class="size-4 shrink-0">
+        <EntityIcon targetType="ai" size="shrinkFill" theme="monochrome" />
+      </div>
+    ),
+    loading: true,
+    createFn: async (projectId) => {
+      const id = await createAiDocument({ projectId, source: 'project' });
+      if (!id) throw new Error(t('create.failedToCreateIllustratorFile'));
+      return id;
+    },
+  },
+  {
+    get label() {
+      return t('create.folderLabel');
+    },
     blockName: 'project' as BlockName,
     hotkeyToken: TOKENS.create.project,
     icon: () => (
@@ -163,7 +241,7 @@ const BLOCK_CREATE_SPECS: CreateBlockSpec[] = [
         name: 'New Project',
         parentId: projectId,
       });
-      if (!result) throw new Error('Failed to create folder');
+      if (!result) throw new Error(t('create.failedToCreateFolder'));
       return result;
     },
   },
@@ -238,6 +316,13 @@ function ProjectCreateDialog(props: {
   const { replaceSplit, insertSplit } = useSplitLayout();
   const createBlock = makeCreateBlock({ replaceSplit, insertSplit });
   const spreadsheetAccess = useSpreadsheetAccess();
+  const offered = (spec: CreateBlockSpec) => {
+    if (spec.blockName === 'spreadsheet') return spreadsheetAccess();
+    if (spec.blockName === 'psd') return isFeatureEnabled(enablePsdEditor);
+    if (spec.blockName === 'fig') return isFeatureEnabled(enableFigViewer);
+    if (spec.blockName === 'ai') return isFeatureEnabled(enableAiEditor);
+    return true;
+  };
 
   return (
     <Dialog open={props.open} onOpenChange={(o) => !o && props.onClose()}>
@@ -245,25 +330,37 @@ function ProjectCreateDialog(props: {
         <div class="*:max-h-[75vh]">
           <div class="p-2">
             <Dialog.Title class="text-base font-semibold text-ink pb-3">
-              Create in {props.name}
+              {t('create.createInName', { name: props.name })}
             </Dialog.Title>
-            <For
-              each={BLOCK_CREATE_SPECS.filter(
-                (spec) =>
-                  spec.blockName !== 'spreadsheet' || spreadsheetAccess()
-              )}
-            >
+            <For each={BLOCK_CREATE_SPECS.filter(offered)}>
               {(spec) => (
                 <button
                   class="flex items-center gap-2 py-1 text-sm hover:bg-hover w-full text-left min-h-11"
                   onClick={() => {
                     props.onClose();
-                    createBlock({
-                      blockName: spec.blockName,
-                      loading: spec.loading,
-                      createFn: () => spec.createFn(props.projectId),
-                      params: spec.params,
-                    });
+                    if (
+                      spec.blockName === 'chat' &&
+                      isFeatureEnabled(enableChatV3Agents)
+                    ) {
+                      fireAndForget(
+                        openChatWithAgent({
+                          type: 'project',
+                          id: props.projectId,
+                          name: props.name,
+                        }),
+                        'project-create'
+                      );
+                      return;
+                    }
+                    fireAndForget(
+                      createBlock({
+                        blockName: spec.blockName,
+                        loading: spec.loading,
+                        createFn: () => spec.createFn(props.projectId),
+                        params: spec.params,
+                      }),
+                      'project-create'
+                    );
                   }}
                 >
                   <div class="size-4 shrink-0">
@@ -291,24 +388,41 @@ function MenuItem(props: MenuItemProps) {
   );
 }
 
-function MenuContent(props: { projectId: string }) {
+function MenuContent(props: { projectId: string; name: string }) {
   const { replaceSplit, insertSplit } = useSplitLayout();
   const createBlock = makeCreateBlock({ replaceSplit, insertSplit });
   const spreadsheetAccess = useSpreadsheetAccess();
+  const offered = (spec: CreateBlockSpec) => {
+    if (spec.blockName === 'spreadsheet') return spreadsheetAccess();
+    if (spec.blockName === 'psd') return isFeatureEnabled(enablePsdEditor);
+    if (spec.blockName === 'fig') return isFeatureEnabled(enableFigViewer);
+    if (spec.blockName === 'ai') return isFeatureEnabled(enableAiEditor);
+    return true;
+  };
 
   const items = (): MenuItemProps[] =>
-    BLOCK_CREATE_SPECS.filter(
-      (spec) => spec.blockName !== 'spreadsheet' || spreadsheetAccess()
-    ).map((spec) => ({
+    BLOCK_CREATE_SPECS.filter(offered).map((spec) => ({
       label: spec.label,
       Icon: spec.icon,
-      action: () =>
-        createBlock({
+      action: () => {
+        if (spec.blockName === 'chat' && isFeatureEnabled(enableChatV3Agents)) {
+          fireAndForget(
+            openChatWithAgent({
+              type: 'project',
+              id: props.projectId,
+              name: props.name,
+            }),
+            'project-create'
+          );
+          return;
+        }
+        return createBlock({
           blockName: spec.blockName,
           loading: spec.loading,
           createFn: () => spec.createFn(props.projectId),
           params: spec.params,
-        }),
+        });
+      },
     }));
 
   return (
@@ -329,7 +443,7 @@ export function useProjectCreateTools(
 
   const tools: BlockTool[] = [
     {
-      label: 'Create',
+      label: () => t('create.create'),
       icon: PlusIcon,
       // Using a setTimeout here so that the synthetic click event after the touch doesn't instantly select an item
       action: () => setTimeout(() => setOpen(true), 0),
@@ -349,25 +463,17 @@ export function useProjectCreateTools(
   return { tools, CreateDialog };
 }
 
-export function ProjectCreateMenu(props: { id: string }) {
+export function ProjectCreateMenu(props: { id: string; name: string }) {
   const [open, setOpen] = createSignal(false);
   return (
     <Dropdown open={open()} onOpenChange={setOpen}>
-      <div class="flex items-center">
-        <Dropdown.Trigger
-          variant="outline"
-          size="sm"
-          class="bg-surface py-3"
-          depth={2}
-        >
-          <CirclePlus />
-          Create
-          <CaretDown />
-        </Dropdown.Trigger>
-      </div>
-      <MenuContent projectId={props.id} />
+      <Dropdown.Trigger
+        as={ViewCreateButton}
+        presentation="toolbar"
+        menu
+        aria-label={t('create.createInFolder')}
+      />
+      <MenuContent projectId={props.id} name={props.name} />
     </Dropdown>
   );
 }
-
-import { createSpreadsheetDocument } from '@app/features/block-spreadsheet/queries/create-spreadsheet';

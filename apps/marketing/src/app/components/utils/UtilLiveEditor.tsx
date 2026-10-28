@@ -8,7 +8,7 @@ import {
 import { isServer } from 'solid-js/web';
 import './util-live-editor.css';
 
-const rajdhani = "'rajdhani', 'body'";
+const bodyFont = "'Inter', 'body'";
 
 /** Website-owned editable document: no iframe, app bundle, or authenticated state. */
 export function LiveDocEditor(props: {
@@ -23,7 +23,7 @@ export function LiveDocEditor(props: {
   onReady?: () => void;
 }) {
   if (isServer) return <>{props.fallback()}</>;
-  const [menu, setMenu] = createSignal<'mention' | 'command' | undefined>();
+  const [menu, setMenu] = createSignal<'command' | undefined>();
   let host: HTMLDivElement | undefined;
   let editor: HTMLDivElement | undefined;
   let interacted = false;
@@ -68,12 +68,6 @@ export function LiveDocEditor(props: {
       current?.addRange(selection);
     }
   }
-  function insertMention(text: string) {
-    restoreSelection();
-    document.execCommand('insertText', false, text);
-    setMenu(undefined);
-    interactedWithDocument();
-  }
   function command(value: string) {
     restoreSelection();
     if (value === 'bullet') document.execCommand('insertUnorderedList');
@@ -93,6 +87,7 @@ export function LiveDocEditor(props: {
     <div
       ref={host}
       class="site-live-doc-host"
+      data-demo-mentions="on"
       style={{ background: props.background ?? 'transparent' }}
     >
       <Show when={props.active} fallback={props.fallback()}>
@@ -139,12 +134,12 @@ export function LiveDocEditor(props: {
                   return;
                 }
               }
-              if (event.key !== '@' && event.key !== '/') return;
+              if (event.key !== '/') return;
               const current = window.getSelection();
               if (!current?.rangeCount) return;
               event.preventDefault();
               selection = current.getRangeAt(0).cloneRange();
-              setMenu(event.key === '@' ? 'mention' : 'command');
+              setMenu('command');
             }}
           >
             <h1>Why Macro Docs?</h1>
@@ -176,45 +171,20 @@ export function LiveDocEditor(props: {
             <div
               class="site-live-doc-menu"
               role="toolbar"
-              aria-label={
-                menu() === 'mention' ? 'Insert mention' : 'Document commands'
-              }
+              aria-label="Document commands"
             >
-              <Show
-                when={menu() === 'mention'}
-                fallback={
-                  <>
-                    <button type="button" onClick={() => command('h1')}>
-                      Heading
-                    </button>
-                    <button type="button" onClick={() => command('h2')}>
-                      Subheading
-                    </button>
-                    <button type="button" onClick={() => command('bullet')}>
-                      Bullet list
-                    </button>
-                    <button type="button" onClick={() => command('p')}>
-                      Paragraph
-                    </button>
-                  </>
-                }
-              >
-                <button type="button" onClick={() => insertMention('@Julia')}>
-                  Julia Westphal
-                </button>
-                <button
-                  type="button"
-                  onClick={() => insertMention('Q3 launch plan')}
-                >
-                  Q3 launch plan
-                </button>
-                <button
-                  type="button"
-                  onClick={() => insertMention('Prepare the launch checklist')}
-                >
-                  Prepare the launch checklist
-                </button>
-              </Show>
+              <button type="button" onClick={() => command('h1')}>
+                Heading
+              </button>
+              <button type="button" onClick={() => command('h2')}>
+                Subheading
+              </button>
+              <button type="button" onClick={() => command('bullet')}>
+                Bullet list
+              </button>
+              <button type="button" onClick={() => command('p')}>
+                Paragraph
+              </button>
               <button
                 type="button"
                 onClick={() => {
@@ -293,7 +263,7 @@ export function TryMePointer(props: {
               color: 'var(--a0)',
               display: 'block',
               'font-family': 'body',
-              'font-size': '18px',
+              'font-size': '15px',
               'font-weight': '700',
               'line-height': 1,
               transform: 'rotate(-90deg)',
@@ -304,8 +274,8 @@ export function TryMePointer(props: {
           <span
             style={{
               color: 'var(--a0)',
-              'font-family': rajdhani,
-              'font-size': '17px',
+              'font-family': bodyFont,
+              'font-size': '14px',
               'font-weight': '600',
               'letter-spacing': '0.14em',
               'line-height': 1,

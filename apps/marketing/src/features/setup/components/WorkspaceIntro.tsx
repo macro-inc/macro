@@ -50,8 +50,8 @@ export function WorkspaceIntro(props: {
         Create your workspace
       </h1>
       <p class="mt-6 max-w-[460px] font-[Inter_Variable] text-sm leading-6 text-ink-muted sm:text-[15px] [text-wrap:balance]">
-        Let’s make Macro feel like you, then bring in your calendar, email,
-        messages and tools together.
+        Choose your workspace color. You’ll connect accounts and invite
+        teammates when you finish setting up in the app.
       </p>
       <div
         class="relative mt-8 flex h-40 w-full max-w-[400px] items-center justify-center sm:h-44"

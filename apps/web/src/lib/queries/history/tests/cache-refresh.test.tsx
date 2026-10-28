@@ -1,4 +1,8 @@
-import type { CacheChangeOptions } from '@graphql-cache/host/types';
+import type {
+  CacheChangeListener,
+  CacheChangeOptions,
+} from '@graphql-cache/host/types';
+import { INITIAL_CACHE_REVISION } from '@graphql-cache/protocol';
 import { cleanup, render, waitFor } from '@solidjs/testing-library';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -13,6 +17,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => ({ enabled: true }),
 }));
+vi.mock('@core/context/user', () => ({ useIsAuthenticated: () => () => true }));
+
 vi.mock('@core/constant/featureFlags', () => ({ enableGraphqlSoup: {} }));
 vi.mock('@core/constant/allBlocks', () => ({
   itemToSafeName: (item: { name: string }) => item.name,
@@ -26,7 +32,8 @@ vi.mock('@service-storage/client', () => ({
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupCacheHost: () => ({ onCacheChanged: mocks.subscribe }),
 }));
-vi.mock('@queries/history/graphql', () => ({
+vi.mock('@queries/history/graphql', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../graphql')>()),
   readCachedGraphqlHistoryItems: mocks.readHistory,
 }));
 vi.mock('@queries/client', () => ({ queryClient: {} }));
@@ -156,10 +163,10 @@ describe('cache-backed history refresh', () => {
     }
   });
 
-  it('opts into hydration, refreshes only local history, and unsubscribes on disposal', async () => {
-    let notify: (() => void) | undefined;
+  it('ignores unrelated hydration but discovers newly hydrated documents', async () => {
+    let notify: CacheChangeListener | undefined;
     mocks.subscribe.mockImplementation(
-      (callback: () => void, options: CacheChangeOptions) => {
+      (callback: CacheChangeListener, options: CacheChangeOptions) => {
         expect(options).toEqual({ includeHydration: true });
         notify = callback;
         return mocks.unsubscribe;
@@ -188,8 +195,18 @@ describe('cache-backed history refresh', () => {
     ));
     await waitFor(() => expect(query?.isSuccess).toBe(true));
     expect(query?.data).toEqual([]);
-    notify?.();
-    await waitFor(() => expect(query?.data).toHaveLength(1));
+    const callsBefore = mocks.readHistory.mock.calls.length;
+    vi.useFakeTimers();
+    notify?.(INITIAL_CACHE_REVISION, { searchChangedBuckets: ['email'] });
+    notify?.(INITIAL_CACHE_REVISION, {
+      searchChangedBuckets: ['channel', 'dm'],
+    });
+    notify?.(INITIAL_CACHE_REVISION, { searchChangedBuckets: [] });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(mocks.readHistory).toHaveBeenCalledTimes(callsBefore);
+    notify?.(INITIAL_CACHE_REVISION, { searchChangedBuckets: ['note'] });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(query?.data).toHaveLength(1);
     expect(mocks.fetchHistory).not.toHaveBeenCalled();
     view.unmount();
     expect(mocks.unsubscribe).toHaveBeenCalledOnce();

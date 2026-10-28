@@ -31,6 +31,13 @@ env_vars! {
 #[derive(macro_config::MacroConfig)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub struct Config {
+    /// Outlook sync can be paused without stopping Google Calendar.
+    #[macro_config_default(false)]
+    pub outlook_sync_enabled: bool,
+    /// Reject new Outlook calendar writes while preserving reads and local disconnect.
+    #[macro_config_default(false)]
+    pub outlook_writes_enabled: bool,
+
     /// The connection URL for the macrodb instance this application should use.
     /// For deployed applications, this is a secret stored in AWS Secrets Manager.
     pub macro_db_url: MacroDbUrl,
@@ -55,6 +62,10 @@ pub struct Config {
     /// later resumes everything without a migration.
     #[macro_config_default(false)]
     pub calendar_sync_enabled: bool,
+
+    /// Enable read-only calendar projections shared with current teammates.
+    #[macro_config_default(false)]
+    pub calendar_team_sharing_enabled: bool,
 
     /// Auth service secret key, used for internal access
     pub authentication_service_secret_key: LocalOrRemoteSecret<AuthenticationServiceSecretKey>,

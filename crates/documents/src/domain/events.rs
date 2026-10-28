@@ -91,6 +91,9 @@ pub struct DocumentUpdatedMetadata {
 pub struct DocumentDeletedMetadata {
     /// The id of the deleted document.
     pub document_id: String,
+    /// Subtype captured before deletion, so consumers can distinguish tasks.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sub_type: Option<DocumentSubType>,
     /// The authenticated user who deleted the document; `None` for
     /// unauthenticated or internal callers.
     pub actor_user_id: Option<MacroUserIdStr<'static>>,

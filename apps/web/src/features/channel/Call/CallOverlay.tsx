@@ -1,10 +1,21 @@
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { UserIcon } from '@core/component/UserIcon';
 import { useAuthor, useUserId } from '@core/context/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getDisplayName, tryMacroId } from '@core/user';
+import { fireAndForget } from '@core/util/fireAndForget';
+import ChatIcon from '@icon/system/regular/chat-circle.svg';
 import { cn, InlineCheckbox, Tooltip } from '@ui';
 import type { RemoteParticipant, Track } from 'livekit-client';
-import { For, type JSXElement, Show } from 'solid-js';
+import {
+  createSignal,
+  createUniqueId,
+  For,
+  type JSXElement,
+  lazy,
+  Show,
+  Suspense,
+} from 'solid-js';
 import { useCallContext } from './CallContext';
 import { CallControls } from './CallControls/CallControls';
 import {
@@ -13,8 +24,12 @@ import {
 } from './call-panel-breakpoints';
 import { LK_TRACK_SOURCE } from './livekit-loader';
 import { MutedMicrophoneBadge } from './MutedMicrophoneBadge';
+import { ParticipantAvatarBackground } from './ParticipantAvatarBackground';
 import { TrackView } from './TrackView';
 import { useActiveCallTeamShare } from './use-toggle-share-with-team';
+
+const CallChat = lazy(() => import('./chat/CallChat'));
+const GuestCallChat = lazy(() => import('./chat/GuestCallChat'));
 
 function VideoTag(props: {
   children: JSXElement;
@@ -71,8 +86,11 @@ function ParticipantAvatar(props: {
   };
 
   return (
-    <div class="flex items-center justify-center size-full p-4">
-      <div class={avatarClass()}>
+    <div class="relative flex items-center justify-center size-full p-4">
+      <Show when={props.userId?.trim()} keyed>
+        {(userId) => <ParticipantAvatarBackground userId={userId} />}
+      </Show>
+      <div class={cn('relative', avatarClass())}>
         <Show
           when={props.userId?.trim()}
           keyed
@@ -212,6 +230,10 @@ export function CallOverlay(props: {
   showTeamSharing?: boolean;
   sharedWithTeam?: boolean;
   localName?: string;
+  /** The host may hide chat until account or guest session credentials are ready. */
+  showChat?: boolean;
+  /** Narrow RTC credential for a guest; never an account bearer. */
+  guestChatSession?: { token: string; participantId: string };
 }) {
   const callCtx = useCallContext();
   const currentUserId = useUserId();
@@ -220,6 +242,20 @@ export function CallOverlay(props: {
   const teamShare = useActiveCallTeamShare();
   const sharedWithTeam = () =>
     props.sharedWithTeam ?? callCtx.isSharedWithTeam();
+  const [chatOpen, setChatOpen] = createSignal(false);
+  const [chatMounted, setChatMounted] = createSignal(false);
+  const chatId = createUniqueId();
+  let chatButton: HTMLButtonElement | undefined;
+  const closeChat = () => {
+    setChatOpen(false);
+    chatButton?.focus();
+  };
+  const toggleChat = () => {
+    if (chatOpen()) return closeChat();
+    setChatMounted(true);
+    setChatOpen(true);
+  };
+  const canChat = () => props.showChat !== false && !!callCtx.activeCallId();
   const teamShareLocked = () =>
     isConnecting() || !teamShare.canToggle() || teamShare.isPending();
 
@@ -278,80 +314,125 @@ export function CallOverlay(props: {
   };
 
   return (
-    <div class="flex flex-col h-full touch:pb-(--mobile-content-inset-bottom)">
-      {/* Screen share area */}
-      <Show when={hasAnyScreenShare()}>
-        <div class="flex-1 min-h-0 pt-2">
-          <div class="h-full rounded-lg overflow-hidden bg-surface-2 flex items-center justify-center">
-            <Show when={callCtx.isScreenSharing()}>
-              <div class="relative size-full">
-                <TrackView track={localScreenTrack()} fit="contain" />
+    <div class="flex flex-col h-full min-h-0 @container/call touch:pb-(--mobile-content-inset-bottom)">
+      <div class="relative flex min-h-0 flex-1 overflow-hidden">
+        <div class="flex min-w-0 flex-1 flex-col">
+          {/* Screen share area */}
+          <Show when={hasAnyScreenShare()}>
+            <div class="flex-1 min-h-0 pt-2">
+              <div class="h-full rounded-lg overflow-hidden bg-surface-2 flex items-center justify-center">
+                <Show when={callCtx.isScreenSharing()}>
+                  <div class="relative size-full">
+                    <TrackView track={localScreenTrack()} fit="contain" />
 
-                <VideoTag>Your screen</VideoTag>
+                    <VideoTag>Your screen</VideoTag>
+                  </div>
+                </Show>
+                <For each={remoteScreenShares()}>
+                  {(participant) => (
+                    <ScreenShareTile participant={participant} />
+                  )}
+                </For>
+              </div>
+            </div>
+          </Show>
+
+          {/* Participants area */}
+          <div
+            class={`${hasAnyScreenShare() ? 'h-45 shrink-0' : 'flex-1 min-h-0'} relative pt-2`}
+          >
+            <Show
+              when={participants().length > 0}
+              fallback={
+                <LocalParticipantTile
+                  class="size-full"
+                  isSpeaking={isLocalSpeaking()}
+                  isConnecting={isConnecting()}
+                  isAudioMuted={callCtx.isAudioMuted()}
+                  isVideoMuted={callCtx.isVideoMuted()}
+                  track={localVideoTrack()}
+                  userId={localUserId()}
+                  fallbackName={
+                    props.localName ||
+                    callCtx.room()?.localParticipant.name ||
+                    currentUserName()
+                  }
+                />
+              }
+            >
+              {/* Remote participants grid */}
+              <div
+                class={`size-full grid ${gridCols()} gap-2 auto-rows-fr overflow-hidden`}
+              >
+                <For each={participants()}>
+                  {(participant) => (
+                    <ParticipantTile participant={participant} />
+                  )}
+                </For>
+              </div>
+
+              {/* Local participant PIP (Google Meet style: small, bottom-right) */}
+              <div class="absolute bottom-4 right-4 w-40 aspect-video shadow-lg z-10 sm:w-48">
+                <LocalParticipantTile
+                  class="size-full min-h-0"
+                  isSpeaking={isLocalSpeaking()}
+                  isConnecting={isConnecting()}
+                  isAudioMuted={callCtx.isAudioMuted()}
+                  isVideoMuted={callCtx.isVideoMuted()}
+                  track={localVideoTrack()}
+                  userId={localUserId()}
+                  fallbackName={
+                    props.localName ||
+                    callCtx.room()?.localParticipant.name ||
+                    currentUserName()
+                  }
+                  avatarSize="sm"
+                />
               </div>
             </Show>
-            <For each={remoteScreenShares()}>
-              {(participant) => <ScreenShareTile participant={participant} />}
-            </For>
           </div>
         </div>
-      </Show>
-
-      {/* Participants area */}
-      <div
-        class={`${hasAnyScreenShare() ? 'h-45 shrink-0' : 'flex-1 min-h-0'} relative pt-2`}
-      >
-        <Show
-          when={participants().length > 0}
-          fallback={
-            <LocalParticipantTile
-              class="size-full"
-              isSpeaking={isLocalSpeaking()}
-              isConnecting={isConnecting()}
-              isAudioMuted={callCtx.isAudioMuted()}
-              isVideoMuted={callCtx.isVideoMuted()}
-              track={localVideoTrack()}
-              userId={localUserId()}
-              fallbackName={
-                props.localName ||
-                callCtx.room()?.localParticipant.name ||
-                currentUserName()
-              }
-            />
-          }
-        >
-          {/* Remote participants grid */}
-          <div
-            class={`size-full grid ${gridCols()} gap-2 auto-rows-fr overflow-hidden`}
-          >
-            <For each={participants()}>
-              {(participant) => <ParticipantTile participant={participant} />}
-            </For>
-          </div>
-
-          {/* Local participant PIP (Google Meet style: small, bottom-right) */}
-          <div class="absolute bottom-4 right-4 w-40 aspect-video shadow-lg z-10 sm:w-48">
-            <LocalParticipantTile
-              class="size-full min-h-0"
-              isSpeaking={isLocalSpeaking()}
-              isConnecting={isConnecting()}
-              isAudioMuted={callCtx.isAudioMuted()}
-              isVideoMuted={callCtx.isVideoMuted()}
-              track={localVideoTrack()}
-              userId={localUserId()}
-              fallbackName={
-                props.localName ||
-                callCtx.room()?.localParticipant.name ||
-                currentUserName()
-              }
-              avatarSize="sm"
-            />
-          </div>
+        <Show when={canChat() && chatMounted()}>
+          <Show when={callCtx.activeCallId()} keyed>
+            {(callId) => (
+              <Suspense>
+                <Show
+                  when={props.guestChatSession}
+                  keyed
+                  fallback={
+                    <CallChat
+                      callId={callId}
+                      id={chatId}
+                      open={chatOpen()}
+                      onClose={closeChat}
+                    />
+                  }
+                >
+                  {(session) => (
+                    <GuestCallChat
+                      callId={callId}
+                      session={session}
+                      id={chatId}
+                      open={chatOpen()}
+                      onClose={closeChat}
+                    />
+                  )}
+                </Show>
+              </Suspense>
+            )}
+          </Show>
         </Show>
       </div>
-
-      {/* Settings expand over the tiles; sharing stays clear of the controls. */}
-      <div class="flex flex-col items-center gap-2 py-3 relative">
+      {/* Settings expand over the tiles; sharing stays clear of the controls.
+          On desktop the bar (and the chat composer beside it) is the call's
+          last row, where the corner prompt sits, so the prompt waits. */}
+      <div
+        class="relative flex shrink-0 flex-col items-center gap-2 py-3"
+        data-holds-prompts={isTouchDevice() ? undefined : ''}
+        classList={{
+          '@min-[800px]/call:mr-90': canChat() && chatOpen(),
+        }}
+      >
         <Show
           when={
             callCtx.activeChannelId() !== null &&
@@ -363,13 +444,13 @@ export function CallOverlay(props: {
             placement="top"
             label={
               sharedWithTeam()
-                ? "The creator's team can view the transcript and AI summary once the call ends"
-                : "Let the creator's team view the transcript and AI summary once the call ends"
+                ? "The creator's team can view the chat, transcript, and AI summary once the call ends"
+                : "Let the creator's team view the chat, transcript, and AI summary once the call ends"
             }
           >
             <button
               type="button"
-              onClick={() => void teamShare.toggle()}
+              onClick={() => fireAndForget(teamShare.toggle(), 'channel-call')}
               disabled={teamShareLocked()}
               role="checkbox"
               aria-checked={sharedWithTeam()}
@@ -388,7 +469,40 @@ export function CallOverlay(props: {
             </button>
           </Tooltip>
         </Show>
-        <CallControls onLeave={props.onLeave} />
+        <div
+          class="grid w-full items-center gap-2 px-2"
+          classList={{
+            'grid-cols-[minmax(3.5rem,1fr)_minmax(0,36rem)_minmax(3.5rem,1fr)] @max-[500px]/call:grid-cols-[minmax(0,1fr)_auto]':
+              canChat(),
+            'grid-cols-[minmax(0,1fr)_minmax(0,36rem)_minmax(0,1fr)]':
+              !canChat(),
+          }}
+        >
+          <div
+            class="col-start-2 flex min-w-0 justify-center"
+            classList={{ '@max-[500px]/call:col-start-1': canChat() }}
+          >
+            <CallControls onLeave={props.onLeave} />
+          </div>
+          <Show when={canChat()}>
+            <div class="justify-self-end rounded-xl border border-edge-muted bg-panel p-1.5 shadow-sm">
+              <Tooltip label={chatOpen() ? 'Close chat' : 'Open chat'}>
+                <button
+                  ref={chatButton}
+                  type="button"
+                  aria-label={chatOpen() ? 'Close chat' : 'Open chat'}
+                  aria-expanded={chatOpen()}
+                  aria-controls={chatId}
+                  onClick={toggleChat}
+                  class="flex size-10 items-center justify-center rounded-lg hover:bg-hover focus-visible:outline-2 focus-visible:outline-accent @min-[500px]/call:size-12"
+                  classList={{ 'bg-hover text-accent': chatOpen() }}
+                >
+                  <ChatIcon class="size-5" />
+                </button>
+              </Tooltip>
+            </div>
+          </Show>
+        </div>
       </div>
     </div>
   );

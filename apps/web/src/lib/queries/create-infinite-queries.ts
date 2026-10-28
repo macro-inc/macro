@@ -32,6 +32,7 @@ type InfiniteQueryResult<TData, TSelect> = {
   data: Accessor<TSelect | undefined>;
   hasNextPage: Accessor<boolean>;
   isFetchingNextPage: Accessor<boolean>;
+  error: Accessor<Error | null>;
   fetchNextPage: () => Promise<
     InfiniteQueryObserverResult<
       InfiniteData<TData | null, string | null>,
@@ -47,6 +48,26 @@ type InfiniteQueriesResult<TData, TSelect> = {
   list: Accessor<InfiniteQueryResult<TData, TSelect>[]>;
   map: Accessor<Map<string, InfiniteQueryResult<TData, TSelect>>>;
 };
+
+type PageParam = string | null;
+
+// Cached callbacks outlive the per-key root. They wrap only the caller's
+// function values, never the config lookup or this helper's scope.
+function wrapQueryFn<TData>(
+  queryFn: InfiniteQueryConfig<TData, unknown>['queryFn'] | undefined
+) {
+  return async (ctx: { pageParam: PageParam }): Promise<TData | null> =>
+    queryFn ? queryFn({ pageParam: ctx.pageParam }) : null;
+}
+
+function wrapGetNextPageParam<TData>(
+  getNextPageParam:
+    | InfiniteQueryConfig<TData, unknown>['getNextPageParam']
+    | undefined
+) {
+  return (lastPage: TData | null): PageParam =>
+    lastPage ? (getNextPageParam?.(lastPage) ?? null) : null;
+}
 
 export function createInfiniteQueries<TData, TSelect = TData[]>(
   getConfigs: Accessor<InfiniteQueryConfig<TData, TSelect>[]>
@@ -81,13 +102,11 @@ export function createInfiniteQueries<TData, TSelect = TData[]>(
 
         return {
           queryKey: config?.queryKey ?? (['__disabled__', key] as const),
-          queryFn: async (ctx) => {
-            if (!config) return null;
-            return config.queryFn({ pageParam: ctx.pageParam });
-          },
+          queryFn: wrapQueryFn<TData>(config?.queryFn),
           initialPageParam: null,
-          getNextPageParam: (lastPage) =>
-            lastPage ? (config?.getNextPageParam(lastPage) ?? null) : null,
+          getNextPageParam: wrapGetNextPageParam<TData>(
+            config?.getNextPageParam
+          ),
           enabled: config?.enabled ?? false,
           staleTime: config?.staleTime ?? Infinity,
           initialData: config?.initialData as InfiniteData<
@@ -117,6 +136,7 @@ export function createInfiniteQueries<TData, TSelect = TData[]>(
         data,
         hasNextPage: () => query.hasNextPage ?? false,
         isFetchingNextPage: () => query.isFetchingNextPage,
+        error: () => query.error,
         fetchNextPage: () => query.fetchNextPage(),
         refetch: () => query.refetch(),
       };

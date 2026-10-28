@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT request, prepared_content FROM email_send_attempts WHERE message_id = $1 AND link_id = $2 AND NOT cancelled AND NOT sent ORDER BY send_time DESC NULLS LAST LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "request",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 1,
+        "name": "prepared_content",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      true
+    ]
+  },
+  "hash": "97bdc12f2c4f553f3387e1171dd9a161dadb87dd867aa05065a7f40d0a0c867b"
+}

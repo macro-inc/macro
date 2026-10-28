@@ -1,0 +1,98 @@
+.feature-page .email-page-hero {
+  padding: 132px 24px 64px;
+}
+
+.email-page-hero::before {
+  display: none;
+}
+
+.feature-page .email-page-hero > .email-page-hero-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 0 0 22px;
+  color: var(--color-ink-muted);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.product-home-link > svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.feature-page .email-page-hero h1 {
+  margin: 0 0 24px;
+  font-family: 'Roboto Slab Variable', display, serif;
+  font-size: clamp(44px, 5vw, 72px);
+  font-weight: calc(315 + var(--cream-slab-weight-increase, 0));
+  line-height: 1.06;
+  letter-spacing: -.04em;
+}
+
+.email-page-hero h1 span {
+  display: block;
+}
+
+.email-page-hero h1 span:last-child {
+  color: var(--color-ink-muted);
+}
+
+.feature-page .email-page-hero > .email-page-hero-description {
+  width: 100%;
+  max-width: 540px;
+  color: var(--color-ink-muted);
+  font-size: 17px;
+  line-height: 1.65;
+  text-wrap: pretty;
+}
+
+.email-page-hero .feature-page-cta {
+  margin-top: 28px;
+  padding-inline: 26px;
+}
+
+@media (max-width: 699px) {
+  .feature-page .email-page-hero {
+    padding: 114px 18px 44px;
+  }
+
+  .feature-page .email-page-hero h1 {
+    font-size: clamp(34px, 7.8vw, 50px);
+    letter-spacing: -.035em;
+    line-height: 1.1;
+  }
+
+  .feature-page .email-page-hero > .email-page-hero-label {
+    margin-bottom: 18px;
+    font-size: 11px;
+  }
+
+  .feature-page .email-page-hero > .email-page-hero-description {
+    max-width: 340px;
+    font-size: 15px;
+  }
+
+  .email-page-hero-break {
+    display: none;
+  }
+}
+
+.product-home-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: inherit;
+  text-decoration: none;
+  border-radius: 3px;
+}
+.product-home-link:hover { color: var(--color-ink); }
+.product-home-link:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 5px;
+}
