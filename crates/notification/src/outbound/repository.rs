@@ -741,13 +741,22 @@ impl NotificationDbOps for PgPool {
 
         let created_at = sqlx::query_scalar!(
             r#"
-            INSERT INTO user_notification (notification_id, user_id)
-            SELECT $1, user_id
+            INSERT INTO user_notification (
+                notification_id,
+                user_id,
+                event_item_type,
+                event_item_id,
+                notification_event_type
+            )
+            SELECT $1, user_id, $3, $4, $5
             FROM UNNEST($2::text[]) as user_id
             RETURNING created_at::timestamptz as "created_at!"
             "#,
             notification_id,
-            &user_ids
+            &user_ids,
+            entity_type,
+            request.notification_entity.entity_id.as_ref(),
+            typename
         )
         .fetch_one(&mut *tx)
         .await?;
