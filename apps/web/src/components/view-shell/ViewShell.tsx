@@ -11,6 +11,7 @@ import { Resize } from '@core/component/Resize';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import SidebarIcon from '@icon/system/regular/sidebar-simple.svg';
+import CloseIcon from '@icon/system/regular/x.svg';
 import { createWritableMemo } from '@solid-primitives/memo';
 import { mergeRefs } from '@solid-primitives/refs';
 import { createElementSize } from '@solid-primitives/resize-observer';
@@ -20,6 +21,7 @@ import { tourTarget } from '@ui/components/Tour';
 import {
   type Accessor,
   batch,
+  type ComponentProps,
   createComputed,
   createContext,
   createSignal,
@@ -549,7 +551,16 @@ function Aside(props: ViewShellAsideProps) {
 }
 
 /** Keep split close available in both docked and overlay navigation. */
-export const ViewSidebarCloseButton = SplitPanel.CloseButton;
+export function ViewSidebarCloseButton(
+  props: ComponentProps<typeof SplitPanel.CloseButton>
+) {
+  const [local, rest] = splitProps(props, ['children', 'size']);
+  return (
+    <SplitPanel.CloseButton {...rest} size={local.size ?? 'icon-xs'}>
+      {local.children ?? <CloseIcon class="size-4" />}
+    </SplitPanel.CloseButton>
+  );
+}
 
 /** Safe outside a shell so block preview headers can share this control. */
 export function ViewSidebarToggle(props: { action: 'collapse' | 'expand' }) {
@@ -575,7 +586,7 @@ export function ViewSidebarToggle(props: { action: 'collapse' | 'expand' }) {
           hotkey: TOKENS.workspace.toggleNavigation,
         }}
         variant="ghost"
-        size="icon-sm"
+        size="icon-xs"
         class={cn(
           'shrink-0 touch:hidden',
           props.action === 'collapse' && 'ml-auto',

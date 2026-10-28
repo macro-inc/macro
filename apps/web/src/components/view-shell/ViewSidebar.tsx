@@ -192,9 +192,9 @@ function Control(props: ButtonProps) {
   return (
     <Button
       variant="ghost"
-      size="icon-sm"
+      size="icon-xs"
       {...rest}
-      class={cn('size-(--sidebar-control-size) shrink-0', local.class)}
+      class={cn('shrink-0', local.class)}
       data-view-sidebar-control=""
     />
   );

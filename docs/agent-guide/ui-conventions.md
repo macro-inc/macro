@@ -36,6 +36,9 @@ keeps its full-width field with facet chips under it. Inputs, search fields,
 and filter chips are pills on the control frame. The [design system rule](../../.agents/rules/web/design-system.md)
 lists which control to use for each role.
 
+Desktop view-sidebar header actions use `size="icon-xs"` (24px) with 16px
+glyphs for search, close, and collapse. Preserve each action's icon and the
+shared Button touch targets; do not resize these controls through classes.
 On touch devices, low-emphasis header actions remain borderless with their
 existing hover and pressed states. Emphasized variants retain their treatment,
 including an active call's green ink. Button size does not change variant colors

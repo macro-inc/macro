@@ -70,7 +70,7 @@ export function CrmSidebar(props: {
                     aria-label="Collapse CRM sidebar"
                     tooltip="Collapse CRM sidebar"
                     variant="ghost"
-                    size="icon-sm"
+                    size="icon-xs"
                     onClick={props.onCollapse}
                   >
                     <SidebarIcon class="size-4" />
