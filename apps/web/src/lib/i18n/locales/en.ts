@@ -10,6 +10,7 @@ import nav from './en/nav';
 import settingsLanguage from './en/settings-language';
 import settingsNav from './en/settings-nav';
 import splitMenu from './en/split-menu';
+import tabs from './en/tabs';
 import viewMenus from './en/view-menus';
 
 /**
@@ -29,5 +30,6 @@ export default {
   settingsLanguage,
   settingsNav,
   splitMenu,
+  tabs,
   viewMenus,
 };

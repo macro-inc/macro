@@ -173,7 +173,7 @@ export function TasksSidebar() {
   });
 
   return (
-    <ViewSidebar.Root aria-label="Tasks navigation">
+    <ViewSidebar.Root aria-label="Tasks navigation" class="relative">
       <SidebarCreateHeader
         title="Tasks"
         searchLabel="Search tasks"
@@ -233,8 +233,12 @@ export function TasksSidebar() {
             }}
           />
         </Show>
-        <ConnectorImportSidebar category="tasks" class="mt-auto" />
       </ViewSidebar.Content>
+      {/* Overlays the sidebar's bottom so the projects list keeps its height. */}
+      <ConnectorImportSidebar
+        category="tasks"
+        class="absolute inset-x-(--sidebar-gutter) bottom-(--sidebar-content-inset) z-10"
+      />
     </ViewSidebar.Root>
   );
 }
