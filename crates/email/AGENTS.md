@@ -50,6 +50,8 @@ tools — hexagonal, heavily feature-gated.
 
 ## Gotchas
 
+- Treat DATE property literals as non-matches; apply ordinary boolean negation and keep non-date email filtering unchanged.
+
 - Reconcile deferred message deletion before claiming scheduled work; unresolved sends retain their message, attachments, and delivery job.
 - Durable send admission supports Gmail and Outlook; Outlook delivery stays with its provider coordinator.
 - Carry the captured `draft_generation` through every draft mutation; advance it on send acceptance/cancellation under the message lock and preserve attempt tombstones after message deletion.

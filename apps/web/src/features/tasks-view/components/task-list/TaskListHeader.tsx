@@ -9,12 +9,19 @@ function SortableHeader(props: {
   label: string;
   area: string;
   sortId?: TaskSortId;
+  reverseSortId?: TaskSortId;
   align?: 'start' | 'end';
   class?: string;
 }) {
   const { state, setPrimarySort } = useTasksView();
-  const active = () => state.sort[0]?.id === props.sortId;
-  const reversed = () => active() && state.sort[0]?.reversed === true;
+  const active = () =>
+    state.sort[0]?.id === props.sortId ||
+    (props.reverseSortId !== undefined &&
+      state.sort[0]?.id === props.reverseSortId);
+  const reversed = () =>
+    active() &&
+    (state.sort[0]?.id === props.reverseSortId ||
+      state.sort[0]?.reversed === true);
   const alignment = () => {
     if (props.align === 'end') return 'justify-end';
     return 'justify-start';
@@ -38,7 +45,13 @@ function SortableHeader(props: {
               'flex h-full min-w-0 items-center gap-1 text-ink-extra-muted hover:text-ink',
               active() && 'text-ink'
             )}
-            onClick={() => setPrimarySort(sortId())}
+            onClick={() => {
+              if (props.reverseSortId && state.sort[0]?.id === sortId()) {
+                setPrimarySort(props.reverseSortId);
+                return;
+              }
+              setPrimarySort(sortId());
+            }}
           >
             <span class="truncate">{props.label}</span>
             <ArrowDownIcon
@@ -73,6 +86,12 @@ export function TaskListHeader() {
       <SortableHeader label="Status" area="status" />
       <SortableHeader label="Priority" area="priority" />
       <SortableHeader label="Assignees" area="assignees" />
+      <SortableHeader
+        label="Due date"
+        area="dueDate"
+        sortId="due_date_earliest"
+        reverseSortId="due_date_latest"
+      />
       <Show when={projectsEnabled()}>
         <SortableHeader label="Project" area="initiative" />
       </Show>
@@ -86,6 +105,7 @@ export function TaskListHeader() {
         area="timestamp"
         sortId="updated_at"
         align="end"
+        class="@max-[840px]/u-list:hidden"
       />
     </div>
   );

@@ -19,6 +19,7 @@ import { useTaskFilters } from '../filters/use-task-filters';
 import { useTasksView } from '../tasks-view-context';
 import { TASKS_TOUR } from '../tour';
 import { TasksFilterDrawer } from './TasksFilterDrawer';
+import { TaskDueDateRangeDialog } from './task-due-date-range-dialog';
 
 export function TasksControls() {
   return (
@@ -60,7 +61,7 @@ function DesktopTasksControls() {
     sort: {
       description: 'Sort tasks',
       run: () => {
-        if (!sortTrigger) return false;
+        if (!sortTrigger || state.search.trim()) return false;
 
         setOpenMenu('sort');
         return true;
@@ -69,7 +70,7 @@ function DesktopTasksControls() {
   });
 
   const primarySort = () => state.sort[0]?.id ?? 'updated_at';
-  const isBoardSearch = () => state.layout === 'board' && !!state.search.trim();
+  const isSearching = () => !!state.search.trim();
 
   const groupOptions = () => {
     if (state.layout !== 'board') {
@@ -136,13 +137,13 @@ function DesktopTasksControls() {
       </HeaderActionGroup>
       <HeaderActionGroup label="Task view options">
         <Show
-          when={!isBoardSearch()}
+          when={!isSearching()}
           fallback={
             <span
               class="text-xs text-ink-muted"
-              title="Search results are ranked by relevance. Clear search to sort the board."
+              title="Search keeps its existing result ordering. Clear search to sort tasks."
             >
-              Relevance
+              Search order
             </span>
           }
         >
@@ -163,6 +164,11 @@ function DesktopTasksControls() {
           onChange={(groupBy) => setState('groupBy', groupBy)}
         />
       </HeaderActionGroup>
+      <TaskDueDateRangeDialog
+        value={filters.customRange()}
+        onChange={filters.setCustomRange}
+        onApply={filters.applyCustomRange}
+      />
     </>
   );
 }

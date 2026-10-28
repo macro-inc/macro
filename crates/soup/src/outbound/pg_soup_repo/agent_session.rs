@@ -100,7 +100,9 @@ pub(super) async fn cursor_soup(
     db: &PgPool,
     req: SimpleSortRequest<'_>,
 ) -> Result<Vec<SoupItem<()>>, sqlx::Error> {
-    let parts = cursor_parts(req.cursor);
+    let Some(parts) = cursor_parts(req.cursor) else {
+        return Ok(Vec::new());
+    };
     let Some(filter) = parts.filter.as_ref().filter(|filter| opted_in(filter)) else {
         return Ok(Vec::new());
     };
@@ -177,8 +179,9 @@ pub(super) async fn by_ids(
         .collect()
 }
 
-fn cursor_parts(cursor: SimpleSortQuery) -> CursorParts {
-    match cursor {
+fn cursor_parts(cursor: SimpleSortQuery) -> Option<CursorParts> {
+    Some(match cursor {
+        SimpleSortQuery::Property(_) => return None,
         // No AST means the query never mentioned agent sessions: opt-out.
         SimpleSortQuery::NoFilter(query) => parts_from_query(&query, None, None),
         SimpleSortQuery::FilterFrecency(query) => parts_from_query(&query, None, None),
@@ -198,7 +201,7 @@ fn cursor_parts(cursor: SimpleSortQuery) -> CursorParts {
                 ast.properties_filter.as_deref().cloned(),
             )
         }
-    }
+    })
 }
 
 fn parts_from_query<F>(

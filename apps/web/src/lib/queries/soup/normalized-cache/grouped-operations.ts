@@ -204,6 +204,9 @@ export function syncGroupQueries(entityId: string, entity: SoupApiItem) {
       continue;
     }
 
+    const existing = prev.pages.some((page) =>
+      page.group.itemIds.includes(entityId)
+    );
     const shouldHave = nextGroupKeys.includes(meta.groupKey);
 
     let changed = false;
@@ -213,7 +216,7 @@ export function syncGroupQueries(entityId: string, entity: SoupApiItem) {
     for (const page of prev.pages) {
       const hasEntity = page.group.itemIds.includes(entityId);
 
-      if (shouldHave && index === 0 && !hasEntity) {
+      if (shouldHave && index === 0 && !existing) {
         changed = true;
         pages.push({
           ...page,

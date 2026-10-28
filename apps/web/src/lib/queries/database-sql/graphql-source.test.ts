@@ -254,9 +254,27 @@ describe('the GraphQL row source', () => {
         id: 'macro|viewer@databases.test',
         groupSoup: {
           bins: [
-            { key: WON, totalCount: 2, nextCursor: null, items: [] },
-            { key: LEAD, totalCount: 1, nextCursor: null, items: [] },
-            { key: '', totalCount: 4, nextCursor: null, items: [] },
+            {
+              key: WON,
+              displayOrder: null,
+              totalCount: 2,
+              nextCursor: null,
+              items: [],
+            },
+            {
+              key: LEAD,
+              displayOrder: null,
+              totalCount: 1,
+              nextCursor: null,
+              items: [],
+            },
+            {
+              key: '',
+              displayOrder: null,
+              totalCount: 4,
+              nextCursor: null,
+              items: [],
+            },
           ],
         },
       },

@@ -64,7 +64,7 @@ async fn page(
         ExpandedDynamicCursorArgs {
             user_id,
             limit: 20,
-            cursor: Query::Sort(SimpleSortMethod::CreatedAt, filter),
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt.into(), filter),
             exclude_frecency: false,
         },
     )
@@ -80,7 +80,7 @@ async fn a_viewer_reads_the_won_deals_of_one_table(pool: PgPool) {
             user_id: MacroUserIdStr::parse_from_str("macro|viewer@databases.test").unwrap(),
             limit: 20,
             cursor: Query::Sort(
-                SimpleSortMethod::CreatedAt,
+                SimpleSortMethod::CreatedAt.into(),
                 EntityFilterAst {
                     database_row_filter: Some(Arc::new(Expr::val(DatabaseRowLiteral::TableId(
                         DEALS,
@@ -205,7 +205,7 @@ async fn deals_grouped_by_stage_count_each_option(pool: PgPool) {
             user_id: viewer(),
             limit: 20,
             cursor: Query::Sort(
-                SimpleSortMethod::CreatedAt,
+                SimpleSortMethod::CreatedAt.into(),
                 rows_of(Some(Expr::val(DatabaseRowLiteral::TableId(DEALS)))),
             ),
             exclude_frecency: false,
@@ -213,6 +213,7 @@ async fn deals_grouped_by_stage_count_each_option(pool: PgPool) {
                 field: GroupByField::Property {
                     property_definition_id: STAGE,
                     entity_type: Some("DATABASE_ROW".into()),
+                    bucketing: None,
                 },
                 group_key: None,
                 per_group_limit: None,

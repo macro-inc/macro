@@ -86,6 +86,7 @@ async fn fanout_caps_counts_and_tied_cursor_pages(pool: Pool<Postgres>) -> anyho
             field: GroupByField::Property {
                 property_definition_id: system_properties::SystemPropertyKey::ASSIGNEES_UUID,
                 entity_type,
+                bucketing: None,
             },
             group_key: None,
             per_group_limit: None,
@@ -103,7 +104,7 @@ async fn fanout_caps_counts_and_tied_cursor_pages(pool: Pool<Postgres>) -> anyho
             )
         };
         let result = fetch(
-            Query::Sort(SimpleSortMethod::UpdatedAt, task_filter()),
+            Query::Sort(SimpleSortMethod::UpdatedAt.into(), task_filter()),
             grouping.clone(),
         )
         .await;
@@ -135,7 +136,7 @@ async fn fanout_caps_counts_and_tied_cursor_pages(pool: Pool<Postgres>) -> anyho
             let mut cursor = continuation(group.last().unwrap(), SimpleSortMethod::UpdatedAt);
             loop {
                 let page = fetch(
-                    cursor,
+                    crate::domain::models::DynamicSort::from_timestamp_query(cursor),
                     GroupingConfig {
                         group_key: Some(key.to_string()),
                         ..grouping.clone()
@@ -147,8 +148,8 @@ async fn fanout_caps_counts_and_tied_cursor_pages(pool: Pool<Postgres>) -> anyho
                     break;
                 }
                 for (index, item) in page.iter().enumerate() {
-                    assert_eq!(item.total_group_count, expected.len() - seen.len());
-                    assert_eq!(item.index_in_group, index + 1);
+                    assert_eq!(item.total_group_count, expected.len());
+                    assert_eq!(item.index_in_group, seen.len() + index + 1);
                 }
                 cursor = continuation(page.last().unwrap(), SimpleSortMethod::UpdatedAt);
                 seen.extend(page.iter().map(|i| i.item.id().to_string()));
@@ -166,12 +167,13 @@ async fn fanout_caps_counts_and_tied_cursor_pages(pool: Pool<Postgres>) -> anyho
         GroupedDynamicCursorArgs {
             user_id: MacroUserIdStr::parse_from_str("macro|user-1@test.com")?,
             limit: 50,
-            cursor: Query::Sort(SimpleSortMethod::UpdatedAt, task_filter()),
+            cursor: Query::Sort(SimpleSortMethod::UpdatedAt.into(), task_filter()),
             exclude_frecency: true,
             grouping: GroupingConfig {
                 field: GroupByField::Property {
                     property_definition_id: system_properties::SystemPropertyKey::ASSIGNEES_UUID,
                     entity_type: None,
+                    bucketing: None,
                 },
                 group_key: Some("a".to_string()),
                 per_group_limit: None,

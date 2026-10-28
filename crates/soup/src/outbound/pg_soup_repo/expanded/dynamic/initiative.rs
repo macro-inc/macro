@@ -56,10 +56,11 @@ pub(in crate::outbound::pg_soup_repo) fn build_initiative_filter(
         }
     }
     fn due_date_filter(operator: &str, date: &DateTime<Utc>) -> String {
+        let value = super::property_date_expression("ep_due");
         format!(
-            "EXISTS (SELECT 1 FROM entity_properties ep_due WHERE ep_due.entity_id = i.id::text AND ep_due.entity_type = 'INITIATIVE' AND ep_due.property_definition_id = '{}' AND (ep_due.values->>'value')::timestamptz {operator} '{}'::timestamptz)",
+            "EXISTS (SELECT 1 FROM entity_properties ep_due WHERE ep_due.entity_id = i.id::text AND ep_due.entity_type = 'INITIATIVE' AND ep_due.property_definition_id = '{}' AND {value} {operator} '{}'::timestamptz)",
             SystemPropertyKey::DUE_DATE_UUID,
-            date.to_rfc3339()
+            date.to_rfc3339(),
         )
     }
     filter
@@ -67,7 +68,11 @@ pub(in crate::outbound::pg_soup_repo) fn build_initiative_filter(
         .unwrap_or_default()
 }
 
-pub(super) fn initiative_top_clause(sort: SimpleSortMethod, grouped: bool) -> String {
+pub(super) fn initiative_top_clause(
+    sort: SimpleSortMethod,
+    grouped: bool,
+    property_sort: bool,
+) -> String {
     let sort_ts = match sort {
         SimpleSortMethod::CreatedAt => "i.created_at",
         SimpleSortMethod::UpdatedAt => "i.updated_at",
@@ -78,6 +83,8 @@ pub(super) fn initiative_top_clause(sort: SimpleSortMethod, grouped: bool) -> St
     };
     let group_columns = if grouped {
         ", NULL::text as project_id, 'INITIATIVE'::property_entity_type as property_entity_type"
+    } else if property_sort {
+        ", 'INITIATIVE'::property_entity_type as property_entity_type"
     } else {
         ""
     };

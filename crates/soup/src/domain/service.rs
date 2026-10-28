@@ -48,8 +48,8 @@ use item_filters::ast::{
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, EntityType};
 use models_pagination::{
-    Base64Str, Cursor, CursorVal, Frecency, FrecencyValue, Identify, NotifiedAt, PaginateOn,
-    Paginated, Query, SimpleSortMethod, SortOn, TouchedByMe,
+    Base64Str, Cursor, CursorVal, Frecency, FrecencyValue, Identify, NotifiedAt, Paginate,
+    PaginateOn, Paginated, Query, SimpleSortMethod, SortOn, TouchedByMe,
 };
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use models_soup::{
@@ -80,6 +80,7 @@ struct SoupCandidate {
     frecency_score: Option<AggregateFrecency>,
     touched_at: Option<chrono::DateTime<chrono::Utc>>,
     notified_at: Option<chrono::DateTime<chrono::Utc>>,
+    sort_key: Option<f64>,
 }
 
 impl SoupCandidate {
@@ -91,6 +92,7 @@ impl SoupCandidate {
             frecency_score: None,
             touched_at: None,
             notified_at: None,
+            sort_key: None,
         }
     }
 
@@ -102,6 +104,7 @@ impl SoupCandidate {
             frecency_score: None,
             touched_at: None,
             notified_at: None,
+            sort_key: hydration.sort_key,
         }
     }
 }
@@ -1010,6 +1013,7 @@ where
                     hydration: SoupProjectionHydration {
                         item: candidate.item,
                         document_server_facts: candidate.document_server_facts,
+                        sort_key: candidate.sort_key,
                     },
                 })
                 .collect(),
@@ -1238,6 +1242,7 @@ where
                 frecency_score,
                 touched_at: None,
                 notified_at: None,
+                sort_key: None,
             },
         )))
     }
@@ -1266,6 +1271,7 @@ where
                             frecency_score,
                             touched_at: None,
                             notified_at: None,
+                            sort_key: None,
                         }
                     })
                 })?,
@@ -1479,6 +1485,9 @@ where
             SoupOutput::Simple(page) => Ok(SoupOutput::Simple(
                 self.populate_properties_page(user_id, page).await?,
             )),
+            SoupOutput::Property(page) => Ok(SoupOutput::Property(
+                self.populate_properties_page(user_id, page).await?,
+            )),
             SoupOutput::Frecency(page) => Ok(SoupOutput::Frecency(
                 self.populate_properties_page(user_id, page).await?,
             )),
@@ -1536,6 +1545,9 @@ where
             // and cursor construction. Reuse them rather than issuing a
             // duplicate by-id lookup.
             SoupOutput::Frecency(page) => Ok(SoupOutput::Frecency(page)),
+            SoupOutput::Property(page) => Ok(SoupOutput::Property(
+                self.populate_frecency_page(user_id, page).await?,
+            )),
             // Touched sorting orders on the activity log, so scores are not
             // loaded during page construction; load them for the final page.
             SoupOutput::Touched(page) => Ok(SoupOutput::Touched(
@@ -1571,6 +1583,7 @@ where
         output.map(|candidate| SoupProjectionHydration {
             item: candidate.item,
             document_server_facts: candidate.document_server_facts,
+            sort_key: candidate.sort_key,
         })
     }
 
@@ -1587,6 +1600,7 @@ where
                 notified_at: candidate.notified_at,
             },
             document_server_facts: candidate.document_server_facts,
+            sort_key: candidate.sort_key,
         })
     }
 
@@ -1608,7 +1622,14 @@ where
             .map(|item| {
                 (
                     item.item,
-                    (item.key, item.total_group_count, item.index_in_group),
+                    (
+                        item.key,
+                        item.total_group_count,
+                        item.index_in_group,
+                        item.sort_key,
+                        item.display_order,
+                        item.document_server_facts,
+                    ),
                 )
             })
             .unzip();
@@ -1632,11 +1653,24 @@ where
             .into_iter()
             .zip(metadata)
             .map(
-                |(item, (key, total_group_count, index_in_group))| ItemGroupingInfo {
+                |(
+                    item,
+                    (
+                        key,
+                        total_group_count,
+                        index_in_group,
+                        sort_key,
+                        display_order,
+                        document_server_facts,
+                    ),
+                )| ItemGroupingInfo {
                     item,
                     key,
                     total_group_count,
                     index_in_group,
+                    sort_key,
+                    display_order,
+                    document_server_facts,
                 },
             )
             .collect::<Vec<_>>()
@@ -1656,10 +1690,10 @@ where
         let entity_filter = req.filters().clone();
         let mut req = req.into_ast()?;
         if req.entity_ast().and_then(|ast| ast.favorites_only) == Some(true)
-            && !matches!(&req.cursor, SoupQuery::Simple(_))
+            && !matches!(&req.cursor, SoupQuery::Simple(_) | SoupQuery::Property(_))
         {
             return Err(SoupErr::AstErr(item_filters::ast::ExpandErr::ApiAst(
-                "favorites_only requires a timestamp sort".into(),
+                "favorites_only requires a timestamp or property sort".into(),
             )));
         }
         let favorite_entities = self.favorite_entities(&req.user, req.entity_ast()).await?;
@@ -1668,8 +1702,7 @@ where
                 .cursor
                 .map(|ast| ast.map(|ast| favorites::apply(ast, entities)));
         }
-        // CRM associations resolve to complete entity sets, so they only
-        // compose with the timestamp-sorted sources that take those sets.
+        // Resolve CRM associations before either timestamp or task due-date selection.
         let crm_record = req.entity_ast().and_then(|ast| ast.crm_association);
         // Read the filter of every query kind: `entity_ast` hides frecency
         // filters, which must be rejected rather than silently unscoped.
@@ -1679,9 +1712,9 @@ where
             .as_ref()
             .is_some_and(|ast| !ast.crm_associations().is_empty())
         {
-            if !matches!(&req.cursor, SoupQuery::Simple(_)) {
+            if !matches!(&req.cursor, SoupQuery::Simple(_) | SoupQuery::Property(_)) {
                 return Err(SoupErr::AstErr(item_filters::ast::ExpandErr::ApiAst(
-                    "CRM associations require a timestamp sort".into(),
+                    "CRM associations require timestamp or property sorting".into(),
                 )));
             }
             // Unexpanded candidate queries cannot apply filter trees, so the
@@ -1716,7 +1749,6 @@ where
             return Err(SoupErr::CrmTeamRequired);
         }
 
-        // Borrow before email's builder consumes team_receipt.
         let crm_contact_request = req.build_crm_contact_request(team_receipt.as_ref())?;
         let mut crm_company_request = req.build_crm_company_request(&team_receipt);
         let foreign_entity_source_ids = req.build_foreign_entity_source_ids(team_receipt.as_ref());
@@ -1749,6 +1781,30 @@ where
         let sort_direction = req.sort_direction;
 
         let output: Result<SoupOutput<R, SoupCandidate>, SoupErr> = match req.cursor {
+            SoupQuery::Property(cursor) => {
+                let sort = *cursor.sort_method();
+                let items = self
+                    .soup_storage
+                    .expanded_generic_cursor_soup_with_projection(SimpleSortRequest {
+                        user_id: req.user,
+                        limit: limit.saturating_add(1),
+                        cursor: SimpleSortQuery::Property(
+                            cursor.map_filter(Option::unwrap_or_default),
+                        ),
+                    })
+                    .await
+                    .map_err(anyhow::Error::from)?;
+                let page = items
+                    .into_iter()
+                    .map(SoupCandidate::from_projection_hydration)
+                    .paginate(limit.into(), |item: &SoupCandidate| CursorVal {
+                        sort_type: sort,
+                        last_val: sort.position(item.sort_key, item.item.updated_at()),
+                    })
+                    .filter_on(entity_filter)
+                    .into_page();
+                Ok(SoupOutput::Property(page))
+            }
             SoupQuery::Simple(SimpleQueryInner(cursor)) => {
                 let sort_method = *cursor.sort_method();
 
@@ -1895,6 +1951,7 @@ where
         let mut output = output?;
         let items = match &mut output {
             SoupOutput::Simple(page) => &mut page.items,
+            SoupOutput::Property(page) => &mut page.items,
             SoupOutput::Frecency(page) => &mut page.items,
             SoupOutput::Touched(page) => &mut page.items,
             SoupOutput::Notified(page) => &mut page.items,
@@ -2050,7 +2107,6 @@ where
         self.populate_grouped_items(user_id, items).await
     }
 
-    #[tracing::instrument(err, skip(self))]
     async fn caller_tag_sets<'a>(
         &self,
         user_id: MacroUserIdStr<'a>,

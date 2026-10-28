@@ -17,7 +17,6 @@ import {
   unreadFilterFn,
   useIsShared,
 } from '@entity';
-import { NarrowLayout } from '@entity/composed/list-entity/narrow-layout';
 import {
   type BaseListEntityProps,
   hasSearchContentHits,
@@ -26,6 +25,7 @@ import {
 } from '@entity/composed/list-entity/shared';
 import type { EntityRowConfig } from '@entity/extractors-notification';
 import { EntityReferenceProperties } from '@entity/extractors-property/entity-reference-properties';
+import { getTaskDueDate, isTaskClosed } from '@entity/utils/task-properties';
 import {
   BULK_DOCUMENT_WAKEUP_FEATURE_FLAG,
   enqueueDocumentWakeup,
@@ -37,6 +37,7 @@ import {
 } from '@service-connection/stream-events';
 import { mergeRefs } from '@solid-primitives/refs';
 import { cn } from '@ui/utils/classname';
+import type { Accessor } from 'solid-js';
 import {
   createEffect,
   createSignal,
@@ -46,10 +47,15 @@ import {
   Switch,
   useContext,
 } from 'solid-js';
+import {
+  type DateBucketBoundaries,
+  taskDueDateUrgency,
+} from '../../core/task-due-date';
 import { TaskGridLayout } from './TaskGridLayout';
 
 type TaskListEntityProps = Omit<BaseListEntityProps, 'entity'> & {
   entity: TaskEntityWithProperties;
+  calendar: Accessor<DateBucketBoundaries>;
   rowId?: string;
   showUnrollNotifications?: boolean;
   /** Show the Project column (Projects enabled). */
@@ -119,8 +125,12 @@ export function TaskListEntity(props: TaskListEntityProps) {
 
   const showContentHits = () => showHitSnippet();
 
+  const dueDate = () => getTaskDueDate(props.entity);
+  const urgency = () =>
+    taskDueDateUrgency(dueDate(), isTaskClosed(props.entity), props.calendar());
   const layoutProps = () => ({
     entity: props.entity,
+    dueDateUrgency: urgency(),
     checked: props.checked,
     hideCheckbox: props.hideCheckbox,
     onChecked: props.onChecked,
@@ -188,7 +198,7 @@ export function TaskListEntity(props: TaskListEntityProps) {
             entityId={props.entity.id}
             config={props.entityRowConfig}
           >
-            <NarrowLayout {...layoutProps()} />
+            <TaskGridLayout {...layoutProps()} compact />
             <Show when={props.referencePropertyIds}>
               {(ids) => (
                 <div class="px-3 pb-1">

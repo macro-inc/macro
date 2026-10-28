@@ -12,6 +12,9 @@ const fixture = vi.hoisted(() => ({
   searchState: vi.fn(),
   mapItem: vi.fn(),
 }));
+vi.mock('@queries/properties/definitions', () => ({
+  useListPropertiesQuery: () => ({ isSuccess: false, data: [] }),
+}));
 vi.mock('@app/features/soup', async () => ({
   ...(await import('@app/features/soup/filters')),
   ...(await import('@app/features/soup/collection/rows')),

@@ -30,9 +30,7 @@ use models_soup::{
 };
 use predicate_index::RecordKey;
 use serde_json::Value;
-use soup::domain::models::{
-    EnrichedSoupItem, SoupProjectionHydration, SoupPropertiesField, grouping::NestedSoupGroups,
-};
+use soup::domain::models::{EnrichedSoupItem, SoupProjectionHydration, grouping::GroupedResponse};
 use soup_filter_projection::{encode_cache_projection_supplement, project_soup_cache_supplement};
 use uuid::Uuid;
 
@@ -218,18 +216,33 @@ pub struct GroupedSoup<E: SoupEntityEdges> {
 }
 
 impl<E: SoupEntityEdges> GroupedSoup<E> {
-    /// Construct grouped GraphQL Soup bins from the domain grouping model.
-    pub fn new(groups: NestedSoupGroups<SoupPropertiesField>) -> Self {
+    /// Construct GraphQL bins from the shared grouped response and cursor policy.
+    pub fn from_response(response: GroupedResponse) -> Self {
         Self {
-            bins: groups
-                .into_bins()
-                .map(|(key, bin)| GraphqlSoupBin {
-                    key,
-                    total_count: bin.group_total_size(),
-                    next_cursor: bin.next_cursor().map(ToOwned::to_owned),
-                    items: bin
-                        .into_items()
-                        .map(|item| GraphqlSoupEntity::new(item.map_extra(|_| ())))
+            bins: response
+                .groups
+                .into_iter()
+                .map(|group| GraphqlSoupBin {
+                    key: group.key,
+                    total_count: group.total_count as usize,
+                    display_order: group.display_order,
+                    next_cursor: group.next_cursor,
+                    items: group
+                        .item_ids
+                        .iter()
+                        .filter_map(|id| response.items.get(id).map(|item| (id, item)))
+                        .map(|(id, item)| {
+                            GraphqlSoupEntity::new_from_enriched_with_projection(
+                                SoupProjectionHydration {
+                                    item: item.clone(),
+                                    document_server_facts: response
+                                        .document_server_facts
+                                        .get(id)
+                                        .cloned(),
+                                    sort_key: None,
+                                },
+                            )
+                        })
                         .collect(),
                 })
                 .collect(),
@@ -244,6 +257,8 @@ pub struct GraphqlSoupBin<E: SoupEntityEdges> {
     key: String,
     /// Total number of items in this group across all pages.
     total_count: usize,
+    /// Stored option order or calendar bucket order, when available.
+    display_order: Option<i32>,
     /// Opaque cursor for the next page in this bin, if one exists.
     next_cursor: Option<String>,
     /// Items in this bin, ordered by their index within the group.

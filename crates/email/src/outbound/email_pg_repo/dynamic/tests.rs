@@ -43,6 +43,32 @@ fn build_thread_email_filter(ast: &Expr<EmailLiteral>, sort_ts_field: &str) -> S
     super::filters::build_thread_email_filter(ast, sort_ts_field, &ResolvedFilters::empty())
 }
 
+#[sqlx::test(migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS")]
+async fn date_literals_match_nothing_and_preserve_negation(pool: sqlx::PgPool) {
+    use item_filters::ast::properties::{DateRange, PropertiesLiteral, PropertyMatchValue};
+
+    let literal = Expr::Literal(EmailLiteral::Property(PropertiesLiteral {
+        property_definition_id: Uuid::from_u128(4),
+        entity_type: None,
+        value: PropertyMatchValue::DateRange(DateRange {
+            start: None,
+            end: None,
+        }),
+    }));
+    for (filter, expected) in [(literal.clone(), false), (Expr::is_not(literal), true)] {
+        let mut query = QueryBuilder::new("SELECT TRUE");
+        build_thread_email_filter(&filter, "t.updated_at").push_into(&mut query, "unused");
+        assert_eq!(
+            query
+                .build_query_scalar::<bool>()
+                .fetch_one(&pool)
+                .await
+                .unwrap(),
+            expected
+        );
+    }
+}
+
 #[test]
 fn unresolved_sender_short_circuits() {
     let expr = Expr::Literal(EmailLiteral::Sender(complete("missing@x.com")));

@@ -49,6 +49,7 @@ pub(super) struct PropertyClauseParams {
 /// other call filters, so here they are unconstrained (`Any`).
 enum Formula {
     Any,
+    Never,
     Term(PropertyTerm),
     And(Box<Formula>, Box<Formula>),
     Or(Box<Formula>, Box<Formula>),
@@ -102,6 +103,13 @@ fn formula(expr: &Expr<CallLiteral>, negated: bool) -> Formula {
     match expr {
         Expr::Literal(CallLiteral::Property(literal)) => {
             let condition = match &literal.value {
+                PropertyMatchValue::DateRange(_) => {
+                    return if negated {
+                        Formula::Any
+                    } else {
+                        Formula::Never
+                    };
+                }
                 PropertyMatchValue::SelectOption(option_id) => {
                     PropertyCondition::Tag(option_id.to_string())
                 }
@@ -123,6 +131,7 @@ fn formula(expr: &Expr<CallLiteral>, negated: bool) -> Formula {
 
 fn and(a: Formula, b: Formula) -> Formula {
     match (a, b) {
+        (Formula::Never, _) | (_, Formula::Never) => Formula::Never,
         (Formula::Any, other) | (other, Formula::Any) => other,
         (a, b) => Formula::And(Box::new(a), Box::new(b)),
     }
@@ -131,6 +140,7 @@ fn and(a: Formula, b: Formula) -> Formula {
 fn or(a: Formula, b: Formula) -> Formula {
     match (a, b) {
         (Formula::Any, _) | (_, Formula::Any) => Formula::Any,
+        (Formula::Never, other) | (other, Formula::Never) => other,
         (a, b) => Formula::Or(Box::new(a), Box::new(b)),
     }
 }
@@ -139,6 +149,7 @@ fn or(a: Formula, b: Formula) -> Formula {
 fn clauses(formula: &Formula) -> Option<Vec<Vec<PropertyTerm>>> {
     match formula {
         Formula::Any => Some(Vec::new()),
+        Formula::Never => Some(vec![Vec::new()]),
         Formula::Term(term) => Some(vec![vec![term.clone()]]),
         Formula::And(a, b) => {
             let mut all = clauses(a)?;

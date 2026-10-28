@@ -7,6 +7,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { usePropertyUserDisplay } from '@property/hooks/usePropertyUserDisplay';
 import type { Accessor } from 'solid-js';
 import { toTaskBoardGrouping } from './core/task-board';
+import { taskDueDatePredicate } from './core/task-due-date';
 import { createTaskBoardQueries } from './queries/task-board-queries';
 import { taskBoardComposerContext } from './task-composer';
 import { useTasksView } from './tasks-view-context';
@@ -15,7 +16,7 @@ import { TaskBoardView } from './views/task-board-view';
 /** Connects the task view to query adapters and app navigation. */
 export function TasksBoard(props: { ref?: (element: HTMLDivElement) => void }) {
   const context = useTasksView();
-  const { state, source, openTask, projectsEnabled } = context;
+  const { state, source, openTask, projectsEnabled, calendar } = context;
   const panel = useSplitPanelOrThrow();
   const layout = useSplitLayout();
   const createContext = useCreateContext();
@@ -27,6 +28,8 @@ export function TasksBoard(props: { ref?: (element: HTMLDivElement) => void }) {
     projectsEnabled,
     facets: () => state.facets,
     sort: () => state.sort,
+    calendar,
+    dueDate: () => taskDueDatePredicate(state.dueDate, calendar()),
   });
   const data = {
     ...queries,
@@ -36,10 +39,12 @@ export function TasksBoard(props: { ref?: (element: HTMLDivElement) => void }) {
 
   const canCreate = () => !!context.createTask || !context.scopeKey;
   const createTask = (columnId: string) => {
+    const grouping = toTaskBoardGrouping(state.groupBy);
     if (!canCreate()) return;
     const composerContext = taskBoardComposerContext({
-      grouping: toTaskBoardGrouping(state.groupBy),
+      grouping,
       columnId,
+      calendar: calendar(),
       scopeKey: context.scopeKey ?? panel.handle.id,
       context: createContext.snapshot('task', panel.handle.id),
     });

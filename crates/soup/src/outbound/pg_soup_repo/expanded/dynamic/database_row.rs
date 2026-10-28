@@ -39,7 +39,11 @@ const FORM_EDITOR_SEMI_JOIN: &str = r#"row_database.database_id IN (
 
 /// Rows are never viewed on their own: `ViewedAt` sorts them last and `ViewedUpdated`
 /// uses `updated_at`, matching [`models_soup::item::SoupItem`]'s cursor.
-pub(super) fn database_row_top_clause(sort: SimpleSortMethod, grouped: bool) -> String {
+pub(super) fn database_row_top_clause(
+    sort: SimpleSortMethod,
+    grouped: bool,
+    property_sort: bool,
+) -> String {
     let sort_ts = match sort {
         SimpleSortMethod::CreatedAt => "r.created_at",
         SimpleSortMethod::ViewedAt => "'1970-01-01 00:00:00+00'",
@@ -47,6 +51,8 @@ pub(super) fn database_row_top_clause(sort: SimpleSortMethod, grouped: bool) -> 
     };
     let group_columns = if grouped {
         ", NULL::text as project_id, 'DATABASE_ROW'::property_entity_type as property_entity_type"
+    } else if property_sort {
+        ", 'DATABASE_ROW'::property_entity_type as property_entity_type"
     } else {
         ""
     };

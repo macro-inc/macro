@@ -79,6 +79,7 @@
 - [ProjectSearchResponseItem](type-aliases/ProjectSearchResponseItem.md)
 - [ProjectSearchResponseItemWithMetadata](type-aliases/ProjectSearchResponseItemWithMetadata.md)
 - [ProjectSearchResult](type-aliases/ProjectSearchResult.md)
+- [PropertyDateFilterRange](type-aliases/PropertyDateFilterRange.md)
 - [PropertyDefinition](type-aliases/PropertyDefinition.md)
 - [PropertyFilter](type-aliases/PropertyFilter.md)
 - [PropertyOwner](type-aliases/PropertyOwner.md)

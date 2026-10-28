@@ -2,6 +2,7 @@ import type { FacetSelection } from '@app/features/soup/filters/facets/types';
 import { err, ok, type Result } from 'neverthrow';
 import { z } from 'zod';
 import { TASK_DEFAULT_GROUP_BY } from '../constants';
+import { TASK_DUE_DATE_BUCKETS } from '../core/task-due-date';
 import type { TasksViewState, TaskTab } from '../types';
 import {
   TASK_PRIORITY_OPTIONS,
@@ -47,6 +48,27 @@ const filtersSchema = z
       .max(100),
   })
   .strict();
+const dueDateSchema = z.union([
+  z
+    .object({
+      type: z.enum([
+        ...TASK_DUE_DATE_BUCKETS.map((bucket) => bucket.id),
+        'has_due_date',
+      ]),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('range'),
+      start: z.iso.date().optional(),
+      end: z.iso.date().optional(),
+    })
+    .strict()
+    .refine(
+      ({ start, end }) =>
+        Boolean(start || end) && (!start || !end || start <= end)
+    ),
+]);
 const layoutSchema = z.enum(['list', 'board', 'gantt']);
 const groupBySchema = z.enum([
   'none',
@@ -55,10 +77,19 @@ const groupBySchema = z.enum([
   'assignee',
   'project',
   'date',
+  'due_date',
 ]);
 const sortItemSchema = z
   .object({
-    id: z.enum(['updated_at', 'created_at', 'viewed_at']),
+    id: z.enum([
+      'updated_at',
+      'created_at',
+      'viewed_at',
+      'status',
+      'priority',
+      'due_date_earliest',
+      'due_date_latest',
+    ]),
     reversed: z.boolean().default(false),
   })
   .strict();
@@ -68,6 +99,7 @@ const taskSavedViewSchema = z
     kind: z.literal('tasks'),
     version: z.literal(1),
     filters: filtersSchema,
+    dueDate: dueDateSchema.optional(),
     layout: layoutSchema.default('list'),
     groupBy: groupBySchema.default(TASK_DEFAULT_GROUP_BY['team-tasks']),
     sort: sortSchema.default([{ id: 'updated_at', reversed: false }]),
@@ -101,6 +133,7 @@ function canonical(config: TaskSavedViewConfig): TaskSavedViewConfig {
   return {
     kind: 'tasks',
     version: 1,
+    ...(config.dueDate && { dueDate: { ...config.dueDate } }),
     layout: config.layout,
     groupBy: config.groupBy,
     sort: config.sort.map((item) => ({ ...item, reversed: !!item.reversed })),
@@ -182,6 +215,7 @@ export function readTaskSavedView(value: unknown): TaskSavedViewRead {
       ? [{ id: 'updated_at' as const, reversed: false }]
       : readSort(readable.data.sort);
   const filters = readable.data.filters;
+  const dueDate = dueDateSchema.safeParse(readable.data.dueDate);
 
   function readSort(value: unknown) {
     if (!Array.isArray(value))
@@ -244,6 +278,7 @@ export function readTaskSavedView(value: unknown): TaskSavedViewRead {
         ? groupBy.data
         : TASK_DEFAULT_GROUP_BY['team-tasks'],
       sort,
+      ...(dueDate.success && dueDate.data && { dueDate: dueDate.data }),
       filters: {
         statusOptionIds: readEntries(
           filters.statusOptionIds,
@@ -295,6 +330,7 @@ export function captureTaskSavedView(input: {
   layout?: TasksViewState['layout'];
   groupBy?: TasksViewState['groupBy'];
   sort?: TasksViewState['sort'];
+  dueDate?: TasksViewState['dueDate'];
   context: TaskFacetContext;
 }): Result<TaskSavedViewConfig, string> {
   if (input.tab === 'projects')
@@ -323,6 +359,7 @@ export function captureTaskSavedView(input: {
     layout: input.layout,
     groupBy: input.groupBy,
     sort: input.sort,
+    ...(input.dueDate && { dueDate: input.dueDate }),
     filters: {
       statusOptionIds: (input.facets.status ?? []).map((id) =>
         optionId(id, TASK_STATUS_OPTIONS)
@@ -344,6 +381,7 @@ export function materializeTaskSavedView(config: TaskSavedViewConfig): {
   layout: TasksViewState['layout'];
   groupBy: TasksViewState['groupBy'];
   sort: TasksViewState['sort'];
+  dueDate?: TasksViewState['dueDate'];
 } {
   const filters = config.filters;
   const selectionId = (id: string, options: typeof TASK_STATUS_OPTIONS) =>
@@ -355,6 +393,7 @@ export function materializeTaskSavedView(config: TaskSavedViewConfig): {
     layout: config.layout,
     groupBy: config.groupBy,
     sort: config.sort.map((item) => ({ ...item })),
+    dueDate: config.dueDate ? { ...config.dueDate } : undefined,
     facets: {
       status: filters.statusOptionIds.map((id) =>
         selectionId(id, TASK_STATUS_OPTIONS)

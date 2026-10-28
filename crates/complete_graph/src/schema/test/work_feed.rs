@@ -67,6 +67,7 @@ fn doc_entry() -> WorkFeedEntry<SoupProjectionHydration> {
         item: WorkFeedItem {
             key: doc_key(),
             entity: SoupProjectionHydration {
+                sort_key: None,
                 item: soup_document(DOC_ID),
                 document_server_facts: None,
             },

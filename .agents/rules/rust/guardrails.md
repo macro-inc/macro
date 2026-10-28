@@ -21,7 +21,9 @@ alwaysApply: false
   Tests compile against the live database, so they don't need the cache.
 - Across domain crates, depend on the owning domain service or port; only a
   composition root may construct that crate's outbound adapters. Never import
-  another crate's `outbound` module from an outbound adapter.
+  another crate's `outbound` module from an outbound adapter. Soup's candidate
+  repository may read `entity_properties` after the properties service authorizes
+  the selected definitions; keep execution and entity access gates in Soup.
 - Read the [Rust development guide](../../../docs/development/rust.md) before
   building or testing, and the hexagonal architecture skill before changing
   inbound, domain, or outbound code.

@@ -282,6 +282,19 @@ enum GraphqlFilterPropertyMatchValue {
     SelectOption(ID),
     /// Entity reference id to match.
     EntityRef(ID),
+    /// Match a DATE property in a UTC range.
+    DateRange(GraphqlPropertyDateRange),
+}
+
+/// Explicit UTC bounds for a DATE property.
+#[cfg_attr(feature = "server", derive(async_graphql::InputObject))]
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GraphqlPropertyDateRange {
+    /// Inclusive UTC start, or no lower bound.
+    start: Option<String>,
+    /// Exclusive UTC end, or no upper bound.
+    end: Option<String>,
 }
 
 impl GraphqlFilterPropertyMatchValue {
@@ -295,6 +308,24 @@ impl GraphqlFilterPropertyMatchValue {
                 EntityRefId::new(value.to_string())
                     .map_err(|err| InputError::new(format!("invalid entityRef: {err}")))?,
             ),
+            Self::DateRange(range) => {
+                PropertyMatchValue::DateRange(item_filters::ast::properties::DateRange {
+                    start: range
+                        .start
+                        .as_deref()
+                        .map(chrono::DateTime::parse_from_rfc3339)
+                        .transpose()
+                        .map_err(|err| InputError::new(format!("invalid dateRange.start: {err}")))?
+                        .map(|value| value.with_timezone(&Utc)),
+                    end: range
+                        .end
+                        .as_deref()
+                        .map(chrono::DateTime::parse_from_rfc3339)
+                        .transpose()
+                        .map_err(|err| InputError::new(format!("invalid dateRange.end: {err}")))?
+                        .map(|value| value.with_timezone(&Utc)),
+                })
+            }
         })
     }
 }
@@ -339,6 +370,7 @@ impl TryFrom<GraphqlPropertyEntityType> for PropertyEntityType {
     fn try_from(value: GraphqlPropertyEntityType) -> Result<Self, Self::Error> {
         Ok(match value {
             GraphqlPropertyEntityType::CalendarEvent => Self::CalendarEvent,
+            GraphqlPropertyEntityType::CallRecord => Self::CallRecord,
             GraphqlPropertyEntityType::Channel => Self::Channel,
             GraphqlPropertyEntityType::Chat => Self::Chat,
             GraphqlPropertyEntityType::Company => Self::Company,
@@ -349,8 +381,7 @@ impl TryFrom<GraphqlPropertyEntityType> for PropertyEntityType {
             GraphqlPropertyEntityType::Thread => Self::Thread,
             GraphqlPropertyEntityType::User => Self::User,
             GraphqlPropertyEntityType::Initiative => Self::Initiative,
-            other
-            @ (GraphqlPropertyEntityType::CallRecord | GraphqlPropertyEntityType::Contact) => {
+            other @ GraphqlPropertyEntityType::Contact => {
                 return Err(other);
             }
         })
@@ -366,7 +397,7 @@ pub struct GraphqlEntityFilterAst {
     favorites_only: Option<bool>,
     /// Restrict every entity type to items associated with this CRM record,
     /// or to activity across visible CRM-enabled teams.
-    /// Requires an expanded, timestamp-sorted query.
+    /// Requires an expanded query sorted by a timestamp or selected property.
     crm_association: Option<GraphqlCrmAssociation>,
     /// The calendar event filter to apply.
     calendar_event_filter: Option<GraphqlCalendarEventExpr>,
@@ -703,8 +734,8 @@ enum GraphqlDocumentLiteral {
     /// Uploaded from an email attachment sent by, or to, a matching address.
     EmailAttachmentParticipant(GraphqlEmailValue),
     /// Associated with a CRM record through its Companies or Contacts
-    /// property or a reference to the record. Requires an expanded,
-    /// timestamp-sorted query.
+    /// property or a reference to the record. Requires an expanded query
+    /// sorted by a timestamp or task due date.
     CrmAssociated(GraphqlCrmAssociation),
     /// Case-insensitive substring of the document name.
     NameContains(String),

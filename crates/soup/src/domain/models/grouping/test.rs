@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 use super::*;
 
-fn project(id: u128) -> SoupItem {
+fn project(id: u128) -> SoupItem<SoupPropertiesField> {
     SoupItem::Project(SoupProject {
         id: Uuid::from_u128(id),
         name: format!("Project {id}"),
@@ -18,102 +18,116 @@ fn project(id: u128) -> SoupItem {
         updated_at: DateTime::default(),
         viewed_at: None,
         deleted_at: None,
-        extra: (),
+        extra: SoupPropertiesField::default(),
     })
 }
 
 #[test]
-fn nested_groups_preserve_bin_and_item_insertion_order() {
-    let groups: NestedSoupGroups = vec![
-        ItemGroupingInfo {
-            key: "project".to_string(),
-            total_group_count: 2,
-            index_in_group: 2,
-            item: project(2),
-        },
-        ItemGroupingInfo {
-            key: "project".to_string(),
-            total_group_count: 2,
-            index_in_group: 1,
-            item: project(1),
-        },
-        ItemGroupingInfo {
-            key: "document".to_string(),
-            total_group_count: 1,
-            index_in_group: 1,
-            item: project(3),
-        },
-    ]
-    .into_iter()
-    .collect();
+fn grouped_response_preserves_unranked_group_and_item_order() {
+    let response = build_grouped_response(
+        vec![
+            ItemGroupingInfo {
+                sort_key: None,
+                display_order: None,
+                document_server_facts: None,
+                key: "project".to_string(),
+                total_group_count: 2,
+                index_in_group: 1,
+                item: project(2),
+            },
+            ItemGroupingInfo {
+                sort_key: None,
+                display_order: None,
+                document_server_facts: None,
+                key: "project".to_string(),
+                total_group_count: 2,
+                index_in_group: 2,
+                item: project(1),
+            },
+            ItemGroupingInfo {
+                sort_key: None,
+                display_order: None,
+                document_server_facts: None,
+                key: "document".to_string(),
+                total_group_count: 1,
+                index_in_group: 1,
+                item: project(3),
+            },
+        ],
+        &GroupByField::Project,
+        SimpleSortMethod::UpdatedAt,
+        None,
+        EntityFilterAst::default(),
+    );
 
-    let mut bins = groups.into_bins();
-    let (project_key, project_bin) = bins.next().unwrap();
-    assert_eq!(project_key, "project");
-    assert_eq!(project_bin.group_total_size(), 2);
+    assert_eq!(response.groups.len(), 2);
+    assert_eq!(response.groups[0].key, "project");
+    assert_eq!(response.groups[0].total_count, 2);
     assert_eq!(
-        project_bin
-            .into_items()
-            .map(|item| item.id())
-            .collect::<Vec<_>>(),
+        response.groups[0].item_ids,
         vec![Uuid::from_u128(2), Uuid::from_u128(1)]
     );
-
-    let (document_key, document_bin) = bins.next().unwrap();
-    assert_eq!(document_key, "document");
-    assert_eq!(
-        document_bin
-            .into_items()
-            .map(|item| item.id())
-            .collect::<Vec<_>>(),
-        vec![Uuid::from_u128(3)]
-    );
-    assert!(bins.next().is_none());
+    assert_eq!(response.groups[1].key, "document");
+    assert_eq!(response.groups[1].item_ids, vec![Uuid::from_u128(3)]);
 }
 
 #[test]
-fn nested_groups_add_cursor_only_to_truncated_bins() {
-    let groups: NestedSoupGroups = vec![
-        ItemGroupingInfo {
-            key: "truncated".to_string(),
-            total_group_count: 2,
-            index_in_group: 1,
-            item: project(1),
-        },
-        ItemGroupingInfo {
-            key: "complete".to_string(),
-            total_group_count: 1,
-            index_in_group: 1,
-            item: project(2),
-        },
-    ]
-    .into_iter()
-    .collect::<NestedSoupGroups>()
-    .with_next_cursors(SimpleSortMethod::UpdatedAt, EntityFilterAst::default());
+fn grouped_response_adds_cursor_only_to_truncated_groups() {
+    let response = build_grouped_response(
+        vec![
+            ItemGroupingInfo {
+                sort_key: None,
+                display_order: None,
+                document_server_facts: None,
+                key: "truncated".to_string(),
+                total_group_count: 2,
+                index_in_group: 1,
+                item: project(1),
+            },
+            ItemGroupingInfo {
+                sort_key: None,
+                display_order: None,
+                document_server_facts: None,
+                key: "complete".to_string(),
+                total_group_count: 1,
+                index_in_group: 1,
+                item: project(2),
+            },
+        ],
+        &GroupByField::Project,
+        SimpleSortMethod::UpdatedAt,
+        None,
+        EntityFilterAst::default(),
+    );
 
-    let mut bins = groups.into_bins();
-    let (_, truncated) = bins.next().unwrap();
-    let cursor = Base64Str::<
-        CursorWithValAndFilter<Uuid, SimpleSortMethod, EntityFilterAst>,
-    >::new_from_string(truncated.next_cursor().unwrap().to_owned())
-    .decode_json()
-    .unwrap();
+    let cursor =
+        Base64Str::<CursorWithValAndFilter<Uuid, DynamicSort, EntityFilterAst>>::new_from_string(
+            response.groups[0].next_cursor.clone().unwrap(),
+        )
+        .decode_json()
+        .unwrap();
     assert_eq!(cursor.id, Uuid::from_u128(1));
     assert_eq!(cursor.limit, 1);
-
-    let (_, complete) = bins.next().unwrap();
-    assert!(complete.next_cursor().is_none());
+    assert!(matches!(
+        cursor.val.sort_type,
+        DynamicSort::Timestamp(SimpleSortMethod::UpdatedAt)
+    ));
+    assert!(response.groups[1].next_cursor.is_none());
+    assert!(response.page_cursor.is_none());
 }
 
 #[test]
-fn rest_grouped_response_remains_normalized() {
+fn grouped_response_remains_normalized() {
     let id = Uuid::from_u128(1);
     let response = build_grouped_response(
         vec![ItemGroupingInfo {
+            sort_key: None,
+            display_order: None,
+            document_server_facts: None,
             key: "project".to_string(),
             total_group_count: 1,
             index_in_group: 1,
-            item: project(1).map_extra(|()| SoupPropertiesField::default()),
+            item: project(1),
         }],
         &GroupByField::EntityType,
         SimpleSortMethod::ViewedUpdated,

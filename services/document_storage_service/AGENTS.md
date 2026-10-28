@@ -59,7 +59,7 @@ threads, pins, recents, notifications, folders, activity.
 - Add a Soup GraphQL field: resolver/loader in `crates/graphql_soup` →
   `src/api/graphql_soup.rs` if wiring changes.
 - Add a REST route: `src/api/<area>.rs` → `src/api.rs` (router) →
-  `src/openapi.rs`.
+  `src/api/swagger.rs`.
 - Add a config value or feature-gated behavior: `src/config.rs` → the
   `[features]` table in `Cargo.toml` if it should be independently toggleable.
 
@@ -71,6 +71,8 @@ threads, pins, recents, notifications, folders, activity.
 - After query changes: `nix develop --command just prepare_db` from the repo root.
 
 ## Gotchas
+
+- Compose Soup without a separate property-definition reader; REST and GraphQL validate DATE range inputs before calling the service.
 
 - Several behaviors are Cargo-feature-gated (`connection_gateway`,
   `delete_document_worker`, `location_check`, all on by `default`) — a feature

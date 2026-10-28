@@ -47,6 +47,7 @@ fn document_hydration(
     is_email_attachment: bool,
 ) -> SoupProjectionHydration {
     SoupProjectionHydration {
+        sort_key: None,
         item: SoupItem::Document(document(id, sub_type)),
         document_server_facts: Some(SoupDocumentServerFacts {
             is_email_attachment,
@@ -220,6 +221,7 @@ fn entities_without_document_server_facts_do_not_emit_supplements() {
             extra: (),
         }),
         document_server_facts: None,
+        sort_key: None,
     };
     let chat = SoupProjectionHydration {
         item: SoupItem::Chat(SoupChat {
@@ -236,6 +238,7 @@ fn entities_without_document_server_facts_do_not_emit_supplements() {
             extra: (),
         }),
         document_server_facts: None,
+        sort_key: None,
     };
 
     assert!(
@@ -275,6 +278,7 @@ fn document_server_facts_attached_to_another_entity_are_rejected() {
             is_important: true,
             status_option_ids: Vec::new(),
         }),
+        sort_key: None,
     };
     assert!(matches!(
         project_soup_cache_supplement(

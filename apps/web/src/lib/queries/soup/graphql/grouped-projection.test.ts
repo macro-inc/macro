@@ -82,11 +82,18 @@ function page(count: number): GroupSoupQuery {
         bins: [
           {
             key: 'a',
+            displayOrder: null,
             totalCount: count,
             nextCursor: null,
             items: Array.from({ length: count }, (_, id) => row(id)),
           },
-          { key: 'b', totalCount: 0, nextCursor: null, items: [] },
+          {
+            key: 'b',
+            displayOrder: null,
+            totalCount: 0,
+            nextCursor: null,
+            items: [],
+          },
         ],
       },
     },

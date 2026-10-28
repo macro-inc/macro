@@ -1,9 +1,11 @@
 import type { FacetSelection } from '@app/features/soup';
 import type { TaskEntityWithProperties } from '@entity/types/entity';
 import {
+  getTaskDueDate,
   getTaskPriorityOptionId,
   getTaskReferencedEntityIds,
   getTaskStatusOptionId,
+  isTaskClosed,
   TASK_PRIORITY_OPTIONS,
   TASK_STATUS_OPTIONS,
 } from '@entity/utils/task-properties';
@@ -18,6 +20,14 @@ import {
   taskBoardGroupKeys,
 } from '../core/task-board';
 import {
+  type DateBucketBoundaries,
+  isTaskDueDateBucket,
+  TASK_DUE_DATE_BUCKETS,
+  type TaskDatePredicate,
+  taskDueDateBucket,
+  taskDueDateBucketMatchesFilter,
+} from '../core/task-due-date';
+import {
   EMPTY_TASK_FACET_CONTEXT,
   getTaskFacetOption,
 } from '../filters/task-facets';
@@ -28,16 +38,27 @@ const BOARD_PROPERTY_IDS = {
   priority: SYSTEM_PROPERTY_IDS.PRIORITY,
   assignee: SYSTEM_PROPERTY_IDS.ASSIGNEES,
   project: SYSTEM_PROPERTY_IDS.PROJECT,
+  due_date: SYSTEM_PROPERTY_IDS.DUE_DATE,
 };
 
 export function taskBoardPropertyId(grouping: TaskBoardGrouping): string {
   return BOARD_PROPERTY_IDS[grouping];
 }
 
-export function toBoardTask(task: TaskEntityWithProperties): TaskBoardTask {
+export function toBoardTask(
+  task: TaskEntityWithProperties,
+  calendar?: DateBucketBoundaries
+): TaskBoardTask {
   return {
     id: task.id,
     name: task.name,
+    dueDate: getTaskDueDate(task),
+    closed: isTaskClosed(task),
+    subtypeCompleted:
+      task.subType?.type === 'task' && task.subType.is_completed,
+    deadline: calendar
+      ? taskDueDateBucket(getTaskDueDate(task), calendar)
+      : undefined,
     statusId: getTaskStatusOptionId(task),
     priorityId: getTaskPriorityOptionId(task),
     // Include both people and agent assignees. Their original reference types are retained on writes.
@@ -83,11 +104,15 @@ function allowedBoardColumns(
 export function filterTaskBoardColumns(
   columns: readonly TaskBoardColumn[],
   grouping: TaskBoardGrouping,
-  facets: FacetSelection
+  facets: FacetSelection,
+  dueDate?: TaskDatePredicate,
+  calendar?: DateBucketBoundaries
 ): TaskBoardColumn[] {
   const allowedColumnIds = allowedBoardColumns(grouping, facets);
 
   return columns.filter((column) => {
+    if (grouping === 'due_date' && calendar && isTaskDueDateBucket(column.id))
+      return taskDueDateBucketMatchesFilter(column.id, dueDate, calendar);
     return (
       allowedColumnIds.length === 0 || allowedColumnIds.includes(column.id)
     );
@@ -98,7 +123,8 @@ export function filterTaskBoardColumns(
 export function taskBoardColumns(
   rows: readonly TasksDataSourceItem[],
   grouping: TaskBoardGrouping,
-  searching: boolean
+  searching: boolean,
+  calendar?: DateBucketBoundaries
 ): TaskBoardColumn[] {
   const columns = new Map<
     string,
@@ -130,21 +156,30 @@ export function taskBoardColumns(
     priority: TASK_PRIORITY_OPTIONS,
     assignee: [],
     project: [],
+    due_date: [
+      { value: 'no_due_date', label: 'No due date' },
+      ...TASK_DUE_DATE_BUCKETS.filter(
+        (bucket) => bucket.id !== 'no_due_date'
+      ).map((bucket) => ({ value: bucket.id, label: bucket.label })),
+    ],
   }[grouping];
 
   for (const option of options) {
     addColumn(option.value, option.label);
   }
 
-  addColumn(
-    '',
-    {
-      status: 'No status',
-      priority: 'No priority',
-      assignee: 'Unassigned',
-      project: 'No project',
-    }[grouping]
-  );
+  if (grouping !== 'due_date') {
+    addColumn(
+      '',
+      {
+        status: 'No status',
+        priority: 'No priority',
+        assignee: 'Unassigned',
+        project: 'No project',
+        due_date: 'No due date',
+      }[grouping]
+    );
+  }
 
   for (const row of rows) {
     if (row.kind !== 'group-header') {
@@ -172,7 +207,7 @@ export function taskBoardColumns(
       continue;
     }
 
-    const task = toBoardTask(row.entity);
+    const task = toBoardTask(row.entity, calendar);
     const keys =
       searching || row.groupId === undefined
         ? taskBoardGroupKeys(task, grouping)
@@ -208,6 +243,14 @@ export function taskBoardMoveValue(
   grouping: TaskBoardGrouping,
   move: TaskBoardMove
 ): PropertyApiValues {
+  if (grouping === 'due_date') {
+    if (move.dueDate === undefined)
+      throw new Error('Deadline move requires a resolved date');
+    return {
+      valueType: 'DATE',
+      value: move.dueDate === null ? null : new Date(move.dueDate),
+    };
+  }
   if (grouping === 'status' || grouping === 'priority') {
     return {
       valueType: 'SELECT_STRING',

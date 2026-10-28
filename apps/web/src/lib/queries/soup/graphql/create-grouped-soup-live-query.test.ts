@@ -182,7 +182,15 @@ function page(
     user: {
       id: 'viewer',
       groupSoup: {
-        bins: [{ key: 'todo', items, totalCount: 20, nextCursor: cursor }],
+        bins: [
+          {
+            key: 'todo',
+            items,
+            displayOrder: null,
+            totalCount: 20,
+            nextCursor: cursor,
+          },
+        ],
       },
     },
   };
@@ -567,6 +575,7 @@ describe('grouped Soup live ownership', () => {
     cached.user.groupSoup.bins.push({
       key: 'done',
       items: [],
+      displayOrder: null,
       totalCount: 12,
       nextCursor: 'done-next',
     });

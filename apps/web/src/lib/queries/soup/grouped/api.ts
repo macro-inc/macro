@@ -5,6 +5,7 @@ import type { ApiGroupMeta } from '@service-storage/generated/schemas/apiGroupMe
 import type { Params } from '@service-storage/generated/schemas/params';
 import type { SoupApiItem } from '@service-storage/generated/schemas/soupApiItem';
 import { match } from 'ts-pattern';
+import { propertyDateGroupKey } from './date-ranges';
 import { type GroupByField, type GroupMeta, NOT_SET_GROUP_KEY } from './types';
 
 /** Sort methods the grouped soup endpoints accept. */
@@ -81,6 +82,13 @@ export function serializeGroupByField(
         property: {
           property_definition_id: field.propertyDefinitionId,
           ...(field.entityType && { entity_type: field.entityType }),
+          ...(field.bucketing && {
+            bucketing: {
+              type: field.bucketing.type,
+              ranges: field.bucketing.ranges,
+              missing_value_bucket_key: field.bucketing.missingValueBucketKey,
+            },
+          }),
         },
       };
   }
@@ -139,6 +147,16 @@ export function resolveGroupMetaForKey(
       return;
     })
     .with({ type: 'property' }, (propertyGroupBy) => {
+      if (propertyGroupBy.bucketing) {
+        const { ranges, missingValueBucketKey } = propertyGroupBy.bucketing;
+        const order = ranges.findIndex((range) => range.key === key);
+        if (order === -1 && key !== missingValueBucketKey) return;
+        return {
+          key,
+          label: key,
+          displayOrder: order === -1 ? ranges.length : order,
+        };
+      }
       if (key === NOT_SET_GROUP_KEY) {
         return { key, label: 'Not Set', displayOrder: Number.MAX_SAFE_INTEGER };
       }
@@ -181,25 +199,6 @@ function getGroupedPropertyValueType(
   return value?.type;
 }
 
-// Stable UUIDs from migrations/20251128000001_seed_system_properties.sql.
-// Custom (user-created) options fall through to displayOrder.
-const STATUS_OPTION_ORDER: readonly string[] = [
-  '00000001-0000-0000-0002-000000000001', // Not Started
-  '00000001-0000-0000-0002-000000000002', // In Progress
-  '00000001-0000-0000-0002-000000000003', // In Review
-  NOT_SET_GROUP_KEY,
-  '00000001-0000-0000-0002-000000000004', // Completed
-  '00000001-0000-0000-0002-000000000005', // Canceled
-];
-
-const PRIORITY_OPTION_ORDER: readonly string[] = [
-  '00000001-0000-0000-0003-000000000004', // Urgent
-  '00000001-0000-0000-0003-000000000003', // High
-  '00000001-0000-0000-0003-000000000002', // Medium
-  '00000001-0000-0000-0003-000000000001', // Low
-  NOT_SET_GROUP_KEY,
-];
-
 function keyRank(order: readonly string[], key: string): number {
   const i = order.indexOf(key);
   return i === -1 ? order.length : i;
@@ -217,40 +216,33 @@ export function makeGroupComparator(
   groupBy: GroupByField | undefined
 ): (a: GroupMeta, b: GroupMeta) => number {
   if (groupBy?.type === 'property') {
-    if (groupBy.propertyDefinitionId === SYSTEM_PROPERTY_IDS.STATUS) {
-      return (a, b) => {
-        const diff =
-          keyRank(STATUS_OPTION_ORDER, a.key) -
-          keyRank(STATUS_OPTION_ORDER, b.key);
-        return diff !== 0 ? diff : defaultOrder(a, b);
-      };
+    if (groupBy.bucketing) {
+      const { ranges, missingValueBucketKey } = groupBy.bucketing;
+      const order = [
+        ...ranges.map((range) => range.key),
+        missingValueBucketKey,
+      ];
+      return (a, b) => keyRank(order, a.key) - keyRank(order, b.key);
     }
-    if (groupBy.propertyDefinitionId === SYSTEM_PROPERTY_IDS.PRIORITY) {
-      return (a, b) => {
-        const diff =
-          keyRank(PRIORITY_OPTION_ORDER, a.key) -
-          keyRank(PRIORITY_OPTION_ORDER, b.key);
-        return diff !== 0 ? diff : defaultOrder(a, b);
-      };
-    }
-    if (groupBy.propertyDefinitionId === SYSTEM_PROPERTY_IDS.ASSIGNEES) {
-      return (a, b) => {
-        const aNotSet = a.key === NOT_SET_GROUP_KEY;
-        const bNotSet = b.key === NOT_SET_GROUP_KEY;
-        if (aNotSet && bNotSet) return 0;
-        if (aNotSet) return 1;
-        if (bNotSet) return -1;
+    return (a, b) => {
+      const aNotSet = a.key === NOT_SET_GROUP_KEY;
+      const bNotSet = b.key === NOT_SET_GROUP_KEY;
+      if (aNotSet && bNotSet) return 0;
+      if (aNotSet) return 1;
+      if (bNotSet) return -1;
+      if (groupBy.propertyDefinitionId === SYSTEM_PROPERTY_IDS.ASSIGNEES) {
         return a.label.localeCompare(b.label);
-      };
-    }
+      }
+      // Server metadata uses the definition's option display_order, also used by item sorting.
+      return defaultOrder(a, b);
+    };
   }
   return defaultOrder;
 }
 
 /**
  * Compute the group keys an item belongs to under the given grouping.
- * Returns `undefined` when bucketing can't be reproduced client-side
- * (date, non-categorical property) — caller should invalidate.
+ * Returns `undefined` when membership cannot be reproduced from loaded values.
  */
 export function computeGroupKeysForItem(
   item: SoupApiItem,
@@ -271,6 +263,20 @@ export function computeGroupKeysForItem(
       if (!hasProperties(item)) return;
 
       const properties = item.data.properties;
+      if (propertyGroupBy.bucketing) {
+        if (!properties) return;
+        const property = properties.find(
+          (property) =>
+            property.definition.id === propertyGroupBy.propertyDefinitionId
+        );
+        const value = property?.value;
+        return [
+          propertyDateGroupKey(
+            value?.type === 'Date' ? value.value : undefined,
+            propertyGroupBy.bucketing
+          ),
+        ];
+      }
 
       if (!properties) return [NOT_SET_GROUP_KEY];
 

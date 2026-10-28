@@ -24,7 +24,7 @@ async fn fetch(
         GroupedDynamicCursorArgs {
             user_id: MacroUserIdStr::parse_from_str("macro|user-1@test.com")?,
             limit,
-            cursor,
+            cursor: crate::domain::models::DynamicSort::from_timestamp_query(cursor),
             exclude_frecency: false,
             grouping: GroupingConfig {
                 field,
@@ -154,8 +154,8 @@ async fn all_sorts_preserve_history_dates_and_real_cursors(
                     break;
                 }
                 for (index, item) in page.iter().enumerate() {
-                    assert_eq!(item.total_group_count, expected.len() - seen.len());
-                    assert_eq!(item.index_in_group, index + 1);
+                    assert_eq!(item.total_group_count, expected.len());
+                    assert_eq!(item.index_in_group, seen.len() + index + 1);
                 }
                 cursor = cursor_from(page.last().unwrap(), sort, EntityFilterAst::mock_empty());
                 seen.extend(page.iter().map(|i| i.item.id().to_string()));
@@ -253,8 +253,8 @@ async fn calendar_sorts_preserve_reminders_and_linked_account_cursors(
             assert_eq!(page.len(), 1);
             let item = &page[0];
             assert_eq!(item.item.id(), id);
-            assert_eq!(item.total_group_count, 2 - index);
-            assert_eq!(item.index_in_group, 1);
+            assert_eq!(item.total_group_count, 2);
+            assert_eq!(item.index_in_group, index + 1);
             assert_eq!(SoupItem::sort_on(sort)(&item.item).last_val, ts);
             let SoupItem::CalendarEvent(event) = &item.item else {
                 panic!("expected event")

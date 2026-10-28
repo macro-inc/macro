@@ -580,10 +580,7 @@ export function restoreSoupEntityToDoneFilteredQueries(
     }
 
     // Grouped parents keep membership entirely on the first page.
-    if (
-      entityId in firstPage.items ||
-      firstPage.groups.some((group) => group.itemIds.includes(entityId))
-    ) {
+    if (containsEntity(Object.values(firstPage.items))) {
       continue;
     }
 

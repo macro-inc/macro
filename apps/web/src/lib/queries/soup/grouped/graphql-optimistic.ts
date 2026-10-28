@@ -15,6 +15,7 @@ import {
   type GroupSoupQueryVariables,
 } from '../../../service-clients/service-storage/graphql/generated/graphql';
 import { getActiveGraphqlSoupRevalidations } from '../graphql/active-queries';
+import { propertyDateGroupKey } from './date-ranges';
 import {
   groupedSoupInputKey,
   groupedSoupLogicalViewKey,
@@ -27,7 +28,9 @@ type BuildArgs = {
   propertyDefinitionId: string;
   oldGroupKeys: readonly string[];
   newGroupKeys: readonly string[];
-  /** Unsupported/date values still revalidate relevant active fields. */
+  /** Date buckets are computed independently for each mounted query's ranges. */
+  dateChange?: { from: Date | null; to: Date | null };
+  /** Unsupported values still revalidate relevant active fields. */
   revalidateOnly?: boolean;
 };
 
@@ -173,7 +176,7 @@ async function prepareGroupedPropertyUpdates(
   readPage: ReadGroupPage
 ): Promise<OptimisticGroupedPropertyUpdates> {
   const changes = diffGroupKeys(args.oldGroupKeys, args.newGroupKeys);
-  if (!changes && !args.revalidateOnly) {
+  if (!changes && !args.revalidateOnly && !args.dateChange) {
     return { updates: [], revalidations: [] };
   }
 
@@ -182,7 +185,7 @@ async function prepareGroupedPropertyUpdates(
     document: GroupSoupMembershipDocument,
     variables: { input },
   }));
-  if (args.revalidateOnly || !changes) {
+  if (args.revalidateOnly && !args.dateChange) {
     return { updates: [], revalidations };
   }
 
@@ -190,10 +193,25 @@ async function prepareGroupedPropertyUpdates(
   const views = groupPagesByLogicalView(
     loadedPages.filter((page): page is GroupPage => page !== null)
   );
-  const { removed, added } = changes;
   const updates: OptimisticUpdate[] = [];
   for (const pages of views.values()) {
-    const sourceGroupKeys = removed.length > 0 ? removed : args.oldGroupKeys;
+    const groupBy = (pages[0].input.initial ?? pages[0].input.continuation)
+      .groupBy;
+    let oldGroupKeys = args.oldGroupKeys;
+    let newGroupKeys = args.newGroupKeys;
+    if (args.dateChange) {
+      if (!groupBy.bucketing) continue;
+      oldGroupKeys = [
+        propertyDateGroupKey(args.dateChange.from, groupBy.bucketing),
+      ];
+      newGroupKeys = [
+        propertyDateGroupKey(args.dateChange.to, groupBy.bucketing),
+      ];
+    }
+    const changes = diffGroupKeys(oldGroupKeys, newGroupKeys);
+    if (!changes) continue;
+    const { removed, added } = changes;
+    const sourceGroupKeys = removed.length > 0 ? removed : oldGroupKeys;
     const sourcePages = pages.filter((page) =>
       sourceGroupKeys.some((key) =>
         page.bins

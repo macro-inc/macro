@@ -1,6 +1,7 @@
 import { DatePickerUI } from '@core/component/DatePicker/DatePickerUI';
 import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
 import { useKeyPressed } from '@core/util/useKeyPressed';
+import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import type { DateProperty } from '@property/types';
 import { useSearchInputFocus } from '@property/utils/focus';
@@ -17,6 +18,7 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import { formatDate } from '../../utils/formatting';
 
 type DateSelectorMode = 'search' | 'calendar';
 
@@ -42,6 +44,12 @@ export const PropertyDateSelector = (props: DateSelectorProps) => {
   });
 
   const hasClear = () => props.selectedDate != null;
+  const selectedDateLabel = () => {
+    const date = props.selectedDate;
+    return date
+      ? formatDate(date)
+      : `No ${props.property.displayName.toLowerCase()}`;
+  };
   // When a date is set, replace the last suggestion with the Clear row so
   // the section height stays the same.
   const visibleDateOptions = createMemo(() => {
@@ -169,6 +177,11 @@ export const PropertyDateSelector = (props: DateSelectorProps) => {
           disabled={mode() !== 'search'}
         />
       </div>
+      <p class="flex items-center gap-2 border-b border-edge-muted px-3 py-2">
+        <CalendarIcon class="size-4 shrink-0 text-ink-muted" />
+        <span class="text-ink-muted">Current:</span>
+        <span class="min-w-0 truncate">{selectedDateLabel()}</span>
+      </p>
       <Switch>
         <Match when={mode() === 'search'}>
           <div class="flex min-h-0 flex-1 p-1.5">

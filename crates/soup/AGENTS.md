@@ -13,6 +13,8 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   its repository/collaborator traits.
 - `src/domain/models.rs` (+ `grouping.rs`, `exclusions.rs`, `contact_listing.rs`):
   the unified `SoupItem`/grouping/exclusion shapes.
+- `src/domain/models/sort.rs`: property/timestamp sort descriptors and ordinary
+  position cursors; timestamp encodings remain backward-compatible.
 - `src/domain/service/favorites.rs`, `agent_metadata.rs`: entity-kind-specific
   query logic layered onto the core service.
 - `src/outbound/pg_soup_repo.rs`: the Postgres repo, split by entity kind
@@ -74,6 +76,17 @@ rows, initiatives, ...) and get back a single unified, paginated result.
 - `expanded/` vs `unexpanded/` queries exist because hydrating full entities
   is expensive — don't widen `unexpanded` to return hydrated data; add a new
   `expanded` path instead.
+- Extend the existing dynamic query for property sorts and date-range groups; do not rebuild its source UNION in a candidate pipeline.
+- Keep property definition IDs unchecked like existing filters/grouping; enforce item visibility through the existing source access gates.
+- Order property pages by typed key with explicit ASC/DESC and NULLS LAST, then update timestamp and descending ID; keep timestamp SQL unchanged.
+- Validate caller DATE ranges in REST/GraphQL input conversion; render typed UTC bounds with `to_rfc3339()` and map numeric range indices to caller keys in Rust.
+- Preserve projection-backed hydration, the UUID-keyed item/fact pools, and per-group total/has-more metadata through the shared grouped response.
+- Flat property sorts omit calendar events, email, channels, calls, companies, and agent sessions; grouped reads retain calendar events and timestamp queries retain their existing sources.
+- Preserve deployed timestamp cursor encodings; client query keys restart pages when ranges or selections change.
+- Keep flat timestamp top clauses lightweight; bind document-ID arrays after the sort's fixed parameters and skip subtype namespace joins when the filter proves TASK-only unless other predicates need them.
+- Read grouping/sort definition types through uncorrelated scalar lookups; join grouping options once outside the value expansion and preserve missing-option groups.
+- Build option-sort order maps with an uncorrelated `jsonb_object_agg` lookup using the sort definition bind; ignore unknown option IDs and keep unknown-only values missing.
+- Materialize grouped `TopItems` only for property sorts so the sort key is computed before multi-value group expansion; leave timestamp CTEs inlineable.
 - `candidate_gates.rs` encodes access-gate SQL shared across repo queries;
   changing it changes what every entity kind can return.
 - Keep the notified feed's notification lookup behind a lateral `OFFSET 0`
