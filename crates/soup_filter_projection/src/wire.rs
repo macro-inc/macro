@@ -424,7 +424,9 @@ impl TryFrom<&SoupCacheProjectionSupplement> for SoupCacheProjectionCapsuleV3 {
     type Error = SoupCacheProjectionWireError;
 
     fn try_from(supplement: &SoupCacheProjectionSupplement) -> Result<Self, Self::Error> {
-        if supplement.target_profile != item_filter_index::mail::profile() {
+        if supplement.target_profile != item_filter_index::mail::profile()
+            && supplement.target_profile.token().as_str() != "soup-mail-v2"
+        {
             return Err(SoupCacheProjectionWireError::UnsupportedTargetProfile(
                 supplement.target_profile.token().as_str().to_owned(),
             ));
@@ -544,7 +546,9 @@ fn validate_supplement(
             "GraphqlSoupDocument:"
         }
         SoupCacheProjectionFacts::Mail(_) => {
-            if supplement.target_profile != item_filter_index::mail::profile() {
+            if supplement.target_profile != item_filter_index::mail::profile()
+                && supplement.target_profile.token().as_str() != "soup-mail-v2"
+            {
                 return Err(SoupCacheProjectionWireError::UnsupportedTargetProfile(
                     supplement.target_profile.token().as_str().to_owned(),
                 ));

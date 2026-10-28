@@ -343,7 +343,14 @@ fn push_thread_candidate_select(
     if wants_message_exists_pushdown(view) {
         build_thread_message_exists_filter(email_filter, view, &params.resolved)
             .push_into(builder, &params.user_id);
-    } else if has_address_literals(email_filter) {
+    }
+    if has_address_literals(email_filter)
+        && (!wants_message_exists_pushdown(view)
+            || matches!(
+                view,
+                PreviewView::StandardLabel(PreviewViewStandardLabel::All)
+            ))
+    {
         build_thread_address_filter(email_filter).push_into(builder, &params.user_id);
     }
 
@@ -438,10 +445,14 @@ fn build_query(
     let defer_uh = !uses_view_history(email_filter, &params.sort_method_str);
 
     let needs_shared_cte = !matches!(params.shared, SharedEmailFilter::Exclude);
-    // When the candidate stage pushes a full per-message EXISTS (view-level
-    // message filter), it already enforces "thread has a message the lateral
-    // will surface", so the address-only `matching_threads` CTE is redundant.
-    let matching_threads = if wants_message_exists_pushdown(view) {
+    // All Mail keeps its index-driven address prefilter as well as the exact
+    // message check, so large mailbox/CRM queries do not scan every thread.
+    // Other message-filtered views retain their correlated EXISTS plan.
+    let matching_threads = if wants_message_exists_pushdown(view)
+        && !matches!(
+            view,
+            PreviewView::StandardLabel(PreviewViewStandardLabel::All)
+        ) {
         None
     } else {
         // Owned-only queries can scope the CTE's contact/message scans to

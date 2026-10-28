@@ -391,7 +391,16 @@ headers use the selected Mail view's indexed timestamps, not a preview cached fr
 another view. Drafts and Sent display their latest eligible message snapshot, even
 when a newer normal message is the ALL preview; no message bodies are needed.
 Sent also requires a canonical outbound timestamp. Trashed messages cannot supply
-any preview. Calendar uses the authoritative thread calendar-attachment flag.
+any preview. All Mail also excludes spam/junk, including its cached preview and
+non-draft baseline after draft edits. Mixed threads show the latest message outside
+spam and trash; excluded messages must not consume a page slot. Drafts and Sent
+keep their own canonical preview membership. Mail profiles v5/v6 require fresh
+server metadata after upgrading, so older spam-inclusive cache entries cannot
+reappear. Native offline behavior requires a native cache update, not only OTA; older
+native engines fall back to the network for new capsules, including draft queue
+admission. Ship the native cache update before relying on offline draft writes.
+Verify Gmail labels and Outlook
+folder state. Calendar uses the authoritative thread calendar-attachment flag.
 
 A successful authoritative `Soup` first page also invalidates cached Mail facts
 that match its supported view/filter but are missing inside its covered sort

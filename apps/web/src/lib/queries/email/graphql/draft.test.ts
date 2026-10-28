@@ -493,3 +493,23 @@ it('marks a conversation read when its only unread draft is edited or discarded'
   expect(updateDraftThread(thread, draft, true).isRead).toBe(true);
   expect(removeDraftFromThread(thread, draft.id)?.isRead).toBe(true);
 });
+
+it('discarding a local draft does not bring a junk provider draft into All Mail', async () => {
+  const { draft, thread } = await standalone();
+  const state = thread.mailDraftState!;
+  const junk = {
+    ...state.drafts[0],
+    id: 'junk-draft',
+    macroDraft: false,
+    facts: {
+      ...state.drafts[0].facts,
+      latestNonSpamMessageTs: null,
+      preview: { ...state.drafts[0].facts.preview!, id: 'junk-draft' },
+    },
+  };
+  state.drafts.push(junk);
+  const result = removeDraftFromThread(thread, draft.id)!;
+  expect(result.mailAllPreview).toBeNull();
+  expect(result.mailDraftPreview?.id).toBe('junk-draft');
+  expect(draftThreadIsEmpty(result)).toBe(false);
+});

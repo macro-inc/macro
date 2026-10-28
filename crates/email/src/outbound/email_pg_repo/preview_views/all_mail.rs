@@ -5,9 +5,9 @@ use uuid::Uuid;
 
 /// Fetches a paginated list of thread previews for the "All Mail" view using a
 /// denormalized timestamp.
-/// This view includes all threads that have at least one non-spam message, sorted by the
-/// `latest_non_spam_message_ts` column on the `threads` table. The preview shows
-/// details from the latest non-spam message
+/// Includes threads with a present message outside spam and trash, ordered by
+/// `latest_non_spam_message_ts` (or thread update time for undated drafts).
+/// The preview shows the latest message outside spam and trash.
 #[tracing::instrument(skip(pool), err)]
 pub(crate) async fn all_mail_preview_cursor(
     pool: &PgPool,
@@ -49,7 +49,7 @@ pub(crate) async fn all_mail_preview_cursor(
             el.id AS "link_id!"
         FROM (
             -- Step 1: Efficiently find, sort, and limit the top N+1 threads.
-            -- This subquery only touches `threads` and `user_history`, making it very fast.
+            -- Check message eligibility before LIMIT so excluded threads cannot shorten a page.
             SELECT
                 t.id,
                 t.provider_id,
@@ -58,30 +58,35 @@ pub(crate) async fn all_mail_preview_cursor(
                 t.is_read,
                 t.is_signal,
                 t.project_id,
-                t.latest_non_spam_message_ts AS created_at,
-                t.latest_non_spam_message_ts AS updated_at,
+                COALESCE(t.latest_non_spam_message_ts, t.updated_at) AS created_at,
+                COALESCE(t.latest_non_spam_message_ts, t.updated_at) AS updated_at,
                 uh.updated_at AS viewed_at,
                 CASE $5 -- sort_method_str
                     WHEN 'viewed_at' THEN COALESCE(uh."updated_at", '1970-01-01 00:00:00+00')
-                    WHEN 'viewed_updated' THEN COALESCE(uh.updated_at, t.latest_non_spam_message_ts)
-                    ELSE t.latest_non_spam_message_ts
+                    WHEN 'viewed_updated' THEN COALESCE(uh.updated_at, t.latest_non_spam_message_ts, t.updated_at)
+                    ELSE COALESCE(t.latest_non_spam_message_ts, t.updated_at)
                 END AS effective_ts
             FROM email_threads t
             LEFT JOIN email_user_history uh ON uh.thread_id = t.id AND uh.link_id = t.link_id
             WHERE
                 t.link_id = ANY($1)
-              AND t.latest_non_spam_message_ts IS NOT NULL
+              AND EXISTS (
+                  SELECT 1 FROM email_messages m
+                  JOIN email_message_mailbox_facts mf ON mf.id = m.id
+                  WHERE m.thread_id = t.id
+                    AND mf.is_present AND NOT mf.in_junk AND NOT mf.in_trash
+              )
 
               -- Cursor logic is moved inside for maximum efficiency
               AND (($3::timestamptz IS NULL) OR (
                   -- This CASE must exactly match the one that defines `effective_ts`
                   CASE $5 -- sort_method_str
                       WHEN 'viewed_at' THEN COALESCE(uh."updated_at", '1970-01-01 00:00:00+00')
-                      WHEN 'viewed_updated' THEN COALESCE(uh.updated_at, t.latest_non_spam_message_ts)
-                      ELSE t.latest_non_spam_message_ts
+                      WHEN 'viewed_updated' THEN COALESCE(uh.updated_at, t.latest_non_spam_message_ts, t.updated_at)
+                      ELSE COALESCE(t.latest_non_spam_message_ts, t.updated_at)
                   END, t.id
               ) < ($3::timestamptz, $4::uuid))
-            ORDER BY effective_ts DESC, t.updated_at DESC
+            ORDER BY effective_ts DESC, t.id DESC
             LIMIT $2
         ) AS t
         -- Step 2: For EACH of the limited threads from above, find its latest non-SPAM/TRASH message.
@@ -94,15 +99,14 @@ pub(crate) async fn all_mail_preview_cursor(
                 m.from_name
             FROM email_messages m
             WHERE m.thread_id = t.id
-              AND EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND mf.is_present AND NOT mf.in_junk)
-              AND EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND mf.is_present AND NOT mf.in_trash)
-            ORDER BY m.internal_date_ts DESC
+              AND EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND mf.is_present AND NOT mf.in_junk AND NOT mf.in_trash)
+            ORDER BY COALESCE(m.internal_date_ts, m.created_at) DESC, m.id DESC
             LIMIT 1
         ) AS lmp
         -- Step 3: Join to get the sender's details for the final result set.
         LEFT JOIN email_contacts c ON lmp.from_contact_id = c.id
         JOIN email_links el ON t.link_id = el.id
-        ORDER BY t.effective_ts DESC, t.updated_at DESC
+        ORDER BY t.effective_ts DESC, t.id DESC
         "#,
         link_ids,           // $1
         query_limit,        // $2

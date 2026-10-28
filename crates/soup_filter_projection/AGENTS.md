@@ -46,6 +46,10 @@ Soup entity's filterable facts, shared by server and client-side cache code.
 
 ## Gotchas
 
+- Mail capsules target `soup-mail-v5` (spam/trash-free All Mail previews);
+  legacy `soup-mail-v2` capsules still decode but cannot establish current Mail
+  completeness. Property-backed Mail projections use `soup-mail-v6`.
+
 - `default-features = false` (no `models`) is the wasm-safe build; don't add a
   non-optional dependency on `soup`/`models_soup` outside the `models` feature.
 - Decoding must stay backward-compatible with every `SOUP_CACHE_PROJECTION_WIRE_VERSION_V*`
