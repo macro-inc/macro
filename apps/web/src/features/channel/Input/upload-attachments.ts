@@ -101,6 +101,7 @@ export async function uploadInputAttachments(options: {
     // A full tracker rejected this file; do not upload an invisible attachment.
     if (!options.tracker.attachments().some((item) => item.id === pendingId)) {
       if (previewSrc) URL.revokeObjectURL(previewSrc);
+      toast.failure(`Could not attach ${file.name}: attachment limit reached`);
       continue;
     }
 

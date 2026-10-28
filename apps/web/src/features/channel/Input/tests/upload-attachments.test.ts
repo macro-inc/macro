@@ -222,6 +222,8 @@ describe('uploadInputAttachments', () => {
 });
 
 describe('attachment upload cancellation', () => {
+  beforeEach(() => toastFailureMock.mockReset());
+  afterEach(() => vi.restoreAllMocks());
   it.each(['removed', 'closed'] as const)(
     'does not restore an image when the draft is %s during upload',
     async (reason) => {
@@ -250,7 +252,6 @@ describe('attachment upload cancellation', () => {
       await upload;
       expect(tracker.attachments()).toEqual([]);
       expect(revoke).toHaveBeenCalledWith('blob:cancelled-image');
-      vi.restoreAllMocks();
     }
   );
 
@@ -265,7 +266,7 @@ describe('attachment upload cancellation', () => {
       uploadFile,
     });
     expect(uploadFile).not.toHaveBeenCalled();
+    expect(toastFailureMock).toHaveBeenCalledOnce();
     expect(revoke).toHaveBeenCalledWith('blob:rejected-image');
-    vi.restoreAllMocks();
   });
 });

@@ -39,7 +39,7 @@ test('pastes an image, waits for its upload and sends an inline image with multi
       }),
     ]);
   }, IMAGE);
-  await page.keyboard.press('Control+v');
+  await page.keyboard.press('ControlOrMeta+v');
   await expect(
     page.locator('[data-input-attachments="media"] img[src^="blob:"]')
   ).toBeVisible();
