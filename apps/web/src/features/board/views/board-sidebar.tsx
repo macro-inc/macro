@@ -1,5 +1,6 @@
 import { CollapsibleSection, ViewSidebar } from '@app/components/view-shell';
 import { t } from '@app/lib/i18n';
+import { IS_MAC } from '@core/constant/isMac';
 import ChartGanttIcon from '@icon/system/regular/chart-gantt.svg';
 import ChatCircleDotsIcon from '@icon/system/regular/chat-circle-dots.svg';
 import CrosshairIcon from '@icon/system/regular/crosshair.svg';
@@ -159,7 +160,7 @@ export function BoardSidebar(props: {
                 <span class="min-w-0 flex-1 truncate">{t('board.tidyUp')}</span>
               </ViewSidebar.Item>
               <p class="px-(--sidebar-item-inset) pt-2 text-xs leading-4 text-ink-extra-muted">
-                {t('board.boardHelp')}
+                {t('board.boardHelp', { modifier: IS_MAC ? '⌘' : 'Ctrl' })}
               </p>
             </div>
           </CollapsibleSection.Content>

@@ -1,4 +1,3 @@
-import { t } from '@app/lib/i18n';
 import PushPinIcon from '@icon/system/regular/push-pin.svg';
 import { cn } from '@ui';
 import { Match, Show, Switch } from 'solid-js';
@@ -56,10 +55,7 @@ export function RiverChip(props: {
             {props.item.title}
           </span>
           <Show when={props.moved}>
-            <PushPinIcon
-              aria-label={t('board.movedByHand')}
-              class="size-3 shrink-0 text-ink-extra-muted"
-            />
+            <PushPinIcon class="size-3 shrink-0 text-ink-extra-muted" />
           </Show>
           <Show when={props.freshness === 'live'}>
             <LiveDot />

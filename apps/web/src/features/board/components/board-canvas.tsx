@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { cn } from '@ui';
 import type { JSX } from 'solid-js';
 import type { Camera } from '../core/camera';
@@ -21,7 +22,7 @@ export function BoardCanvas(props: {
     <section
       ref={props.ref}
       aria-label={props.label}
-      aria-roledescription="board"
+      aria-roledescription={t('board.roleDescription')}
       class={cn(
         'relative size-full touch-none overflow-hidden bg-page select-none',
         props.panning ? 'cursor-grabbing' : 'cursor-grab',

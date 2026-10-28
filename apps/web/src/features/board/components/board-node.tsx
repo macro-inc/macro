@@ -1,6 +1,6 @@
 import XIcon from '@icon/system/regular/x.svg';
-import { cn } from '@ui';
-import { type JSX, Show } from 'solid-js';
+import { Button, cn } from '@ui';
+import type { JSX } from 'solid-js';
 
 /**
  * A movable thing on the board. The frame owns position, entrance motion,
@@ -85,26 +85,28 @@ export function BoardNode(props: {
       >
         {props.children}
       </div>
-      <Show when={props.dismissLabel}>
-        <button
-          type="button"
-          data-board-node-action=""
-          aria-label={props.dismissLabel}
-          title={props.dismissLabel}
-          class={cn(
-            'absolute flex size-6 items-center justify-center rounded-full border border-edge-muted bg-panel text-ink-muted shadow-sm transition-opacity hover:text-ink focus-visible:outline-2 focus-visible:outline-accent',
-            'opacity-0 group-hover/node:opacity-100 group-focus-within/node:opacity-100 touch:opacity-100',
-            props.dragging && 'invisible',
-            props.dismissClass ?? '-top-2.5 -right-2.5'
-          )}
+      {/* Positioned out of flow so it never adds to the node's measured size. */}
+      <div
+        data-board-node-action=""
+        class={cn(
+          'absolute transition-opacity',
+          'opacity-0 group-hover/node:opacity-100 group-focus-within/node:opacity-100 touch:opacity-100',
+          props.dragging && 'invisible',
+          props.dismissClass ?? '-top-2.5 -right-2.5'
+        )}
+      >
+        <Button
+          variant="outline"
+          size="icon-sm"
+          label={props.dismissLabel}
           onClick={(event) => {
             event.stopPropagation();
             props.onDismiss();
           }}
         >
-          <XIcon class="size-3" />
-        </button>
-      </Show>
+          <XIcon />
+        </Button>
+      </div>
     </div>
   );
 }

@@ -121,10 +121,7 @@ export function ConversationCard(props: {
           </div>
           <div class="flex shrink-0 items-center gap-1.5 self-start pt-0.5">
             <Show when={props.moved}>
-              <PushPinIcon
-                aria-label={t('board.movedByHand')}
-                class="size-3 text-ink-extra-muted"
-              />
+              <PushPinIcon class="size-3 text-ink-extra-muted" />
             </Show>
             <Show when={props.freshness === 'live'}>
               <LiveDot />

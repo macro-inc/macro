@@ -194,7 +194,7 @@ export function RadarBoard(props: VariantProps) {
                   centered
                   x={at().x}
                   y={at().y}
-                  label={itemLabel(item())}
+                  label={itemLabel(item(), stage.isMoved(key()))}
                   dismissLabel={t('board.removeItem', { title: item().title })}
                   dragging={bind.dragging()}
                   faded={isFaded(props.scene.freshness(key()))}

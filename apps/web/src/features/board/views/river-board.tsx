@@ -170,7 +170,7 @@ export function RiverBoard(props: VariantProps) {
                   x={at().x}
                   y={at().y}
                   width={RIVER_CHIP_WIDTH}
-                  label={itemLabel(item())}
+                  label={itemLabel(item(), stage.isMoved(key()))}
                   dismissLabel={t('board.removeItem', { title: item().title })}
                   dragging={bind.dragging()}
                   faded={isFaded(props.scene.freshness(key()))}

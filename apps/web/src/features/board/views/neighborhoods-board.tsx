@@ -87,7 +87,7 @@ export function NeighborhoodsBoard(props: VariantProps) {
                     stage.sizes.size(key())?.width ??
                     NEIGHBORHOOD_METRICS.columnWidth
                   }
-                  label={itemLabel(item())}
+                  label={itemLabel(item(), stage.isMoved(key()))}
                   dismissLabel={t('board.removeItem', { title: item().title })}
                   dragging={bind.dragging()}
                   faded={isFaded(props.scene.freshness(key()))}

@@ -1,6 +1,7 @@
 import { t } from '@app/lib/i18n';
-import { Button } from '@ui';
-import { type JSX, Match, Show, Switch } from 'solid-js';
+import { LoadingSpinner } from '@core/component/LoadingSpinner';
+import { EmptyStatePanel } from '@ui';
+import { type JSX, Match, Switch } from 'solid-js';
 import type { Point } from '../core/camera';
 import type { BoardItem } from '../core/item';
 import type { BoardMemory } from '../primitives/board-memory';
@@ -17,13 +18,15 @@ export type VariantProps = {
   onRetry: () => void;
 };
 
-export function itemLabel(item: BoardItem): string {
-  return item.unreadCount > 0
-    ? t('board.itemLabelUnread', {
-        title: item.title,
-        count: item.unreadCount,
-      })
-    : item.title;
+export function itemLabel(item: BoardItem, moved: boolean): string {
+  const label =
+    item.unreadCount > 0
+      ? t('board.itemLabelUnread', {
+          title: item.title,
+          count: item.unreadCount,
+        })
+      : item.title;
+  return moved ? t('board.itemLabelMoved', { label }) : label;
 }
 
 /**
@@ -63,59 +66,53 @@ export function BoardStatus(props: {
   return (
     <Switch>
       <Match when={props.scene.view().t === 'loading'}>
-        <StatusCard title={t('board.loading')} />
+        <StatusOverlay>
+          <div
+            role="status"
+            aria-label={t('board.loading')}
+            class="flex size-full items-center justify-center"
+          >
+            <LoadingSpinner />
+          </div>
+        </StatusOverlay>
       </Match>
       <Match when={props.scene.view().t === 'error'}>
-        <StatusCard title={t('board.error')}>
-          <Button variant="outline" size="sm" onClick={props.onRetry}>
-            {t('board.retry')}
-          </Button>
-        </StatusCard>
+        <StatusOverlay>
+          <EmptyStatePanel
+            centered
+            title={t('board.error')}
+            primaryAction={{ label: t('board.retry'), onClick: props.onRetry }}
+          />
+        </StatusOverlay>
       </Match>
       <Match when={props.scene.view().t === 'empty'}>
-        <StatusCard
-          title={t('board.emptyTitle')}
-          description={t('board.emptyDescription')}
-        >
-          <Show when={props.scene.hiddenCount() > 0}>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => props.memory.setShowSettled(true)}
-            >
-              {t('board.settledHidden', {
-                count: props.scene.hiddenCount(),
-              })}
-              {' · '}
-              {t('board.showAll')}
-            </Button>
-          </Show>
-        </StatusCard>
+        <StatusOverlay>
+          <EmptyStatePanel
+            centered
+            title={t('board.emptyTitle')}
+            description={t('board.emptyDescription')}
+            primaryAction={
+              props.scene.hiddenCount() > 0
+                ? {
+                    label: t('board.showSettledCount', {
+                      count: props.scene.hiddenCount(),
+                    }),
+                    onClick: () => props.memory.setShowSettled(true),
+                  }
+                : undefined
+            }
+          />
+        </StatusOverlay>
       </Match>
     </Switch>
   );
 }
 
-function StatusCard(props: {
-  title: string;
-  description?: string;
-  children?: JSX.Element;
-}) {
+/** Covers the board so its pan and zoom leave the state's controls alone. */
+function StatusOverlay(props: { children: JSX.Element }) {
   return (
-    <div
-      data-board-overlay=""
-      class="absolute inset-0 z-10 flex items-center justify-center p-6"
-    >
-      <div
-        role="status"
-        class="flex max-w-80 flex-col items-center gap-2 rounded-2xl border border-edge-muted bg-panel px-6 py-5 text-center shadow-sm"
-      >
-        <span class="text-sm font-semibold text-ink">{props.title}</span>
-        {props.description && (
-          <span class="text-xs text-ink-muted">{props.description}</span>
-        )}
-        {props.children}
-      </div>
+    <div data-board-overlay="" class="absolute inset-0 z-10">
+      {props.children}
     </div>
   );
 }

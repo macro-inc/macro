@@ -1,6 +1,7 @@
 export default {
   // View
   title: 'Board',
+  roleDescription: 'board',
   variantsNav: 'Board variants',
   variants: 'Variants',
   thisBoard: 'This board',
@@ -49,7 +50,7 @@ export default {
     one: '{{title}}, {{count}} unread',
     other: '{{title}}, {{count}} unread',
   },
-  movedByHand: 'Moved by hand',
+  itemLabelMoved: '{{label}}, moved by hand',
   updated: 'Updated',
   threadIn: 'Thread in #{{channel}}',
   live: 'Live',
@@ -60,7 +61,6 @@ export default {
   pullRequestOpen: 'Open',
   pullRequestMerged: 'Merged',
   pullRequestClosed: 'Closed',
-  morePeople: { one: '+{{count}}', other: '+{{count}}' },
 
   // Controls
   zoomIn: 'Zoom in',
@@ -75,15 +75,14 @@ export default {
   removeItem: 'Remove {{title}} from board',
   openInSplit: 'Open in split',
   close: 'Close',
-  settledHidden: {
-    one: '{{count}} settled item hidden',
-    other: '{{count}} settled items hidden',
+  showSettledCount: {
+    one: 'Show {{count}} settled item',
+    other: 'Show {{count}} settled items',
   },
-  showAll: 'Show',
   itemsOnBoard: { one: '{{count}} item', other: '{{count}} items' },
   unreadOnBoard: { one: '{{count}} unread', other: '{{count}} unread' },
   boardHelp:
-    'Drag the board to pan, pinch or ⌘-scroll to zoom. Drag cards to move them; read items settle and fade after a quiet spell.',
+    'Drag the board to pan, pinch or {{modifier}}-scroll to zoom. Drag cards to move them; read items settle and fade after a quiet spell.',
 
   // States
   loading: 'Loading the board…',
