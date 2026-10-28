@@ -36,106 +36,20 @@ pub(super) async fn get_filtered_entity_notifications(
         .map(|entity| entity.entity_type.as_ref().to_owned())
         .collect();
     let limit = i64::from(query.limit);
-    let rows = sqlx::query!(
-        r#"
-        WITH requested AS (
-            SELECT entity_id, entity_type
-            FROM unnest($2::text[], $3::text[]) AS entities(entity_id, entity_type)
-        ),
-        -- Scope uses all active notifications, not just the requested states: a
-        -- seen reply still assigns an unseen root send to its thread row.
-        -- Build scope evidence once per batch, never rescan history per send.
-        channel_scopes AS MATERIALIZED (
-            SELECT DISTINCT n.event_item_id AS channel_id,
-                   CASE WHEN n.notification_event_type = 'channel_mention'
-                       THEN COALESCE(n.metadata->>'messageId', n.metadata->>'message_id')
-                   END AS mentioned_message_id,
-                   COALESCE(n.metadata->>'threadId', n.metadata->>'thread_id') AS thread_id
-            FROM requested
-            JOIN notification n
-              ON n.event_item_id = requested.entity_id AND n.event_item_type = 'channel'
-            JOIN user_notification un ON un.notification_id = n.id
-            WHERE $8::bool AND requested.entity_type = 'channel'
-              AND un.user_id = $1 AND un.deleted_at IS NULL
-              AND un.state = ANY($9::notification_state[])
-              AND n.notification_event_type IN ('channel_mention', 'channel_message_reply')
-        )
-        SELECT requested.entity_id AS "requested_id!",
-               requested.entity_type AS "requested_type!",
-               matched.notification_id AS "notification_id!",
-               matched.event_item_id AS "event_item_id!",
-               matched.event_item_type AS "event_item_type!",
-               matched.notification_event_type AS "notification_event_type!",
-               matched.sent AS "sent!",
-               matched.state AS "state!: NotificationState",
-               matched.created_at AS "created_at!",
-               matched.viewed_at,
-               matched.notification_metadata,
-               matched.sender_id
-        FROM requested
-        CROSS JOIN LATERAL (
-            SELECT un.notification_id, n.event_item_id, n.event_item_type,
-                   n.notification_event_type, un.sent, un.state,
-                   un.created_at::timestamptz AS created_at,
-                   un.seen_at::timestamptz AS viewed_at,
-                   n.metadata AS notification_metadata, n.sender_id
-            FROM (
-                SELECT n.id FROM notification n
-                WHERE n.event_item_id = requested.entity_id AND n.event_item_type = requested.entity_type
-                UNION
-                SELECT n.id FROM notification n
-                WHERE n.secondary_event_item_id = requested.entity_id AND n.secondary_event_item_type = requested.entity_type
-                UNION
-                SELECT n.id FROM notification n
-                WHERE requested.entity_type = 'channel_message'
-                  AND COALESCE(n.metadata->>'messageId', n.metadata->>'message_id', '') = requested.entity_id
-            ) entity_notifications
-            -- Preserve this join order: starting from user_notification rescans the
-            -- viewer's full history once per entity before applying the limit.
-            CROSS JOIN user_notification un
-            CROSS JOIN notification n
-            WHERE un.notification_id = entity_notifications.id
-              AND un.user_id = $1
-              AND n.id = un.notification_id
-              AND un.deleted_at IS NULL
-              AND un.state = ANY($4::notification_state[])
-              AND (cardinality($5::text[]) = 0 OR n.notification_event_type = ANY($5))
-              AND (NOT $7::bool OR (
-                  n.notification_event_type IN ('channel_message_send', 'channel_mention', 'document_mention')
-                  AND COALESCE(n.metadata->>'threadId', n.metadata->>'thread_id') IS NULL
-              ))
-              AND (NOT $8::bool OR requested.entity_type <> 'channel' OR (
-                  n.notification_event_type = 'document_mention'
-                  OR (n.notification_event_type IN ('channel_message_send', 'channel_message_reply') AND (
-                      -- Mention stacks consume the mention, not its duplicate send/reply.
-                      EXISTS (
-                          SELECT 1 FROM channel_scopes scope
-                          WHERE scope.channel_id = n.event_item_id
-                            AND scope.mentioned_message_id = COALESCE(n.metadata->>'messageId', n.metadata->>'message_id')
-                      )
-                      OR (n.notification_event_type = 'channel_message_send' AND NOT EXISTS (
-                          SELECT 1 FROM channel_scopes scope
-                          WHERE scope.channel_id = n.event_item_id AND scope.thread_id <> ''
-                            AND scope.thread_id = COALESCE(n.metadata->>'messageId', n.metadata->>'message_id')
-                      ))
-                      OR (n.notification_event_type = 'channel_message_reply'
-                          AND NULLIF(COALESCE(n.metadata->>'threadId', n.metadata->>'thread_id'), '') IS NULL)
-                  ))
-                  OR (n.notification_event_type = 'channel_mention' AND (
-                      COALESCE(n.metadata->>'threadId', n.metadata->>'thread_id') = ''
-                      OR (COALESCE(n.metadata->>'threadId', n.metadata->>'thread_id') IS NULL
-                          AND COALESCE(n.metadata->>'messageId', n.metadata->>'message_id') = ''
-                          AND EXISTS (SELECT 1 FROM channel_scopes scope
-                              WHERE scope.channel_id = n.event_item_id AND scope.thread_id = ''))
-                  ))
-              ))
-            ORDER BY un.created_at DESC, un.notification_id DESC
-            LIMIT $6
-        ) matched
-        "#,
-        user_id.as_ref(), &ids, &types, &query.states as _, &query.event_types, limit,
-        query.top_level_messages_only, query.channel_feed_only, NotificationState::ACTIVE as _,
-    ).fetch_all(pool).await?;
+    let rows = sqlx::query_file!(
+        "src/outbound/entity_notifications/query.sql",
+        user_id.as_ref(),
+        &ids,
+        &types,
+        &query.states as _,
+        &query.event_types,
+        limit,
+        query.top_level_messages_only,
+        query.channel_feed_only,
+        NotificationState::ACTIVE as _,
+    )
+    .fetch_all(pool)
+    .await?;
 
     for row in rows {
         let requested =

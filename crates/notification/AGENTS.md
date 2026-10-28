@@ -68,6 +68,14 @@ through the same service.
 
 ## Gotchas
 
+- Entity notification reads always use `outbound/entity_notifications/query.sql`
+  with a validated limit: 20 newest active rows by default, maximum 500 per entity.
+  A limited edge is not complete history; bulk state changes must use the entity
+  mutation API, not only the IDs in the loaded edge.
+- Keep the query's lateral membership lookups and `OFFSET 0` fences: otherwise
+  PostgreSQL may rescan the viewer's full history for each entity in a batch.
+  The large-history generic-plan regression covers this with channel scoping on/off.
+
 - Feature flags gate most adapters (`axum`, `ai_tool`, `clear_ios_push`,
   `schema`, and the default `kafka` for the Kafka publishers and consumer); building without the feature a caller needs silently drops the
   module instead of failing loudly — check `Cargo.toml` before assuming an

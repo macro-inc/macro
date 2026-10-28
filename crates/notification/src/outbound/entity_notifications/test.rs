@@ -1,3 +1,5 @@
+mod plan;
+
 use super::*;
 use crate::domain::models::{Notification, SendNotificationRequestBuilder, TaggedContent};
 use crate::outbound::repository::NotificationDbOps;

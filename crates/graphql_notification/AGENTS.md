@@ -36,6 +36,15 @@ mutations, and the realtime subscription.
   `src/notification_event.rs`.
 - Add a mutation: `src/mutations.rs` → the `notification` domain port.
 
+## Notification edge limits
+
+- Omitted or null `notifications(limit:)` returns at most the 20 newest active
+  rows per entity; explicit limits must be 1–500. Filters apply before limiting.
+- Defaults and explicit `limit: 20` share the same DataLoader selection. Different
+  limits/filters remain separate batches. The limit is per entity, not per request.
+- Use the paginated notification API for history and entity-scoped mutations for
+  bulk state changes; a returned edge is not a complete list of notification IDs.
+
 ## Checks
 
 - `cargo test -p graphql_notification` (`SQLX_OFFLINE` unset).

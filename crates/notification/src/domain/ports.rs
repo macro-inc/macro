@@ -173,7 +173,7 @@ pub trait NotificationRepository: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<UserNotificationRow<T>>, Report>> + Send;
 
     /// Get viewer-owned notifications grouped by entity, filtering before each limit.
-    /// The default query preserves the complete active-notification edge.
+    /// The default query returns the 20 newest active notifications per entity.
     fn get_entity_notifications_batch(
         &self,
         user_id: MacroUserIdStr<'_>,

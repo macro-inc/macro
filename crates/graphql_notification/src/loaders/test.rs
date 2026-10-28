@@ -54,6 +54,8 @@ impl SoupNotificationEdgeReader for Reader {
             .push((user.to_string(), keys.clone(), query.clone()));
         Ok(keys.into_iter().map(|key| {
             let rows = [NotificationState::Seen, NotificationState::Unseen].into_iter()
+                .cycle()
+                .take(30)
                 .filter(|state| query.states.contains(state))
                 .take(query.limit as usize)
                 .map(|state| UserNotificationRow {
@@ -110,7 +112,7 @@ async fn aliases_and_entities_batch_by_selection() {
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let json = response.data.into_json().unwrap();
-    assert_eq!(json["defaulted"].as_array().unwrap().len(), 2);
+    assert_eq!(json["defaulted"].as_array().unwrap().len(), 20);
     assert_eq!(json["unread"].as_array().unwrap().len(), 1);
     assert_eq!(json["unread"][0]["state"], "UNSEEN");
     assert_eq!(json["other"].as_array().unwrap().len(), 1);
@@ -142,6 +144,36 @@ async fn aliases_and_entities_batch_by_selection() {
             .len(),
         2
     );
+}
+
+#[tokio::test]
+async fn omitted_and_null_limits_use_the_same_bounded_default() {
+    let calls = Arc::new(Mutex::new(Vec::new()));
+    let schema = Schema::build(Query, EmptyMutation, EmptySubscription)
+        .data(entity_notifications_loader(
+            test_user(),
+            Reader(calls.clone()),
+        ))
+        .finish();
+    let response = schema
+        .execute(
+            r#"{
+        omitted: notifications(entity: "one") { id }
+        null: notifications(entity: "one", limit: null) { id }
+        explicit: notifications(entity: "one", limit: 20) { id }
+        filtered: notifications(entity: "two", filter: {states: [UNSEEN]}) { id }
+    }"#,
+        )
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let json = response.data.into_json().unwrap();
+    assert_eq!(json["omitted"].as_array().unwrap().len(), 20);
+    assert_eq!(json["omitted"], json["null"]);
+    assert_eq!(json["omitted"], json["explicit"]);
+    assert_eq!(json["filtered"].as_array().unwrap().len(), 15);
+    let calls = calls.lock().unwrap();
+    assert_eq!(calls.len(), 2, "equivalent default limits share a batch");
+    assert!(calls.iter().all(|(_, _, query)| query.limit == 20));
 }
 
 #[tokio::test]
