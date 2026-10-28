@@ -36,7 +36,7 @@ import type { PushNotificationNavigation } from '@service-notification/generated
 import { errAsync, ResultAsync } from 'neverthrow';
 import { match, P } from 'ts-pattern';
 import { shareEntity } from '../access-requests/core/types';
-import { whatsappGroupContent } from '../external-view/hosted-content';
+import { externalChatContent } from '../external-view/hosted-content';
 import { projectRouteId } from '../projects/core/route';
 import {
   getDocumentCommentLocation,
@@ -96,13 +96,13 @@ function openContent(
     reportApplied();
 }
 
-/** Groups open in External's main pane; the group's route claim reuses an open one. */
-function openWhatsAppGroup(
+/** Chats open in External's main pane; the chat's route claim reuses an open one. */
+function openExternalChat(
   layoutManager: SplitManager,
-  groupId: string,
+  chatId: string,
   options: OpenOptions
 ) {
-  openContent(layoutManager, whatsappGroupContent(groupId), options);
+  openContent(layoutManager, externalChatContent(chatId), options);
 }
 
 function openSplitIfNotOpen(
@@ -241,10 +241,10 @@ function getSupportedHandler(
               onApplied,
             })
       )
-      .with('whatsapp_group_message', () => {
+      .with('external_chat_message', () => {
         if (!isFeatureEnabled(enableWhatsappLinked)) return null;
         return async (lm: SplitManager, newSplit: boolean = false) =>
-          openWhatsAppGroup(lm, notification.entity_id, {
+          openExternalChat(lm, notification.entity_id, {
             newSplit,
             sourceHandle,
             onApplied,
@@ -284,7 +284,7 @@ function getSupportedHandler(
         );
         if (
           !target ||
-          (target.entityType === 'whatsapp_group' &&
+          (target.entityType === 'external_chat' &&
             !isFeatureEnabled(enableWhatsappLinked))
         )
           return null;
@@ -347,8 +347,8 @@ function getSupportedHandler(
                     )
                   : undefined;
               const block =
-                target.entityType === 'whatsapp_group'
-                  ? 'whatsapp_group'
+                target.entityType === 'external_chat'
+                  ? 'external_chat'
                   : target.entityType === 'initiative'
                     ? 'initiative'
                     : itemToBlockName({
@@ -385,8 +385,8 @@ function getSupportedHandler(
                   });
               };
               span.setAttr('access_requests.outcome', 'navigation_requested');
-              if (block === 'whatsapp_group')
-                openWhatsAppGroup(lm, target.entityId, {
+              if (block === 'external_chat')
+                openExternalChat(lm, target.entityId, {
                   newSplit,
                   sourceHandle,
                   onApplied: applied,

@@ -14,7 +14,7 @@ struct WorkRow {
     passkey_response: Option<serde_json::Value>,
 }
 
-fn work(row: WorkRow) -> LinkedResult<PairingWork> {
+fn work(row: WorkRow) -> ExternalChatResult<PairingWork> {
     Ok(PairingWork {
         id: row.id,
         account_id: row.account_id,
@@ -32,7 +32,7 @@ async fn fail_pairing_in(
     pairing: Uuid,
     account: Uuid,
     generation: i64,
-) -> LinkedResult<()> {
+) -> ExternalChatResult<()> {
     end_pairing_in(tx, pairing, account, generation, PairingState::Failed).await
 }
 
@@ -43,7 +43,7 @@ async fn end_pairing_in(
     account: Uuid,
     generation: i64,
     state: PairingState,
-) -> LinkedResult<()> {
+) -> ExternalChatResult<()> {
     sqlx::query!(
         "UPDATE whatsapp_pairing SET state = $2, consumed_at = clock_timestamp(), qr_code = NULL, pair_code = NULL, passkey_challenge = NULL, passkey_response = NULL, updated_at = now() WHERE id = $1",
         pairing,
@@ -64,8 +64,8 @@ async fn end_pairing_in(
 }
 
 #[async_trait]
-impl SessionRepository for PgLinkedRepository {
-    async fn account_state(&self, account: Uuid) -> LinkedResult<Option<AccountState>> {
+impl SessionRepository for PgWhatsAppRepository {
+    async fn account_state(&self, account: Uuid) -> ExternalChatResult<Option<AccountState>> {
         sqlx::query_scalar!(
             "SELECT state FROM whatsapp_linked_account WHERE id = $1",
             account
@@ -77,7 +77,7 @@ impl SessionRepository for PgLinkedRepository {
         .transpose()
     }
 
-    async fn discoverable_accounts(&self, limit: i64) -> LinkedResult<Vec<Uuid>> {
+    async fn discoverable_accounts(&self, limit: i64) -> ExternalChatResult<Vec<Uuid>> {
         let mut tx = self.pool.begin().await.map_err(failure)?;
         accounts::expire_pairings_in(&mut tx, None, None, None).await?;
         let accounts = sqlx::query_scalar!(
@@ -99,13 +99,13 @@ impl SessionRepository for PgLinkedRepository {
         Ok(accounts)
     }
 
-    async fn announce_released(&self, account: Uuid) -> LinkedResult<()> {
+    async fn announce_released(&self, account: Uuid) -> ExternalChatResult<()> {
         let mut tx = self.pool.begin().await.map_err(failure)?;
         notify(&mut tx, signals::ACCOUNT_RELEASED, account).await?;
         tx.commit().await.map_err(failure)
     }
 
-    async fn fleet_health(&self) -> LinkedResult<FleetHealth> {
+    async fn fleet_health(&self) -> ExternalChatResult<FleetHealth> {
         let row = sqlx::query!(
             r#"WITH needing AS (
                 SELECT EXISTS (
@@ -130,11 +130,15 @@ impl SessionRepository for PgLinkedRepository {
         })
     }
 
-    async fn enqueue_inbound(&self, scope: SessionScope, event: &InboundEvent) -> LinkedResult<()> {
-        PgLinkedRepository::enqueue_inbound(self, scope, event).await
+    async fn enqueue_inbound(
+        &self,
+        scope: SessionScope,
+        event: &InboundEvent,
+    ) -> ExternalChatResult<()> {
+        PgWhatsAppRepository::enqueue_inbound(self, scope, event).await
     }
 
-    async fn begin_lease(&self, account: Uuid) -> LinkedResult<Lease> {
+    async fn begin_lease(&self, account: Uuid) -> ExternalChatResult<Lease> {
         let mut tx = self.pool.begin().await.map_err(failure)?;
         let row = sqlx::query!(
             r#"UPDATE whatsapp_linked_account SET lease_epoch = lease_epoch + 1 WHERE id = $1
@@ -144,7 +148,7 @@ impl SessionRepository for PgLinkedRepository {
         .fetch_optional(&mut *tx)
         .await
         .map_err(failure)?
-        .ok_or(LinkedError::NotFound)?;
+        .ok_or(ExternalChatError::NotFound)?;
         let unknown = sqlx::query!(
             "UPDATE whatsapp_send SET state = 'unknown', claimed_epoch = NULL, updated_at = now() WHERE account_id = $1 AND state = 'sending' AND dispatch_started_at IS NOT NULL",
             account
@@ -173,11 +177,11 @@ impl SessionRepository for PgLinkedRepository {
         })
     }
 
-    async fn release_lease(&self, scope: SessionScope) -> LinkedResult<()> {
+    async fn release_lease(&self, scope: SessionScope) -> ExternalChatResult<()> {
         self.release_sends(scope).await
     }
 
-    async fn pairing_work(&self, pairing: Uuid) -> LinkedResult<Option<PairingWork>> {
+    async fn pairing_work(&self, pairing: Uuid) -> ExternalChatResult<Option<PairingWork>> {
         let mut tx = self.pool.begin().await.map_err(failure)?;
         accounts::expire_pairings_in(&mut tx, None, Some(pairing), None).await?;
         let row = sqlx::query_as!(
@@ -192,7 +196,7 @@ impl SessionRepository for PgLinkedRepository {
         row.map(work).transpose()
     }
 
-    async fn live_pairing(&self, scope: SessionScope) -> LinkedResult<Option<PairingWork>> {
+    async fn live_pairing(&self, scope: SessionScope) -> ExternalChatResult<Option<PairingWork>> {
         let mut tx = self.pool.begin().await.map_err(failure)?;
         accounts::expire_pairings_in(&mut tx, None, None, Some(scope.account_id)).await?;
         let account = fence_in(&mut tx, scope).await?;
@@ -214,7 +218,7 @@ impl SessionRepository for PgLinkedRepository {
         scope: SessionScope,
         pairing: Uuid,
         update: &PairingUpdate,
-    ) -> LinkedResult<PairingWork> {
+    ) -> ExternalChatResult<PairingWork> {
         let mut tx = self.pool.begin().await.map_err(failure)?;
         let account = fence_exclusive_in(&mut tx, scope).await?;
         accounts::expire_pairings_in(&mut tx, None, Some(pairing), Some(scope.account_id)).await?;
@@ -227,12 +231,12 @@ impl SessionRepository for PgLinkedRepository {
         .fetch_optional(&mut *tx)
         .await
         .map_err(failure)?
-        .ok_or(LinkedError::NotFound)?;
+        .ok_or(ExternalChatError::NotFound)?;
         let mut rejection = None;
         if current.consumed_at.is_none() {
             if current.generation != account.generation {
                 fail_pairing_in(&mut tx, pairing, account.id, current.generation).await?;
-                rejection = Some(LinkedError::Conflict);
+                rejection = Some(ExternalChatError::Conflict);
             } else {
                 match update {
                     PairingUpdate::Qr(code) => {
@@ -295,12 +299,12 @@ impl SessionRepository for PgLinkedRepository {
                             // A reconnect must keep its verified identity.
                             fail_pairing_in(&mut tx, pairing, account.id, account.generation)
                                 .await?;
-                            rejection = Some(LinkedError::Conflict);
+                            rejection = Some(ExternalChatError::Conflict);
                         } else if taken.is_some() {
                             // A verified identity belongs to one Macro person.
                             fail_pairing_in(&mut tx, pairing, account.id, account.generation)
                                 .await?;
-                            rejection = Some(LinkedError::Forbidden);
+                            rejection = Some(ExternalChatError::Forbidden);
                         } else {
                             sqlx::query!(
                                 "UPDATE whatsapp_linked_account SET identity_jid = $2, state = 'connected', updated_at = now() WHERE id = $1",
@@ -341,7 +345,7 @@ impl SessionRepository for PgLinkedRepository {
         &self,
         scope: SessionScope,
         pairing: Uuid,
-    ) -> LinkedResult<Option<serde_json::Value>> {
+    ) -> ExternalChatResult<Option<serde_json::Value>> {
         let mut tx = self.pool.begin().await.map_err(failure)?;
         let account = fence_in(&mut tx, scope).await?;
         let response = sqlx::query_scalar!(
@@ -363,8 +367,8 @@ impl SessionRepository for PgLinkedRepository {
         &self,
         scope: SessionScope,
         limit: i64,
-    ) -> LinkedResult<Vec<MediaImport>> {
-        PgLinkedRepository::claim_media_imports(self, scope, limit).await
+    ) -> ExternalChatResult<Vec<MediaImport>> {
+        PgWhatsAppRepository::claim_media_imports(self, scope, limit).await
     }
 
     async fn complete_media_import(
@@ -372,8 +376,8 @@ impl SessionRepository for PgLinkedRepository {
         scope: SessionScope,
         attachment: &AttachmentRef,
         bytes: &[u8],
-    ) -> LinkedResult<()> {
-        PgLinkedRepository::complete_media_import(self, scope, attachment, bytes).await
+    ) -> ExternalChatResult<()> {
+        PgWhatsAppRepository::complete_media_import(self, scope, attachment, bytes).await
     }
 
     async fn fail_media_import(
@@ -381,15 +385,19 @@ impl SessionRepository for PgLinkedRepository {
         scope: SessionScope,
         attachment: &AttachmentRef,
         failure: MediaFailure,
-    ) -> LinkedResult<()> {
-        PgLinkedRepository::fail_media_import(self, scope, attachment, failure).await
+    ) -> ExternalChatResult<()> {
+        PgWhatsAppRepository::fail_media_import(self, scope, attachment, failure).await
     }
 
-    async fn outbound_media(&self, scope: SessionScope, send: Uuid) -> LinkedResult<OutboundMedia> {
-        PgLinkedRepository::outbound_media(self, scope, send).await
+    async fn outbound_media(
+        &self,
+        scope: SessionScope,
+        send: Uuid,
+    ) -> ExternalChatResult<OutboundMedia> {
+        PgWhatsAppRepository::outbound_media(self, scope, send).await
     }
 
-    async fn logged_out(&self, scope: SessionScope) -> LinkedResult<()> {
+    async fn logged_out(&self, scope: SessionScope) -> ExternalChatResult<()> {
         let mut tx = self.pool.begin().await.map_err(failure)?;
         let account = fence_exclusive_in(&mut tx, scope).await?;
         if account.state == AccountState::Connected {
@@ -409,7 +417,7 @@ impl SessionRepository for PgLinkedRepository {
         scope: SessionScope,
         groups: &[GroupInfo],
         complete: bool,
-    ) -> LinkedResult<()> {
+    ) -> ExternalChatResult<()> {
         let mut tx = self.pool.begin().await.map_err(failure)?;
         let account = fence_exclusive_in(&mut tx, scope).await?;
         if account.state != AccountState::Connected {
@@ -424,7 +432,7 @@ impl SessionRepository for PgLinkedRepository {
         scope: SessionScope,
         group: &str,
         observed_at: chrono::DateTime<chrono::Utc>,
-    ) -> LinkedResult<()> {
+    ) -> ExternalChatResult<()> {
         let mut tx = self.pool.begin().await.map_err(failure)?;
         let account = fence_exclusive_in(&mut tx, scope).await?;
         if account.state != AccountState::Connected {
@@ -434,14 +442,14 @@ impl SessionRepository for PgLinkedRepository {
         tx.commit().await.map_err(failure)
     }
 
-    async fn observed_groups(&self, scope: SessionScope) -> LinkedResult<Vec<String>> {
+    async fn observed_groups(&self, scope: SessionScope) -> ExternalChatResult<Vec<String>> {
         let mut tx = self.pool.begin().await.map_err(failure)?;
         let account = fence_in(&mut tx, scope).await?;
         let groups = sqlx::query_scalar!(
-            r#"SELECT DISTINCT b.group_jid FROM whatsapp_group b JOIN whatsapp_group_membership m ON m.binding_id = b.id
+            r#"SELECT DISTINCT b.remote_id FROM external_chat b JOIN whatsapp_chat_membership m ON m.chat_id = b.id
             WHERE m.account_id = $1 AND m.generation = $2 AND m.consent_ended_at IS NULL AND b.state = 'active'
-              AND whatsapp_group_can_view(b.id, $3)
-            ORDER BY b.group_jid"#,
+              AND external_chat_can_view(b.id, $3)
+            ORDER BY b.remote_id"#,
             account.id,
             account.generation,
             account.user_id
@@ -457,7 +465,11 @@ impl SessionRepository for PgLinkedRepository {
         })
     }
 
-    async fn update_chats(&self, scope: SessionScope, chats: &[ChatUpdate]) -> LinkedResult<bool> {
+    async fn update_chats(
+        &self,
+        scope: SessionScope,
+        chats: &[ChatUpdate],
+    ) -> ExternalChatResult<bool> {
         let mut tx = self.pool.begin().await.map_err(failure)?;
         let account = fence_in(&mut tx, scope).await?;
         if account.state != AccountState::Connected {
@@ -468,7 +480,7 @@ impl SessionRepository for PgLinkedRepository {
         Ok(anchored)
     }
 
-    async fn backfill_work(&self, scope: SessionScope) -> LinkedResult<Vec<BackfillWork>> {
+    async fn backfill_work(&self, scope: SessionScope) -> ExternalChatResult<Vec<BackfillWork>> {
         let mut tx = self.pool.begin().await.map_err(failure)?;
         let account = fence_in(&mut tx, scope).await?;
         if account.state != AccountState::Connected {
@@ -483,7 +495,7 @@ impl SessionRepository for PgLinkedRepository {
         &self,
         scope: SessionScope,
         group: Uuid,
-    ) -> LinkedResult<()> {
+    ) -> ExternalChatResult<()> {
         let mut tx = self.pool.begin().await.map_err(failure)?;
         let account = fence_in(&mut tx, scope).await?;
         chats::set_backfill_in(
@@ -497,14 +509,18 @@ impl SessionRepository for PgLinkedRepository {
         tx.commit().await.map_err(failure)
     }
 
-    async fn backfill_requested(&self, scope: SessionScope, group: Uuid) -> LinkedResult<()> {
+    async fn backfill_requested(&self, scope: SessionScope, group: Uuid) -> ExternalChatResult<()> {
         let mut tx = self.pool.begin().await.map_err(failure)?;
         let account = fence_in(&mut tx, scope).await?;
         chats::set_backfill_in(&mut tx, &account, group, BackfillState::Running, true).await?;
         tx.commit().await.map_err(failure)
     }
 
-    async fn backfill_unanswered(&self, scope: SessionScope, group: Uuid) -> LinkedResult<()> {
+    async fn backfill_unanswered(
+        &self,
+        scope: SessionScope,
+        group: Uuid,
+    ) -> ExternalChatResult<()> {
         let mut tx = self.pool.begin().await.map_err(failure)?;
         let account = fence_in(&mut tx, scope).await?;
         chats::set_backfill_in(
@@ -522,7 +538,7 @@ impl SessionRepository for PgLinkedRepository {
         &self,
         scope: SessionScope,
         page: &HistoryPage,
-    ) -> LinkedResult<Vec<(Uuid, BackfillState)>> {
+    ) -> ExternalChatResult<Vec<(Uuid, BackfillState)>> {
         let mut tx = self.pool.begin().await.map_err(failure)?;
         let account = fence_in(&mut tx, scope).await?;
         let states = chats::backfill_page_in(&mut tx, &account, page).await?;
@@ -534,16 +550,24 @@ impl SessionRepository for PgLinkedRepository {
         &self,
         scope: SessionScope,
         event: &InboundEvent,
-    ) -> LinkedResult<IngestOutcome> {
+    ) -> ExternalChatResult<IngestOutcome> {
         self.ingest_event(scope, event).await
     }
 
-    async fn due_events(&self, scope: SessionScope, limit: i64) -> LinkedResult<Vec<InboundEvent>> {
-        PgLinkedRepository::due_events(self, scope, limit).await
+    async fn due_events(
+        &self,
+        scope: SessionScope,
+        limit: i64,
+    ) -> ExternalChatResult<Vec<InboundEvent>> {
+        PgWhatsAppRepository::due_events(self, scope, limit).await
     }
 
-    async fn claim_sends(&self, scope: SessionScope, limit: i64) -> LinkedResult<Vec<ClaimedSend>> {
-        PgLinkedRepository::claim_sends(self, scope, limit).await
+    async fn claim_sends(
+        &self,
+        scope: SessionScope,
+        limit: i64,
+    ) -> ExternalChatResult<Vec<ClaimedSend>> {
+        PgWhatsAppRepository::claim_sends(self, scope, limit).await
     }
 
     async fn begin_dispatch(
@@ -551,8 +575,8 @@ impl SessionRepository for PgLinkedRepository {
         scope: SessionScope,
         send: Uuid,
         source_id: &str,
-    ) -> LinkedResult<()> {
-        PgLinkedRepository::begin_dispatch(self, scope, send, source_id).await
+    ) -> ExternalChatResult<()> {
+        PgWhatsAppRepository::begin_dispatch(self, scope, send, source_id).await
     }
 
     async fn record_send_outcome(
@@ -560,7 +584,7 @@ impl SessionRepository for PgLinkedRepository {
         scope: SessionScope,
         send: Uuid,
         outcome: &SendOutcome,
-    ) -> LinkedResult<()> {
-        PgLinkedRepository::record_send_outcome(self, scope, send, outcome).await
+    ) -> ExternalChatResult<()> {
+        PgWhatsAppRepository::record_send_outcome(self, scope, send, outcome).await
     }
 }

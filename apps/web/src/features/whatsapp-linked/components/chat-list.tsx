@@ -102,7 +102,7 @@ export function ChatList(props: {
   adding: ReadonlySet<string>;
   errors: Readonly<Record<string, string>>;
   onAdd: (chat: WhatsAppChat) => void;
-  onOpenGroup: (groupId: string) => void;
+  onOpenChat: (chatId: string) => void;
 }) {
   return (
     <ul class="flex flex-col" aria-label={props.label}>
@@ -155,7 +155,7 @@ export function ChatList(props: {
                           type="button"
                           variant="ghost"
                           size="sm"
-                          onClick={() => props.onOpenGroup(mine().groupId)}
+                          onClick={() => props.onOpenChat(mine().chatId)}
                         >
                           Open
                         </Button>
@@ -168,7 +168,7 @@ export function ChatList(props: {
                           variant="ghost"
                           size="sm"
                           aria-label={`Open ${chat.name}, shared with you by ${by().ownerName}`}
-                          onClick={() => props.onOpenGroup(by().groupId)}
+                          onClick={() => props.onOpenChat(by().chatId)}
                         >
                           Open
                         </Button>

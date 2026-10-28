@@ -25,4 +25,4 @@ viewer pattern), which apply to every type defined here.
 - `NOTIFIED_AT` maps to Soup's notified request, not a simple sort: `soup`
   accepts it descending only and `groupSoup` rejects it. Its continuation
   cursors carry their own sort tag and string identifiers, separate from timestamp and selected-property cursors.
-- Standalone WhatsApp groups are intentionally excluded from Soup hydration; use the External group API.
+- External chats are intentionally excluded from Soup hydration; use the `/external-chats` API.

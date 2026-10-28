@@ -22,7 +22,11 @@ tool list. Expand the discovery row to see the results. An app name alone does
 not establish that the requested action is supported.
 
 For a suitable unconnected app, the assistant offers **Connect <app>**. Clicking
-it opens the hosted authorization flow over the agent transcript on web. In
+it opens the hosted authorization flow over the agent transcript on web. For an
+overlaid app (one with its own MCP server, see Settings → Integrations) it
+opens that server's OAuth consent in a new tab instead, and the session
+continues once the server is authorized; the agent then reaches the app
+through that server rather than Pipedream. In
 native apps, consent opens in the system browser, which returns to Macro on its
 own after authorization (**Return to Macro** is the fallback link). The waiting
 dialog's **Done** checks Pipedream for an account the flow created, and callbacks
@@ -409,11 +413,11 @@ the shimmer.
   The selected segment glides for 250ms with
   an ease-out curve. The greeting text flips vertically into place on each mode change
   with the same duration; both animations respect reduced motion.
-  Its bottom corners follow the toggle's curve. Chat and Code limit the offered agents; the choice is
-  remembered per user, and a person with no saved choice starts in **Auto**. Auto is
+  Its bottom corners follow the toggle's curve. Chat and Code limit the offered agents; the choice
+  lasts only while the composer is mounted, and every composer opens in **Auto**. Auto is
   behind the `enable-composer-auto-mode` PostHog flag (Macro employees only), which the
-  agent harness checks too; without it the switch is Chat / Code and a saved Auto reads as Chat.
-  **Auto** (magic wand) hides the agent, model, effort, and speed controls. On send, the
+  agent harness checks too; without it the switch is Chat / Code and Auto reads as Chat.
+  **Auto** (sparkle, the sidebar's Agents icon) hides the agent, model, effort, and speed controls. On send, the
   input is briefly blocked (“Choosing Chat or Code…”) while `POST /agent-mode-choice` on the
   agent harness asks Cloudflare's Clef Flash whether the prompt needs a coding agent. Code
   starts the user's most recently used coding agent (else the first that can start) with its default model and
@@ -1082,10 +1086,11 @@ preserve the submitted tool selection.
 
 ## Composer anatomy (a11y)
 
-AI chat (including Home and doc-scoped chat) and agent session composers have
-a **Start dictation** microphone beside Send. It records
-in memory and uploads to the
-authenticated `/dictation/transcribe` storage endpoint only on confirmation.
+On pointer devices, AI chat (including Home and doc-scoped chat) and agent
+session composers have a **Start dictation** microphone beside Send. Touch
+devices omit it because their keyboards already dictate. It records in memory
+and uploads to the authenticated `/dictation/transcribe` storage endpoint only
+on confirmation.
 Whisper is available on all plans without consuming chat credits; its server
 credential is never exposed to the browser. Unsupported recording environments
 show a disabled microphone. Every supported browser uses Whisper; there are
@@ -1102,7 +1107,6 @@ If the browser stops listening on its own, **Ready** waits for confirmation.
 While **Finishing…**, the checkmark is disabled and Cancel remains available.
 No provider name or transcription hint appears below the composer; only the
 recording limit and failures do.
-Mobile chat stays expanded when focus moves into dictation controls.
 Starting dictation in another composer releases the previous session without
 moving focus back to it. Closing the composer releases the microphone. Capture failures
 appear below the composer.

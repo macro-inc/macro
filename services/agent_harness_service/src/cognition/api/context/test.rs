@@ -500,7 +500,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
 
     let tool_service_context = ai_tools::ToolServiceContext {
         cognition_tool_context: Default::default(),
-        connector_tool_context: ai_tools::build_connector_tool_context(pool.clone(), None),
+        connector_tool_context: ai_tools::build_connector_tool_context(pool.clone(), None, None),
         search_service_client: search_service_client.clone(),
         email_service_client: email_service_client_external.clone(),
         soup_service: soup_service.clone(),

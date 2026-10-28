@@ -1268,18 +1268,19 @@ describe('createNotificationSource', () => {
   });
 });
 
-it('accepts the independent WhatsApp notification through the generated wire schema', () => {
+it('accepts the independent external chat notification through the generated wire schema', () => {
   const row: UnifiedNotification = {
     ...notification(
       '019a061e-0000-7000-8000-000000000003',
-      'whatsapp_group',
+      'external_chat',
       '019a061e-0000-7000-8000-000000000001'
     ),
-    notification_event_type: 'whatsapp_group_message',
+    notification_event_type: 'external_chat_message',
     notification_metadata: {
-      tag: 'whatsapp_group_message',
+      tag: 'external_chat_message',
       content: {
-        groupName: 'Design Crit',
+        provider: 'whatsapp',
+        chatName: 'Design Crit',
         messageId: '019a061e-0000-7000-8000-000000000002',
       },
     },

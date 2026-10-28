@@ -6507,6 +6507,7 @@ dependencies = [
  "entity_mutation",
  "entity_registry",
  "entity_registry_db_utils",
+ "external_chat",
  "favorites",
  "flate2",
  "foreign_entity",
@@ -7874,6 +7875,38 @@ name = "extended"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "af9673d8203fcb076b19dfd17e38b3d4ae9f44959416ea532ce72415a6020365"
+
+[[package]]
+name = "external_chat"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "chrono",
+ "entity_access",
+ "entity_access_db_utils",
+ "image",
+ "macro_authorization",
+ "macro_user_id",
+ "model-entity",
+ "models_permissions",
+ "nom 8.0.0",
+ "opentelemetry",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "share_permission_db_utils",
+ "sqlx",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "tracing-opentelemetry",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
 
 [[package]]
 name = "fallible-iterator"
@@ -15036,6 +15069,7 @@ dependencies = [
  "futures",
  "http 1.4.0",
  "macro_authorization",
+ "macro_db_migrator",
  "macro_user_id",
  "mcp_toolset",
  "model-error-response",
@@ -21702,6 +21736,7 @@ dependencies = [
  "chrono",
  "entity_access",
  "entity_access_db_utils",
+ "external_chat",
  "macro_db_migrator",
  "macro_user_id",
  "sqlx",
@@ -21757,6 +21792,7 @@ dependencies = [
  "entity_access",
  "entity_access_db_utils",
  "entity_registry_db_utils",
+ "external_chat",
  "harness_id",
  "image",
  "macro_authorization",
@@ -21767,7 +21803,6 @@ dependencies = [
  "model_user",
  "models_permissions",
  "nom 8.0.0",
- "opentelemetry",
  "rootcause",
  "serde",
  "serde_json",
@@ -21775,11 +21810,9 @@ dependencies = [
  "share_permission_db_utils",
  "sqlx",
  "strum 0.27.2",
- "thiserror 2.0.18",
  "tokio",
  "tower 0.5.3",
  "tracing",
- "tracing-opentelemetry",
  "utoipa",
  "uuid",
  "workspace-hack",
@@ -21795,6 +21828,7 @@ dependencies = [
  "chrono",
  "database_env_vars",
  "doppler-config",
+ "external_chat",
  "futures",
  "macro_aws_config",
  "macro_config",

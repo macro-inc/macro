@@ -1,11 +1,12 @@
 import { throwOnErr } from '@core/util/result';
-import type { LinkedAdoptGroup } from '@service-storage/generated/schemas/linkedAdoptGroup';
-import type { LinkedPasskeyBody } from '@service-storage/generated/schemas/linkedPasskeyBody';
+import { externalChatsClient } from '@service-storage/external-chats';
+import type { ExternalChatKind } from '@service-storage/generated/schemas/externalChatKind';
+import type { WhatsappPasskeyBody } from '@service-storage/generated/schemas/whatsappPasskeyBody';
 import { whatsappLinkedClient as client } from '@service-storage/whatsapp-linked';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
-import { invalidateWhatsappGroupList } from '../whatsapp-groups';
+import { invalidateExternalChatList } from '../external-chats';
 import { whatsappLinkedKeys } from './keys';
 import { whatsappOperation } from './operation';
 
@@ -108,20 +109,27 @@ export function refreshWhatsappLinkedAccount() {
 
 export function useSubmitWhatsappPasskeyMutation() {
   return useMutation(() => ({
-    mutationFn: (input: { pairingId: string; response: LinkedPasskeyBody }) =>
+    mutationFn: (input: { pairingId: string; response: WhatsappPasskeyBody }) =>
       whatsappOperation('submit_passkey', () =>
         throwOnErr(() => client.passkey(input.pairingId, input.response))
       ),
   }));
 }
 
-export function useAdoptWhatsappGroupMutation() {
+/** Adds one of the account's WhatsApp chats to Macro as an external chat. */
+export function useAddWhatsappChatMutation() {
   return useMutation(() => ({
-    mutationFn: (request: LinkedAdoptGroup) =>
-      whatsappOperation('adopt_group', () =>
-        throwOnErr(() => client.adopt(request))
+    mutationFn: (chat: { jid: string; kind: ExternalChatKind }) =>
+      whatsappOperation('add_chat', () =>
+        throwOnErr(() =>
+          externalChatsClient.add({
+            provider: 'whatsapp',
+            remoteId: chat.jid,
+            kind: chat.kind,
+          })
+        )
       ),
     onSuccess: () =>
-      Promise.all([invalidateChats(), invalidateWhatsappGroupList()]),
+      Promise.all([invalidateChats(), invalidateExternalChatList()]),
   }));
 }

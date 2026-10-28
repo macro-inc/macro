@@ -1,56 +1,36 @@
-//! Owner-bound account lifecycle, adoption and deliberate sends, as served by DSS.
+//! Owner-bound account lifecycle and the WhatsApp chat list, as served by DSS.
+//! Added chats are `external_chat`'s; [`super::provider`] adds and sends.
 
-use super::{
-    jid::{Jid, is_group_jid},
-    models::*,
-    ports::*,
-    timeline::*,
-};
-use chrono::{DateTime, Utc};
-use entity_access::domain::models::{EntityAccessReceipt, EntityType, RequiredPermission};
+use super::{models::*, ports::*};
+use external_chat::domain::{models::*, ports::ExternalChatResult};
 use macro_user_id::user_id::MacroUserIdStr;
-use sha2::{Digest, Sha256};
 use std::sync::Arc;
 use uuid::Uuid;
 
 #[cfg(test)]
 mod test;
-mod timeline;
 
-/// DSS use cases for personal linked devices.
+/// DSS use cases for a person's linked WhatsApp account.
 #[derive(Clone)]
-pub struct LinkedService {
+pub struct WhatsAppService {
     accounts: Arc<dyn AccountRepository>,
     groups: Arc<dyn GroupRepository>,
-    bindings: Arc<dyn BindingRepository>,
-    sends: Arc<dyn SendRepository>,
-    timeline: Arc<dyn TimelineRepository>,
-    send_rate_limiter: Arc<dyn SendRateLimiter>,
 }
 
-impl LinkedService {
+impl WhatsAppService {
     /// Wire adapters at the composition root.
-    pub fn new<R>(repository: Arc<R>, send_rate_limiter: Arc<dyn SendRateLimiter>) -> Self
+    pub fn new<R>(repository: Arc<R>) -> Self
     where
-        R: AccountRepository
-            + GroupRepository
-            + BindingRepository
-            + SendRepository
-            + TimelineRepository
-            + 'static,
+        R: AccountRepository + GroupRepository + 'static,
     {
         Self {
             accounts: repository.clone(),
-            groups: repository.clone(),
-            bindings: repository.clone(),
-            sends: repository.clone(),
-            timeline: repository,
-            send_rate_limiter,
+            groups: repository,
         }
     }
 
     /// Personal settings never depend on workspace administration.
-    pub async fn account(&self, user: &MacroUserIdStr<'_>) -> LinkedResult<Option<Account>> {
+    pub async fn account(&self, user: &MacroUserIdStr<'_>) -> ExternalChatResult<Option<Account>> {
         self.accounts.owned_account(user).await
     }
 
@@ -61,7 +41,7 @@ impl LinkedService {
         user: &MacroUserIdStr<'_>,
         replace: bool,
         authority: SendAuthority,
-    ) -> LinkedResult<Pairing> {
+    ) -> ExternalChatResult<Pairing> {
         human(authority)?;
         let pairing = self.accounts.begin_pairing(user, replace).await?;
         let span = tracing::Span::current();
@@ -76,7 +56,7 @@ impl LinkedService {
         user: &MacroUserIdStr<'_>,
         pairing: Uuid,
         authority: SendAuthority,
-    ) -> LinkedResult<PairState> {
+    ) -> ExternalChatResult<PairState> {
         human(authority)?;
         self.accounts.pair_state(user, pairing).await
     }
@@ -90,10 +70,10 @@ impl LinkedService {
         pairing: Uuid,
         response: &serde_json::Value,
         authority: SendAuthority,
-    ) -> LinkedResult<()> {
+    ) -> ExternalChatResult<()> {
         human(authority)?;
         if !response.is_object() || response.to_string().len() > PASSKEY_LIMIT_BYTES {
-            return Err(LinkedError::Invalid("invalid passkey response").into());
+            return Err(ExternalChatError::Invalid("invalid passkey response").into());
         }
         self.accounts.submit_passkey(user, pairing, response).await
     }
@@ -105,7 +85,7 @@ impl LinkedService {
         user: &MacroUserIdStr<'_>,
         pairing: Uuid,
         authority: SendAuthority,
-    ) -> LinkedResult<()> {
+    ) -> ExternalChatResult<()> {
         human(authority)?;
         self.accounts.cancel_pairing(user, pairing).await
     }
@@ -117,26 +97,12 @@ impl LinkedService {
         user: &MacroUserIdStr<'_>,
         generation: i64,
         authority: SendAuthority,
-    ) -> LinkedResult<Disconnect> {
+    ) -> ExternalChatResult<Disconnect> {
         human(authority)?;
         let changed = self.accounts.disconnect(user, generation).await?;
         Ok(Disconnect {
             remote_unlink_requested: changed,
         })
-    }
-
-    async fn connected(&self, user: &MacroUserIdStr<'_>) -> LinkedResult<(Account, String)> {
-        let account = self
-            .accounts
-            .owned_account(user)
-            .await?
-            .filter(|a| a.state == AccountState::Connected)
-            .ok_or(LinkedError::Disconnected)?;
-        let identity = account
-            .identity_jid
-            .clone()
-            .ok_or(LinkedError::Disconnected)?;
-        Ok((account, identity))
     }
 
     /// The person's WhatsApp chat list, as WhatsApp Web shows it: groups and
@@ -150,8 +116,8 @@ impl LinkedService {
         err,
         fields(count, account_id)
     )]
-    pub async fn chats(&self, user: &MacroUserIdStr<'_>) -> LinkedResult<ChatList> {
-        let (account, identity) = self.connected(user).await?;
+    pub async fn chats(&self, user: &MacroUserIdStr<'_>) -> ExternalChatResult<ChatList> {
+        let (account, identity) = connected(self.accounts.as_ref(), user).await?;
         tracing::Span::current().record("account_id", tracing::field::display(account.id));
         self.groups.request_groups_refresh(&[account.id]).await?;
         let roster = self.groups.account_groups(account.id).await?;
@@ -165,22 +131,22 @@ impl LinkedService {
         let mut listed = std::collections::HashMap::new();
         for chat in stored {
             listed.insert(chat.jid.clone(), chats.len());
-            let (group, shared) = adoption_of(user, &adoptions, &chat.jid);
+            let (added, shared) = adoption_of(user, &adoptions, &chat.jid);
             // Someone else's chat with the same person is their own
             // conversation, not this one.
-            let shared = shared.filter(|_| chat.kind == ChatKind::Group);
+            let shared = shared.filter(|_| chat.kind == ExternalChatKind::Group);
             let name = chat
                 .name
                 .clone()
                 .filter(|name| !name.trim().is_empty())
                 .unwrap_or_else(|| chat_fallback_name(&chat.jid, chat.kind, &identity));
             let reason = match chat.kind {
-                ChatKind::Direct if chat.jid == identity => Some(CannotAdd::OwnChat),
-                ChatKind::Direct => None,
+                ExternalChatKind::Direct if chat.jid == identity => Some(CannotAdd::OwnChat),
+                ExternalChatKind::Direct => None,
                 // Listed by WhatsApp but not in the account's groups any more.
-                ChatKind::Group => Some(CannotAdd::NotInGroup),
+                ExternalChatKind::Group => Some(CannotAdd::NotInGroup),
             };
-            let open = group.is_none() && shared.is_none();
+            let open = added.is_none() && shared.is_none();
             chats.push(Chat {
                 name: if chat.jid == identity {
                     "You".to_owned()
@@ -194,7 +160,7 @@ impl LinkedService {
                 pinned: chat.pinned,
                 can_add: open && reason.is_none(),
                 cannot_add_reason: reason.filter(|_| open),
-                group,
+                added,
                 shared,
                 community: None,
             });
@@ -205,12 +171,12 @@ impl LinkedService {
                 None => {
                     chats.push(Chat {
                         jid: info.jid.clone(),
-                        kind: ChatKind::Group,
+                        kind: ExternalChatKind::Group,
                         name: String::new(),
                         last_activity_at: None,
                         archived: false,
                         pinned: false,
-                        group: None,
+                        added: None,
                         shared: None,
                         can_add: false,
                         cannot_add_reason: None,
@@ -220,9 +186,9 @@ impl LinkedService {
                 }
             };
             let chat = &mut chats[index];
-            chat.kind = ChatKind::Group;
+            chat.kind = ExternalChatKind::Group;
             chat.name = info.display_name(&identity);
-            (chat.group, chat.shared) = adoption_of(user, &adoptions, &info.jid);
+            (chat.added, chat.shared) = adoption_of(user, &adoptions, &info.jid);
             chat.community = info.community(
                 info.community_jid
                     .as_ref()
@@ -235,7 +201,7 @@ impl LinkedService {
             } else {
                 None
             };
-            let open = chat.group.is_none() && chat.shared.is_none();
+            let open = chat.added.is_none() && chat.shared.is_none();
             chat.can_add = open && reason.is_none();
             chat.cannot_add_reason = reason.filter(|_| open);
         }
@@ -248,380 +214,62 @@ impl LinkedService {
         Ok(ChatList { chats })
     }
 
-    /// Add an existing group the person has joined, or a direct chat from
-    /// their chat list, as their own Macro chat; never creates or joins
-    /// anything in WhatsApp. Adding the same chat twice returns the existing
-    /// one.
-    #[tracing::instrument(
-        name = "whatsapp.linked.adopt",
-        skip_all,
-        err,
-        fields(binding_id, created, kind)
-    )]
-    pub async fn adopt(
-        &self,
-        user: &MacroUserIdStr<'_>,
-        request: &AdoptGroup,
-        authority: SendAuthority,
-    ) -> LinkedResult<Binding> {
-        human(authority)?;
-        let (account, identity) = self.connected(user).await?;
-        let adoption = if is_group_jid(&request.group_jid) {
-            let group = self
-                .groups
-                .account_group(account.id, &request.group_jid)
-                .await?
-                .ok_or(LinkedError::CannotAdd(CannotAdd::NotInGroup))?;
-            if group.community_parent {
-                return Err(LinkedError::CannotAdd(CannotAdd::Community).into());
-            }
-            if group.participant(&identity).is_none() {
-                return Err(LinkedError::CannotAdd(CannotAdd::NotInGroup).into());
-            }
-            Adoption {
-                jid: group.jid.clone(),
-                kind: ChatKind::Group,
-                name: group.display_name(&identity),
-                can_post: group.can_post(&identity),
-                observed_at: group.observed_at,
-            }
-        } else {
-            if request.group_jid == identity {
-                return Err(LinkedError::CannotAdd(CannotAdd::OwnChat).into());
-            }
-            let chat = self
-                .groups
-                .account_chats(account.id)
-                .await?
-                .into_iter()
-                .find(|chat| chat.kind == ChatKind::Direct && chat.jid == request.group_jid)
-                .ok_or(LinkedError::CannotAdd(CannotAdd::NotInChatList))?;
-            Adoption {
-                name: chat
-                    .name
-                    .filter(|name| !name.trim().is_empty())
-                    .unwrap_or_else(|| chat_fallback_name(&chat.jid, chat.kind, &identity)),
-                jid: chat.jid,
-                kind: ChatKind::Direct,
-                can_post: true,
-                observed_at: chrono::Utc::now(),
-            }
-        };
-        let adopted = self
-            .bindings
-            .adopt(AdoptionRecord {
-                user,
-                account: &account,
-                adoption: &adoption,
-            })
-            .await?;
-        let span = tracing::Span::current();
-        span.record("binding_id", tracing::field::display(adopted.binding.id));
-        span.record("created", adopted.created);
-        span.record("kind", adoption.kind.as_str());
-        Ok(adopted.binding)
+    /// Delete old participant receipts and old consumed pairings.
+    pub async fn expire_retained(&self) -> ExternalChatResult<u64> {
+        self.accounts.expire_retained().await
     }
 
-    /// Detach locally; nothing changes in WhatsApp. Only the person who
-    /// added the chat, in their own session, stops syncing it.
-    #[tracing::instrument(name = "whatsapp.linked.detach", skip_all, err, fields(group_id))]
-    pub async fn detach<T: RequiredPermission>(
-        &self,
-        access: &EntityAccessReceipt<T>,
-        authority: SendAuthority,
-    ) -> LinkedResult<()> {
-        human(authority)?;
-        let (user, group_id) = receipt_scope(access)?;
-        tracing::Span::current().record("group_id", tracing::field::display(group_id));
-        let binding = self
-            .bindings
-            .binding(group_id)
-            .await?
-            .ok_or(LinkedError::NotFound)?;
-        if binding.user_id != user.as_ref() {
-            return Err(LinkedError::Forbidden.into());
-        }
-        self.bindings.detach(&binding).await
-    }
-
-    async fn reply_block(
-        &self,
-        account: Option<&Account>,
-        binding: &Binding,
-    ) -> LinkedResult<Option<ReplyBlock>> {
-        let facts = match account {
-            Some(account) if account.state == AccountState::Connected => {
-                let roster = match binding.kind {
-                    ChatKind::Group => self.sends.account_roster(account, binding).await?,
-                    ChatKind::Direct => None,
-                };
-                Some(sending_facts(account, binding, roster))
-            }
-            _ => None,
-        };
-        Ok(reply_block(account, binding, facts.as_ref()))
-    }
-
-    /// Record a deliberate send for the person's own account. The account's
-    /// replica dispatches it; uncertain outcomes are never resent.
-    #[tracing::instrument(
-        name = "whatsapp.linked.send",
-        skip_all,
-        err,
-        fields(group_id, send_id, kind)
-    )]
-    pub async fn send_reply<T: RequiredPermission>(
-        &self,
-        access: &EntityAccessReceipt<T>,
-        request: &SendReply,
-        authority: SendAuthority,
-    ) -> LinkedResult<SendProgress> {
-        sender(authority)?;
-        let (user, group_id) = receipt_scope(access)?;
-        tracing::Span::current().record("group_id", tracing::field::display(group_id));
-        validate_request(request)?;
-        let digest: [u8; 32] = Sha256::digest(
-            serde_json::to_vec(request).map_err(|_| LinkedError::Invalid("invalid request"))?,
-        )
-        .into();
-        // A retry with the same intent key returns the original send, whatever
-        // happened since; it never sends twice.
-        if let Some(StoredSend {
-            request_sha256,
-            progress,
-        }) = self
-            .sends
-            .stored_send(group_id, user, request.idempotency_key)
-            .await?
-        {
-            if request_sha256 != digest {
-                return Err(LinkedError::Conflict.into());
-            }
-            tracing::Span::current().record("send_id", tracing::field::display(progress.id));
-            return Ok(progress);
-        }
-        self.send_rate_limiter.check(user).await?;
-        let binding = self
-            .bindings
-            .binding(group_id)
-            .await?
-            .ok_or(LinkedError::NotFound)?;
-        let account = self.accounts.owned_account(user).await?;
-        if let Some(block) = self.reply_block(account.as_ref(), &binding).await? {
-            return Err(refusal(block).into());
-        }
-        let account = account.ok_or(LinkedError::Disconnected)?;
-        let identity = account
-            .identity_jid
-            .as_deref()
-            .ok_or(LinkedError::Disconnected)?;
-        if let Some(quoted) = request.reply_to {
-            self.sends
-                .mutation_target(&binding, quoted)
-                .await?
-                .filter(|target| !target.deleted)
-                .ok_or(LinkedError::NotFound)?;
-        }
-        if let ReplyContent::Media { upload_id, caption } = &request.message {
-            let mime = self
-                .sends
-                .staged_upload_mime(user, group_id, *upload_id)
-                .await?
-                .ok_or(LinkedError::NotFound)?;
-            if MediaKind::of(&mime) == Some(MediaKind::Audio) && caption.is_some() {
-                return Err(
-                    LinkedError::Invalid("send an audio caption as a separate message").into(),
-                );
-            }
-        }
-        if let ReplyContent::Mutation {
-            message_id,
-            operation,
-            ..
-        } = &request.message
-        {
-            tracing::Span::current().record("kind", tracing::field::debug(operation));
-            let target = self
-                .sends
-                .mutation_target(&binding, *message_id)
-                .await?
-                .filter(|target| !target.deleted)
-                .ok_or(LinkedError::NotFound)?;
-            authorize_mutation(*operation, &target, identity, Utc::now())?;
-        }
-        let progress = self
-            .sends
-            .enqueue(SendIntent {
-                user,
-                account: &account,
-                binding: &binding,
-                request,
-                digest,
-            })
-            .await?;
-        tracing::Span::current().record("send_id", tracing::field::display(progress.id));
-        Ok(progress)
-    }
-
-    /// Stage one attachment for a later deliberate send in this group. Nothing
-    /// is sent until a media reply names it.
-    #[tracing::instrument(name = "whatsapp.linked.upload", skip_all, err, fields(group_id, size = bytes.len()))]
-    pub async fn upload_attachment<T: RequiredPermission>(
-        &self,
-        access: &EntityAccessReceipt<T>,
-        filename: &str,
-        mime: &str,
-        bytes: &[u8],
-        authority: SendAuthority,
-    ) -> LinkedResult<UploadedAttachment> {
-        sender(authority)?;
-        let (user, group_id) = receipt_scope(access)?;
-        tracing::Span::current().record("group_id", tracing::field::display(group_id));
-        let kind = MediaKind::of(mime).ok_or(LinkedError::Invalid(
-            "this file type cannot be sent to WhatsApp",
-        ))?;
-        let filename = filename.trim();
-        if bytes.is_empty()
-            || bytes.len() > MEDIA_LIMIT_BYTES
-            || filename.is_empty()
-            || filename.len() > 255
-            || filename
-                .chars()
-                .any(|c| c.is_control() || c == '/' || c == '\\')
-        {
-            return Err(LinkedError::Invalid(
-                "an attachment needs a filename and must be non-empty and within the size limit",
-            )
-            .into());
-        }
-        let binding = self
-            .bindings
-            .binding(group_id)
-            .await?
-            .ok_or(LinkedError::NotFound)?;
-        let account = self.accounts.owned_account(user).await?;
-        if let Some(block) = self.reply_block(account.as_ref(), &binding).await? {
-            return Err(refusal(block).into());
-        }
-        let upload_id = self
-            .sends
-            .stage_upload(StagedUpload {
-                user,
-                group_id,
-                filename,
-                mime,
-                bytes,
-                sha256: Sha256::digest(bytes).into(),
-                shape: super::shape::measure(kind, mime, bytes),
-            })
-            .await?;
-        Ok(UploadedAttachment {
-            upload_id,
-            filename: filename.to_owned(),
-            kind,
-        })
-    }
-
-    /// Attachment states of linked messages the viewer can read. The message
-    /// body keeps a text fallback for readers that don't know about them.
-    pub async fn message_attachments<T: RequiredPermission>(
-        &self,
-        access: &EntityAccessReceipt<T>,
-        messages: &[Uuid],
-    ) -> LinkedResult<Vec<MessageAttachments>> {
-        let (_, group_id) = view_scope(access)?;
-        if messages.len() > BATCH_LIMIT {
-            return Err(LinkedError::Invalid("too many messages in one request").into());
-        }
-        let binding = self
-            .bindings
-            .binding(group_id)
-            .await?
-            .ok_or(LinkedError::NotFound)?;
-        self.bindings.message_attachments(&binding, messages).await
-    }
-
-    /// The viewer's sends for these intents or group messages.
-    pub async fn delivery<T: RequiredPermission>(
-        &self,
-        access: &EntityAccessReceipt<T>,
-        ids: &[Uuid],
-    ) -> LinkedResult<Vec<SendProgress>> {
-        let (user, group_id) = receipt_scope(access)?;
-        if ids.len() > BATCH_LIMIT {
-            return Err(LinkedError::Invalid("too many messages in one request").into());
-        }
-        self.sends.sends_for(group_id, user, ids).await
+    /// The Macro user who linked this account.
+    pub async fn account_owner(&self, account: Uuid) -> ExternalChatResult<Option<String>> {
+        self.accounts.account_owner(account).await
     }
 }
 
-fn human(authority: SendAuthority) -> LinkedResult<()> {
+fn human(authority: SendAuthority) -> ExternalChatResult<()> {
     match authority {
         SendAuthority::Human => Ok(()),
         SendAuthority::UserApiToken | SendAuthority::Automation => {
-            Err(LinkedError::Forbidden.into())
+            Err(ExternalChatError::Forbidden.into())
         }
     }
 }
 
-fn sender(authority: SendAuthority) -> LinkedResult<()> {
-    match authority {
-        SendAuthority::Human | SendAuthority::UserApiToken => Ok(()),
-        SendAuthority::Automation => Err(LinkedError::Forbidden.into()),
-    }
+/// The person's connected account and its verified identity.
+pub(crate) async fn connected(
+    accounts: &dyn AccountRepository,
+    user: &MacroUserIdStr<'_>,
+) -> ExternalChatResult<(Account, String)> {
+    let account = accounts
+        .owned_account(user)
+        .await?
+        .filter(|a| a.state == AccountState::Connected)
+        .ok_or(ExternalChatError::Disconnected)?;
+    let identity = account
+        .identity_jid
+        .clone()
+        .ok_or(ExternalChatError::Disconnected)?;
+    Ok((account, identity))
 }
 
-/// The WhatsApp chat a receipt names.
-fn receipt_group<T: RequiredPermission>(access: &EntityAccessReceipt<T>) -> LinkedResult<Uuid> {
-    let entity = access.entity();
-    if entity.entity_type != EntityType::WhatsAppGroup {
-        return Err(LinkedError::Forbidden.into());
-    }
-    Ok(Uuid::parse_str(&entity.entity_id).map_err(|_| LinkedError::NotFound)?)
-}
-
-/// The person and chat of a receipt held by a person.
-fn receipt_scope<T: RequiredPermission>(
-    access: &EntityAccessReceipt<T>,
-) -> LinkedResult<(&MacroUserIdStr<'static>, Uuid)> {
-    let user = access
-        .get_authenticated_user()
-        .map_err(|_| LinkedError::Forbidden)?;
-    Ok((user, receipt_group(access)?))
-}
-
-/// Read receipts may represent a bot, but never borrow its acting user's phone
-/// identity, send records or unread state.
-fn view_scope<T: RequiredPermission>(
-    access: &EntityAccessReceipt<T>,
-) -> LinkedResult<(&str, Uuid)> {
-    let principal = match access.auth() {
-        entity_access::domain::models::EntityAccessAuth::Authenticated(user) => user.as_ref(),
-        entity_access::domain::models::EntityAccessAuth::Bot(bot) => bot.bot_id_str().as_ref(),
-        _ => return Err(LinkedError::Forbidden.into()),
-    };
-    Ok((principal, receipt_group(access)?))
-}
-
-/// The caller's own Macro group for a WhatsApp group, else someone else's
-/// group for it that was shared with them.
+/// The caller's own external chat for a WhatsApp chat, else someone else's
+/// external chat for it that was shared with them.
 fn adoption_of(
     user: &MacroUserIdStr<'_>,
     adoptions: &[VisibleAdoption],
     jid: &str,
-) -> (Option<GroupReference>, Option<SharedGroupReference>) {
+) -> (Option<ChatReference>, Option<SharedChatReference>) {
     let mine = adoptions
         .iter()
-        .find(|adoption| adoption.group_jid == jid && adoption.owner_id == user.as_ref())
-        .map(|adoption| GroupReference {
+        .find(|adoption| adoption.remote_id == jid && adoption.owner_id == user.as_ref())
+        .map(|adoption| ChatReference {
             id: adoption.id,
             name: adoption.name.clone(),
         });
     let shared = mine.is_none().then(|| {
         adoptions
             .iter()
-            .find(|adoption| adoption.group_jid == jid && adoption.owner_id != user.as_ref())
-            .map(|adoption| SharedGroupReference {
+            .find(|adoption| adoption.remote_id == jid && adoption.owner_id != user.as_ref())
+            .map(|adoption| SharedChatReference {
                 id: adoption.id,
                 name: adoption.name.clone(),
                 owner_id: adoption.owner_id.clone(),
@@ -631,159 +279,12 @@ fn adoption_of(
 }
 
 /// A chat WhatsApp gave no name: a direct chat by its phone number.
-fn chat_fallback_name(jid: &str, kind: ChatKind, identity: &str) -> String {
+pub(crate) fn chat_fallback_name(jid: &str, kind: ExternalChatKind, identity: &str) -> String {
     match kind {
-        ChatKind::Group => "WhatsApp group".to_owned(),
-        ChatKind::Direct if jid == identity => "You".to_owned(),
-        ChatKind::Direct => {
+        ExternalChatKind::Group => "WhatsApp group".to_owned(),
+        ExternalChatKind::Direct if jid == identity => "You".to_owned(),
+        ExternalChatKind::Direct => {
             super::jid::phone_number(jid).unwrap_or_else(|| "WhatsApp contact".to_owned())
         }
     }
-}
-
-/// Whether the person's own account can send in the chat, from its own
-/// roster of the group. A direct chat has two people: only its owner's own
-/// account is in it.
-pub(crate) fn sending_facts(
-    account: &Account,
-    binding: &Binding,
-    roster: Option<GroupInfo>,
-) -> SendingFacts {
-    if binding.kind == ChatKind::Direct {
-        let owner = account.user_id == binding.user_id;
-        return SendingFacts {
-            observing: owner,
-            remote_member: owner,
-            can_post: owner,
-        };
-    }
-    let identity = account.identity_jid.as_deref();
-    SendingFacts {
-        observing: roster.is_some(),
-        remote_member: roster
-            .as_ref()
-            .zip(identity)
-            .is_some_and(|(group, identity)| group.participant(identity).is_some()),
-        can_post: roster
-            .as_ref()
-            .zip(identity)
-            .is_some_and(|(group, identity)| group.can_post(identity)),
-    }
-}
-
-/// The error a send or upload refused for `block` returns.
-fn refusal(block: ReplyBlock) -> LinkedError {
-    match block {
-        ReplyBlock::NoAccount | ReplyBlock::Disconnected => LinkedError::Disconnected,
-        ReplyBlock::NotObserving | ReplyBlock::NotAllowedInGroup | ReplyBlock::GroupUnavailable => {
-            LinkedError::Forbidden
-        }
-    }
-}
-
-/// Why the person cannot send now, from the current facts.
-pub(crate) fn reply_block(
-    account: Option<&Account>,
-    binding: &Binding,
-    facts: Option<&SendingFacts>,
-) -> Option<ReplyBlock> {
-    let Some(account) = account else {
-        return Some(ReplyBlock::NoAccount);
-    };
-    if account.state != AccountState::Connected {
-        return Some(ReplyBlock::Disconnected);
-    }
-    if binding.state != BindingState::Active {
-        return Some(ReplyBlock::GroupUnavailable);
-    }
-    let Some(facts) = facts.filter(|facts| facts.observing) else {
-        return Some(ReplyBlock::NotObserving);
-    };
-    if !facts.remote_member || !facts.can_post {
-        return Some(ReplyBlock::NotAllowedInGroup);
-    }
-    None
-}
-
-fn validate_text(text: &str) -> LinkedResult<()> {
-    if text.trim().is_empty() || text.len() > TEXT_LIMIT_BYTES {
-        return Err(
-            LinkedError::Invalid("the message is empty or longer than the text limit").into(),
-        );
-    }
-    Ok(())
-}
-
-/// Each mention is a person's WhatsApp id that the text names as
-/// `@<user part>`, the way WhatsApp renders it.
-fn validate_mentions(text: &str, mentions: &[String]) -> LinkedResult<()> {
-    if mentions.len() > MENTION_LIMIT {
-        return Err(LinkedError::Invalid("too many mentions in one message").into());
-    }
-    for mention in mentions {
-        let user = Jid::parse(mention)
-            .filter(|jid| jid.is_person())
-            .ok_or(LinkedError::Invalid(
-                "a mention is not a WhatsApp participant",
-            ))?
-            .user;
-        if !text.contains(&format!("@{user}")) {
-            return Err(LinkedError::Invalid("a mentioned person is not named in the text").into());
-        }
-    }
-    Ok(())
-}
-
-pub(crate) fn validate_request(request: &SendReply) -> LinkedResult<()> {
-    if request.idempotency_key.is_nil() {
-        return Err(LinkedError::Invalid("a stable send intent key is required").into());
-    }
-    match &request.message {
-        ReplyContent::Text { text, mentions } => {
-            validate_text(text)?;
-            validate_mentions(text, mentions)
-        }
-        ReplyContent::Media { caption: None, .. } => Ok(()),
-        ReplyContent::Media {
-            caption: Some(caption),
-            ..
-        } => validate_text(caption),
-        ReplyContent::Mutation {
-            operation: Mutation::Edit,
-            text: Some(text),
-            ..
-        } => validate_text(text),
-        ReplyContent::Mutation {
-            operation: Mutation::Reaction,
-            text: Some(emoji),
-            ..
-        } if emoji.chars().count() <= 32 && !emoji.chars().any(char::is_control) => Ok(()),
-        ReplyContent::Mutation {
-            operation: Mutation::Delete,
-            text: None,
-            ..
-        } => Ok(()),
-        ReplyContent::Mutation { .. } => {
-            Err(LinkedError::Invalid("invalid message operation").into())
-        }
-    }
-}
-
-/// Edits and deletes are limited to the person's own recent messages.
-pub(crate) fn authorize_mutation(
-    operation: Mutation,
-    target: &MutationTarget,
-    identity: &str,
-    now: DateTime<Utc>,
-) -> LinkedResult<()> {
-    if operation == Mutation::Reaction {
-        return Ok(());
-    }
-    if !target.sent_by.iter().any(|jid| jid == identity) {
-        return Err(LinkedError::Forbidden.into());
-    }
-    if now - target.source_at > chrono::Duration::seconds(MUTATION_WINDOW_SECONDS) {
-        return Err(LinkedError::Invalid("the time to change this message has passed").into());
-    }
-    Ok(())
 }

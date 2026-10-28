@@ -46,6 +46,9 @@ between the sandbox and the rest of the product.
 
 External runtimes receive the session's configured MCP selection when binding,
 including enabled owner connections and custom servers under `OwnerConnections`.
+Under `Selected`, an overlaid app (`pipedream_mcp` `mcp_overlays`) the owner
+authorized natively is advertised as that custom server instead of its slug;
+an app connected that way also satisfies the `app.connected` resume check.
 Use `external_mcp_servers` to preserve the host-reachable egress URL override.
 
 External chat replies use `domain/service/external_replies.rs` and the

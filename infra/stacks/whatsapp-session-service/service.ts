@@ -291,6 +291,9 @@ export class WhatsappSessionService extends pulumi.ComponentResource {
                   options: {
                     Name: 'datadog',
                     Host: 'http-intake.logs.us5.datadoghq.com',
+                    // Egress allows only 443; Fluent Bit defaults to plain 80.
+                    TLS: 'on',
+                    Port: '443',
                     apikey: DATADOG_API_KEY,
                     dd_service: BASE_NAME,
                     dd_source: 'fargate',

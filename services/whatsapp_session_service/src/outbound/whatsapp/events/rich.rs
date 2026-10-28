@@ -4,15 +4,15 @@
 //! messages of history pages.
 
 use chrono::{DateTime, Utc};
+use external_chat::domain::rich::{
+    Call, CallOutcome, ContactCard, Contacts, Event, Location, Poll, PollOption, PollVote,
+    RichContent, SystemAction, SystemLine, web_link,
+};
 use nom::Parser;
 use nom::bytes::complete::{take_till, take_while1};
 use nom::character::complete::char;
 use nom::combinator::opt;
 use nom::sequence::terminated;
-use whatsapp_linked::domain::rich::{
-    Call, CallOutcome, ContactCard, Contacts, Event, Location, Poll, PollOption, PollVote,
-    RichContent, SystemAction, SystemLine, web_link,
-};
 use whatsmeow::msgsecret::hash_poll_options;
 use whatsmeow::proto::wa_e2e;
 use whatsmeow::proto::wa_e2e::call_log_message;

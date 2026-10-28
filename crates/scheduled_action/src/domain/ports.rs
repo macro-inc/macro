@@ -1,5 +1,5 @@
 use super::event_runs::{AuthorizedEventRun, ClaimToken, ConfigurationRevision};
-use super::event_trigger::EventReference;
+use super::event_trigger::{EventName, EventReference};
 use super::execution::ExecutionHandle;
 use super::models::{
     ActionExecutionRecord, CreateScheduledAction, DispatchEvent, InProgressExecution,
@@ -260,4 +260,58 @@ pub trait ScheduledAgentRunner: Send + Sync + 'static {
 
 pub trait ScheduledActionLiveUpdate: Send + Sync + 'static {
     fn publish_update(&self, update: ScheduledActionUpdate) -> impl Future<Output = ()> + Send;
+}
+
+/// What started a finished routine run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RunTrigger {
+    /// One of its schedules came due.
+    Scheduled,
+    /// Its owner started it by hand.
+    Manual,
+    /// An event it watches happened.
+    Event(EventName),
+}
+
+/// Who did a routine run's work.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RunTarget {
+    /// A model, prompted directly.
+    Model,
+    /// One of the owner's agents.
+    Agent,
+    /// The task could not be read.
+    Unknown,
+}
+
+/// How a routine run ended.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RunEnd {
+    Succeeded,
+    Failed,
+    /// Shutdown or the event worker stopped it.
+    Interrupted,
+    /// The owner's AI allowance refused the run before it started.
+    AiLimitReached,
+}
+
+/// A routine run that started and then ended, whatever the outcome.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FinishedRoutineRun {
+    pub owner: MacroUserIdStr<'static>,
+    pub routine_id: Uuid,
+    pub trigger: RunTrigger,
+    pub target: RunTarget,
+    pub end: RunEnd,
+    pub duration: chrono::Duration,
+}
+
+/// Told about every finished routine run, e.g. for product analytics.
+/// Called on the run's task, so implementations must be quick or spawn.
+pub trait RoutineRunObserver: Send + Sync + 'static {
+    fn run_finished(&self, run: FinishedRoutineRun);
+}
+
+impl RoutineRunObserver for () {
+    fn run_finished(&self, _run: FinishedRoutineRun) {}
 }

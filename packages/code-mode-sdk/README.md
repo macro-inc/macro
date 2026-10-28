@@ -15,8 +15,8 @@ The harness mints a Macro API JWT for the owner, lasting 60 seconds, after the
 session's execution approval policy permits the run. Its signed agent identity comes from
 the authenticated session. SDK messages use that agent as sender and record the
 owner as `triggered_by`; other SDK endpoints retain normal user authentication.
-WhatsApp reads, sends and media uploads use the credential owner's own linked
-connection. Owner API tokens can send, including signed agent-attributed tokens;
+External chat reads, sends and media uploads use the credential owner's own
+provider connection. Owner API tokens can send, including signed agent-attributed tokens;
 bot credentials never send. Pairing and account/access controls require the person's
 bearer session.
 Deno permits network access only to configured Macro service hosts and denies
@@ -37,7 +37,7 @@ symbol, each class split into its own methods, with links rewritten to the
 symbols they name. Wire types an entity reaches are included as symbols; a name
 two pages share is qualified by its service or entity (`storage.Message`).
 Discovery uses at most 32 topics; agent and host setup share a topic, as do
-native channels and linked WhatsApp groups. New SDK
+native channels, external chats and WhatsApp. New SDK
 services must also be registered in the generated operation-label catalog.
 There is no separate declaration parser. Private, protected and internal members
 are excluded. `DescribeCodeTools` provides the compact catalog, entity indexes and workflow

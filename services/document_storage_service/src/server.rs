@@ -1480,21 +1480,20 @@ pub async fn run() -> anyhow::Result<()> {
         entity_access_service: entity_access_service.clone(),
         authorization_state: authorization_state.clone(),
     };
-    let whatsapp_linked_state =
-        crate::whatsapp_linked::build(crate::whatsapp_linked::Dependencies {
-            redis: redis_client.clone(),
-            static_files: static_file_service_client::StaticFileServiceClient::new(
-                config.internal_api_key.to_string(),
-                StaticFileServiceUrl::new()?.to_string(),
-            ),
-            pool: db.clone(),
-            access: entity_access_service.clone(),
-            authorization: authorization_state.clone(),
-            notifications: notification_ingress_service.clone(),
-            connection_gateway: conn_gateway_client.clone(),
-            tracker: consumer_tracker.clone(),
-            cancellation: consumer_cancellation_token.clone(),
-        });
+    let external_chat_state = crate::external_chat::build(crate::external_chat::Dependencies {
+        redis: redis_client.clone(),
+        static_files: static_file_service_client::StaticFileServiceClient::new(
+            config.internal_api_key.to_string(),
+            StaticFileServiceUrl::new()?.to_string(),
+        ),
+        pool: db.clone(),
+        access: entity_access_service.clone(),
+        authorization: authorization_state.clone(),
+        notifications: notification_ingress_service.clone(),
+        connection_gateway: conn_gateway_client.clone(),
+        tracker: consumer_tracker.clone(),
+        cancellation: consumer_cancellation_token.clone(),
+    });
 
     // Held by value here and behind an `Arc` in the router state: the impl is a
     // pool handle, so cloning is cheap and `SoupImpl` needs an owned service.
@@ -2157,7 +2156,7 @@ pub async fn run() -> anyhow::Result<()> {
             authorization_state.clone(),
         ),
         slack_state,
-        whatsapp_linked_state,
+        external_chat_state,
         reminders_state: RemindersRouterState::new(
             Arc::new(reminders_service),
             entity_access_service.clone(),

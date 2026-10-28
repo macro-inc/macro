@@ -52,7 +52,7 @@ fn team_reviewers(facts: &SharingFacts) -> Vec<MacroUserIdStr<'static>> {
 pub fn supported_levels(kind: ShareEntityType, file_type: Option<&str>) -> Vec<AccessLevel> {
     use AccessLevel::{Comment, Edit, View};
     match kind {
-        ShareEntityType::WhatsAppGroup | ShareEntityType::EmailThread => vec![View],
+        ShareEntityType::ExternalChat | ShareEntityType::EmailThread => vec![View],
         ShareEntityType::Document => match file_type {
             Some("md" | "docx" | "spreadsheet" | "pptx") => vec![View, Comment, Edit],
             _ => vec![View, Comment],

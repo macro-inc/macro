@@ -55,7 +55,7 @@ events to the `macro.properties` Kafka topic.
 - `cargo test -p properties --no-default-features --features outbound` to
   check the outbound-only build other services depend on.
 
-- Standalone `WhatsAppGroup` currently has no property-storage mapping.
+- `ExternalChat` currently has no property-storage mapping.
 
 ## Related
 

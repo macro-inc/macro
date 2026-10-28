@@ -12,7 +12,7 @@ import { ConversationSectionList } from '../components/conversation-sections';
 import { PairingDialog, type PasskeyMode } from '../components/pairing-dialog';
 import { useWhatsAppLinked } from '../context/whatsapp-linked-context';
 import { accountStatus } from '../core/account';
-import { adoptFailureMessage } from '../core/adopt';
+import { addFailureMessage } from '../core/add';
 import {
   chatSections,
   conversationSections,
@@ -108,16 +108,16 @@ export function WhatsAppPage(props: {
       else next.delete(jid);
       return next;
     });
-  const adopt = async (chat: WhatsAppChat) => {
+  const add = async (chat: WhatsAppChat) => {
     if (adding().has(chat.jid)) return;
     setAddErrors(({ [chat.jid]: _previous, ...rest }) => rest);
     setPending(chat.jid, true);
-    const result = await whatsapp.adopt(chat.jid);
+    const result = await whatsapp.add(chat);
     setPending(chat.jid, false);
     if (result.isErr())
       setAddErrors((current) => ({
         ...current,
-        [chat.jid]: adoptFailureMessage(result.error),
+        [chat.jid]: addFailureMessage(result.error),
       }));
   };
 
@@ -187,11 +187,11 @@ export function WhatsAppPage(props: {
                                 errors={addErrors()}
                                 onAdd={(chat) =>
                                   fireAndForget(
-                                    adopt(chat),
-                                    'whatsapp-linked.adopt'
+                                    add(chat),
+                                    'whatsapp-linked.add'
                                   )
                                 }
-                                onOpenGroup={whatsapp.openGroup}
+                                onOpenChat={whatsapp.openChat}
                               />
                             )}
                           />

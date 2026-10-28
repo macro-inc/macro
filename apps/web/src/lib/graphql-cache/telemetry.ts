@@ -22,6 +22,7 @@ export const CACHE_TELEMETRY_EVENT_NAMES = [
   'graphql_cache.storage_reset_required',
   'graphql_cache.logical_reset',
   'graphql_cache.revision_advance',
+  'graphql_cache.change_batch',
   'graphql_cache.reset_wipe',
   'graphql_cache.origin_storage_pressure',
   'graphql_cache.linear_memory',

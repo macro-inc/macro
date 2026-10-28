@@ -15,6 +15,7 @@ use macro_authorization::{
 };
 use macro_service_urls::{ConnectionGatewayUrl, LexicalServiceUrl};
 pub mod config;
+mod routine_analytics;
 use config::Config;
 use scheduled_action::domain::event_runs::{
     PageSize, admission::EventAdmissionService, condition::ConditionGate,
@@ -131,7 +132,15 @@ pub async fn build(
         lifecycle.executions.clone(),
         lifecycle.stop_executions.clone(),
     )
-    .with_admission(ai_admission);
+    .with_admission(ai_admission)
+    .with_observer(Arc::new(routine_analytics::RoutineAnalytics(
+        agent_harness_service::product_analytics::ProductAnalytics::new(
+            config.posthog_api_key.value(),
+            config.posthog_host.value(),
+            environment,
+            &db,
+        ),
+    )));
     let service_executor = Arc::new(dispatcher_executor.clone());
 
     let jwt_args = JwtValidationArgs::new_with_secret_manager(environment, &secretsmanager_client)
