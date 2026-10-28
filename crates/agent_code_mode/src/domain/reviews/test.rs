@@ -900,7 +900,8 @@ async fn a_view_the_renderer_would_not_draw_is_turned_back_with_what_to_fix() {
     else {
         panic!("the view is turned back");
     };
-    let types = r#""md", "timeline", "list", "channelMessage", "container""#;
+    let types =
+        r#""md", "timeline", "list", "channelMessage", "events", "cards", "tags", "container""#;
     let listed = (0..10)
         .map(|index| format!("- view.widgets[{index}].type should be one of {types}\n"))
         .collect::<String>();

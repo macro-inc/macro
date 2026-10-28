@@ -4,7 +4,8 @@ use crate::view_problems;
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
 
-const WIDGET_TYPES: &str = r#""md", "timeline", "list", "channelMessage", "container""#;
+const WIDGET_TYPES: &str =
+    r#""md", "timeline", "list", "channelMessage", "events", "cards", "tags", "container""#;
 
 /// One of every widget, with every field the schema names.
 fn every_widget() -> Value {
@@ -32,6 +33,17 @@ fn every_widget() -> Value {
             },
             { "type": "list", "source": { "kind": "query", "query": { "include": { "documentId": ["doc-1"] } } } },
             { "type": "channelMessage", "channelId": "channel-1", "messageId": "message-1" },
+            { "type": "events", "title": "This week", "events": [{ "eventId": "event-1", "occurrenceKey": "2026-10-14" }] },
+            { "type": "cards", "title": "Docs", "items": [{ "type": "document", "id": "doc-1" }] },
+            {
+                "type": "tags",
+                "title": "Engineering tags",
+                "tags": [{
+                    "label": "Type",
+                    "description": "What kind of work it is",
+                    "children": [{ "label": "bug", "color": "red", "tagId": "tag-1" }]
+                }]
+            },
             {
                 "type": "container",
                 "direction": "row",
@@ -79,6 +91,26 @@ fn a_markdown_type_and_a_list_without_a_source_are_named() {
         [
             format!("view.widgets[0].type should be one of {WIDGET_TYPES}"),
             r#"view.widgets[1] is missing "source""#.to_owned(),
+        ]
+    );
+}
+
+#[test]
+fn a_tags_widget_without_tags_and_an_invented_card_type_are_named() {
+    let view = json!({
+        "title": "Workspace setup",
+        "widgets": [
+            { "type": "tags", "title": "Created tags" },
+            { "type": "cards", "items": [{ "type": "spaceship", "id": "s-1" }] },
+            { "type": "tags", "tags": [{ "label": "Type", "children": [{ "color": "red" }] }] }
+        ]
+    });
+    assert_eq!(
+        view_problems(&view),
+        [
+            r#"view.widgets[0] is missing "tags""#.to_owned(),
+            r#"view.widgets[1].items[0].type should be one of "document", "email_thread", "calendar_event", "project", "channel", "routine", "form", "initiative""#.to_owned(),
+            r#"view.widgets[2].tags[0].children[0] is missing "label""#.to_owned(),
         ]
     );
 }

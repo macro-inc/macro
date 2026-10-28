@@ -1478,8 +1478,16 @@ the tool. Older sessions' `DisplayResults` calls, and AI chat's, still render
 the same way.
 
 A presented view breaks tool groups before and after itself; later calls start
-a separate group. Its dashboard supports markdown, timelines, entity lists, and
-channel messages, using the same full-width view as AI chat. Malformed views
+a separate group. Its dashboard supports markdown, timelines, entity lists,
+channel messages, item cards, calendar agendas and tags, using the same
+full-width view as AI chat. An item card (one to four items: a document or
+spreadsheet, an email thread, an event, a project, a channel, a routine, a form
+or an initiative) loads its item with the viewer's own access and opens it; a
+routine's card can pause it or run it now. An agenda loads its events live
+from the viewer's calendars and groups them by day. A tags widget nests tags
+to any depth as coloured pills. A list holds a fixed height and says how many
+items are below it. The dynamic UI gallery (`/app/component/dynamic-ui`) shows
+each widget. Malformed views
 show **Couldn't render dashboard**; failed calls show a **Failed** summary row
 without a disclosure.
 

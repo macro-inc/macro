@@ -60,6 +60,41 @@ describe('DisplayResults tool contract', () => {
               channelId: 'channel-1',
               messageId: 'message-1',
             },
+            {
+              type: 'events',
+              title: 'This week',
+              events: [{ eventId: 'event-1', occurrenceKey: '2026-10-14' }],
+            },
+            {
+              type: 'cards',
+              items: [
+                { type: 'document', id: 'doc-1' },
+                { type: 'routine', id: 'routine-1' },
+              ],
+            },
+            {
+              type: 'tags',
+              title: 'Company tags',
+              tags: [
+                {
+                  label: 'Area',
+                  children: [
+                    {
+                      label: 'Platform',
+                      color: 'teal',
+                      children: [
+                        {
+                          label: 'infra',
+                          color: '#FFB224',
+                          description: 'Cloud and CI/CD',
+                          tagId: 'tag-1',
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
           ],
         },
       ],
@@ -82,6 +117,23 @@ describe('DisplayResults tool contract', () => {
               kind: 'items',
               entities: [{ id: 'doc-1', type: 'invented' }],
             },
+          },
+        ],
+      },
+    },
+    {
+      view: {
+        widgets: [{ type: 'cards', items: [{ type: 'spaceship', id: 's-1' }] }],
+      },
+    },
+    { view: { widgets: [{ type: 'events', events: [{}] }] } },
+    { view: { widgets: [{ type: 'tags', tags: [{ color: 'red' }] }] } },
+    {
+      view: {
+        widgets: [
+          {
+            type: 'tags',
+            tags: [{ label: 'Area', children: [{ description: 'No name' }] }],
           },
         ],
       },
@@ -118,6 +170,8 @@ describe('PresentView tool contract', () => {
     const schema = presentViewToolSchema();
     expect(schema.title).toBe('PresentView');
     expect(schema.description).toContain('the user will not ask');
+    expect(schema.description).toContain('in a cards widget');
+    expect(schema.description).toContain('use a tags widget');
     expect(schema.description).toContain('never invent ids');
     expect(schema.description).toContain('checked against this schema');
     expect(schema.required).toEqual(['view']);

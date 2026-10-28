@@ -1,4 +1,8 @@
 import {
+  CollectionCard,
+  CollectionGroup,
+} from '@app/features/agent-cards/components/collection';
+import {
   compileToAst,
   defineQueryFilters,
   type Query,
@@ -9,25 +13,24 @@ import { soupItemMatchesQuery } from '@app/features/next-soup/filters/query-filt
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import type { EntityIconSelector } from '@core/component/EntityIcon';
 import { ListEntityMetadataQueryProvider } from '@entity';
-import { CollapsibleList } from '@entity/components/CollapsibleList';
 import { ListEntity, ListLayoutProvider } from '@entity/composed/ListEntity';
 import type { EntityData } from '@entity/types/entity';
 import type { WithNotification } from '@entity/types/notification';
-import type { GroupByField } from '@queries/soup/grouped/types';
+import type { GroupByField, GroupMeta } from '@queries/soup/grouped/types';
 import {
   type SoupApiItemFilter,
   type SoupAstItemsQueryArgs,
   useSoupAstItemsQuery,
 } from '@queries/soup/items';
-import { cn } from '@ui';
-import { createMemo, Show, Suspense } from 'solid-js';
+import { createMemo, For, Show, Suspense } from 'solid-js';
 import type { EntityRef, WidgetOf } from '../schema';
-import { SURFACE, TEXT } from '../tokens';
 
 /**
- * A list of workspace items, styled to match SoupView's grouped "card view":
- * a bold group header above a rounded card of rows, with a "Show N More" footer.
+ * A list of workspace items, as an agent collection card: a header with the
+ * title and count, the rows, group headers when grouped, and a fixed height
+ * with "N more below" once the list is long.
  *
  * ── Real unified-list rows ───────────────────────────────────────────────────
  * Rows render via {@link ListEntity} — the very same component the soup list uses
@@ -75,6 +78,7 @@ const ID_FIELD_BY_TYPE: Partial<Record<EntityRef['type'], IdFieldName>> = {
   call: 'callId',
   foreign_entity: 'foreignEntityRecordId',
   crm_company: 'crmCompanyId',
+  calendar_event: 'calendarEventId',
   // user / team / crm_contact / static_file have no soup item filter — skipped.
 };
 
@@ -129,23 +133,55 @@ function queryItemFilter(source: Query): SoupApiItemFilter {
 function Row(props: { entity: WithNotification<EntityData> }) {
   const notificationSource = useGlobalNotificationSource();
   return (
-    <ListEntity
-      entity={props.entity}
-      hideCheckbox
-      onClick={() =>
-        openEntityInSplitFromUnifiedList(props.entity, {
-          notificationSource,
-        })
-      }
-    />
+    <div data-card-row class="min-w-0">
+      <ListEntity
+        entity={props.entity}
+        hideCheckbox
+        onClick={() =>
+          openEntityInSplitFromUnifiedList(props.entity, {
+            notificationSource,
+          })
+        }
+      />
+    </div>
   );
 }
 
-function Rows(props: {
-  source: ListProps['source'];
-  limit?: number;
-  groupBy?: ListProps['groupBy'];
-}) {
+/** The icon a collection's header takes: the rows' own kind, or a mix. */
+function collectionIcon(entities: readonly EntityData[]): EntityIconSelector {
+  const kind = entities[0]?.type;
+  if (!kind || entities.some((entity) => entity.type !== kind)) return 'files';
+  return kind as EntityIconSelector;
+}
+
+type Section = { label?: string; entities: WithNotification<EntityData>[] };
+
+/**
+ * The rows in the order the query grouped them, each group under its
+ * label. Rows the groups do not name close the list unlabeled, so nothing
+ * the query returned goes missing.
+ */
+function sections(
+  entities: WithNotification<EntityData>[],
+  groups: readonly GroupMeta[] | undefined
+): Section[] {
+  if (!groups?.length) return [{ entities }];
+  const byId = new Map(entities.map((entity) => [entity.id, entity]));
+  const placed = new Set<string>();
+  const grouped = groups.flatMap((group) => {
+    const rows = group.itemIds.flatMap((id) => {
+      const entity = byId.get(id);
+      if (!entity || placed.has(id)) return [];
+      placed.add(id);
+      return [entity];
+    });
+    return rows.length ? [{ label: group.label, entities: rows }] : [];
+  });
+  const rest = entities.filter((entity) => !placed.has(entity.id));
+  return rest.length ? [...grouped, { entities: rest }] : grouped;
+}
+
+function Rows(props: ListProps) {
   const query = createMemo<Query>(() => {
     const src = props.source;
     return src.kind === 'items' ? refsToQuery(src.entities) : src.query;
@@ -179,75 +215,65 @@ function Rows(props: {
       withEntityNotifications(entity, notificationSource)
     );
   });
+  const count = () => entities().length;
+  const counted = () => `${count()} ${count() === 1 ? 'item' : 'items'}`;
 
   return (
-    <Show
-      when={entities().length > 0}
-      fallback={
-        <div class={cn('px-3 py-6 text-center text-sm', TEXT.tertiary)}>
-          No items.
-        </div>
-      }
+    <CollectionCard
+      title={props.title ?? counted()}
+      subtitle={props.title ? counted() : undefined}
+      icon={collectionIcon(entities())}
+      count={count()}
+      live={props.source.kind === 'query'}
+      state="ready"
     >
-      <CollapsibleList
-        items={entities()}
-        visibleCount={3}
-        togglePosition="bottom"
-      >
-        {(entity) => <Row entity={entity} />}
-      </CollapsibleList>
-    </Show>
+      <For each={sections(entities(), itemsQuery.data?.groups)}>
+        {(section) => (
+          <Show
+            when={props.groupBy && section.label}
+            fallback={
+              <For each={section.entities}>
+                {(entity) => <Row entity={entity} />}
+              </For>
+            }
+          >
+            {(label) => (
+              <CollectionGroup label={label()}>
+                <For each={section.entities}>
+                  {(entity) => <Row entity={entity} />}
+                </For>
+              </CollectionGroup>
+            )}
+          </Show>
+        )}
+      </For>
+    </CollectionCard>
   );
 }
 
+/**
+ * Many workspace items as one collection card. Rows are the unified list's
+ * own, live from the soup query; a long list holds a fixed height and says
+ * how much is below it, and while the query loads the card keeps its
+ * height with skeleton rows.
+ */
 export function List(props: ListProps) {
   return (
     <ListEntityMetadataQueryProvider>
       <ListLayoutProvider ref={() => undefined}>
-        <div class="flex w-full min-w-0 flex-col gap-2">
-          {/* Group header, soup-style: bold title above the card. */}
-          <Show when={props.title}>
-            {(title) => (
-              <div
-                class={cn(
-                  'flex items-center gap-2 px-1 text-sm font-semibold',
-                  TEXT.primary
-                )}
-              >
-                {title()}
-              </div>
-            )}
-          </Show>
-
-          {/*
-           * Flush row container (mirrors SoupView's unified list): no
-           * per-row dividers/borders. Each `ListEntity` brings its own
-           * rounded inset highlight pill (`mx-1`), so the card just needs a
-           * hair of vertical padding for the pills to breathe — adding
-           * `divide-y`/per-row borders here would box those highlights in.
-           */}
-          <div
-            class={cn(
-              'overflow-hidden rounded-lg border py-1',
-              SURFACE.borderMuted
-            )}
-          >
-            {/* Soup fetches suspend; guard so it can't blank the surrounding view. */}
-            <Suspense
-              fallback={
-                <div class={cn('px-3 py-6 text-center text-sm', TEXT.tertiary)}>
-                  Loading…
-                </div>
-              }
-            >
-              <Rows
-                source={props.source}
-                limit={props.limit}
-                groupBy={props.groupBy}
-              />
-            </Suspense>
-          </div>
-        </div>
+        {/* Soup fetches suspend; guard so it can't blank the surrounding view. */}
+        <Suspense
+          fallback={
+            <CollectionCard
+              title={props.title ?? 'Items'}
+              count={0}
+              live={props.source.kind === 'query'}
+              state="loading"
+            />
+          }
+        >
+          <Rows {...props} />
+        </Suspense>
       </ListLayoutProvider>
     </ListEntityMetadataQueryProvider>
   );
