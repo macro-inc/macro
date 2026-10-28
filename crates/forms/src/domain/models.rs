@@ -124,6 +124,12 @@ pub enum SharingRefusal {
     /// or names no level.
     #[error("a channel grant is invalid")]
     InvalidChannelGrant,
+    /// Earlier responses already name their respondents, and the database
+    /// keeps those names in its history, so anonymity cannot start late.
+    #[error(
+        "responses already name their respondents; make a form anonymous before anyone responds"
+    )]
+    RespondentsAlreadyNamed,
 }
 
 /// Errors of the forms domain.

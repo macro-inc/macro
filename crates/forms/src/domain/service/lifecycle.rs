@@ -24,7 +24,7 @@ use crate::domain::events::{
 };
 use crate::domain::models::{
     Audience, ForbiddenWidget, Form, FormAccess, FormError, FormId, FormUpdate, ListedForm,
-    UpdateForm, Widget,
+    SharingRefusal, UpdateForm, Widget,
 };
 use crate::domain::ports::{Clock, FormAccessDirectory, FormEventPublisher, FormsRepo};
 
@@ -83,6 +83,16 @@ where
             .flatten()
         {
             within(text, MAX_TEXT_LENGTH)?;
+        }
+        if update.respondent_hidden == Some(true) && !form.respondent_hidden {
+            let counts = self
+                .repository
+                .response_counts(form.id)
+                .await
+                .map_err(repository_error)?;
+            if counts.submitted > 0 {
+                return Err(SharingRefusal::RespondentsAlreadyNamed.into());
+            }
         }
         // A public form asks for no file: going public holds only if no
         // question asks for one when the change commits. A file widget left
