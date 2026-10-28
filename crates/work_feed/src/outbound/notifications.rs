@@ -2,6 +2,7 @@
 
 use std::{collections::HashMap, sync::Arc};
 
+use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use model_notifications::NotifEvent;
@@ -51,6 +52,17 @@ where
             .into_iter()
             .map(|(entity, rows)| (entity, rows.into_iter().map(Arc::new).collect()))
             .collect())
+    }
+
+    async fn active_ids_through(
+        &self,
+        user: MacroUserIdStr<'static>,
+        entity: Entity<'static>,
+        through: DateTime<Utc>,
+    ) -> Result<Vec<Uuid>, Report> {
+        self.reader
+            .get_active_notification_ids_through(user, entity, through)
+            .await
     }
 
     async fn set_done(

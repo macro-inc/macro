@@ -76,6 +76,15 @@ pub trait NotificationReader: Send + Sync + 'static {
         req: UpdateNotificationsForEntitiesRequest,
     ) -> impl Future<Output = Result<Vec<UserNotificationRow<T>>, Report>> + Send;
 
+    /// Get all active IDs for one viewer-owned entity through an observed timestamp.
+    /// This mutation lookup is not capped by notification edge display limits.
+    fn get_active_notification_ids_through(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        entity: Entity<'static>,
+        through: chrono::DateTime<chrono::Utc>,
+    ) -> impl Future<Output = Result<Vec<Uuid>, Report>> + Send;
+
     /// Get a user's non-deleted notifications, paginated.
     ///
     /// Returns at most `limit` (default 20, max 500) notifications matching
@@ -711,7 +720,12 @@ where
     ) -> Result<Vec<UserNotificationRow<T>>, Report> {
         let notification_ids = self
             .repository
-            .get_notification_ids_for_entities(req.user_id.copied(), &req.entities, &req.status)
+            .get_notification_ids_for_entities(
+                req.user_id.copied(),
+                &req.entities,
+                &req.status,
+                None,
+            )
             .await?;
 
         if notification_ids.is_empty() {
@@ -724,6 +738,23 @@ where
             status: req.status,
         })
         .await
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_active_notification_ids_through(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        entity: Entity<'static>,
+        through: chrono::DateTime<chrono::Utc>,
+    ) -> Result<Vec<Uuid>, Report> {
+        self.repository
+            .get_notification_ids_for_entities(
+                user_id,
+                &[entity],
+                &NotificationStatus::Done(true),
+                Some(through),
+            )
+            .await
     }
 
     #[tracing::instrument(err, skip(self))]

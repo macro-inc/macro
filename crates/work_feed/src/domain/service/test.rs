@@ -1,5 +1,6 @@
 use std::sync::Mutex;
 
+use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use notification::domain::models::NotificationState;
 use serde_json::json;
@@ -120,10 +121,29 @@ impl WorkFeedNotifications for FakeNotifications {
                     .into_iter()
                     .flatten()
                     .filter(|n| n.state != NotificationState::Done)
+                    .take(20)
                     .cloned()
                     .collect();
                 (entity, active)
             })
+            .collect())
+    }
+
+    async fn active_ids_through(
+        &self,
+        _user: MacroUserIdStr<'static>,
+        entity: Entity<'static>,
+        through: DateTime<Utc>,
+    ) -> Result<Vec<Uuid>, Report> {
+        Ok(self
+            .by_entity
+            .lock()
+            .unwrap()
+            .get(&entity)
+            .into_iter()
+            .flatten()
+            .filter(|n| n.state != NotificationState::Done && n.created_at <= through)
+            .map(|n| n.notification_id)
             .collect())
     }
 
@@ -464,6 +484,45 @@ async fn done_acknowledges_only_what_was_observed() {
     assert_eq!(
         *service.signals.calls.lock().unwrap(),
         vec![vec![doc.entity().clone()]]
+    );
+}
+
+#[tokio::test]
+async fn done_acknowledges_history_beyond_the_display_limit() {
+    let mut notifications = vec![doc_comment(100, DOC, 0xB0, 0xB0, 8)];
+    notifications.extend((1..=25).map(|id| doc_comment(id, DOC, 0xA0, 0xA0, 6)));
+    let service = service(
+        vec![candidate(
+            "doc",
+            entity(EntityType::Document, DOC),
+            Some(8),
+            Some(9),
+        )],
+        notifications,
+    );
+    let outcome = service
+        .mark_done(
+            viewer(),
+            vec![WorkFeedDoneTarget {
+                key: key(entity(EntityType::Document, DOC)),
+                revision: Some(WorkFeedRevision {
+                    attention_through: Some(at(6)),
+                }),
+            }],
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(outcome.receipt.notification_ids.len(), 25);
+    for id in 1..=25 {
+        assert_eq!(
+            service.notifications.state_of(uuid(id)),
+            NotificationState::Done
+        );
+    }
+    assert_eq!(
+        service.notifications.state_of(uuid(100)),
+        NotificationState::Unseen
     );
 }
 

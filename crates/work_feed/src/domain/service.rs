@@ -355,10 +355,13 @@ where
             let observed = target.revision.unwrap_or_else(|| item.revision());
             if let Some(through) = observed.attention_through {
                 notification_ids.extend(
-                    item.notifications
-                        .iter()
-                        .filter(|notification| notification.created_at <= through)
-                        .map(|notification| notification.notification_id),
+                    self.notifications
+                        .active_ids_through(
+                            viewer.user.clone(),
+                            target.key.entity().clone(),
+                            through,
+                        )
+                        .await?,
                 );
             }
             if assembled.facts.mail.is_some_and(|mail| mail.inbox_visible)

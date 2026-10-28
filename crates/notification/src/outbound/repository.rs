@@ -409,6 +409,7 @@ pub trait NotificationDbOps: DeviceRegistrationDbOps + Send + Sync + 'static {
         user_id: &MacroUserIdStr<'_>,
         entities: &[Entity<'_>],
         status: &NotificationStatus,
+        through: Option<DateTime<Utc>>,
     ) -> impl std::future::Future<Output = Result<Vec<Uuid>, Report>> + Send;
 
     /// Get basic notification data (collapse keys) for push clearing.
@@ -932,6 +933,7 @@ impl NotificationDbOps for PgPool {
         user_id: &MacroUserIdStr<'_>,
         entities: &[Entity<'_>],
         status: &NotificationStatus,
+        through: Option<DateTime<Utc>>,
     ) -> Result<Vec<Uuid>, Report> {
         let (states, include_unviewed) = status.entity_update_filter();
         let entity_types = entities
@@ -954,6 +956,7 @@ impl NotificationDbOps for PgPool {
             WHERE un.user_id = $1
               AND un.deleted_at IS NULL
               AND (un.state = ANY($4::notification_state[]) OR ($5 AND un.seen_at IS NULL))
+              AND ($6::timestamp IS NULL OR un.created_at <= $6)
               AND EXISTS (
                   SELECT 1
                   FROM requested_entities entity
@@ -977,6 +980,7 @@ impl NotificationDbOps for PgPool {
             &entity_ids,
             states as _,
             include_unviewed,
+            through.map(|time| time.naive_utc()),
         )
         .fetch_all(self)
         .await?;
@@ -1541,9 +1545,10 @@ impl<D: NotificationDbOps + Send + Sync> NotificationRepository for DbNotificati
         user_id: MacroUserIdStr<'_>,
         entities: &[Entity<'_>],
         status: &NotificationStatus,
+        through: Option<DateTime<Utc>>,
     ) -> Result<Vec<Uuid>, Report> {
         self.db
-            .get_notification_ids_for_entities(&user_id, entities, status)
+            .get_notification_ids_for_entities(&user_id, entities, status, through)
             .await
     }
 

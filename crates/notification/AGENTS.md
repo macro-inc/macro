@@ -71,7 +71,8 @@ through the same service.
 - Entity notification reads always use `outbound/entity_notifications/query.sql`
   with a validated limit: 20 newest active rows by default, maximum 500 per entity.
   A limited edge is not complete history; bulk state changes must use the entity
-  mutation API, not only the IDs in the loaded edge.
+  mutation API, not only the IDs in the loaded edge. Timestamp-bounded acknowledgements
+  use `get_active_notification_ids_through` to leave newer notifications active.
 - Keep the query's lateral membership lookups and `OFFSET 0` fences: otherwise
   PostgreSQL may rescan the viewer's full history for each entity in a batch.
   The large-history generic-plan regression covers this with channel scoping on/off.

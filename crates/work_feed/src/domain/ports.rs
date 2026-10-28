@@ -97,6 +97,15 @@ pub trait WorkFeedNotifications: Send + Sync + 'static {
         entities: Vec<Entity<'static>>,
     ) -> impl Future<Output = Result<HashMap<Entity<'static>, Vec<FeedNotification>>, Report>> + Send;
 
+    /// All active notification IDs for an entity through the observed attention time.
+    /// Unlike `active`, this mutation lookup must not limit the number of results.
+    fn active_ids_through(
+        &self,
+        user: MacroUserIdStr<'static>,
+        entity: Entity<'static>,
+        through: DateTime<Utc>,
+    ) -> impl Future<Output = Result<Vec<Uuid>, Report>> + Send;
+
     /// Move the viewer's notifications to done, or back from done to seen.
     /// Returns the ids whose state changed.
     fn set_done(

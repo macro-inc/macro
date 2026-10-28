@@ -391,6 +391,7 @@ impl NotificationRepository for MockRepository {
         user_id: MacroUserIdStr<'_>,
         entities: &[model_entity::Entity<'_>],
         status: &NotificationStatus,
+        _through: Option<chrono::DateTime<chrono::Utc>>,
     ) -> Result<Vec<Uuid>, Report> {
         let (states, include_unviewed) = status.entity_update_filter();
         self.entity_lookup_filters
@@ -661,9 +662,10 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
         user_id: MacroUserIdStr<'_>,
         entities: &[model_entity::Entity<'_>],
         status: &NotificationStatus,
+        through: Option<chrono::DateTime<chrono::Utc>>,
     ) -> Result<Vec<Uuid>, Report> {
         (**self)
-            .get_notification_ids_for_entities(user_id, entities, status)
+            .get_notification_ids_for_entities(user_id, entities, status, through)
             .await
     }
 

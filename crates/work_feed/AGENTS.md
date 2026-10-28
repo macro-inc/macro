@@ -33,6 +33,11 @@ list of things that need the viewer's attention plus work they recently did.
 - Add a new feed item source: implement a port in `src/domain/ports.rs` → new
   adapter in `src/outbound/` → wire into `src/domain/policy.rs`.
 
+## Gotchas
+
+- Done uses a mutation-specific notification ID lookup through each item's observed
+  attention timestamp; never acknowledge only the bounded display notifications.
+
 ## Checks
 
 - `cargo test -p work_feed` (`SQLX_OFFLINE` unset).

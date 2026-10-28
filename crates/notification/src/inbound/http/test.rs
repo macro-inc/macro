@@ -112,6 +112,15 @@ impl MacroAuthorizationService for FakeAuthorizationService {
 struct AuthenticationTestService;
 
 impl NotificationReader for AuthenticationTestService {
+    async fn get_active_notification_ids_through(
+        &self,
+        _user_id: MacroUserIdStr<'_>,
+        _entity: model_entity::Entity<'static>,
+        _through: chrono::DateTime<chrono::Utc>,
+    ) -> Result<Vec<Uuid>, Report> {
+        unreachable!("should not be called")
+    }
+
     fn update_notifications(
         &self,
         _req: UpdateNotificationsRequest,
@@ -598,6 +607,15 @@ async fn internal_request_without_acting_user_is_unauthorized() {
 struct PresignedTestService;
 
 impl NotificationReader for PresignedTestService {
+    async fn get_active_notification_ids_through(
+        &self,
+        _user_id: MacroUserIdStr<'_>,
+        _entity: model_entity::Entity<'static>,
+        _through: chrono::DateTime<chrono::Utc>,
+    ) -> Result<Vec<Uuid>, Report> {
+        unreachable!("should not be called")
+    }
+
     fn update_notifications(
         &self,
         _req: UpdateNotificationsRequest,

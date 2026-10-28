@@ -127,11 +127,13 @@ pub trait NotificationRepository: Send + Sync + 'static {
 
     /// Get non-deleted, user-owned notification IDs associated with any primary or secondary
     /// entity that need the requested status transition or an initial viewing timestamp.
+    /// When supplied, `through` includes only rows created at or before that time.
     fn get_notification_ids_for_entities(
         &self,
         user_id: MacroUserIdStr<'_>,
         entities: &[Entity<'_>],
         status: &NotificationStatus,
+        through: Option<chrono::DateTime<chrono::Utc>>,
     ) -> impl Future<Output = Result<Vec<Uuid>, Report>> + Send;
 
     /// Get basic notification data (collapse keys) needed for push clearing.

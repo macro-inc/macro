@@ -462,7 +462,7 @@ async fn test_get_notification_ids_for_entities_matches_multiple_primary_and_sec
         EntityType::Project.with_entity_str("entity-1"),
     ];
     let notification_ids = pool
-        .get_notification_ids_for_entities(&user, &entities, &NotificationStatus::Seen)
+        .get_notification_ids_for_entities(&user, &entities, &NotificationStatus::Seen, None)
         .await
         .unwrap()
         .into_iter()
@@ -502,6 +502,7 @@ async fn test_get_notification_ids_for_entities_matches_task_entity(pool: Pool<P
             &user,
             &[EntityType::Document.with_entity_str(task_entity_id)],
             &NotificationStatus::Seen,
+            None,
         )
         .await
         .unwrap();
@@ -531,6 +532,7 @@ async fn test_get_notification_ids_for_entities_matches_message_entity(pool: Poo
             &user,
             &[EntityType::ChannelMessage.with_entity_str(&message_id)],
             &NotificationStatus::Seen,
+            None,
         )
         .await
         .unwrap();
@@ -588,6 +590,7 @@ async fn test_get_notification_ids_for_entities_matches_foreign_entities_includi
             &user,
             &[EntityType::ForeignEntity.with_entity_str(&foreign_entity_id)],
             &NotificationStatus::Seen,
+            None,
         )
         .await
         .unwrap();

@@ -165,6 +165,7 @@ impl NotificationRepository for MockRepo {
         _: MacroUserIdStr<'_>,
         _: &[model_entity::Entity<'_>],
         _: &crate::domain::models::request::NotificationStatus,
+        _: Option<chrono::DateTime<chrono::Utc>>,
     ) -> Result<Vec<uuid::Uuid>, Report> {
         unimplemented!()
     }

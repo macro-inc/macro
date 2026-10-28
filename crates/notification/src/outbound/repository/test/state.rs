@@ -77,6 +77,56 @@ async fn persisted_transitions_match_domain_policy(pool: Pool<Postgres>) -> Resu
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn entity_done_lookup_includes_all_observed_history(
+    pool: Pool<Postgres>,
+) -> Result<(), Report> {
+    let user = test_user("user@example.com");
+    let entity = EntityType::Document.with_entity_string(Uuid::now_v7().to_string());
+    let through = chrono::DateTime::parse_from_rfc3339("2020-01-01T00:00:00Z")
+        .unwrap()
+        .with_timezone(&Utc);
+    let mut expected = HashSet::new();
+    for index in 0..26 {
+        let id = Uuid::now_v7();
+        pool.create_notification(
+            SendNotificationRequestBuilder {
+                notification_entity: entity.clone(),
+                secondary_notification_entity: None,
+                notification: TaggedContent::new(TestNotification {
+                    message: "history".to_string(),
+                }),
+                sender_id: None,
+                recipient_ids: HashSet::from([user.clone()]),
+            },
+            id,
+            "test_service",
+            None,
+        )
+        .await?;
+        let created_at = if index < 25 {
+            expected.insert(id);
+            through
+        } else {
+            through + chrono::Duration::seconds(1)
+        };
+        sqlx::query!(
+            "UPDATE user_notification SET created_at = $3 WHERE user_id = $1 AND notification_id = $2",
+            user.as_ref(), id, created_at.naive_utc(),
+        ).execute(&pool).await?;
+    }
+    let ids = pool
+        .get_notification_ids_for_entities(
+            &user,
+            &[entity],
+            &NotificationStatus::Done(true),
+            Some(through),
+        )
+        .await?;
+    assert_eq!(ids.into_iter().collect::<HashSet<_>>(), expected);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn entity_updates_skip_noops_and_retries(pool: Pool<Postgres>) -> Result<(), Report> {
     let user = test_user("entity-transitions@test.com");
     let original_viewed_at = chrono::DateTime::parse_from_rfc3339("2020-01-01T00:00:00Z")
@@ -125,7 +175,7 @@ async fn entity_updates_skip_noops_and_retries(pool: Pool<Postgres>) -> Result<(
             }
         }
         let ids = pool
-            .get_notification_ids_for_entities(&user, std::slice::from_ref(&entity), &status)
+            .get_notification_ids_for_entities(&user, std::slice::from_ref(&entity), &status, None)
             .await?;
         assert_eq!(ids.iter().copied().collect::<HashSet<_>>(), expected);
         let updated = match status {
@@ -136,7 +186,7 @@ async fn entity_updates_skip_noops_and_retries(pool: Pool<Postgres>) -> Result<(
         };
         assert_eq!(updated.len(), expected.len());
         assert!(
-            pool.get_notification_ids_for_entities(&user, &[entity], &status)
+            pool.get_notification_ids_for_entities(&user, &[entity], &status, None)
                 .await?
                 .is_empty()
         );
