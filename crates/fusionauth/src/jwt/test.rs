@@ -1,5 +1,4 @@
-use serde_json::json;
-use wiremock::matchers::{body_json, header, method, path};
+use wiremock::matchers::{body_string, header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use crate::FusionAuthClient;
@@ -17,12 +16,13 @@ fn client(base_url: String) -> FusionAuthClient {
 }
 
 #[tokio::test]
-async fn revoke_refresh_token_sends_the_token_in_the_body() {
+async fn revoke_refresh_token_sends_the_token_form_encoded() {
     let server = MockServer::start().await;
     Mock::given(method("DELETE"))
         .and(path("/api/jwt/refresh"))
         .and(header("authorization", "api-key"))
-        .and(body_json(json!({ "token": "refresh-token" })))
+        .and(header("content-type", "application/x-www-form-urlencoded"))
+        .and(body_string("token=refresh-token"))
         .respond_with(ResponseTemplate::new(200))
         .expect(1)
         .mount(&server)

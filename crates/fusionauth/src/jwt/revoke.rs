@@ -1,22 +1,15 @@
-use std::borrow::Cow;
-
 use crate::{
     AuthedClient, Result,
     error::{FusionAuthClientError, GenericErrorResponse},
 };
 
-#[derive(serde::Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-struct RevokeRefreshTokenRequest<'a> {
-    /// The refresh token to revoke. Sent in the body rather than the query so
-    /// the token stays out of request logs.
-    pub token: Cow<'a, str>,
-}
-
 /// Revokes a single refresh token. A token FusionAuth does not know (already
 /// revoked or expired) counts as revoked, so callers can retry.
-/// https://fusionauth.io/docs/apis/jwt#revoke-refresh-tokens
-/// Valid respones: 200, 400, 401, 404, 500, 503
+/// The token goes in a form-encoded body, which FusionAuth accepts in place of
+/// the `token` query parameter, so it stays out of URLs and request logs.
+/// FusionAuth does not read a JSON body here.
+/// https://fusionauth.io/docs/apis/jwt/revoke-refresh-tokens
+/// Valid responses: 200, 400, 401, 404, 500, 503
 pub(crate) async fn revoke_refresh_token(
     client: &AuthedClient,
     base_url: &str,
@@ -25,9 +18,7 @@ pub(crate) async fn revoke_refresh_token(
     let res = client
         .client()
         .delete(format!("{base_url}/api/jwt/refresh"))
-        .json(&RevokeRefreshTokenRequest {
-            token: Cow::Borrowed(refresh_token),
-        })
+        .form(&[("token", refresh_token)])
         .send()
         .await
         .map_err(|e| {
