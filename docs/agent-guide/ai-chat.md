@@ -515,7 +515,7 @@ the shimmer.
   without asking; any failure or a 3s timeout also falls back to Chat. The session opens
   under Chat or Code like one started from that mode.
   Switching modes preserves the draft and attachments and
-  clears model and effort overrides from the previous mode. It does not filter
+  clears the model override from the previous mode. It does not filter
   the conversation sidebar. Session composers start at one line and grow with
   longer prompts or Shift+Enter. Lists, quotes, headings, and other non-paragraph
   blocks expand immediately, even with short text. The editor takes the full width
@@ -658,8 +658,10 @@ the shimmer.
   the catalog in place with a Back action. Search includes every model.
 - A compact **speedometer-style effort** button with a simple arc and needle beside the model selector opens a simple list of effort levels with a check beside the current choice: a popover centered below the button on desktop, or its own bottom sheet on mobile. Choosing a level applies it and closes the menu. Mobile shows it alongside the model control after the input expands. It is hidden when the model has fewer than two effort choices.
   Model-specific effort choices remain available in desktop model submenus.
-  Free and Pro users start new conversations at the lowest advertised level,
-  unless they explicitly choose another. Existing sessions keep their current setting.
+  New conversations remember the last effort picked for each runtime and model,
+  per signed-in user, across sends, mode switches, and reloads, while that model
+  still offers it. Without one, Free and Pro users start at the lowest advertised
+  level. Existing sessions keep their current setting.
 - On desktop, chat agents' empty input shows the static hint **Type @ to mention
   docs, people, or channels, / for skills** immediately, without typing or cycling
   through other hints. Clearing a draft restores the same hint.
