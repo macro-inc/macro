@@ -92,6 +92,10 @@ message. Channel names
 prefer the current channel cache, then a matching thread notification's name,
 then **Unknown channel** if neither source has a name. Selecting a
 thread opens that thread in the channel preview; Shift-click opens it in a split.
+If the channel is already open in another split or preview, clicking a message
+or reply notification focuses that view and jumps to the specific message,
+without a **Content already open** warning. Verify with two splits and a reply
+in a different thread from the one currently displayed; repeat on touch.
 A Home URL containing only the channel `threadId` opens that thread's root,
 not the latest message. Reloading or opening the same URL on touch retains the
 target; an explicit reply `messageId` still takes precedence.
