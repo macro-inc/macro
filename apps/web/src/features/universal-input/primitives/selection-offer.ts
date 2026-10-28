@@ -11,10 +11,7 @@ import { createInferenceQueue } from './inference-queue';
 /** Let a drag finish before spending a classification on what it covers. */
 const SETTLE_MS = 220;
 
-export type OfferedSelection = SelectedText & {
-  intent: Intent;
-  scores: Scores;
-};
+export type OfferedSelection = SelectedText & { intent: Intent };
 
 /**
  * Watches the reader's text selection and offers the shape the classifier
@@ -58,7 +55,6 @@ export function createSelectionOffer(source: {
               surface: input.surface,
               container: input.container,
               intent,
-              scores,
             }
           : undefined
       );
@@ -105,4 +101,3 @@ export function createSelectionOffer(source: {
     },
   };
 }
-export type SelectionOfferController = ReturnType<typeof createSelectionOffer>;
