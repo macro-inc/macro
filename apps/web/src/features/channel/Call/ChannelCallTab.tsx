@@ -3,7 +3,7 @@ import { UserGroup } from '@core/component/UserGroup';
 import { getDisplayName, tryMacroId } from '@core/user';
 import PhoneIcon from '@icon/system/regular/phone-call.svg';
 import { Telemetry } from '@macro-inc/observability';
-import { useActiveCallQuery, useCallRecordQuery } from '@queries/call/call';
+import { useActiveCallQuery, useLiveCallRecordQuery } from '@queries/call/call';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { Button } from '@ui';
 import { type Accessor, createMemo, Match, Show, Switch } from 'solid-js';
@@ -52,7 +52,7 @@ function JoinCallEmptyState(props: {
   onJoin: () => void;
 }) {
   const activeCallQuery = useActiveCallQuery(() => props.channelId);
-  const callRecordQuery = useCallRecordQuery(
+  const callRecordQuery = useLiveCallRecordQuery(
     () => activeCallQuery.data?.callId ?? ''
   );
   const participantIds = createMemo(
