@@ -322,6 +322,19 @@ function readFiring(trigger: Element): Firing {
       tail: `· ${callTitle} ended`,
       destination: callDestination,
     }))
+    .with('github', () => {
+      const delivery = child(event, 'github');
+      const name = [attribute(delivery, 'event'), attribute(delivery, 'action')]
+        .filter(Boolean)
+        .join(' ');
+      const repository = attribute(delivery, 'repository');
+      return {
+        tail: repository
+          ? `· GitHub ${name} in ${repository}`
+          : `· GitHub ${name}`,
+        destination: undefined,
+      };
+    })
     .otherwise(() => ({ tail: undefined, destination: undefined }));
 }
 
