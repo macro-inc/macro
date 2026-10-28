@@ -49,9 +49,8 @@ export function MeetingCopyButton(props: {
           type="button"
           variant="ghost"
           size={isMobile() ? 'icon-xl' : 'lg'}
-          depth={isMobile() ? 3 : undefined}
-          label="Copy Meeting Url"
-          tooltipPlacement="top"
+          aria-label="Copy Meeting Url"
+          tooltip={{ content: 'Copy Meeting Url', placement: 'top' }}
           disabled={props.disabled || copying()}
           aria-busy={copying()}
           class="bg-hover mobile:bg-transparent text-ink not-touch:not-disabled:hover:bg-active focus-visible:outline-2 focus-visible:outline-accent"

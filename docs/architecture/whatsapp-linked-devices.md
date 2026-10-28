@@ -192,7 +192,10 @@ The web flag `enable-whatsapp-linked` is the only rollout gate; DSS always
 serves `/external-chats` and `/whatsapp`. To stop all WhatsApp traffic (receiving and sending),
 scale the session service to zero tasks: accounts stay `connected`, history and
 access are kept, and sends recorded meanwhile expire unsent after ten minutes.
-Replicas pick every account up again when scaled back.
+Replicas pick every account up again when scaled back. Prod runs two replicas
+and dev one (`infra/stacks/whatsapp-session-service/service.ts`); with two, a
+deploy hands every lease to a running replica. A deploy restores the task
+count. Prod deploys with each published release.
 
 ## Media
 

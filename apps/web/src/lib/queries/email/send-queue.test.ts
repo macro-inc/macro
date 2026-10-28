@@ -25,7 +25,9 @@ const mocks = vi.hoisted(() => ({
   publish: vi.fn(),
   status: vi.fn(),
   save: vi.fn(),
+  track: vi.fn(),
 }));
+vi.mock('@app/lib/analytics', () => ({ analytics: { track: mocks.track } }));
 vi.mock('@service-storage/email-send', () => ({
   readEmailSendStatus: mocks.status,
 }));
@@ -117,6 +119,31 @@ it('persists approval without contacting the network or normalized cache', async
   });
   expect(mocks.status).not.toHaveBeenCalled();
   expect(result.persistence).toBe('queued');
+});
+it('counts each accepted send once for product analytics', async () => {
+  await sendEmailQueued(args());
+  await sendEmailQueued({
+    ...args(),
+    draft: {
+      ...draft,
+      draftId: '00000000-0000-4000-8000-000000000004',
+      replyingToId: '00000000-0000-4000-8000-000000000005',
+    },
+  });
+  expect(mocks.track.mock.calls).toEqual([
+    ['email_message_sent', { isReply: false }],
+    ['email_message_sent', { isReply: true }],
+  ]);
+});
+it('does not count a send the queue refused', async () => {
+  mocks.persist.mockRejectedValueOnce(
+    new DOMException('Full', 'QuotaExceededError')
+  );
+  await expect(sendEmailQueued(args())).rejects.toThrow('Full');
+  await sendEmailQueued(args());
+  mocks.read.mockResolvedValue([mocks.persist.mock.lastCall?.[0]]);
+  await expect(sendEmailQueued(args())).rejects.toThrow('already queued');
+  expect(mocks.track).toHaveBeenCalledOnce();
 });
 it('freezes the exact input before any asynchronous storage read', async () => {
   const pending = Promise.withResolvers<EmailSendIntent[]>();

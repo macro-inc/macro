@@ -2,4 +2,3 @@ config:
   aws-native:region: us-east-1
   aws:region: us-east-1
   whatsapp-session-service:session_kms_deletion_window_days: 7
-  whatsapp-session-service:desired_count: 2

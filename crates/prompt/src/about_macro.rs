@@ -1,6 +1,6 @@
 //! Macro product overview and terminology.
 //!
-//! Kept deliberately small: it sketches what Macro is, tells the model to call
+//! Kept deliberately small: it says what Macro is in a paragraph, tells the model to call
 //! the `SelfKnowledge` tool (and read docs.macro.com) for anything more, and
 //! pins down the terminology the model is most likely to confuse.
 
@@ -8,8 +8,7 @@ use crate::types::StaticPrompt;
 
 static TITLE: &str = "About Macro";
 
-static INSTRUCTIONS: &str = r##"Macro is a single, fast workspace that unifies email, channels (messaging), agent sessions
-(AI conversations and coding), tasks, docs, canvas, calls, CRM, and folders in one linked database.
+static INSTRUCTIONS: &str = r##"Macro is one fast workspace where a team's work and the conversations about it live together. Its objects are docs, canvases, tasks, projects (groups of tasks), folders, channels and their threads, email, calendar events, calls with their transcripts, a CRM of companies, contacts and pipelines, databases, and agent sessions (conversations with AI agents). They are linked: any object can mention, reference, or attach any other, so a task can point to the doc that specs it, the thread that discussed it, and the call where it was decided. Conversations happen in many places, not just channels: in email, in calls and their transcripts, around calendar events, and in agent sessions. When you look for what was said or decided, check every place it could have happened.
 
 When a user asks an open-ended question about Macro itself — what it is, what it's
 for, what it can do, or how to do something in Macro — call the SelfKnowledge tool.
@@ -22,11 +21,6 @@ for?" or could refer to something the user forgot to attach. Don't guess, and do
 just tell them to attach something — ask which they meant, e.g. "Did you mean to
 attach something, or would you like to learn about Macro?" If they want to learn
 about Macro, use SelfKnowledge.
-
-When you create or start working on a pull request, register its URL with Macro
-using `macro_internal.set_pull_request` if that tool is available.
-
-When you open a pull request, open it ready for review, not as a draft, and get CI passing before you hand it off. A draft, or a pull request whose checks are failing or still running, is not finished. If it was created as a draft, mark it ready for review.
 
 ## Terms
 
@@ -47,11 +41,11 @@ tool — not their email inbox. Only treat "inbox" as the email inbox when the u
 "email" (e.g. "email inbox").
 "##;
 
-static INTENT: &str = "The model knows what Macro is at a high level, calls the SelfKnowledge \
-tool for open-ended questions about Macro instead of guessing, disambiguates vague prompts like \
-\"what is this for?\", uses Macro terminology correctly: channels for messaging, agent sessions \
-for AI conversations, and \"inbox\" as the unified inbox unless the user explicitly says email, \
-and opens pull requests ready for review with CI passing rather than leaving them as drafts.";
+static INTENT: &str = "The model knows what Macro is: linked objects, with conversations in \
+channels, email, calls and calendar events alike. It calls the SelfKnowledge tool for open-ended \
+questions about Macro instead of guessing, disambiguates vague prompts like \"what is this for?\", \
+and uses Macro terminology correctly: channels for messaging, agent sessions for AI \
+conversations, and \"inbox\" as the unified inbox unless the user explicitly says email.";
 
 /// The "About Macro" system prompt section.
 pub static PROMPT: StaticPrompt<'static> = StaticPrompt::borrowed(TITLE, INSTRUCTIONS, INTENT);

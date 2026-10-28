@@ -32,7 +32,12 @@ function LoadFailure(props: { what: string; onRetry: () => void }) {
   return (
     <div class="flex items-center gap-3 px-4 py-2 text-sm text-ink-muted">
       <span role="alert">Couldn't load {props.what}.</span>
-      <Button type="button" size="sm" variant="outline" onClick={props.onRetry}>
+      <Button
+        type="button"
+        size="sm"
+        variant="secondary"
+        onClick={props.onRetry}
+      >
         Try again
       </Button>
     </div>

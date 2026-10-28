@@ -39,7 +39,7 @@
 mod test;
 
 use crate::domain::artifact::{ArtifactListing, CollectedArtifact, inline_text, mime_type};
-use crate::domain::error::{PromptRefusal, SessionError};
+use crate::domain::error::{PromptRefusal, RunFailed, SessionError};
 use crate::domain::event::CursorEvent;
 use crate::domain::journal::{CursorJournal, JournalEntry, JournalInput, ReplayMachine};
 use crate::domain::model::{
@@ -317,6 +317,57 @@ fn captured_content(
             _ => None,
         })
         .collect()
+}
+
+/// The turn's failure for a run Cursor ended in neither finished nor
+/// cancelled.
+///
+/// The span and the log keep everything Cursor said about the run: its
+/// terminal status and the last `error` event journaled for it. The person
+/// gets a notice pointing at the run's page, the only place the reason is.
+/// Read from the journal rather than the stream loop so a run whose terminal
+/// status was recovered after a restart is reported the same way.
+fn run_failure(
+    session: &Session,
+    agent: &CursorAgentId,
+    run: &CursorRunId,
+    status: RunStatus,
+) -> SessionError {
+    let reported = session
+        .state
+        .lock()
+        .expect("session state poisoned")
+        .journal_entries
+        .iter()
+        .rev()
+        .filter(|entry| entry.run.as_ref() == Some(run))
+        .find_map(|entry| match &entry.input {
+            JournalInput::Sse(record) => match record.decode() {
+                CursorEvent::Error { code, message } => Some((code, message)),
+                _ => None,
+            },
+            _ => None,
+        });
+    let (code, message) = reported.unzip();
+    let code = code.flatten();
+    let span = tracing::Span::current();
+    span.record("cursor.run.error.code", code.as_deref());
+    span.record("cursor.run.error.message", message.as_deref());
+    tracing::warn!(
+        %agent,
+        cursor.run.id = %run,
+        cursor.run.status = ?status,
+        cursor.run.error.code = code.as_deref(),
+        cursor.run.error.message = message.as_deref(),
+        "Cursor ended the run in failure"
+    );
+    SessionError::Rejected(
+        RunFailed {
+            agent: agent.clone(),
+            status,
+        }
+        .refusal(),
+    )
 }
 
 /// Restate a rejection the person who prompted can act on - a repository
@@ -1554,6 +1605,9 @@ where
             cursor.ingest.emit = ?mode.emit,
             cursor.ingest.strict = mode.strict,
             cursor.ingest.attempt = mode.attempt,
+            cursor.run.status = tracing::field::Empty,
+            cursor.run.error.code = tracing::field::Empty,
+            cursor.run.error.message = tracing::field::Empty,
             cursor.stream.reconnects = tracing::field::Empty,
             cursor.stream.fell_back_to_poll = tracing::field::Empty,
         ),
@@ -1583,6 +1637,7 @@ where
             .machine
             .terminal_status(run);
         if let Some(status) = terminal {
+            tracing::Span::current().record("cursor.run.status", tracing::field::debug(&status));
             if strict
                 && !session
                     .state
@@ -1607,7 +1662,7 @@ where
                 RunStatus::Cancelled => Ok(StopReason::Cancelled),
                 RunStatus::Finished => Ok(StopReason::EndTurn),
                 _ if strict => Ok(StopReason::EndTurn),
-                status => Err(rootcause::report!("cursor run {run} ended in {status:?}").into()),
+                status => Err(run_failure(session, agent, run, status)),
             };
         }
         let mut captured = captured_content(session, run);
@@ -1890,7 +1945,15 @@ where
                             }
                             // Cursor said its piece about this run; a fresh
                             // connection would only be told the same thing.
-                            CursorEvent::Error { .. } => break None,
+                            CursorEvent::Error { code, message } => {
+                                tracing::warn!(
+                                    cursor.run.id = %run,
+                                    cursor.run.error.code = code,
+                                    cursor.run.error.message = %message,
+                                    "Cursor stream reported an error"
+                                );
+                                break None;
+                            }
                             CursorEvent::Done => break None,
                             _ => {}
                         }
@@ -2065,6 +2128,9 @@ where
                 sleep_unless_cancelled(cancel, poll_delay(attempt)).await;
             }
         }
+        if let Some(status) = &terminal {
+            span.record("cursor.run.status", tracing::field::debug(status));
+        }
         let Some(status) = terminal else {
             // Not a failure to describe in provider terms: the run is still
             // going as far as Cursor is concerned, and this turn has simply
@@ -2111,7 +2177,7 @@ where
         match status {
             RunStatus::Finished => Ok(StopReason::EndTurn),
             RunStatus::Cancelled => Ok(StopReason::Cancelled),
-            status => Err(rootcause::report!("cursor run {run} ended in {status:?}").into()),
+            status => Err(run_failure(session, agent, run, status)),
         }
     }
 

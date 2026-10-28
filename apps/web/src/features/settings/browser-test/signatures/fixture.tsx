@@ -7,7 +7,7 @@ import { createSignal, For, onMount, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { macroDarkTheme } from '../../../theme/themes/macro-dark';
 import { macroLightTheme } from '../../../theme/themes/macro-light';
-import { themeCssVars } from '../../../theme/utils/themeColorTokens';
+import { themeCssVars } from '../../../theme/utils/themeCssVars';
 import {
   SettingsButton as Button,
   SettingsPage,

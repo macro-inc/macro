@@ -127,12 +127,14 @@ export function ProjectWorkspace(props: {
                     />
                   </Show>
                   <div
-                    class="mb-6 mt-3 flex flex-wrap items-center gap-2"
+                    class="mb-6 mt-3 flex flex-row flex-wrap items-center gap-2 text-sm empty:hidden"
                     aria-label="Project properties"
                   >
                     <For each={props.source.properties()}>
                       {(property) => (
                         <PropertyValuePill
+                          variant="secondary"
+                          size="xs"
                           property={property}
                           canEdit={canEdit()}
                           onSave={(property, value) =>

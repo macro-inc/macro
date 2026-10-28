@@ -99,18 +99,18 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
   const { userId } = options;
 
   const canExecute = (entity: EntityData): boolean => {
-    if (
-      entity.type === 'database' ||
-      entity.type === 'form' ||
-      entity.type === 'channel_message' ||
-      entity.type === 'channel_thread'
-    ) {
-      return false;
-    }
     if (entity.type === 'email') {
       return true;
     }
-    if (entity.type === 'channel') {
+    // The types the delete mutation supports; it skips any other.
+    if (
+      entity.type !== 'agent_session' &&
+      entity.type !== 'document' &&
+      entity.type !== 'chat' &&
+      entity.type !== 'project' &&
+      entity.type !== 'call' &&
+      entity.type !== 'routine'
+    ) {
       return false;
     }
     return entity.ownerId === userId();

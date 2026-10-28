@@ -126,9 +126,10 @@ export function CopyAvailabilityDialog(props: ManagedDialogProps) {
           <ActionDialogShell.Header class="flex items-start justify-between gap-3">
             <ActionDialogShell.Title>Copy availability</ActionDialogShell.Title>
             <Button
+              aria-label="Close availability dialog"
+              tooltip="Close availability dialog"
               variant="ghost"
               size="icon-sm"
-              label="Close availability dialog"
               onClick={() => props.onOpenChange(false)}
             >
               <XIcon class="size-4" />
@@ -195,7 +196,11 @@ export function CopyAvailabilityDialog(props: ManagedDialogProps) {
               class="flex w-full items-center justify-between gap-2 text-sm text-ink-muted"
             >
               Could not load availability.
-              <Button variant="outline" size="sm" onClick={availability.retry}>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={availability.retry}
+              >
                 Retry
               </Button>
             </div>
@@ -225,7 +230,7 @@ export function CopyAvailabilityDialog(props: ManagedDialogProps) {
                   tabIndex={unavailable() ? 0 : undefined}
                 >
                   <Button
-                    variant="strong"
+                    variant="secondary"
                     size="md"
                     class={cn(
                       'w-full px-2 disabled:cursor-not-allowed disabled:opacity-50',

@@ -1,4 +1,5 @@
 import { parseAgentsRoute } from '@app/features/agents-view/core/route';
+import { NextMeetingBadgePill } from '@app/features/meetings/components/next-meeting-badge-pill';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { t } from '@app/lib/i18n';
 import { useSplitRouter } from '@app/lib/split-router';
@@ -130,13 +131,13 @@ export const ListNav = (props: ListNavProps) => {
       }
     >
       <Button
+        aria-label={props.item.label}
         variant="ghost"
         size="icon-md"
         class={cn(
           'size-10 cursor-default rounded-xl',
           isActive() && 'bg-hover text-ink'
         )}
-        label={props.item.label}
         aria-description={
           [
             props.unread && t('nav.unreadItems'),
@@ -146,13 +147,13 @@ export const ListNav = (props: ListNavProps) => {
             .filter(Boolean)
             .join('. ') || undefined
         }
-        tooltip={t('nav.goTo', { label: props.item.label })}
-        tooltipPlacement="right"
-        hotkey={
-          props.item.hotkeyToken
+        tooltip={{
+          content: t('nav.goTo', { label: props.item.label }),
+          placement: 'right',
+          hotkey: props.item.hotkeyToken
             ? [TOKENS.sidebar.goToLeader, props.item.hotkeyToken]
-            : undefined
-        }
+            : undefined,
+        }}
         draggable={false}
         aria-current={isActive() ? 'page' : undefined}
         // An attribute rather than a class-only state, so the styling can be
@@ -188,15 +189,7 @@ export const ListNav = (props: ListNavProps) => {
           </span>
         </Show>
         <Show when={!isGoToLeaderActive() && props.badge}>
-          {(badge) => (
-            <span
-              aria-hidden="true"
-              data-sidebar-badge
-              class="pointer-events-none absolute bottom-0 left-1/2 -translate-x-1/2 rounded-full bg-accent px-1 text-[9px] font-semibold leading-3 text-surface ring-2 ring-panel"
-            >
-              {badge()}
-            </span>
-          )}
+          {(badge) => <NextMeetingBadgePill label={badge()} />}
         </Show>
         <Show when={isGoToLeaderActive() && props.item.hotkeyToken}>
           {(token) => (

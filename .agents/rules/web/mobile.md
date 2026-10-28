@@ -105,7 +105,7 @@ read their code, and follow that pattern rather than inventing a new one.
   ignores taps outside islands). Bottom chrome goes through `FloatRegion` or
   `FloatRegionOrInline` with `px-(--mobile-chrome-gutter)` and
   `pointer-events-auto`. Style it with `island` / `glass`, size it with the
-  px `--mobile-chrome-*` tokens (not rem), and pass Button a `depth`.
+  px `--mobile-chrome-*` tokens (not rem), and use Button's size and finish props.
 - Phones show one pane: open in place or as a front pane, never a new
   split. Desktop-only layouts fall back (board to list) and update the URL.
 - Suspense wraps content, never the router or chrome, with `ContentLoading`

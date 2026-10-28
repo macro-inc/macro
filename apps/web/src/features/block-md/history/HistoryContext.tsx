@@ -157,8 +157,11 @@ export function HistoryProvider(props: {
     return peers ? [...new Set(peers.values())] : [];
   });
   const userEntries = mapArray(uniqueUserIds, (userId) => {
+    const macroId = tryMacroId(userId);
     const displayName = () =>
-      getDisplayName(tryMacroId(userId), { emailFallback: 'local-part' });
+      macroId
+        ? getDisplayName(macroId, { emailFallback: 'local-part' })
+        : userLabel(userId);
     return { userId, displayName, color: userColor(userId) };
   });
   const userById = (userId: string): HistoryUser =>

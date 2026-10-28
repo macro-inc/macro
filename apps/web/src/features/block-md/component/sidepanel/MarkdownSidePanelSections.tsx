@@ -71,6 +71,7 @@ export function MarkdownSidePanelSections() {
           </Show>
           <HeaderActionGroup label="Actions">
             <AskMacroButton
+              grouped
               entity={{
                 type: 'document',
                 id: documentId(),

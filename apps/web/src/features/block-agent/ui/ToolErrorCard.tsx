@@ -106,7 +106,6 @@ export function ToolErrorCard(props: ToolErrorCardProps) {
           type="button"
           variant="ghost"
           size="sm"
-          noTouchResize
           class="shrink-0 px-1 text-ink-extra-muted hover:text-ink-muted"
           aria-label={copied() ? 'Copied' : 'Copy error'}
           onMouseDown={(event) => event.preventDefault()}

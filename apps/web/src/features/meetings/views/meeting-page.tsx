@@ -187,8 +187,7 @@ export function MeetingPage(props: {
             <Button
               variant="ghost"
               size="icon-lg"
-              depth={3}
-              label="Back"
+              aria-label="Back"
               onClick={props.onBack}
             >
               <ArrowLeft class="size-6" />

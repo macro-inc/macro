@@ -126,7 +126,7 @@ export function StopScreen(props: {
           : 'Nothing you entered was submitted.'}
       </p>
       <div class="flex flex-wrap gap-2 pt-1">
-        <Button variant="strong" size="sm" onClick={props.onCheckAnswers}>
+        <Button variant="secondary" size="sm" onClick={props.onCheckAnswers}>
           Check my answers
         </Button>
         <Show when={props.onMessageOwner}>
@@ -273,7 +273,7 @@ export function Confirmation(props: {
         </Show>
         {props.notice}
         <Show when={props.canEdit}>
-          <Button variant="strong" size="sm" onClick={props.onEdit}>
+          <Button variant="secondary" size="sm" onClick={props.onEdit}>
             Edit my response
           </Button>
         </Show>

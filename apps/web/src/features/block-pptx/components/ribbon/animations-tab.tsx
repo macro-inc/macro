@@ -171,7 +171,7 @@ export function AnimationsTab() {
     <>
       <RibbonGroup label="Preview">
         <RibbonTextButton
-          label="Preview"
+          aria-label="Preview"
           tooltip="Preview the slide's animations"
           data-testid="pptx-animation-preview"
           disabled={!env.slide()?.animations?.length}
@@ -304,8 +304,8 @@ export function AnimationsTab() {
           )}
         </RibbonPopover>
         <RibbonTextButton
-          label="Animation pane"
-          variant={anim.pane() ? 'accent' : 'ghost'}
+          aria-label="Animation pane"
+          variant={anim.pane() ? 'primary' : 'ghost'}
           aria-pressed={anim.pane()}
           data-testid="pptx-animation-pane-toggle"
           onClick={anim.togglePane}
@@ -379,7 +379,7 @@ export function AnimationsTab() {
           }
         />
         <RibbonButton
-          label="Move earlier"
+          aria-label="Move earlier"
           tooltip="Move Earlier"
           data-testid="pptx-animation-earlier"
           disabled={ro() || (anim.current() ?? 0) === 0}
@@ -395,7 +395,7 @@ export function AnimationsTab() {
           <ArrowUp />
         </RibbonButton>
         <RibbonButton
-          label="Move later"
+          aria-label="Move later"
           tooltip="Move Later"
           data-testid="pptx-animation-later"
           disabled={

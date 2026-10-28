@@ -262,7 +262,7 @@ export function RailListError(props: {
     >
       <span>Couldn’t load conversations.</span>
       <Button
-        variant="outline"
+        variant="secondary"
         size="xs"
         onClick={() => fireAndForget(props.retry(), 'channels-view')}
       >
@@ -277,7 +277,7 @@ export function CreateRailAction(props: {
   onClick: () => void;
 }) {
   return (
-    <ViewSidebar.Control label={props.label} onClick={props.onClick}>
+    <ViewSidebar.Control aria-label={props.label} onClick={props.onClick}>
       <PlusIcon class="size-3.5" />
     </ViewSidebar.Control>
   );

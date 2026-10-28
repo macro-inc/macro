@@ -198,3 +198,29 @@ fn a_poll_vote_is_never_shown_on_its_own() {
         None
     );
 }
+
+#[test]
+fn a_stored_group_created_line_holding_creation_metadata_names_no_subject() {
+    let created = RichContent::System(SystemLine {
+        action: SystemAction::GroupCreated,
+        participants: vec![],
+        value: Some(
+            r#"{"reason":0,"parent_group_jid":null,"is_open_group":true,"subject":null}"#
+                .to_owned(),
+        ),
+        call: None,
+        by_whatsapp: false,
+    });
+    let ana = person("Ana", Some("macro|ana@example.com"));
+
+    assert_eq!(
+        rich_view(created, &ana, &[], "viewer", &People::default()),
+        Some(ExternalChatRichContent::System(ExternalChatSystemLine {
+            action: SystemAction::GroupCreated,
+            actor: Some(ana.clone()),
+            participants: vec![],
+            value: None,
+            call: None,
+        }))
+    );
+}

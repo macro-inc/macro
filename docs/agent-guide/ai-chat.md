@@ -1,5 +1,12 @@
 # AI Chat (Agents)
 
+Agent session split headers show other current viewers' avatars, excluding your
+own, with up to three avatars and a count for additional viewers. Presence uses
+the resolved session ID, including sessions opened from the create menu. Open
+the same shared session in two signed-in browser contexts and check that each
+shows the other viewer; closing one session removes its avatar from the other.
+Desktop and touch headers use the same avatar group.
+
 User-sent messages in chat and agent transcripts use an ink-colored bubble with
 `InvertUtil` in light themes. Dark themes use `Layer depth={3}` for the slightly
 lighter bubble with the normal text palette. Preview Markdown and controls at
@@ -176,6 +183,10 @@ The editor and model picker stay mounted so collapsing preserves the draft.
 Dismissing the model or effort selector on mobile returns focus to the message input.
 Active sessions use the same compact mobile model drawer: focused search, Suggested
 with Gemini last, and More models for the complete provider catalog.
+In new and active agent composers, check that the model selector and lightning
+speed toggle share a height and vertical center: 32px on desktop and 36px with
+touch emulation. Open the model picker and toggle fast mode to verify both
+controls remain interactive at desktop, phone, and tablet widths.
 Repository and branch pickers keep the composer expanded while their search
 fields are focused, so their anchor stays in place.
 
@@ -190,8 +201,8 @@ While an agent works, a draft can be sent to its queue. Above the queue,
 message. The empty composer offers the same action as **Flush queued messages**
 with a ringed send arrow; with a draft it offers **Send**. Each queued row offers
 **Steer** while a turn is running, to interrupt it and send that row next. With no
-draft or queue, the busy composer offers **Stop**. Send-next actions disable and
-Steer is hidden during stopping/starting and for read-only sessions.
+draft or queue, the busy composer offers **Stop**. Send next and Steer stay
+available while a previous one is starting; read-only sessions get neither.
 
 Phone verification: check portrait and landscape with touch emulation. In the
 Agents composer, enter multiple lines and tap Send, attach, or the model control;
@@ -378,7 +389,7 @@ the shimmer.
   pressed; runs of routines set to **Show runs** are always listed. Every
   routine run carries the same clock icon after its age. The list starts
   without hidden runs each time the Agents view opens.
-- The agent composer's **+ (Add)** menu offers **Add photos & files**,
+- The agent composer's **+ (Add)** menu offers **Add photos**, **Add files**,
   **Add from library** (`@` references), and **Use a skill** (`/`; sessions show
   **Skills & commands**). Desktop uses a scrollable menu; phones use a bottom
   sheet with the same actions. Selecting a reference or skill restores editor
@@ -683,6 +694,13 @@ While an answer streams, resolved mention pills should keep their names and
 icons instead of flashing back to loading placeholders. Check an answer with
 multiple mentions while more text arrives and when generation finishes, in both
 chat and agent sessions. A newly encountered mention may load once.
+
+If an agent reply stops inside a Macro mention chip, its unfinished trailing
+markup stays hidden after stopping and after reload, on desktop and mobile.
+Completed chips, literal tag examples in Markdown code, and the prose before
+the unfinished chip remain visible. Verify
+with a reply containing a completed mention followed by a partial mention: stop
+it, then reload. User-authored markup remains unchanged.
 
 On mobile, only the AI/Agents view has a floating AI composer above the bottom
 dock. Its input fills the row with no separate create button. Other views keep
@@ -1338,8 +1356,8 @@ mention only notifies people who could already open it.
 In Home, a new Agents conversation, and an existing agent session, files can be
 attached to a prompt three ways: drop them anywhere on the composer (a
 "Drop files here to send them to the agent" overlay appears), paste them from the
-clipboard, or use the paperclip **`Attach files`** button. Every file uploads to the
-static file service and shows as a chip above the text (media thumbnails, document
+clipboard, or choose **Add photos** / **Add files** from the **+ (Add)** menu.
+Every file uploads to the static file service and shows as a chip above the text (media thumbnails, document
 pills with a remove `×`); **Send** is disabled while an upload is pending. The agent
 receives each file as an ACP `resource_link` (a URL it can fetch) after the prompt text,
 and the sent prompt renders its files in the transcript (image thumbnails and
@@ -1369,7 +1387,9 @@ its own session. A message that alone takes more than half of the model's
 window is refused with "This message is too long. Split it into smaller messages
 or attach it as a file." `/compact` is an ordinary message to every agent: the
 transcript shows it as sent, followed by the agent's reply; a "Context compacted"
-line appears only when the agent reports a compaction.
+line appears only when the agent reports a compaction, at the point in the reply
+where the summary landed: a summary that finishes while a tool runs splits the
+tool group, with the running call above the line and later steps below it.
 
 Cursor walkthrough files the run re-hosts appear in the transcript after the
 answer: screenshots as images, recordings as video players, and `.txt` / `.log`
@@ -1490,6 +1510,10 @@ agent as working, every Thinking label, **Calling N tools** row, shimmering
 tool title, and working row settles — earlier turns never shimmer, even ones
 the runtime cut off mid-call. Shimmer identifies current activity: an active
 tool and its containing group can shimmer together; completed rows stay still.
+Working and Thinking use the same text shimmer and keep its phase when the
+status changes. Check both labels in light and dark themes at desktop and phone
+widths: one highlight should sweep evenly across the whole label, with no
+highlight returning at the opposite edge. With reduced motion, labels stay still.
 
 ### Sharing a session
 
@@ -1665,8 +1689,10 @@ and line and marks them "sent to agent". Sending a typed composer message
 while notes are queued includes those notes in the same prompt and marks them
 sent — a second Enter does not post them again. Clicking a note's path opens
 that file in the Changes pane. Notes never go to GitHub. Collapsed files and
-unsent notes persist per session in localStorage; a new capture expands all
-files.
+unsent notes persist per session in localStorage. A fresh capture expands files
+with at most 40 changed lines (additions + deletions) and collapses larger files,
+on desktop and phones. File toggles and **Collapse all / Expand all** override
+these defaults; selecting a file in the tree expands it.
 
 The Changes pane header and sidebar totals display the linked PR's `additions`
 and `deletions` returned by the GitHub API, without summing transcript edits.
@@ -1798,12 +1824,12 @@ must stay hidden; subsequent live messages must still appear.
   with a ring so it reads as flushing the queue rather than sending a new message);
   pressing Enter or clicking that button cancels the current turn so the queue drains
   in order, oldest first. Steer on a queued row is the interrupt for that one message;
-  flush sends whatever is already next. The advance is held — the flush control is
-  disabled and Enter is inert — while a stop is already in flight or while the prompt the last
-  advance sent is still unconfirmed (it shows as a pending bubble); once the server
-  confirms that prompt as the running turn, Enter advances the queue again. Two rapid
-  Enters therefore advance one entry, not two: each advance ends the turn the server is
-  actually running. Typed composer text still takes priority and Enter
+  flush sends whatever is already next. Each advance or Steer shows its message as a
+  pending bubble at once and drops its row; consecutive ones never wait on each other in
+  the UI. Their steer requests go out one at a time in press order, each after the
+  previous message leaves the server queue, so three rapid presses send three messages,
+  each once, in that order. A refused steer brings its row back labelled `Not sent`; it
+  stays queued and can be steered again. Typed composer text still takes priority and Enter
   queues that new prompt normally.
 - The stop button cancels only the **current** turn. The queue keeps draining: the next
   queued prompt starts a new turn. To fully quiesce a session, remove the queued
@@ -1813,8 +1839,11 @@ must stay hidden; subsequent live messages must still appear.
   A pending request shows one `Approval needed` card above the composer, with
   the command or affected file separate from the actions. The transcript does
   not repeat the pending request.
-  `Allow once` and `Deny` answer immediately; `More options` contains remembered
-  choices with the agent's full rule text. Channel Magic Chips expose the same
+  `Allow once`, `Always allow`, and `Deny` answer immediately; `Always allow`
+  shows the agent's rule text as its tooltip. `More options` holds any further
+  remembered choices with their full rule text. Native Herdr sessions (Claude
+  Code or Codex in herdr) offer `Always allow` for recognized approval
+  dialogs; see `crates/coding_agent_worker/README.md`. Channel Magic Chips expose the same
   approval card in place of their loading state, alongside existing questions.
   Only authenticated users with **Edit** or **Owner** session access may answer;
   bot, harness, and internal-service credentials cannot approve on their behalf.
@@ -2015,7 +2044,12 @@ uploaded images as normalized inline content, including attachments from earlier
 turns. Test an image-only prompt and a text-plus-image prompt, then follow up
 without reattaching the image.
 
-Text-only model choices show a description and a composer warning. Pasted,
+Text-only model choices show a description. In the composer’s + menu, only
+**Add photos** is dimmed, with a tooltip beside the row using the model’s house
+name (`"<Model> doesn't support images"`) on hover or arrow-key focus; selecting
+it does nothing and leaves the menu open. Touch shows the reason as the row’s
+second line instead. **Add files** remains available without a tooltip, and no
+warning banner is shown. Pasted,
 dropped, and picked images should be refused before upload; document attachments
 and text should still work. If an image is already attached when switching to a
 text-only model, keep the draft and image chip but disable Send until the image

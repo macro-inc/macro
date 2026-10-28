@@ -9,6 +9,7 @@ import {
   createSignal,
   createUniqueId,
   For,
+  type JSX,
   type ParentProps,
   Show,
 } from 'solid-js';
@@ -47,6 +48,8 @@ export interface EventFormProps {
   addOnlyGuests?: boolean;
   /** Why a read-only guest list cannot change. */
   guestsReadOnlyReason?: string;
+  /** An action beside the guests, such as forwarding the invitation. */
+  guestsAction?: JSX.Element;
   /** The organizer hides the guest list, so the seeded guests are not all of them. */
   guestListHidden?: boolean;
   /** Whether the viewer may set what guests may do, as the organizer. */
@@ -347,6 +350,7 @@ export function EventForm(props: EventFormProps) {
                     props.addOnlyGuests ? controller.initialGuests() : undefined
                   }
                 />
+                {props.guestsAction}
                 <LockedField reason={props.detailsReadOnlyReason}>
                   <EventComposerConferencePill
                     value={state().conference}
@@ -552,8 +556,7 @@ export function EventForm(props: EventFormProps) {
         </Button>
         <Button
           type="submit"
-          variant="strong"
-          depth={3}
+          variant="primary"
           disabled={!controller.canSave() || formIsDisabled()}
           aria-label={isEdit() ? 'Save' : 'Create event'}
         >

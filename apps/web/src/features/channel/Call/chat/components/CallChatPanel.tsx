@@ -77,6 +77,8 @@ export function CallChatPanel(props: {
           inert={!sheetOpen()}
           targetHeight={80}
           class="data-closed:hidden"
+          // A pending drawer-open frame must not restart a closed sheet.
+          classList={{ 'duration-0!': !sheetOpen() }}
         >
           <MobileDrawer.Handle />
           <MobileDrawer.Title class="shrink-0 px-4 pb-2 text-sm font-medium">

@@ -578,10 +578,13 @@ export function CallOverlay(props: {
                 <Show when={canChat()}>
                   <Button
                     ref={chatButton}
-                    variant="outline"
+                    variant="secondary"
                     size={isMobile() ? 'icon-xl' : 'icon-lg'}
-                    label={chatOpen() ? 'Close chat' : 'Open chat'}
-                    tooltipPlacement="top"
+                    aria-label={chatOpen() ? 'Close chat' : 'Open chat'}
+                    tooltip={{
+                      content: chatOpen() ? 'Close chat' : 'Open chat',
+                      placement: 'top',
+                    }}
                     aria-pressed={chatOpen()}
                     aria-expanded={chatOpen()}
                     aria-controls={chatId}

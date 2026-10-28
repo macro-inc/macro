@@ -347,6 +347,10 @@ pub struct ScheduledAction {
     pub enabled: bool,
     /// Whether the action's runs are listed in Home and the Agents list.
     pub run_visibility: RunVisibility,
+    /// The shared template this routine was activated from, if any.
+    #[serde(default)]
+    #[schema(value_type = Option<String>, format = Uuid)]
+    pub template_id: Option<Uuid>,
 }
 
 impl ScheduledAction {

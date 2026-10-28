@@ -115,7 +115,6 @@ function ResultToggle(props: ToolResultToggleProps) {
         type="button"
         variant="ghost"
         size="sm"
-        noTouchResize
         aria-expanded={props.expanded}
         class="shrink-0 whitespace-nowrap px-1 text-ink-extra-muted hover:text-ink-muted"
         onClick={(event) => {
@@ -128,6 +127,7 @@ function ResultToggle(props: ToolResultToggleProps) {
           <span>{props.status}</span>
         </Show>
         <CaretRight
+          class="size-3 touch:size-6 shrink-0 pointer-events-none"
           aria-hidden="true"
           classList={{
             'rotate-90': props.expanded,

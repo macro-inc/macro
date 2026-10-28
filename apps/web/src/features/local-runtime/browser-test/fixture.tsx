@@ -92,7 +92,7 @@ function Fixture() {
   const [action, setAction] = createSignal('');
   return (
     <main class="min-h-screen bg-panel p-6">
-      <Button type="button" variant="outline" onClick={() => setOpen(true)}>
+      <Button type="button" variant="secondary" onClick={() => setOpen(true)}>
         Open setup
       </Button>
       <p role="status" aria-label="Preview action" class="mt-3 text-sm">
