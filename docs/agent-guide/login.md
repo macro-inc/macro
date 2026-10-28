@@ -47,6 +47,12 @@ for restoring allowlist enforcement.
 
 ## GraphQL cache session lifecycle
 
+For local browser checks signed in through the passwordless HTTP API, copy the
+returned cookies into the browser context and set localStorage `macro:login` to
+`true` before the app loads. The app uses that hint to start its identity check;
+the HttpOnly session cookie alone does not start it. Normal UI login sets the
+hint automatically. The backend still verifies the session.
+
 Signed-out pages use the network client without creating the GraphQL cache,
 draft queue runner, or live-update subscriptions. Signing in activates them in
 the same tab, including after a session expiry. Queued draft writes wait for

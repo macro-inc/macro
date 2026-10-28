@@ -763,6 +763,10 @@ the denied view is taken into the channel when the approval arrives.
 Verify with two accounts: ask from a non-member, approve or deny from a member
 in another tab, and check the row, the requester's view, and the member's inbox
 update without reloading. Check the panel and the row's buttons at phone width.
+Use a copied `/app/channels/<id>` link for a private channel absent from the
+requester's channel list. The Chat workspace must offer **Ask to join** there
+and open the conversation after approval. A transient loading failure still
+offers **Retry** rather than an access request.
 
 ## Chat navigation rail
 

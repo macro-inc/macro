@@ -7,6 +7,7 @@ import { ViewTour } from '@app/features/tours/ViewTour';
 import { SplitRouter } from '@app/lib/split-router';
 import { ChannelLoading } from '@channel/Channel/ChannelLoading';
 import { useChannelByIdQuery } from '@channel/Channel/channel-entity';
+import { ChannelAccessDenied } from '@channel/ChannelAccessDenied';
 import { DebugSuspense } from '@channel/DebugSuspense';
 import { prefetchChannelTarget } from '@channel/queries/prefetch-channel-target';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
@@ -321,6 +322,14 @@ function ChannelDetailRouteContent() {
     );
   });
   const unavailable = () => detail.view().status === 'unavailable';
+  const deniedChannelId = () => {
+    const view = detail.view();
+    if (
+      view.status === 'unavailable' &&
+      (view.denied || source.load().status === 'ready')
+    )
+      return view.channelId;
+  };
   const retry = async () => {
     try {
       await detail.refresh();
@@ -344,15 +353,30 @@ function ChannelDetailRouteContent() {
               </span>
             </ViewShell.TopBar>
             <Show when={unavailable()} fallback={<ChannelLoading />}>
-              <div
-                class="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 text-ink-muted"
-                role="status"
+              <Show
+                when={deniedChannelId()}
+                keyed
+                fallback={
+                  <div
+                    class="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 text-ink-muted"
+                    role="status"
+                  >
+                    <h2>Conversation unavailable</h2>
+                    <button type="button" onClick={retry}>
+                      Retry
+                    </button>
+                  </div>
+                }
               >
-                <h2>Conversation unavailable</h2>
-                <button type="button" onClick={retry}>
-                  Retry
-                </button>
-              </div>
+                {(id) => (
+                  <ChannelAccessDenied
+                    channelId={id}
+                    onAccessGranted={() =>
+                      fireAndForget(retry(), 'channel-access-request')
+                    }
+                  />
+                )}
+              </Show>
             </Show>
           </>
         }

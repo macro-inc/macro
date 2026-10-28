@@ -41,6 +41,18 @@ vi.mock('@core/context/user', () => ({
 vi.mock('@channel/queries/prefetch-channel-target', () => ({
   prefetchChannelTarget: mocks.prefetchTarget,
 }));
+vi.mock('@channel/ChannelAccessDenied', () => ({
+  ChannelAccessDenied: (props: {
+    channelId: string;
+    onAccessGranted: () => void;
+  }) => (
+    <div data-testid="channel-access-denied" data-channel-id={props.channelId}>
+      <button type="button" onClick={props.onAccessGranted}>
+        Complete approval
+      </button>
+    </div>
+  ),
+}));
 vi.mock('./queries/channel-list-search-pool', () => ({
   useChannelListSearchPool: () => () => [],
 }));
@@ -512,7 +524,7 @@ describe('channel selection loading and recovery', () => {
       setSelectedId('two');
       setQuery('error', error);
       render(() => <ChannelsView />);
-      expect(screen.getByText('Conversation unavailable')).toBeTruthy();
+      expect(screen.getByTestId('channel-access-denied')).toBeTruthy();
       expect(screen.queryByTestId('channel-detail')).toBeNull();
       expect(mocks.markRead).not.toHaveBeenCalled();
 
@@ -520,11 +532,32 @@ describe('channel selection loading and recovery', () => {
       expect(screen.getByTestId('channel-detail').textContent).toBe('two');
       mocks.markRead.mockClear();
       setQuery('error', error);
-      expect(screen.getByText('Conversation unavailable')).toBeTruthy();
+      expect(screen.getByTestId('channel-access-denied')).toBeTruthy();
       expect(screen.queryByTestId('channel-detail')).toBeNull();
       expect(mocks.markRead).not.toHaveBeenCalled();
     }
   );
+
+  it('loads an uncached private channel after its access request is approved', async () => {
+    setRows([]);
+    setSelectedId('private');
+    setQuery({ error: null, data: { entities: [] } });
+    render(() => <ChannelsView />);
+
+    expect(screen.getByTestId('channel-access-denied').dataset.channelId).toBe(
+      'private'
+    );
+    expect(screen.queryByTestId('channel-detail')).toBeNull();
+    expect(mocks.markRead).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Complete approval' }));
+    await waitFor(() => expect(mocks.refresh).toHaveBeenCalledOnce());
+    setQuery('data', { entities: [full('private', [])] });
+
+    expect(screen.getByTestId('channel-detail').textContent).toBe('private');
+    expect(screen.queryByTestId('channel-access-denied')).toBeNull();
+    expect(mocks.markRead).toHaveBeenCalledOnce();
+  });
 
   it('keeps an uncached channel unavailable after a transient failure', () => {
     setRows([]);
@@ -575,11 +608,13 @@ describe('channel selection loading and recovery', () => {
     );
   });
 
-  it('offers recovery for a successful empty selection and retries normally', async () => {
+  it('refreshes a previously listed channel after access approval', async () => {
     render(() => <ChannelsView />);
-    expect(screen.getByText('Conversation unavailable')).toBeTruthy();
+    expect(screen.getByTestId('channel-access-denied')).toBeTruthy();
     expect(screen.queryByText('Loading conversation')).toBeNull();
-    await fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    await fireEvent.click(
+      screen.getByRole('button', { name: 'Complete approval' })
+    );
     expect(mocks.refresh).toHaveBeenCalledOnce();
     expect(mocks.markRead).not.toHaveBeenCalled();
 
