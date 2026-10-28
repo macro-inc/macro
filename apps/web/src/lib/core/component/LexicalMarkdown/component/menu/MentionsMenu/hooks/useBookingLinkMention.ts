@@ -3,6 +3,7 @@ import type {
   SchedulingProfile,
 } from '@app/features/scheduling/core/types';
 import { schedulingKeys } from '@app/features/scheduling/queries/keys';
+import { createFreshSearch } from '@core/util/freshSort';
 import { throwOnErr } from '@core/util/result';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import { schedulingClient } from '@service-email/scheduling';
@@ -14,9 +15,15 @@ import type { BookingLinkMentionItem } from '../../../../utils/mentionsUtils';
 export type UseBookingLinkMentionOptions = {
   /** Whether to fetch booking links. */
   enabled: Accessor<boolean>;
-  /** Current search term; booking links only show when empty. */
+  /** Current search term, matched against booking link titles. */
   searchTerm: Accessor<string>;
 };
+
+const bookingLinkSearch = createFreshSearch<BookingLinkMentionItem>({
+  config: { timeWeight: 0 },
+  getName: (item) => item.data.title,
+  getTimestamp: () => ({}),
+});
 
 function profileBookingLinks(
   profile: SchedulingProfile,
@@ -30,18 +37,16 @@ function profileBookingLinks(
 export function useBookingLinkMention(options: UseBookingLinkMentionOptions) {
   const { enabled, searchTerm } = options;
 
-  const shouldFetch = () => enabled() && searchTerm().trim() === '';
-
   const personal = useQuery(() => ({
     queryKey: schedulingKeys.settings('me').queryKey,
     queryFn: async () =>
       (await throwOnErr(() => schedulingClient.settings())).profile,
-    enabled: shouldFetch(),
+    enabled: enabled(),
     retry: false,
     staleTime: 30_000,
   }));
 
-  const team = useCurrentTeamQuery(shouldFetch);
+  const team = useCurrentTeamQuery(enabled);
   const teamId = () => (team.isSuccess ? team.data?.team.id : undefined);
   const teamName = () => (team.isSuccess ? team.data?.team.name : undefined);
 
@@ -49,13 +54,13 @@ export function useBookingLinkMention(options: UseBookingLinkMentionOptions) {
     queryKey: schedulingKeys.settings(teamId() ?? '').queryKey,
     queryFn: async () =>
       (await throwOnErr(() => schedulingClient.settings(teamId()))).profile,
-    enabled: shouldFetch() && !!teamId(),
+    enabled: enabled() && !!teamId(),
     retry: false,
     staleTime: 30_000,
   }));
 
-  const bookingLinks = createLazyMemo((): BookingLinkMentionItem[] => {
-    if (!shouldFetch()) return [];
+  const allBookingLinks = createLazyMemo((): BookingLinkMentionItem[] => {
+    if (!enabled()) return [];
     if (!personal.isSuccess) return [];
 
     const personalLinks = profileBookingLinks(personal.data, 'Personal');
@@ -78,10 +83,17 @@ export function useBookingLinkMention(options: UseBookingLinkMentionOptions) {
     }));
   });
 
+  const bookingLinks = createLazyMemo((): BookingLinkMentionItem[] => {
+    const term = searchTerm().trim();
+    const links = allBookingLinks();
+    if (!term) return links;
+    return bookingLinkSearch(links, term).map(({ item }) => item);
+  });
+
   return {
     bookingLinks,
     isLoading: () =>
-      shouldFetch() &&
+      enabled() &&
       (personal.isPending || (teamId() !== undefined && teamProfile.isPending)),
   };
 }

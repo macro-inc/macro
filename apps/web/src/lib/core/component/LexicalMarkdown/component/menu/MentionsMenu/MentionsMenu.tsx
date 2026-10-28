@@ -448,29 +448,35 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       ];
     }
 
+    const bookingLinksBucket: BucketConfig = {
+      id: 'bookingLinks',
+      label: 'Booking Links',
+      getData: bookingLinks,
+      getFullCount: () => bookingLinks().length,
+    };
+    const peopleBucket: BucketConfig = {
+      id: 'users',
+      label:
+        props.includeGroups !== false && groups().length > 0
+          ? 'People & Groups'
+          : 'People',
+      getData: mentionUsers,
+      getFullCount: () => mentionUsers().length,
+      hasMore: () => contactsEnabled() && (contactMention?.hasMore() ?? false),
+      isLoadingMore: () =>
+        contactsEnabled() && (contactMention?.isLoadingMore() ?? false),
+      loadMore: async () => {
+        if (contactsEnabled()) await contactMention?.loadMore();
+      },
+    };
+    // A typed query is usually aimed at a person; a booking link whose title
+    // also matches must not take the preselected first row from them.
+    const leadingBuckets = searchTerm().trim()
+      ? [peopleBucket, bookingLinksBucket]
+      : [bookingLinksBucket, peopleBucket];
+
     const buckets: BucketConfig[] = [
-      {
-        id: 'bookingLinks',
-        label: 'Booking Links',
-        getData: bookingLinks,
-        getFullCount: () => bookingLinks().length,
-      },
-      {
-        id: 'users',
-        label:
-          props.includeGroups !== false && groups().length > 0
-            ? 'People & Groups'
-            : 'People',
-        getData: mentionUsers,
-        getFullCount: () => mentionUsers().length,
-        hasMore: () =>
-          contactsEnabled() && (contactMention?.hasMore() ?? false),
-        isLoadingMore: () =>
-          contactsEnabled() && (contactMention?.isLoadingMore() ?? false),
-        loadMore: async () => {
-          if (contactsEnabled()) await contactMention?.loadMore();
-        },
-      },
+      ...leadingBuckets,
       {
         id: 'documents',
         label: 'Documents, Agents, & Tasks',

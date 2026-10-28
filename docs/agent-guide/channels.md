@@ -365,6 +365,12 @@ a cached channel without typing `@`. Then open mentions, search, close, and reop
 results must reflect current people and entities, and scrolling or keyboard
 navigation must still load more results. Check both mobile and desktop.
 
+A bare `@` lists your enabled personal and current-team booking links first.
+Typing searches them by title, like every other category, and the
+`Booking Links` group then follows People so a matching link never takes the
+preselected row from a person. Selecting one inserts a mention labeled with the
+link's title that opens its public booking page.
+
 The shared `@` menu also offers `Recent agent sessions` after Channels and
 before Companies (the latest 500 accessible sessions, searchable by title or
 persona). These inline chips show the shared
