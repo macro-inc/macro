@@ -180,7 +180,7 @@ pub fn take_inherited() -> Option<HandedOffAgent> {
     let file = std::fs::File::from(unsafe { OwnedFd::from_raw_fd(fd) });
     match read_state(file).and_then(adopt) {
         Ok(agent) => {
-            tracing::info!("picked up the running agent from the previous macrod");
+            tracing::info!(pid = agent.pid().as_raw_nonzero().get(), "picked up the running agent from the previous macrod");
             Some(agent)
         }
         Err((error, fallback)) => {

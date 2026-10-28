@@ -27,6 +27,7 @@ use tracing::Instrument as _;
 
 mod install;
 mod release;
+#[cfg(any(windows, test))]
 pub mod versions;
 
 use install::{Installation, StageError};
@@ -43,6 +44,10 @@ mod environment {
     macro_env_var::maybe_env_var! {
         /// A mirror to update from instead of GitHub releases.
         pub struct MacrodUpdateSource;
+    }
+    macro_env_var::maybe_env_var! {
+        /// Seconds between checks, for testing against a mirror.
+        pub struct MacrodUpdateCheckSeconds;
     }
 }
 
@@ -165,8 +170,11 @@ pub fn start_poller(auto: bool) -> Option<UpdatePoller> {
             return None;
         }
     };
+    let every = environment::MacrodUpdateCheckSeconds::new()
+        .and_then(|value| value.value()?.parse().ok())
+        .map_or(CHECK_EVERY, Duration::from_secs);
     let (staged_tx, staged) = oneshot::channel();
-    let task = tokio::spawn(poll(client, current, installation, staged_tx));
+    let task = tokio::spawn(poll(client, current, installation, staged_tx, every));
     Some(UpdatePoller {
         staged,
         _task: AbortOnDropHandle::new(task),
@@ -178,6 +186,7 @@ async fn poll(
     current: ReleaseVersion,
     installation: Installation,
     staged_tx: oneshot::Sender<StagedUpdate>,
+    every: Duration,
 ) {
     loop {
         match check_and_stage(&client, current, &installation).await {
@@ -190,7 +199,7 @@ async fn poll(
                 tracing::warn!(error = ?error, "macrod self-update failed; retrying at the next check");
             }
         }
-        tokio::time::sleep(CHECK_EVERY).await;
+        tokio::time::sleep(every).await;
     }
 }
 
