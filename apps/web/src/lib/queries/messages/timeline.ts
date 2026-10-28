@@ -733,17 +733,17 @@ export function softInvalidateMessageTimelineByIds(parent: MessageParent) {
   });
 }
 
-/**
- * Build a single oldest-first timeline index for display and lookup.
- * Pages arrive newest-first, entries within each page are newest-first,
- * so we reverse both layers in one pass.
- */
 /** Whether `next` joins the activity row that `previous`, just before it, ends. */
 export type ActivityMerge = (
   previous: TimelineActivity,
   next: TimelineActivity
 ) => boolean;
 
+/**
+ * Build a single oldest-first timeline index for display and lookup.
+ * Pages arrive newest-first, entries within each page are newest-first,
+ * so we reverse both layers in one pass.
+ */
 /**
  * The rows a timeline renders, oldest first, from its cached pages.
  * Consecutive activity that `mergeActivity` accepts shares one row, keyed and
