@@ -5,7 +5,6 @@ import {
   queryStateFrom,
 } from '@app/features/next-soup/filters/filter-store';
 import { useUserId } from '@core/context/user';
-import { compareDateDesc } from '@core/util/date';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type ChannelEntity,
@@ -19,6 +18,7 @@ import {
   useSoupAstItemsQuery,
 } from '@queries/soup/items';
 import { type Accessor, createEffect, createMemo } from 'solid-js';
+import { sortChannels } from './core/channel-sort';
 import { channelThreadsQueryArgs } from './core/channel-threads-query';
 import type {
   ChannelListSort,
@@ -217,22 +217,6 @@ export function resolveSelectedChannel(
         isChannelEntity(entity) && entity.id === selectedChannelId
     )
   );
-}
-
-function sortChannels(
-  channels: readonly ChannelEntity[],
-  sort: ChannelListSort
-): ChannelEntity[] {
-  const sortDate = (channel: ChannelEntity) =>
-    sort === 'created_at'
-      ? channel.createdAt
-      : sort === 'viewed_at'
-        ? channel.viewedAt
-        : channel.updatedAt;
-
-  return channels
-    .slice()
-    .sort((left, right) => compareDateDesc(sortDate(left), sortDate(right)));
 }
 
 /**
