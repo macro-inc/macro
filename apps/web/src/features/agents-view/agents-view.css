@@ -331,6 +331,48 @@
 		margin-bottom: 12px;
 	}
 
+	:where(.agents-view, .agents-view-portal) .greeting-text {
+		display: inline-block;
+		transform-origin: center 60%;
+		backface-visibility: hidden;
+		animation: greeting-flip 250ms cubic-bezier(0.22, 1, 0.36, 1);
+	}
+
+	@keyframes greeting-flip {
+		from {
+			transform: perspective(600px) rotateX(-70deg);
+		}
+		to {
+			transform: perspective(600px) rotateX(0);
+		}
+	}
+
+	:where(.agents-view, .agents-view-portal) .greeting-mark[data-active="true"] > :is(path, g) {
+		transform-box: fill-box;
+		transform-origin: center;
+		animation: greeting-mark-wave 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
+	}
+
+	:where(.agents-view, .agents-view-portal) .greeting-mark[data-active="true"] > :is(path, g):nth-child(2) {
+		animation-delay: 45ms;
+	}
+
+	:where(.agents-view, .agents-view-portal) .greeting-mark[data-active="true"] > :is(path, g):nth-child(3) {
+		animation-delay: 90ms;
+	}
+
+	@keyframes greeting-mark-wave {
+		0%, 100% {
+			transform: translateY(0) rotate(0);
+		}
+		35% {
+			transform: translateY(-2.5px) rotate(-4deg);
+		}
+		65% {
+			transform: translateY(0.6px) rotate(1deg);
+		}
+	}
+
 	:where(.agents-view, .agents-view-portal) .composer-drawer {
 		position: relative;
 		display: grid;
