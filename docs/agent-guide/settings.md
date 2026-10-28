@@ -11,7 +11,7 @@ the original byte limit. Cancellation and cleanup still work during recovery.
 Deleted or replaced scratch databases fail the old import instead of silently
 continuing with incomplete history; its cleanup must leave a replacement intact.
 
-In **Team → Connections**, **Import from Slack** appears only for team admins
+In **Integrations → Accounts**, the **Slack export** row appears only for team admins
 and owners with `enable-slack-archive-import` enabled. Production rollout stays
 off until explicitly enabled. Select an export ZIP, filter the grouped conversation
 picker, optionally show archived conversations, and use Space to toggle focused
@@ -77,7 +77,9 @@ signature and saves it right away, replacing any unsaved draft; a toast reports
 when Gmail has no signature. Unsaved drafts
 survive switching settings pages. On phones, the signature preview, replies/forwards
 toggle, and clear action are available; editing and import remain desktop-only.
-Email accounts can also be managed from **Integrations**. Its **Email settings**
+Accounts list each inbox as its own row, followed by **Connect another Google
+Workspace account** and **Connect an Outlook account**; Integrations shows the
+same rows. Its **Email settings**
 gear opens the dedicated page, and Email links to Notifications and Calendar.
 With a composer open, save a changed signature or reply-signature preference and
 verify its preview updates. Once the account refresh completes, reopen a composer
@@ -644,8 +646,8 @@ custom servers. Agents configured with a fixed app selection do not receive the
 owner's custom servers.
 An agent reply's `Connect <app>` chip still starts that app's connection flow.
 Cursor stays in Agents → Runtimes with its API key and default model controls; it is not
-featured or offered in the Connections catalog. Personal Gmail and GitHub account
-links appear above the installed tools and app catalog on Settings → Integrations. The native-only integrations section remains
+featured or offered in the Connections catalog. Settings → Integrations lists
+Email, Accounts and AI apps above the agent tools and app catalog. The native-only integrations section remains
 available when `pipedream-mcp` is disabled.
 Open Settings with the rail's gear button or `Ctrl+;`; leave it by picking any other rail item.
 
