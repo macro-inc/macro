@@ -77,8 +77,9 @@ Applies to `apps/web/src/components/ui`, including ports from shadcn-solid.
 - Keep unchecked checkbox and radio faces transparent. Checked and indeterminate
   controls use the accent fill with `accent-contrast` marks; do not reuse Button materials.
 - Set checkbox/radio size on the root: `sm` is 14px, `md` (default) is 16px,
-  and `lg` is 20px. `ToggleSwitch` keeps its existing `xs`/`sm`/`md` geometry.
-  Do not resize internal SVGs or restyle selected colors from callers.
+  and `lg` is 20px. `ToggleSwitch` tracks use `xs` 28×14px, `sm` (default)
+  32×16px, and `md` 40×20px. Do not resize internal SVGs or override selection
+  colors from callers or enclosing pages; checked controls use the theme accent.
 - Render `Checkbox.Control` or `RadioGroup.ItemControl` once per value; each
   includes its native input and default indicator. Do not add a second Input slot.
 - Use `InlineCheckbox` only as an aria-hidden decoration for an interactive row

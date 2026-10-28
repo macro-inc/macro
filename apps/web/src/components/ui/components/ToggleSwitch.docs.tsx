@@ -134,7 +134,7 @@ export default defineDoc({
       id: 'sizes',
       title: 'Sizes',
       description:
-        '`sm` is the default toolbar size; `md` is for settings rows; `xs` is for dense inline chrome.',
+        '`sm` is the default toolbar size (32×16px); `md` is for settings rows (40×20px); `xs` is for dense inline chrome (28×14px).',
       render: SizesDemo,
     },
     {

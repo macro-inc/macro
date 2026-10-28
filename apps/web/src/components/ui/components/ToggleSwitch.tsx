@@ -17,19 +17,19 @@ export type ToggleSwitchProps = Omit<
 
 const SWITCH_SIZES = {
   xs: {
-    control: 'h-3.5 w-5.5',
-    thumb: '-left-0.5 -top-px size-3.5 data-checked:translate-x-2.5',
-    pressed: 'group-active/switch:w-4 data-checked:group-active/switch:translate-x-2',
+    control: 'h-3.5 w-7',
+    thumb: '-left-0.5 -top-px size-3.5 data-checked:translate-x-4',
+    pressed: 'group-active/switch:w-4 data-checked:group-active/switch:translate-x-3.5',
   },
   sm: {
-    control: 'h-4 w-6',
-    thumb: '-left-0.5 -top-px size-4 data-checked:translate-x-2.5',
-    pressed: 'group-active/switch:w-5 data-checked:group-active/switch:translate-x-1.5',
+    control: 'h-4 w-8',
+    thumb: '-left-0.5 -top-px size-4 data-checked:translate-x-4.5',
+    pressed: 'group-active/switch:w-5 data-checked:group-active/switch:translate-x-3.5',
   },
   md: {
-    control: 'h-5 w-9',
-    thumb: '-left-0.5 -top-px size-5 data-checked:translate-x-4.5',
-    pressed: 'group-active/switch:w-6 data-checked:group-active/switch:translate-x-3.5',
+    control: 'h-5 w-10',
+    thumb: '-left-0.5 -top-px size-5 data-checked:translate-x-5.5',
+    pressed: 'group-active/switch:w-6 data-checked:group-active/switch:translate-x-4.5',
   },
 } as const;
 
