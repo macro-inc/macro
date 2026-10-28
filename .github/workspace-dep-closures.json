@@ -9933,6 +9933,7 @@
     ],
     "mcp_auth_proxy": [
       "crates/cowlike",
+      "crates/cursor_api_key",
       "crates/fusionauth",
       "crates/macro_auth",
       "crates/macro_env",

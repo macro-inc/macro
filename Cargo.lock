@@ -12526,15 +12526,20 @@ name = "mcp_auth_proxy"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "axum",
  "base64 0.22.1",
+ "chrono",
+ "cursor_api_key",
  "fusionauth",
  "macro_auth",
+ "macro_db_migrator",
  "macro_user_id",
  "redis",
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "sqlx",
  "thiserror 2.0.18",
  "tokio",
  "tower 0.5.3",
@@ -12544,6 +12549,7 @@ dependencies = [
  "urlencoding",
  "uuid",
  "workspace-hack",
+ "zeroize",
 ]
 
 [[package]]

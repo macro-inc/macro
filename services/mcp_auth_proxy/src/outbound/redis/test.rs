@@ -218,3 +218,35 @@ async fn handshake_state_round_trips_with_its_client_id() {
         "an issued code must be single-use"
     );
 }
+
+#[tokio::test]
+#[ignore = "requires a local Redis"]
+async fn export_returns_live_registrations_and_bindings_with_their_ttl() {
+    let registry = RedisClientRegistry::new(client());
+    let client_id = unique("client");
+    let digest = unique("digest");
+    registry
+        .insert_client(&registered_client(&client_id))
+        .await
+        .expect("insert should succeed");
+    registry
+        .bind(&digest, &client_id)
+        .await
+        .expect("bind should succeed");
+
+    let clients = registry.export_clients().await.expect("export clients");
+    let (exported, remaining) = clients
+        .iter()
+        .find(|(exported, _)| exported.client_id == client_id)
+        .expect("the registration should be exported");
+    assert_eq!(exported.client_name, "test-client");
+    assert!(*remaining > CLIENT_REGISTRATION_TTL - Duration::from_secs(60));
+
+    let bindings = registry.export_bindings().await.expect("export bindings");
+    let (_, bound, remaining) = bindings
+        .iter()
+        .find(|(exported, _, _)| *exported == digest)
+        .expect("the binding should be exported");
+    assert_eq!(*bound, client_id);
+    assert!(*remaining > REFRESH_TOKEN_BINDING_TTL - Duration::from_secs(60));
+}

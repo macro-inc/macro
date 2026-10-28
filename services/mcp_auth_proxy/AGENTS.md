@@ -18,8 +18,16 @@ in front of FusionAuth, which doesn't support DCR itself.
 - `src/domain/ports.rs`: `ClientRegistrationStore`, `OAuthProvider`,
   `RefreshTokenBindingStore` — the ports the service depends on.
 - `src/inbound/axum_router.rs`: HTTP routes; `src/inbound/middleware.rs`: auth.
-- `src/outbound/fusionauth.rs`, `src/outbound/redis.rs`: concrete adapters
-  (gated behind the `outbound` feature; `inbound`/`outbound` are each optional).
+- `src/outbound/postgres.rs`: the store of record for all broker state
+  (registrations, refresh token bindings, pending authorizations, issued
+  codes). Issued codes are stored by digest with their upstream tokens
+  KMS-encrypted under `MCP_OAUTH_KMS_KEY_ID`.
+- `src/outbound/redis_cutover.rs`: wraps the Postgres store during the move
+  off Redis: Postgres first, Redis fallback with copy-forward, registrations
+  and bindings mirrored to Redis, plus the startup backfill.
+- `src/outbound/fusionauth.rs`, `src/outbound/redis.rs`: the upstream provider
+  and the legacy Redis store (all adapters gated behind the `outbound`
+  feature; `inbound`/`outbound` are each optional).
 
 ## Scope
 
@@ -37,7 +45,8 @@ in front of FusionAuth, which doesn't support DCR itself.
 
 ## Checks
 
-- `cargo test -p mcp_auth_proxy` (`SQLX_OFFLINE` unset).
+- `cargo test -p mcp_auth_proxy --all-features` (`SQLX_OFFLINE` unset; the
+  Postgres adapter tests need a migrated local MacroDB).
 
 ## Shared listener
 
@@ -53,6 +62,13 @@ and other library consumers. Both retain OAuth metadata, CORS, and bearer auth.
 - Refresh tokens are bound by SHA-256 digest with rotate-before-drop ordering;
   don't weaken that to avoid a race, and remember pre-binding-era refresh
   tokens have no binding (clients reauthorize once).
+- Redis is legacy. Write new state to Postgres only; the cutover module's
+  Redis mirroring exists solely for replicas on the previous build. Remove it
+  only after a deploy that started once no replica ran the Redis-only build
+  has logged `backfilled MCP OAuth state from legacy Redis` in each
+  environment (an earlier backfill can miss entries those replicas wrote
+  late); then wire `PostgresAuthStore` directly and delete `redis.rs` and
+  `redis_cutover.rs`.
 
 ## Related
 
