@@ -14,8 +14,8 @@ From `infra/`:
 
 ## Gotchas
 
-- Dev and prod configs enable 30-day retention in deletion mode every five
-  minutes. Deploying either stack activates cleanup; deployment still needs
+- Dev and prod configs enable hourly 30-day retention in deletion mode.
+  Deploying either stack activates cleanup; deployment still needs
   explicit approval and the checks in `docs/runbooks/notification-retention.md`.
 - Keep the disabled/dry-run defaults for missing config and empty manual events.
 - The retention function needs its pinned x86_64 Datadog extension to receive

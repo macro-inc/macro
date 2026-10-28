@@ -114,7 +114,7 @@ test('extension access is scoped to the existing Datadog key, not all secrets', 
 test.each([
   'dev',
   'prod',
-])('%s config schedules deletion and alerts when invocations stop', async (stack) => {
+])('%s config schedules hourly deletion and alerts when invocations stop', async (stack) => {
   const parsed = YAML.parse(
     await file(new URL(`./Pulumi.${stack}.yaml`, import.meta.url)).text()
   );
@@ -153,7 +153,7 @@ test.each([
   const registered = resources.slice(start);
   expect(
     resource('aws:cloudwatch/eventRule:EventRule', registered).inputs
-  ).toMatchObject({ state: 'ENABLED', scheduleExpression: 'rate(5 minutes)' });
+  ).toMatchObject({ state: 'ENABLED', scheduleExpression: 'rate(1 hour)' });
   expect(
     JSON.parse(
       resource('aws:cloudwatch/eventTarget:EventTarget', registered).inputs
@@ -166,7 +166,12 @@ test.each([
         r.type === 'aws:cloudwatch/metricAlarm:MetricAlarm' &&
         r.inputs.metricName === 'Invocations'
     )?.inputs
-  ).toMatchObject({ actionsEnabled: true, treatMissingData: 'breaching' });
+  ).toMatchObject({
+    period: 10800,
+    evaluationPeriods: 1,
+    actionsEnabled: true,
+    treatMissingData: 'breaching',
+  });
 });
 
 test('telemetry does not enable cleanup or duplicate the existing log path', () => {

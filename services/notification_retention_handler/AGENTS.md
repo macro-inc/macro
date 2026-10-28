@@ -26,7 +26,7 @@ Internal scheduled notification cleanup. The owning notification domain enforces
   of already-committed deletion. Flush time comes from reserved handler headroom.
 - Unit tests cannot prove the deployed extension exported traces. Verify an
   explicitly approved dry run in Datadog before production cleanup.
-- Dev and prod stack configs enable scheduled deletion every five minutes;
+- Dev and prod stack configs enable scheduled deletion every hour;
   deployment still needs explicit approval and the runbook's rollout checks.
 
 ## Related

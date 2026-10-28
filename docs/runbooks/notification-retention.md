@@ -2,7 +2,7 @@
 
 The internal `notification_retention_handler` Lambda removes notifications older
 than 30 complete UTC days. Both dev and prod stack configs **enable** its
-five-minute EventBridge schedule in **deletion mode**. Deploying either
+hourly EventBridge schedule in **deletion mode**. Deploying either
 notification-service stack activates cleanup, including the historical backlog;
 committing the config or applying migrations alone does not. These are desired
 settings, not proof of the deployed schedule's state. Missing stack settings
@@ -22,7 +22,7 @@ read-only.
   device registrations, and email-send bookkeeping are not removed.
 - Old unread notifications disappear. Items whose only feed-placement reason was
   an expired notification may disappear from that feed, not from source storage.
-- This is eventual cleanup, normally within a five-minute schedule interval plus
+- This is eventual cleanup, normally within a one-hour schedule interval plus
   execution time after expiry once caught up. Backlogs, failures, or locked rows
   can extend that delay. There is no new read-time expiration filter.
 - **Replay protection is intentionally out of scope.** Parent-row existence still
@@ -196,8 +196,9 @@ Do not run a historical `DELETE` inside a migration.
 5. After approval and reviewing dry-run logs, change
    `notification_retention_dry_run` to `false` and deploy. Drain existing history
    with these same bounded batches; do not substitute a bulk deletion. Initial
-   capacity is at most 10,000 parents per invocation (usually less). Verify
-   steady-state capacity exceeds incoming expiration volume before enabling prod.
+   capacity is at most 10,000 parents per hourly invocation (usually less), or
+   240,000 per day. Verify steady-state capacity exceeds incoming expiration
+   volume before enabling prod.
 6. Monitor application latency, database CPU/I/O, WAL and replica lag, dead tuples,
    vacuum progress, NOTIFY warnings/queue pressure, and realtime consumer lag.
    Pause the schedule on unacceptable impact. Do not automatically run
@@ -212,8 +213,8 @@ retention period or batch caps.
 ## Monitoring and stopping
 
 Infrastructure alarms on Lambda errors, throttles, and no invocations for
-15 minutes while the schedule is enabled. Each sweep logs the cutoff,
-`sampled_expired`, `oldest_expired_at`, committed parent `deleted` count,
+three hours (three schedule intervals) while the schedule is enabled. Each sweep
+logs the cutoff, `sampled_expired`, `oldest_expired_at`, committed parent `deleted` count,
 attempted `batches`, and stopping reason. Each committed batch is also logged,
 so partial progress remains visible if a later batch fails.
 
@@ -221,7 +222,7 @@ Track `cutoff - oldest_expired_at` as expiration backlog age. During backfill it
 should trend downward; once caught up, sustained growth indicates insufficient
 capacity, long-lived locks, or a failing high-fanout parent. A zero-row batch can
 mean rows were locked, not necessarily that every expired row has been removed.
-Do not run a full `COUNT(*)` over the backlog every five minutes.
+Do not run a full `COUNT(*)` over the backlog on each sweep.
 
 Disable `notification_retention_enabled` and deploy to stop future scheduled
 invocations. An already-running invocation may still commit batches. Emergency

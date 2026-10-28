@@ -116,7 +116,7 @@ export class NotificationRetention extends pulumi.ComponentResource {
     const rule = new aws.cloudwatch.EventRule(
       `${BASE_NAME}-schedule`,
       {
-        scheduleExpression: 'rate(5 minutes)',
+        scheduleExpression: 'rate(1 hour)',
         state: enabled ? 'ENABLED' : 'DISABLED',
         tags,
       },
@@ -179,7 +179,8 @@ export class NotificationRetention extends pulumi.ComponentResource {
         metricName: 'Invocations',
         dimensions: { FunctionName: this.lambda.name },
         statistic: 'Sum',
-        period: 900,
+        // Allow three scheduled intervals before alarming on missing sweeps.
+        period: 10800,
         evaluationPeriods: 1,
         threshold: 1,
         comparisonOperator: 'LessThanThreshold',
