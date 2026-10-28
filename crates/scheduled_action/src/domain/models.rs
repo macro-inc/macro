@@ -313,6 +313,8 @@ pub enum ActionPolicyError {
     EventManagementDisabled,
     #[error("trigger conditions are not enabled")]
     ConditionsDisabled,
+    #[error("connect GitHub before enabling a GitHub trigger")]
+    GithubNotLinked,
     #[error("scheduled action changed or is running; reload before updating")]
     UpdateConflict,
 }
