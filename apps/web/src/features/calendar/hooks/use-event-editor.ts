@@ -40,8 +40,10 @@ import {
 } from '../utils/calendar-label';
 import {
   addedGuestEmails,
+  canForwardInvitation,
   type EventGuestEditing,
   eventGuestEditing,
+  FORWARD_INVITATION_INSTEAD,
   GUEST_EDITS_RESTRICTED,
   guestEditsRestricted,
   guestInvitesRestrictedReason,
@@ -202,7 +204,12 @@ export function useEventEditor(props: UseEventEditorProps) {
   });
   const guestsReadOnlyReason = () => {
     const event = props.event();
-    return event && guestInvitesRestrictedReason(event);
+    const reason = event && guestInvitesRestrictedReason(event);
+    if (!reason) return undefined;
+    return (props.guestInvitesEnabled?.() ?? false) &&
+      canForwardInvitation(event)
+      ? `${reason} ${FORWARD_INVITATION_INSTEAD}`
+      : reason;
   };
   // A refusal means the stored guest policy was newer than the event shown,
   // so the details lock without waiting for the refetch.

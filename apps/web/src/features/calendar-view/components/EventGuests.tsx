@@ -13,6 +13,7 @@ import { EventAttendeesSection } from '@app/features/calendar/components/EventDe
 import type {
   GuestInvitation,
   GuestInviteController,
+  InvitationForward,
 } from '@app/features/calendar/hooks/create-guest-invite-controller';
 import type { CalendarEvent } from '@app/features/calendar/types';
 import { guestListHidden } from '@app/features/calendar/utils/event-guest-editing';
@@ -26,17 +27,57 @@ import { isMobile } from '@core/mobile/isMobile';
 import { recipientEntityMapper, useContacts } from '@core/user';
 import CopyIcon from '@icon/system/regular/copy.svg';
 import EnvelopeIcon from '@icon/system/regular/envelope.svg';
+import PaperPlaneTiltIcon from '@icon/system/regular/paper-plane-tilt.svg';
 import UserPlusIcon from '@icon/system/regular/user-plus.svg';
 import { Popover } from '@kobalte/core/popover';
 import type { CalendarInviteScope } from '@service-email/client';
 import { Button, Checkbox, Dialog, Layer, Tabs } from '@ui';
-import { createMemo, createSignal, Show } from 'solid-js';
+import { createMemo, createSignal, type JSX, Show } from 'solid-js';
 
 /** Same wording as the RSVP and delete scope choices. */
 const INVITE_SCOPE_OPTIONS = [
   { value: 'this_event', label: 'This event' },
   { value: 'all', label: 'All events' },
 ] satisfies { value: CalendarInviteScope; label: string }[];
+
+/** The viewer's contacts as guest options, and the event's guests among them. */
+function createGuestOptions(event: () => CalendarEvent) {
+  const contacts = useContacts();
+  const options = createMemo<EventEditorGuestOption[]>(() =>
+    contacts().map(recipientEntityMapper('user'))
+  );
+  const current = createMemo(() =>
+    initialGuestOptions(
+      event()
+        .attendees.map((attendee) => attendee.email)
+        .join(', '),
+      options()
+    )
+  );
+  return { options, current };
+}
+
+/**
+ * A guest form's keys: Cmd/Ctrl+Enter sends. Registered on the element so it
+ * runs before the picker's document listener, which adds the highlighted
+ * suggestion on every Enter, and Enter outside the picker's text field does
+ * not reach it.
+ */
+function guestFormKeydown(send: () => void) {
+  return (event: KeyboardEvent) => {
+    if (event.key !== 'Enter') return;
+    if (event.metaKey || event.ctrlKey) {
+      event.preventDefault();
+      event.stopPropagation();
+      send();
+      return;
+    }
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement && target.type === 'text')) {
+      event.stopPropagation();
+    }
+  };
+}
 
 /**
  * The composer's add-only guest editor, plus what an invitation from event
@@ -48,16 +89,7 @@ function InviteGuestsForm(props: {
   onSend: (invitation: GuestInvitation) => void;
   onClose: () => void;
 }) {
-  const contacts = useContacts();
-  const options = createMemo<EventEditorGuestOption[]>(() =>
-    contacts().map(recipientEntityMapper('user'))
-  );
-  const current = createMemo(() =>
-    initialGuestOptions(
-      props.event.attendees.map((attendee) => attendee.email).join(', '),
-      options()
-    )
-  );
+  const { options, current } = createGuestOptions(() => props.event);
   const [added, setAdded] = createSignal<SelectedEventEditorGuest[]>([]);
   const [optionalIds, setOptionalIds] = createSignal<ReadonlySet<string>>(
     new Set()
@@ -90,21 +122,7 @@ function InviteGuestsForm(props: {
   return (
     <div
       class="flex min-h-0 flex-1 flex-col"
-      // Registered on the element so it runs before the picker's document
-      // listener, which adds the highlighted suggestion on every Enter.
-      on:keydown={(event) => {
-        if (event.key !== 'Enter') return;
-        if (event.metaKey || event.ctrlKey) {
-          event.preventDefault();
-          event.stopPropagation();
-          send();
-          return;
-        }
-        const target = event.target;
-        if (!(target instanceof HTMLInputElement && target.type === 'text')) {
-          event.stopPropagation();
-        }
-      }}
+      on:keydown={guestFormKeydown(send)}
     >
       <AddOnlyGuestsEditor
         options={options}
@@ -151,30 +169,81 @@ function InviteGuestsForm(props: {
   );
 }
 
-/**
- * The attendees header's "Add guests" action and the editor it opens,
- * anchored to the action on desktop and a bottom sheet on phones.
- */
-function EventInviteGuestsAction(props: {
-  event: CalendarEvent;
-  invites: GuestInviteController;
-}) {
-  const close = () => props.invites.setEditorOpen(false);
-  const form = () => (
-    <InviteGuestsForm
-      event={props.event}
-      onSend={props.invites.send}
-      onClose={close}
-    />
-  );
+/** Shown above the forward button; Google says the same of its own forward. */
+const FORWARD_FORM_NOTE =
+  "They can add the event to their calendar but won't appear in the guest list.";
 
+/**
+ * Forwarding the invitation, for a guest who cannot add guests: the same
+ * add-only picker as Add guests, for people who get the event by email
+ * instead of a place on the guest list. A forward covers the whole series,
+ * since the file it sends is the series.
+ */
+function ForwardInvitationForm(props: {
+  event: CalendarEvent;
+  onSend: (forward: InvitationForward) => void;
+  onClose: () => void;
+}) {
+  const { options, current } = createGuestOptions(() => props.event);
+  const [added, setAdded] = createSignal<SelectedEventEditorGuest[]>([]);
+  const send = () => {
+    if (added().length === 0) return;
+    props.onSend({
+      recipients: added().map((guest) => ({
+        email: guestEmail(guest),
+        name: guestDisplayName(guest),
+      })),
+    });
+  };
+
+  return (
+    <div
+      class="flex min-h-0 flex-1 flex-col"
+      on:keydown={guestFormKeydown(send)}
+    >
+      <AddOnlyGuestsEditor
+        options={options}
+        current={current()}
+        added={added()}
+        onAddedChange={setAdded}
+        onClose={props.onClose}
+        addedLabel="Forward to"
+      />
+      <div class="flex shrink-0 items-center gap-2 border-t border-edge-muted p-2">
+        <p class="min-w-0 flex-1 text-xs text-ink-muted">{FORWARD_FORM_NOTE}</p>
+        <Button
+          variant="strong"
+          size="sm"
+          depth={3}
+          class="shrink-0"
+          disabled={added().length === 0}
+          onClick={send}
+        >
+          Forward
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * An attendees-header action and the guest editor it opens, anchored to the
+ * action on desktop and a bottom sheet on phones.
+ */
+function GuestEditorAction(props: {
+  label: string;
+  icon: JSX.Element;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  children: JSX.Element;
+}) {
   return (
     <Show
       when={isMobile()}
       fallback={
         <Popover
-          open={props.invites.editorOpen()}
-          onOpenChange={props.invites.setEditorOpen}
+          open={props.open}
+          onOpenChange={props.onOpenChange}
           placement="bottom-end"
           gutter={4}
           flip
@@ -182,19 +251,19 @@ function EventInviteGuestsAction(props: {
         >
           <Popover.Trigger
             as={Button}
-            label="Add guests"
+            label={props.label}
             variant="ghost"
             size="icon-sm"
             depth={3}
             class="text-ink-muted [&_svg]:size-4"
           >
-            <UserPlusIcon />
+            {props.icon}
           </Popover.Trigger>
           <EventComposerPopoverPortal>
             <Layer depth={3}>
               <Popover.Content class="menu-surface z-action-menu flex max-h-[min(30rem,var(--kb-popper-content-available-height,30rem))] w-80 max-w-[calc(100vw-1rem)] flex-col overflow-hidden text-sm menu-open-animation">
-                <Popover.Title class="sr-only">Add guests</Popover.Title>
-                {form()}
+                <Popover.Title class="sr-only">{props.label}</Popover.Title>
+                {props.children}
               </Popover.Content>
             </Layer>
           </EventComposerPopoverPortal>
@@ -202,25 +271,67 @@ function EventInviteGuestsAction(props: {
       }
     >
       <Button
-        label="Add guests"
+        label={props.label}
         variant="ghost"
         size="icon-sm"
         depth={3}
         class="text-ink-muted [&_svg]:size-4"
-        onClick={() => props.invites.setEditorOpen(true)}
+        onClick={() => props.onOpenChange(true)}
       >
-        <UserPlusIcon />
+        {props.icon}
       </Button>
-      <Dialog
-        open={props.invites.editorOpen()}
-        onOpenChange={props.invites.setEditorOpen}
-      >
+      <Dialog open={props.open} onOpenChange={props.onOpenChange}>
         <Dialog.Title class="px-4 pb-2 text-base font-semibold text-ink">
-          Add guests
+          {props.label}
         </Dialog.Title>
-        {form()}
+        {props.children}
       </Dialog>
     </Show>
+  );
+}
+
+/** The attendees header's "Add guests" action and its editor. */
+function EventInviteGuestsAction(props: {
+  event: CalendarEvent;
+  invites: GuestInviteController;
+}) {
+  return (
+    <GuestEditorAction
+      label="Add guests"
+      icon={<UserPlusIcon />}
+      open={props.invites.editorOpen()}
+      onOpenChange={props.invites.setEditorOpen}
+    >
+      <InviteGuestsForm
+        event={props.event}
+        onSend={props.invites.send}
+        onClose={() => props.invites.setEditorOpen(false)}
+      />
+    </GuestEditorAction>
+  );
+}
+
+/**
+ * The attendees header's "Forward invitation" action, where Add guests
+ * would be if the viewer could invite, and its editor.
+ */
+export function EventForwardInvitationAction(props: {
+  event: CalendarEvent;
+  invites: GuestInviteController;
+}) {
+  return (
+    <GuestEditorAction
+      label="Forward invitation"
+      icon={<PaperPlaneTiltIcon />}
+      open={props.invites.forwardEditorOpen()}
+      onOpenChange={props.invites.setForwardEditorOpen}
+    >
+      <ForwardInvitationForm
+        event={props.event}
+        onSend={props.invites.forward}
+        onClose={() => props.invites.setForwardEditorOpen(false)}
+      />
+    </GuestEditorAction>
   );
 }
 
@@ -228,8 +339,8 @@ function EventInviteGuestsAction(props: {
  * The guest-row actions Google Calendar users know: copy every guest's
  * address and start an email to the other guests (both hidden when the
  * viewer is the only one, as on a snapshot, and copying while the organizer
- * hides the guest list, which the copy does not hold), or add guests when the
- * organizer allows it. Emailing closes the details first: closing hands focus
+ * hides the guest list, which the copy does not hold), add guests when the
+ * organizer allows it, or else forward the invitation. Emailing closes the details first: closing hands focus
  * back to the calendar chip, and the composer's To field has to win that
  * exchange.
  */
@@ -272,6 +383,12 @@ function EventGuestActions(props: {
       </Show>
       <Show when={props.invites.canInvite()}>
         <EventInviteGuestsAction event={props.event} invites={props.invites} />
+      </Show>
+      <Show when={props.invites.canForward()}>
+        <EventForwardInvitationAction
+          event={props.event}
+          invites={props.invites}
+        />
       </Show>
     </Show>
   );
