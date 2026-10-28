@@ -14,24 +14,30 @@ export function DroppedTagApplier(props: {
   entities: EntityData[];
   onDone: () => void;
 }) {
-  const applications = props.entities.flatMap((entity) => {
-    const entityType = tagEntityType(entity);
-    if (!entityType) return [];
-    const docTags = useSoupDocTags(entity.id, entityType, () =>
-      'properties' in entity ? entity.properties : undefined
-    );
-    return [docTags.applyTag(props.tag.scope, props.tag.id)];
-  });
-
-  const settle = async () => {
-    const results = await Promise.allSettled(applications);
-    for (const result of results) {
-      if (result.status === 'rejected') {
-        Telemetry.error(result.reason, { surface: 'tag-drop' });
+  const settle = () =>
+    Telemetry.span('tag.drop_apply', async (span) => {
+      span.setAttr('tag.id', props.tag.id);
+      const applications = props.entities.flatMap((entity) => {
+        const entityType = tagEntityType(entity);
+        if (!entityType) return [];
+        const docTags = useSoupDocTags(entity.id, entityType, () =>
+          'properties' in entity ? entity.properties : undefined
+        );
+        return [docTags.applyTag(props.tag.scope, props.tag.id)];
+      });
+      span.setAttr('tag.entity_count', applications.length);
+      const results = await Promise.allSettled(applications);
+      let failures = 0;
+      for (const result of results) {
+        if (result.status === 'rejected') {
+          failures++;
+          Telemetry.error(result.reason, { surface: 'tag-drop' });
+        }
       }
-    }
-    props.onDone();
-  };
+      span.setAttr('tag.failure_count', failures);
+      if (failures > 0) span.error('Tag application failed');
+      props.onDone();
+    });
   fireAndForget(settle(), 'tag-drop');
 
   return null;
