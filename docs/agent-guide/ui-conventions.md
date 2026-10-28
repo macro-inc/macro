@@ -98,6 +98,20 @@ at the top-right and bottom-left corners. Light themes keep a soft highlight
 through those corners so they are only slightly dimmer. The iOS app also uses shared
 [glass press feedback](navigation.md#mobile-glass-feedback).
 
+## Selection controls
+
+Unchecked checkboxes and radios have transparent faces. Selected controls use the
+accent fill and a contrasting mark; a partially selected checkbox uses a dash.
+Checkbox marks animate on both selection and deselection. Switches have an accent
+on-state and a larger rounded thumb that widens only while pressed. Reduced-motion
+preferences suppress these transitions.
+
+Use the root size prop rather than overriding the box or its glyph. Checkbox and
+radio defaults stay 16px; compact list controls stay 14px. Switch toolbar and
+settings sizes retain their existing geometry. Native keyboard behavior, form
+values, labels, disabled/read-only state, and surrounding row hit targets stay
+unchanged. See the [selection-control API contract](../../.agents/rules/web/ui-primitives.md#selection-controls).
+
 ## Multiselect dropdowns
 
 Use `Dropdown.MultiSelectItem` for filter options, not independent settings.

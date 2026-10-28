@@ -188,6 +188,10 @@ the user's newest account for that app from the last fifteen minutes.
 
 ### General
 
+- Keep selection controls on shared `Checkbox`, `ToggleSwitch`, and `RadioGroup`;
+  preserve their native input semantics and use root sizing instead of internal
+  control/glyph overrides. See the [selection-control contract](../../.agents/rules/web/ui-primitives.md#selection-controls).
+
 - Share URL recognition with `packages/lexical-core/utils/auto-link.ts`; preserve explicit unlink markers when saving and rendering messages. See `packages/lexical-core/README.md` at the repository root.
 - Empty human DMs use the shared centered conversations graphic and explain email delivery to nonusers; keep this state out of agent DMs, loading/error states, and populated timelines.
 - Main Tasks mounts reusable GraphQL saved views; keep embedded Project/CRM task lists unchanged. Read `src/features/tasks-view/AGENTS.md` for filter, draft, navigation, and browser checks.
