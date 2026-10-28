@@ -16,16 +16,30 @@ const mocks = vi.hoisted(() => ({
   success: vi.fn(),
   failure: vi.fn(),
   shareOptions: vi.fn(),
+  uploading: false,
+  attachments: [] as {
+    entity_type: string;
+    entity_id: string;
+    width: number;
+    height: number;
+  }[],
   recipients: [] as { kind: 'channel' | 'user'; id: string }[],
 }));
 
 vi.mock('@app/lib/analytics/analytics-context', () => ({
   useAnalytics: () => ({ track: vi.fn() }),
 }));
-vi.mock('@channel/Input', () => ({
-  createConfiguredChannelMarkdownEditor: () => ({
-    controls: { focus: vi.fn() },
+vi.mock('@core/component/ForwardMessageComposer', () => ({
+  createForwardMessageComposer: () => ({
+    message: () => ({
+      content: '',
+      mentions: [],
+      attachments: mocks.attachments,
+    }),
+    isUploading: () => mocks.uploading,
+    clear: vi.fn(),
   }),
+  ForwardMessageComposer: () => <textarea aria-label="Optional message" />,
 }));
 vi.mock('@core/auth', () => ({ useIsAuthenticated: () => () => true }));
 vi.mock('@core/block', () => ({
@@ -135,6 +149,8 @@ function mountForward(
 
 beforeEach(() => {
   vi.resetAllMocks();
+  mocks.uploading = false;
+  mocks.attachments = [];
   mocks.recipients = [{ kind: 'channel', id: 'channel-1' }];
 });
 afterEach(cleanup);
@@ -404,5 +420,53 @@ describe('forwarding with selected access', () => {
       ['channel-2', 'view'],
     ]);
     expect(onSubmit).toHaveBeenCalledOnce();
+  });
+});
+
+describe('forwarding image attachments', () => {
+  it.each(['channel', 'user'] as const)(
+    'includes inline images with the shared entity for a %s',
+    async (target) => {
+      mocks.recipients = [{ kind: target, id: 'recipient-1' }];
+      mocks.attachments = [
+        {
+          entity_type: 'static/image',
+          entity_id: 'image-1',
+          width: 20,
+          height: 10,
+        },
+      ];
+      const send =
+        target === 'channel' ? mocks.sendToChannel : mocks.sendToUsers;
+      send.mockResolvedValue({
+        channelId: 'channel-1',
+        navigateToChannel: vi.fn(),
+      });
+      const { submit } = mountForward();
+      await submit();
+      expect(send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          attachments: [
+            { entity_type: 'agent_session', entity_id: 'session-1' },
+            {
+              entity_type: 'static/image',
+              entity_id: 'image-1',
+              width: 20,
+              height: 10,
+            },
+          ],
+        })
+      );
+    }
+  );
+
+  it('blocks the submit handler while images are uploading', async () => {
+    mocks.uploading = true;
+    const { submit } = mountForward();
+    await submit();
+    expect(mocks.sendToChannel).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole('button', { name: 'Share' }).hasAttribute('disabled')
+    ).toBe(true);
   });
 });

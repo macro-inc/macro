@@ -143,10 +143,13 @@ vi.mock('@queries/storage/databases', () => ({
 vi.mock('@app/lib/analytics/analytics-context', () => ({
   useAnalytics: () => ({ track: vi.fn() }),
 }));
-vi.mock('@channel/Input', () => ({
-  createConfiguredChannelMarkdownEditor: () => ({
-    controls: { focus: vi.fn() },
+vi.mock('@core/component/ForwardMessageComposer', () => ({
+  createForwardMessageComposer: () => ({
+    message: () => ({ content: '', mentions: [], attachments: [] }),
+    isUploading: () => false,
+    clear: vi.fn(),
   }),
+  ForwardMessageComposer: () => <textarea aria-label="Optional message" />,
 }));
 vi.mock('@core/auth', () => ({ useIsAuthenticated: () => () => true }));
 vi.mock('@core/constant/allBlocks', () => ({

@@ -785,7 +785,7 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
 
   const [forwardRef, setForwardRef] = createSignal<{
     handleSubmit: () => void;
-    getSelectedOptions: () => unknown[];
+    canSubmit: () => boolean;
   }>();
 
   return (
@@ -818,9 +818,7 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
                 variant="ghost"
                 size="sm"
                 class="shrink-0 ml-2 pl-2 disabled:text-ink-muted text-accent"
-                disabled={
-                  (forwardRef()?.getSelectedOptions().length ?? 0) === 0
-                }
+                disabled={!forwardRef()?.canSubmit()}
                 onClick={() => forwardRef()?.handleSubmit()}
               >
                 Share
