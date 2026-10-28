@@ -299,7 +299,7 @@ export function EmailCard(
             >
               <Tooltip label="Add inbox">
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   size="md"
                   aria-label="Add inbox"
                   onClick={onConnectEmail}
@@ -447,7 +447,7 @@ function DisabledPrimaryRow(props: { email: string; onEnable: () => void }) {
         </div>
         <span class="text-xs text-ink-muted">Sync disabled</span>
       </div>
-      <Button variant="outline" size="md" onClick={props.onEnable}>
+      <Button variant="secondary" size="md" onClick={props.onEnable}>
         Enable
       </Button>
     </div>
@@ -540,7 +540,7 @@ function InboxRow(props: {
             when={calendarUiEnabled() && props.link.needs_calendar_permission}
           >
             <Button
-              variant="outline"
+              variant="secondary"
               size="md"
               onClick={props.onEnableCalendar}
               aria-label={`Enable calendar for ${props.link.email_address}`}
@@ -563,7 +563,7 @@ function InboxRow(props: {
           >
             <Tooltip label="Turn off calendar">
               <Button
-                variant="outline"
+                variant="secondary"
                 size="icon-sm"
                 onClick={props.onTurnOffCalendar}
                 aria-label={`Turn off calendar for ${props.link.email_address}`}
@@ -575,7 +575,7 @@ function InboxRow(props: {
           <Show when={ENABLE_INBOX_RESYNC}>
             <Tooltip label="Force sync">
               <Button
-                variant="outline"
+                variant="secondary"
                 size="icon-sm"
                 disabled={
                   props.resyncing ||

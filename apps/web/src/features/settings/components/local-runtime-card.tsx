@@ -164,7 +164,7 @@ export function LocalRuntimeCard() {
                 <Show when={phase() === 'running' && !setup()}>
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
                     disabled={busy()}
                     onClick={() => fireAndForget(stop(), 'local-runtime-card')}
@@ -258,7 +258,7 @@ export function LocalRuntimeCard() {
                     </p>
                     <Button
                       type="button"
-                      variant="outline"
+                      variant="secondary"
                       size="sm"
                       disabled={busy()}
                       onClick={() =>
@@ -279,7 +279,7 @@ export function LocalRuntimeCard() {
                     </p>
                     <Button
                       type="button"
-                      variant="outline"
+                      variant="secondary"
                       size="sm"
                       disabled={busy()}
                       onClick={() =>

@@ -70,7 +70,7 @@ export function OwnerSettingsSection(props: {
   const pageShare = () => (
     <CopyButton
       aria-label="Copy link"
-      variant="outline"
+      variant="secondary"
       size="md"
       tooltip={
         source.profile()?.revision

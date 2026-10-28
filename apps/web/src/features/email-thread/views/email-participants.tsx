@@ -118,7 +118,7 @@ export function EmailParticipants() {
       </Key>
       <Show when={hiddenCount() > 0}>
         <Button
-          variant="outline"
+          variant="secondary"
           size="sm"
           onClick={() => setExpanded((v) => !v)}
           class={badgeTriggerClasses({

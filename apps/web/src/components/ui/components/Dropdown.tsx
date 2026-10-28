@@ -484,7 +484,7 @@ function DropdownTrigger<T extends ValidComponent = 'button'>(
 ) {
   return (
     <KobalteDropdownMenu.Trigger<ValidComponent>
-      variant="outline"
+      variant="secondary"
       as={Button}
       size="sm"
       {...props}

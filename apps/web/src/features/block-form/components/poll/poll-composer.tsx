@@ -121,7 +121,7 @@ export function PollComposer(props: {
           </Show>
           <Button
             type="button"
-            variant="outline"
+            variant="secondary"
             class="h-10 w-full justify-start border-dashed text-ink-muted"
             disabled={options().length >= 20}
             onClick={() => {

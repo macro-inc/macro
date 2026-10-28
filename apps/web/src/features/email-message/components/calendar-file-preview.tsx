@@ -41,7 +41,7 @@ export function CalendarFilePreview(props: {
             {props.fileName || 'Calendar file'}
           </Dialog.Title>
           <Show when={props.onDownload}>
-            <Button variant="outline" onClick={() => props.onDownload?.()}>
+            <Button variant="secondary" onClick={() => props.onDownload?.()}>
               <DownloadSimple class="size-4 shrink-0 touch:size-6" />
               Download .ics
             </Button>

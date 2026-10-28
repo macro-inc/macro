@@ -105,7 +105,7 @@ export function AutoReloadDialog(props: {
             </p>
             <Button
               class="self-start"
-              variant="outline"
+              variant="secondary"
               size="sm"
               disabled={
                 !props.canManagePaymentMethods || props.paymentMethodsPending

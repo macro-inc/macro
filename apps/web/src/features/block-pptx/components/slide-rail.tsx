@@ -355,7 +355,7 @@ export function SlideRail(props: SlideRailProps) {
             aria-label="New slide"
             tooltip="New slide"
             size="sm"
-            variant="outline"
+            variant="secondary"
             class="w-full"
             onClick={props.onAdd}
           >

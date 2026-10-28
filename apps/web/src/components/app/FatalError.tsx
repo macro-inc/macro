@@ -47,7 +47,7 @@ export function FatalError(props: FatalErrorProps) {
               >
                 <HomeIcon class="size-4" /> Home
               </Button>
-              <Button variant="outline" onClick={props.reset}>
+              <Button variant="secondary" onClick={props.reset}>
                 <ResetIcon class="size-4" /> Try Again
               </Button>
             </div>

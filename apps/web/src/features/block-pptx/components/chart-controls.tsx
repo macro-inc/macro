@@ -541,7 +541,7 @@ export function ChartDataEditor(props: {
         <div class="flex items-center gap-2">
           <Button
             size="sm"
-            variant="outline"
+            variant="secondary"
             disabled={props.readonly}
             onClick={addRow}
           >
@@ -550,7 +550,7 @@ export function ChartDataEditor(props: {
           </Button>
           <Button
             size="sm"
-            variant="outline"
+            variant="secondary"
             disabled={props.readonly}
             onClick={addSeries}
           >
@@ -651,7 +651,7 @@ export function ChartDesignTab(props: {
                   class="h-7 min-w-0 flex-1 rounded-md border border-edge-muted bg-input px-2 text-xs"
                   onKeyDown={(e) => e.stopPropagation()}
                 />
-                <Button size="xs" variant="outline" type="submit">
+                <Button size="xs" variant="secondary" type="submit">
                   Set
                 </Button>
               </form>

@@ -679,7 +679,7 @@ export function ProjectsCollection(props: {
                     </span>
                     <Show when={!filtered()}>
                       <Button
-                        variant="outline"
+                        variant="secondary"
                         onClick={() => props.onCreate()}
                       >
                         New project
@@ -783,7 +783,7 @@ export function ProjectsCollection(props: {
                                 class="flex justify-center py-2"
                               >
                                 <Button
-                                  variant="outline"
+                                  variant="secondary"
                                   disabled={collection.loadingMore()}
                                   onClick={() =>
                                     list.activate.key(more().id, {

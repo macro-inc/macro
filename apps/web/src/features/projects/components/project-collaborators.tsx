@@ -65,7 +65,7 @@ export function ProjectCollaborators(props: {
             setPicking(value);
           }}
         >
-          <Dropdown.Trigger disabled={props.pending} variant="outline">
+          <Dropdown.Trigger disabled={props.pending} variant="secondary">
             Manage collaborators
           </Dropdown.Trigger>
           <Dropdown.Content portalScope="local" class="min-w-72 p-3">

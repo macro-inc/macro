@@ -501,7 +501,7 @@ export function Account() {
           label="Log out"
           description="Sign out of Macro on this device."
         >
-          <Button variant="outline" size="sm" onClick={() => logout()}>
+          <Button variant="secondary" size="sm" onClick={() => logout()}>
             <SignOutIcon class="size-4" />
             Log out
           </Button>

@@ -40,7 +40,7 @@ export function BotProfileFields(props: {
         </div>
         <Button
           type="button"
-          variant="outline"
+          variant="secondary"
           size="sm"
           disabled={props.uploadingAvatar}
           onClick={props.onUploadAvatar}

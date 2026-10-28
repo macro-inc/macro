@@ -473,7 +473,7 @@ export function CalendarEventPreviewDetails(props: {
               class="mt-1 flex flex-wrap items-center gap-1"
               onClick={(event) => event.stopPropagation()}
             >
-              <Button variant="outline" size="xs" onClick={open()}>
+              <Button variant="secondary" size="xs" onClick={open()}>
                 <CalendarCheckIcon />
                 Open
               </Button>

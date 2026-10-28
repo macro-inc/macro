@@ -103,7 +103,7 @@ export function CrmImport(props: {
           />
           <div class="flex flex-wrap items-center gap-3">
             <Button
-              variant="outline"
+              variant="secondary"
               disabled={pending()}
               onClick={() => fileInput.click()}
             >

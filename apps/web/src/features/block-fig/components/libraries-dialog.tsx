@@ -113,7 +113,7 @@ export function LibrariesDialog(props: {
                 </div>
                 <Show when={props.canEdit}>
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
                     data-testid="fig-library-publish"
                     disabled={

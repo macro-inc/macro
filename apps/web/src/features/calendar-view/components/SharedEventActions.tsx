@@ -108,7 +108,7 @@ export function SharedEventActions(props: {
         </Match>
         <Match when={props.canRequestToJoin}>
           <Button
-            variant="outline"
+            variant="secondary"
             size="xs"
             disabled={requestToJoin.isPending}
             onClick={() => requestToJoin.mutate(props.eventId)}

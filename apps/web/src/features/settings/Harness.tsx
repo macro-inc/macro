@@ -228,7 +228,7 @@ export function Harness(
                             />
                             <Button
                               type="button"
-                              variant="outline"
+                              variant="secondary"
                               size="sm"
                               disabled={
                                 cursorApiKey().trim().length === 0 ||

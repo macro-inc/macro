@@ -83,7 +83,7 @@ export function AnimationPane(props: {
       <div class="flex items-center gap-1 border-edge-muted border-b px-2 py-1.5">
         <Button
           size="sm"
-          variant="outline"
+          variant="secondary"
           data-testid="pptx-animation-play"
           disabled={animations().length === 0}
           onClick={anim.preview}

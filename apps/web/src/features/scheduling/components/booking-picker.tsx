@@ -387,7 +387,7 @@ export function BookingPicker(props: {
                           {(slot) => (
                             <Button
                               type="button"
-                              variant="outline"
+                              variant="secondary"
                               onClick={() => flow.select(slot.startsAt)}
                             >
                               {new Date(slot.startsAt).toLocaleTimeString([], {

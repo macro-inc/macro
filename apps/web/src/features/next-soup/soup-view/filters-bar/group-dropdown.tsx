@@ -38,7 +38,7 @@ export const GroupDropdown: Component<GroupDropdownProps> = (props) => {
       <Tooltip label="Group">
         <Dropdown.Trigger
           as={props.grouped ? ButtonGroup.Button : Button}
-          variant={props.variant ?? 'outline'}
+          variant={props.variant ?? 'secondary'}
           size={triggerSize()}
           aria-label={props.hideLabel ? 'Group' : undefined}
         >

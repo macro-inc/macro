@@ -55,7 +55,7 @@ export function AddToCalendarButton(props: {
       when={targetCalendars().length > 1}
       fallback={
         <Button
-          variant="outline"
+          variant="secondary"
           size={props.size}
           disabled={props.pending || targetCalendars().length === 0}
           onClick={() => props.onAdd(targetCalendars()[0]?.id)}
@@ -73,7 +73,7 @@ export function AddToCalendarButton(props: {
     >
       <Dropdown onOpenChange={(open) => props.onMenuOpenChange?.(open)}>
         <Dropdown.Trigger
-          variant="outline"
+          variant="secondary"
           size={props.size}
           disabled={props.pending}
         >

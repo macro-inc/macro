@@ -232,7 +232,7 @@ export default function ProjectionPlayground() {
 
           <section class="flex gap-2">
             <Button
-              variant="outline"
+              variant="secondary"
               size="sm"
               disabled={projection.query.isFetching}
               onClick={() => projection.query.refetch()}

@@ -265,7 +265,7 @@ export function BotDetail(props: { botId: string; onBack: () => void }) {
                     <Button
                       type="button"
                       size="sm"
-                      variant="outline"
+                      variant="secondary"
                       class="ml-auto"
                       disabled={agentDm?.pending()}
                       onClick={() =>

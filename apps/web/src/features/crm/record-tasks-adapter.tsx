@@ -87,7 +87,7 @@ function RecordTasksBody(props: { scope: CrmRecordScope }) {
       actions={
         <>
           <TasksControls />
-          <Button variant="outline" onClick={composeTask}>
+          <Button variant="secondary" onClick={composeTask}>
             <PlusIcon class="size-4" />
             New task
           </Button>

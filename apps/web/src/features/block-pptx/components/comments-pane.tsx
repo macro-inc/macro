@@ -492,7 +492,7 @@ export function CommentsPane(props: {
             <Show when={!props.readonly}>
               <Button
                 size="sm"
-                variant="outline"
+                variant="secondary"
                 onClick={() => c.newComment()}
               >
                 New comment

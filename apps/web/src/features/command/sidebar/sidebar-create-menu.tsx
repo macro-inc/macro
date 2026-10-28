@@ -152,7 +152,7 @@ export const SidebarCreateMenu = (props: SidebarCreateMenuProps) => {
               }}
               ref={createMenuTarget}
               as={Button}
-              variant="outline"
+              variant="secondary"
               size="icon-sm"
               class="size-[26px] bg-surface shadow-md shadow-drop-shadow"
               onMouseDown={(e: MouseEvent) => {

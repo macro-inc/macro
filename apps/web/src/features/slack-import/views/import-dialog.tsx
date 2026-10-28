@@ -919,12 +919,12 @@ function JobHistory(props: {
       <Show when={props.paged || props.page?.nextCursor}>
         <div class="flex items-center gap-2">
           <Show when={props.paged}>
-            <Button variant="outline" size="sm" onClick={props.onNewest}>
+            <Button variant="secondary" size="sm" onClick={props.onNewest}>
               Newest imports
             </Button>
           </Show>
           <Show when={props.page?.nextCursor}>
-            <Button variant="outline" size="sm" onClick={props.onOlder}>
+            <Button variant="secondary" size="sm" onClick={props.onOlder}>
               Older imports
             </Button>
           </Show>

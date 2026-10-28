@@ -121,7 +121,7 @@ export function ProjectAssignment(props: {
         </Show>
         <Show when={source.hasMore()}>
           <Button
-            variant="outline"
+            variant="secondary"
             disabled={source.loadingMore()}
             onClick={() => fireAndForget(source.loadMore(), 'projects')}
           >

@@ -33,7 +33,7 @@ function SizesDemo() {
             aria-label="Copy example"
             tooltip="Copy example"
             size={size}
-            variant="outline"
+            variant="secondary"
             onClick={() => navigator.clipboard.writeText('Copied from Macro')}
           >
             <CopyIcon />

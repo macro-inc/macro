@@ -131,7 +131,7 @@ export function DatabaseEditorToolbar(props: {
             <Show when={props.onCreateRecord}>
               <Button
                 size="md"
-                variant="outline"
+                variant="secondary"
                 aria-label={
                   props.creating
                     ? 'Saving record'

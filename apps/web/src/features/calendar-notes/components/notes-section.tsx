@@ -83,7 +83,7 @@ export function NotesSection(props: {
             class="flex items-center justify-between gap-2 py-2 text-xs text-ink-muted"
           >
             <span>{props.state.error}</span>
-            <Button size="sm" variant="outline" onClick={props.onRetry}>
+            <Button size="sm" variant="secondary" onClick={props.onRetry}>
               Retry
             </Button>
           </div>
@@ -116,7 +116,7 @@ export function NotesSection(props: {
                         }
                       >
                         <Dropdown.Trigger
-                          variant="outline"
+                          variant="secondary"
                           size="xs"
                           aria-label={`Options for ${note.name}`}
                           tooltip={`Options for ${note.name}`}

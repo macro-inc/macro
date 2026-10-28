@@ -147,7 +147,7 @@ export function HiddenColumns(props: {
                   </span>
                   <span class="text-xs text-ink-muted">{column.label}</span>
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
                     onClick={() => props.onAdd(column.id)}
                   >

@@ -46,7 +46,7 @@ export function ChangesReadyCard(props: {
       </div>
       <div class="flex flex-wrap gap-1.5">
         <Button
-          variant="outline"
+          variant="secondary"
           size="sm"
           class="gap-1.5"
           onClick={() => props.onReview()}
@@ -56,7 +56,7 @@ export function ChangesReadyCard(props: {
         </Button>
         <Show when={props.linkedUrl}>
           <Button
-            variant="outline"
+            variant="secondary"
             size="sm"
             class="gap-1.5"
             onClick={props.onViewPullRequest}

@@ -175,7 +175,7 @@ export function TagsRow(props: {
             <TagPicker
               docTags={docTags}
               triggerClass={buttonClasses({
-                variant: 'outline',
+                variant: 'secondary',
                 size: 'icon-xs',
                 class: 'm-px',
               })}

@@ -183,7 +183,7 @@ export function SpreadsheetFindDialog(props: SpreadsheetFindDialogProps) {
               />
               <Button
                 size="sm"
-                variant="outline"
+                variant="secondary"
                 disabled={props.matchIndex < 0}
                 onClick={() => props.onReplace(false)}
               >
@@ -191,7 +191,7 @@ export function SpreadsheetFindDialog(props: SpreadsheetFindDialogProps) {
               </Button>
               <Button
                 size="sm"
-                variant="outline"
+                variant="secondary"
                 disabled={!props.matchCount}
                 onClick={() => props.onReplace(true)}
               >

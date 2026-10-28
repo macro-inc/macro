@@ -222,7 +222,7 @@ function CrmEnablementSection() {
                 Cancel
               </Button>
               <Button
-                variant="outline"
+                variant="secondary"
                 disabled={patchCrmMutation.isPending}
                 onClick={() => handleEnable(false)}
               >
@@ -580,7 +580,7 @@ function StagesSection() {
             when={dealStages.isCustomized()}
             fallback={
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 disabled={pending()}
                 onClick={handleCustomize}
@@ -592,7 +592,7 @@ function StagesSection() {
             }
           >
             <Button
-              variant="outline"
+              variant="secondary"
               size="sm"
               disabled={blocked()}
               onClick={() => setShowResetModal(true)}
@@ -646,7 +646,7 @@ function StagesSection() {
                 }}
               />
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 class="shrink-0"
                 disabled={newStageName().trim() === '' || pending()}

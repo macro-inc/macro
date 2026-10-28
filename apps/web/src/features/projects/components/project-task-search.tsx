@@ -27,7 +27,7 @@ export function ProjectTaskSearch(props: {
           aria-label={label()}
           tooltip={label()}
           ref={trigger}
-          variant="outline"
+          variant="secondary"
           size="icon-md"
           aria-expanded={false}
           aria-controls={inputId}

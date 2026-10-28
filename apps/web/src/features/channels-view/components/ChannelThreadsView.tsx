@@ -134,7 +134,7 @@ function ThreadCard(props: {
           <div class="flex items-center gap-2 text-xs text-ink-muted">
             <span>Couldn’t load this thread.</span>
             <Button
-              variant="outline"
+              variant="secondary"
               size="xs"
               onClick={() => fireAndForget(query.refetch(), 'channels-view')}
             >
@@ -225,7 +225,7 @@ function ThreadList(props: {
             <div class="flex min-h-40 flex-col items-center justify-center gap-2 text-sm text-ink-muted">
               <span>Couldn’t load threads.</span>
               <Button
-                variant="outline"
+                variant="secondary"
                 size="xs"
                 onClick={() =>
                   fireAndForget(props.query.refresh(), 'channels-view')
@@ -283,7 +283,7 @@ function ThreadList(props: {
               <div class="flex items-center justify-center gap-2 py-3 text-xs text-ink-muted">
                 <span>Couldn’t load more threads.</span>
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   size="xs"
                   onClick={() =>
                     fireAndForget(props.query.refresh(), 'channels-view')

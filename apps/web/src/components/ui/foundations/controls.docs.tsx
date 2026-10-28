@@ -68,14 +68,14 @@ function HeaderDemo() {
             <BoardIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
           </ButtonGroup.Button>
         </HeaderActionGroup>
-        <Button variant="outline" size="md">
+        <Button variant="secondary" size="md">
           <PlusIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           New
         </Button>
         <Button
           aria-label="Search tasks"
           tooltip="Search tasks"
-          variant="outline"
+          variant="secondary"
           size="icon-md"
         >
           <SearchIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
@@ -104,7 +104,7 @@ function SelectedDemo() {
       <Button
         aria-label={open() ? 'Hide details' : 'Show details'}
         tooltip={open() ? 'Hide details' : 'Show details'}
-        variant="outline"
+        variant="secondary"
         size="icon-md"
         aria-pressed={open()}
         onClick={() => setOpen(!open())}
@@ -134,14 +134,14 @@ function SizesDemo() {
               value="team"
               onChange={() => {}}
             />
-            <Button variant="outline" size={size}>
+            <Button variant="secondary" size={size}>
               <PlusIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
               New
             </Button>
             <Button
               aria-label="Search"
               tooltip="Search"
-              variant="outline"
+              variant="secondary"
               size={size === 'sm' ? 'icon-sm' : 'icon-md'}
             >
               <SearchIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />

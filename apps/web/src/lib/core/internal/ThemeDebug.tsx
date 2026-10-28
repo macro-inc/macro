@@ -432,7 +432,7 @@ function ThemeDebug() {
                   <Panel.Body class="p-4">
                     <div class="flex flex-wrap gap-2">
                       <Button variant="ghost">Ghost</Button>
-                      <Button variant="outline">Base</Button>
+                      <Button variant="secondary">Base</Button>
                       <Button variant="primary">Active</Button>
                       <Button variant="danger">Danger</Button>
                     </div>

@@ -365,7 +365,7 @@ export function ReviewsList(props: ReviewsListProps) {
             >
               <span>Reviews couldn’t be loaded.</span>
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 onClick={() => fireAndForget(source.retry(), 'reviews-view')}
               >
@@ -523,7 +523,7 @@ export function ReviewsList(props: ReviewsListProps) {
               >
                 <div class="flex justify-center p-3">
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
                     disabled={source.isLoadingMore()}
                     onClick={() =>

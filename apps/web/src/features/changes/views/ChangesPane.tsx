@@ -384,7 +384,7 @@ function ChangesBodyContent(props: {
                         The diff could not be loaded
                       </p>
                       <Button
-                        variant="outline"
+                        variant="secondary"
                         size="sm"
                         onClick={model.retryPatch}
                       >

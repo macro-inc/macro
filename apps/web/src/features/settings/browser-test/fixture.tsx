@@ -111,7 +111,7 @@ function Fixture() {
               {(email) => (
                 <SettingsRow label={email} description="Up to date">
                   <Show when={email === 'alex@example.com'}>
-                    <Button variant="outline" size="md">
+                    <Button variant="secondary" size="md">
                       Enable calendar
                     </Button>
                   </Show>
@@ -125,7 +125,7 @@ function Fixture() {
               label="Add another inbox"
               description="Connect more Gmail accounts."
             >
-              <Button variant="outline" size="md">
+              <Button variant="secondary" size="md">
                 Add account
               </Button>
             </SettingsRow>

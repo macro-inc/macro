@@ -129,7 +129,7 @@ export function ChatList(props: {
                     fallback={
                       <Button
                         type="button"
-                        variant="outline"
+                        variant="secondary"
                         size="sm"
                         aria-label={
                           props.adding.has(chat.jid)

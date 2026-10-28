@@ -54,7 +54,7 @@ export function ParticipantsMobileLayout(props: {
               <Button
                 aria-label="Add participants"
                 tooltip="Add participants"
-                variant="outline"
+                variant="secondary"
                 size="icon-md"
                 onClick={() => setAdding(true)}
               >

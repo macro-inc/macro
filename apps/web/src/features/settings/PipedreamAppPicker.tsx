@@ -73,7 +73,7 @@ export function PipedreamAppPicker(props: {
             <div class="px-4 py-4 text-center text-sm text-ink-muted">
               Couldn't load the connector catalog.
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 onClick={() => catalog.query.refetch()}
                 class="ml-2"
@@ -113,7 +113,7 @@ export function PipedreamAppPicker(props: {
             <Show when={catalog.query.hasNextPage}>
               <div class="px-3 py-2 text-center">
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   size="sm"
                   disabled={catalog.query.isFetchingNextPage}
                   onClick={() =>

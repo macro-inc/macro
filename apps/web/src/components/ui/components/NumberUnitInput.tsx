@@ -107,7 +107,7 @@ function StepButton(props: ButtonProps) {
   const readOnly = useContext(ReadOnlyContext);
   return (
     <Button
-      variant="outline"
+      variant="secondary"
       {...props}
       disabled={props.disabled || readOnly?.()}
     />

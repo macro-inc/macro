@@ -40,7 +40,7 @@ export const EntitySelectionToolbarModal = (
             <Show when={props.onAction}>
               <Button
                 onClick={props.onAction}
-                variant="outline"
+                variant="secondary"
                 class="p-1 pl-2 bg-surface"
               >
                 <span>{t('entityActions.actions')}</span>
@@ -50,7 +50,7 @@ export const EntitySelectionToolbarModal = (
             {props.children}
             <Button
               onClick={props.onClose}
-              variant="outline"
+              variant="secondary"
               class="p-1 pl-2 bg-surface"
             >
               <span>{t('entityActions.clear')}</span>

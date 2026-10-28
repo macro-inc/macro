@@ -88,7 +88,7 @@ export function UsageSettingsView(props: { context: UsageContext }) {
                 <Show when={props.context.failed()}>
                   <Button
                     class="self-start"
-                    variant="outline"
+                    variant="secondary"
                     onClick={props.context.refresh}
                   >
                     Try again
@@ -193,7 +193,7 @@ export function UsageSettingsView(props: { context: UsageContext }) {
                                 ref={(button) => {
                                   purchaseTrigger = button;
                                 }}
-                                variant="outline"
+                                variant="secondary"
                                 size="sm"
                                 class="rounded-full px-4"
                                 onClick={() => setPurchaseOpen(true)}
@@ -291,7 +291,7 @@ export function UsageSettingsView(props: { context: UsageContext }) {
                 <div class="flex flex-wrap gap-2">
                   <Button
                     variant={
-                      developer().plan() === 'free' ? 'primary' : 'outline'
+                      developer().plan() === 'free' ? 'primary' : 'secondary'
                     }
                     size="sm"
                     aria-pressed={developer().plan() === 'free'}
@@ -301,7 +301,7 @@ export function UsageSettingsView(props: { context: UsageContext }) {
                   </Button>
                   <Button
                     variant={
-                      developer().plan() === 'paid' ? 'primary' : 'outline'
+                      developer().plan() === 'paid' ? 'primary' : 'secondary'
                     }
                     size="sm"
                     aria-pressed={developer().plan() === 'paid'}
@@ -310,7 +310,7 @@ export function UsageSettingsView(props: { context: UsageContext }) {
                     Preview paid plan
                   </Button>
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
                     disabled={developer().beforeLaunch()}
                     onClick={() => developer().openLimitDialog('free')}
@@ -318,7 +318,7 @@ export function UsageSettingsView(props: { context: UsageContext }) {
                     Open Free usage-limit dialog
                   </Button>
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
                     disabled={developer().beforeLaunch()}
                     onClick={() => developer().openLimitDialog('paid')}
@@ -326,7 +326,7 @@ export function UsageSettingsView(props: { context: UsageContext }) {
                     Open paid usage-limit dialog
                   </Button>
                   <Button
-                    variant={developer().beforeLaunch() ? 'primary' : 'outline'}
+                    variant={developer().beforeLaunch() ? 'primary' : 'secondary'}
                     size="sm"
                     aria-pressed={developer().beforeLaunch()}
                     onClick={developer().previewBeforeLaunch}

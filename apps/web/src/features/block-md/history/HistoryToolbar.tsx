@@ -68,7 +68,7 @@ export function HistoryToolbar(props: { onClose: () => void }) {
         Current version
       </Button>
       <Button
-        variant="outline"
+        variant="secondary"
         size="sm"
         onClick={handleFork}
         disabled={

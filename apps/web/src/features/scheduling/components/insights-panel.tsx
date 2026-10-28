@@ -517,7 +517,7 @@ export function InsightsPanel(props: {
             {props.scopeSelector}
             <div class="ml-auto flex min-w-0 items-center gap-2">
               <Button
-                variant="outline"
+                variant="secondary"
                 onClick={download}
                 disabled={!canDownload()}
               >
@@ -552,7 +552,7 @@ export function InsightsPanel(props: {
             class="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-edge-muted p-5"
           >
             <p class="text-sm">{props.error}</p>
-            <Button variant="outline" onClick={props.onRetry}>
+            <Button variant="secondary" onClick={props.onRetry}>
               Try again
             </Button>
           </div>

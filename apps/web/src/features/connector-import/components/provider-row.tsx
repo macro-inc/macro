@@ -46,7 +46,7 @@ export function ProviderRow(props: {
         when={props.state === 'connected'}
         fallback={
           <Button
-            variant="outline"
+            variant="secondary"
             size="sm"
             disabled={
               props.disabled ||

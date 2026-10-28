@@ -302,7 +302,7 @@ export function CompanyViewsMenu(
                   ]}
                 />
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   size="sm"
                   disabled={!saveName().trim()}
                   onClick={saveCurrentView}

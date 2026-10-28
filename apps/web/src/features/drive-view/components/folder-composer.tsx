@@ -77,7 +77,7 @@ export function FolderComposer(props: {
             <Button
               tabIndex={-1}
               size="sm"
-              variant="outline"
+              variant="secondary"
               disabled={props.busy}
               onClick={() => {
                 props.onClear();
@@ -143,7 +143,7 @@ export function FolderComposer(props: {
                 <div class="flex flex-wrap justify-center gap-2">
                   <Button
                     size="sm"
-                    variant="outline"
+                    variant="secondary"
                     disabled={props.busy}
                     onClick={props.onFiles}
                   >
@@ -151,7 +151,7 @@ export function FolderComposer(props: {
                   </Button>
                   <Button
                     size="sm"
-                    variant="outline"
+                    variant="secondary"
                     disabled={props.busy}
                     onClick={props.onFolder}
                   >

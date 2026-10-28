@@ -49,7 +49,7 @@ export function MeetingList(props: {
                   </Button>
                   <Button
                     size="sm"
-                    variant="outline"
+                    variant="secondary"
                     onClick={() => props.onCopy(meeting)}
                   >
                     Copy link

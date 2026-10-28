@@ -254,7 +254,7 @@ export function PipelineView(props: {
                   </label>
                   <Button
                     type="submit"
-                    variant="outline"
+                    variant="secondary"
                     disabled={
                       pending() ||
                       !name().trim() ||

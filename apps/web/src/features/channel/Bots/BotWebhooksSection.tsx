@@ -23,7 +23,7 @@ export function BotWebhooksSection(props: BotWebhooksSectionProps) {
       action={
         <Button
           type="button"
-          variant="outline"
+          variant="secondary"
           size="sm"
           onClick={props.onNewToken}
         >

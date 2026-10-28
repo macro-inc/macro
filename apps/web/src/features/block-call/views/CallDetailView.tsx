@@ -177,7 +177,7 @@ export function CallDetailContent(props: {
                 <div class="flex flex-col items-center gap-3 text-sm">
                   <span>This call recording could not be displayed.</span>
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
                     onClick={() =>
                       fireAndForget(props.query.refetch(), 'call-detail')

@@ -395,7 +395,7 @@ export function BookingCard(props: {
                   href={url()}
                   target="_blank"
                   rel="noopener noreferrer"
-                  class={buttonClasses({ variant: 'outline', size: 'md' })}
+                  class={buttonClasses({ variant: 'secondary', size: 'md' })}
                 >
                   <External aria-hidden="true" class="size-3.5" />
                   Join meeting

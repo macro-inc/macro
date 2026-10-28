@@ -21,7 +21,7 @@ export function GanttSettings() {
   return (
     <Dropdown placement="bottom-end">
       <Dropdown.Trigger
-        variant="outline"
+        variant="secondary"
         size="icon-md"
         class="bg-surface shadow-sm"
         aria-label="Timeline settings"

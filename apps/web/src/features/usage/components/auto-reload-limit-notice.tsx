@@ -45,7 +45,7 @@ export function AutoReloadLimitNotice(props: {
         <div class="flex flex-wrap gap-2">
           <Button
             size="sm"
-            variant="outline"
+            variant="secondary"
             disabled={props.pending}
             onClick={(event) => props.onAdjust(event.currentTarget)}
           >

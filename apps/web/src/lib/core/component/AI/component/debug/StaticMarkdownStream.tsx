@@ -207,7 +207,7 @@ export default function StaticMarkdownStreamDebug() {
               Stream
             </Button>
             <Button
-              variant="outline"
+              variant="secondary"
               size="sm"
               onClick={stopRun}
               disabled={!isStreaming()}

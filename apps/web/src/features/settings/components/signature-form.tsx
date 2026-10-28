@@ -72,7 +72,7 @@ export function SignatureForm(props: {
         />
         <div class="flex items-center justify-end gap-2">
           <Button
-            variant="outline"
+            variant="secondary"
             size="md"
             disabled={!props.hasContent || props.pending || props.importing}
             onClick={props.onClear}

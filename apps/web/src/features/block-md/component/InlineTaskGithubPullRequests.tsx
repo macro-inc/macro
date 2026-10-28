@@ -174,7 +174,7 @@ function InlineTaskGithubPullRequestsContent(props: {
       <For each={pullRequests()}>{(pr) => <PullRequestPill pr={pr} />}</For>
       <Show when={!isWaitingForPullRequests() && pullRequests().length === 0}>
         <CopyButton
-          variant="outline"
+          variant="secondary"
           size="sm"
           tooltip={{
             content: 'Copy branch name',

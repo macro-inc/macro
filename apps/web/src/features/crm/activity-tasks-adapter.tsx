@@ -67,7 +67,7 @@ function ActivityTasksBody(props: {
       <Show
         when={!isTouchDevice()}
         fallback={
-          <Button variant="outline" onClick={() => props.onCreateTask()}>
+          <Button variant="secondary" onClick={() => props.onCreateTask()}>
             <PlusIcon class="size-4" />
             New task
           </Button>

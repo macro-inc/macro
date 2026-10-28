@@ -119,7 +119,7 @@ export function CallControlBar(props: {
         </MediaSplitButton>
         <Button
           size="icon-lg"
-          variant="outline"
+          variant="secondary"
           aria-label={
             props.screenSharing ? 'Stop sharing screen' : 'Share screen'
           }

@@ -262,7 +262,7 @@ export function RailListError(props: {
     >
       <span>Couldn’t load conversations.</span>
       <Button
-        variant="outline"
+        variant="secondary"
         size="xs"
         onClick={() => fireAndForget(props.retry(), 'channels-view')}
       >

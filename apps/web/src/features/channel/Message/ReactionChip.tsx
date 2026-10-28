@@ -99,7 +99,7 @@ export function ReactionChip(props: ReactionChipProps) {
               }))
             }
             size="sm"
-            variant={props.selected ? 'primary' : 'outline'}
+            variant={props.selected ? 'primary' : 'secondary'}
             class={cn(
               'flex flex-row items-center h-7 min-w-7 gap-1',
               !props.interactive && 'pointer-events-auto'

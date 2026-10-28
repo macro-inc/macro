@@ -174,7 +174,7 @@ function TaskDuplicateMention(props: { match: TaskDuplicate }) {
 function DismissDuplicateButton(props: { onDismiss: () => void }) {
   return (
     <Button
-      variant="outline"
+      variant="secondary"
       size="xs"
       class="shrink-0"
       onClick={props.onDismiss}
@@ -187,7 +187,7 @@ function DismissDuplicateButton(props: { onDismiss: () => void }) {
 function DismissAllButton(props: { onDismissAll: () => void }) {
   return (
     <Button
-      variant="outline"
+      variant="secondary"
       size="xs"
       class="mt-1 w-fit"
       onClick={props.onDismissAll}

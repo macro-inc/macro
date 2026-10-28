@@ -246,7 +246,7 @@ export function QuestionActions(props: {
   );
   const decline = (
     <Button
-      variant="outline"
+      variant="secondary"
       size="xs"
       disabled={props.locked}
       onClick={() => respond({ action: 'decline' })}

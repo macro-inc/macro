@@ -440,7 +440,7 @@ export function AvailabilityPanel(props: {
                   />
                   <Show when={props.canEdit}>
                     <Button
-                      variant="outline"
+                      variant="secondary"
                       size="sm"
                       disabled={props.saving}
                       onClick={(event) =>

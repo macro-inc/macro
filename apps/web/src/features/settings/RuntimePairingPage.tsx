@@ -163,7 +163,7 @@ export function RuntimePairingPage(props: {
                   <div>
                     <Button
                       type="button"
-                      variant="outline"
+                      variant="secondary"
                       size="sm"
                       onClick={tryAnotherCode}
                     >

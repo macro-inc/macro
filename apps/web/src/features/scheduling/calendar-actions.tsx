@@ -57,7 +57,7 @@ function Actions(props: { sidebar?: boolean; compact?: boolean }) {
       <Dropdown.Trigger
         aria-label="Booking links"
         tooltip="Booking links"
-        variant={props.compact ? 'outline' : 'ghost'}
+        variant={props.compact ? 'secondary' : 'ghost'}
         size={props.sidebar || props.compact ? 'md' : 'lg'}
         class={
           props.sidebar

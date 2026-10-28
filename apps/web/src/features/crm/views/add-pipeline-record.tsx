@@ -404,7 +404,7 @@ export function AddPipelineRecordDialog(
               </EntityComposer.Main>
               <EntityComposer.Footer class="items-center justify-end border-t border-edge-muted/60 px-5 py-3">
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   class="gap-3 not-touch:h-[33.75px] not-touch:px-[15px]"
                   disabled={pending()}
                   onClick={close}

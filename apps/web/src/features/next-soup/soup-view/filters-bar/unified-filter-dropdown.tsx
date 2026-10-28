@@ -868,7 +868,7 @@ export const UnifiedFilterDropdown = (
               >
                 <Dropdown.Trigger
                   as={props.grouped ? ButtonGroup.Button : Button}
-                  variant={props.variant ?? 'outline'}
+                  variant={props.variant ?? 'secondary'}
                   size={triggerSize()}
                   aria-label={
                     props.hideLabel ? t('viewMenus.filter') : undefined

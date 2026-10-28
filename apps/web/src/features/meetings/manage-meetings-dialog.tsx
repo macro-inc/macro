@@ -79,7 +79,7 @@ export function ManageMeetingsDialog(props: { onClose: () => void }) {
                   Could not load your call links.
                 </p>
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   onClick={() => fireAndForget(meetings.refetch(), 'meetings')}
                 >
                   Try again

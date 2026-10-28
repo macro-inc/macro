@@ -344,7 +344,7 @@ export function BookingDetailsDialog(props: {
               </Button>
               <Show when={!past()}>
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   size="md"
                   class="@max-[22rem]/booking-details:px-1.5 @max-[22rem]/booking-details:text-xs"
                   disabled={!!props.busyId}
@@ -361,7 +361,7 @@ export function BookingDetailsDialog(props: {
                   target="_blank"
                   rel="noopener noreferrer"
                   class={buttonClasses({
-                    variant: 'outline',
+                    variant: 'secondary',
                     size: 'md',
                     class:
                       '@max-[22rem]/booking-details:gap-1 @max-[22rem]/booking-details:px-1.5 @max-[22rem]/booking-details:text-xs',

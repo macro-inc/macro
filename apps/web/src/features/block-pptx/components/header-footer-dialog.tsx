@@ -248,7 +248,7 @@ export function HeaderFooterDialog(props: {
           </Button>
           <Button
             size="sm"
-            variant="outline"
+            variant="secondary"
             data-testid="pptx-hf-apply"
             disabled={ro()}
             tooltip={

@@ -147,7 +147,7 @@ export const InviteModal = () => {
                     type="button"
                     onClick={handleCopy}
                     size="md"
-                    variant="outline"
+                    variant="secondary"
                     class="font-medium border px-2"
                   >
                     <ClipboardIcon class="size-3" />

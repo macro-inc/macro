@@ -251,7 +251,7 @@ function McpConnectAction(props: {
 
 function ConnectButton(props: { label: string; onClick: () => void }) {
   return (
-    <Button variant="outline" size="sm" onClick={props.onClick}>
+    <Button variant="secondary" size="sm" onClick={props.onClick}>
       Connect {props.label}
     </Button>
   );
@@ -263,7 +263,7 @@ export function ViewTourAction(props: {
   children: JSX.Element;
 }) {
   return (
-    <Button variant="outline" size="sm" onClick={props.onClick}>
+    <Button variant="secondary" size="sm" onClick={props.onClick}>
       {props.children}
     </Button>
   );

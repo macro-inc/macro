@@ -114,7 +114,7 @@ export function WebhooksDialog(props: {
                         <CopyButton
                           aria-label="Copy webhook URL"
                           tooltip="Copy webhook URL"
-                          variant="outline"
+                          variant="secondary"
                           onClick={() => copy(url())}
                         >
                           <CopyIcon />

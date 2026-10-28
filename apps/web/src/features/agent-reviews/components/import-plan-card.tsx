@@ -305,7 +305,7 @@ function PlanContents(
           <Show when={props.onReload}>
             {(reload) => (
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 disabled={props.working}
                 onClick={() => reload()()}

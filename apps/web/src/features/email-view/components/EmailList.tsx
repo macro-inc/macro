@@ -675,7 +675,7 @@ export function EmailList(props: EmailListProps) {
                 >
                   <span>Email couldn’t be loaded.</span>
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
                     onClick={() =>
                       fireAndForget(source.refresh(), 'email-view')
@@ -911,7 +911,7 @@ export function EmailList(props: EmailListProps) {
                                   }
                                 >
                                   <Button
-                                    variant="outline"
+                                    variant="secondary"
                                     size="xs"
                                     disabled={loadMore().isLoading}
                                     class="bg-surface"

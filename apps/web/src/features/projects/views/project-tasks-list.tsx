@@ -82,7 +82,7 @@ function ProjectTasksListBody(props: ProjectTasksListProps) {
           <TasksControls />
           {props.addTasksAction}
           <Show when={props.onCreateTask}>
-            <Button variant="outline" onClick={() => props.onCreateTask?.()}>
+            <Button variant="secondary" onClick={() => props.onCreateTask?.()}>
               <PlusIcon class="size-4" />
               New task
             </Button>

@@ -195,7 +195,7 @@ export function DocxFindBar(props: DocxFindBarProps) {
           </InputGroup>
           <Toolbar.Button
             size="sm"
-            variant="outline"
+            variant="secondary"
             disabled={props.current === undefined}
             onClick={() => props.onReplace()}
             data-docx-replace
@@ -204,7 +204,7 @@ export function DocxFindBar(props: DocxFindBarProps) {
           </Toolbar.Button>
           <Toolbar.Button
             size="sm"
-            variant="outline"
+            variant="secondary"
             disabled={!props.count}
             onClick={() => props.onReplaceAll()}
             data-docx-replace-all

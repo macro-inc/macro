@@ -241,7 +241,7 @@ export function Header(props: {
           content: 'Go to today',
           hotkey: TOKENS.calendar.period.today,
         }}
-        variant={mobile || compact ? 'ghost' : 'outline'}
+        variant={mobile || compact ? 'ghost' : 'secondary'}
         size={size()}
         class={cn(
           mobile && 'relative',

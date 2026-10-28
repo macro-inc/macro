@@ -52,7 +52,7 @@ export function PaywallView(props: {
             <p role="alert" class="text-sm text-ink-muted">
               Couldn't load your available plans. Please try again.
             </p>
-            <Button size="sm" variant="outline" onClick={props.onRetry}>
+            <Button size="sm" variant="secondary" onClick={props.onRetry}>
               Try again
             </Button>
           </div>

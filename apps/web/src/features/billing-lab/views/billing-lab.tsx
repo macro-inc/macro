@@ -212,7 +212,7 @@ export function BillingLabView(props: {
               <Button
                 aria-label="Reset scenario"
                 tooltip="Reset scenario"
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 onClick={() => {
                   lab.selectScenario(lab.state().scenario);
@@ -390,7 +390,7 @@ export function BillingLabView(props: {
             <ControlSection title="Time travel">
               <div class="grid grid-cols-2 gap-2">
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   size="sm"
                   disabled={lab.pending()}
                   onClick={() => lab.advance(1)}
@@ -398,7 +398,7 @@ export function BillingLabView(props: {
                   +1 day
                 </Button>
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   size="sm"
                   disabled={lab.pending()}
                   onClick={() => lab.advance(7)}
@@ -441,7 +441,7 @@ export function BillingLabView(props: {
                   }
                 />
               </label>
-              <Button variant="outline" size="sm" onClick={lab.exhaust}>
+              <Button variant="secondary" size="sm" onClick={lab.exhaust}>
                 Exhaust included usage
               </Button>
               <label class="flex flex-col gap-2 text-xs">
@@ -465,7 +465,7 @@ export function BillingLabView(props: {
             </ControlSection>
             <ControlSection title="Dialogs & requests">
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 onClick={() => lab.setLimitOpen(true)}
               >

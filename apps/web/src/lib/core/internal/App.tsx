@@ -81,7 +81,7 @@ const App: Component = () => {
       <div class="flex flex-row flex-wrap justify-center gap-4">
         <For each={Themes}>
           {() => (
-            <Button variant="outline">
+            <Button variant="secondary">
               <Subtract class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />{' '}
               Button Text{' '}
               <CaretDown class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
@@ -92,7 +92,7 @@ const App: Component = () => {
       <div class="flex flex-row flex-wrap justify-center gap-4">
         <Index each={ThemesWithSeparator}>
           {() => (
-            <Button variant="outline">
+            <Button variant="secondary">
               <Subtract class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />{' '}
               Button Text{' '}
               <CaretDown class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
@@ -103,7 +103,7 @@ const App: Component = () => {
       <div class="flex flex-row flex-wrap justify-center gap-4">
         <Index each={Themes}>
           {() => (
-            <Button variant="outline" size="icon-md">
+            <Button variant="secondary" size="icon-md">
               <Acorn class="size-4 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           )}
@@ -112,7 +112,7 @@ const App: Component = () => {
       <div class="flex flex-row flex-wrap justify-center gap-4">
         <Index each={ThemesWithSeparator}>
           {() => (
-            <Button variant="outline" size="icon-md">
+            <Button variant="secondary" size="icon-md">
               <Acorn class="size-4 touch:size-6 shrink-0 pointer-events-none" />
               <CaretDown class="size-4 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
@@ -122,7 +122,7 @@ const App: Component = () => {
       <div class="flex flex-row flex-wrap justify-center gap-4">
         <Index each={ThemesWithSeparator}>
           {() => (
-            <Button variant="outline" size="icon-md">
+            <Button variant="secondary" size="icon-md">
               <Acorn class="size-4 touch:size-6 shrink-0 pointer-events-none" />
               <CaretDown class="size-4 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
@@ -141,7 +141,7 @@ const App: Component = () => {
       </div>
       <div class="flex flex-row flex-wrap justify-center gap-4">
         <Dropdown>
-          <Dropdown.Trigger variant="outline" tabIndex={-1}>
+          <Dropdown.Trigger variant="secondary" tabIndex={-1}>
             Open
           </Dropdown.Trigger>
           <Dropdown.Content>

@@ -65,7 +65,7 @@ export function InboxSelector() {
     >
       <Combobox.Trigger
         as={Button}
-        variant="outline"
+        variant="secondary"
         size="sm"
         aria-label={selectorProps.hideLabel ? label() : undefined}
         class={cn(
@@ -84,7 +84,7 @@ export function InboxSelector() {
 
   const ConnectAnotherAccount = (buttonProps: { hideLabel?: boolean }) => (
     <Button
-      variant="outline"
+      variant="secondary"
       size="sm"
       aria-label={
         buttonProps.hideLabel ? t('viewMenus.connectAnotherAccount') : undefined

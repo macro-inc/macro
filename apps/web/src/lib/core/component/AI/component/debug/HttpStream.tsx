@@ -186,7 +186,7 @@ export default function HttpStreamDebug() {
                 setError(null);
                 setIsStreaming(false);
               }}
-              variant="outline"
+              variant="secondary"
             >
               Reset
             </Button>

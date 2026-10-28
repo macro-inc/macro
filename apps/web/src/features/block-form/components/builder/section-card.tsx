@@ -209,7 +209,7 @@ export function GateCard(props: {
                 ? 'A rule checks a question that is no longer before this gate. Responses are refused until it is fixed.'
                 : `${props.brokenRules} rules check questions that are no longer before this gate. Responses are refused until they are fixed.`}
             </span>
-            <Button variant="outline" size="sm" onClick={props.onRepair}>
+            <Button variant="secondary" size="sm" onClick={props.onRepair}>
               Remove broken rules
             </Button>
           </div>
@@ -241,7 +241,7 @@ export function GateCard(props: {
             when={props.editingRules}
             fallback={
               <Button
-                variant="outline"
+                variant="secondary"
                 size="md"
                 class="self-start"
                 onClick={props.onEditRules}

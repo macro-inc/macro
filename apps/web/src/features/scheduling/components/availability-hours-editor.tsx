@@ -172,7 +172,7 @@ export function AvailabilityHoursEditor(props: {
         </div>
         <Button
           ref={addButton}
-          variant="outline"
+          variant="secondary"
           size="sm"
           class="shrink-0 self-start"
           disabled={!nextRange()}

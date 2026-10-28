@@ -67,7 +67,7 @@ function PrShareModal(props: PrShareModalProps) {
                 submitPermissionInfo={undefined}
               />
               <div class="px-4 py-3 border-t border-edge-muted">
-                <Button variant="outline" onClick={copyLink}>
+                <Button variant="secondary" onClick={copyLink}>
                   <CopyIcon class="size-4" />
                   <span>Copy Link</span>
                 </Button>
@@ -121,7 +121,7 @@ function PrShareModal(props: PrShareModalProps) {
                       Anyone with access to the PR on GitHub can view it in
                       Macro
                     </span>
-                    <Button variant="outline" onClick={copyLink}>
+                    <Button variant="secondary" onClick={copyLink}>
                       <CopyIcon class="size-4" />
                       <span>Copy Link</span>
                     </Button>

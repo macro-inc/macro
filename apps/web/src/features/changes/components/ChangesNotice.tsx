@@ -27,7 +27,7 @@ export function ChangesNotice(props: {
       </Show>
       <Show when={props.onRefresh}>
         <Button
-          variant="outline"
+          variant="secondary"
           size="sm"
           class="mt-2 gap-1.5"
           disabled={props.refreshing}

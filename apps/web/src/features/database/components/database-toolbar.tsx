@@ -180,7 +180,7 @@ export function DatabaseToolbar(props: DatabaseToolbarProps) {
               <Button
                 ref={allRecordsButton}
                 type="button"
-                variant="outline"
+                variant="secondary"
                 size="md"
                 aria-pressed={!props.selectedViewId}
                 onClick={() => props.onSelectView()}
@@ -391,7 +391,7 @@ function ViewTab(props: {
             <ContextMenu.Trigger
               tooltip={{ content: undefined, disabled: true }}
               as={Button}
-              variant="outline"
+              variant="secondary"
               size="md"
               type="button"
               {...(props.canReorder ? sortable.dragActivators : {})}

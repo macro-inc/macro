@@ -259,7 +259,7 @@ function TextOnlyDemo() {
       <Item.Actions class="h-5">
         <Button
           size="sm"
-          variant="outline"
+          variant="secondary"
           aria-pressed={following()}
           onClick={() => setFollowing(!following())}
         >

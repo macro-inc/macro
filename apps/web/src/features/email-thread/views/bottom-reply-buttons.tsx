@@ -27,7 +27,7 @@ function ReplyActionButton(props: {
 }) {
   return (
     <Button
-      variant="outline"
+      variant="secondary"
       aria-label={props.ariaLabel}
       disabled={props.disabled}
       class={cn(

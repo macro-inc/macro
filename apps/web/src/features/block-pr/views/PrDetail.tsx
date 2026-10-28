@@ -409,7 +409,7 @@ function PrLoadErrorBanner(props: { onRetry: () => void }) {
   return (
     <div class="mt-6 flex flex-col items-start gap-3 rounded-lg border border-edge-muted px-3 py-2 text-xs text-ink-muted">
       <span>Couldn't load this pull request from cached GitHub data.</span>
-      <Button variant="outline" size="sm" onClick={props.onRetry}>
+      <Button variant="secondary" size="sm" onClick={props.onRetry}>
         Retry
       </Button>
     </div>

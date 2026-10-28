@@ -58,7 +58,7 @@ function InvertedDemo() {
           <Input aria-label="Inverted input" placeholder="Write something…" />
           <div class="flex flex-wrap gap-2">
             <Button variant="ghost">Ghost</Button>
-            <Button variant="outline">Outline</Button>
+            <Button variant="secondary">Outline</Button>
             <Button variant="secondary">Strong</Button>
             <Button variant="primary">Primary</Button>
             <Button variant="primary">Primary action</Button>

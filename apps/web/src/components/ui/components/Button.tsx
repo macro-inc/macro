@@ -26,17 +26,20 @@ const buttonFrames = {
   neutral:
     'bg-button-neutral-bg text-button-neutral-ink border-transparent shadow-button',
   secondary: cn(
-    'bg-button-secondary-bg text-ink border-border-secondary dark-mode:border-transparent shadow-button',
+    'bg-button-secondary-bg text-ink-muted border-border-secondary dark-mode:border-transparent shadow-button',
     'light-mode:not-data-disabled:active:border-border-secondary light-mode:aria-pressed:border-border-secondary light-mode:aria-expanded:border-border-secondary'
   ),
   outline:
-    'bg-transparent text-ink border-border-secondary bg-none shadow-none',
+    'bg-transparent text-ink-muted border-border-secondary bg-none shadow-none',
   ghost:
     'bg-button-tertiary-bg text-ink-muted border-transparent bg-none shadow-none',
   danger: 'bg-button-danger-bg text-failure border-transparent shadow-button',
   success: 'bg-button-success-bg text-success border-transparent shadow-button',
   link: 'border-transparent bg-transparent text-link shadow-none',
 };
+
+const buttonMutedTextStyles =
+  'not-data-disabled:hover:text-ink not-data-disabled:focus-visible:text-ink not-data-disabled:active:text-ink aria-pressed:text-ink aria-expanded:text-ink';
 // Headless data-expanded can describe surrounding context rather than this action.
 const buttonPressedStyles =
   'not-data-disabled:active:bg-none aria-pressed:bg-none aria-expanded:bg-none not-data-disabled:active:shadow-none aria-pressed:shadow-none aria-expanded:shadow-none';
@@ -58,11 +61,13 @@ const buttonStyles = createVariants(
       ),
       secondary: cn(
         buttonFrames.secondary,
+        buttonMutedTextStyles,
         'not-data-disabled:hover:bg-button-secondary-hover not-data-disabled:active:bg-button-secondary-pressed aria-pressed:bg-button-secondary-pressed aria-pressed:not-data-disabled:hover:bg-button-secondary-pressed aria-expanded:bg-button-secondary-pressed aria-expanded:not-data-disabled:hover:bg-button-secondary-pressed',
         buttonPressedStyles
       ),
       outline: cn(
         buttonFrames.outline,
+        buttonMutedTextStyles,
         'not-data-disabled:hover:bg-button-outline-hover not-data-disabled:active:bg-button-outline-pressed aria-pressed:bg-button-outline-pressed aria-pressed:not-data-disabled:hover:bg-button-outline-pressed aria-expanded:bg-button-outline-pressed aria-expanded:not-data-disabled:hover:bg-button-outline-pressed',
         buttonPressedStyles
       ),

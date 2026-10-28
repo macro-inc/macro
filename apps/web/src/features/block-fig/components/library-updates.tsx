@@ -39,7 +39,7 @@ export function LibraryUpdatesNotice(props: {
         </div>
         <p class="text-ink-muted">{updateSummary(props.updates)}</p>
         <Button
-          variant="outline"
+          variant="secondary"
           size="sm"
           class="self-start"
           data-testid="fig-library-updates-review"

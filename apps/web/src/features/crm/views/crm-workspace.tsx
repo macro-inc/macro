@@ -693,7 +693,7 @@ export function CrmWorkspaceView(props: {
                         onValueChange={searchPeople}
                       />
                       <Button
-                        variant="outline"
+                        variant="secondary"
                         class="ml-auto shrink-0"
                         onClick={() => openCreateContactModal()}
                       >

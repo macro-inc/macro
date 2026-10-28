@@ -326,7 +326,7 @@ function ServerRow(props: { server: ServerResponse }) {
         }
       >
         <Button
-          variant="outline"
+          variant="secondary"
           size="sm"
           tooltip="Remove"
           onClick={() => setConfirmDelete(true)}
@@ -407,7 +407,7 @@ export function IntegrationsSection() {
       description="Connect MCP servers to give Macro's agent access to the tools your team already uses."
       actions={
         <Button
-          variant="outline"
+          variant="secondary"
           size="sm"
           onClick={() => setShowAddDialog(true)}
         >
@@ -421,7 +421,7 @@ export function IntegrationsSection() {
           <div class="px-6 py-8 text-center text-sm text-ink-muted">
             Failed to load integrations.
             <Button
-              variant="outline"
+              variant="secondary"
               size="sm"
               onClick={() => serversQuery.refetch()}
               class="ml-2"

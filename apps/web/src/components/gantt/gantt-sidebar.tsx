@@ -27,7 +27,7 @@ export function GanttSidebarToggle() {
         }
         ref={gantt.sidebar.setTrigger}
         size="icon-md"
-        variant="outline"
+        variant="secondary"
         class="bg-surface shadow-sm"
         aria-expanded={gantt.sidebar.open()}
         disabled={gantt.editing()}

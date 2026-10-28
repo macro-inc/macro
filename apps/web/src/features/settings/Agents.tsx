@@ -842,7 +842,7 @@ function AgentEditorPage(props: {
                   </p>
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
                     aria-label={`Retry models for ${selectedHarness()?.name ?? 'this runtime'}`}
                     onClick={() =>
@@ -1129,7 +1129,7 @@ function AgentEditorPage(props: {
                   />
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
                     disabled={busy()}
                     onClick={() => avatarInputRef?.click()}

@@ -144,7 +144,7 @@ export default function SpreadsheetDemo() {
       <SplitHeaderRight>
         <div class="order-[1000] flex items-center gap-1">
           <Button
-            variant="outline"
+            variant="secondary"
             size="sm"
             class="bg-surface"
             disabled={!!actions.pending()}
@@ -155,7 +155,7 @@ export default function SpreadsheetDemo() {
             Ask Macro
           </Button>
           <Button
-            variant="outline"
+            variant="secondary"
             size="sm"
             class="bg-surface"
             disabled={!!actions.pending()}

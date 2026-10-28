@@ -129,7 +129,7 @@ export function QueuedSendStatus(props: {
         </Show>
         <Show when={hasMoreServerEmailSends()}>
           <Button
-            variant="outline"
+            variant="secondary"
             onClick={() =>
               fireAndForget(loadMoreServerEmailSends(), 'email-more-sends')
             }

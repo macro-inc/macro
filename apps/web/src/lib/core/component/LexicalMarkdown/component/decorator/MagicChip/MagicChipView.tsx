@@ -211,7 +211,7 @@ export const MagicChipView: Component<{
             </Button>
           </Show>
           <Button
-            variant="outline"
+            variant="secondary"
             size="sm"
             class="aspect-square bg-transparent p-0 font-normal @[600px]:aspect-auto @[600px]:px-2"
             aria-label="Open session"

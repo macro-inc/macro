@@ -84,7 +84,7 @@ export function TeamSeatPlanSelect(props: {
       <Show when={props.value === 'max' && props.pendingDowngrade}>
         <Button
           size="sm"
-          variant="outline"
+          variant="secondary"
           disabled={props.disabled}
           onClick={() => props.onChange('max')}
         >

@@ -40,7 +40,7 @@ export function LoadMoreButton(props: {
 }) {
   return (
     <Button
-      variant="outline"
+      variant="secondary"
       size="xs"
       class="justify-self-center mt-2 bg-surface"
       onClick={() => props.onLoadMore()}

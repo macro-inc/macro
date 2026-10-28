@@ -72,7 +72,7 @@ export function NewBoardGroup(props: {
             <h2 class="text-sm font-medium">Create a group</h2>
             <Button
               size="sm"
-              variant="outline"
+              variant="secondary"
               class="gap-2"
               onClick={() => {
                 setDraft('');

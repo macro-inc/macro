@@ -248,7 +248,7 @@ export function AgentComposer(props: {
               {queuedItems().length} queued
             </span>
             <Button
-              variant="outline"
+              variant="secondary"
               size="sm"
               class="touch:min-h-11"
               aria-label="Send next queued message now"

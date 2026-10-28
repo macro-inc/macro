@@ -42,7 +42,7 @@ export function Admin() {
       description="Local toggles for debugging — only visible to Macro staff."
       actions={
         <Button
-          variant="outline"
+          variant="secondary"
           size="sm"
           disabled={!hasActiveSettings()}
           onClick={clearAllDebugSettings}

@@ -686,7 +686,7 @@ function CalendarSearchControl(props: {
                 }}
                 ref={searchButton}
                 type="button"
-                variant="outline"
+                variant="secondary"
                 size="icon-md"
                 aria-expanded="false"
                 aria-haspopup="dialog"

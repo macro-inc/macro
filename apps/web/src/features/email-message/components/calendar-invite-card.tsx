@@ -386,7 +386,7 @@ export function CalendarInviteCard(props: {
                   <Button
                     aria-label="Open in calendar"
                     tooltip="Open in calendar"
-                    variant="outline"
+                    variant="secondary"
                     size="icon-md"
                     onClick={(event) =>
                       props.actions?.openCalendar?.({

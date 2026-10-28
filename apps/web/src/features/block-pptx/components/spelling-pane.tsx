@@ -66,7 +66,7 @@ export function SpellingPane(props: {
           <div class="flex flex-wrap gap-1">
             <Button
               size="sm"
-              variant="outline"
+              variant="secondary"
               disabled={noAction()}
               data-testid="pptx-spelling-ignore-once"
               onClick={() => fireAndForget(p.ignoreOnce(), 'pptx-spelling')}
@@ -75,7 +75,7 @@ export function SpellingPane(props: {
             </Button>
             <Button
               size="sm"
-              variant="outline"
+              variant="secondary"
               disabled={noAction()}
               data-testid="pptx-spelling-ignore-all"
               onClick={() => fireAndForget(p.ignoreAll(), 'pptx-spelling')}
@@ -84,7 +84,7 @@ export function SpellingPane(props: {
             </Button>
             <Button
               size="sm"
-              variant="outline"
+              variant="secondary"
               disabled={noAction()}
               data-testid="pptx-spelling-add"
               onClick={() => fireAndForget(p.add(), 'pptx-spelling')}
@@ -143,7 +143,7 @@ export function SpellingPane(props: {
             </Button>
             <Button
               size="sm"
-              variant="outline"
+              variant="secondary"
               disabled={noAction() || !p.choice()}
               data-testid="pptx-spelling-change-all"
               onClick={() => fireAndForget(p.changeAll(), 'pptx-spelling')}

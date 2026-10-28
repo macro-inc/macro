@@ -805,7 +805,7 @@ export function FormatPane(props: {
           <div class="flex gap-2 p-3">
             <Button
               size="sm"
-              variant="outline"
+              variant="secondary"
               disabled={ro()}
               onClick={() => c.applyBackgroundToAll()}
             >

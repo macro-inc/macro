@@ -207,7 +207,7 @@ export function FindReplace(props: {
           />
           <Button
             size="xs"
-            variant="outline"
+            variant="secondary"
             disabled={matches().length === 0}
             onClick={() => fireAndForget(replaceOne(), 'pptx-editor')}
           >
@@ -215,7 +215,7 @@ export function FindReplace(props: {
           </Button>
           <Button
             size="xs"
-            variant="outline"
+            variant="secondary"
             data-testid="pptx-replace-all"
             disabled={matches().length === 0}
             onClick={() => fireAndForget(replaceAll(), 'pptx-editor')}

@@ -76,7 +76,7 @@ export function MessageOperationRecovery(props: {
               editing.
             </p>
             <Show when={props.onReloadDraft}>
-              <Button size="sm" variant="outline" onClick={props.onReloadDraft}>
+              <Button size="sm" variant="secondary" onClick={props.onReloadDraft}>
                 Reload draft
               </Button>
             </Show>
@@ -159,7 +159,7 @@ export function MessageOperationRecovery(props: {
                 {(action) => (
                   <Button
                     size="sm"
-                    variant="outline"
+                    variant="secondary"
                     disabled={pending()}
                     onClick={() => {
                       if (

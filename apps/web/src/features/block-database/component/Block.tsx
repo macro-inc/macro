@@ -364,7 +364,7 @@ const Block: Component = () => {
                     : 'Please try opening it again.'}
                 </p>
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   onClick={() => {
                     reset();
                     fireAndForget(detailQuery.refetch(), 'database-view');
@@ -388,7 +388,7 @@ const Block: Component = () => {
                       It may be unavailable, or you may no longer have access.
                     </p>
                     <Button
-                      variant="outline"
+                      variant="secondary"
                       onClick={() =>
                         fireAndForget(detailQuery.refetch(), 'database-view')
                       }

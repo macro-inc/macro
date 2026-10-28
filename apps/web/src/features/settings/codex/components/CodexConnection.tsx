@@ -98,7 +98,7 @@ export function CodexConnection(props: {
                       </Show>
                       <Button
                         type="button"
-                        variant="outline"
+                        variant="secondary"
                         size="sm"
                         class="gap-2"
                         disabled={props.pending}
@@ -137,7 +137,7 @@ export function CodexConnection(props: {
                   </p>
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
                     disabled={props.pending}
                     onClick={props.onCancel}
@@ -198,7 +198,7 @@ export function CodexConnection(props: {
                   </a>
                   <Button
                     size="sm"
-                    variant="outline"
+                    variant="secondary"
                     onClick={props.onRetryEnvironments}
                   >
                     Retry environments
@@ -225,7 +225,7 @@ export function CodexConnection(props: {
                 </p>
                 <Button
                   size="sm"
-                  variant="outline"
+                  variant="secondary"
                   onClick={props.onRetryEnvironments}
                 >
                   Retry environments
@@ -239,7 +239,7 @@ export function CodexConnection(props: {
               <div class="flex gap-2">
                 <Button
                   type="button"
-                  variant="outline"
+                  variant="secondary"
                   size="sm"
                   disabled={
                     props.pending || !hasChanges() || !selectedEnvironment()

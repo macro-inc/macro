@@ -84,7 +84,7 @@ function TagListSection(props: {
       description={props.description}
       actions={
         <Button
-          variant="outline"
+          variant="secondary"
           size="sm"
           onClick={() => props.onCreate(props.scope)}
         >

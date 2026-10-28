@@ -66,7 +66,7 @@ function InviteEntryRow(props: {
         <Show when={props.showRemove}>
           <Tooltip label="Remove">
             <Button
-              variant="outline"
+              variant="secondary"
               size="icon-sm"
               class="shrink-0 focus:border-accent"
               tabIndex={0}
@@ -184,7 +184,7 @@ function InviteEmailsInput(props: {
         </div>
       </Show>
       <Button
-        variant="outline"
+        variant="secondary"
         class="w-full justify-center focus:border-accent"
         tabIndex={0}
         disabled={!canAddRow()}
@@ -225,7 +225,7 @@ function UserInviteRow(props: {
       </div>
       <div class="flex items-center gap-2 shrink-0">
         <Button
-          variant="outline"
+          variant="secondary"
           class="px-2 py-1"
           disabled={props.isAccepting || props.isDeclining}
           onClick={props.onDecline}

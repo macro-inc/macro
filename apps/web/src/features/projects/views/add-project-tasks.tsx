@@ -57,7 +57,7 @@ export function AddProjectTasks(props: { project: ProjectDetail }) {
       }}
       placement="bottom-end"
     >
-      <Dropdown.Trigger variant="outline" size="md">
+      <Dropdown.Trigger variant="secondary" size="md">
         <ListPlusIcon class="size-4" />
         Add existing tasks
       </Dropdown.Trigger>

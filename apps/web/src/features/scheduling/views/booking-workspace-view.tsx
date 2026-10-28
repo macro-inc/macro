@@ -549,7 +549,7 @@ export function BookingWorkspaceView(props: {
                     <Button
                       aria-label="Create with agent"
                       tooltip={{ content: 'Create with agent', disabled: true }}
-                      variant="outline"
+                      variant="secondary"
                       size="md"
                       disabled={
                         !owner()?.source.profile() ||

@@ -108,7 +108,7 @@ export function InsightsRangeSelector(props: {
       <div class="flex items-center gap-2">
         <Button
           type="button"
-          variant="outline"
+          variant="secondary"
           class="flex-1"
           onClick={() => {
             setFrom('');

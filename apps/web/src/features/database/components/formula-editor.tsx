@@ -310,7 +310,7 @@ export function FormulaEditor(props: {
           >
             {(column) => (
               <Button
-                variant="outline"
+                variant="secondary"
                 size="xs"
                 disabled={!tools()}
                 onClick={() => {

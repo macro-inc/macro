@@ -62,7 +62,7 @@ export function PermissionOptions(props: PermissionOptionsProps) {
         <Dropdown placement="top-end">
           <Dropdown.Trigger
             size="md"
-            variant="outline"
+            variant="secondary"
             disabled={props.disabled}
           >
             More options

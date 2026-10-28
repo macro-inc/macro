@@ -394,7 +394,7 @@ export function ScheduleFields(props: {
               </div>
               <Button
                 ref={addExceptionButton}
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 disabled={locked()}
                 onClick={(

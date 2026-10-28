@@ -381,7 +381,7 @@ export function TeamGeneral(props: { team: TeamSummary }) {
               hideDescriptionOnMobile
             >
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 onClick={handleCopyGithubAutolinkUrl}
               >

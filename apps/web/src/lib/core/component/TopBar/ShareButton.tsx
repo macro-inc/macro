@@ -486,7 +486,7 @@ function TeamAccessSection(props: { teamShare: TeamShareControls }) {
       </div>
       <Dropdown>
         <Dropdown.Trigger
-          variant="outline"
+          variant="secondary"
           aria-label="Team access"
           class="min-w-16.75 py-1 pl-2 pr-1 flex items-center gap-1"
         >
@@ -618,7 +618,7 @@ function LinkSharingControls(props: LinkSharingControlsProps) {
                 setPermissions={props.setLinkShareAccessLevel}
               />
             </div>
-            <Button variant="outline" onClick={props.copyLink}>
+            <Button variant="secondary" onClick={props.copyLink}>
               <CopyIcon class="size-4" />
               <span>Copy Link</span>
             </Button>
@@ -893,7 +893,7 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
             </Show>
             <Show when={!props.canForward}>
               <div class="px-4 py-3">
-                <Button variant="outline" onClick={props.copyLink}>
+                <Button variant="secondary" onClick={props.copyLink}>
                   <CopyIcon class="size-4" />
                   <span>Copy Link</span>
                 </Button>
@@ -1929,7 +1929,7 @@ export function ShareModal(props: ShareModalProps) {
                   </Show>
                   <Show when={!canForward()}>
                     <div class="flex justify-end px-4 py-3">
-                      <Button variant="outline" onClick={copyLink}>
+                      <Button variant="secondary" onClick={copyLink}>
                         <CopyIcon class="size-4" />
                         <span>Copy Link</span>
                       </Button>
@@ -2492,7 +2492,7 @@ export function ShareOptions(props: {
   return (
     <Dropdown modal={false} open={isOpen()} onOpenChange={setIsOpen}>
       <Dropdown.Trigger
-        variant="outline"
+        variant="secondary"
         disabled={props.disabled}
         class={`min-w-16.75 py-1 pl-2 pr-1 flex items-center gap-1 ${props.noBorder ? 'border-0 sm:border' : ''}`}
         on:keydown={(e: KeyboardEvent) => {

@@ -172,7 +172,7 @@ export function ChannelBotsPanel(props: {
             <Button
               aria-label="New bot"
               tooltip="New bot"
-              variant="outline"
+              variant="secondary"
               size="icon-md"
               onClick={props.onCreateBot}
             >
@@ -181,7 +181,7 @@ export function ChannelBotsPanel(props: {
             <Button
               aria-label="Invite bot"
               tooltip="Invite bot"
-              variant="outline"
+              variant="secondary"
               size="icon-md"
               onClick={() => setInviteOpen(true)}
             >

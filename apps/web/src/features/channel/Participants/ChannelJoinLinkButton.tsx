@@ -77,7 +77,7 @@ export function ChannelJoinLinkButton(props: {
     <Button
       aria-label={buttonLabel()}
       tooltip={buttonLabel()}
-      variant="outline"
+      variant="secondary"
       size={props.iconOnly ? 'icon-md' : 'sm'}
       disabled={getJoinLinkMutation.isPending}
       onClick={() => fireAndForget(copyJoinLink(), 'channel-invite')}
