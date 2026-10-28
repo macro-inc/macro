@@ -147,9 +147,10 @@ pub async fn thread_media_atts_for_backfill(
 /// of job completion, as we don't know everyone the user has sent messages to until all their
 /// messages have been backfilled.
 ///
-/// There will be overlap between the attachments returned by this query and the ones returned by
-/// fetch_attachment_threads_for_backfill, but the BackfillAttachment job has logic to ensure
-/// duplicate attachments are not inserted by checking the DocumentEmail table.
+/// Attachments that already have a live document are left out, using the same check the
+/// BackfillAttachment job runs before importing. Imports from
+/// fetch_attachment_threads_for_backfill that are still in flight can still overlap; the job's
+/// check skips those.
 ///
 /// This reads the whole mailbox once per backfill, so it starts from the mailbox's document
 /// attachments and only reads the threads that hold them, instead of every message in every
@@ -183,6 +184,13 @@ pub async fn fetch_job_attachments_for_backfill(
             WHERE m.link_id = $1
                 AND m.has_attachments = true
                 AND a.filename IS NOT NULL
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM public.document_email de
+                    JOIN public."Document" d ON d.id = de.document_id
+                    WHERE de.email_attachment_id = a.id
+                        AND d."deletedAt" IS NULL
+                )
                 -- attachment mime type filters injected below
                 {}
         ),
