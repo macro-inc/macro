@@ -442,9 +442,7 @@ function Fixture() {
                     …
                   </Dropdown.Trigger>
                   <Dropdown.Content>
-                    <Dropdown.Item onSelect={download}>
-                      Download .docx
-                    </Dropdown.Item>
+                    <Dropdown.Item onSelect={download}>Download</Dropdown.Item>
                   </Dropdown.Content>
                 </Dropdown>
               )}
@@ -578,7 +576,7 @@ function LocalFixture() {
                       </Dropdown.Trigger>
                       <Dropdown.Content>
                         <Dropdown.Item onSelect={download}>
-                          Download .docx
+                          Download
                         </Dropdown.Item>
                       </Dropdown.Content>
                     </Dropdown>

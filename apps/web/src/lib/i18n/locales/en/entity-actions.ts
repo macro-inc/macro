@@ -40,7 +40,7 @@ export default {
   copyBranchNameCommand: 'Copy branch name',
   copyId: 'Copy ID',
   share: 'Share',
-  downloadDocx: 'Download .docx',
+  downloadDocx: 'Download',
   senderToSignal: 'Sender → Signal',
   senderToNoise: 'Sender → Noise',
   blockSender: 'Block Sender',

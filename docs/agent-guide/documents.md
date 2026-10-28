@@ -2873,7 +2873,7 @@ updates live and shows each collaborator's caret with their name
   delete rows and columns or the table), the `Insert footnote or endnote`
   menu (`[data-docx-menu="notes"]`, in the body), `Track changes`, `Hide tracked
   changes` / `Show tracked changes`, `Comment on selection`, `Find and
-  replace` (viewers get `Find and replace`). `Download .docx` is in the
+  replace` (viewers get `Find and replace`). `Download` is in the
   document header’s three-dot menu on desktop and mobile.
   While tracking is on (or the caret is on a tracked change) it also shows
   `Accept change`, `Reject change`, `Accept all changes` and `Reject all
@@ -2943,7 +2943,7 @@ updates live and shows each collaborator's caret with their name
   Word comments (`addComment`), both attributed to the requesting user by
   name rather than to the agent. Its comments are written into the file, so
   they appear as `In the document` cards and travel with the download.
-- `Download .docx` exports the current collaborative state with every edit,
+- `Download` exports the current collaborative state with every edit,
   including headers, footers and tracked changes. Macro comment threads are
   not written into the file; Word comments (including the agent's
   `addComment` ones) are.
