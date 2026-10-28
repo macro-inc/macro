@@ -264,13 +264,6 @@ function getHistoryItemVersion(
   return `${item.name}|${item.updatedAt}|${viewedAt}|${item.deletedAt}`;
 }
 
-function getChannelVersion(
-  channel: CachedGraphqlChannel,
-  viewedAt?: string
-): string {
-  return `${channel.name}|${channel.updatedAt}|${viewedAt}`;
-}
-
 function getUserVersion(
   user: IUser,
   lastInteraction: DateValue | undefined
@@ -519,33 +512,37 @@ export function createQuickAccessValue(): QuickAccessContextValue {
   });
 
   const channelEntries = createLazyMemo(() => {
+    const startedAt = performance.now();
     const viewedAtMap = soupViewedAtMap();
     const allEntries: IndexEntry[] = [];
+    const completeChannels = channels();
+    const cachedChannels =
+      cacheHost() && queryReadyGate(cachedChannelsQuery)
+        ? cachedChannelsQuery.data
+        : [];
 
     // A partial cache must not hide channels already available in the complete
     // channel list. Cached metadata wins for duplicates, retaining newer views.
     const channelData = new Map(
-      channels().map((channel) => [
+      completeChannels.map((channel) => [
         channel.id,
         apiChannelToQuickAccessChannel(channel),
       ])
     );
-    if (cacheHost() && queryReadyGate(cachedChannelsQuery)) {
-      for (const channel of cachedChannelsQuery.data) {
-        channelData.set(channel.id, {
-          ...channel,
-          viewedAt: latestDate(
-            channelData.get(channel.id)?.viewedAt,
-            channel.viewedAt
-          ),
-        });
-      }
+    for (const channel of cachedChannels) {
+      channelData.set(channel.id, {
+        ...channel,
+        viewedAt: latestDate(
+          channelData.get(channel.id)?.viewedAt,
+          channel.viewedAt
+        ),
+      });
     }
     for (const sourceChannel of channelData.values()) {
       const recentlyViewedAt = viewedAtMap.get(sourceChannel.id);
       const viewedAt = latestDate(recentlyViewedAt, sourceChannel.viewedAt);
       const channel = { ...sourceChannel, viewedAt };
-      const version = getChannelVersion(channel, viewedAt);
+      const version = JSON.stringify(channel);
       const cached = itemCache.get(channel.id);
 
       if (!cached || cached.version !== version) {
@@ -565,7 +562,13 @@ export function createQuickAccessValue(): QuickAccessContextValue {
       }
     }
 
-    return sortIndexEntries(allEntries);
+    const entries = sortIndexEntries(allEntries);
+    return {
+      entries,
+      completeCount: completeChannels.length,
+      cachedCount: cachedChannels.length,
+      buildDurationMs: performance.now() - startedAt,
+    };
   });
 
   const contactEntries = createLazyMemo(() => {
@@ -965,7 +968,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
   const processedData = createLazyMemo(() => {
     const allEntries = mergeMultipleSortedIndices([
       historyEntries().entries,
-      channelEntries(),
+      channelEntries().entries,
       contactEntries(),
       crmCompanyEntries(),
       crmContactEntries(),
@@ -1155,6 +1158,19 @@ export function createQuickAccessValue(): QuickAccessContextValue {
               projectedBuckets().length > 0 && options.enabled?.() !== false,
             existingItems: localItems,
             filterPreviousItems: filterQuickAccessItems,
+            sourceAttributes: () => {
+              const channelIndex = channelEntries();
+              return {
+                'search.channel_index.complete_count':
+                  channelIndex.completeCount,
+                'search.channel_index.cached_recent_count':
+                  channelIndex.cachedCount,
+                'search.channel_index.merged_count':
+                  channelIndex.entries.length,
+                'search.channel_index.last_build_ms':
+                  channelIndex.buildDurationMs,
+              };
+            },
             materialize: async (documents) => {
               const idOf = (recordKey: string) =>
                 recordKey.slice(recordKey.indexOf(':') + 1);

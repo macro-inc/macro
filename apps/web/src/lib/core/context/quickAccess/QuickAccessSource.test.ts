@@ -694,8 +694,26 @@ describe('Quick Access source integration', () => {
     await vi.waitFor(() => expect(list.isLoading()).toBe(false));
     expect(list.items().map((item) => item.id)).toEqual(['uncached-channel']);
 
-    setCached([cachedChannel('uncached-channel', { name: 'Planning' })]);
+    setCached([
+      cachedChannel('uncached-channel', {
+        name: 'Planning',
+        ownerId: 'cached-owner',
+        participantIds: ['participant-1'],
+        channelType: 'private',
+        createdAt: '2026-07-01T00:00:00.000Z',
+        interactedAt: '2026-08-03T00:00:00.000Z',
+      }),
+    ]);
     expect(list.items().map((item) => item.id)).toEqual(['uncached-channel']);
+    expect(list.items()[0]).toMatchObject({
+      data: {
+        ownerId: 'cached-owner',
+        participantIds: ['participant-1'],
+        channelType: 'private',
+        createdAt: '2026-07-01T00:00:00.000Z',
+        interactedAt: '2026-08-03T00:00:00.000Z',
+      },
+    });
   });
 
   it('merges complete channels with cached channels and prefers cached metadata', async () => {

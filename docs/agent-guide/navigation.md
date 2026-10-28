@@ -1223,7 +1223,13 @@ This shared ranking also applies to mobile name search. Verify an older matching
 channel stays above recent CRM contacts and agent sessions in All, and remains
 findable in Channels while its cache entry is absent. Refreshing the cache or
 reopening the menu with unchanged data must not reorder results or duplicate a
-channel when its cache entry arrives.
+channel when its cache entry arrives. Hydration must also refresh ownership,
+participants, and channel type when the name and timestamps are unchanged.
+
+The `quick_access.search` trace includes `search.channel_index` attributes for
+complete-list, cached-recent-page, and merged channel counts. `last_build_ms`
+records the most recent shared channel-index build duration; that build can
+precede the search and is not a child phase of the cache request.
 
 Pending or failed Quick Access history, recently-viewed, skills, and cached-channel
 lookups must not hide the app shell. Verify a cold lookup with Cmd/Ctrl+K: navigation
