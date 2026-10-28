@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT sha, queued_at FROM sha_cleanup_queue ORDER BY queued_at",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "sha",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "queued_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "ddd2346a68634f374b054bbbcb2b42a8bbe571175b154ebcd49059780fe4c22f"
+}

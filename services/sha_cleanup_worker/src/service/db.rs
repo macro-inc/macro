@@ -1,7 +1,10 @@
 mod get_sha_count;
+mod sha_cleanup_queue;
 
 #[allow(unused_imports)]
 use mockall::automock;
+
+pub use sha_cleanup_queue::QueuedSha;
 
 #[cfg(not(test))]
 pub use DBClient as DB;
@@ -22,23 +25,12 @@ impl DBClient {
     pub async fn get_sha_count(&self, sha: &str) -> anyhow::Result<i64> {
         get_sha_count::get_sha_count(self.inner.clone(), sha).await
     }
-}
 
-#[cfg(test)]
-mod tests {
-    use mockall::predicate::eq;
+    pub async fn queued_shas(&self) -> anyhow::Result<Vec<QueuedSha>> {
+        sha_cleanup_queue::queued_shas(&self.inner).await
+    }
 
-    use crate::service::db::DB;
-
-    #[tokio::test]
-    async fn test_get_sha_count() {
-        let mut mock = DB::default();
-        mock.expect_get_sha_count()
-            .with(eq("sha"))
-            .return_once(|_| Ok(0));
-
-        let result = mock.get_sha_count("sha").await;
-
-        assert_eq!(result.is_ok(), true);
+    pub async fn dequeue_shas(&self, shas: Vec<QueuedSha>) -> anyhow::Result<()> {
+        sha_cleanup_queue::dequeue_shas(&self.inner, shas).await
     }
 }

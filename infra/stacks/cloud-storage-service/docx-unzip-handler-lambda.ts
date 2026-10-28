@@ -11,7 +11,6 @@ const ZIP_LOCATION = `${REPO_ROOT}/target/lambda/${ZIP_FOLDER_NAME}/bootstrap.zi
 
 export type DocxUnzipLambdaEnvVars = {
   DATABASE_URL: pulumi.Output<string> | string;
-  REDIS_URI: pulumi.Output<string> | string;
   ENVIRONMENT: pulumi.Output<string> | string;
   RUST_LOG: pulumi.Output<string> | string;
   DOCUMENT_STORAGE_BUCKET: pulumi.Output<string> | string;

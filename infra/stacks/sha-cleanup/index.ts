@@ -28,22 +28,12 @@ const documentStorageBucketId: pulumi.Output<string> = cloudStorageStack
   .getOutput('documentStorageBucketId')
   .apply((id) => id as string);
 
-const MACRO_CACHE = aws.secretsmanager
-  .getSecretVersionOutput({
-    secretId: config.require(`macro_cache_secret_key`),
-  })
-  .apply((secret) => secret.secretString);
-
 const cloudStorageClusterArn: pulumi.Output<string> = cloudStorageStack
   .getOutput('cloudStorageClusterArn')
   .apply((arn) => arn as string);
 
 const shaCleanupWorker = new ShaWorker('sha-cleanup-worker', {
   containerEnvVars: [
-    {
-      name: 'REDIS_URI',
-      value: pulumi.interpolate`redis://${MACRO_CACHE}`,
-    },
     {
       name: 'DATABASE_URL',
       value: pulumi.interpolate`${DATABASE_URL}`,

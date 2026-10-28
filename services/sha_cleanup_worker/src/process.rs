@@ -8,62 +8,57 @@ enum ProcessOp {
     Deleted,
 }
 
-#[tracing::instrument(skip(db_client, s3_client, redis_client))]
+#[tracing::instrument(skip(db_client, s3_client))]
 pub async fn process(
     db_client: Arc<service::db::DB>,
     s3_client: Arc<service::s3::S3>,
-    redis_client: Arc<service::redis::Redis>,
 ) -> Result<(), anyhow::Error> {
-    // Grab shas from set
-    let shas = redis_client.get_shas_from_delete_bucket().await?;
+    let queued = db_client.queued_shas().await?;
 
-    // Early exit if there are no shas to delete
-    if shas.is_empty() {
-        tracing::info!("delete bucket empty");
+    if queued.is_empty() {
+        tracing::info!("sha cleanup queue empty");
         return Ok(());
     }
 
-    tracing::info!("potentially deleting {} shas", shas.len());
+    tracing::info!("potentially deleting {} shas", queued.len());
 
     let shared_db_client = &db_client;
     let shared_s3_client = &s3_client;
-    let shared_redis_client = &redis_client;
-    let delete_sha_results: Vec<Result<(String, ProcessOp), (String, anyhow::Error)>> =
-        futures::stream::iter(shas.iter())
-            .then(|sha| async move {
-                tracing::trace!("attempting to delete sha {sha}");
-                let count = shared_db_client
-                    .get_sha_count(sha.as_str())
-                    .await
-                    .map_err(|e| (sha.clone(), e))?;
+    let delete_sha_results: Vec<
+        Result<(service::db::QueuedSha, ProcessOp), (String, anyhow::Error)>,
+    > = futures::stream::iter(queued.into_iter())
+        .then(|queued| async move {
+            let sha = queued.sha.as_str();
+            tracing::trace!("attempting to delete sha {sha}");
+            let count = shared_db_client
+                .get_sha_count(sha)
+                .await
+                .map_err(|e| (sha.to_string(), e))?;
 
-                if count != 0 {
-                    // update sha count in redis
-                    shared_redis_client
-                        .set_sha_count(sha.as_str(), count)
-                        .await
-                        .map_err(|e| (sha.clone(), e))?;
-                    return Ok((sha.clone(), ProcessOp::Noop));
-                }
-
-                // Delete sha from S3
-                shared_s3_client
-                    .delete_sha(sha.as_str())
-                    .await
-                    .map_err(|e| (sha.clone(), e))?;
-
-                Ok((sha.clone(), ProcessOp::Deleted))
-            })
-            .collect::<Vec<Result<(String, ProcessOp), (String, anyhow::Error)>>>()
-            .await;
-
-    for result in delete_sha_results.iter() {
-        match result {
-            Ok((sha, ProcessOp::Noop)) => {
-                tracing::trace!("sha {sha} was noop");
+            if count != 0 {
+                return Ok((queued, ProcessOp::Noop));
             }
-            Ok((sha, ProcessOp::Deleted)) => {
-                tracing::trace!("sha {sha} was deleted");
+
+            shared_s3_client
+                .delete_sha(sha)
+                .await
+                .map_err(|e| (sha.to_string(), e))?;
+
+            Ok((queued, ProcessOp::Deleted))
+        })
+        .collect()
+        .await;
+
+    let mut done = Vec::new();
+    for result in delete_sha_results {
+        match result {
+            Ok((queued, ProcessOp::Noop)) => {
+                tracing::trace!("sha {} was noop", queued.sha);
+                done.push(queued);
+            }
+            Ok((queued, ProcessOp::Deleted)) => {
+                tracing::trace!("sha {} was deleted", queued.sha);
+                done.push(queued);
             }
             Err((sha, e)) => {
                 tracing::error!(error=?e, "unable to delete sha {sha}");
@@ -71,16 +66,7 @@ pub async fn process(
         }
     }
 
-    let filterd_shas: Vec<String> = delete_sha_results
-        .into_iter()
-        .filter_map(|r| r.ok())
-        .map(|(s, _)| s)
-        .collect();
-
-    // Shas are cleaned up, remove them all from the delete bucket set
-    redis_client
-        .remove_shas_from_set(filterd_shas.clone())
-        .await?;
+    db_client.dequeue_shas(done).await?;
 
     Ok(())
 }

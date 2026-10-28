@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use documents_hex::outbound::editing_worker_client::ReqwestEditingWorkerClient;
-use macro_sha_count_client::Redis;
+use macro_sha_count_client::ShaReferences;
 use sync_service_client::SyncServiceClient;
 
 use crate::{api::context::PropertiesService, service::s3::S3};
@@ -16,7 +16,7 @@ pub struct DeleteDocumentWorkerContext {
     pub worker: Arc<sqs_worker::SQSWorker>,
     pub db: sqlx::Pool<sqlx::Postgres>,
     pub s3_client: Arc<S3>,
-    pub redis_client: Arc<Redis>,
+    pub sha_references: Arc<ShaReferences>,
     pub sync_service_client: Arc<SyncServiceClient>,
     pub editing_worker_client: Arc<ReqwestEditingWorkerClient>,
     pub properties_service: Arc<PropertiesService>,

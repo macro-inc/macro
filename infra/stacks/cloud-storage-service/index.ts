@@ -424,7 +424,6 @@ const convertQueueArn: pulumi.Output<string> = convertServiceStack
 // ------------------------------------------- DOCX Unzip -------------------------------------------
 const docxUnzipHandlerEnvVars: DocxUnzipLambdaEnvVars = {
   DATABASE_URL: pulumi.interpolate`${DATABASE_URL_PROXY}`,
-  REDIS_URI: pulumi.interpolate`redis://${MACRO_CACHE}`,
   ENVIRONMENT: stack,
   RUST_LOG: 'docx_unzip_handler=info,macro_http_request=info',
   DOCUMENT_STORAGE_BUCKET: pulumi.interpolate`${documentStorageBucketId}`,

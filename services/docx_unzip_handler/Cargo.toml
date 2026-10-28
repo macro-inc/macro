@@ -27,10 +27,6 @@ macro_uuid = { path = "../../crates/macro_uuid" }
 model = { path = "../../crates/model" }
 model_owner = { path = "../../crates/model_owner" }
 s3_key = { path = "../../crates/s3_key" }
-redis = { workspace = true, features = [
-  "aio",
-  "tokio-rustls-comp",
-] }
 s3_client = { path = "../../crates/s3_client" }
 serde = { workspace = true }
 serde_json = { workspace = true }

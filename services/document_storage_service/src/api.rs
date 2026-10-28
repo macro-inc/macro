@@ -20,7 +20,6 @@ use utoipa_swagger_ui::SwaggerUi;
 pub(crate) mod context;
 mod saved_views;
 mod sync;
-pub(crate) mod util;
 
 // Middleware
 mod middleware;

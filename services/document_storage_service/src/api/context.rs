@@ -50,7 +50,7 @@ use documents_hex::domain::purge::DocumentPurger;
 use documents_hex::domain::service::DocumentServiceImpl;
 use documents_hex::inbound::axum_router::DocumentRouterState;
 use documents_hex::outbound::document_purge::{
-    LegacyDocumentPurgeRepository, RedisDocxPartReferences, SqsDocumentPurgeQueue,
+    LegacyDocumentPurgeRepository, PgDocxPartReferences, SqsDocumentPurgeQueue,
 };
 use documents_hex::outbound::pg_document_repo::PgDocumentRepo;
 use documents_hex::outbound::s3_upload_url::S3UploadUrlAdapter;
@@ -116,7 +116,7 @@ use macro_authorization::{
     MacroAuthJwtValidator, MacroAuthorizationServiceImpl, MacroAuthorizationState,
 };
 use macro_env_var::env_var;
-use macro_sha_count_client::Redis;
+use macro_sha_count_client::ShaReferences;
 use notification::domain::service::SqsNotificationIngress;
 use notification::outbound::queue::SqsQueue;
 use opensearch_client::OpensearchClient;
@@ -386,7 +386,7 @@ pub(crate) type DocumentService = DocumentServiceImpl<
 pub(crate) type DssDocumentPurger = DocumentPurger<
     LegacyDocumentPurgeRepository,
     SqsDocumentPurgeQueue,
-    RedisDocxPartReferences,
+    PgDocxPartReferences,
     DssEventBroker,
 >;
 
@@ -853,7 +853,7 @@ pub(crate) struct ApiContext {
     pub dictation_state: DssDictationState,
     pub db: PgPool,
     pub readonly_db: ReadOnlyPool,
-    pub redis_client: Arc<Redis>,
+    pub sha_references: Arc<ShaReferences>,
     pub s3_client: Arc<S3>,
     pub github_sync_service: Arc<GithubSyncServiceType>,
     pub github_pull_request_index_state: DssGithubPullRequestIndexState,

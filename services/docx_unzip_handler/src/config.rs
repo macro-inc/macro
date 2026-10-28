@@ -3,7 +3,6 @@ use macro_env_var::env_vars;
 
 env_vars! {
     pub struct DatabaseUrl;
-    pub struct RedisUri;
     pub struct DocumentStorageBucket;
     pub struct WebSocketResponseLambda;
 }
@@ -20,9 +19,6 @@ pub struct Config {
     /// The connection URL for the Postgres database this application should use.
     pub database_url: String,
 
-    /// The connection URI for the redis cluster this application should use.
-    pub redis_uri: String,
-
     /// The document storage s3 bucket
     pub document_storage_bucket: String,
 
@@ -35,9 +31,6 @@ impl Config {
         let database_url = DatabaseUrl::new()
             .context("DATABASE_URL must be provided")?
             .to_string();
-        let redis_uri = RedisUri::new()
-            .context("REDIS_URI must be provided")?
-            .to_string();
         let document_storage_bucket = DocumentStorageBucket::new()
             .context("DOCUMENT_STORAGE_BUCKET must be provided")?
             .to_string();
@@ -46,7 +39,6 @@ impl Config {
             .to_string();
         Ok(Config {
             database_url,
-            redis_uri,
             document_storage_bucket,
             web_socket_response_lambda,
         })

@@ -89,9 +89,9 @@ pub async fn presave_document_handler(
     }
 
     tracing::trace!("finding non existing shas");
-    // Check all bom parts in redis to see if they exist in s3
+    // Parts no BomPart references yet are not in s3
     let non_existing_shas = match state
-        .redis_client
+        .sha_references
         .find_non_existing_shas(&req.new_bom)
         .await
     {

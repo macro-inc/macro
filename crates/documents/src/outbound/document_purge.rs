@@ -87,21 +87,21 @@ impl DocumentPurgeQueue for SqsDocumentPurgeQueue {
     }
 }
 
-/// Docx part references in the shared SHA counter.
-pub struct RedisDocxPartReferences {
-    sha_counts: Arc<macro_sha_count_client::Redis>,
+/// Docx part references, released to the SHA cleanup queue.
+pub struct PgDocxPartReferences {
+    sha_references: Arc<macro_sha_count_client::ShaReferences>,
 }
 
-impl RedisDocxPartReferences {
-    /// Compose from the application's SHA counter client.
-    pub fn new(sha_counts: Arc<macro_sha_count_client::Redis>) -> Self {
-        Self { sha_counts }
+impl PgDocxPartReferences {
+    /// Compose from the application's SHA references.
+    pub fn new(sha_references: Arc<macro_sha_count_client::ShaReferences>) -> Self {
+        Self { sha_references }
     }
 }
 
-impl DocxPartReferences for RedisDocxPartReferences {
+impl DocxPartReferences for PgDocxPartReferences {
     async fn release(&self, shas: Vec<String>) -> Result<(), DocumentError> {
-        self.sha_counts
+        self.sha_references
             .release_shas(shas)
             .await
             .map_err(DocumentError::Internal)

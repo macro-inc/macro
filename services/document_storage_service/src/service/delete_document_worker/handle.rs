@@ -37,20 +37,13 @@ pub async fn handle(
         if let Some(file_type) = document.file_type
             && file_type.as_str() == "docx"
         {
-            // Get the sha counts to decrement from the documents bom parts
             let bom_parts =
                 macro_db_client::document::get_bom_parts(&ctx.db, &document.document_id).await?;
 
-            // Transform bom parts into Vec<(sha, count)>
-            let sha_counts = count_occurrences(
-                bom_parts
-                    .iter()
-                    .map(|bp| bp.sha.clone())
-                    .collect::<Vec<String>>(),
-            );
-
-            tracing::trace!("decrementing sha ref count");
-            ctx.redis_client.decrement_counts(&sha_counts).await?;
+            tracing::trace!("releasing bom part shas");
+            ctx.sha_references
+                .release_shas(bom_parts.into_iter().map(|bp| bp.sha).collect())
+                .await?;
         }
 
         tracing::trace!(document_id=%document.document_id, "deleting document");
@@ -135,19 +128,4 @@ pub(super) fn document_and_owner(
 
 pub(crate) fn document_cleanup_receipt(document_id: &str) -> EditReceipt {
     EditReceipt::dangerously_assert_internal_user(document_id, EntityType::Document)
-}
-
-pub(crate) fn count_occurrences(strings: Vec<String>) -> Vec<(String, i64)> {
-    use std::collections::HashMap;
-
-    let mut counts = HashMap::new();
-
-    for string in strings {
-        *counts.entry(string).or_insert(0) += 1;
-    }
-
-    counts
-        .into_iter()
-        .map(|(string, count)| (string, count as i64))
-        .collect()
 }

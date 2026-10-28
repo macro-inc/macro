@@ -1,6 +1,5 @@
 use anyhow::Context;
 use axum::http::StatusCode;
-use macro_sha_count_client::Redis;
 use sqlx::{Pool, Postgres};
 use tracing::instrument;
 
@@ -13,13 +12,12 @@ use model::document::{DocumentBasic, DocumentMetadata, FileType};
 /// version id pair.
 /// **note** If document id is present we need to handle cleanup
 #[instrument(
-    skip(db, redis_client, s3_client, document_context, save_document_request),
+    skip(db, s3_client, document_context, save_document_request),
     fields(document_name=%document_context.document_name,owner=%document_context.owner,file_type=%file_type)
 )]
 #[expect(clippy::type_complexity, reason = "too annoying to fix now")]
 pub async fn save_document(
     db: &Pool<Postgres>,
-    redis_client: &Redis,
     s3_client: &service::s3::S3,
     document_id: &str,
     file_type: FileType,
@@ -93,13 +91,6 @@ pub async fn save_document(
                     document_metadata.document_version_id,
                 )),
             ));
-        }
-
-        // Incr the SHA ref count using the new_bom
-        if let Err(e) = redis_client.increment_counts(shas).await {
-            // We don't actually care if this fails, the sha counts being messed
-            // up is not the end of the world.
-            tracing::error!(error=?e, "unable to increment sha ref count");
         }
     }
 

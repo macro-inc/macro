@@ -18,7 +18,7 @@ use lambda_runtime::{
     tracing::{self},
 };
 use macro_entrypoint::MacroEntrypoint;
-use macro_sha_count_client::Redis;
+use macro_sha_count_client::ShaReferences;
 use sqlx::postgres::PgPoolOptions;
 
 #[tokio::main]
@@ -53,20 +53,11 @@ async fn main() -> Result<(), Error> {
         sqs_client::SQS::new(aws_sdk_sqs::Client::new(&aws_config)).convert_queue(&convert_queue);
     tracing::trace!("initialized sqs client");
 
-    let redis_client = redis::Client::open(config.redis_uri.clone())
-        .map_err(|e| anyhow::Error::msg(format!("unable to connect to redis {:?}", e)))
-        .context("could not connect to redis client")?;
-    if let Err(e) = redis_client.get_connection() {
-        tracing::error!(error=?e, "unable to connect to redis");
-        return Err(e.into());
-    }
-    let redis_client = Redis::new(redis_client);
-
     let context = context::Context {
+        sha_references: Arc::new(ShaReferences::new(db.clone())),
         db,
         s3_client: Arc::new(s3_client),
         lambda_client: Arc::new(lambda_client),
-        redis_client: Arc::new(redis_client),
         sqs_client: Arc::new(sqs_client),
         config,
     };

@@ -1,68 +1,87 @@
-mod decrement_count;
-mod exists;
-mod increment_count;
 #[cfg(test)]
 mod test;
 
-use std::collections::BTreeMap;
+use std::collections::HashSet;
 
+use anyhow::Context;
 use model::document::SaveBomPart;
+use sqlx::PgPool;
 
+/// References to content-addressed docx parts. `"BomPart"` rows are the
+/// references: a SHA is stored while any row names it, and a released SHA is
+/// queued for `sha_cleanup_worker`, which deletes its object once no row does.
 #[derive(Clone)]
-pub struct Redis {
-    inner: redis::Client,
+pub struct ShaReferences {
+    db: PgPool,
 }
 
-// Key prefixes
-static SHA_COUNT_KEY_PREFIX: &str = "sha:";
-static SHA_DELETE_BUCKET: &str = "bucket:sha-delete";
-
-impl Redis {
-    pub fn new(inner: redis::Client) -> Self {
-        Self { inner }
+impl ShaReferences {
+    pub fn new(db: PgPool) -> Self {
+        Self { db }
     }
 
-    pub async fn increment_counts(&self, shas: Vec<String>) -> anyhow::Result<()> {
-        increment_count::increment_counts(&self.inner, shas).await
-    }
-
-    pub async fn decrement_counts(&self, shas: &Vec<(String, i64)>) -> anyhow::Result<()> {
-        decrement_count::decrement_counts(&self.inner, SHA_DELETE_BUCKET, shas).await
-    }
-
-    /// Release one reference per entry in `shas`, such as the BOM of a deleted
-    /// docx. A SHA listed twice loses two references.
+    /// Queues every SHA in `shas` for cleanup, such as the BOM of a deleted
+    /// docx. Call it before or after the rows go: the worker recounts them.
+    #[tracing::instrument(skip_all, fields(sha_count = shas.len()), err)]
     pub async fn release_shas(&self, shas: Vec<String>) -> anyhow::Result<()> {
-        self.decrement_counts(&reference_counts(shas)).await
+        if shas.is_empty() {
+            return Ok(());
+        }
+        sqlx::query!(
+            r#"
+            INSERT INTO sha_cleanup_queue (sha)
+            SELECT DISTINCT sha FROM UNNEST($1::text[]) AS released(sha)
+            ON CONFLICT (sha) DO UPDATE SET queued_at = now()
+            "#,
+            &shas
+        )
+        .execute(&self.db)
+        .await
+        .context("unable to queue released shas for cleanup")?;
+        Ok(())
     }
 
+    /// The parts of `bom_parts` whose SHA no `"BomPart"` row references yet,
+    /// which the caller must upload.
+    #[tracing::instrument(skip_all, fields(sha_count = bom_parts.len()), err)]
     pub async fn find_non_existing_shas(
         &self,
-        bom_parts: &Vec<SaveBomPart>,
+        bom_parts: &[SaveBomPart],
     ) -> anyhow::Result<Vec<SaveBomPart>> {
-        exists::find_non_existing_shas(&self.inner, bom_parts).await
+        let referenced = self
+            .referenced(bom_parts.iter().map(|part| part.sha.clone()).collect())
+            .await?;
+        Ok(bom_parts
+            .iter()
+            .filter(|part| !referenced.contains(&part.sha))
+            .cloned()
+            .collect())
     }
 
+    /// The SHAs in `shas` that no `"BomPart"` row references yet.
+    #[tracing::instrument(skip_all, fields(sha_count = shas.len()), err)]
     pub async fn find_non_existing_shas_string(
         &self,
         shas: Vec<String>,
     ) -> anyhow::Result<Vec<String>> {
-        exists::find_non_existing_shas_string(&self.inner, shas).await
+        let referenced = self.referenced(shas.clone()).await?;
+        Ok(shas
+            .into_iter()
+            .filter(|sha| !referenced.contains(sha))
+            .collect())
     }
 
-    pub async fn sha_exists(&self, sha: &str) -> anyhow::Result<bool> {
-        exists::exists(
-            &self.inner,
-            format!("{}{}", SHA_COUNT_KEY_PREFIX, sha).as_str(),
+    async fn referenced(&self, shas: Vec<String>) -> anyhow::Result<HashSet<String>> {
+        if shas.is_empty() {
+            return Ok(HashSet::new());
+        }
+        let rows = sqlx::query_scalar!(
+            r#"SELECT DISTINCT sha AS "sha!" FROM "BomPart" WHERE sha = ANY($1)"#,
+            &shas
         )
+        .fetch_all(&self.db)
         .await
+        .context("unable to look up referenced shas")?;
+        Ok(rows.into_iter().collect())
     }
-}
-
-fn reference_counts(shas: Vec<String>) -> Vec<(String, i64)> {
-    let mut counts = BTreeMap::<String, i64>::new();
-    for sha in shas {
-        *counts.entry(sha).or_default() += 1;
-    }
-    counts.into_iter().collect()
 }

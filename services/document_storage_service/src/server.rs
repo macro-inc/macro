@@ -135,7 +135,7 @@ use macro_service_urls::AiEditingWorkerUrl;
 use macro_service_urls::{
     ConnectionGatewayUrl, LexicalServiceUrl, StaticFileServiceUrl, SyncServiceUrl,
 };
-use macro_sha_count_client::Redis;
+use macro_sha_count_client::ShaReferences;
 use notification::domain::service::{
     NotificationReaderService, PlatformArnConfig, SqsNotificationIngress,
     WebSocketNotificationConsumerService,
@@ -598,7 +598,7 @@ pub async fn run() -> anyhow::Result<()> {
             config.upload_staging_bucket.as_ref(),
         ),
         DynamoBulkUploadAdapter::new(dynamodb_client.clone()),
-        ShaCountAdapter::new(Redis::new(redis_client.clone())),
+        ShaCountAdapter::new(ShaReferences::new(db.clone())),
         entity_access_management_service.clone(),
         SqsProjectSearchIndexer::new(Arc::new(sqs_client.clone()), macro_event_broker.clone()),
         if cfg!(feature = "local") {
@@ -2040,14 +2040,12 @@ pub async fn run() -> anyhow::Result<()> {
         }
     });
 
-    let redis_sha_client = Arc::new(Redis::new(redis_client));
+    let sha_references = Arc::new(ShaReferences::new(db.clone()));
 
     let document_purger = Arc::new(documents_hex::domain::purge::DocumentPurger::new(
         documents_hex::outbound::document_purge::LegacyDocumentPurgeRepository::new(db.clone()),
         documents_hex::outbound::document_purge::SqsDocumentPurgeQueue::new(sqs_client.clone()),
-        documents_hex::outbound::document_purge::RedisDocxPartReferences::new(
-            redis_sha_client.clone(),
-        ),
+        documents_hex::outbound::document_purge::PgDocxPartReferences::new(sha_references.clone()),
         macro_event_broker.clone(),
     ));
 
@@ -2079,7 +2077,7 @@ pub async fn run() -> anyhow::Result<()> {
             entity_access_service.clone(),
             Arc::new(outbound::entity_mutation::DssEntityLifecycleAdapter::new(
                 db.clone(),
-                redis_sha_client.clone(),
+                sha_references.clone(),
                 sqs_client.clone(),
                 macro_event_broker.clone(),
             )),
@@ -2273,7 +2271,7 @@ pub async fn run() -> anyhow::Result<()> {
         foreign_entity_state,
         db: db.clone(),
         readonly_db: readonly_pool::ReadOnlyPool(readonly_db.clone()),
-        redis_client: redis_sha_client,
+        sha_references,
         s3_client: s3,
         dynamodb_client: Arc::new(dynamodb_client),
         dynamo_db,
@@ -2373,7 +2371,7 @@ pub async fn run() -> anyhow::Result<()> {
             worker: Arc::new(delete_document_worker),
             db: db.clone(),
             s3_client: api_context.s3_client.clone(),
-            redis_client: api_context.redis_client.clone(),
+            sha_references: api_context.sha_references.clone(),
             sync_service_client: api_context.sync_service_client.clone(),
             editing_worker_client,
             properties_service: api_context.properties_service.clone(),

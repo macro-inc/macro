@@ -235,9 +235,9 @@ pub trait ProjectUploadUrlPort: Send + Sync + 'static {
     fn docx_upload_bucket(&self) -> &str;
 }
 
-/// Port for updating persisted content-hash reference counts.
+/// Port for releasing content-hash references to SHA cleanup.
 pub trait ShaCounterPort: Send + Sync + 'static {
-    /// Decrement each SHA reference count by the supplied amount.
+    /// Release the supplied SHAs; cleanup deletes any no longer referenced.
     fn decrement_counts(
         &self,
         sha_counts: &[(String, i64)],

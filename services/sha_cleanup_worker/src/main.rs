@@ -18,13 +18,6 @@ async fn main() -> Result<(), anyhow::Error> {
 
     tracing::trace!("initialized s3 client");
 
-    let redis_client = service::redis::Redis::new(
-        redis::Client::open(config.redis_uri.as_str()).expect("could not connect to redis client"),
-    );
-    redis_client.ping().context("able to ping redis")?;
-
-    tracing::trace!("initialized redis client");
-
     let db = PgPoolOptions::new()
         .min_connections(1)
         .connect(&config.database_url)
@@ -36,10 +29,5 @@ async fn main() -> Result<(), anyhow::Error> {
 
     tracing::info!("initiating process");
 
-    process(
-        Arc::new(db_client),
-        Arc::new(s3_client),
-        Arc::new(redis_client),
-    )
-    .await
+    process(Arc::new(db_client), Arc::new(s3_client)).await
 }

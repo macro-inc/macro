@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        DELETE FROM sha_cleanup_queue AS queue\n        USING UNNEST($1::text[], $2::timestamptz[]) AS done(sha, queued_at)\n        WHERE queue.sha = done.sha AND queue.queued_at = done.queued_at\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "TimestamptzArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4c03a209cb9d1d60385cfcca991a628efd427e754d4ecee505b0bebf6e1664fe"
+}

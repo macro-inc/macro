@@ -3,16 +3,13 @@
 
 use std::sync::Arc;
 
-use crate::{
-    api::util::count_occurrences,
-    service::{
-        document_event_publisher::publish_document_purged_event,
-        entity_mutation::{EntityLifecycleService, LifecycleError},
-    },
+use crate::service::{
+    document_event_publisher::publish_document_purged_event,
+    entity_mutation::{EntityLifecycleService, LifecycleError},
 };
 use entity_mutation::EntityMutationActor;
 use macro_event_broker::MacroEventBroker;
-use macro_sha_count_client::Redis;
+use macro_sha_count_client::ShaReferences;
 use model_entity::{Entity, EntityType};
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 use sqlx::PgPool;
@@ -35,17 +32,22 @@ fn row_error(error: sqlx::Error) -> LifecycleError {
 /// Production lifecycle adapter backed by the legacy persistence clients.
 pub struct DssEntityLifecycleAdapter<B: MacroEventBroker> {
     db: PgPool,
-    redis: Arc<Redis>,
+    sha_references: Arc<ShaReferences>,
     sqs: Arc<sqs_client::SQS>,
     event_broker: B,
 }
 
 impl<B: MacroEventBroker> DssEntityLifecycleAdapter<B> {
     /// Construct the adapter from concrete outbound dependencies.
-    pub fn new(db: PgPool, redis: Arc<Redis>, sqs: Arc<sqs_client::SQS>, event_broker: B) -> Self {
+    pub fn new(
+        db: PgPool,
+        sha_references: Arc<ShaReferences>,
+        sqs: Arc<sqs_client::SQS>,
+        event_broker: B,
+    ) -> Self {
         Self {
             db,
-            redis,
+            sha_references,
             sqs,
             event_broker,
         }
@@ -121,10 +123,8 @@ impl<B: MacroEventBroker> EntityLifecycleService for DssEntityLifecycleAdapter<B
             let bom_parts = macro_db_client::document::get_bom_parts(&self.db, &entity.entity_id)
                 .await
                 .map_err(|error| internal!(error))?;
-            self.redis
-                .decrement_counts(&count_occurrences(
-                    bom_parts.into_iter().map(|part| part.sha).collect(),
-                ))
+            self.sha_references
+                .release_shas(bom_parts.into_iter().map(|part| part.sha).collect())
                 .await
                 .map_err(|error| internal!(error))?;
         }

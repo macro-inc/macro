@@ -1,6 +1,6 @@
 # Sha Cleanup Worker
 
-Worker to run periodically and clean up and sha's from S3 that are part of the bucket:sha-delete set in redis.
+Worker to run periodically and delete the S3 objects of SHAs in the Postgres `sha_cleanup_queue` that no `"BomPart"` row references any more.
 
 ## Prerequisites
 
@@ -16,7 +16,7 @@ Worker to run periodically and clean up and sha's from S3 that are part of the b
 `make run` - Runs the service normally with AWS access required
 
 ## Local Development
-From the repository root, start the local databases and cache with `just run_dbs`.
+From the repository root, start the local databases with `just run_dbs`.
 
 Create and fill in your `.env` file based on the `.env.sample`
 
@@ -37,6 +37,6 @@ storage s3 bucket and table.
 
 ## Testing
 
-You must have the macrocache up and running locally to perform testing.
+You must have the local Postgres running to perform testing.
 
 `cargo test` to run tests

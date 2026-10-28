@@ -105,10 +105,10 @@ pub async fn process(
 
     let shas: Vec<String> = bom_parts.iter().map(|bp| bp.sha.clone()).collect();
 
-    // Get a list of shas that do not exist in redis yet
+    // Parts no BomPart references yet are not in s3
     let bom_parts_to_upload: Vec<String> = ctx
-        .redis_client
-        .find_non_existing_shas_string(shas.clone())
+        .sha_references
+        .find_non_existing_shas_string(shas)
         .await?;
 
     tracing::trace!("got bom parts to upload");
@@ -142,9 +142,6 @@ pub async fn process(
     .context("unable to save bom parts to db")?;
 
     tracing::trace!("bom parts saved to db");
-
-    tracing::trace!("incrementing sha counts");
-    ctx.redis_client.increment_counts(shas).await?;
 
     tracing::info!("complete");
 

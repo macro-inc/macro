@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO sha_cleanup_queue (sha)\n            SELECT DISTINCT sha FROM UNNEST($1::text[]) AS released(sha)\n            ON CONFLICT (sha) DO UPDATE SET queued_at = now()\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "564803fa61ad4c7d080c760d721ab010798d115cccc2df859d6ead12dc51469a"
+}

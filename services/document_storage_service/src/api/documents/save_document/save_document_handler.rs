@@ -131,7 +131,6 @@ pub async fn save_document_handler(
 
     let document_metadata: DocumentResponseMetadata = match save_document(
         &ctx.db,
-        &ctx.redis_client,
         &ctx.s3_client,
         &document_id,
         file_type,
