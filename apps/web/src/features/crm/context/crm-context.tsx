@@ -1,3 +1,4 @@
+import type { ListFilterGroup } from '@app/components/view-shell';
 import type { CrmCompanyEntity } from '@entity';
 import {
   type Accessor,
@@ -5,6 +6,18 @@ import {
   createContext,
   useContext,
 } from 'solid-js';
+import type { SetStoreFunction, Store } from 'solid-js/store';
+import type { CrmActivityViewState } from '../core/activity-view';
+
+export type ActivityFilters = {
+  groups: Accessor<ListFilterGroup<string, string>[]>;
+  activeCount: Accessor<number>;
+  isSelected(group: string, option: string): boolean;
+  selectedIds(group: string): string[];
+  setSelected(group: string, option: string, selected: boolean): void;
+  clear(): void;
+};
+
 import type {
   CrmDisplayOptions,
   CrmListColumnId,
@@ -82,8 +95,25 @@ export type CrmContext = {
     signal: Accessor<CrmEmailSignal>
   ): ItemListSource;
   /** Paged CRM-wide activity, limited to associated records. */
-  createActivity(tab: Accessor<CrmActivityTab>): ItemListSource;
-  openTaskComposer(): void;
+  createActivity(
+    tab: Accessor<CrmActivityTab>,
+    options?: Accessor<CrmActivityViewState>
+  ): ItemListSource;
+  createActivityState(
+    tab: CrmActivityTab
+  ): readonly [
+    Store<CrmActivityViewState>,
+    SetStoreFunction<CrmActivityViewState>,
+  ];
+  createActivityFilters(
+    tab: CrmActivityTab,
+    state: Store<CrmActivityViewState>,
+    setState: SetStoreFunction<CrmActivityViewState>
+  ): ActivityFilters;
+  ActivityTasks: Component<{ title?: import('solid-js').JSX.Element }>;
+  openTaskComposer(
+    options?: import('../../tasks-view/types').TaskCreateOptions
+  ): void;
   /** Newest mounted record source wins; cleanup restores the parent record source. */
   registerTaskComposerRecord(
     source: Accessor<CrmTaskRecord | undefined>

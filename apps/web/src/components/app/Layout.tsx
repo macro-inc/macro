@@ -1,3 +1,4 @@
+import { ViewSwitcherContext } from '@app/components/view-shell';
 import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 import Banner from '@app/features/auth/banner/Banner';
 import { CalendarPermissionPrompt } from '@app/features/auth/CalendarPermissionPrompt';
@@ -33,6 +34,8 @@ import { CreateChannelModal } from '@channel/CreateChannelModal';
 import { GoToHotkeys } from '@components/app/app-sidebar/sidebar';
 import { registerMailtoComposerHandler } from '@components/app/mailtoComposerHandler';
 import { SidebarRail } from '@components/app/sidebar-next/sidebar-rail';
+import { SidebarPrefsProvider } from '@components/app/sidebar-next/use-sidebar-prefs';
+import { ViewSwitcher } from '@components/app/sidebar-next/view-switcher';
 import {
   isSidebarVisible,
   SidebarVisibilityContext,
@@ -303,14 +306,19 @@ export function AppChrome(props: ParentProps) {
       </Suspense>
       <div class="min-h-0 flex-1 flex">
         <ItemDndProvider>
-          <Show when={isSidebarVisible()}>
-            <SidebarRail />
-          </Show>
-          <PageContent>
-            {/* Route loading must not detach the chrome or mobile navigation;
-                  the route draws its own loading state. */}
-            <Suspense>{props.children}</Suspense>
-          </PageContent>
+          {/* The rail and each view's switcher share the rail preferences. */}
+          <SidebarPrefsProvider>
+            <ViewSwitcherContext.Provider value={ViewSwitcher}>
+              <Show when={isSidebarVisible()}>
+                <SidebarRail />
+              </Show>
+              <PageContent>
+                {/* Route loading must not detach the chrome or mobile
+                    navigation; the route draws its own loading state. */}
+                <Suspense>{props.children}</Suspense>
+              </PageContent>
+            </ViewSwitcherContext.Provider>
+          </SidebarPrefsProvider>
         </ItemDndProvider>
       </div>
       <Show when={isTouchDevice() && isAuthenticated()}>

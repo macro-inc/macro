@@ -221,6 +221,7 @@ export function WideLayout(props: LayoutProps) {
             </CompactingPills>
           )}
         </Show>
+        {props.referenceProperties}
         <Show when={isProjectEntity(props.entity) && props.entity}>
           {(entity) => (
             <RowTags

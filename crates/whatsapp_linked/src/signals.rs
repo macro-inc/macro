@@ -16,7 +16,7 @@ pub const GROUPS_REQUESTED: &str = "whatsapp_groups_requested";
 pub const ACCOUNT_CHANGED: &str = "whatsapp_account_changed";
 /// `<account_id>`: a replica released the account (session service only).
 pub const ACCOUNT_RELEASED: &str = "whatsapp_account_released";
-/// `<document_id>`: attachment bytes are ready to import (DSS listens).
+/// `<blob_id>`: attachment bytes are ready to import (DSS listens).
 pub const MEDIA_READY: &str = "whatsapp_media_ready";
 /// `<message_id>`: a standalone message notification is ready (DSS listens).
 pub const GROUP_EFFECTS: &str = "whatsapp_group_effects";

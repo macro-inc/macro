@@ -70,6 +70,10 @@ Gate event notes and document Share meeting-link controls with
 on in dev and uses PostHog in production.
 See `docs/agent-guide/calendar.md` at the repo root.
 
+Channel composer draft persistence has a backend-free browser regression:
+`bunx playwright test --config src/features/channel/Input/browser-test/playwright.config.ts`.
+It types a draft, remounts the composer over it, and checks the blank lines survive.
+
 A frontend dev server runs against the **dev** backend, so this needs no local stack, Docker, Rust build, or `sudo`:
 
 ```sh
@@ -123,12 +127,13 @@ Then trigger the interaction and read `window.__inst.log`. `'1,2,3' → '' → '
 
 Document sync uses the `sync-via-gateway` PostHog flag in both deployed dev and
 production. Off or unknown flag values use direct sync sockets.
-Local stacks with `sync_router` can opt in with `VITE_SYNC_VIA_GATEWAY=true`;
+Local stacks with the updated DSS can opt in with `VITE_SYNC_VIA_GATEWAY=true`;
 `false` forces direct sync. The choice is made when a sync source is created
 and stays fixed for its lifetime. PostHog can serve a cached value on reload;
 recreate document sessions after the client receives the updated flag to change
-transport. This is not an immediate kill switch for open sessions. Provision
-the hosted router before enabling.
+transport. This is not an immediate kill switch for open sessions. Finish deploying the updated
+DSS before enabling; the dedicated `/sync/ws` socket hosts routing independently
+of the connection-gateway notification socket. The PostHog key keeps its historical name.
 
 Saved canvases use the shared Loro runtime; the stored JSON is only the original
 migration seed. Keep whole-file simple-save out of scene editing. Canvas
@@ -147,6 +152,8 @@ The shared plain-text Lexical codec is `packages/lexical-core/canvas-text.ts`.
 
 Keep persistent list hotkeys free of mounted-view closures, and clear
 virtualizer accessors when their view unmounts.
+Keep editor newline handling local; result-opening handlers must yield
+Shift+Enter while an editor owns focus instead of adding shared hotkey flags.
 
 - Reuse `src/components/WorkspaceTexture.tsx` for the onboarding and Create
   detail panel grain; pass the surface accent and a unique SVG filter ID.
@@ -295,12 +302,19 @@ the user's newest account for that app from the last fifteen minutes.
 - Always persist composer sends in account-scoped IndexedDB and dispatch through the fetch-only email client, without a feature flag; cache health and unrelated mutation queues must not gate delivery. See `docs/architecture/email.md` for state and rollout invariants.
 - Retry cache bootstrap on reconnect/foreground or draft Retry only when storage was proven untouched; retain the same scope and block draft sync until the replacement queue is readable.
 - Touch email replies and forwards use the full-screen composer with the shared new-email header actions; preserve thread state underneath and flush local edits before closing.
+- Include unsynced email working copies in Drafts and mobile name search even
+  before a GraphQL save, and warm sending accounts alongside backfill. Preserve
+  inbox, alias, and facet scope.
 - Draft autosaves preserve active email thread messages; evict inactive legacy
   caches on save and the active cache on thread exit. Revalidate GraphQL thread
   pages only when a save cannot patch the message list (missing snapshot or a
   move between inboxes).
 - Keep email card resize motion on its content wrapper so message and inline
   reply transitions preserve the card's focus target and return to natural height.
+- Task composer submissions retain an account/context-scoped local copy until
+  the create response confirms success; never clear newer composer input from a
+  late callback or automatically retry an uncertain create. Keep recovery copies
+  through restarts and remove them on explicit logout. See the Tasks walkthrough.
 - Shared server-state queries and mutations live in `src/lib/queries`; keep
   feature-specific query orchestration with its owning feature.
 - Refresh the channel list's bounded unread edge when opening a conversation,

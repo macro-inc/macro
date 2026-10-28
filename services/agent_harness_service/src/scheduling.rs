@@ -7,7 +7,7 @@ use connection_gateway_client::client::ConnectionGatewayClient;
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use entity_registry::OwnerGrantPolicy;
 use entity_registry_db_utils::OwnedEntityRegistrar;
-use jev::{domain::JevClassifier, outbound::TypesafeJev};
+use jev::{domain::JevClassifier, outbound::SystemOneJev};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{
     InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationServiceImpl,
@@ -167,7 +167,7 @@ pub async fn build(
     let typesafe = config
         .typesafe_api_key
         .value()
-        .map(TypesafeJev::new)
+        .map(SystemOneJev::typesafe)
         .transpose()
         .context("invalid TYPESAFE_API_KEY")?;
     let conditions_enabled = typesafe.is_some();

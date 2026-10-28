@@ -339,7 +339,18 @@ controls. Use the shared slots described in
 Desktop app navigation panels have **Hide navigation** at the right end of their
 48px title bar. It hides only that split's navigation; **Show navigation** (the
 hamburger) appears before the main header's title/breadcrumbs, including when a
-document, email, or conversation is open. Home's filter sits beside its label.
+document, email, or conversation is open. Home's filter sits in the right group,
+before search and **Hide navigation**.
+A desktop view's name opens the view switcher: clicking it shows the rail's apps
+in rail order, then the More apps, with a check on the current one. Choosing one
+replaces the view in that split, not the active split; Shift opens it in a new
+split. The navigation panel's title shows the name with a caret, sharing one
+hover background. Main headers show the name alone, with the same hover:
+`ViewSidebar.Title caret={false}` for plain titles, and the first breadcrumb
+(Drive, Email, Tasks, Reviews) while it is the current page; deeper, that crumb
+returns to the list. Titles that name content rather than the view (Calendar's
+date, a channel, an agent session, a CRM record) do not switch views. Touch
+devices show plain names and keep the dock.
 The split's **Close** control aligns with the navigation icons when expanded and
 appears immediately before the hamburger when collapsed. Both use 16px icons in
 24px desktop buttons. Close remains hidden when the split cannot be closed.
@@ -523,8 +534,8 @@ Its **New conversation** button opens the composer for the current mode with one
 chat agents, and the composer stays on one line. In Code it lists coding agents
 only, the composer opens expanded with the repository drawer below it, and the
 greeting reads "What should we build?". New sessions use the selected agent's
-default model and the URL for its kind. Home's composer is unchanged and still
-offers both kinds. Opening an existing row restores its own kind and URL.
+default model and the URL for its kind. Home keeps its usual agent composer.
+Opening an existing row restores its own kind and URL.
 Right-click a conversation for Rename, Favorite, Copy link, Share, Delete, and
 the other entity actions used on Home.
 
@@ -560,6 +571,7 @@ These buttons and Home items activate on primary-button
 press; keyboard activation remains supported. Home, Chat, Email,
 Tasks, and other views using the shared inner
 sidebar layout default to 256px; manually resized Chat widths remain saved.
+
 After dragging a view's inner sidebar divider (or using its arrow keys), resizing
 the containing split preserves the chosen sidebar width while space permits.
 Narrow splits may shrink or collapse the sidebar; widening restores its chosen
@@ -583,6 +595,154 @@ across lists, previews, and drag images, with regular and bold weights. Read ema
 uses an open envelope, calendar invitations use a calendar, and pull requests
 retain their open/merged/closed glyphs and status colors. Direct messages may
 show the other participant's avatar instead of a glyph.
+
+### Universal Input in Command K and mobile Search
+
+Home keeps its usual agent or classic chat composer and suggestions.
+PostHog **enable-universal-input** is the only control for Universal Input in
+Command K and mobile Search. When enabled, the composer is available immediately;
+there is no Settings page, account-domain restriction, or saved opt-out.
+Development/local builds enable the flag by default. Use
+`VITE_ENABLE_UNIVERSAL_INPUT` for a local override; deployed builds follow PostHog.
+
+Command K’s Lexical input supports rich text and **@** mentions; there are no formatting
+or mention instruction cues and no Suggestions list beneath it.
+Type directly; predictions refresh while typing, at most once every 200 ms with
+separate classification and field-extraction queues. Each queue keeps one request
+in flight and coalesces updates to the latest text; field extraction never blocks
+type prediction. The classifier chooses a form; extraction supplies its addressing
+and outgoing body. It recognizes AI, global Macro search, email,
+Markdown note, task, calendar event, or message/DM. The main editor keeps focus
+while editable fields appear below it. **Content type** defaults to **Auto**;
+the strongest candidate starts a draft even when the scores are close. Field
+extraction uses Cloudflare Clairic when its Workers AI account/token are configured,
+with Nemotron as the fallback for missing configuration, provider errors, timeouts,
+or unusable results. Clairic selects text from the draft; it does not rewrite prose.
+Nemotron separately extracts structured temporal expressions and exact source
+spans for tasks and events. Rust resolves these against the request time and
+timezone, including this/next calendar-week semantics. Only complete, valid suggestions enter the editable form.
+Absent Clairic values remain empty; uncertain nonempty values and outgoing body
+spans that end early use the existing fallback. Manual edits retain precedence.
+Bug reports and prioritized problems count as tasks. **Cmd/Ctrl+Shift+Right** cycles through
+types in likelihood order; **Cmd/Ctrl+Shift+Left** cycles backward. The icon and
+type pill opens **Content type**; there is no Next type button. Choosing a type, cycling, or editing a field locks the type.
+Opening action words (message, task, search/find, email, note, schedule/calendar,
+ask/agent) strongly guide model classification; the body topic does not override
+the requested action. This remains model interpretation, without a local prefix
+parser. Open-ended questions, including internal history such as when we last
+deployed, go to an agent unless search results are explicitly requested.
+Completed predictions interpret the full draft: bare bug reports and
+“Find and fix notification bug” can become tasks. Manual type choices and field
+edits still lock the type. Addressing distinguishes the channel from actionable text
+in its body. For example, “email julia” followed by “can we reschedule the thing
+tomorrow? let the investors know” prepares an email to Julia with that outgoing
+body. “Remind me to email Julia tomorrow” prepares a task instead.
+Email mode offers **Save as draft** beside **Send email**. Typing and prediction
+only update the open menu’s transient draft; they do not create email-service drafts.
+**Save as draft** explicitly saves the visible email without sending it, including
+unfinished emails with no subject, body, or recipients. Any supplied recipient
+must resolve to an email address, and a connected inbox is required. A successful
+save closes the menu and opens the saved draft when available; a
+failed save preserves the input. **Cmd/Ctrl+Enter** continues to send the email.
+Search mode embeds Global Search's editor, Type/In/From filter chips, and
+result rows with highlighted message snippets. Extraction first selects the search
+type, then uses its schema: Channels has In/From; Tasks has status, priority,
+assignees and creators; Calls has In/From/attendance; Email has importance and
+connected inboxes. Other types extract keywords. Task assignees and creators are
+distinct, and unsupported filter wording (including tags) remains in the keyword
+query. A manually chosen search Type fixes the schema for later predictions.
+Results wait for extraction; no local language parser strips commands or filter clauses. For example, “search messages from Julia in #sales about budget”
+selects **Type: Channels**, resolves Julia through the people directory, selects
+**In: sales**, and searches for “budget”. Names must resolve uniquely; unresolved
+people or channels pause search until corrected in the filter pickers. Use
+**Only** to replace an unresolved name with a specific person or channel. The
+pickers include the full channel and DM directory. The model distinguishes
+explicit filters from ordinary “from”/“in” phrases within search keywords.
+Filter-only requests such as “search channels for messages from user@example.com”
+leave **Search for** empty; category and sender wording is consumed by the filters.
+Adding “about budget” searches for only “budget”.
+
+Editing **Search for** or changing the filter chips overrides subsequent
+predictions for those values. Sender-only message scopes and speaker-only call
+scopes keep their filters visible and request at least three search characters:
+channel/call browsing cannot enforce those message-level filters. No unfiltered
+browse results appear while keywords are required. **Search Macro** or
+**Cmd/Ctrl+Enter** opens Global Search with the same query and complete filters,
+including when the Search view is already open. If extraction fails, results and
+submission pause until both **Search for** and the filter selection are explicitly
+edited, so a provider failure cannot silently broaden the search.
+
+Click a result or message snippet to open its actual location, or use **Up/Down**
+and then **Enter**. Keyboard selection scrolls into view while the editor keeps
+focus. **Shift+Enter** always inserts a newline in the Command K main input,
+including before Universal Input activates and when Shift is released before
+Enter; neither key release opens the selected result. Multiline input hides the
+Macro logo and removes its reserved spacing so text uses the full width. **Escape** exits
+result navigation; a second Escape closes the menu. The content type selector
+uses the shared styled dropdown with a selection checkmark and platform-specific
+shortcut tooltip. Search navigation and type cycling use the app's scoped
+hotkey manager; inline editor menus take precedence.
+
+Notes use the document composer's rich title, **Note body**, slash commands,
+and tag picker below the main input. Note creation saves the visible body and
+selected tags; manual edits, formatting, and tags survive later predictions within the open menu.
+Messages use the channel composer's rich editor and recipient chips. There is
+no formatting button or toolbar row; keyboard formatting remains available. Choose existing people or one channel; external email addresses are for
+email mode. Authored mentions are included when sending a message.
+AI uses the existing agent/model picker, including connection and agent creation
+entries; the main Universal Input remains its prompt.
+The model picker supports searching on desktop and touch layouts. Escape closes
+the picker while keeping Command K and its prompt open.
+Task extraction waits for the field catalog before sending available names/options;
+classification continues independently while it loads. Task creation uses those
+definitions to retain all selected assignees. Explicit priority,
+status, assignees, project, and other supported task properties populate their
+pills rather than remaining as metadata lines in the description. For example,
+“notification click not going to target … priority urgent” displays **Urgent**.
+Unresolved or ambiguous values require a choice; manual property edits survive
+later predictions. Task fields stay in sync as typing continues.
+Select **Auto** to resume detection; manually edited fields remain yours.
+
+**Enter** inserts a newline. **Cmd/Ctrl+Enter** or the labeled action button
+submits only the currently displayed, complete action. There is no queued send
+while inference is pending. Email and message modes show their outgoing body
+and resolved recipients. Email uses the Email Composer's inbox picker, recipient
+chips with address completion, separate Cc/Bcc controls, subject control, rich Markdown editor, and HTML
+preparation for delivery. Task creation uses the task composer's rich title,
+Markdown description, and editable property pills, including Due date.
+Calendar uses the event composer's date/time popovers and calendar, guest, and
+location and recurrence pills, including the shared custom recurrence builder.
+Manual recurrence choices, including Does not repeat, survive later predictions.
+All these controls preserve manual edits during inference.
+The submit shortcut is shown beside the
+action label in its button. Ambiguous names require a specific selection. Calendar
+shows the absolute date, time, timezone, calendar, and invitees. For example,
+“Call John at 3pm tomorrow” becomes a one-hour event at 3 PM tomorrow with no
+invitation; inviting John requires an explicit invitation request or guest edit.
+Bare hours use a reasonable default (1–7 PM, 8–11 AM, 12 noon). For example,
+“call with Julia tomorrow at 7” becomes 7 PM tomorrow for one hour. An assumption
+cue beneath the date/time range draws attention to the inferred AM/PM; editing the start
+time removes that cue. The temporal model identifies clock facts, explicit AM/PM and day parts;
+Rust resolves them, marks assumed AM/PM, validates timestamps and supplies
+a one-hour end when absent. Explicit equal or reversed ends remain unresolved. Extraction suggestions remain
+editable and require review, particularly when using the preview Clairic model.
+This flow creates new emails/events/tasks; replying, forwarding and updating
+existing entities remain follow-up scope.
+Relative starts such as “in 30 minutes” do not set the event's duration;
+“in 30 minutes for 15 minutes” creates a 15-minute event. An ISO date such as
+“2026-10-10 at 7pm” still uses the default one-hour duration.
+
+Drafts are transient for the lifetime of the open Command K menu. Failed
+inference allows manual type selection and field entry; failed submission keeps
+the open draft. Closing the menu discards it. Successful actions close the menu;
+reopening starts with a blank query. AI and search navigate immediately. Attached
+AI context must be removed before submitting another type. Home, Agents, and
+mobile Home retain their usual composers and navigation behavior. Browser
+fixtures use recording-only writes; real email/message buttons send to the
+displayed recipients.
+If email has no connected account or Event has no writable calendar, **Connect
+Google** opens Google's consent flow for Gmail and calendar access together.
+Complete consent in the Google browser page, then reopen Command K to compose.
 
 ## List-row dragging
 
@@ -943,6 +1103,24 @@ Opens a dialog with a focused `Search...` textbox and bubble-style category radi
 the top hit. Also exposes commands: `Create`, `Change theme`, `MCP setup`. Keys: Tab cycles
 category, Esc closes. The category strip and footer have transparent backgrounds.
 
+With PostHog **enable-universal-input** enabled, typing at least **3 words or 24
+characters** turns the menu into the shared Universal Input composer. The current
+text and insertion point transfer to its rich input in the same header row, with
+the same type size and padding. There is no additional title. The Macro logo hides
+when the rich input wraps or contains multiple lines, then returns on one line;
+its reserved space is removed so text uses the full input width. Classification and field
+extraction run while typing continues. For example, “dinner with julia tomorrow
+at 9pm” reveals an event; users can change the type and edit fields before acting.
+Shorter edits keep the composer open; clearing the input returns to ordinary
+Command K search. IME composition finishes before the transition. This applies to
+ordinary search, including a selected category; nested command scopes, entity
+actions, and the onboarding sandbox retain their existing behavior.
+In composer mode, Enter inserts a newline and Cmd/Ctrl+Enter performs the displayed
+action; Tab moves through form controls. Escape closes the menu (or first leaves
+active inline search navigation). Successful actions close the menu and open their
+result when available; errors keep the form available for correction. Command K
+drafts last for the open menu only; closing or reloading discards an unsent draft.
+
 In `Change theme`, Up/Down previews the highlighted palette across the open app,
 including channels and spreadsheets. Moving between rows preserves the original
 palette for cancellation without briefly restoring it between previews. Esc
@@ -1014,7 +1192,7 @@ still order results within each group; other result types keep their positions.
 Verify this in both People and All with a recent CRM contact and a matching DM last
 viewed more than 30 days ago, including when server contacts arrive after the DM.
 Other contacts show their email and open the contact page; Enter and
-click open in place, Shift+Enter in a new split. A server match that arrives after
+click open in place; Shift+Enter inserts a newline in the query. A server match that arrives after
 typing takes the default selection from the Search for… row. Global Search does not
 list CRM contacts; Search for… from People still opens the Channels search. Verify
 a contact outside the cached rows, an email-only query, rapid query changes (rows
@@ -1185,3 +1363,8 @@ HTTPS Play listing for `com.macro.workspace.mobile`, allowing a browser when the
 is absent. An opener failure displays an inline error and the dialog stays
 dismissible. A missing listing is handled in the external store/browser: return
 to Macro, dismiss, and retry later. Task 07 verifies the live listing.
+
+Universal Input observability uses one draft trace, timed classification/extraction
+and submission spans, and events for queue wait, predictions, readiness and edits. Inspect `input.outcome`, safe failure
+categories and provider fallback spans in Tempo. Never include draft contents
+or field values in telemetry. Browser tracing requires its existing OTEL flag.

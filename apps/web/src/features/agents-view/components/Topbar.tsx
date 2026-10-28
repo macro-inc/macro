@@ -1,4 +1,5 @@
 import { ViewShell } from '@app/components/view-shell/ViewShell';
+import { ViewSidebar } from '@app/components/view-shell/ViewSidebar';
 import ArrowLeft from '@icon/system/regular/arrow-left.svg';
 import { Button } from '@ui';
 import { type JSX, Show } from 'solid-js';
@@ -25,9 +26,7 @@ export function Topbar(props: {
       <div class="flex min-w-0 items-center gap-1">
         {props.titleContent ?? (
           <Show when={props.title}>
-            <h1 class="min-w-0 truncate text-sm font-semibold tracking-[-0.03em] text-ink">
-              {props.title}
-            </h1>
+            <ViewSidebar.Title caret={false}>{props.title}</ViewSidebar.Title>
           </Show>
         )}
       </div>

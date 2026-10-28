@@ -451,6 +451,31 @@ async fn publication_ack_preserves_a_concurrent_projection_revision(pool: PgPool
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn projection_claims_take_due_changes_in_order_and_skip_backed_off_ones(pool: PgPool) {
+    let (repo, link, owner) = mailbox(&pool).await;
+    let [later, second, first] = [Uuid::now_v7(), Uuid::now_v7(), Uuid::now_v7()];
+    sqlx::query!(
+        "INSERT INTO calendar_projection_outbox(event_id,owner_id,link_id,change_kind,next_run_at) VALUES
+            ($1,$4,$5,'created',now() + interval '1 hour'),
+            ($2,$4,$5,'updated',now() - interval '1 minute'),
+            ($3,$4,$5,'deleted',now() - interval '2 minutes')",
+        later,
+        second,
+        first,
+        owner,
+        link
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let mut claimed = Vec::new();
+    while let Some(lease) = repo.claim_projection(Uuid::now_v7()).await.unwrap() {
+        claimed.push(lease.event_id);
+    }
+    assert_eq!(claimed, [first, second]);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn simultaneous_workers_do_not_share_a_calendar_lease(pool: PgPool) {
     let (repo, _, _) = mailbox(&pool).await;
     let lease = calendar(&repo).await;

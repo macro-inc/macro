@@ -2,6 +2,7 @@ import {
   ListSortDropdown,
   useViewControlHotkeys,
   ViewShell,
+  ViewSidebar,
 } from '@app/components/view-shell';
 import {
   ListHeader,
@@ -87,9 +88,12 @@ export function DriveHeader() {
       }
     >
       <ViewShell.TopBar>
-        <h1 class="hidden min-w-0 truncate text-sm font-semibold tracking-[-0.03em] text-ink @max-[720px]/view-shell:block">
+        <ViewSidebar.Title
+          caret={false}
+          class="hidden @max-[720px]/view-shell:flex"
+        >
           Drive
-        </h1>
+        </ViewSidebar.Title>
         <DriveBreadcrumbsOutlet
           aria-label="Drive location"
           class="@max-[720px]/view-shell:hidden"

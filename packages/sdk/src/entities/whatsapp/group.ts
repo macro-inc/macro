@@ -6,7 +6,6 @@ import type {
 } from '../../../generated/storage/types.gen';
 import { paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
-import { Document } from '../documents/document';
 import { FavoritableEntity } from '../entity';
 import { User } from '../users/user';
 import { communityOf } from './chat';
@@ -241,8 +240,8 @@ export class WhatsAppGroup extends FavoritableEntity<WhatsAppGroupDetail> {
         fileName: attachment.fileName,
         mime: attachment.mime,
         size: attachment.size,
-        document: attachment.documentId
-          ? Document.byId(this.client, attachment.documentId)
+        url: attachment.fileId
+          ? `${this.client.hosts['static-files']}/file/${attachment.fileId}`
           : undefined,
       })),
     }));

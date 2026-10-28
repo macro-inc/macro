@@ -4,8 +4,8 @@ export type InboundAttachment = {
   state: 'loading' | 'ready' | 'unavailable' | 'unsupported';
   fileName: string;
   mime: string;
-  /** The Macro document holding the file, once ready. */
-  documentId: string | undefined;
+  /** The static file holding it, once ready. */
+  fileId: string | undefined;
   /** As WhatsApp declared them, to reserve space before the file loads. */
   width?: number;
   height?: number;
@@ -21,7 +21,7 @@ export function inlineMediaKind(
 ): 'image' | 'video' | 'audio' | undefined {
   if (
     attachment.state !== 'ready' ||
-    !(attachment.documentId || attachment.previewUrl)
+    !(attachment.fileId || attachment.previewUrl)
   )
     return undefined;
   const type = attachment.mime.split('/')[0];

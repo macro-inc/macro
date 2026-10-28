@@ -268,7 +268,7 @@ it('tells a shared viewer whose phone the import waits for', () => {
   expect(screen.queryByText(/No messages yet/)).toBeNull();
 });
 
-it('plays imported images and voice notes inline, like Chat', () => {
+it('plays stored images and voice notes inline, like Chat, and opens other files', () => {
   const fake = createFakeGroup({
     messages: [
       {
@@ -280,14 +280,21 @@ it('plays imported images and voice notes inline, like Chat', () => {
             state: 'ready',
             fileName: 'photo.jpeg',
             mime: 'image/jpeg',
-            documentId: 'document-photo',
+            fileId: 'file-photo',
           },
           {
             ordinal: 1,
             state: 'ready',
             fileName: 'voice.ogg',
             mime: 'audio/ogg',
-            documentId: 'document-voice',
+            fileId: 'file-voice',
+          },
+          {
+            ordinal: 2,
+            state: 'ready',
+            fileName: 'quote.pdf',
+            mime: 'application/pdf',
+            fileId: 'file-quote',
           },
         ],
       },
@@ -299,10 +306,14 @@ it('plays imported images and voice notes inline, like Chat', () => {
   ).toBeTruthy();
   const voice = screen.getByLabelText('voice.ogg');
   expect(voice.getAttribute('src')).toBe(
-    'https://files.example.test/document-voice'
+    'https://files.example.test/file-voice'
   );
-  // Not as document chips.
+  // Not as file chips.
   expect(screen.queryByText('photo.jpeg')).toBeNull();
+  // Other files open the stored file.
+  expect(
+    screen.getByRole('link', { name: 'quote.pdf' }).getAttribute('href')
+  ).toBe('https://files.example.test/file-quote');
 });
 
 it('mentions group participants from the composer as WhatsApp mentions', async () => {
@@ -359,7 +370,7 @@ it('renders every WhatsApp message type with Chat parts and small cards', () => 
     state: 'ready',
     fileName: `file-${ordinal}`,
     mime,
-    documentId: `document-${ordinal}`,
+    fileId: `file-${ordinal}`,
     ...extra,
   });
   const fake = createFakeGroup({
@@ -614,7 +625,7 @@ it('shows a sent image at once and keeps it in place when WhatsApp stores it', a
           state: 'ready',
           fileName: 'photo.png',
           mime: 'image/png',
-          documentId: 'document-sent',
+          fileId: 'file-sent',
         },
       ],
     },
@@ -627,9 +638,10 @@ it('shows a sent image at once and keeps it in place when WhatsApp stores it', a
   expect(shown).toHaveLength(1);
   expect(shown[0]?.style.width).toBe('400px');
   expect(
-    [...document.querySelectorAll('img')].some(
-      (image) =>
-        image.getAttribute('src') === 'https://files.example.test/document-sent'
+    [...document.querySelectorAll('img')].some((image) =>
+      image
+        .getAttribute('src')
+        ?.startsWith('https://files.example.test/file-sent')
     )
   ).toBe(true);
 });

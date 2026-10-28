@@ -9,7 +9,7 @@ import {
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useUserId } from '@core/context/user';
 import { type Accessor, createMemo, type Setter } from 'solid-js';
-import { buildSoupSearchRequest } from './search-request';
+import { buildSoupSearchRequest } from '../queries/search-request';
 
 interface CreateSearchStateArgs {
   /** Where the search runs, for analytics. */

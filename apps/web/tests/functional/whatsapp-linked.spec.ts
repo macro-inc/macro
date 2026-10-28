@@ -56,6 +56,8 @@ type LinkedServer = {
   delivery: Record<string, Pick<LinkedSendProgress, 'state' | 'messageId'>>;
   /** What `POST /attachments` says it staged. */
   upload: Omit<LinkedUploadedAttachment, 'uploadId'>;
+  /** Stored attachments' bytes, by static file id; others never load. */
+  files: Record<string, { body: Buffer; contentType: string }>;
 };
 
 function server(): LinkedServer {
@@ -121,6 +123,7 @@ function server(): LinkedServer {
     sendReplies: [],
     delivery: {},
     upload: { filename: 'design.pdf', kind: 'document' },
+    files: {},
   };
 }
 
@@ -143,7 +146,7 @@ const incomingMessage = {
       ordinal: 0,
       state: 'loading',
       fileName: 'design.pdf',
-      documentId: null,
+      fileId: null,
     },
   ],
   deliveryState: null,
@@ -461,6 +464,13 @@ async function mount(page: Page, state: LinkedServer, query = '') {
       return route.fulfill({ json: [] });
     if (url.pathname === '/dss/comms/channels')
       return route.fulfill({ json: { items: [], next_cursor: null } });
+    // Stored attachments are static files, like Chat's media.
+    if (url.pathname.startsWith('/static-file/file/')) {
+      const file = state.files[url.pathname.split('/').at(-1) ?? ''];
+      // Unserved files stay loading, so their reserved shape shows.
+      if (!file) return;
+      return route.fulfill(file);
+    }
     if (/^\/(auth|dss|notification|connection-gateway)\//.test(url.pathname))
       return route.fulfill({ json: {} });
     return route.fulfill({ response: await route.fetch() });
@@ -831,7 +841,7 @@ function everyMessageType() {
     fileName: id,
     mime,
     size: 1024,
-    documentId: `document-${id}`,
+    fileId: `file-${id}`,
     width: null,
     height: null,
     durationSeconds: null,
@@ -1029,23 +1039,27 @@ test('every WhatsApp message type renders with Chat parts and small cards', asyn
     'Launch party'
   );
   await expect(timeline.getByText('Voice note · 0:42')).toBeVisible();
-  // Media reserves its declared shape while it loads.
-  const reserved = await timeline
-    .locator('[role="status"][aria-label^="Loading "]')
+  // Media takes its declared shape (within a pixel of rounding) before its
+  // file loads.
+  const shapes = await timeline
+    .locator(
+      '[data-whatsapp-sticker], [data-whatsapp-gif], [data-message-id="type-photo"] button[aria-label="Open image viewer"]'
+    )
     .evaluateAll((boxes) =>
       boxes.map((box) => [
-        box.getAttribute('aria-label'),
-        Math.round(box.getBoundingClientRect().width),
-        Math.round(box.getBoundingClientRect().height),
+        box.getBoundingClientRect().width,
+        box.getBoundingClientRect().height,
       ])
     );
-  expect(reserved).toEqual(
-    expect.arrayContaining([
-      ['Loading sticker.webp', 144, 144],
-      ['Loading gif.mp4', 320, 240],
-      ['Loading photo.jpg', 400, 200],
-    ])
-  );
+  expect(shapes).toHaveLength(3);
+  for (const [[width = 0, height = 0], [declaredWidth, declaredHeight]] of [
+    [shapes[0] ?? [], [144, 144]],
+    [shapes[1] ?? [], [320, 240]],
+    [shapes[2] ?? [], [400, 200]],
+  ] as const) {
+    expect(Math.abs(width - declaredWidth)).toBeLessThanOrEqual(1);
+    expect(Math.abs(height - declaredHeight)).toBeLessThanOrEqual(1);
+  }
   await expect(
     timeline.getByText("Sent something Macro can't show yet")
   ).toBeVisible();
@@ -1132,7 +1146,7 @@ test('an image sent from Macro shows at once and stays one image once stored', a
           fileName: 'photo.png',
           mime: 'image/png',
           size: PNG.length,
-          documentId: 'document-sent',
+          fileId: 'file-sent',
           width: null,
           height: null,
           durationSeconds: null,
@@ -1141,6 +1155,7 @@ test('an image sent from Macro shows at once and stays one image once stored', a
       ],
     },
   ];
+  state.files['file-sent'] = { body: PNG, contentType: 'image/png' };
   state.delivery[sendId] = { state: 'accepted', messageId: 'message-sent' };
   await expect(
     timeline.locator('[data-message-id="message-sent"]')

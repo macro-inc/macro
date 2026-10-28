@@ -14,6 +14,6 @@ export type LinkedReplyContentOneOfThree = {
   /** Optional caption; audio has none. */
   caption?: LinkedReplyContentOneOfThreeCaption;
   type: LinkedReplyContentOneOfThreeType;
-  /** The staged upload, which becomes the message's private document. */
+  /** The staged upload, imported as the message's static file. */
   uploadId: string;
 };

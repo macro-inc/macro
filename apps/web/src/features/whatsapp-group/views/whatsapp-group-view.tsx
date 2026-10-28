@@ -42,7 +42,7 @@ import {
 } from 'solid-js';
 import { match } from 'ts-pattern';
 import { ChatDetails } from '../components/chat-details';
-import { InboundAttachmentPlaceholder } from '../components/inbound-attachment';
+import { AttachmentChip } from '../components/inbound-attachment';
 import {
   InboundMedia,
   type InboundMediaFile,
@@ -163,28 +163,18 @@ function MessageMedia(props: {
     })
   );
   const files = mapArray(
-    () => media().map((file) => file.attachment.documentId ?? ''),
-    (documentId, index) => {
-      const stored = documentId ? source.fileUrl(() => documentId) : undefined;
-      // A refetch signs a new URL for the same file; keep the first so the
-      // image doesn't reload (and the row shrink and grow) on every refresh.
-      let firstUrl: string | undefined;
-      const url = () => {
-        firstUrl ??= stored?.data;
-        return firstUrl;
-      };
+    () => media().map((file) => file.attachment.fileId ?? ''),
+    (fileId, index) =>
       // One object per change, so Chat's media rows don't remount.
-      return createMemo(
+      createMemo(
         (): InboundMediaFile | undefined => {
           const file = media()[index()];
           if (!file) return undefined;
           return {
-            id: documentId || `${file.attachment.ordinal}`,
+            id: fileId || `${file.attachment.ordinal}`,
             kind: file.kind,
             fileName: file.attachment.fileName,
-            url: url() ?? file.attachment.previewUrl,
-            unavailable:
-              !url() && !file.attachment.previewUrl && !!stored?.isError,
+            url: fileId ? source.fileUrl(fileId) : file.attachment.previewUrl,
             previewUrl: file.attachment.previewUrl,
             width: file.attachment.width,
             height: file.attachment.height,
@@ -194,8 +184,7 @@ function MessageMedia(props: {
         },
         undefined,
         { equals: sameMediaFile }
-      );
-    }
+      )
   );
   const shown = () => files().flatMap((file) => file() ?? []);
   return (
@@ -697,16 +686,11 @@ export function WhatsAppGroupView(props: {
                                   ? messagesById().get(message.replyTo)
                                   : undefined;
                               const actions = actionsFor(message);
+                              // Everything that doesn't play inline: files
+                              // to open, and files not stored (yet).
                               const placeholders = () =>
-                                message.attachments.flatMap((attachment) =>
-                                  attachment.state === 'ready'
-                                    ? []
-                                    : [
-                                        {
-                                          state: attachment.state,
-                                          fileName: attachment.fileName,
-                                        },
-                                      ]
+                                message.attachments.filter(
+                                  (attachment) => !inlineMediaKind(attachment)
                                 );
                               return (
                                 <Show
@@ -816,9 +800,9 @@ export function WhatsAppGroupView(props: {
                                           <div class="mt-1 flex flex-wrap gap-2">
                                             <For each={placeholders()}>
                                               {(attachment) => (
-                                                <InboundAttachmentPlaceholder
-                                                  state={attachment.state}
-                                                  fileName={attachment.fileName}
+                                                <AttachmentChip
+                                                  attachment={attachment}
+                                                  url={source.fileUrl}
                                                 />
                                               )}
                                             </For>

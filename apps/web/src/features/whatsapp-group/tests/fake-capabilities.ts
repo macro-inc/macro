@@ -93,8 +93,7 @@ export function createFakeGroup(
       ): Promise<Result<{ uploadId: string; audio: boolean }, SendFailure>> =>
         ok({ uploadId: 'upload-1', audio: false })
     ),
-    fileUrl: (documentId: () => string) =>
-      read(() => `https://files.example.test/${documentId()}`),
+    fileUrl: (fileId: string) => `https://files.example.test/${fileId}`,
     markRead: vi.fn(async (_messageId: string) => undefined),
     stopSync: vi.fn(async () => undefined),
   } satisfies WhatsAppGroupCapabilities;

@@ -115,7 +115,8 @@ export interface DateTimeRangeFieldsProps {
   allDay: boolean;
   onStartChange: (value: string) => void;
   onEndChange: (value: string) => void;
-  onAllDayChange: (allDay: boolean) => void;
+  /** Omit to hide the All day control for hosts that only support timed ranges. */
+  onAllDayChange?: (allDay: boolean) => void;
   startDisabled?: boolean;
   endDisabled?: boolean;
   allDayDisabled?: boolean;
@@ -236,17 +237,23 @@ export function DateTimeRangeFields(props: DateTimeRangeFieldsProps) {
           </Show>
         </span>
       </div>
-      <div class="ml-auto flex shrink-0 items-center gap-2">
-        <ToggleSwitch
-          checked={props.allDay}
-          disabled={props.allDayDisabled}
-          onChange={props.onAllDayChange}
-          size="sm"
-          label="All day"
-          labelClass="whitespace-nowrap text-xs text-ink-muted"
-        />
-        {props.trailing}
-      </div>
+      <Show when={props.onAllDayChange || props.trailing}>
+        <div class="ml-auto flex shrink-0 items-center gap-2">
+          <Show when={props.onAllDayChange}>
+            {(onChange) => (
+              <ToggleSwitch
+                checked={props.allDay}
+                disabled={props.allDayDisabled}
+                onChange={onChange()}
+                size="sm"
+                label="All day"
+                labelClass="whitespace-nowrap text-xs text-ink-muted"
+              />
+            )}
+          </Show>
+          {props.trailing}
+        </div>
+      </Show>
     </div>
   );
 }

@@ -102,7 +102,10 @@ function fixture(handler: (request: Request) => Response | Promise<Response>) {
   }) as typeof fetch;
   const macro = new Macro({
     token: 'owner-api-token',
-    hosts: { storage: 'https://storage.example.test' },
+    hosts: {
+      storage: 'https://storage.example.test',
+      'static-files': 'https://files.example.test',
+    },
   });
   return { macro, requests, group: macro.whatsapp.byId('group') };
 }
@@ -435,7 +438,7 @@ test('sends, delivery and attachment states stay scoped to the chat', async () =
               fileName: 'note.txt',
               mime: 'text/plain',
               size: 5,
-              documentId: 'document',
+              fileId: 'file',
             },
           ],
         },
@@ -450,7 +453,9 @@ test('sends, delivery and attachment states stay scoped to the chat', async () =
   expect(await requests[1].json()).toEqual(['intent', 'message']);
   const [states] = await group.messageAttachments([target]);
   expect(states.message.id).toBe('message');
-  expect(states.attachments[0].document?.id).toBe('document');
+  expect(states.attachments[0].url).toBe(
+    'https://files.example.test/file/file',
+  );
   const other = macro.whatsapp.byId('other');
   await expect(
     group.messageAttachments([

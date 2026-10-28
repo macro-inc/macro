@@ -294,7 +294,7 @@ export const whatsappGroupApi: WhatsAppGroupApi = {
           state: attachment.state,
           fileName: attachment.fileName,
           mime: attachment.mime,
-          documentId: attachment.documentId ?? undefined,
+          fileId: attachment.fileId ?? undefined,
           width: attachment.width ?? undefined,
           height: attachment.height ?? undefined,
           durationSeconds: attachment.durationSeconds ?? undefined,

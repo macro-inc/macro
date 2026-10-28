@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE whatsapp_group_attachment a SET state = 'ready', file_id = $5\n            FROM whatsapp_group_message m\n            WHERE a.binding_id = $1 AND a.person_id = $2 AND a.source_id = $3 AND a.ordinal = $4 AND a.state = 'downloaded'\n              AND m.binding_id = a.binding_id AND m.person_id = a.person_id AND m.source_id = a.source_id\n            RETURNING m.message_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Int2",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "c185f99c645c328a2110c98defc2a39303911d5dae6f9a849f5292c1db942ebc"
+}

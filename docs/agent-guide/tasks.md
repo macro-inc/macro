@@ -129,8 +129,9 @@ the optimistic tag. Repeat with an existing assignment and with removal.
 
 Saved views are available on main Tasks, not inside Project or CRM task lists.
 
-- Desktop: use the **Saved views** sidebar section. Its icon-only **+** remains available while collapsed or empty.
-- Mobile: the **Saved views** pill sits after **Filters** and before the built-in task tabs, using the same mobile pill component. It shows the selected view's name and active styling, and opens a drawer of saved-view rows with selection and management menus, without a duplicate section heading or **+** button. Create views from changed filters, layout, grouping, or sort in the filter drawer.
+- Desktop: use the **Saved views** sidebar section. Its icon-only **+** remains available while collapsed or populated, but hides while the expanded empty state's **+** button is visible.
+- Mobile: the **Saved views** pill sits after **Filters** and before the built-in task tabs, using the same mobile pill component. It shows the selected view's name and active styling, and opens a drawer of saved-view rows with selection and management menus, without a duplicate section heading or a header create button. Create views from changed filters, layout, grouping, or sort in the filter drawer.
+- The empty sidebar and mobile picker show **Your go-to views**, the muted description **Save your setup for next time.**, and a neutral icon-only **+** button labeled **Create view** in a rounded container with a subtle border, 12px padding, the surrounding background, and no shadow or illustration. It starts the same unsaved draft as desktop **+**; on mobile, the picker closes first. Configure the draft in Filters, then choose **Save view**.
 - Desktop **+** starts an unsaved view without person restrictions and with explicit open-status filters. It expands the section and adds a selected, italic **New view** row labeled **Draft** in the sidebar and mobile picker. Configure filters, then choose **Save view**; the name defaults to **New view** and can be edited before saving. A confirmed save replaces the draft with the named view; **Cancel** in the desktop toolbar or mobile filter drawer, another selection, or leaving Tasks removes the unsaved row. Canceling only the name dialog keeps the draft for later.
 - When filters, layout, grouping, or sort differ from the built-in tab defaults, the filled **Save view** button appears immediately left of Filters on desktop and in an edge-to-edge mobile banner above the filter drawer footer. The borderless banner overlays content on a drawer-colored backing and has a leading bookmark icon on its button. Base settings and search alone do not show the banner. It captures current filters, layout, grouping, and ordered sort directions, but excludes text search and scroll state. My Tasks adds **Me** to Assignee; Created by me adds it to Created by. Additional people in the same filter use OR matching.
 - Saved views use the normal Assignee and Created by filters, not a separate Scope control. **Me** stays relative; its tooltip says “Matches whoever opens this saved view.” A named person stays fixed. Removing Me removes that restriction.
@@ -585,7 +586,8 @@ keyboard shortcut on touch. Desktop uses the centered composer dialog.
    set, the task is still created and a toast says it wasn't added to the project.
    The `Share with <team name>` switch in the footer's left corner (hidden when you
    aren't on a team) defaults to on and remembers your
-   choice in local storage across composer openings and page reloads. Hovering it
+   choice in local storage across composer openings and page reloads. Recovered
+   submissions use their saved sharing choice without changing this default. Hovering it
    explains whether the task will be visible to your whole team or only to you and
    the people you share it with. The choice also applies to Create More, continuing
    in a split, and tasks created from a project.
@@ -605,8 +607,8 @@ Customers supplies its preset when PostHog `enable-crm-activity` is enabled:
 **Companies** and **Contacts** replace Status in the initial row; Status still
 starts as Not Started on the saved task. Record-level task creation prefills the
 company or contact, including the contact's company when already loaded. With the
-CRM flag off or loading, CRM supplies no preset; record-level creation still
-associates the task with its record. **Add property** opens the same property
+CRM flag off or loading, record-level creation uses the standard property row
+while retaining its record-scoped draft and associations. **Add property** opens the same property
 editor as the document/task side panel: search by name or type, select a property
 and enter its value, or create a property from an unmatched search. Assignments
 and values stay in the task draft until creation; opening or closing the editor
@@ -616,6 +618,22 @@ records; reopening restores added properties as well as their values. **Clear Dr
 restores that view's preset.
 Later flag, focus or record changes leave the open draft and associations intact,
 even between launch and mount. The next opening uses the current context.
+
+Task creation requires a connection. Before any create request, the composer
+saves a separate copy of the title, description/editor state, properties, and
+sharing choice on this device. Pending submissions do not expire and survive an
+app restart. Reopen the same task composer context and choose **Recover: <title>**
+to continue an unconfirmed draft; **Clear Draft** discards that recovered copy.
+Explicit logout removes these account-scoped copies. Recovery does not submit
+anything automatically: check Tasks before retrying because a lost response may
+mean the task already exists. A submission still in flight cannot be recovered
+or submitted again. Recovered drafts create one task at a time.
+
+**Create More** keeps newer input separate from its pending submission. A late
+success removes only the confirmed submission; failure leaves it recoverable
+without replacing newer text. Continuing in a split has the same durable save.
+A confirmed create retires its saved copy before history/project follow-up work,
+so a failure in that follow-up does not present an already-created task for retry.
 
 Tasks are documents under the hood (creation hits `POST /dss/documents/create_task`), so they
 also show up in Files/`All` and in AI-chat document listings.

@@ -147,8 +147,8 @@ impl SessionService {
         Ok(claimed)
     }
 
-    /// Hand over decrypted bytes for an import. DSS turns them into a private
-    /// document whose access inherits the group.
+    /// Hand over decrypted bytes for an import. DSS stores them as a static
+    /// file.
     #[tracing::instrument(name = "whatsapp.session.complete_media", skip_all, err, fields(account_id = %scope.account_id, size = bytes.len()))]
     pub async fn complete_media_import(
         &self,

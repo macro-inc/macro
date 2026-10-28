@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT mime FROM whatsapp_media_blob b\n            WHERE id = $1 AND group_id = $2 AND user_id = $3\n              AND NOT EXISTS (SELECT 1 FROM whatsapp_group_attachment a WHERE a.blob_id = b.id)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "mime",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "6265ce89ef6c4a9f51b14198ace78b615fe4037014cd390ab131f74c1569b95f"
+}

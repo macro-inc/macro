@@ -1,6 +1,6 @@
 # Type Alias: LinkedAttachment
 
-> **LinkedAttachment** = \{ `documentId?`: `string` \| `null`; `durationSeconds?`: `number` \| `null`; `fileName`: `string`; `height?`: `number` \| `null`; `mime`: `string`; `ordinal`: `number`; `presentation?`: `null` \| [`LinkedMediaPresentation`](LinkedMediaPresentation.md); `size`: `number`; `state`: [`LinkedAttachmentState`](LinkedAttachmentState.md); `width?`: `number` \| `null`; \}
+> **LinkedAttachment** = \{ `durationSeconds?`: `number` \| `null`; `fileId?`: `string` \| `null`; `fileName`: `string`; `height?`: `number` \| `null`; `mime`: `string`; `ordinal`: `number`; `presentation?`: `null` \| [`LinkedMediaPresentation`](LinkedMediaPresentation.md); `size`: `number`; `state`: [`LinkedAttachmentState`](LinkedAttachmentState.md); `width?`: `number` \| `null`; \}
 
 One attachment of a linked message.
 
@@ -8,8 +8,8 @@ One attachment of a linked message.
 
 | Property | Type | Description |
 | ------ | ------ | ------ |
-| <a id="property-documentid"></a> `documentId?` | `string` \| `null` | The private document, once ready. |
 | <a id="property-durationseconds"></a> `durationSeconds?` | `number` \| `null` | Length of audio or video in whole seconds, when declared. |
+| <a id="property-fileid"></a> `fileId?` | `string` \| `null` | The static file holding it, once ready. |
 | <a id="property-filename"></a> `fileName` | `string` | Display filename. |
 | <a id="property-height"></a> `height?` | `number` \| `null` | Pixel height, when declared. |
 | <a id="property-mime"></a> `mime` | `string` | Declared MIME type. |

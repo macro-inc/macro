@@ -1,0 +1,43 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE whatsapp_group_attachment a SET state = 'failed', claimed_until = NULL, locator = NULL\n        FROM whatsapp_group_message m, whatsapp_group b\n        WHERE a.binding_id = $1 AND a.person_id = $2 AND a.source_id = $3 AND a.ordinal = $4\n          AND a.state IN ('pending', 'downloaded')\n          AND m.binding_id = a.binding_id AND m.person_id = a.person_id AND m.source_id = a.source_id\n          AND b.id = a.binding_id\n        RETURNING a.blob_id, a.filename, m.message_id, b.id AS group_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "blob_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "filename",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "message_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "group_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Int2"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "8ce95f39264cdf91060fa85c1c633224871c8a08ba9c11803c36acdeb0944226"
+}

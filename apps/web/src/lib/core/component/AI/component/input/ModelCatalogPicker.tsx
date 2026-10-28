@@ -309,6 +309,7 @@ function ModelCatalogSheet(
 ) {
   const [query, setQuery] = createSignal('');
   const [showAll, setShowAll] = createSignal(false);
+  const [trigger, setTrigger] = createSignal<HTMLButtonElement>();
   let searchInput: HTMLInputElement | undefined;
   const catalog = createMemo(() => buildModelCatalog(props.options, true));
   const groups = createMemo(() => {
@@ -349,6 +350,7 @@ function ModelCatalogSheet(
       preventScrollbarShift={false}
     >
       <MobileDrawer.Trigger
+        ref={setTrigger}
         as={Button}
         variant="ghost"
         size="sm"
@@ -363,9 +365,21 @@ function ModelCatalogSheet(
       >
         {props.trigger}
       </MobileDrawer.Trigger>
-      <MobileDrawer.Portal>
+      <MobileDrawer.Portal
+        mount={trigger()?.closest<HTMLElement>('.portal-scope') ?? undefined}
+      >
         <MobileDrawer.Overlay />
-        <MobileDrawer.Content aria-label="Choose a model">
+        <MobileDrawer.Content
+          aria-label="Choose a model"
+          on:keydown={(event: KeyboardEvent) => {
+            if (event.key !== 'Escape' || event.isComposing) return;
+            // Corvu and Kobalte have separate dismissal stacks. Consume the
+            // sheet's Escape before it can dismiss a surrounding dialog.
+            event.preventDefault();
+            event.stopPropagation();
+            changeOpen(false);
+          }}
+        >
           <MobileDrawer.Handle />
           <div class="flex items-center gap-2 px-4 pb-3">
             <Show when={showAll()}>

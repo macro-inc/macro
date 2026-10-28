@@ -10,4 +10,4 @@ A staged attachment, sent only by a later deliberate send.
 | ------ | ------ | ------ |
 | <a id="property-filename"></a> `filename` | `string` | Display filename. |
 | <a id="property-kind"></a> `kind` | [`LinkedMediaKind`](LinkedMediaKind.md) | Category. |
-| <a id="property-uploadid"></a> `uploadId` | `string` | Use as `upload_id` in a media send; also the future document id. |
+| <a id="property-uploadid"></a> `uploadId` | `string` | Use as `upload_id` in a media send. |

@@ -356,7 +356,7 @@ async fn media_keeps_its_shape_and_a_media_reply_keeps_its_quote(pool: PgPool) {
     let downloaded = wait_for_rows(&world.pool, TIMEOUT, || async {
         sqlx::query_scalar!(
             "SELECT b.bytes FROM whatsapp_group_attachment a
-             JOIN whatsapp_media_blob b ON b.document_id = a.document_id
+             JOIN whatsapp_media_blob b ON b.id = a.blob_id
              WHERE a.binding_id = $1 AND a.source_id = $2 AND a.state = 'downloaded'",
             binding.id,
             &view_once

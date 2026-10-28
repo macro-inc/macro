@@ -6,6 +6,7 @@ import {
 import { convertBookingLinkMentionsToLinks } from '@core/component/LexicalMarkdown/utils/convertBookingLinkMentionsToLinks';
 import { convertDocumentMentionsToLinks } from '@core/component/LexicalMarkdown/utils/convertDocumentMentionsToLinks';
 import { staticFileReferenceEndpoint } from '@core/constant/servers';
+import { encodeBase64UrlUtf8 } from '@core/util/base64';
 import { formatEmailDate } from '@core/util/date';
 import { $generateHtmlFromNodes, $generateNodesFromDOM } from '@lexical/html';
 import { $createQuoteNode } from '@lexical/rich-text';
@@ -472,10 +473,7 @@ export function prepareEmailBodyFromHtml(
     parsed.body.appendChild(appendedReplyElement);
   }
 
-  const html = btoa(unescape(encodeURIComponent(parsed.body.outerHTML)))
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/={1,}$/, '');
+  const html = encodeBase64UrlUtf8(parsed.body.outerHTML);
   const bodyHtml = html;
   const bodyText = parsed.body.firstChild?.textContent ?? '';
 

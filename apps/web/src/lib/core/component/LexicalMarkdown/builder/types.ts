@@ -130,7 +130,10 @@ export interface EditorControls {
  * Props of an Editor component.
  */
 export interface EditorComponentProps {
+  /** Controlled Markdown. Host updates do not echo through onChange. */
+  value?: string;
   placeholder?: string;
+  ariaLabel?: string;
   /** Initialize with markdown text */
   initialValue?: string;
   /** Initialize with a serialized editor state. Takes precedence over initialValue. */

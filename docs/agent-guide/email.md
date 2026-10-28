@@ -37,10 +37,13 @@ Chat sidebar tabs. Selecting Inbox
 from another mailbox opens Signal; selecting it while in Noise keeps Noise.
 The desktop sidebar continues with `Favorites`, `Drafts`, `Sent`, `Scheduled`,
 and `Reminders` (when reminders are enabled), followed by a **Library** section containing `All mail`,
-`Archived`, and `Shared`, then **Tags**. Sidebar number and sequential shortcuts
-follow that order. Calendar mail remains available through the calendar filter
-and existing Calendar route. Mobile keeps its original tabs and order, including
-separate Signal, Noise, and Calendar tabs.
+`Archived`, and `Shared`, then **Tags**. Sidebar number shortcuts follow that
+order; `Tab` and `Shift+Tab` toggle between Signal and Noise (from another
+mailbox, `Tab` opens Signal and `Shift+Tab` Noise). While the email list itself
+has focus, `Tab` moves browser focus instead; use `g i` or `g o`. Calendar
+mail remains available through the calendar filter and existing Calendar route.
+Mobile keeps its original tabs and order, including separate Signal, Noise, and
+Calendar tabs.
 Compose via the `Email` button (or `Create` → `Email E`). On a fresh local user it
 shows `Connect your email`; Gmail/Google Workspace and enabled Outlook connections
 use provider consent. Most functionality needs a connected account. Search is `Ctrl+F` or `/` within the surface.
@@ -532,7 +535,23 @@ syncing text appears, including offline. A failure shows a banner inside the
 composer, above the recipients, with **Retry** (or **Retry discard**); it never
 appears in the toolbar or the mobile header actions. Verify the banner on mobile
 sits below the header and that editing while failed continues saving locally
-without repeatedly submitting the rejected request.
+without repeatedly submitting the rejected request. If sender metadata is still
+unavailable, the local draft is retained; reconnect and select an inbox before
+editing to resume synchronization.
+
+Unqueued first-use drafts also appear in mobile name search and the current Mail
+view's Drafts search, without requiring a cached thread record. A working copy
+preserves confirmed thread flags for facet filters, and a subject mismatch never
+hides a matching server body or cached sender hit. Inbox, alias, and facet
+selections still apply; a draft without an inbox is visible with All inboxes
+selected. Sender metadata warms alongside GraphQL backfill, before opening a
+composer. Test an empty sender catalog too: create a draft offline, restart, find
+it in Drafts/name search, and reopen its subject and body. Reconnect, select the
+sending inbox, edit, and verify it syncs without a duplicate row. Reopen an
+unqueued local draft while online too: its temporary thread's server 404 must
+not hide the local composer or mark that temporary ID read. Confirmed server
+threads still respect deletion/access errors; local working copies do not
+override authentication or permission failures.
 Local draft storage reopens unexpectedly closed IndexedDB connections. If creating
 a transaction fails because the connection is closing, it retries once before
 running any writes. When WebKit aborts a started transaction (typically while the

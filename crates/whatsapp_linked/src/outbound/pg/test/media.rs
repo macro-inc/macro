@@ -1,32 +1,57 @@
 use super::*;
 use crate::domain::{
     media::MediaService,
-    ports::{DocumentImport, DocumentStore},
+    ports::{FileImport, FileStore, MediaRepository},
 };
 use sha2::{Digest, Sha256};
 use std::sync::Mutex;
 
-/// Records what would become documents; fails the first `fail` imports.
+/// A stored static file: its id, the blob it came from, its owner and bytes.
+#[derive(Clone)]
+struct StoredFile {
+    file_id: Uuid,
+    blob_id: Uuid,
+    owner: String,
+    bytes: Vec<u8>,
+}
+
+/// Records the static files stored and deleted; fails the first `fail` stores.
 #[derive(Default)]
-struct Documents {
-    stored: Mutex<Vec<(Uuid, String, Vec<u8>)>>,
+struct Files {
+    stored: Mutex<Vec<StoredFile>>,
+    deleted: Mutex<Vec<Uuid>>,
     fail: Mutex<u32>,
 }
 
 #[async_trait]
-impl DocumentStore for Documents {
-    async fn store(&self, import: &DocumentImport, bytes: Vec<u8>) -> LinkedResult<()> {
+impl FileStore for Files {
+    async fn store(&self, import: &FileImport, bytes: Vec<u8>) -> LinkedResult<Uuid> {
         let mut fail = self.fail.lock().unwrap();
         if *fail > 0 {
             *fail -= 1;
             return Err(LinkedError::Unavailable.into());
         }
-        self.stored
-            .lock()
-            .unwrap()
-            .push((import.document_id, import.owner.clone(), bytes));
+        let file_id = Uuid::now_v7();
+        self.stored.lock().unwrap().push(StoredFile {
+            file_id,
+            blob_id: import.blob_id,
+            owner: import.owner.clone(),
+            bytes,
+        });
+        Ok(file_id)
+    }
+
+    async fn delete(&self, file_id: Uuid) -> LinkedResult<()> {
+        self.deleted.lock().unwrap().push(file_id);
         Ok(())
     }
+}
+
+async fn released_files(pool: &PgPool) -> Vec<Uuid> {
+    sqlx::query_scalar!("SELECT file_id FROM whatsapp_file_deletion ORDER BY file_id")
+        .fetch_all(pool)
+        .await
+        .unwrap()
 }
 
 fn photo(event: u128, sender: &str, source: &str, bytes: &[u8]) -> InboundEvent {
@@ -58,7 +83,7 @@ async fn content(pool: &PgPool, group_id: Uuid) -> Vec<String> {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn an_inbound_photo_is_downloaded_once_and_becomes_a_private_document(pool: PgPool) {
+async fn an_inbound_photo_is_downloaded_once_and_becomes_a_static_file(pool: PgPool) {
     let (linked, session, repository, binding, alice, bob) = adopted(&pool).await;
     let bytes = b"jpeg bytes".to_vec();
     session
@@ -115,7 +140,7 @@ async fn an_inbound_photo_is_downloaded_once_and_becomes_a_private_document(pool
     );
     assert_eq!(states[0].linked_attachments[0].file_name, "receipt.jpg");
 
-    // A fresh message imports cleanly, surviving one failed document write.
+    // A fresh message imports cleanly, surviving one failed file write.
     session
         .ingest_event(alice, &photo(3, CUSTOMER_JID, "3EB0PIC2", &bytes))
         .await
@@ -125,9 +150,9 @@ async fn an_inbound_photo_is_downloaded_once_and_becomes_a_private_document(pool
         .complete_media_import(alice, &claimed[0].attachment, &bytes)
         .await
         .unwrap();
-    let documents = Arc::new(Documents::default());
-    *documents.fail.lock().unwrap() = 1;
-    let media = MediaService::new(repository.clone(), documents.clone());
+    let files = Arc::new(Files::default());
+    *files.fail.lock().unwrap() = 1;
+    let media = MediaService::new(repository.clone(), files.clone());
     assert_eq!(media.import_pending().await.unwrap(), 0);
     sqlx::query!(
         "UPDATE whatsapp_group_attachment SET retry_at = now() WHERE state = 'downloaded'"
@@ -137,20 +162,19 @@ async fn an_inbound_photo_is_downloaded_once_and_becomes_a_private_document(pool
     .unwrap();
     assert_eq!(media.import_pending().await.unwrap(), 1);
     assert_eq!(media.import_pending().await.unwrap(), 0);
-    let stored = documents.stored.lock().unwrap().clone();
+    let stored = files.stored.lock().unwrap().clone();
     assert_eq!(stored.len(), 1);
     assert_eq!(
-        stored[0].1, binding.user_id,
+        stored[0].owner, binding.user_id,
         "the content owner owns imports"
     );
-    assert_eq!(stored[0].2, bytes);
-    let attached = sqlx::query_scalar!(
-        "SELECT document_id FROM whatsapp_group_attachment WHERE state = 'ready'"
-    )
-    .fetch_all(&pool)
-    .await
-    .unwrap();
-    assert_eq!(attached, vec![stored[0].0]);
+    assert_eq!(stored[0].bytes, bytes);
+    let attached =
+        sqlx::query_scalar!("SELECT file_id FROM whatsapp_group_attachment WHERE state = 'ready'")
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+    assert_eq!(attached, vec![Some(stored[0].file_id)]);
     assert_eq!(
         content(&pool, binding.id).await[1],
         "",
@@ -174,129 +198,102 @@ async fn an_inbound_photo_is_downloaded_once_and_becomes_a_private_document(pool
             file_name: "receipt.jpg".into(),
             mime: "image/jpeg".into(),
             size: bytes.len() as u64,
-            document_id: Some(stored[0].0),
+            file_id: Some(stored[0].file_id),
             width: Some(800),
             height: Some(600),
             duration_seconds: None,
             presentation: None,
         }
     );
-    // Imported documents inherit ordinary group shares dynamically.
-    sqlx::query!(
-        r#"INSERT INTO "Document" (id,name,owner) VALUES ($1,'receipt',$2)"#,
-        stored[0].0.to_string(),
-        ALICE
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-    let mut tx = pool.begin().await.unwrap();
-    entity_access_db_utils::direct_share::set(
-        &mut tx,
-        &binding.id,
-        EntityType::WhatsAppGroup,
-        &CAROL.to_owned().try_into().unwrap(),
-        Some(AccessLevel::View),
-        false,
-    )
-    .await
-    .unwrap();
-    tx.commit().await.unwrap();
-    let access = entity_access::domain::service::EntityAccessServiceImpl::new(
-        entity_access::outbound::PgAccessRepository::new(pool.clone()),
-    );
-    use entity_access::domain::ports::EntityAccessService;
-    let viewer = macro_user_id::user_id::MacroUserIdStr::try_from(CAROL.to_owned()).unwrap();
-    assert_eq!(
-        access
-            .get_access_level(
-                Some(&viewer.0),
-                &stored[0].0.to_string(),
-                EntityType::Document
-            )
-            .await
-            .unwrap(),
-        Some(AccessLevel::View)
-    );
-    let mut tx = pool.begin().await.unwrap();
-    entity_access_db_utils::direct_share::set(
-        &mut tx,
-        &binding.id,
-        EntityType::WhatsAppGroup,
-        &viewer,
-        None,
-        false,
-    )
-    .await
-    .unwrap();
-    tx.commit().await.unwrap();
-    assert_eq!(
-        access
-            .get_access_level(
-                Some(&viewer.0),
-                &stored[0].0.to_string(),
-                EntityType::Document
-            )
-            .await
-            .unwrap(),
-        None
-    );
-    // A bot in team scope inherits the group's explicit team share, without
-    // impersonating the adopter or receiving a separate document grant.
-    let bot = entity_access::domain::models::BotId::new_from_uuid(Uuid::from_u128(0xb07));
-    let team = sqlx::query_scalar!("SELECT team_id FROM team_user WHERE user_id = $1", ALICE)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
-    sqlx::query!("INSERT INTO bots (id,kind,team_id,name,handle) VALUES ($1,'owned',$2,'Group reader','wa-reader')",
-        bot.as_uuid(), team).execute(&pool).await.unwrap();
-    let team_share = models_permissions::share_permission::UpdateSharePermissionRequestV2 {
-        link_share: None,
-        link_share_access_level: None,
-        team_share_access_level: Some(Some(AccessLevel::View)),
-        channel_share_permissions: None,
-    };
-    let owner = receipt::<MessageView>(ALICE, binding.id);
-    linked
-        .update_permissions(&owner, &team_share, SendAuthority::Human)
-        .await
-        .unwrap();
-    use entity_access::domain::ports::AccessRepository;
-    let permissions = entity_access::outbound::PgAccessRepository::new(pool.clone());
-    assert_eq!(
-        permissions
-            .get_team_entity_access(bot, team, &stored[0].0.to_string(), EntityType::Document)
-            .await
-            .unwrap(),
-        Some(AccessLevel::View)
-    );
-    linked
-        .update_permissions(
-            &owner,
-            &models_permissions::share_permission::UpdateSharePermissionRequestV2 {
-                team_share_access_level: Some(None),
-                ..team_share
-            },
-            SendAuthority::Human,
-        )
-        .await
-        .unwrap();
-    assert_eq!(
-        permissions
-            .get_team_entity_access(bot, team, &stored[0].0.to_string(), EntityType::Document)
-            .await
-            .unwrap(),
-        None
-    );
     let blobs = sqlx::query_scalar!(r#"SELECT count(*) AS "count!" FROM whatsapp_media_blob"#)
         .fetch_one(&pool)
         .await
         .unwrap();
     assert_eq!(blobs, 0);
+
+    // Deleting the message in WhatsApp deletes its file.
+    let mut delete = text(4, CUSTOMER_JID, "3EB0DEL", "");
+    if let InboundKind::Message(message) = &mut delete.kind {
+        message.kind = MessageKind::Delete;
+        message.target = Some(Target {
+            source_id: "3EB0PIC2".into(),
+            sender_jid: CUSTOMER_JID.into(),
+        });
+    }
+    session.ingest_event(alice, &delete).await.unwrap();
+    assert_eq!(released_files(&pool).await, vec![stored[0].file_id]);
+    assert_eq!(media.delete_released().await.unwrap(), 1);
+    assert_eq!(*files.deleted.lock().unwrap(), vec![stored[0].file_id]);
+    assert!(released_files(&pool).await.is_empty());
+    assert_eq!(media.delete_released().await.unwrap(), 0);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn an_uploaded_attachment_is_sent_once_and_becomes_the_messages_document(pool: PgPool) {
+async fn deleting_a_chats_owner_deletes_its_files(pool: PgPool) {
+    let (_, session, repository, binding, alice, _) = adopted(&pool).await;
+    let bytes = b"jpeg bytes".to_vec();
+    session
+        .ingest_event(alice, &photo(1, CUSTOMER_JID, "3EB0PIC", &bytes))
+        .await
+        .unwrap();
+    let claimed = session.claim_media_imports(alice, 8).await.unwrap();
+    session
+        .complete_media_import(alice, &claimed[0].attachment, &bytes)
+        .await
+        .unwrap();
+    let files = Arc::new(Files::default());
+    let media = MediaService::new(repository, files.clone());
+    assert_eq!(media.import_pending().await.unwrap(), 1);
+    let file_id = files.stored.lock().unwrap()[0].file_id;
+    assert!(released_files(&pool).await.is_empty());
+
+    sqlx::query!(r#"DELETE FROM "User" WHERE id = $1"#, binding.user_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(released_files(&pool).await, vec![file_id]);
+    assert_eq!(media.delete_released().await.unwrap(), 1);
+    assert_eq!(*files.deleted.lock().unwrap(), vec![file_id]);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_file_stored_after_its_message_was_deleted_is_deleted(pool: PgPool) {
+    let (_, session, repository, _, alice, _) = adopted(&pool).await;
+    let bytes = b"jpeg bytes".to_vec();
+    session
+        .ingest_event(alice, &photo(1, CUSTOMER_JID, "3EB0PIC", &bytes))
+        .await
+        .unwrap();
+    let claimed = session.claim_media_imports(alice, 8).await.unwrap();
+    session
+        .complete_media_import(alice, &claimed[0].attachment, &bytes)
+        .await
+        .unwrap();
+    let imports = repository.due_imports(8).await.unwrap();
+    let mut delete = text(2, CUSTOMER_JID, "3EB0DEL", "");
+    if let InboundKind::Message(message) = &mut delete.kind {
+        message.kind = MessageKind::Delete;
+        message.target = Some(Target {
+            source_id: "3EB0PIC".into(),
+            sender_jid: CUSTOMER_JID.into(),
+        });
+    }
+    session.ingest_event(alice, &delete).await.unwrap();
+    // The import was already under way: its file has no attachment to go to.
+    let late = Uuid::now_v7();
+    repository.import_stored(&imports[0], late).await.unwrap();
+    assert_eq!(released_files(&pool).await, vec![late]);
+    let ready = sqlx::query_scalar!(
+        r#"SELECT count(*) AS "count!" FROM whatsapp_group_attachment WHERE file_id IS NOT NULL"#
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(ready, 0);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_uploaded_attachment_is_sent_once_and_becomes_the_messages_file(pool: PgPool) {
     let (linked, session, repository, binding, alice, _) = adopted(&pool).await;
     let bytes = b"%PDF-1.7 quote".to_vec();
     let uploaded = linked
@@ -382,16 +379,16 @@ async fn an_uploaded_attachment_is_sent_once_and_becomes_the_messages_document(p
         vec!["Signed quote"],
         "attachment state is separate from the plain caption"
     );
-    let documents = Arc::new(Documents::default());
-    MediaService::new(repository, documents.clone())
+    let files = Arc::new(Files::default());
+    MediaService::new(repository, files.clone())
         .import_pending()
         .await
         .unwrap();
     assert_eq!(content(&pool, binding.id).await, vec!["Signed quote"]);
-    let stored = documents.stored.lock().unwrap().clone();
+    let stored = files.stored.lock().unwrap().clone();
     assert_eq!(stored.len(), 1);
-    assert_eq!(stored[0].0, uploaded.upload_id);
-    assert_eq!(stored[0].1, ALICE, "the uploader owns what they sent");
+    assert_eq!(stored[0].blob_id, uploaded.upload_id);
+    assert_eq!(stored[0].owner, ALICE, "the uploader owns what they sent");
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

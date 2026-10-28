@@ -55,21 +55,23 @@ lists belong to `features/whatsapp-linked` and `features/external-view`.
   above, and says "Importing history…" / "Waiting for … phone" until DSS
   reports `done` or `partial`. `waiting_for_message` (no message to import
   from yet) shows nothing.
-- Images, video and audio play inline: `fileUrl` resolves the imported
-  document's presigned URL and `InboundMedia` hands it to Chat's
-  `MediaPreview` (or an audio player); `groupMessageData` keeps them out of
-  the document chips. DSS's declared width/height reserve the space (keeps
+- Attachments are static files, like Chat's media: `fileUrl` is
+  `staticFileIdEndpoint`, and images take Chat's sized variants. Images,
+  video and audio play inline: `InboundMedia` hands them to Chat's
+  `MediaPreview` (or an audio player); other ready files are
+  `AttachmentChip` links that open the file. `groupMessageData` passes no
+  attachments to the channel row. DSS's declared width/height reserve the space (keeps
   the open-at-bottom scroll right); stickers, GIFs and voice notes follow the
-  attachment's `presentation`. A file whose URL can't be resolved, or whose
-  image, video or audio fails to load (expired or missing), shows
+  attachment's `presentation`. A file whose image, video or audio fails to
+  load (deleted or missing), shows
   "Attachment unavailable" instead of loading forever (Chat's media tiles
   report it through `MediaPreview`'s `onError`).
 - The timeline and composer use Chat's layout (`macro-message-width` column,
   `CustomScrollbar`, `ChannelInputContainer` → centered column). The view
   follows the bottom (a `ResizeObserver` on the content) until the reader
   scrolls by intent (wheel, touch, keys, scrollbar); layout-driven scroll
-  events never change that. Media URLs keep their first presigned URL and
-  memoized items so refetches don't remount or reload them.
+  events never change that. Media keep their memoized items so refetches
+  don't remount or reload them.
 - Files this page sent keep their local preview and size on the stored
   message (`conversation.sentFiles`), so the swap from pending neither
   flashes nor jumps.

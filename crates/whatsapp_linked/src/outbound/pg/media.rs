@@ -1,11 +1,12 @@
-//! Attachment downloads (session service) and their import into private
-//! documents (DSS). States: `pending` → `downloaded` (bytes in
-//! `whatsapp_media_blob`) → `ready`, or `failed`; `deleted` follows the message.
+//! Attachment downloads (session service) and their import into static files
+//! (DSS). States: `pending` → `downloaded` (bytes in `whatsapp_media_blob`) →
+//! `ready` (`file_id` set), or `failed`; `deleted` follows the message. A file
+//! an attachment lets go of is queued in `whatsapp_file_deletion` by a trigger.
 
 use super::*;
 use crate::domain::{
     events::*,
-    ports::{DocumentImport, MediaRepository},
+    ports::{FileImport, MediaRepository},
 };
 use async_trait::async_trait;
 use sha2::{Digest, Sha256};
@@ -25,7 +26,7 @@ async fn fail_in(
           AND a.state IN ('pending', 'downloaded')
           AND m.binding_id = a.binding_id AND m.person_id = a.person_id AND m.source_id = a.source_id
           AND b.id = a.binding_id
-        RETURNING a.document_id, a.filename, m.message_id, b.id AS group_id"#,
+        RETURNING a.blob_id, a.filename, m.message_id, b.id AS group_id"#,
         attachment.binding_id,
         attachment.person_id,
         attachment.source_id,
@@ -35,13 +36,10 @@ async fn fail_in(
     .await
     .map_err(failure)?;
     let Some(row) = row else { return Ok(()) };
-    sqlx::query!(
-        "DELETE FROM whatsapp_media_blob WHERE document_id = $1",
-        row.document_id
-    )
-    .execute(&mut **tx)
-    .await
-    .map_err(failure)?;
+    sqlx::query!("DELETE FROM whatsapp_media_blob WHERE id = $1", row.blob_id)
+        .execute(&mut **tx)
+        .await
+        .map_err(failure)?;
     if let Some(message) = row.message_id {
         bump_in(tx, attachment, message).await?;
     }
@@ -133,7 +131,7 @@ impl PgLinkedRepository {
         let account = fence_in(&mut tx, scope).await?;
         lock_group_in(&mut tx, attachment.binding_id).await?;
         let row = sqlx::query!(
-            r#"SELECT a.document_id, a.sha256, a.state, a.mime AS "mime!", a.filename AS "filename!", b.id AS group_id, b.user_id
+            r#"SELECT a.blob_id, a.sha256, a.state, a.mime AS "mime!", a.filename AS "filename!", b.id AS group_id, b.user_id
             FROM whatsapp_group_attachment a JOIN whatsapp_group b ON b.id = a.binding_id
             WHERE a.binding_id = $1 AND a.person_id = $2 AND a.source_id = $3 AND a.ordinal = $4 AND a.account_id = $5
             FOR UPDATE OF a"#,
@@ -158,9 +156,9 @@ impl PgLinkedRepository {
             return Err(LinkedError::Invalid("attachment bytes do not match their hash").into());
         }
         sqlx::query!(
-            r#"INSERT INTO whatsapp_media_blob (document_id, group_id, user_id, mime, filename, sha256, bytes)
-            VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (document_id) DO NOTHING"#,
-            row.document_id,
+            r#"INSERT INTO whatsapp_media_blob (id, group_id, user_id, mime, filename, sha256, bytes)
+            VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (id) DO NOTHING"#,
+            row.blob_id,
             row.group_id,
             row.user_id,
             row.mime,
@@ -182,7 +180,7 @@ impl PgLinkedRepository {
         .execute(&mut *tx)
         .await
         .map_err(failure)?;
-        notify(&mut tx, signals::MEDIA_READY, row.document_id).await?;
+        notify(&mut tx, signals::MEDIA_READY, row.blob_id).await?;
         tx.commit().await.map_err(failure)
     }
 
@@ -220,7 +218,7 @@ impl PgLinkedRepository {
 
 #[async_trait]
 impl MediaRepository for PgLinkedRepository {
-    async fn due_imports(&self, limit: i64) -> LinkedResult<Vec<DocumentImport>> {
+    async fn due_imports(&self, limit: i64) -> LinkedResult<Vec<FileImport>> {
         // Claiming pushes retry_at forward, so DSS replicas don't import twice.
         let rows = sqlx::query!(
             r#"UPDATE whatsapp_group_attachment a SET retry_at = now() + interval '5 minutes'
@@ -229,54 +227,49 @@ impl MediaRepository for PgLinkedRepository {
                 SELECT binding_id, person_id, source_id, ordinal FROM whatsapp_group_attachment
                 WHERE state = 'downloaded' AND retry_at <= now()
                 ORDER BY retry_at LIMIT $1 FOR UPDATE SKIP LOCKED)
-              AND blob.document_id = a.document_id
-            RETURNING a.binding_id, a.person_id, a.source_id, a.ordinal, a.document_id, a.attempts,
-                blob.group_id, blob.user_id, blob.filename, blob.mime, blob.sha256"#,
+              AND blob.id = a.blob_id
+            RETURNING a.binding_id, a.person_id, a.source_id, a.ordinal, a.blob_id, a.attempts,
+                blob.group_id, blob.user_id, blob.filename, blob.mime"#,
             limit
         )
         .fetch_all(&self.pool)
         .await
         .map_err(failure)?;
-        rows.into_iter()
-            .map(|row| {
-                Ok(DocumentImport {
-                    attachment: AttachmentRef {
-                        binding_id: row.binding_id,
-                        person_id: row.person_id,
-                        source_id: row.source_id,
-                        ordinal: row.ordinal,
-                    },
-                    document_id: row.document_id,
-                    group_id: row.group_id,
-                    owner: row.user_id,
-                    filename: row.filename,
-                    mime: row.mime,
-                    sha256: row
-                        .sha256
-                        .try_into()
-                        .map_err(|_| corrupt("sha256 is not 32 bytes"))?,
-                    attempts: row.attempts,
-                })
+        Ok(rows
+            .into_iter()
+            .map(|row| FileImport {
+                attachment: AttachmentRef {
+                    binding_id: row.binding_id,
+                    person_id: row.person_id,
+                    source_id: row.source_id,
+                    ordinal: row.ordinal,
+                },
+                blob_id: row.blob_id,
+                group_id: row.group_id,
+                owner: row.user_id,
+                filename: row.filename,
+                mime: row.mime,
+                attempts: row.attempts,
             })
-            .collect()
+            .collect())
     }
 
-    async fn import_bytes(&self, import: &DocumentImport) -> LinkedResult<Option<Vec<u8>>> {
+    async fn import_bytes(&self, import: &FileImport) -> LinkedResult<Option<Vec<u8>>> {
         sqlx::query_scalar!(
-            "SELECT bytes FROM whatsapp_media_blob WHERE document_id = $1",
-            import.document_id
+            "SELECT bytes FROM whatsapp_media_blob WHERE id = $1",
+            import.blob_id
         )
         .fetch_optional(&self.pool)
         .await
         .map_err(failure)
     }
 
-    async fn import_stored(&self, import: &DocumentImport) -> LinkedResult<()> {
+    async fn import_stored(&self, import: &FileImport, file_id: Uuid) -> LinkedResult<()> {
         let attachment = &import.attachment;
         let mut tx = self.pool.begin().await.map_err(failure)?;
         lock_group_in(&mut tx, import.attachment.binding_id).await?;
         let row = sqlx::query!(
-            r#"UPDATE whatsapp_group_attachment a SET state = 'ready'
+            r#"UPDATE whatsapp_group_attachment a SET state = 'ready', file_id = $5
             FROM whatsapp_group_message m
             WHERE a.binding_id = $1 AND a.person_id = $2 AND a.source_id = $3 AND a.ordinal = $4 AND a.state = 'downloaded'
               AND m.binding_id = a.binding_id AND m.person_id = a.person_id AND m.source_id = a.source_id
@@ -284,25 +277,40 @@ impl MediaRepository for PgLinkedRepository {
             attachment.binding_id,
             attachment.person_id,
             attachment.source_id,
-            attachment.ordinal
+            attachment.ordinal,
+            file_id
         )
         .fetch_optional(&mut *tx)
         .await
         .map_err(failure)?;
+        match row {
+            Some(row) => {
+                if let Some(message) = row.message_id {
+                    bump_in(&mut tx, attachment, message).await?;
+                }
+            }
+            // Deleted or imported meanwhile: nothing will reference the file.
+            None => {
+                sqlx::query!(
+                    "INSERT INTO whatsapp_file_deletion (file_id) VALUES ($1) ON CONFLICT DO NOTHING",
+                    file_id
+                )
+                .execute(&mut *tx)
+                .await
+                .map_err(failure)?;
+            }
+        }
         sqlx::query!(
-            "DELETE FROM whatsapp_media_blob WHERE document_id = $1",
-            import.document_id
+            "DELETE FROM whatsapp_media_blob WHERE id = $1",
+            import.blob_id
         )
         .execute(&mut *tx)
         .await
         .map_err(failure)?;
-        if let Some(message) = row.and_then(|row| row.message_id) {
-            bump_in(&mut tx, attachment, message).await?;
-        }
         tx.commit().await.map_err(failure)
     }
 
-    async fn import_failed(&self, import: &DocumentImport, permanent: bool) -> LinkedResult<()> {
+    async fn import_failed(&self, import: &FileImport, permanent: bool) -> LinkedResult<()> {
         let mut tx = self.pool.begin().await.map_err(failure)?;
         lock_group_in(&mut tx, import.attachment.binding_id).await?;
         if permanent {
@@ -328,7 +336,7 @@ impl MediaRepository for PgLinkedRepository {
     async fn expire_retained(&self) -> LinkedResult<u64> {
         let uploads = sqlx::query!(
             r#"DELETE FROM whatsapp_media_blob b WHERE b.created_at < now() - interval '1 day'
-            AND NOT EXISTS (SELECT 1 FROM whatsapp_group_attachment a WHERE a.document_id = b.document_id)"#
+            AND NOT EXISTS (SELECT 1 FROM whatsapp_group_attachment a WHERE a.blob_id = b.id)"#
         )
         .execute(&self.pool)
         .await
@@ -350,5 +358,32 @@ impl MediaRepository for PgLinkedRepository {
         .map_err(failure)?
         .rows_affected();
         Ok(uploads + receipts + pairings)
+    }
+
+    async fn due_file_deletions(&self, limit: i64) -> LinkedResult<Vec<Uuid>> {
+        // Claiming pushes retry_at forward, so DSS replicas don't delete twice
+        // and a failing file waits before it is tried again.
+        sqlx::query_scalar!(
+            r#"UPDATE whatsapp_file_deletion SET retry_at = now() + interval '5 minutes'
+            WHERE file_id IN (
+                SELECT file_id FROM whatsapp_file_deletion WHERE retry_at <= now()
+                ORDER BY retry_at LIMIT $1 FOR UPDATE SKIP LOCKED)
+            RETURNING file_id"#,
+            limit
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(failure)
+    }
+
+    async fn files_deleted(&self, files: &[Uuid]) -> LinkedResult<()> {
+        sqlx::query!(
+            "DELETE FROM whatsapp_file_deletion WHERE file_id = ANY($1)",
+            files
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(failure)?;
+        Ok(())
     }
 }

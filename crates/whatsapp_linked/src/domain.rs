@@ -10,7 +10,7 @@ pub mod rich;
 /// Native notification outbox.
 #[cfg(feature = "ports")]
 pub mod effects;
-/// Attachment import into private documents.
+/// Attachment import into static files.
 #[cfg(feature = "ports")]
 pub mod media;
 /// Port traits.

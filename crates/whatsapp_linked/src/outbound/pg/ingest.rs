@@ -369,7 +369,7 @@ async fn reserve_attachments_in(
             "failed"
         };
         sqlx::query!(
-            r#"INSERT INTO whatsapp_group_attachment (binding_id, person_id, source_id, ordinal, document_id, sha256, state, account_id, locator, mime, filename, size,
+            r#"INSERT INTO whatsapp_group_attachment (binding_id, person_id, source_id, ordinal, blob_id, sha256, state, account_id, locator, mime, filename, size,
                 width, height, duration_seconds, presentation)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
             ON CONFLICT (binding_id, person_id, source_id, ordinal) DO UPDATE SET account_id = excluded.account_id, locator = excluded.locator
@@ -477,7 +477,7 @@ pub(super) async fn persist_in(
         reserve_attachments_in(tx, r, message).await?;
     }
     if r.deleted_at.is_some() {
-        sqlx::query!("UPDATE whatsapp_group_attachment SET state = 'deleted' WHERE binding_id = $1 AND person_id = $2 AND source_id = $3",r.binding.id,r.person,r.source)
+        sqlx::query!("UPDATE whatsapp_group_attachment SET state = 'deleted', file_id = NULL WHERE binding_id = $1 AND person_id = $2 AND source_id = $3",r.binding.id,r.person,r.source)
             .execute(&mut **tx).await.map_err(failure)?;
     }
     Ok(r.create || changed || matches!(message.kind, MessageKind::Edit | MessageKind::Delete))

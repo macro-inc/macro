@@ -26,7 +26,7 @@ Content of a deliberate send.
 | ------ | ------ | ------ |
 | `caption?` | `string` \| `null` | Optional caption; audio has none. |
 | `type` | `"media"` | - |
-| `uploadId` | `string` | The staged upload, which becomes the message's private document. |
+| `uploadId` | `string` | The staged upload, imported as the message's static file. |
 
 ***
 

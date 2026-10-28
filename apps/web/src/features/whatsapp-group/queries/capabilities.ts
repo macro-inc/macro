@@ -1,7 +1,7 @@
+import { staticFileIdEndpoint } from '@core/constant/servers';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
 import { queryReadyGate } from '@queries/gate';
-import { useBinaryDocumentQuery } from '@queries/storage/binary-document';
 import {
   invalidateWhatsappGroup,
   invalidateWhatsappGroupList,
@@ -146,7 +146,7 @@ export function createWhatsAppGroupCapabilities(
         );
         return result;
       }),
-    fileUrl: (documentId) => sourceRead(useBinaryDocumentQuery(documentId)),
+    fileUrl: staticFileIdEndpoint,
     markRead: async (messageId) => {
       await whatsappOperation(
         'group.read',

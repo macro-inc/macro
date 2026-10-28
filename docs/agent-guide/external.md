@@ -88,8 +88,9 @@ Ready images and videos show inline in Chat's media grid (click opens the
 viewer), sized from WhatsApp's declared width/height before they load so the
 timeline opens at the bottom. Stickers show small and unframed, GIFs loop muted
 in place, voice notes read **Voice note · 0:42** above an inline player; bytes
-come from the imported document's presigned URL. Other ready files show as
-document chips; other states show loading, unavailable or unsupported. Senders
+come from the attachment's static file, like Chat's media. Other ready files
+(PDF, text) show as file chips that open the stored file in a new tab; other
+states show loading, unavailable or unsupported. Senders
 show their WhatsApp name. `@<number>` in a body shows the person: a verified
 Macro user as Chat's mention chip, anyone else their WhatsApp name in bold.
 Bare URLs are links with Chat's hover preview. **Forwarded** marks forwarded

@@ -1,7 +1,6 @@
 import type { WhatsAppGroupMessage } from '../../../generated/storage/types.gen';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
-import { Document } from '../documents/document';
 import { MacroEntity } from '../entity';
 import type { WhatsAppGroup } from './group';
 
@@ -72,7 +71,7 @@ export class WhatsAppMessage extends MacroEntity<WhatsAppGroupMessage> {
     this.mappedField('replyTo', (id) =>
       id ? WhatsAppMessage.byId(this.client, this.group, id) : undefined,
     );
-  /** Attachment state and imported document handles. */
+  /** Attachment states, with the stored file's URL once ready. */
   readonly attachments = this.mappedField('attachments', (records) =>
     records.map((record) => ({
       ordinal: record.ordinal,
@@ -84,8 +83,8 @@ export class WhatsAppMessage extends MacroEntity<WhatsAppGroupMessage> {
       height: record.height ?? undefined,
       durationSeconds: record.durationSeconds ?? undefined,
       presentation: record.presentation ?? undefined,
-      document: record.documentId
-        ? Document.byId(this.client, record.documentId)
+      url: record.fileId
+        ? `${this.client.hosts['static-files']}/file/${record.fileId}`
         : undefined,
     })),
   );

@@ -4,8 +4,8 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { LinkedAttachmentDocumentId } from './linkedAttachmentDocumentId';
 import type { LinkedAttachmentDurationSeconds } from './linkedAttachmentDurationSeconds';
+import type { LinkedAttachmentFileId } from './linkedAttachmentFileId';
 import type { LinkedAttachmentHeight } from './linkedAttachmentHeight';
 import type { LinkedAttachmentPresentation } from './linkedAttachmentPresentation';
 import type { LinkedAttachmentState } from './linkedAttachmentState';
@@ -15,13 +15,13 @@ import type { LinkedAttachmentWidth } from './linkedAttachmentWidth';
  * One attachment of a linked message.
  */
 export interface LinkedAttachment {
-  /** The private document, once ready. */
-  documentId?: LinkedAttachmentDocumentId;
   /**
    * Length of audio or video in whole seconds, when declared.
    * @minimum 0
    */
   durationSeconds?: LinkedAttachmentDurationSeconds;
+  /** The static file holding it, once ready. */
+  fileId?: LinkedAttachmentFileId;
   /** Display filename. */
   fileName: string;
   /**

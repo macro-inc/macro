@@ -13,6 +13,7 @@ import {
 } from '@entity/components/Badges';
 import type { LayoutProps } from '@entity/composed/list-entity/shared';
 import { soupPropertyToProperty } from '@entity/extractors-property';
+import { EntityReferenceProperties } from '@entity/extractors-property/entity-reference-properties';
 import { ListPropertyValue } from '@property/component/ListPropertyValue';
 import { Modals } from '@property/component/modal';
 import {
@@ -61,6 +62,7 @@ function buildStubProperty(col: TaskGridColumn): Property {
 type TaskGridLayoutProps = Omit<LayoutProps, 'entity'> & {
   entity: TaskEntityWithProperties;
   onFilterByTag?: (optionId: string) => void;
+  referencePropertyIds?: readonly string[];
 };
 
 export function TaskGridLayout(props: TaskGridLayoutProps) {
@@ -173,6 +175,15 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
             <span class="hidden @min-[841px]/u-list:inline @min-[1221px]/u-list:hidden">
               <CreatedByBadgeSmall ownerId={props.entity.ownerId} />
             </span>
+          </Show>
+          <Show when={props.referencePropertyIds}>
+            {(ids) => (
+              <EntityReferenceProperties
+                entity={props.entity}
+                propertyIds={ids()}
+                compact={false}
+              />
+            )}
           </Show>
           <EntityRowTags
             entityId={props.entity.id}

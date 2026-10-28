@@ -54,6 +54,10 @@ key issuance, and account merge/link flows.
 - `GET /user/stripe/trial_eligibility` reads the authenticated customer's
   eligibility without creating checkout. Any prior subscription disqualifies
   the first-subscription trial, including canceled or incomplete subscriptions.
+  The trial is Pro only. Max checkout is paid immediately, and a trialing Pro
+  subscription that moves to Max ends the trial and starts a Max billing cycle
+  now. A team's first Max seat does the same; seat changes on a subscription
+  already trialing on Max keep its trial.
 - Nonterminal subscriptions (including past due, unpaid, paused, and incomplete)
   require management; only canceled and incomplete-expired subscriptions allow
   replacement. Eligibility includes `existingSubscription` for recovery UI.

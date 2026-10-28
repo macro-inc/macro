@@ -1,6 +1,7 @@
 import type { FoldedMessage } from '../../../generated/agent-fold';
 import type {
   AgentAction,
+  AgentMode,
   AgentSessionChangesResponse,
   AgentSessionLogResponse,
   AgentSessionResponse,
@@ -172,6 +173,22 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
       }),
     );
     return branches;
+  }
+
+  /**
+   * Whether `prompt` needs a chat agent or a coding agent, as the app's Auto
+   * mode decides before starting a session. Rejects when Auto mode is not
+   * enabled for the caller, the classifier is unavailable or slow, or the
+   * caller is out of AI quota.
+   */
+  static async chooseMode(
+    client: MacroClient,
+    prompt: string,
+  ): Promise<AgentMode> {
+    const { mode } = unwrap(
+      await client.agentHarness.chooseAgentMode({ body: { prompt } }),
+    );
+    return mode;
   }
 
   protected async fetch(): Promise<AgentSessionResponse> {

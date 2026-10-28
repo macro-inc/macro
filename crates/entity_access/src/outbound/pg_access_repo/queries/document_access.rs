@@ -79,17 +79,6 @@ pub async fn get_document_access(
             AND source_id = ANY($2)
 
             UNION ALL
-            -- A WhatsApp attachment's document is viewable by whoever can view
-            -- a chat whose live message holds it, through the chat's one access
-            -- rule (whatsapp_group_access_level).
-            SELECT 'view'::text AS access_level
-            FROM whatsapp_group_attachment wa
-            JOIN whatsapp_group_message wm
-              ON wm.binding_id = wa.binding_id AND wm.person_id = wa.person_id AND wm.source_id = wa.source_id
-            WHERE wa.document_id = $1 AND wa.state = 'ready' AND wm.deleted_at IS NULL
-              AND whatsapp_group_access_level(wm.binding_id, $2) IS NOT NULL
-
-            UNION ALL
             -- Source 2: document link share permission
             SELECT
                 share_permission."linkShareAccessLevel"::text AS access_level

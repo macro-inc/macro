@@ -23,22 +23,11 @@ it('shows a file that fails to load as unavailable instead of loading forever', 
           url: 'https://files.example.test/expired-voice',
           presentation: 'voice_note',
         },
-        {
-          id: 'sticker',
-          kind: 'image',
-          fileName: 'sticker.webp',
-          url: undefined,
-          unavailable: true,
-          presentation: 'sticker',
-        },
       ]}
     />
   ));
-  expect(screen.getByText('Attachment unavailable: sticker.webp')).toBeTruthy();
-  expect(screen.queryByLabelText('Loading sticker.webp')).toBeNull();
-
   const photo = container.querySelector(
-    'img[src="https://files.example.test/expired-photo"]'
+    'img[src^="https://files.example.test/expired-photo"]'
   );
   const voice = container.querySelector('audio');
   if (!photo || !voice) throw new Error('media not rendered');
@@ -49,7 +38,7 @@ it('shows a file that fails to load as unavailable instead of loading forever', 
   expect(screen.getByText('Attachment unavailable: voice.ogg')).toBeTruthy();
   expect(
     container.querySelector(
-      'img[src="https://files.example.test/expired-photo"]'
+      'img[src^="https://files.example.test/expired-photo"]'
     )
   ).toBeNull();
   expect(container.querySelector('audio')).toBeNull();

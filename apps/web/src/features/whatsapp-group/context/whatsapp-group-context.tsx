@@ -33,8 +33,8 @@ export type WhatsAppGroupCapabilities = {
   upload: (
     file: File
   ) => Promise<Result<{ uploadId: string; audio: boolean }, SendFailure>>;
-  /** A short-lived URL for an imported file's bytes, to play it inline. */
-  fileUrl: (documentId: Accessor<string>) => SourceRead<string>;
+  /** A stored file's URL, resolved like Chat's static media. */
+  fileUrl: (fileId: string) => string;
   markRead: (messageId: string) => Promise<unknown>;
   stopSync: () => Promise<unknown>;
 };

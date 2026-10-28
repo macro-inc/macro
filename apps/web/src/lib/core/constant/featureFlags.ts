@@ -164,6 +164,16 @@ export const enableSidebarPromotions = defineFlag({
   default: onInDev,
 });
 
+/**
+ * Auto in the agent composer's mode switch: the agent harness picks Chat or
+ * Code per prompt. Macro employees only; the backend checks the same key.
+ */
+export const enableComposerAutoMode = defineFlag({
+  key: 'enable-composer-auto-mode',
+  env: 'ENABLE_COMPOSER_AUTO_MODE',
+  default: onInDev,
+});
+
 /** Shows the Reviews shortcut in Tasks; copied Reviews links remain accessible. */
 export const enableTasksReviews = defineFlag({
   key: 'enable-tasks-reviews',
@@ -206,8 +216,8 @@ export const ENABLE_SCRIPTING = defineFlag({
   default: false,
 }).enabled;
 
-// Deployed dev and production defer to PostHog: the router must be provisioned
-// before enabling gateway sync. Local stacks can use the env override.
+// Historical key retained at the deployed PostHog boundary. This selects the
+// dedicated DSS sync socket; deploy DSS before enabling. Local env override supported.
 export const syncViaGateway = defineFlag({
   key: 'sync-via-gateway',
   env: 'SYNC_VIA_GATEWAY',
@@ -773,6 +783,13 @@ export const enableChatV3Agents = defineFlag({
   key: 'enable-chat-v3-agents',
   env: 'ENABLE_CHAT_V3_AGENTS',
   default: onInDev,
+});
+
+/** Enables Universal Input in Command K and mobile Search. */
+export const enableUniversalInput = defineFlag({
+  key: 'enable-universal-input',
+  env: 'ENABLE_UNIVERSAL_INPUT',
+  default: DEV_MODE_ENV || import.meta.env.DEV || undefined,
 });
 
 // Private conversations with agent personas. On in dev; there is no PostHog

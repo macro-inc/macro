@@ -88,7 +88,7 @@ it('decodes pagination, deleted flags, reaction ownership and attachment states 
             fileName: 'drawing.psd',
             mime: 'image/vnd.adobe.photoshop',
             size: 1024,
-            documentId: null,
+            fileId: null,
           },
         ],
         deliveryState: null,
@@ -104,7 +104,7 @@ it('decodes pagination, deleted flags, reaction ownership and attachment states 
     sender: { name: 'Ana Ruiz' },
     reactions: [{ emoji: '👍', count: 2, mine: true }],
     attachments: [
-      { state: 'unsupported', fileName: 'drawing.psd', documentId: undefined },
+      { state: 'unsupported', fileName: 'drawing.psd', fileId: undefined },
     ],
   });
 });
@@ -150,7 +150,7 @@ it('decodes mentions, forwarding, media presentation and every rich type, keepin
             fileName: 'sticker.webp',
             mime: 'image/webp',
             size: 2048,
-            documentId: 'doc-1',
+            fileId: 'file-1',
             width: 512,
             height: 512,
             durationSeconds: null,

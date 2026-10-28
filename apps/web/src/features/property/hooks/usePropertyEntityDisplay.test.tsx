@@ -252,6 +252,24 @@ describe('usePropertyEntityDisplay subscription ownership', () => {
 });
 
 describe('usePropertyEntityDisplay CRM references', () => {
+  it.each(['COMPANY', 'CONTACT'] as const)(
+    'tracks authorized preview access for %s without resubscribing',
+    (type) => {
+      const [preview, setPreview] = createSignal<unknown>({ loading: true });
+      fixture.preview = preview;
+      const display = setup(type);
+      expect(display.hasPreviewAccess()).toBe(false);
+      setPreview({ loading: false, access: 'access', name: 'Example record' });
+      expect(display.hasPreviewAccess()).toBe(true);
+      setPreview({ loading: false, access: 'no_access' });
+      expect(display.hasPreviewAccess()).toBe(false);
+      setPreview({ loading: false, access: 'does_not_exist' });
+      expect(display.hasPreviewAccess()).toBe(false);
+      setPreview({ loading: false, access: 'access', name: 'Restored record' });
+      expect(display.hasPreviewAccess()).toBe(true);
+      expect(fixture.previewMounts).toBe(1);
+    }
+  );
   it.each([
     ['COMPANY', 'Acme', 'company'],
     ['CONTACT', 'Ada Lovelace', 'contact'],

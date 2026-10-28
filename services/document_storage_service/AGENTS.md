@@ -8,6 +8,10 @@ threads, pins, recents, notifications, folders, activity.
 
 ## Start here
 
+- `src/api/sync.rs`: dedicated authenticated `/sync/ws` endpoint; `crates/sync_router`
+  owns multiplex routing and cancellation. Sync-service still owns document state
+  and validates scoped tokens. DSS shutdown drains these upgraded sockets.
+  This binary WebSocket protocol is intentionally outside the REST OpenAPI/SDK surface.
 - `src/api.rs`: route module list — `documents`, `items`, `entity`,
   `folders_query`, `graphql_soup`, `threads`, `annotations`, `history`,
   `pins`, `recents`, `notification`, `instructions`, `internal`.
@@ -21,7 +25,8 @@ threads, pins, recents, notifications, folders, activity.
   notification/withdrawal/realtime ports. Policy lives in `crates/access_requests`.
 - `src/whatsapp_linked.rs`: mounts `/meta/linked` from `crates/whatsapp_linked`
   and runs the group notification/import worker (LISTEN `whatsapp_group_effects`,
-  `whatsapp_media_ready`) and the `whatsapp_changed` pusher (bare
+  `whatsapp_media_ready`; attachments become static files through the static
+  file service, which also deletes released ones) and the `whatsapp_changed` pusher (bare
   connection-gateway events to the account owner or a group's viewers);
   enforces a Redis-shared one-send-request-per-second budget per user;
   switches `WHATSAPP_LINKED_{PAIRING,ADOPTION,SENDING}_ENABLED` default off.

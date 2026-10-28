@@ -52243,11 +52243,7 @@ export const linkedUploadResponse = zod
     kind: zod
       .enum(['image', 'audio', 'video', 'document'])
       .describe('Attachment categories WhatsApp distinguishes.'),
-    uploadId: zod
-      .uuid()
-      .describe(
-        'Use as `upload_id` in a media send; also the future document id.'
-      ),
+    uploadId: zod.uuid().describe('Use as `upload_id` in a media send.'),
   })
   .describe('A staged attachment, sent only by a later deliberate send.');
 
@@ -52304,7 +52300,7 @@ export const linkedDeliveryResponseItem = zod
                 uploadId: zod
                   .uuid()
                   .describe(
-                    "The staged upload, which becomes the message's private document."
+                    "The staged upload, imported as the message's static file."
                   ),
               })
               .describe('One attachment staged through the attachments route.'),
@@ -52389,10 +52385,6 @@ export const whatsappGroupMessagesResponse = zod
               .array(
                 zod
                   .object({
-                    documentId: zod
-                      .uuid()
-                      .nullish()
-                      .describe('The private document, once ready.'),
                     durationSeconds: zod
                       .number()
                       .min(
@@ -52402,6 +52394,10 @@ export const whatsappGroupMessagesResponse = zod
                       .describe(
                         'Length of audio or video in whole seconds, when declared.'
                       ),
+                    fileId: zod
+                      .uuid()
+                      .nullish()
+                      .describe('The static file holding it, once ready.'),
                     fileName: zod.string().describe('Display filename.'),
                     height: zod
                       .number()
@@ -52832,10 +52828,6 @@ export const linkedMessageAttachmentsResponseItem = zod
       .array(
         zod
           .object({
-            documentId: zod
-              .uuid()
-              .nullish()
-              .describe('The private document, once ready.'),
             durationSeconds: zod
               .number()
               .min(
@@ -52845,6 +52837,10 @@ export const linkedMessageAttachmentsResponseItem = zod
               .describe(
                 'Length of audio or video in whole seconds, when declared.'
               ),
+            fileId: zod
+              .uuid()
+              .nullish()
+              .describe('The static file holding it, once ready.'),
             fileName: zod.string().describe('Display filename.'),
             height: zod
               .number()
@@ -52918,10 +52914,6 @@ export const whatsappGroupMessageResponse = zod
       .array(
         zod
           .object({
-            documentId: zod
-              .uuid()
-              .nullish()
-              .describe('The private document, once ready.'),
             durationSeconds: zod
               .number()
               .min(
@@ -52931,6 +52923,10 @@ export const whatsappGroupMessageResponse = zod
               .describe(
                 'Length of audio or video in whole seconds, when declared.'
               ),
+            fileId: zod
+              .uuid()
+              .nullish()
+              .describe('The static file holding it, once ready.'),
             fileName: zod.string().describe('Display filename.'),
             height: zod
               .number()
@@ -53438,7 +53434,7 @@ export const whatsappGroupSendsResponseItem = zod
                 uploadId: zod
                   .uuid()
                   .describe(
-                    "The staged upload, which becomes the message's private document."
+                    "The staged upload, imported as the message's static file."
                   ),
               })
               .describe('One attachment staged through the attachments route.'),
@@ -53525,7 +53521,7 @@ export const linkedReplyBody = zod
             uploadId: zod
               .uuid()
               .describe(
-                "The staged upload, which becomes the message's private document."
+                "The staged upload, imported as the message's static file."
               ),
           })
           .describe('One attachment staged through the attachments route.'),
@@ -53604,7 +53600,7 @@ export const linkedReplyResponse = zod
                 uploadId: zod
                   .uuid()
                   .describe(
-                    "The staged upload, which becomes the message's private document."
+                    "The staged upload, imported as the message's static file."
                   ),
               })
               .describe('One attachment staged through the attachments route.'),

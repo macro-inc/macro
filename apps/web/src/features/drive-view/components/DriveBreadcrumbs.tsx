@@ -2,6 +2,7 @@ import {
   ViewBreadcrumbs,
   type ViewBreadcrumbsOutletProps,
   type ViewBreadcrumbsSeparatorState,
+  ViewSwitchTrigger,
 } from '@app/components/view-shell';
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
 import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
@@ -95,14 +96,34 @@ export function DriveLocationBreadcrumbItems(props: {
           >
             {(item) => (
               <div class="flex min-w-0 items-center">
-                <ViewBreadcrumbs.Button
-                  class="max-w-48"
-                  isActive={item.isActive()}
-                  onClick={item.onSelect}
-                  tooltip={entry.label}
+                <Show
+                  when={index() === 0 && item.isActive() && !folder()}
+                  fallback={
+                    <ViewBreadcrumbs.Button
+                      class="max-w-48"
+                      isActive={item.isActive()}
+                      onClick={item.onSelect}
+                      tooltip={entry.label}
+                    >
+                      <span class="truncate">{entry.label}</span>
+                    </ViewBreadcrumbs.Button>
+                  }
                 >
-                  <span class="truncate">{entry.label}</span>
-                </ViewBreadcrumbs.Button>
+                  {/* The top-level location switches views; folders keep their menu. */}
+                  <ViewSwitchTrigger
+                    fallback={
+                      <ViewBreadcrumbs.Button
+                        class="max-w-48"
+                        isActive
+                        tooltip={entry.label}
+                      >
+                        <span class="truncate">{entry.label}</span>
+                      </ViewBreadcrumbs.Button>
+                    }
+                  >
+                    {entry.label}
+                  </ViewSwitchTrigger>
+                </Show>
                 <Show when={item.isActive() ? folder() : undefined}>
                   {(activeFolder) => (
                     <FolderBreadcrumbMenu

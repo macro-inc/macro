@@ -29,6 +29,7 @@ import {
   EventComposerRecurrencePill,
   EventComposerRemindersPill,
 } from './EventPropertyPills';
+import { EventTitleInput } from './EventTitleInput';
 import type {
   EventEditorDisabledFields,
   EventEditorSubmitValues,
@@ -266,17 +267,11 @@ export function EventForm(props: EventFormProps) {
               reason={props.detailsReadOnlyReason}
               class="flex w-full"
             >
-              <input
-                type="text"
+              <EventTitleInput
                 value={state().title}
-                onInput={(event) =>
-                  controller.setField('title', event.currentTarget.value)
-                }
-                placeholder="New event"
-                aria-label="Title"
+                onChange={(value) => controller.setField('title', value)}
                 autofocus={!isEdit()}
                 disabled={fieldIsDisabled('title')}
-                class="h-9 w-full bg-transparent px-2 text-lg font-semibold leading-snug text-ink outline-none placeholder:text-ink-placeholder"
               />
             </LockedField>
 

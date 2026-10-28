@@ -19,6 +19,7 @@ import './synthetics';
 
 // Declared here first.
 import './monitors/ai-editing';
+import './monitors/calls';
 import './monitors/graphql-soup';
 import './monitors/whatsapp-session';
 import { notificationRetentionDashboard } from './monitors/notification-retention';

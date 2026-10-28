@@ -1,9 +1,12 @@
+import { t } from '@app/lib/i18n';
 import { replacePaneSearchParams } from '@app/lib/split-router';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
+import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { writeClipboardData } from '@core/util/dataTransfer';
 import { fireAndForget } from '@core/util/fireAndForget';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import BookmarkIcon from '@phosphor/bookmark-simple.svg';
 import DotsIcon from '@phosphor/dots-three.svg';
 import InfoIcon from '@phosphor/info.svg';
@@ -286,46 +289,9 @@ function TaskSavedViewMenuItems(props: {
   );
 }
 
-export function TaskSavedViewsList() {
-  const {
-    savedViews,
-    savedViewsList,
-    startSavedView,
-    isSidebarSectionOpen,
-    setSidebarSectionOpen,
-  } = useTasksView();
-  return (
-    <Show when={savedViews && savedViewsList}>
-      <SavedViewList.Root
-        open={isSidebarSectionOpen('saved-views')}
-        onOpenChange={(open) => setSidebarSectionOpen('saved-views', open)}
-      >
-        <SavedViewList.Header
-          onCreate={() => {
-            setSidebarSectionOpen('saved-views', true);
-            startSavedView();
-          }}
-        />
-        <SavedViewList.Content>
-          <TaskSavedViewRows />
-        </SavedViewList.Content>
-      </SavedViewList.Root>
-    </Show>
-  );
-}
-
-function TaskSavedViewRows(props: {
-  onAction?: (action: () => void) => void;
-  dialogOwner?: Owner | null;
-}) {
-  const { savedViews, savedViewsList, selectSavedView, closeTask } =
-    useTasksView();
+function useTaskSavedViewListState() {
+  const { savedViews, savedViewsList } = useTasksView();
   const viewerId = useUserId();
-  const owner = props.dialogOwner ?? getOwner();
-  const selectedId = () => {
-    const view = savedViews?.view();
-    return view?.kind === 'saved' ? view.record.id : undefined;
-  };
   const creating = () => savedViews?.view().kind === 'new';
   const items = () => {
     const records = savedViewsList?.items();
@@ -339,6 +305,67 @@ function TaskSavedViewRows(props: {
       return [selection.record, ...(records ?? [])];
     return records;
   };
+  return {
+    creating,
+    items,
+    empty: () =>
+      !creating() && !savedViewsList?.loading() && items()?.length === 0,
+  };
+}
+
+export function TaskSavedViewsList() {
+  const {
+    savedViews,
+    savedViewsList,
+    startSavedView,
+    isSidebarSectionOpen,
+    setSidebarSectionOpen,
+  } = useTasksView();
+  const list = useTaskSavedViewListState();
+  const create = () => {
+    setSidebarSectionOpen('saved-views', true);
+    startSavedView();
+  };
+  return (
+    <Show when={savedViews && savedViewsList}>
+      <SavedViewList.Root
+        open={isSidebarSectionOpen('saved-views')}
+        onOpenChange={(open) => setSidebarSectionOpen('saved-views', open)}
+      >
+        <SavedViewList.Header
+          onCreate={
+            !isSidebarSectionOpen('saved-views') || !list.empty()
+              ? create
+              : undefined
+          }
+        />
+        <SavedViewList.Content>
+          <TaskSavedViewRows />
+        </SavedViewList.Content>
+      </SavedViewList.Root>
+    </Show>
+  );
+}
+
+function TaskSavedViewRows(props: {
+  onAction?: (action: () => void) => void;
+  dialogOwner?: Owner | null;
+}) {
+  const {
+    savedViews,
+    savedViewsList,
+    selectSavedView,
+    startSavedView,
+    closeTask,
+  } = useTasksView();
+  const [attachCreateHotkeys] = useHotkeyDOMScope('create-saved-view', true);
+  const viewerId = useUserId();
+  const owner = props.dialogOwner ?? getOwner();
+  const selectedId = () => {
+    const view = savedViews?.view();
+    return view?.kind === 'saved' ? view.record.id : undefined;
+  };
+  const { creating, items, empty } = useTaskSavedViewListState();
   const run = (action: () => void) =>
     props.onAction ? props.onAction(action) : action();
   return (
@@ -372,12 +399,26 @@ function TaskSavedViewRows(props: {
               Loading views…
             </p>
           </Show>
-          <Show
-            when={!creating() && !views().loading() && items()?.length === 0}
-          >
-            <p class="px-3 py-2 text-xs text-ink-muted">
-              Save a set of filters to return to it.
-            </p>
+          <Show when={empty()}>
+            <div class="mx-2 my-1 flex flex-col items-start gap-2 rounded-lg border border-edge-muted p-3 group-data-closed/sidebar-section:invisible">
+              <div class="space-y-1">
+                <p class="text-xs font-medium text-ink">
+                  {t('viewMenus.savedViewsEmptyTitle')}
+                </p>
+                <p class="text-xs text-ink-muted">
+                  {t('viewMenus.savedViewsEmptyDescription')}
+                </p>
+              </div>
+              <Button
+                ref={attachCreateHotkeys}
+                size="icon-sm"
+                label={t('viewMenus.createSavedView')}
+                variant="outline"
+                onClick={() => run(startSavedView)}
+              >
+                <PlusIcon class="size-3.5" />
+              </Button>
+            </div>
           </Show>
           <Show when={views().error()}>
             <Button
@@ -417,7 +458,7 @@ export function TaskSavedViewsPicker() {
           scopeKey={viewerId()}
           label={
             views().view().kind === 'default'
-              ? 'Saved views'
+              ? t('viewMenus.savedViews')
               : taskSavedViewTitle(views().view())
           }
         >

@@ -9037,13 +9037,13 @@ export type LinkedAdoptGroup = {
  */
 export type LinkedAttachment = {
     /**
-     * The private document, once ready.
-     */
-    documentId?: string | null;
-    /**
      * Length of audio or video in whole seconds, when declared.
      */
     durationSeconds?: number | null;
+    /**
+     * The static file holding it, once ready.
+     */
+    fileId?: string | null;
     /**
      * Display filename.
      */
@@ -9394,7 +9394,7 @@ export type LinkedReplyContent = {
     caption?: string | null;
     type: 'media';
     /**
-     * The staged upload, which becomes the message's private document.
+     * The staged upload, imported as the message's static file.
      */
     uploadId: string;
 } | {
@@ -9510,7 +9510,7 @@ export type LinkedUploadedAttachment = {
      */
     kind: LinkedMediaKind;
     /**
-     * Use as `upload_id` in a media send; also the future document id.
+     * Use as `upload_id` in a media send.
      */
     uploadId: string;
 };

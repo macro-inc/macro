@@ -219,7 +219,7 @@ pub struct SendIntent<'a> {
 
 /// A validated attachment upload.
 pub struct StagedUpload<'a> {
-    /// Uploader, who will own the document.
+    /// Uploader, who will own the static file.
     pub user: &'a MacroUserIdStr<'a>,
     /// Group it may be sent to.
     pub group_id: Uuid,
@@ -318,7 +318,7 @@ pub trait SessionRepository: Send + Sync {
         scope: SessionScope,
         limit: i64,
     ) -> LinkedResult<Vec<MediaImport>>;
-    /// Keep downloaded bytes for import into a private document. The bytes must
+    /// Keep downloaded bytes for import into a static file. The bytes must
     /// match the expected hash; a ready attachment is never rewritten.
     async fn complete_media_import(
         &self,
@@ -507,49 +507,55 @@ pub trait GroupPublisher: Send + Sync {
     async fn publish(&self, effect: &GroupEffect) -> LinkedResult<()>;
 }
 
-/// Downloaded or uploaded bytes waiting to become a private document.
+/// Downloaded or uploaded bytes waiting to become a static file.
 #[derive(Clone)]
-pub struct DocumentImport {
+pub struct FileImport {
     /// Which attachment.
     pub attachment: AttachmentRef,
-    /// Reserved document id.
-    pub document_id: Uuid,
-    /// The chat whose viewers inherit access to the document.
+    /// The staged bytes' id (the upload id of a file sent from Macro).
+    pub blob_id: Uuid,
+    /// The chat the attachment belongs to.
     pub group_id: Uuid,
-    /// Owner of the document.
+    /// Owner of the static file: the uploader, or the chat's owner.
     pub owner: String,
     /// Display filename.
     pub filename: String,
     /// MIME type.
     pub mime: String,
-    /// SHA-256 of the bytes.
-    pub sha256: [u8; 32],
     /// Earlier failed imports.
     pub attempts: i32,
 }
 
-/// The import queue between blobs and documents.
+/// The import queue between blobs and static files, and the static files no
+/// attachment references any more.
 #[async_trait]
 pub trait MediaRepository: Send + Sync {
     /// Imports whose retry time has come, claimed, without their bytes.
-    async fn due_imports(&self, limit: i64) -> LinkedResult<Vec<DocumentImport>>;
+    async fn due_imports(&self, limit: i64) -> LinkedResult<Vec<FileImport>>;
     /// One claimed import's plaintext bytes; `None` once the blob is gone.
-    async fn import_bytes(&self, import: &DocumentImport) -> LinkedResult<Option<Vec<u8>>>;
-    /// The document holds the bytes: attach it to the message, drop the blob and
-    /// queue publication.
-    async fn import_stored(&self, import: &DocumentImport) -> LinkedResult<()>;
+    async fn import_bytes(&self, import: &FileImport) -> LinkedResult<Option<Vec<u8>>>;
+    /// `file_id` holds the bytes: attach it to the message, drop the blob and
+    /// queue publication. A file the attachment no longer takes (deleted, or
+    /// imported meanwhile) is queued for deletion instead.
+    async fn import_stored(&self, import: &FileImport, file_id: Uuid) -> LinkedResult<()>;
     /// Retry later, or give up and show a notice on the message.
-    async fn import_failed(&self, import: &DocumentImport, permanent: bool) -> LinkedResult<()>;
+    async fn import_failed(&self, import: &FileImport, permanent: bool) -> LinkedResult<()>;
     /// Delete staged uploads nobody sent, participant receipts older than
     /// [`RECEIPT_RETENTION_DAYS`](crate::domain::models::RECEIPT_RETENTION_DAYS)
     /// and pairings consumed over a day ago (they keep the expected identity).
     async fn expire_retained(&self) -> LinkedResult<u64>;
+    /// Static files no attachment references any more, claimed for deletion.
+    async fn due_file_deletions(&self, limit: i64) -> LinkedResult<Vec<Uuid>>;
+    /// The static file service no longer holds these files.
+    async fn files_deleted(&self, files: &[Uuid]) -> LinkedResult<()>;
 }
 
-/// Private document storage owned by the documents domain.
+/// Static file storage, the same as channel media's.
 #[async_trait]
-pub trait DocumentStore: Send + Sync {
-    /// Create the document with the reserved id, owned by `owner`, holding the
-    /// bytes; group viewers inherit attachment access. Never rewrites uploaded bytes.
-    async fn store(&self, import: &DocumentImport, bytes: Vec<u8>) -> LinkedResult<()>;
+pub trait FileStore: Send + Sync {
+    /// Store the bytes as a new static file owned by `import.owner`; returns
+    /// its id.
+    async fn store(&self, import: &FileImport, bytes: Vec<u8>) -> LinkedResult<Uuid>;
+    /// Delete one static file; one that is already gone counts as deleted.
+    async fn delete(&self, file_id: Uuid) -> LinkedResult<()>;
 }

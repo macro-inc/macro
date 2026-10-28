@@ -1,5 +1,4 @@
 import type { MessageData } from '@core/messages/types';
-import { inlineMediaKind } from './attachments';
 import { whatsappToMarkdown } from './formatting';
 import type { GroupMessage } from './group';
 
@@ -26,22 +25,9 @@ export function groupMessageData(
     updated_at: message.sentAt,
     edited_at: message.edited ? message.sentAt : null,
     deleted_at: message.deleted ? message.sentAt : null,
-    // Images, video and audio play inline (the view renders them); other
-    // files show as document chips.
-    attachments: message.attachments.flatMap((attachment) =>
-      attachment.state === 'ready' &&
-      attachment.documentId &&
-      !inlineMediaKind(attachment)
-        ? [
-            {
-              id: `${message.id}:${attachment.ordinal}`,
-              entity_id: attachment.documentId,
-              entity_type: 'document',
-              created_at: message.sentAt,
-            },
-          ]
-        : []
-    ),
+    // Attachments are static files the view renders itself: media inline,
+    // other files as chips that open them.
+    attachments: [],
     // WhatsApp reports counts, not reactors; others stay unnamed.
     reactions: message.reactions.map((reaction) => {
       const mine = reaction.mine && viewerId ? [viewerId] : [];

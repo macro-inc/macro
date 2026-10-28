@@ -54,7 +54,9 @@ rows and `NOTIFY` (the `outbound::pg` notify helper).
   final schema, including the one view rule `whatsapp_group_access_level`, which
   entity_access also calls) and
   `20261027061311_validate_entity_whatsapp_group_type.sql` (validates the entity
-  type check in its own transaction). Deleting a user cascades to their account,
+  type check in its own transaction), then
+  `20261027194950_whatsapp_attachments_as_static_files.sql` (attachments keep a
+  static `file_id`; released files queue in `whatsapp_file_deletion`). Deleting a user cascades to their account,
   chats (with their grants, entity record and sharing settings) and sends;
   aliases outlive the account that saw them.
 ## Boundaries
@@ -90,7 +92,10 @@ rows and `NOTIFY` (the `outbound::pg` notify helper).
   `whatsapp_group_reaction`, `whatsapp_group_attachment` and
   `whatsapp_group_poll_vote`; never native comms tables.
 - Attachment bytes cross Postgres (`whatsapp_media_blob`, ≤ 32 MiB) because the
-  session service has no document storage; DSS imports and deletes them.
+  session service has no file storage; DSS stores them as static files (like
+  Chat's media, readable by id) through the `FileStore` port and deletes the
+  blob. A file no attachment references is queued in `whatsapp_file_deletion`
+  (trigger) and deleted by `MediaService::delete_released`.
   `events::Media::locator` is sealed by the session service; never read it.
 - `src/domain/media.rs` + `src/outbound/pg/media.rs`: download claims, import
   queue. `src/domain/shape.rs` reads a staged upload's pixel size and length

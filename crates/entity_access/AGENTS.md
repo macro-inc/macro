@@ -64,7 +64,7 @@ the entity-access domain service.
   checked access at the right level; domain code downstream (e.g.
   `entity_mutation`) takes a receipt, not a raw boolean/level.
 
-- `WhatsAppGroup` resolves ordinary entity-access/link/team grants; its extractor reads `group_id`. Imported WhatsApp attachments inherit current group view access.
+- `WhatsAppGroup` resolves ordinary entity-access/link/team grants; its extractor reads `group_id`.
 
 ## Related
 

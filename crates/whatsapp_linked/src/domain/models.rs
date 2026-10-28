@@ -588,7 +588,7 @@ pub enum ReplyContent {
     },
     /// One attachment staged through the attachments route.
     Media {
-        /// The staged upload, which becomes the message's private document.
+        /// The staged upload, imported as the message's static file.
         #[serde(rename = "uploadId")]
         upload_id: Uuid,
         /// Optional caption; audio has none.
@@ -773,7 +773,7 @@ pub const MEDIA_LIMIT_BYTES: usize = 32 * 1024 * 1024;
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "schema", schema(as = LinkedUploadedAttachment))]
 pub struct UploadedAttachment {
-    /// Use as `upload_id` in a media send; also the future document id.
+    /// Use as `upload_id` in a media send.
     pub upload_id: Uuid,
     /// Display filename.
     pub filename: String,
@@ -789,7 +789,7 @@ pub struct UploadedAttachment {
 pub enum AttachmentState {
     /// Downloading or importing.
     Loading,
-    /// Imported; `document_id` is set.
+    /// Imported; `file_id` is set.
     Ready,
     /// Download or import failed for good.
     Unavailable,
@@ -813,8 +813,8 @@ pub struct LinkedAttachment {
     pub mime: String,
     /// Declared size in bytes.
     pub size: u64,
-    /// The private document, once ready.
-    pub document_id: Option<Uuid>,
+    /// The static file holding it, once ready.
+    pub file_id: Option<Uuid>,
     /// Pixel width of an image, sticker or video, when WhatsApp declared it.
     pub width: Option<u32>,
     /// Pixel height, when declared.

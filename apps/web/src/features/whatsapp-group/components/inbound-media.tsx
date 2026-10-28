@@ -1,20 +1,19 @@
 import type { MediaItem } from '@channel/Media/media-items';
 import { MediaPreview } from '@channel/Message/MediaPreview';
+import { staticFileSizedUrl } from '@core/constant/servers';
 import { constrainImageDimensions } from '@macro-inc/lexical-core/utils/media';
 import MicrophoneIcon from '@phosphor/microphone.svg';
 import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
 import { formatDuration } from '../core/rich';
 import { InboundAttachmentPlaceholder } from './inbound-attachment';
 
-/** An imported image, video or voice note with its resolved file URL. */
+/** A stored image, video or voice note with its static file URL. */
 export type InboundMediaFile = {
   id: string;
   kind: 'image' | 'video' | 'audio';
   fileName: string;
-  /** Undefined while the URL resolves. */
+  /** The stored file, else the local preview of a file this page sent. */
   url: string | undefined;
-  /** The URL couldn't be resolved (the file is gone or not readable). */
-  unavailable?: boolean;
   /** A local preview shown until `url` loads (files this page sent). */
   previewUrl?: string;
   /** Declared by WhatsApp; reserves the space before the file loads. */
@@ -161,8 +160,7 @@ function Audio(props: { file: InboundMediaFile; onError: () => void }) {
 export function InboundMedia(props: { files: InboundMediaFile[] }) {
   const [failed, setFailed] = createSignal<ReadonlySet<string>>(new Set());
   const fail = (id: string) => setFailed((ids) => new Set(ids).add(id));
-  const usable = (file: InboundMediaFile) =>
-    !file.unavailable && !failed().has(file.id);
+  const usable = (file: InboundMediaFile) => !failed().has(file.id);
   const grid = () =>
     props.files.filter(
       (file) =>
@@ -177,9 +175,17 @@ export function InboundMedia(props: { files: InboundMediaFile[] }) {
     (previous: MediaItem[]) =>
       grid().flatMap((file): MediaItem[] => {
         if (!file.url || file.kind === 'audio') return [];
+        // Sized like Chat's static images (a local preview stays as is).
         const item: MediaItem = {
           id: file.id,
-          src: file.url,
+          src:
+            file.kind === 'image'
+              ? staticFileSizedUrl(file.url, 'medium')
+              : file.url,
+          thumbSrc:
+            file.kind === 'image'
+              ? staticFileSizedUrl(file.url, 'small')
+              : undefined,
           fullSrc: file.url,
           previewSrc: file.previewUrl,
           kind: file.kind,

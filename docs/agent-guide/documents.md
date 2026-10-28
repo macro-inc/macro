@@ -1,12 +1,14 @@
 # Documents
 
-For gateway sync rollout checks, use PostHog flag `sync-via-gateway` (dev and
+For DSS sync rollout checks, use PostHog flag `sync-via-gateway` (dev and
 production) and recreate document sessions after the client receives the updated
 flag. A reload can initially read PostHog's cached value; open sessions do not
-change transport when the remote value changes. Off or unavailable uses a
+change transport when the remote value changes. Off or unknown flag values use a
 direct sync-service WebSocket per document; on multiplexes document frames over
-the connection gateway. Confirm the hosted `sync_router` is provisioned before
-enabling. Local stacks can override with `VITE_SYNC_VIA_GATEWAY=true` or `false`.
+a dedicated DSS `/sync/ws` socket. Confirm all DSS replicas have the sync
+endpoint before enabling; notification traffic still uses connection gateway.
+Verify two clients converge after concurrent edits, a large update, and a forced
+sync disconnect with pending edits. The historical flag name is unchanged. Local stacks can override with `VITE_SYNC_VIA_GATEWAY=true` or `false`.
 
 The document header has separate Share, Copy Share Link, and Side Panel buttons.
 They are borderless with a soft rounded background on hover. Share opens the

@@ -31,6 +31,7 @@ vi.mock('@app/components/view-shell', () => ({
     Main: (props: ParentProps) => props.children,
     Header: (props: ParentProps) => <header>{props.children}</header>,
   },
+  ViewSidebar: { Title: (props: ParentProps) => <h1>{props.children}</h1> },
   useViewShell: () => ({
     aside: { isCollapsed: () => true },
     breakpoints: { narrow: () => fixture.narrow },

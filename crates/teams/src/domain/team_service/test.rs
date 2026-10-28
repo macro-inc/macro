@@ -1078,6 +1078,7 @@ impl CustomerRepository for MockCustomerRepository {
         &self,
         _: &stripe::SubscriptionId,
         _: SeatPlan,
+        _: bool,
     ) -> Result<(), CustomerError> {
         Ok(())
     }

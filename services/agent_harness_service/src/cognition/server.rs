@@ -558,7 +558,7 @@ pub async fn build(
     let decision_classifier = config
         .typesafe_api_key
         .value()
-        .map(jev::outbound::TypesafeJev::new)
+        .map(jev::outbound::SystemOneJev::typesafe)
         .transpose()
         .context("failed to configure the decision classifier")?
         .map(|provider| jev::domain::JevClassifier::new(provider, recorder.clone()));

@@ -100,10 +100,15 @@ pub trait CustomerRepository: Clone + Send + Sync + 'static {
 
     /// Cancel any pending downgrade and replace the personal price atomically with
     /// respect to other provider mutations, invoicing proration immediately.
+    ///
+    /// When `end_trial` is set, end an in-progress trial and start the new plan's
+    /// billing cycle now. A Max upgrade sets this while the subscription is still
+    /// trialing so the trial cannot move onto the Max price.
     fn upgrade_personal_plan(
         &self,
         subscription: &stripe::SubscriptionId,
         plan: SeatPlan,
+        end_trial: bool,
     ) -> impl Future<Output = Result<(), CustomerError>> + Send;
 
     /// Member plans whose scheduled phase has actually started at the provider.

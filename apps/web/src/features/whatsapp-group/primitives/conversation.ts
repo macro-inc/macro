@@ -49,7 +49,7 @@ function sentAttachment(file: DraftFile, ordinal: number): InboundAttachment {
     state: visual ? 'ready' : 'loading',
     fileName: file.name,
     mime: file.mime ?? '',
-    documentId: undefined,
+    fileId: undefined,
     previewUrl: file.previewUrl,
     width: file.width,
     height: file.height,

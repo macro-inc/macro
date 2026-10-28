@@ -96,7 +96,7 @@ Advance the caller's own read cursor.
 
 ### messageAttachments()
 
-> **messageAttachments**(`messages`): `Promise`\<\{ `attachments`: \{ `document`: [`Document`](../../../documents/document/classes/Document.md) \| `undefined`; `fileName`: `string`; `mime`: `string`; `ordinal`: `number`; `size`: `number`; `state`: [`LinkedAttachmentState`](../../../../../generated/storage/types.gen/type-aliases/LinkedAttachmentState.md); \}[]; `message`: [`WhatsAppMessage`](../../message/classes/WhatsAppMessage.md); \}[]\>
+> **messageAttachments**(`messages`): `Promise`\<\{ `attachments`: \{ `fileName`: `string`; `mime`: `string`; `ordinal`: `number`; `size`: `number`; `state`: [`LinkedAttachmentState`](../../../../../generated/storage/types.gen/type-aliases/LinkedAttachmentState.md); `url`: `string` \| `undefined`; \}[]; `message`: [`WhatsAppMessage`](../../message/classes/WhatsAppMessage.md); \}[]\>
 
 Read attachment states for selected messages.
 
@@ -108,7 +108,7 @@ Read attachment states for selected messages.
 
 #### Returns
 
-`Promise`\<\{ `attachments`: \{ `document`: [`Document`](../../../documents/document/classes/Document.md) \| `undefined`; `fileName`: `string`; `mime`: `string`; `ordinal`: `number`; `size`: `number`; `state`: [`LinkedAttachmentState`](../../../../../generated/storage/types.gen/type-aliases/LinkedAttachmentState.md); \}[]; `message`: [`WhatsAppMessage`](../../message/classes/WhatsAppMessage.md); \}[]\>
+`Promise`\<\{ `attachments`: \{ `fileName`: `string`; `mime`: `string`; `ordinal`: `number`; `size`: `number`; `state`: [`LinkedAttachmentState`](../../../../../generated/storage/types.gen/type-aliases/LinkedAttachmentState.md); `url`: `string` \| `undefined`; \}[]; `message`: [`WhatsAppMessage`](../../message/classes/WhatsAppMessage.md); \}[]\>
 
 ***
 

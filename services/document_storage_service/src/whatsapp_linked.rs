@@ -1,5 +1,5 @@
 //! Personal WhatsApp linked devices: composition of the `whatsapp_linked` domain
-//! crate with DSS's entity access, notification and document clients, the
+//! crate with DSS's entity access, notification and static file clients, the
 //! notification outbox worker, and the `whatsapp_changed` pushes to open pages.
 //! The session service runs the WhatsApp sockets; it reaches DSS only through
 //! MacroDB rows and `NOTIFY`.
@@ -7,29 +7,24 @@
 use crate::api::context::{AuthorizationService, EntityAccessService, NotificationIngressType};
 use async_trait::async_trait;
 use connection_gateway_client::client::ConnectionGatewayClient;
-use documents_hex::domain::{
-    models::{InitialLinkShare, NewDocument},
-    ports::DocumentService as _,
-};
 use entity_access::domain::ports::EntityAccessService as _;
 use macro_user_id::user_id::MacroUserIdStr;
-use model::document::FileType;
 use model_entity::EntityType;
-use model_owner::CreationPrincipal;
-use models_permissions::share_permission::LinkShareState;
 use notification::domain::{models::SendNotificationRequestBuilder, service::NotificationIngress};
 use sqlx::PgPool;
+use static_file_service_client::StaticFileServiceClient;
 use std::{collections::HashSet, sync::Arc, time::Duration};
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use tracing::Instrument as _;
+use uuid::Uuid;
 use whatsapp_linked::{
     domain::{
         effects::EffectsService,
         media::MediaService,
         models::{Features, LinkedError},
         ports::{
-            AudienceRepository, DocumentImport, DocumentStore, GroupEffect, GroupPublisher,
-            LinkedResult, Origin, SendRateLimiter,
+            AudienceRepository, FileImport, FileStore, GroupEffect, GroupPublisher, LinkedResult,
+            Origin, SendRateLimiter,
         },
         service::LinkedService,
     },
@@ -44,9 +39,7 @@ pub(crate) type State = LinkedRouterState<EntityAccessService, AuthorizationServ
 /// Clients the linked composition needs from DSS.
 pub(crate) struct Dependencies {
     pub features: Features,
-    pub documents: Arc<crate::api::context::DocumentService>,
-    pub s3: aws_sdk_s3::Client,
-    pub document_bucket: String,
+    pub static_files: StaticFileServiceClient,
     pub pool: PgPool,
     pub redis: redis::Client,
     pub access: Arc<EntityAccessService>,
@@ -61,9 +54,7 @@ pub(crate) struct Dependencies {
 pub(crate) fn build(dependencies: Dependencies) -> State {
     let Dependencies {
         features,
-        documents,
-        s3,
-        document_bucket,
+        static_files,
         pool,
         redis,
         access,
@@ -79,15 +70,7 @@ pub(crate) fn build(dependencies: Dependencies) -> State {
         access: access.clone(),
         notifications,
     });
-    let media = MediaService::new(
-        repository.clone(),
-        Arc::new(DssDocumentStore {
-            pool: pool.clone(),
-            documents,
-            s3,
-            bucket: document_bucket,
-        }),
-    );
+    let media = MediaService::new(repository.clone(), Arc::new(StaticFiles(static_files)));
     let service = LinkedService::new(
         features,
         repository.clone(),
@@ -184,7 +167,8 @@ async fn listen(
     }
 }
 
-/// Import ready attachments, expire unsent uploads and publish notifications.
+/// Import ready attachments, delete released files, expire unsent uploads and
+/// publish notifications.
 async fn drain(effects: &EffectsService, media: &MediaService) {
     loop {
         match media.import_pending().await {
@@ -194,6 +178,19 @@ async fn drain(effects: &EffectsService, media: &MediaService) {
                 tracing::warn!(
                     code = error.current_context().code(),
                     "WhatsApp attachment import will retry"
+                );
+                break;
+            }
+        }
+    }
+    loop {
+        match media.delete_released().await {
+            Ok(0) => break,
+            Ok(_) => {}
+            Err(error) => {
+                tracing::warn!(
+                    code = error.current_context().code(),
+                    "Deleting WhatsApp attachment files will retry"
                 );
                 break;
             }
@@ -411,93 +408,42 @@ impl GroupPublisher for DssGroupPublisher {
     }
 }
 
-/// Creates private documents for imported and sent attachments, owned by the
-/// group owner or uploader; document access inherits the group's current grants.
-struct DssDocumentStore {
-    pool: PgPool,
-    documents: Arc<crate::api::context::DocumentService>,
-    s3: aws_sdk_s3::Client,
-    bucket: String,
-}
+/// Stores imported and sent attachments as static files, like channel media,
+/// owned by the uploader or the chat's owner.
+struct StaticFiles(StaticFileServiceClient);
 
 #[async_trait]
-impl DocumentStore for DssDocumentStore {
+impl FileStore for StaticFiles {
     #[tracing::instrument(
-        name = "whatsapp.linked.store_document",
+        name = "whatsapp.linked.store_file",
         skip_all,
         err,
-        fields(document_id = %import.document_id, group_id = %import.group_id, size = bytes.len())
+        fields(blob_id = %import.blob_id, group_id = %import.group_id, size = bytes.len(), file_id)
     )]
-    async fn store(&self, import: &DocumentImport, bytes: Vec<u8>) -> LinkedResult<()> {
-        let id = import.document_id.to_string();
-        let owner = MacroUserIdStr::try_from(import.owner.clone()).map_err(unavailable)?;
-        let file_type = FileType::all()
-            .iter()
-            .copied()
-            .find(|kind| kind.mime_type() == import.mime)
-            .ok_or_else(|| unavailable(format!("unsupported attachment type {}", import.mime)))?;
-        let exists = match macro_db_client::document::get_basic_document(&self.pool, &id).await {
-            Ok(_) => true,
-            Err(sqlx::Error::RowNotFound) => false,
-            Err(error) => return Err(unavailable(error)),
-        };
-        if !exists {
-            let name = std::path::Path::new(&import.filename)
-                .file_stem()
-                .and_then(|stem| stem.to_str())
-                .filter(|stem| !stem.trim().is_empty())
-                .unwrap_or("Attachment")
-                .to_owned();
-            self.documents
-                .create_document(
-                    &CreationPrincipal::BotForUser {
-                        bot: bot_id::MACRO_SYSTEM_BOT_ID,
-                        user: owner.clone(),
-                    },
-                    NewDocument {
-                        id: Some(import.document_id),
-                        sha: hex::encode(import.sha256),
-                        document_name: name,
-                        file_type: Some(file_type),
-                        project_id: None,
-                        team_id: None,
-                        share_with_team: false,
-                        created_at: None,
-                        sub_type: None,
-                        skip_history: true,
-                        initial_link_share: InitialLinkShare::Exact(LinkShareState::Off),
-                    },
-                    None,
-                )
-                .await
-                .map_err(unavailable)?;
-        }
-        let document = macro_db_client::document::get_basic_document(&self.pool, &id)
+    async fn store(&self, import: &FileImport, bytes: Vec<u8>) -> LinkedResult<Uuid> {
+        let stored = self
+            .0
+            .put_named_bytes_for_user(&import.owner, &import.filename, bytes.into(), &import.mime)
             .await
-            .map_err(unavailable)?;
-        let (version, uploaded) =
-            macro_db_client::document::get_latest_document_version_id(&self.pool, &id)
-                .await
-                .map_err(unavailable)?;
-        // Ready bytes are never rewritten; an interrupted upload is retried.
-        if !uploaded {
-            use base64::Engine as _;
-            self.s3
-                .put_object()
-                .bucket(&self.bucket)
-                .key(s3_key::build_cloud_storage_bucket_document_key(
-                    &document.owner,
-                    &id,
-                    version,
-                ))
-                .content_type(file_type.mime_type())
-                .checksum_sha256(base64::engine::general_purpose::STANDARD.encode(import.sha256))
-                .body(aws_sdk_s3::primitives::ByteStream::from(bytes))
-                .send()
-                .await
-                .map_err(unavailable)?;
+            .map_err(|error| unavailable(format!("{error:#}")))?;
+        tracing::Span::current().record("file_id", &stored.id);
+        Uuid::parse_str(&stored.id).map_err(unavailable)
+    }
+
+    #[tracing::instrument(name = "whatsapp.linked.delete_file", skip(self), err)]
+    async fn delete(&self, file_id: Uuid) -> LinkedResult<()> {
+        match self.0.delete_file(&file_id.to_string()).await {
+            Ok(_) => Ok(()),
+            Err(error)
+                if error
+                    .downcast_ref::<reqwest::Error>()
+                    .and_then(reqwest::Error::status)
+                    == Some(reqwest::StatusCode::NOT_FOUND) =>
+            {
+                Ok(())
+            }
+            Err(error) => Err(unavailable(format!("{error:#}"))),
         }
-        Ok(())
     }
 }
 

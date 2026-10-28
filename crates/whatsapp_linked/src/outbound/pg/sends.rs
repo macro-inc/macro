@@ -51,7 +51,7 @@ impl SendRepository for PgLinkedRepository {
     async fn stage_upload(&self, upload: StagedUpload<'_>) -> LinkedResult<Uuid> {
         let id = Uuid::now_v7();
         sqlx::query!(
-            r#"INSERT INTO whatsapp_media_blob (document_id, group_id, user_id, mime, filename, sha256, bytes, width, height, duration_seconds)
+            r#"INSERT INTO whatsapp_media_blob (id, group_id, user_id, mime, filename, sha256, bytes, width, height, duration_seconds)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)"#,
             id,
             upload.group_id,
@@ -79,8 +79,8 @@ impl SendRepository for PgLinkedRepository {
         let user = user.as_ref();
         sqlx::query_scalar!(
             r#"SELECT mime FROM whatsapp_media_blob b
-            WHERE document_id = $1 AND group_id = $2 AND user_id = $3
-              AND NOT EXISTS (SELECT 1 FROM whatsapp_group_attachment a WHERE a.document_id = b.document_id)"#,
+            WHERE id = $1 AND group_id = $2 AND user_id = $3
+              AND NOT EXISTS (SELECT 1 FROM whatsapp_group_attachment a WHERE a.blob_id = b.id)"#,
             upload,
             group_id,
             user
@@ -384,7 +384,7 @@ async fn content_in(
     Ok(match &request.message {
         ReplyContent::Media { upload_id, caption } => {
             let Some(blob) = sqlx::query!(
-                "SELECT mime, filename, width, height, duration_seconds FROM whatsapp_media_blob WHERE document_id = $1",
+                "SELECT mime, filename, width, height, duration_seconds FROM whatsapp_media_blob WHERE id = $1",
                 upload_id
             )
             .fetch_optional(&mut **tx)
@@ -653,7 +653,7 @@ impl PgLinkedRepository {
                 let (kind, text, target) = match &request.message {
                     ReplyContent::Media { upload_id, caption } => {
                         let blob = sqlx::query!(
-                            "SELECT mime, filename, sha256, octet_length(bytes) AS \"size!\", width, height, duration_seconds FROM whatsapp_media_blob WHERE document_id = $1",
+                            "SELECT mime, filename, sha256, octet_length(bytes) AS \"size!\", width, height, duration_seconds FROM whatsapp_media_blob WHERE id = $1",
                             upload_id
                         )
                         .fetch_one(&mut *tx)
@@ -775,10 +775,10 @@ impl PgLinkedRepository {
                     let changed =
                         ingest::persist_in(&mut tx, &event, message, &reservation).await?;
                     ingest::finish_in(&mut tx, &reservation, changed).await?;
-                    // The staged upload becomes the attachment's document.
+                    // The staged upload is imported as the attachment's static file.
                     if let Some(upload) = upload {
                         sqlx::query!(
-                            r#"UPDATE whatsapp_group_attachment SET document_id = $4, state = 'downloaded', retry_at = now()
+                            r#"UPDATE whatsapp_group_attachment SET blob_id = $4, state = 'downloaded', retry_at = now()
                             WHERE binding_id = $1 AND person_id = $2 AND source_id = $3 AND ordinal = 0 AND state = 'pending'"#,
                             reservation.binding.id,
                             reservation.person,
@@ -806,7 +806,7 @@ impl PgLinkedRepository {
         let account = fence_in(&mut tx, scope).await?;
         let row = sqlx::query!(
             r#"SELECT b.mime, b.filename, b.sha256, b.bytes FROM whatsapp_send s
-            JOIN whatsapp_media_blob b ON b.document_id = (s.payload->'message'->>'uploadId')::uuid
+            JOIN whatsapp_media_blob b ON b.id = (s.payload->'message'->>'uploadId')::uuid
               AND b.user_id = s.user_id AND b.group_id = s.group_id
             WHERE s.id = $1 AND s.account_id = $2 AND s.claimed_epoch = $3 AND s.state = 'sending'
               AND s.payload->'message'->>'type' = 'media'"#,

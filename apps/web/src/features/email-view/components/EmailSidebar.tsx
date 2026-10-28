@@ -36,6 +36,10 @@ import { EmailInboxList } from './EmailInboxSelector';
 
 // Email is personal, so the sidebar lists only the user's own tags.
 const SIDEBAR_TAG_SCOPES: readonly TagScope[] = ['user'];
+const INBOX_TAB_IDS = [
+  'important',
+  'noise',
+] as const satisfies readonly EmailTab[];
 const PRIMARY_TAB_IDS = [
   'favorites',
   'drafts',
@@ -167,18 +171,22 @@ export function EmailSidebar() {
     setSidebarSectionOpen,
   } = useEmailView();
 
+  const tabIds = () =>
+    (isTouchDevice() ? EMAIL_TAB_IDS : DESKTOP_TAB_IDS).filter(
+      (id) =>
+        id !== 'reminders' ||
+        reminders().enabled ||
+        (reminders().loading && state.tab === 'reminders')
+    );
+
   useViewTabHotkeys({
     scopeId: panel.splitHotkeyScope,
     enabled: panel.isPanelActive,
-    ids: () =>
-      (isTouchDevice() ? EMAIL_TAB_IDS : DESKTOP_TAB_IDS).filter(
-        (id) =>
-          id !== 'reminders' ||
-          reminders().enabled ||
-          (reminders().loading && state.tab === 'reminders')
-      ),
-    activeId: () =>
-      !isTouchDevice() && state.tab === 'noise' ? 'important' : state.tab,
+    ids: tabIds,
+    // Desktop groups Signal and Noise under Inbox, so Tab toggles between
+    // them instead of walking the sidebar.
+    sequentialIds: () => (isTouchDevice() ? tabIds() : INBOX_TAB_IDS),
+    activeId: () => state.tab,
     setActiveId: setTab,
     shouldHandleSequentialKeyEvent: (event) =>
       !(
