@@ -423,6 +423,11 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   properties do not prove prior membership. Supply complete prior multi-value
   memberships when adjusting counts: a row loaded in one bin may already be an
   unloaded member of another.
+- Reconcile authoritative Mail first pages in the shared Soup projection adapter,
+  not a UI exclusion list: invalidate contradicted facts within the supported
+  page range without deleting normalized threads or treating backfill gaps as
+  deletions. The OPFS revisit/reload regression is
+  `bunx playwright test --config src/lib/graphql-cache/worker/browser-test/playwright.config.ts mail-reconciliation --project chromium`.
 - Reactive GraphQL reads use `createLiveQuery` for a document and
   `useSoupAstItemsQuery` (backed by `createSoupLiveQuery`) for Soup lists; see
   [choosing a reactive read](docs/graphql-normalized-cache-plan.md#choosing-a-reactive-read).

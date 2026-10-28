@@ -215,6 +215,120 @@ fn exhausted_and_empty_first_pages_revoke_older_matches() {
     });
 }
 #[test]
+fn pending_local_edits_survive_negative_server_membership() {
+    pollster::block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let vars = variables("DESC");
+        persist(
+            &mut engine,
+            "SoupMailBackfill",
+            &vars,
+            &response(&[20, 18, 16, 14, 8], Value::Null),
+        )
+        .await;
+        let data = json!({"user":{"id":VIEWER,"soup":{"items":[{
+            "__typename":TYPE,"id":id(18),"isRead":true
+        }]}}});
+        let projections = optimistic_updates(
+            projection_updates(
+                engine.schema(),
+                engine.storage(),
+                PARTIAL,
+                None,
+                &Map::new(),
+                &data,
+            )
+            .await
+            .unwrap(),
+        );
+        let projections = crate::properties::augment_optimistic(
+            engine.schema(),
+            engine.storage(),
+            PARTIAL,
+            None,
+            &Map::new(),
+            &data,
+            projections,
+        )
+        .await
+        .unwrap();
+        engine
+            .begin_optimistic_write_with_projections(
+                None,
+                BeginOptimisticWrite {
+                    client_metadata: None,
+                    uuid: "00000000-0000-0000-0000-000000009000",
+                    query: PARTIAL,
+                    operation_name: None,
+                    variables: &Map::new(),
+                    data: &data,
+                    link_patches: &[],
+                    revalidations: &[],
+                    created_at_ms: 1,
+                    identity_bindings: &[],
+                },
+                projections,
+            )
+            .await
+            .unwrap();
+        persist(
+            &mut engine,
+            "Soup",
+            &vars,
+            &response(&[20, 16, 8], json!("next")),
+        )
+        .await;
+        assert_eq!(
+            current_keys(&mut engine, noise(), "DESC").await,
+            [20, 18, 16, 8].map(|n| format!("{TYPE}:{}", id(n)))
+        );
+        let states = engine
+            .storage()
+            .load_projection_states(&[RecordKey::new(format!("{TYPE}:{}", id(18))).unwrap()])
+            .await
+            .unwrap();
+        assert!(
+            matches!(states[0], Some(ProjectionState::Complete(_))),
+            "the authoritative base must survive rollback of a pending edit"
+        );
+    });
+}
+
+#[test]
+fn view_timestamps_not_preview_updated_at_bound_the_page() {
+    pollster::block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let vars = variables("DESC");
+        let mut seed = response(&[20, 18, 16, 14], Value::Null);
+        for (item, timestamp) in seed["user"]["soup"]["items"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .zip([
+                "2025-01-02T00:00:00.000003Z",
+                "2025-01-02T00:00:00.000002Z",
+                "2025-01-02T00:00:00.000001Z",
+                "2025-01-02T00:00:00Z",
+            ])
+        {
+            item["latestInboundMessageTs"] = json!(timestamp);
+        }
+        persist(&mut engine, "SoupMailBackfill", &vars, &seed).await;
+        let mut network = seed.clone();
+        network["user"]["soup"]["items"] = json!([
+            seed["user"]["soup"]["items"][0],
+            seed["user"]["soup"]["items"][2]
+        ]);
+        network["user"]["soup"]["nextCursor"] = json!("next");
+        persist(&mut engine, "Soup", &vars, &network).await;
+        assert_eq!(
+            current_keys(&mut engine, noise(), "DESC").await,
+            [20, 16, 14].map(|n| format!("{TYPE}:{}", id(n)))
+        );
+    });
+}
+
+#[test]
 fn partial_backfill_cursor_and_unsupported_queries_are_not_negative_evidence() {
     pollster::block_on(async {
         for case in [
