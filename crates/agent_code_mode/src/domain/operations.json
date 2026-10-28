@@ -233,6 +233,7 @@
   "email.listBackfillGmail": "List Backfill Gmail",
   "email.getBackfillGmailActive": "Get Backfill Gmail Active",
   "email.getBackfillGmail": "Get Backfill Gmail",
+  "email.forwardCalendarEvent": "Forward Calendar Event",
   "email.listContacts": "List Contacts",
   "email.blockSender": "Block Sender",
   "email.listBlockedSenders": "List Blocked Senders",

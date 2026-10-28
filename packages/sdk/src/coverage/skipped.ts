@@ -239,7 +239,11 @@ export const emailExcluded = [
   'resyncLink',
 ] as const satisfies readonly (keyof EmailSdk)[];
 
-export const emailBacklog = [] as const satisfies readonly (keyof EmailSdk)[];
+export const emailBacklog = [
+  // Belongs on CalendarEvent beside inviteGuests; the first release keeps
+  // forwarding to the app's own surfaces, since the SDK also reaches agents.
+  'forwardCalendarEvent',
+] as const satisfies readonly (keyof EmailSdk)[];
 
 export const notificationExcluded = [
   'bulkGetTypedNotificationsByEventItemIds',
