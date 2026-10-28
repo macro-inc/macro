@@ -726,9 +726,9 @@ body.tauri-ios {
   --button-elevated-top-edge: var(--glass-desktop-top-edge);
   --button-elevated-inner-edge: var(--glass-desktop-inner-edge);
 
-  --button-secondary-bg: oklch(1 0 0 / 8%);
-  --button-secondary-hover: oklch(1 0 0 / 12%);
-  --button-secondary-pressed: oklch(1 0 0 / 16%);
+  --button-secondary-bg: oklch(1 0 0 / 4%);
+  --button-secondary-hover: oklch(1 0 0 / 8%);
+  --button-secondary-pressed: oklch(1 0 0 / 12%);
   --button-outline-hover: oklch(1 0 0 / 8%);
   --button-outline-pressed: oklch(1 0 0 / 10%);
   --button-tertiary-bg: transparent;
