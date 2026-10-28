@@ -78,43 +78,6 @@
   --left-of-channel-rail: calc(var(--left-of-connector) - var(--channel-rail-width) / 2);
   --channel-rail-center: calc(var(--left-of-channel-rail) + var(--channel-rail-width) / 2);
 
-  /* Glass chrome, ported from the marketing site's hero CTA ring
-     (solid-site `.home-hero-cta-bar`). The look is four things layered on a
-     translucent surface: a backdrop blur, a bright inner top edge, a dark
-     inner bottom edge, and a diagonal specular rim. Touch surfaces use only
-     the diagonal reflections with short, dimmer opposing corners.
-
-     Split in two so the size scale and the theme stay independent:
-
-     - PALETTE (below, plus a light-mode pass) says which way the light comes
-       from and how strong the effect is at full size. The site is dark-only,
-       so its hard-coded values are the dark half; in a light theme the lift
-       comes from white, not from the (dark) ink color.
-     - GEOMETRY (owned by the utilities) says how big it is: blur/shadow
-       extents, and `--glass-scale` multiplying every palette strength. The
-       utilities set their tokens *on the element*, which would out-specify an
-       inherited light-mode value, so they must never name a color or a
-       strength directly — palette lives here, and only here. */
-  --glass-tint: var(--color-content-1);
-  --glass-press-tint: var(--color-content-1);
-  --glass-shade-color: var(--color-surface-0);
-  --glass-shadow-alpha: 0.55;
-  --glass-highlight-base: 6%;
-  --glass-shade-base: 40%;
-  --glass-rim-strong-base: 13.5%;
-  --glass-rim-soft-base: 9%;
-  --glass-rim-shade-base: 0%;
-  --glass-rim-gap-ratio: 0;
-  --glass-desktop-outline: rgb(0 0 0 / 0.4);
-  --glass-desktop-inner-edge: rgb(255 255 255 / 0.08);
-  --glass-desktop-top-edge: rgb(255 255 255 / 0.12);
-  /* Dark desktop glass separates by its outline; light adds a cast shadow. */
-  --glass-desktop-cast-alpha: 0;
-  --elevated-control-scale: 0.4;
-  /* Mobile chrome has two diagonal reflections with quiet opposing corners. */
-  --island-rim-strong: 28%;
-  --island-rim-soft: 12%;
-
   /* Depth-0 defaults for content rendered outside a Layer marker. */
   --layer-surface: var(--color-surface-0);
   --layer-inset: var(--color-surface-0);
@@ -123,35 +86,6 @@
     background-color: oklch(from var(--color-ink) l c h / 0.1);
   }
 
-}
-
-/* Light themes invert where the glass gets its lift: the bright edge is white
-   rather than the (dark) ink color, the bottom edge is a hint of ink rather
-   than a hole punched in black, and the cast shadow is softer so the surface
-   reads as raised instead of cut out. Palette only — the geometry tokens are
-   shared, so every size scales the same way in both themes. */
-html[data-theme-light='true'] {
-  --glass-tint: white;
-  --glass-press-tint: white;
-  --glass-shade-color: var(--color-content-0);
-  --glass-shadow-alpha: 0.28;
-  --glass-highlight-base: 55%;
-  --glass-shade-base: 8%;
-  --glass-rim-strong-base: 52.5%;
-  --glass-rim-soft-base: 30%;
-  /* A faint ink rim keeps white reflections legible on pale surfaces. */
-  --glass-rim-shade-base: 7%;
-  /* Keep quiet corners close to the highlight instead of exposing a dark rim. */
-  --glass-rim-gap-ratio: 0.85;
-  --glass-desktop-outline: var(--color-edge-frame);
-  --glass-desktop-inner-edge: rgb(255 255 255 / 0.6);
-  --glass-desktop-top-edge: rgb(255 255 255 / 0.9);
-  /* A fine outline alone vanishes on near-white content: keep the glass cast
-     shadow, and give controls a full 1px edge like a bordered input. */
-  --glass-desktop-cast-alpha: var(--glass-shadow-alpha);
-  --elevated-control-scale: 1;
-  --island-rim-strong: 75%;
-  --island-rim-soft: 40%;
 }
 
 html[data-platform='ios'],
@@ -696,6 +630,181 @@ body.tauri-ios {
   --sidepanel-label-width: 5.5rem;
 }
 
+/* Runtime theme tokens. Dark is the default; light overrides follow.
+   Reset shared materials at every theme marker so previews resolve locally.
+   Root-only and device conditions retain their existing scope. */
+:root,
+[data-theme-light] {
+  /* Neutral borders. Focus, status, and glass edges stay independent. */
+  --border-primary: oklch(1 0 0 / 16%);
+  --border-secondary: oklch(1 0 0 / 12%);
+  --border-tertiary: oklch(1 0 0 / 8%);
+  --divider: oklch(1 0 0 / 4%);
+
+  /* Button materials. */
+  --button-primary-bg: var(--color-accent);
+  --button-primary-ink: white;
+  --button-primary-state-mix: black;
+  --button-primary-hover: color-mix(in srgb, var(--button-primary-bg) 82%, var(--button-primary-state-mix));
+  --button-primary-pressed: color-mix(in srgb, var(--button-primary-bg) 72%, var(--button-primary-state-mix));
+  --button-neutral-bg: white;
+  --button-neutral-ink: black;
+  --button-neutral-hover: color-mix(in srgb, var(--button-neutral-bg) 82%, var(--button-neutral-ink));
+  --button-neutral-pressed: color-mix(in srgb, var(--button-neutral-bg) 72%, var(--button-neutral-ink));
+  --button-focus: var(--color-edge-focus, var(--color-accent));
+  --button-elevated-outline: var(--glass-desktop-outline);
+  --button-elevated-top-edge: var(--glass-desktop-top-edge);
+  --button-elevated-inner-edge: var(--glass-desktop-inner-edge);
+
+  /* Tint the face before applying opacity so dark state strengths stay fixed. */
+  --button-secondary-face: color-mix(in srgb, white 98%, var(--color-accent) 2%);
+  --button-secondary-bg: oklch(from var(--button-secondary-face) l c h / 4%);
+  --button-secondary-hover: oklch(from var(--button-secondary-face) l c h / 6%);
+  --button-secondary-pressed: oklch(from var(--button-secondary-face) l c h / 8%);
+  --button-outline-hover: oklch(1 0 0 / 8%);
+  --button-outline-pressed: oklch(1 0 0 / 10%);
+  --button-tertiary-bg: transparent;
+  --button-tertiary-hover: oklch(1 0 0 / 10%);
+  --button-tertiary-pressed: oklch(1 0 0 / 14%);
+
+  --button-danger-bg: oklch(from var(--color-failure) l c h / 10%);
+  --button-danger-hover: oklch(from var(--color-failure) l c h / 26%);
+  --button-danger-pressed: oklch(from var(--color-failure) l c h / 32%);
+  --button-success-bg: oklch(from var(--color-success) l c h / 8%);
+  --button-success-hover: oklch(from var(--color-success) l c h / 16%);
+  --button-success-pressed: oklch(from var(--color-success) l c h / 22%);
+
+  /* Negative spread keeps the faint contact shadow beneath the button. */
+  --button-shadow: 0 2px 1px -1px oklch(0 0 0 / 10%);
+
+  /* Avatar edges remain at the current 0.4 review strength. */
+  --color-avatar-edge: oklch(0 0 0 / 0.4);
+
+  /* The document owns the glass palette; geometry stays in the utilities. */
+  &:where(:root) {
+    /* Colors and strengths stay here; utilities own blur, dimensions, and
+       --glass-scale so control sizes share the same material. */
+    --glass-tint: var(--color-content-1);
+    --glass-press-tint: var(--color-content-1);
+    --glass-shade-color: var(--color-surface-0);
+    --glass-shadow-alpha: 0.55;
+    --glass-highlight-base: 6%;
+    --glass-shade-base: 40%;
+    --glass-rim-strong-base: 13.5%;
+    --glass-rim-soft-base: 9%;
+    --glass-rim-shade-base: 0%;
+    --glass-rim-gap-ratio: 0;
+    --glass-desktop-outline: rgb(0 0 0 / 0.4);
+    --glass-desktop-inner-edge: rgb(255 255 255 / 0.08);
+    --glass-desktop-top-edge: rgb(255 255 255 / 0.12);
+    /* Dark desktop glass separates by its outline; light adds a cast shadow. */
+    --glass-desktop-cast-alpha: 0;
+    --elevated-control-scale: 0.4;
+    /* Mobile chrome has two diagonal reflections with quiet opposing corners. */
+    --island-rim-strong: 28%;
+    --island-rim-soft: 12%;
+  }
+
+  /* Preserve the darker thread rail only on an explicitly dark document. */
+  &:is(html):where([data-theme-light='false']) {
+    --color-thread-rail: color-mix(in oklch, var(--color-surface) 70%, var(--color-ink));
+  }
+}
+
+[data-theme-light='true'] {
+  /* Neutral borders. */
+  --border-primary: oklch(0 0 0 / 16%);
+  --border-secondary: oklch(0 0 0 / 12%);
+  --border-tertiary: oklch(0 0 0 / 8%);
+  --divider: oklch(0 0 0 / 4%);
+
+  /* Button materials. */
+  --button-neutral-bg: black;
+  --button-neutral-ink: white;
+  /* Keep hover and pressed shading neutral over the lightly tinted face. */
+  --button-secondary-bg: var(--button-secondary-face);
+  --button-secondary-hover: color-mix(in srgb, var(--button-secondary-face), black 4%);
+  --button-secondary-pressed: color-mix(in srgb, var(--button-secondary-face), black 8%);
+  /* Raised light controls keep the outer frame without inset highlights. */
+  --button-elevated-top-edge: transparent;
+  --button-elevated-inner-edge: transparent;
+  --button-outline-hover: oklch(0 0 0 / 4%);
+  --button-outline-pressed: oklch(0 0 0 / 8%);
+  --button-tertiary-hover: oklch(0 0 0 / 4%);
+  --button-tertiary-pressed: oklch(0 0 0 / 8%);
+
+  --button-danger-bg: oklch(from var(--color-failure) l c h / 20%);
+  --button-success-bg: oklch(from var(--color-success) l c h / 20%);
+  --button-success-hover: oklch(from var(--color-success) l c h / 26%);
+  --button-success-pressed: oklch(from var(--color-success) l c h / 32%);
+
+  --button-shadow: 0 2px 1px -1px oklch(0 0 0 / 5%);
+
+  /* Avatar and composer surfaces. */
+  --color-avatar-edge: oklch(1 0 0 / 0.4);
+  --color-composer: var(--color-surface-4);
+
+  /* Light document glass keeps its existing root-only scope. */
+  &:is(html) {
+    --glass-tint: white;
+    --glass-press-tint: white;
+    --glass-shade-color: var(--color-content-0);
+    --glass-shadow-alpha: 0.28;
+    --glass-highlight-base: 55%;
+    --glass-shade-base: 8%;
+    --glass-rim-strong-base: 52.5%;
+    --glass-rim-soft-base: 30%;
+    /* A faint ink rim keeps white reflections legible on pale surfaces. */
+    --glass-rim-shade-base: 7%;
+    /* Keep quiet corners close to the highlight instead of exposing a dark rim. */
+    --glass-rim-gap-ratio: 0.85;
+    --glass-desktop-outline: var(--color-edge-frame);
+    --glass-desktop-inner-edge: rgb(255 255 255 / 0.6);
+    --glass-desktop-top-edge: rgb(255 255 255 / 0.9);
+    /* A fine outline alone vanishes on near-white content: keep the glass cast
+       shadow, and give controls a full 1px edge like a bordered input. */
+    --glass-desktop-cast-alpha: var(--glass-shadow-alpha);
+    --elevated-control-scale: 1;
+    --island-rim-strong: 75%;
+    --island-rim-soft: 40%;
+
+    &:not([data-touch-device='true']) {
+      --color-control-raised: color-mix(in oklch, var(--color-surface-2) 98%, var(--color-content-0));
+    }
+  }
+}
+@theme inline {
+  --color-border-primary: var(--border-primary);
+  --color-border-secondary: var(--border-secondary);
+  --color-border-tertiary: var(--border-tertiary);
+  --color-divider: var(--divider);
+  --color-button-primary-bg: var(--button-primary-bg);
+  --color-button-primary-hover: var(--button-primary-hover);
+  --color-button-primary-pressed: var(--button-primary-pressed);
+  --color-button-primary-ink: var(--button-primary-ink);
+  --color-button-neutral-bg: var(--button-neutral-bg);
+  --color-button-neutral-ink: var(--button-neutral-ink);
+  --color-button-neutral-hover: var(--button-neutral-hover);
+  --color-button-neutral-pressed: var(--button-neutral-pressed);
+  --color-button-secondary-bg: var(--button-secondary-bg);
+  --color-button-secondary-hover: var(--button-secondary-hover);
+  --color-button-secondary-pressed: var(--button-secondary-pressed);
+  --color-button-outline-hover: var(--button-outline-hover);
+  --color-button-outline-pressed: var(--button-outline-pressed);
+  --color-button-tertiary-bg: var(--button-tertiary-bg);
+  --color-button-tertiary-hover: var(--button-tertiary-hover);
+  --color-button-tertiary-pressed: var(--button-tertiary-pressed);
+  --color-button-danger-bg: var(--button-danger-bg);
+  --color-button-danger-hover: var(--button-danger-hover);
+  --color-button-danger-pressed: var(--button-danger-pressed);
+  --color-button-success-bg: var(--button-success-bg);
+  --color-button-success-hover: var(--button-success-hover);
+  --color-button-success-pressed: var(--button-success-pressed);
+  --color-button-focus: var(--button-focus);
+  --shadow-button: var(--button-shadow);
+  --spacing-button-control: 2rem;
+}
+
 /* Interface languages whose scripts Inter doesn't cover. Latin text keeps the
    default faces; the script's glyphs come from each platform's native UI font
    (macOS, Windows, then Noto on Linux/Android), and `lang` on <html> (set by
@@ -749,28 +858,8 @@ html:not([data-touch-device="true"]) [data-invert] {
 @custom-variant light-mode (&:where([data-theme-light="true"] *));
 @custom-variant dark-mode (&:where([data-theme-light="false"] *));
 
-/* Dark surfaces need a larger ink step for the thread path to remain visible.
-   Both inputs stay opaque, so overlapping rail segments still render evenly. */
-html[data-theme-light='false'] {
-  --color-thread-rail: color-mix(in oklch, var(--color-surface) 70%, var(--color-ink));
-}
-
-/* The avatar hairline follows the surface it sits on: it darkens the edge on
-   dark surfaces and lightens it on light ones, so the avatar settles into the
-   page instead of being ringed against it. Ancestor-scoped for the same reason
-   as the variants above.
-
-   NOTE: turned up to 0.4 so the treatment is obvious while it is being
-   reviewed. The intended production value is 0.08 — change both alphas below
-   (and the @theme default) once the look is settled. */
-[data-theme-light='false'] {
-  --color-avatar-edge: oklch(0 0 0 / 0.4);
-}
-
-[data-theme-light='true'] {
-  --color-avatar-edge: oklch(1 0 0 / 0.4);
-  --color-composer: var(--color-surface-4);
-}
+/* Expanded content is not a pressed action; only popup triggers stay active. */
+@custom-variant popup-open (&:where([aria-haspopup]:not([aria-haspopup="false"]))[aria-expanded="true"]);
 
 /* Desktop floating surfaces use a close contact shadow rather than the longer
    touch shadow. */
@@ -779,22 +868,7 @@ html:not([data-touch-device='true']) {
   --shadow-control: 0 1px 2px rgb(0 0 0 / 0.06);
 }
 
-html[data-theme-light='true']:not([data-touch-device='true']) {
-  --color-control-raised: color-mix(in oklch, var(--color-surface-2) 98%, var(--color-content-0));
-}
-
-/* Right-side header actions share a quiet, hover-only background. Touch header
-   islands own their controls' chrome (the compose island's filled send button,
-   say), so the flattening stops at an island boundary. */
-@utility header-actions {
-  & [data-button]:is([data-variant="ghost"], [data-variant="outline"]):not([data-header-island] *) {
-    @apply glass-none border-0 bg-transparent;
-
-    &:not(:hover):not(:active) {
-      background-image: none;
-    }
-  }
-}
+/* Header Button presentation belongs to the shared Button recipes. */
 
 /* Floating "island" chrome shared by the mobile dock buttons, header islands,
    and other floating mobile controls. Consumers add their own shape classes
@@ -925,6 +999,14 @@ html[data-theme-light='true']:not([data-touch-device='true']) {
   @apply elevation-shadow border-transparent shadow-(--shadow-elevated);
   --elevation-scale: var(--elevated-control-scale);
   --elevation-ambient-shadow: var(--shadow-control);
+}
+
+/* Reuse shared elevation with Button-specific edge colors. */
+@utility button-elevated {
+  @apply elevated;
+  --glass-desktop-outline: var(--button-elevated-outline);
+  --glass-desktop-top-edge: var(--button-elevated-top-edge);
+  --glass-desktop-inner-edge: var(--button-elevated-inner-edge);
 }
 
 /* Strip the glass under a variant (e.g. a container query collapsing a pill
@@ -1098,8 +1180,8 @@ html[data-platform='ios'][data-touch-device='true'] :is(
   [data-input] [data-composer-collapsed],
   [data-mobile-dock-island],
   [data-header-island],
-  [data-slot='button-group'].glass,
-  :is(button, a, [role='button'], [role='tab']):is(.glass, .island, [class~='touch:island'])
+  [data-slot='button-group']:is(.glass, [class~='touch:glass']),
+  :is(button, a, [role='button'], [role='tab']):is(.glass, [class~='touch:glass'], .island, [class~='touch:island'])
 ) {
   /* The shimmer replaces native tap feedback only on these press surfaces. */
   -webkit-tap-highlight-color: transparent;
@@ -1831,8 +1913,10 @@ html:not([data-touch-device="true"]) [data-message][data-targeted]:hover{
   transition: none;
 }
 
-:focus-visible {
-  outline: none;
+@layer base {
+  :focus-visible {
+    outline: none;
+  }
 }
 
 input[type="time"]::-webkit-calendar-picker-indicator {

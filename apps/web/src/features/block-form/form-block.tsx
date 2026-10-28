@@ -143,7 +143,9 @@ function FormBlockContent(props: {
       fallback={
         <HeaderActionButton
           label="Publish"
-          icon={<PaperPlaneTilt />}
+          icon={
+            <PaperPlaneTilt class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+          }
           onClick={openShare}
         />
       }
@@ -204,6 +206,7 @@ function FormBlockContent(props: {
             >
               <HeaderActionGroup label="Form actions">
                 <HeaderActionButton
+                  grouped
                   label="Preview"
                   icon={<Eye class="size-3.5" />}
                   disabled={preview.opening()}

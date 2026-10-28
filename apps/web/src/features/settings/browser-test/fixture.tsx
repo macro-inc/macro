@@ -12,7 +12,7 @@ import { createMemo, createSignal, For, onMount, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { macroDarkTheme } from '../../theme/themes/macro-dark';
 import { macroLightTheme } from '../../theme/themes/macro-light';
-import { themeCssVars } from '../../theme/utils/themeColorTokens';
+import { themeCssVars } from '../../theme/utils/themeCssVars';
 import { Appearance } from '../Appearance';
 import { AppInfo } from '../components/app-info';
 import { SettingsSearchTarget } from '../components/settings-search-target';
@@ -111,7 +111,7 @@ function Fixture() {
               {(email) => (
                 <SettingsRow label={email} description="Up to date">
                   <Show when={email === 'alex@example.com'}>
-                    <Button variant="outline" size="md">
+                    <Button variant="secondary" size="md">
                       Enable calendar
                     </Button>
                   </Show>
@@ -125,7 +125,7 @@ function Fixture() {
               label="Add another inbox"
               description="Connect more Gmail accounts."
             >
-              <Button variant="outline" size="md">
+              <Button variant="secondary" size="md">
                 Add account
               </Button>
             </SettingsRow>

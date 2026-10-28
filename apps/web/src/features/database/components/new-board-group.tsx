@@ -72,7 +72,7 @@ export function NewBoardGroup(props: {
             <h2 class="text-sm font-medium">Create a group</h2>
             <Button
               size="sm"
-              variant="outline"
+              variant="secondary"
               class="gap-2"
               onClick={() => {
                 setDraft('');
@@ -122,13 +122,18 @@ export function NewBoardGroup(props: {
             </p>
           </Show>
           <div class="mt-3 flex items-center justify-end gap-2">
-            <Button size="sm" disabled={pending()} onClick={cancel}>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={pending()}
+              onClick={cancel}
+            >
               Cancel
             </Button>
             <Button
               size="sm"
               type="submit"
-              variant="cta"
+              variant="primary"
               disabled={pending() || !draft().trim()}
             >
               {pending() ? 'Adding…' : 'Add group'}

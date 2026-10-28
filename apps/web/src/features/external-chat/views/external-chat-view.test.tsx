@@ -699,7 +699,7 @@ it('opens members, sharing and syncing in the side panel', async () => {
   });
   const { share } = mount(fake);
   expect(screen.queryByRole('list', { name: 'WhatsApp members' })).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: /side panel/i }));
+  fireEvent.click(screen.getByRole('button', { name: 'Show details' }));
 
   const members = await screen.findByRole('list', {
     name: 'WhatsApp members',
@@ -734,7 +734,7 @@ it('lets the owner stop syncing a direct chat from its details', async () => {
     chat: { ...chat, kind: 'direct', name: 'Ana Ruiz', members: [] },
   });
   mount(fake);
-  fireEvent.click(screen.getByRole('button', { name: /side panel/i }));
+  fireEvent.click(screen.getByRole('button', { name: 'Show details' }));
   expect(
     await screen.findByRole('button', { name: 'Stop syncing' })
   ).toBeTruthy();
@@ -747,7 +747,7 @@ it('keeps syncing controls from a shared viewer', async () => {
     chat: { ...chat, accessLevel: 'view', canSend: false },
   });
   mount(fake);
-  fireEvent.click(screen.getByRole('button', { name: /side panel/i }));
+  fireEvent.click(screen.getByRole('button', { name: 'Show details' }));
   expect(await screen.findByRole('button', { name: 'Share…' })).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Stop syncing' })).toBeNull();
 });

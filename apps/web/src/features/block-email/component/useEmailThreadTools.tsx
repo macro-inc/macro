@@ -27,6 +27,7 @@ import { ENABLE_EMAIL_SHARING } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { TOKENS } from '@core/hotkey/tokens';
 import { getActiveCommandByToken, runCommand } from '@core/hotkey/utils';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { buildEntityData } from '@entity';
 import IconShared from '@icon/share.svg';
@@ -324,10 +325,11 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
         );
       },
       condition: () => !!emailCtx.thread()?.db_id,
-      buttonComponent: () => {
+      buttonComponent: (control) => {
         const id = emailCtx.thread()?.db_id;
         return id ? (
           <ChatWithAgentButton
+            grouped={control.grouped}
             entity={{ type: 'email', id, name: props.title }}
           />
         ) : null;
@@ -348,6 +350,7 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
         const entity = emailEntity();
         return entity && isOwnThread() ? (
           <EmailReminderStatus
+            grouped={!isTouchDevice()}
             entity={entity}
             onSaved={async () => {
               const navigation = props.listNavigation;

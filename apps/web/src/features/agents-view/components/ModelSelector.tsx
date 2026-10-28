@@ -4,6 +4,7 @@ import {
   type ModelRowProps,
 } from '@core/component/AI/component/input/ModelCatalogPicker';
 import { modelLabel } from '@core/component/AI/constant/model-label';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { Component, JSX } from 'solid-js';
 
 export type ModelChoice = {
@@ -39,7 +40,8 @@ export function ModelSelector(props: {
       triggerLabel={props.label}
       placeholder={modelLabel(props.model)}
       triggerSize="md"
-      triggerClass="min-w-0 max-w-full gap-[5.625px] rounded-full border-0 bg-transparent hover:bg-hover px-[7.5px] text-base font-normal text-ink-muted light-mode:text-composer-placeholder [&_svg]:size-[15px]"
+      triggerClass="min-w-0 max-w-full gap-[5.625px] rounded-full border-0 bg-transparent hover:bg-hover px-[7.5px] text-base font-normal text-ink-muted light-mode:text-composer-placeholder"
+      contentClass="w-[min(42rem,calc(100vw-2rem))] rounded-2xl border-0"
       ariaLabel="Model"
       placement="top-end"
       disabled={props.disabled}
@@ -67,7 +69,7 @@ export function SessionModelSelector(props: AgentModelSelectorProps) {
           shown(),
           props.options.find((option) => option.id === shown())?.name
         ),
-        props.effortLabel,
+        isTouchDevice() ? props.effortLabel : undefined,
       ]
         .filter(Boolean)
         .join(' · ')}

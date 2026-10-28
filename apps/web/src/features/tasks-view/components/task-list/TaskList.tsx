@@ -459,7 +459,7 @@ export function TaskList(props: TaskListProps) {
                     <div class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 text-sm text-ink-muted">
                       <span>Tasks couldn’t be loaded.</span>
                       <Button
-                        variant="outline"
+                        variant="secondary"
                         size="sm"
                         onClick={() =>
                           fireAndForget(source.refresh(), 'tasks-view')
@@ -484,7 +484,7 @@ export function TaskList(props: TaskListProps) {
                   </Show>
                   <Show when={!forceEmptyState() && source.hasMore()}>
                     <Button
-                      variant="outline"
+                      variant="secondary"
                       size="sm"
                       disabled={source.isLoadingMore()}
                       onClick={() =>
@@ -664,9 +664,8 @@ export function TaskList(props: TaskListProps) {
                                   when={!loadMore().isLoading}
                                   fallback={
                                     <Button
-                                      variant="outline"
-                                      size="sm"
-                                      depth={2}
+                                      variant="secondary"
+                                      size="xs"
                                       class={buttonClass()}
                                       disabled
                                     >
@@ -676,9 +675,8 @@ export function TaskList(props: TaskListProps) {
                                   }
                                 >
                                   <Button
-                                    variant="outline"
-                                    size="sm"
-                                    depth={2}
+                                    variant="secondary"
+                                    size="xs"
                                     class={buttonClass()}
                                   >
                                     <CaretDownIcon class="size-2.5" />

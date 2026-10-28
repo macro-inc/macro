@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, owner, name, schedule, kind, timezone, task, claimed, created_at,\n                   updated_at, next_run_at, enabled, trigger_type, event_filters,\n                   configuration_revision, event_activated_at, trigger_config, run_visibility\n            FROM scheduled_action\n            WHERE id = $1\n            ",
+  "query": "\n            SELECT id, owner, name, schedule, kind, timezone, task, claimed, created_at,\n                   updated_at, next_run_at, enabled, trigger_type, event_filters,\n                   configuration_revision, event_activated_at, trigger_config, run_visibility, template_id\n            FROM scheduled_action\n            WHERE id = $1\n            ",
   "describe": {
     "columns": [
       {
@@ -92,6 +92,11 @@
         "ordinal": 17,
         "name": "run_visibility",
         "type_info": "Text"
+      },
+      {
+        "ordinal": 18,
+        "name": "template_id",
+        "type_info": "Uuid"
       }
     ],
     "parameters": {
@@ -117,8 +122,9 @@
       false,
       true,
       true,
-      false
+      false,
+      true
     ]
   },
-  "hash": "25e8d0c6107cbed40084681e520b4efbe35b59a902abe83e021856bf53edc8f2"
+  "hash": "524c351334625b88bdcce2cabd2fc3bb250614590fb4e6b9d29750f0cadfbed0"
 }

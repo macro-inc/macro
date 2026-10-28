@@ -21,6 +21,12 @@ Components, styling, and interaction conventions.
   default palette is disabled via `--color-*: initial` in
   `apps/web/src/index.css`, so classes like `text-red-500` silently render
   nothing. Enforced by ast-grep `tsx-no-raw-tailwind-palette`, CI error.
+- Keep runtime theme tokens together in `apps/web/src/index.css`: one
+  `:root, [data-theme-light]` block for dark defaults, followed by one
+  `[data-theme-light='true']` override block. Keep any narrower root/device
+  conditions inside that theme area. `@theme` registers Tailwind tokens;
+  component utilities and layer/inversion rules keep their own responsibilities.
+  Do not append separate border, Button, glass, or avatar theme blocks elsewhere.
 - **FE-26** Prefer composition over configurability; keep reusable components
   small and free of queries/complex state.
 - **FE-27** Don't add `cursor-pointer` to clickable elements. Enforced by

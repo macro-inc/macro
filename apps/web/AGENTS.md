@@ -36,15 +36,21 @@ sheet that must still press its own controls:
 
 Composer typeahead menus choosing the side with room for their full list
 (`floatWithSelection`'s `fullHeight`), above a composer at the bottom of a
-phone screen and below one near the top, have a backend-free browser regression:
+phone screen and below one near the top, and the floating format menu staying
+beside a scrolling editor whose selection runs past its visible bottom
+(`clipToVisible`), have a backend-free browser regression:
 `bunx playwright test --config src/lib/core/component/LexicalMarkdown/directive/browser-test/playwright.config.ts`.
 
 Event details placement has a backend-free browser regression: the desktop
 popover stays beside its event when join requests arrive after it opens, and
-slides into a short window; the phone drawer shows late requests:
+slides into a short window; the phone drawer shows late requests. The same
+suite covers the Add guests and Forward invitation editors (the real
+`EventGuests` over a stand-in contact picker) on desktop and phone:
 `bunx playwright test --config src/features/calendar-view/browser-test/playwright.config.ts`.
 Keep the popover's `flip` limited to `left-start`: an end fallback re-places it
-above the event whenever a late section changes its height.
+above the event whenever a late section changes its height. Keep the guest
+editors' `overlap`: without it their height follows the room below the button,
+so they never overflow, never flip, and squeeze the chosen people to nothing.
 
 The desktop app's local runtime setup (find an agent, connect, create the
 agent, retry, open a session) has a backend-free browser regression over a
@@ -274,7 +280,8 @@ the user's newest account for that app from the last fifteen minutes.
   workflow and mobile controls. Use `ListHeader` for the single-row Email, Drive,
   and Tasks headers: title, filters, view options, New, expandable Search. Put sidebar search in
   `ViewSidebar.Header` so its icon precedes collapse and its field opens above New.
-- Keep desktop headers on the shared `ListHeader` / `HeaderActionGroup` pattern: view `Tabs` as pills after the title, 32px semantic islands with 8px gaps on the right, fully rounded elevated frames, New then expandable Search; preserve touch layouts. Pick each control by role from the [design system rule](../../.agents/rules/web/design-system.md); see [UI conventions](../../docs/agent-guide/ui-conventions.md#top-bars). Never use recessed/inset backgrounds in headers.
+- Keep desktop headers on the shared `ListHeader` / `HeaderActionGroup` pattern: view `Tabs` as pills after the title, `sm`/`icon-sm` semantic islands (28px controls) with 8px gaps on the right, fully rounded frames, New then expandable Search; retain `md` sizing for Tabs, New, and Search. Drive and Tasks list-header filter, layout, sort, and grouping islands use `md`/`icon-md` (32px) to match New and Search. Preserve touch layouts. Compose ButtonGroup actions with explicit `ButtonGroup.Button` segments; use `variant="secondary" finish="raised"` on action frames. Standalone Buttons do not inherit group styling. Pick each control by role from the [design system rule](../../.agents/rules/web/design-system.md); see [UI conventions](../../docs/agent-guide/ui-conventions.md#top-bars). Never use recessed/inset backgrounds in headers.
+- Keep desktop model and effort controls separate: the model selector opens the catalog and the speedometer opens the runtime's advertised slider stops; retain the mobile effort sheet.
 - Passive PR mentions must not retry initial GitHub status failures on remount; preserve confirmed status through refetch errors and keep pending data reads out of their parent Suspense boundary.
 - Keep native booking exit navigation in the route shell, outside page loading boundaries, and use the router so the native hash route stays intact.
 - Diagnose native full reloads with `native_webview_started`, `native_diagnostic_recovered`, and the shared `frontend_instance_id`; use `reloadApp(reason)` for frontend reloads and keep breadcrumbs content-free. Treat `previous_document_*` checkpoints as last-observed lifecycle evidence, never a crash verdict; clear them on logout. `previous_document_last_*` comes from the native navigation breadcrumb (route and entity type, never ids). See [frontend checkpoints](docs/native-reload-diagnostics.md) and `tauri/src-tauri/README.md`.

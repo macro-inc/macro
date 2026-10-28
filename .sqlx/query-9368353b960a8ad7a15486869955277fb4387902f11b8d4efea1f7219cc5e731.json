@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, owner, name, schedule, kind, timezone, task, claimed, created_at,\n                   updated_at, next_run_at, enabled, trigger_type, event_filters,\n                   configuration_revision, event_activated_at, trigger_config, run_visibility\n            FROM scheduled_action\n            WHERE owner = $1\n            ",
+  "query": "\n            SELECT id, owner, name, schedule, kind, timezone, task, claimed, created_at,\n                   updated_at, next_run_at, enabled, trigger_type, event_filters, trigger_config,\n                   configuration_revision, event_activated_at, run_visibility, template_id\n            FROM scheduled_action\n            WHERE id = ANY($1)\n            ",
   "describe": {
     "columns": [
       {
@@ -75,28 +75,33 @@
       },
       {
         "ordinal": 14,
+        "name": "trigger_config",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 15,
         "name": "configuration_revision",
         "type_info": "Int8"
       },
       {
-        "ordinal": 15,
+        "ordinal": 16,
         "name": "event_activated_at",
         "type_info": "Timestamptz"
-      },
-      {
-        "ordinal": 16,
-        "name": "trigger_config",
-        "type_info": "Jsonb"
       },
       {
         "ordinal": 17,
         "name": "run_visibility",
         "type_info": "Text"
+      },
+      {
+        "ordinal": 18,
+        "name": "template_id",
+        "type_info": "Uuid"
       }
     ],
     "parameters": {
       "Left": [
-        "Text"
+        "UuidArray"
       ]
     },
     "nullable": [
@@ -114,11 +119,12 @@
       false,
       false,
       true,
+      true,
       false,
       true,
-      true,
-      false
+      false,
+      true
     ]
   },
-  "hash": "732d1f99ec6e068e2f38277ea773d140dcaf693cd05398f7a3b832de476978c7"
+  "hash": "9368353b960a8ad7a15486869955277fb4387902f11b8d4efea1f7219cc5e731"
 }

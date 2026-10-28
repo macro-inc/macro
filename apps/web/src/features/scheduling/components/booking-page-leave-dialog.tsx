@@ -55,7 +55,7 @@ export function BookingPageLeaveDialog(props: {
           </Button>
           <Button
             type="button"
-            variant="cta"
+            variant="primary"
             disabled={props.pending || !props.canSave}
             onClick={props.onSave}
           >

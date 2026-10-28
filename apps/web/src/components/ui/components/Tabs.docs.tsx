@@ -3,8 +3,8 @@ import ChatIcon from '@icon/system/regular/chat-text.svg';
 import CodeIcon from '@icon/system/regular/code.svg';
 import PaperclipIcon from '@icon/system/regular/paperclip.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
-import { createSignal } from 'solid-js';
-import { Tabs } from './Tabs';
+import { createSignal, For } from 'solid-js';
+import { Tabs, type TabsSize } from './Tabs';
 
 // #region demo:view
 function ViewDemo() {
@@ -67,6 +67,46 @@ function IconOnlyDemo() {
 }
 // #endregion
 
+// #region demo:sizes
+function SizeRow(props: { size: TabsSize }) {
+  const [view, setView] = createSignal<'messages' | 'files'>('messages');
+  const [icon, setIcon] = createSignal<'messages' | 'files'>('messages');
+  const options = [
+    { value: 'messages', label: 'Messages', icon: ChatIcon },
+    { value: 'files', label: 'Files', icon: PaperclipIcon },
+  ] as const;
+  return (
+    <div class="flex flex-wrap items-center gap-3">
+      <span class="w-6 font-mono text-xs text-ink-muted">{props.size}</span>
+      <Tabs
+        aria-label={`${props.size} view tabs`}
+        size={props.size}
+        options={options}
+        value={view()}
+        onChange={setView}
+      />
+      <Tabs
+        aria-label={`${props.size} icon tabs`}
+        size={props.size}
+        iconOnly
+        options={options}
+        value={icon()}
+        onChange={setIcon}
+      />
+    </div>
+  );
+}
+
+function SizesDemo() {
+  return (
+    <div class="flex flex-col gap-3">
+      <For each={['xs', 'sm', 'md', 'lg', 'xl'] as const}>
+        {(size) => <SizeRow size={size} />}
+      </For>
+    </div>
+  );
+}
+// #endregion
 // #region demo:value
 function ValueDemo() {
   const [value, setValue] = createSignal<'team' | 'personal'>('team');
@@ -122,7 +162,7 @@ export default defineDoc({
       id: 'view',
       title: 'View tabs',
       description:
-        'Header view tabs sit after the title, left of the controls. The choices share one rounded track with an inset selected pill, at the same height as neighbouring controls.',
+        'Header view tabs sit after the title, left of the controls. The choices share a flat rounded track with an inset selected pill, sized to match neighbouring controls.',
       render: ViewDemo,
     },
     {
@@ -139,6 +179,13 @@ export default defineDoc({
       render: IconOnlyDemo,
     },
     {
+      id: 'sizes',
+      title: 'Sizes',
+      description:
+        'Tabs share Button minimum heights and square icon sizes. Medium labels use 14px text and 12px horizontal padding; large labels use 15px text. Touch treatments retain their minimum targets.',
+      render: SizesDemo,
+    },
+    {
       id: 'value',
       title: 'Choosing a value',
       description:
@@ -149,7 +196,7 @@ export default defineDoc({
       id: 'track',
       title: 'Composer mode switch',
       description:
-        '`variant="track"` slides one raised pill along a filled track on every device. It is only for the agent composer\'s Chat/Code switch in the composer tray.',
+        '`variant="track"` slides one flat pill along a filled track on every device. It is only for the agent composer\'s Chat/Code switch in the composer tray.',
       render: TrackDemo,
     },
   ],

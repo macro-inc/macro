@@ -66,7 +66,7 @@ export function ActivitySection(
                 onEscape={view.host.focus}
                 class="min-w-0 flex-1"
               />
-              <Button variant="outline" onClick={props.onCreate}>
+              <Button variant="secondary" onClick={props.onCreate}>
                 <PlusIcon class="size-4" />
                 {props.createLabel}
               </Button>
@@ -77,7 +77,8 @@ export function ActivitySection(
         <ListHeader title={props.title ?? props.label}>
           {props.controls}
           <ViewCreateButton
-            label={props.createLabel}
+            aria-label={props.createLabel}
+            tooltip={props.createLabel}
             onClick={props.onCreate}
           />
           <ListHeaderSearch

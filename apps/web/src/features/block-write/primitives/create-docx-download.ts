@@ -7,9 +7,9 @@ const DOCX_MIME =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
 /**
- * Saving a Word document as a `.docx`, for the editor toolbar and the file
- * menu alike. The mounted editor saves its live state, unsynced edits
- * included; before it mounts, the server's export is the latest copy.
+ * Saving a Word document as a `.docx` from the file menu. The mounted editor
+ * saves its live state, unsynced edits included; before it mounts, the server's
+ * export is the latest copy.
  */
 export function createDocxDownload(options: {
   documentId: string;

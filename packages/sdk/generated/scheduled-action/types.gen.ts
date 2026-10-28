@@ -227,6 +227,33 @@ export type LegacyActionConfiguration = {
 export type RoutineModelId = string;
 
 /**
+ * A shared routine's snapshot, readable by any signed-in user with its ID.
+ */
+export type RoutineTemplate = {
+    /**
+     * Routines activated from this template, including stopped ones.
+     */
+    active_count: number;
+    /**
+     * Who shared it: the source routine's owner.
+     */
+    author: string;
+    created_at: string;
+    description: string;
+    /**
+     * The routine it was shared from.
+     */
+    id: string;
+    name: string;
+    task: {
+        [key: string]: unknown;
+    };
+    trigger: ActionTrigger;
+    updated_at: string;
+    variables: Array<TemplateVariable>;
+};
+
+/**
  * An individual trigger in a routine's trigger list.
  */
 export type RoutineTrigger = {
@@ -290,6 +317,10 @@ export type ScheduledAction = {
     task: {
         [key: string]: unknown;
     };
+    /**
+     * The shared template this routine was activated from, if any.
+     */
+    template_id?: string | null;
     trigger: ActionTrigger;
     updated_at: string;
 };
@@ -342,9 +373,45 @@ export type SetScheduledActionEnabled = {
 };
 
 /**
+ * What the owner supplies when sharing; the rest is snapshotted from the routine.
+ */
+export type ShareRoutineTemplate = {
+    description: string;
+    variables: Array<TemplateVariable>;
+};
+
+/**
+ * A user-specific part of a shared routine.
+ */
+export type TemplateVariable = {
+    fill: VariableFill;
+    id: string;
+    kind: 'user';
+    label: string;
+} | {
+    /**
+     * The mention's block name, such as `channel` or `md`.
+     */
+    block_name: string;
+    fill: VariableFill;
+    id: string;
+    kind: 'item';
+    label: string;
+} | {
+    fill: VariableFill;
+    kind: 'time_zone';
+    timezone: string;
+};
+
+/**
  * Full replacement of client configuration, not of server-owned action state.
  */
 export type UpdateScheduledAction = ActionConfigurationUpdate | LegacyActionConfiguration;
+
+/**
+ * How a variable is filled when someone activates the template.
+ */
+export type VariableFill = 'activator' | 'shared' | 'choice';
 
 export type ScheduledActionHealthData = {
     body?: never;
@@ -588,3 +655,116 @@ export type ListScheduledActionHistoryResponses = {
 };
 
 export type ListScheduledActionHistoryResponse = ListScheduledActionHistoryResponses[keyof ListScheduledActionHistoryResponses];
+
+export type UnshareScheduledActionTemplateData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the shared routine
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/{id}/template';
+};
+
+export type UnshareScheduledActionTemplateErrors = {
+    401: string;
+    404: string;
+    500: string;
+};
+
+export type UnshareScheduledActionTemplateError = UnshareScheduledActionTemplateErrors[keyof UnshareScheduledActionTemplateErrors];
+
+export type UnshareScheduledActionTemplateResponses = {
+    204: void;
+};
+
+export type UnshareScheduledActionTemplateResponse = UnshareScheduledActionTemplateResponses[keyof UnshareScheduledActionTemplateResponses];
+
+export type GetScheduledActionTemplateData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the shared routine
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/{id}/template';
+};
+
+export type GetScheduledActionTemplateErrors = {
+    401: string;
+    /**
+     * The routine is not shared
+     */
+    404: string;
+    500: string;
+};
+
+export type GetScheduledActionTemplateError = GetScheduledActionTemplateErrors[keyof GetScheduledActionTemplateErrors];
+
+export type GetScheduledActionTemplateResponses = {
+    200: RoutineTemplate;
+};
+
+export type GetScheduledActionTemplateResponse = GetScheduledActionTemplateResponses[keyof GetScheduledActionTemplateResponses];
+
+export type ShareScheduledActionTemplateData = {
+    body: ShareRoutineTemplate;
+    path: {
+        /**
+         * ID of the routine to share
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/{id}/template';
+};
+
+export type ShareScheduledActionTemplateErrors = {
+    400: string;
+    401: string;
+    404: string;
+    500: string;
+};
+
+export type ShareScheduledActionTemplateError = ShareScheduledActionTemplateErrors[keyof ShareScheduledActionTemplateErrors];
+
+export type ShareScheduledActionTemplateResponses = {
+    200: RoutineTemplate;
+};
+
+export type ShareScheduledActionTemplateResponse = ShareScheduledActionTemplateResponses[keyof ShareScheduledActionTemplateResponses];
+
+export type ActivateScheduledActionTemplateData = {
+    body: CreateScheduledAction;
+    path: {
+        /**
+         * ID of the shared routine
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/{id}/template/activate';
+};
+
+export type ActivateScheduledActionTemplateErrors = {
+    400: string;
+    401: string;
+    403: string;
+    /**
+     * The routine is not shared
+     */
+    404: string;
+    500: string;
+};
+
+export type ActivateScheduledActionTemplateError = ActivateScheduledActionTemplateErrors[keyof ActivateScheduledActionTemplateErrors];
+
+export type ActivateScheduledActionTemplateResponses = {
+    201: ScheduledActionResponse;
+};
+
+export type ActivateScheduledActionTemplateResponse = ActivateScheduledActionTemplateResponses[keyof ActivateScheduledActionTemplateResponses];

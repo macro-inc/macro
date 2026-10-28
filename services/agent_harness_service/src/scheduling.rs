@@ -25,9 +25,13 @@ use scheduled_action::domain::ports::ScheduledActionDispatcher;
 use scheduled_action::domain::service::ScheduledActionServiceImpl;
 use scheduled_action::domain::target_runner::TargetRunner;
 use scheduled_action::domain::target_validation::TargetValidation;
+use scheduled_action::domain::templates::RoutineTemplateServiceImpl;
 use scheduled_action::inbound::axum_router::{ScheduledActionRouterState, scheduled_action_router};
 use scheduled_action::inbound::event_run_worker::run_event_worker;
 use scheduled_action::inbound::kafka_consumer::run_scheduled_action_event_consumer;
+use scheduled_action::inbound::template_router::{
+    RoutineTemplateRouterState, routine_template_router,
+};
 use scheduled_action::outbound::agent_session_client::AgentSessionClient;
 use scheduled_action::outbound::conn_gateway_live_updates::ConnGatewayLiveUpdates;
 use scheduled_action::outbound::event_access::EventAccessAdapter;
@@ -37,6 +41,7 @@ use scheduled_action::outbound::pg_event_run_repo::PgEventRunRepo;
 use scheduled_action::outbound::pg_polling_dispatcher::{
     PgPollingDispatcher, PgPollingDispatcherLifecycle,
 };
+use scheduled_action::outbound::pg_routine_template_repo::PgRoutineTemplateRepo;
 use scheduled_action::outbound::pg_scheduled_action_repo::PgScheduledActionRepo;
 use scheduled_action::swagger::ApiDoc;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
@@ -260,12 +265,21 @@ pub async fn build(
             config.routine_agents_enabled,
         )),
     );
+    let template_state = RoutineTemplateRouterState {
+        service: Arc::new(RoutineTemplateServiceImpl::new(
+            Arc::clone(&service),
+            Arc::new(PgRoutineTemplateRepo::new(db.clone())),
+        )),
+        access_service: Arc::clone(&access),
+        authorization_state: authorization_state.clone(),
+    };
     let state = ScheduledActionRouterState {
         service,
         access_service: access,
         authorization_state,
     };
-    let authed_routes = scheduled_action_router::<_, _, _, ()>(state);
+    let authed_routes = scheduled_action_router::<_, _, _, ()>(state)
+        .merge(routine_template_router::<_, _, _, ()>(template_state));
 
     let router = mount_router(authed_routes)
         .layer(macro_cors::cors_layer())

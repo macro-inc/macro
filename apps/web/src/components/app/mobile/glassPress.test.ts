@@ -123,7 +123,22 @@ describe('mobile glass surface press', () => {
     expect(group.style.getPropertyValue('--press-y')).toBe('20px');
     expect(group.children).toHaveLength(2);
   });
-  it.each(['glass', 'island', 'touch:island'])(
+  it.each(['glass', 'touch:glass'])(
+    'keeps %s group press feedback on the shared frame',
+    (className) => {
+      const group = surface();
+      group.removeAttribute('data-mobile-dock-island');
+      group.dataset.slot = 'button-group';
+      group.className = className;
+      const button = group.querySelector('button')!;
+
+      pointer(button, 'pointerdown');
+
+      expect(group.dataset.glassPress).toBe('wide');
+      expect(button.hasAttribute('data-glass-press')).toBe(false);
+    }
+  );
+  it.each(['glass', 'touch:glass', 'island', 'touch:island'])(
     'animates standalone %s buttons without per-control setup',
     (className) => {
       const button = document.createElement('button');

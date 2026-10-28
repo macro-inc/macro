@@ -131,7 +131,7 @@ Saved views are available on main Tasks, not inside Project or CRM task lists.
 
 - Desktop: use the **Saved views** sidebar section. Its icon-only **+** remains available when the section is empty, populated, collapsed, loading, or in an error state. Enter on the focused **+** starts a draft instead of opening the selected task.
 - Mobile: the **Saved views** pill sits after **Filters** and before the built-in task tabs, using the same mobile pill component. It shows the selected view's name and active styling, and opens a drawer of saved-view rows with selection and management menus, without a duplicate section heading or a header create button. Create views from changed filters, layout, grouping, or sort in the filter drawer.
-- The empty sidebar and mobile picker show **Your go-to views**, the muted description **Save your setup for next time.**, and a neutral **Create view** button with a leading plus icon in a rounded container with a subtle border, 12px padding, the surrounding background, and no shadow or illustration. It starts the same unsaved draft as desktop **+**; on mobile, the picker closes first. Configure the draft in Filters, then choose **Save view**.
+- The empty sidebar and mobile picker show **Your go-to views**, the muted description **Save your setup for next time.**, and a secondary **Create view** button with a leading plus icon in a rounded container with a subtle border, 12px padding, the surrounding background, and no shadow or illustration. It starts the same unsaved draft as desktop **+**; on mobile, the picker closes first. Configure the draft in Filters, then choose **Save view**.
 - Desktop **+** starts an unsaved view without person restrictions and with explicit open-status filters. It expands the section and adds a selected, italic **New view** row labeled **Draft** in the sidebar and mobile picker. Configure filters, then choose **Save view**; the name defaults to **New view** and can be edited before saving. A confirmed save replaces the draft with the named view; **Cancel** in the desktop toolbar or mobile filter drawer, another selection, or leaving Tasks removes the unsaved row. Canceling only the name dialog keeps the draft for later.
 - When filters, layout, grouping, or sort differ from the built-in tab defaults, the filled **Save view** button appears immediately left of Filters on desktop and in an edge-to-edge mobile banner above the filter drawer footer. The borderless banner overlays content on a drawer-colored backing and has a leading bookmark icon on its button. Base settings and search alone do not show the banner. It captures current filters, layout, grouping, and ordered sort directions, but excludes text search and scroll state. My Tasks adds **Me** to Assignee; Created by me adds it to Created by. Additional people in the same filter use OR matching.
 - Saved views use the normal Assignee and Created by filters, not a separate Scope control. **Me** stays relative; its tooltip says “Matches whoever opens this saved view.” A named person stays fixed. Removing Me removes that restriction.
@@ -732,7 +732,11 @@ horizontally in narrow splits, keeping list controls, Add existing tasks, and Ne
 task accessible. Opening an associated task extends the breadcrumb trail; choose
 the project breadcrumb to return, or Projects to restore the collection and its
 filters, groups, and scroll position. Project URLs retain identity and section:
-`/app/component/initiative-view~<project-id>~overview` (or `tasks`).
+`/app/tasks/projects/<project-id>/overview` (or `tasks`). Share, and Copy Link
+in the project title and Projects row menus, copy `/app/initiative/<project-id>`,
+which opens the project in Tasks; pasting it, or an older
+`/app/component/initiative-view~<project-id>~overview` link, into a markdown
+editor inserts a project mention. A link to a project discussion stays a link.
 Project properties live in the shared floating information panel and honor
 project access. Editors can rename the project; its owner can delete it.
 Deleting a project leaves its tasks in the workspace.

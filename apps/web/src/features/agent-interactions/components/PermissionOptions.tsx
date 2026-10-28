@@ -62,11 +62,11 @@ export function PermissionOptions(props: PermissionOptionsProps) {
         <Dropdown placement="top-end">
           <Dropdown.Trigger
             size="md"
-            variant="outline"
+            variant="secondary"
             disabled={props.disabled}
           >
             More options
-            <CaretDown />
+            <CaretDown class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Dropdown.Trigger>
           <Dropdown.Content class="w-80 max-w-[calc(100vw-2rem)]">
             <Dropdown.Group class="max-h-64 overflow-y-auto">
@@ -96,7 +96,7 @@ export function PermissionOptions(props: PermissionOptionsProps) {
           <Button
             type="button"
             size="md"
-            variant="strong"
+            variant="primary"
             tooltip={option().name}
             disabled={props.disabled}
             onClick={() => props.onSelect(option().id)}

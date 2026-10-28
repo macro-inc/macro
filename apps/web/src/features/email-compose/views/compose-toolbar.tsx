@@ -48,16 +48,18 @@ export function EmailComposeToolbar(props: {
         <div class="flex shrink-0 items-center gap-1">
           <Show when={ctx.hasDraft()}>
             <Button
+              variant="ghost"
               onClick={ctx.onDelete}
               tooltip="Delete draft"
-              size="icon-composer"
+              size="icon-md"
               disabled={ctx.disabled()}
             >
-              <Trash />
+              <Trash class="size-4 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           </Show>
           <Show when={!ctx.hideAttachments}>
             <Button
+              variant="ghost"
               ref={(el) =>
                 fileSelector(el, () => ({
                   multiple: true,
@@ -65,19 +67,20 @@ export function EmailComposeToolbar(props: {
                 }))
               }
               tooltip="Attach"
-              size="icon-composer"
+              size="icon-md"
               disabled={ctx.disabled()}
             >
-              <PaperclipIcon />
+              <PaperclipIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           </Show>
           <Button
+            variant="ghost"
             tooltip="Format"
-            size="icon-composer"
+            size="icon-md"
             disabled={ctx.disabled()}
             onClick={() => setShowFormatRibbon(!showFormatRibbon())}
           >
-            <TextAa />
+            <TextAa class="size-4 touch:size-6 shrink-0 pointer-events-none" />
           </Button>
           <Show when={ctx.scheduleEnabled}>
             <div class="shrink-0">
@@ -98,11 +101,12 @@ export function EmailComposeToolbar(props: {
             onClick={() => ctx.onSend()}
             disabled={ctx.isSavingDraft?.() || ctx.primaryActionDisabled()}
             pending={ctx.isSending()}
-            tooltip={
-              ctx.sendUnavailableReason?.() ?? ctx.schedule.actionLabel()
-            }
+            tooltip={{
+              content:
+                ctx.sendUnavailableReason?.() ?? ctx.schedule.actionLabel(),
+              shortcut: 'cmd+enter',
+            }}
             aria-label={ctx.schedule.actionLabel()}
-            shortcut="cmd+enter"
           />
         </div>
       </div>

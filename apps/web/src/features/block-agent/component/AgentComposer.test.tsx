@@ -63,6 +63,7 @@ vi.mock('../context/AgentSessionContext', () => ({
     },
     sendNext: mocks.sendNext,
     steer: mocks.steer,
+    steerFailed: () => new Set(),
     turn: () => mocks.turn(),
     sessionId: () => 'session-1',
     registerQuoteInsert: vi.fn(),
@@ -178,7 +179,7 @@ describe('view-only session controls', () => {
   );
 });
 
-it('explicitly sends the queue head and disables it while the turn transitions', () => {
+it('keeps force-sending the queue head while the turn transitions', () => {
   const [turn, setTurn] = createSignal<TurnState>('running');
   mocks.turn = turn;
   mocks.session = () => ({ canEdit: true });
@@ -191,11 +192,10 @@ it('explicitly sends the queue head and disables it while the turn transitions',
   expect(mocks.sendNext).toHaveBeenCalledTimes(1);
   for (const next of ['stopping', 'starting'] as const) {
     setTurn(next);
-    expect(sendNext.hasAttribute('disabled')).toBe(true);
-    expect(mocks.queued?.onSteer).toBeUndefined();
+    expect(mocks.queued?.onSteer).toEqual(expect.any(Function));
     fireEvent.click(sendNext);
   }
-  expect(mocks.sendNext).toHaveBeenCalledTimes(1);
+  expect(mocks.sendNext).toHaveBeenCalledTimes(3);
 });
 
 it('retains an unsent draft when speed configuration is rejected', async () => {

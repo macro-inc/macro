@@ -11,7 +11,13 @@ import BookmarkIcon from '@phosphor/bookmark-simple.svg';
 import DotsIcon from '@phosphor/dots-three.svg';
 import InfoIcon from '@phosphor/info.svg';
 import WarningIcon from '@phosphor/warning-circle.svg';
-import { Button, type DialogHandle, Dropdown, openDialog } from '@ui';
+import {
+  Button,
+  ButtonGroup,
+  type DialogHandle,
+  Dropdown,
+  openDialog,
+} from '@ui';
 import { ok } from 'neverthrow';
 import { batch, For, getOwner, type Owner, onCleanup, Show } from 'solid-js';
 import { v4 as uuid } from 'uuid';
@@ -409,7 +415,7 @@ function TaskSavedViewRows(props: {
               <Button
                 ref={attachCreateHotkeys}
                 size="sm"
-                variant="outline"
+                variant="secondary"
                 onClick={() => run(startSavedView)}
               >
                 <PlusIcon class="size-3.5" />
@@ -493,9 +499,9 @@ export function TaskSaveViewButton() {
   return (
     <Show when={visible()}>
       <HeaderActionGroup label="Save task view">
-        <Button size="md" variant="cta" onClick={() => create()}>
+        <ButtonGroup.Button variant="primary" onClick={() => create()}>
           Save view
-        </Button>
+        </ButtonGroup.Button>
       </HeaderActionGroup>
     </Show>
   );
@@ -522,7 +528,7 @@ export function TaskSavedViewCreateBanner(props: TaskSavedViewDialogProps) {
       >
         <InfoIcon class="size-4 shrink-0 text-accent" aria-hidden="true" />
         <span class="min-w-0 flex-1">Save these filters as a view</span>
-        <Button size="sm" variant="cta" onClick={showCreate}>
+        <Button size="sm" variant="primary" onClick={showCreate}>
           <BookmarkIcon class="size-4" aria-hidden="true" />
           Save view
         </Button>
@@ -589,7 +595,8 @@ export function TaskSavedViewMenu() {
             ref={trigger}
             size="icon-md"
             variant="ghost"
-            label="Saved view actions"
+            aria-label="Saved view actions"
+            tooltip="Saved view actions"
           >
             <DotsIcon class="size-4" />
           </Dropdown.Trigger>
@@ -674,9 +681,8 @@ export function TaskSavedViewActions(props: TaskSavedViewDialogProps = {}) {
             fallback={
               <>
                 <Show when={selected()?.record.ownerId === viewerId()}>
-                  <Button
-                    size="md"
-                    variant="cta"
+                  <ButtonGroup.Button
+                    variant="primary"
                     class="touch:order-last"
                     disabled={update.isPending || !!selected()?.issues.length}
                     title={
@@ -687,24 +693,23 @@ export function TaskSavedViewActions(props: TaskSavedViewDialogProps = {}) {
                     onClick={() => fireAndForget(save(), 'saved-views')}
                   >
                     Save changes
-                  </Button>
+                  </ButtonGroup.Button>
                 </Show>
-                <Button
-                  size="md"
+                <ButtonGroup.Button
                   variant="ghost"
                   onClick={() => savedViews?.reset()}
                 >
                   Reset
-                </Button>
+                </ButtonGroup.Button>
               </>
             }
           >
-            <Button size="md" variant="cta" onClick={() => showCreate()}>
+            <ButtonGroup.Button variant="primary" onClick={() => showCreate()}>
               Save view
-            </Button>
-            <Button size="md" variant="ghost" onClick={leaveSavedView}>
+            </ButtonGroup.Button>
+            <ButtonGroup.Button variant="ghost" onClick={leaveSavedView}>
               Cancel
-            </Button>
+            </ButtonGroup.Button>
           </Show>
         </HeaderActionGroup>
       </Show>
@@ -721,21 +726,19 @@ export function TaskSavedViewActions(props: TaskSavedViewDialogProps = {}) {
             <Show
               when={error().graphQLErrors[0]?.extensions.code === 'CONFLICT'}
             >
-              <Button
-                size="sm"
+              <ButtonGroup.Button
                 variant="ghost"
                 onClick={() => fireAndForget(reload(), 'saved-views')}
               >
                 Reload saved view
-              </Button>
+              </ButtonGroup.Button>
             </Show>
-            <Button
-              size="sm"
+            <ButtonGroup.Button
               variant="ghost"
               onClick={() => showCreate(selected()?.record)}
             >
               Duplicate
-            </Button>
+            </ButtonGroup.Button>
           </HeaderActionGroup>
         )}
       </Show>
@@ -753,7 +756,9 @@ export function TaskSavedViewFailure() {
   return (
     <div class="flex h-full flex-col items-center justify-center gap-4 p-6 text-sm">
       <p role="alert">{message()}</p>
-      <Button onClick={() => setTab('my-tasks')}>Return to Tasks</Button>
+      <Button variant="ghost" onClick={() => setTab('my-tasks')}>
+        Return to Tasks
+      </Button>
     </div>
   );
 }

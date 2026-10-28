@@ -13,21 +13,25 @@ function BasicDemo() {
   return (
     <Toolbar size="icon-sm">
       <Toolbar.Group>
-        <Toolbar.Button label="Undo">
+        <Toolbar.Button aria-label="Undo" tooltip="Undo">
           <ArrowCounterClockwiseIcon />
         </Toolbar.Button>
       </Toolbar.Group>
       <Toolbar.Divider />
       <Toolbar.Group>
-        <Toolbar.Button label="Copy">
+        <Toolbar.Button aria-label="Copy" tooltip="Copy">
           <CopyIcon />
         </Toolbar.Button>
-        <Toolbar.Button label="Copy link">
+        <Toolbar.Button aria-label="Copy link" tooltip="Copy link">
           <LinkIcon />
         </Toolbar.Button>
       </Toolbar.Group>
       <Toolbar.Divider />
-      <Toolbar.Button label="Delete" class="text-failure-ink">
+      <Toolbar.Button
+        aria-label="Delete"
+        tooltip="Delete"
+        class="text-failure-ink"
+      >
         <TrashIcon />
       </Toolbar.Button>
     </Toolbar>
@@ -47,8 +51,9 @@ function MediumDemo() {
       <Toolbar.Divider />
       <Toolbar.Group>
         <Toolbar.Button
+          aria-label="Zoom out"
+          tooltip="Zoom out"
           size="icon-md"
-          label="Zoom out"
           onClick={() => setZoom((value) => Math.max(25, value - 25))}
         >
           <ZoomOutIcon />
@@ -57,8 +62,9 @@ function MediumDemo() {
           {zoom()}%
         </Toolbar.Button>
         <Toolbar.Button
+          aria-label="Zoom in"
+          tooltip="Zoom in"
           size="icon-md"
-          label="Zoom in"
           onClick={() => setZoom((value) => Math.min(200, value + 25))}
         >
           <ZoomInIcon />

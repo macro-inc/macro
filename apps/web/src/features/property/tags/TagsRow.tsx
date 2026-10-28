@@ -9,7 +9,7 @@ import PlusIcon from '@icon/system/regular/plus.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import { Badge, badgeTriggerClasses, Layer } from '@ui';
+import { Badge, badgeTriggerClasses, buttonClasses, Layer } from '@ui';
 import { createSignal, For, Match, Show, Switch } from 'solid-js';
 import { TagDot } from './TagDot';
 import {
@@ -162,7 +162,7 @@ export function TagsRow(props: {
               docTags={docTags}
               triggerClass={badgeTriggerClasses({
                 variant: 'outline',
-                size: 'sm',
+                size: 'xs',
                 class: 'm-px gap-1.5',
               })}
               triggerLabel="Add tags"
@@ -174,10 +174,10 @@ export function TagsRow(props: {
           <Match when={true}>
             <TagPicker
               docTags={docTags}
-              triggerClass={badgeTriggerClasses({
-                variant: 'outline',
-                size: 'sm',
-                class: 'm-px size-6 p-0',
+              triggerClass={buttonClasses({
+                variant: 'secondary',
+                size: 'icon-xs',
+                class: 'm-px',
               })}
               triggerLabel="Add tags"
             >

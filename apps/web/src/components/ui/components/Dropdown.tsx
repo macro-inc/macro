@@ -1,7 +1,10 @@
 import { isModality } from '@core/mobile/inputModality';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import CheckIcon from '@icon/system/regular/check.svg';
-import { DropdownMenu as KobalteDropdownMenu } from '@kobalte/core/dropdown-menu';
+import {
+  DropdownMenu as KobalteDropdownMenu,
+  type DropdownMenuTriggerProps as KobalteDropdownTriggerProps,
+} from '@kobalte/core/dropdown-menu';
 import {
   type ComponentProps,
   createSignal,
@@ -9,6 +12,7 @@ import {
   onCleanup,
   Show,
   splitProps,
+  type ValidComponent,
 } from 'solid-js';
 import { cn } from '../utils/classname';
 import {
@@ -66,10 +70,8 @@ export type DropdownContentProps = ComponentProps<
   /** Block pointer interaction behind the menu with a transparent backdrop. */
   blockingBackdrop?: boolean;
 };
-export type DropdownTriggerProps = ComponentProps<
-  typeof KobalteDropdownMenu.Trigger
-> &
-  ButtonProps;
+export type DropdownTriggerProps<T extends ValidComponent = 'button'> =
+  ButtonProps<T> & KobalteDropdownTriggerProps<T>;
 export type DropdownItemIndicatorProps = ComponentProps<
   typeof KobalteDropdownMenu.ItemIndicator
 >;
@@ -477,10 +479,12 @@ function DropdownItem(props: DropdownItemProps) {
   );
 }
 
-function DropdownTrigger(props: DropdownTriggerProps) {
+function DropdownTrigger<T extends ValidComponent = 'button'>(
+  props: DropdownTriggerProps<T>
+) {
   return (
-    <KobalteDropdownMenu.Trigger
-      variant="outline"
+    <KobalteDropdownMenu.Trigger<ValidComponent>
+      variant="secondary"
       as={Button}
       size="sm"
       {...props}

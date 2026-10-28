@@ -199,7 +199,7 @@ export function AgentSplitHeader(props: {
               <For each={tools}>
                 {(tool) => (
                   <Show when={!tool.condition || tool.condition()}>
-                    <ToolButton tool={tool} />
+                    <ToolButton tool={tool} grouped />
                   </Show>
                 )}
               </For>

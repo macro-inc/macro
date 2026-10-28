@@ -283,6 +283,12 @@ color field (Shift makes larger steps). **Reset to default** clears the override
 Visibility and colors share the calendar sidebar's browser-local preferences,
 survive reload, and do not change the Google calendar or booking conflict checks.
 
+The **Sidebar** section's **Next meeting countdown** switch (on by default, saved in
+the same browser-local preferences) controls the app rail's Calendar badge:
+`Now` during a meeting, or minutes until one under an hour away. Turning it off
+hides the badge and stops its upcoming-events fetch. The row previews the
+Calendar button beside the switch, with a sample `23m` pill only while it is on.
+
 The calendar header has a `Booking links` dropdown. Select an active link to
 copy it. The `Manage booking links` footer opens the Scheduling workspace, even
 while links load or when none are active. At narrow desktop pane widths, the
@@ -542,6 +548,15 @@ that load after it opens (join requests, meeting notes) therefore never move it
 from below the event to above it. Check placement with an event low in a tall
 window, a short window, and a pending join request; the backend-free regression
 is `apps/web/src/features/calendar-view/browser-test/playwright.config.ts`.
+The `Add guests` and `Forward invitation` editors in the attendees header open
+below their button, right-aligned with it, and move above it when they don't
+fit below, including when the picker's suggestions arrive after the editor
+opens; when neither side has room they slide over the button to stay in the
+window. The picker, the people chosen and the send button stay visible at every
+event position and window height. The same regression covers both editors in a
+tall and a short window (`?guests=add` or `?guests=forward`, with
+`?contacts=late` delivering the picker's contacts on
+`window.calendarPreview.deliverContacts()`) and their phone sheets.
 
 The `New event` composer (also opened by dragging a range on the grid) has an `Event kind`
 pill choosing between `Event` and `Out of office`. Picking `Out of office` hides the guests,
