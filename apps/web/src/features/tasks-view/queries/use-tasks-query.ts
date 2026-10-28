@@ -23,7 +23,10 @@ import {
 } from '@entity';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { createGroupedSoupQueries } from '@queries/soup/grouped/create-grouped-soup-queries';
-import { useSoupAstItemsQuery } from '@queries/soup/items';
+import {
+  type SoupApiItemFilter,
+  useSoupAstItemsQuery,
+} from '@queries/soup/items';
 import { mapApiSoupItemToEntity } from '@queries/soup/transform-utils';
 import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
 import { type Accessor, createMemo } from 'solid-js';
@@ -114,6 +117,23 @@ function namesCrmRecord(task: TaskEntityWithProperties, crm: TaskCrmScope) {
   ).includes(crm.id);
 }
 
+/** Admits an optimistic row only where this scoped view shows it. */
+function taskInsertFilter(
+  context: TaskViewContext,
+  reference: TaskReferenceScope | undefined,
+  crm: TaskCrmScope | undefined
+): SoupApiItemFilter {
+  return (item) => {
+    const entity = mapApiSoupItemToEntity(item);
+    return (
+      isTaskEntity(entity) &&
+      taskMatchesView(entity, context) &&
+      (!reference || referencesEntity(entity, reference)) &&
+      (!crm || namesCrmRecord(entity, crm))
+    );
+  };
+}
+
 /** Query, service search, and row assembly owned by the production Tasks view. */
 export function useTasksDataSource(
   state: TasksDataSourceInput,
@@ -153,34 +173,27 @@ export function useTasksDataSource(
   const queryArgs = () => queryArgsFor();
 
   const scoped = Boolean(options.reference || options.crm);
-  const query = useSoupAstItemsQuery(queryArgs, () => ({
-    enabled: facetOptionsReady(),
-    networkPaused: options.networkPaused?.(),
-    keepPreviousData: scoped,
-    // Scoped lists admit optimistic rows only where this view shows them.
-    meta: scoped
-      ? {
-          insertFilter: (item) => {
-            const entity = mapApiSoupItemToEntity(item);
-            const reference = options.reference?.();
-            const crm = options.crm?.();
-            return (
-              isTaskEntity(entity) &&
-              taskMatchesView(entity, viewContext()) &&
-              (!reference || referencesEntity(entity, reference)) &&
-              (!crm || namesCrmRecord(entity, crm))
-            );
-          },
-        }
-      : undefined,
-  }));
-
   const viewContext = (): TaskViewContext => ({
     tab: state.tab,
     userId: options.userId(),
     facets: state.facets,
     facetContext: facetContext(),
   });
+
+  const query = useSoupAstItemsQuery(queryArgs, () => ({
+    enabled: facetOptionsReady(),
+    networkPaused: options.networkPaused?.(),
+    keepPreviousData: scoped,
+    meta: scoped
+      ? {
+          insertFilter: taskInsertFilter(
+            viewContext(),
+            options.reference?.(),
+            options.crm?.()
+          ),
+        }
+      : undefined,
+  }));
 
   const transformEntities = (entities: EntityData[]) => {
     const selected: TaskEntityWithProperties[] = [];
