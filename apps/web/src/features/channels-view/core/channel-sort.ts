@@ -4,6 +4,7 @@ import {
   type DateValue,
 } from '@core/util/date';
 import type { ChannelEntity } from '@entity';
+import { match } from 'ts-pattern';
 import type { ChannelListSort } from '../types';
 
 /**
@@ -31,11 +32,11 @@ export function sortChannels(
   sort: ChannelListSort
 ): ChannelEntity[] {
   const sortDate = (channel: ChannelEntity) =>
-    sort === 'created_at'
-      ? channel.createdAt
-      : sort === 'viewed_at'
-        ? channel.viewedAt
-        : activitySortDate(channel);
+    match(sort)
+      .with('created_at', () => channel.createdAt)
+      .with('viewed_at', () => channel.viewedAt)
+      .with('updated_at', () => activitySortDate(channel))
+      .exhaustive();
 
   return channels
     .slice()
