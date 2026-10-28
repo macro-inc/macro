@@ -1,4 +1,5 @@
 import { ChatWithAgentButton } from '@app/features/chat/ChatWithAgentButton';
+import { t } from '@app/lib/i18n';
 import {
   ResponsiveBlockToolbar,
   ResponsivePermissionsBadge,
@@ -148,7 +149,7 @@ export default function DocxBlock(props: { share?: string }) {
           ]}
           menuTools={[
             {
-              label: 'Download .docx',
+              label: () => t('entityActions.downloadDocx'),
               icon: DownloadSimple,
               action: () => download()?.(),
               condition: () => !!download(),
