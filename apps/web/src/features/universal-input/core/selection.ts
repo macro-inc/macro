@@ -35,10 +35,19 @@ export type ReadableSelection = Pick<
 > & { toString(): string };
 
 function offerContainer(node: Node): HTMLElement | undefined {
-  const element = node instanceof Element ? node : node.parentElement;
-  return (
-    element?.closest<HTMLElement>(`[${SELECTION_OFFER_ATTRIBUTE}]`) ?? undefined
-  );
+  let current: Node | null = node;
+  while (current) {
+    const element = current instanceof Element ? current : current.parentElement;
+    const container = element?.closest<HTMLElement>(
+      `[${SELECTION_OFFER_ATTRIBUTE}]`
+    );
+    if (container) return container;
+    // Email bodies render inside a shadow root, which closest() will not
+    // leave; step out through its host and keep looking.
+    const root = current.getRootNode();
+    current = root instanceof ShadowRoot ? root.host : null;
+  }
+  return undefined;
 }
 
 export function offerableText(text: string): boolean {

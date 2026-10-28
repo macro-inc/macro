@@ -2,7 +2,17 @@ import { expect, type Page, test } from '@playwright/test';
 
 async function select(page: Page, passage: string) {
   await page.evaluate((id) => {
-    const node = document.querySelector(`[data-testid="${id}"]`);
+    // The email passage renders in a shadow root, like the email renderer's.
+    const find = (root: Document | ShadowRoot): Element | undefined => {
+      const direct = root.querySelector(`[data-testid="${id}"]`);
+      if (direct) return direct;
+      for (const element of root.querySelectorAll('*'))
+        if (element.shadowRoot) {
+          const nested = find(element.shadowRoot);
+          if (nested) return nested;
+        }
+    };
+    const node = find(document);
     if (!node) throw new Error(`no passage ${id}`);
     const range = document.createRange();
     range.selectNodeContents(node);
@@ -74,6 +84,18 @@ test('offers nothing for a question, an unmarked surface, or a passage too short
   // The same page still offers a shape it does recognize.
   await select(page, 'email-passage');
   await expect(offer(page)).toHaveText('Create task');
+});
+
+test('reads an email body out of the shadow root its renderer mounts', async ({
+  page,
+}) => {
+  await page.goto('/?selection');
+  await select(page, 'email-passage');
+  await expect(offer(page)).toHaveText('Create task');
+  await offer(page).click();
+  await expect(draft(page)).toContainText(
+    'ship the onboarding checklist before the release on Thursday'
+  );
 });
 
 test('a dismissed passage is left alone until the reader selects something else', async ({

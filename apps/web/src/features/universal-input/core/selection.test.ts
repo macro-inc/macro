@@ -68,6 +68,23 @@ it('ignores a drag across two surfaces, unmarked text, and a collapsed caret', (
   ).toBeUndefined();
 });
 
+it('reads text an email body renders inside its shadow root', () => {
+  const message = surface('email-message', '');
+  const host = document.createElement('div');
+  message.append(host);
+  const body = host.attachShadow({ mode: 'open' });
+  body.innerHTML =
+    '<div><p><span>ship the checklist before Thursday</span></p></div>';
+  const node = body.querySelector('span')!.firstChild!;
+  expect(
+    readSelectedText(selected(node, node, 'ship the checklist before Thursday'))
+  ).toEqual({
+    text: 'ship the checklist before Thursday',
+    surface: 'email-message',
+    container: message,
+  });
+});
+
 it('offers nothing for a phrase too short to shape or a passage too long to capture', () => {
   const message = surface('channel-message', 'anything');
   const node = message.firstChild!;

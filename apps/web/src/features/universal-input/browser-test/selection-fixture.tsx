@@ -1,5 +1,5 @@
 import { attachGlobalDOMScope, useHotKeyRoot } from '@core/hotkey/hotkeys';
-import { For } from 'solid-js';
+import { For, Show } from 'solid-js';
 import { SelectionOffer } from '../selection-offer';
 import { commandSubmissions } from './fixture';
 import '@fontsource-variable/inter';
@@ -17,6 +17,7 @@ const PASSAGES = [
     surface: 'email-message',
     label: 'Email message',
     text: 'ship the onboarding checklist before the release on Thursday',
+    shadow: true,
   },
   {
     id: 'question-passage',
@@ -32,6 +33,16 @@ const PASSAGES = [
   },
 ];
 
+/** The email renderer mounts its body in a shadow root; selections there read
+ *  back as nodes inside it, which `closest()` cannot climb out of. */
+function mountShadowBody(host: HTMLElement, id: string, text: string) {
+  const body = host.attachShadow({ mode: 'open' });
+  const content = document.createElement('div');
+  content.style.userSelect = 'text';
+  content.innerHTML = `<p data-testid="${id}"><span>${text}</span></p>`;
+  body.append(content);
+}
+
 /** Opted-in surfaces around the real offer, with no network of its own. */
 export function SelectionOfferFixture() {
   useHotKeyRoot();
@@ -44,11 +55,22 @@ export function SelectionOfferFixture() {
           <section class="max-w-150 space-y-1">
             <h2 class="font-medium text-ink-muted text-xs">{passage.label}</h2>
             <div data-selection-offer={passage.surface}>
-              {/* Rendered Markdown wraps its text in spans, which is what the
-                  app's default `user-select: none` makes selectable. */}
-              <p data-testid={passage.id}>
-                <span>{passage.text}</span>
-              </p>
+              <Show
+                when={passage.shadow}
+                fallback={
+                  // Rendered Markdown wraps its text in spans, which is what
+                  // the app's default `user-select: none` makes selectable.
+                  <p data-testid={passage.id}>
+                    <span>{passage.text}</span>
+                  </p>
+                }
+              >
+                <div
+                  ref={(element) =>
+                    mountShadowBody(element, passage.id, passage.text)
+                  }
+                />
+              </Show>
             </div>
           </section>
         )}
