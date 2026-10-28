@@ -135,6 +135,7 @@ members = [
   "crates/webhook_signature",
   "crates/whatsapp_e2e",
   "crates/whatsapp_fake_server",
+  "crates/external_chat",
   "crates/whatsapp_linked",
   "crates/whatsapp_store_pg",
   "crates/whatsmeow",
@@ -177,7 +178,7 @@ members = [
   "services/sha_cleanup_worker",
   "services/slack_import_worker",
   "services/static_file_service",
-  "services/sync-router",
+  "crates/sync_router",
   "services/sync-service",
   "services/sync-service/bebop-schema",
   "services/unfurl_service",
@@ -448,6 +449,7 @@ utoipa = { version = "5.4.0", features = [
 ] }
 utoipa-swagger-ui = { version = "9", features = ["axum", "vendored"] }
 uuid = { version = "1.15.1", features = ["fast-rng", "serde", "v4", "v5", "v7"] }
+webpki-roots = "1.0.10"
 wiremock = "0.6.5"
 zeroize = "1.8.2"
 zune-core = "0.5"

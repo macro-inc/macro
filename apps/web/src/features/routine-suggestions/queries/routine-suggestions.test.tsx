@@ -77,6 +77,18 @@ describe('createRoutineSuggestions', () => {
     expect(source.generating()).toBe(false);
   });
 
+  it('keeps the same rows when a refetch answers with the same set', async () => {
+    server.get.mockImplementation(() => okAsync(set({})));
+    const source = mount();
+    await waitFor(() => expect(source.suggestions()).toHaveLength(1));
+    const [before] = source.suggestions() ?? [];
+
+    await queryClient.refetchQueries();
+
+    expect(server.get).toHaveBeenCalledTimes(2);
+    expect(source.suggestions()?.[0]).toBe(before);
+  });
+
   it('keeps the earlier set visible while a refresh generates', async () => {
     server.get.mockReturnValue(okAsync(set({})));
     server.refresh.mockReturnValue(okAsync(set({ status: 'generating' })));

@@ -83,7 +83,7 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
 
 ## Gotchas
 
-- Fail closed if team cleanup encounters a WhatsApp group: linked groups require human ownership.
+- Fail closed if team cleanup encounters an external chat: external chats require human ownership.
 
 - GitHub reconnect preserves the current link until OAuth completes. A different
   account returns 409; disconnect first to switch accounts. Missing grants report

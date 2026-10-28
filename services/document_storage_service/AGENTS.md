@@ -8,6 +8,10 @@ threads, pins, recents, notifications, folders, activity.
 
 ## Start here
 
+- `src/api/sync.rs`: dedicated authenticated `/sync/ws` endpoint; `crates/sync_router`
+  owns multiplex routing and cancellation. Sync-service still owns document state
+  and validates scoped tokens. DSS shutdown drains these upgraded sockets.
+  This binary WebSocket protocol is intentionally outside the REST OpenAPI/SDK surface.
 - `src/api.rs`: route module list — `documents`, `items`, `entity`,
   `folders_query`, `graphql_soup`, `threads`, `annotations`, `history`,
   `pins`, `recents`, `notification`, `instructions`, `internal`.
@@ -19,12 +23,15 @@ threads, pins, recents, notifications, folders, activity.
 - `src/server.rs`: composition root, including access-request routes and the
   tracked delivery dispatcher; `src/outbound/access_requests.rs` composes the
   notification/withdrawal/realtime ports. Policy lives in `crates/access_requests`.
-- `src/whatsapp_linked.rs`: mounts `/meta/linked` from `crates/whatsapp_linked`
-  and runs the group notification/import worker (LISTEN `whatsapp_group_effects`,
-  `whatsapp_media_ready`) and the `whatsapp_changed` pusher (bare
-  connection-gateway events to the account owner or a group's viewers);
-  enforces a Redis-shared one-send-request-per-second budget per user;
-  switches `WHATSAPP_LINKED_{PAIRING,ADOPTION,SENDING}_ENABLED` default off.
+- `src/external_chat.rs`: composes `ExternalChatService<WhatsAppProvider>`,
+  mounts `/external-chats` (`crates/external_chat`) and `/whatsapp`
+  (`crates/whatsapp_linked`) and runs the notification/import worker (LISTEN
+  `external_chat_effects`, `whatsapp_media_ready`; attachments become static
+  files through the static file service, which also deletes released ones) and
+  the `external_chat_changed` pusher (bare connection-gateway events to the
+  account owner or a chat's viewers);
+  enforces a Redis-shared one-send-request-per-second budget per user.
+  No backend switch: the web flag `enable-whatsapp-linked` gates rollout.
 - Guest call chat is mounted outside account auth at `/call/guest-chat/{call_id}`;
   `call` verifies the RTC session and `messages` owns the shared discussion.
 - `src/service/entity_mutation.rs`: generic entity-mutation plumbing used

@@ -791,28 +791,33 @@ conflict, refresh and inspect the review; never automatically retry a send whose
 outcome is unknown. These SDK methods have the same user authorization as the
 ordinary API: review cards offer a user workflow, not a separate security grant.
 
-### WhatsApp chats
+### External chats and WhatsApp
 
 Pair your personal account in Macro's External view first. Your WhatsApp chat
 list (`whatsapp.chats()`) holds groups and direct chats; adding one makes an
-independent `WhatsAppGroup` entity (a group or a direct chat) with its own
-history and ordinary sharing, and its earlier messages are imported from your
-phone. Shared viewers can read without WhatsApp. Sending and media uploads
-require your own connected account in the chat, using your personal session or
-own API credential; only the owner sends in a direct chat, and bots never send.
-Adding and detaching require a personal bearer session. Each user is limited to
-one send request per second across all chats.
+independent `ExternalChat` entity (a group or a direct chat, with `provider`
+`whatsapp`) with its own history and ordinary sharing, and its earlier messages
+are imported from your phone. `externalChats.list()` returns every added chat
+you can view; shared viewers can read without WhatsApp. Sending and media
+uploads require your own connected account in the chat, using your personal
+session or own API credential; only the owner sends in a direct chat, and bots
+never send. Adding and removing require a personal bearer session. Each user is
+limited to one send request per second across all chats.
 
 ```ts
 const personal = new Macro({
   auth: { type: 'user', token: () => session.accessToken() },
 });
-const chats = await personal.whatsapp.chats();
-const addable = chats.find((chat) => chat.canAdd());
-const group = addable ? await addable.adopt() : undefined;
-if (group && (await group.canSend())) {
-  const [someone] = await group.participants();
-  const send = await group.reply(
+let chat;
+for (const entry of await personal.whatsapp.chats()) {
+  if (await entry.canAdd()) {
+    chat = await entry.add();
+    break;
+  }
+}
+if (chat && (await chat.canSend())) {
+  const [someone] = await chat.participants();
+  const send = await chat.send(
     {
       type: 'text',
       text: someone ? `Hello @${someone.mentionToken}` : 'Hello',
@@ -823,7 +828,7 @@ if (group && (await group.canSend())) {
   await send.refresh();
   console.log(await send.state());
 }
-for (const shared of await personal.whatsapp.groups()) {
+for (const shared of await personal.externalChats.list()) {
   for await (const message of shared.messages()) console.log(await message.body());
 }
 ```

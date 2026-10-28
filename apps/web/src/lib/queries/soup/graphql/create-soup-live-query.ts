@@ -19,7 +19,10 @@ import { isResponseFreeNetworkError } from '../../../core/util/request-error';
 import { querySnapshot } from '../../../graphql-cache/exchange/live-query';
 import { normalizedCacheResultMetadata } from '../../../graphql-cache/exchange/normalized-cache-exchange';
 import { selectRecords } from '../../../graphql-cache/exchange/record-selection';
-import type { CacheRevision } from '../../../graphql-cache/protocol';
+import {
+  type CacheRevision,
+  MAX_MAIL_THROUGH_ROWS,
+} from '../../../graphql-cache/protocol';
 import {
   ChannelListItemFieldsFragmentDoc,
   ChannelListSoupDocument,
@@ -37,6 +40,7 @@ import {
   getGraphqlSoupCacheHost,
   getGraphqlSoupClient,
   graphqlSoupProjectionSupported,
+  hasGraphqlCacheHost,
 } from '../../../service-clients/service-storage/graphql-soup';
 import { createUrqlInfiniteQuery } from '../../../urql-solid/create-urql-infinite-query';
 import type { UrqlInfiniteData } from '../../../urql-solid/types';
@@ -89,6 +93,18 @@ export function createSoupLiveQuery(
   const pendingDeleteIds = usePendingGraphqlSoupDeleteIds();
   const offline = createBrowserOfflineSignal();
   const [fetchingMailPage, setFetchingMailPage] = createSignal(false);
+  // The position of the last local Mail row loaded (a page's `endCursor`).
+  // Cache writes re-read the page through it, so a scrolled list neither
+  // collapses to its first page nor loses its last row when mail arrives
+  // above it. Native engines that predate positions report none and re-read
+  // the first page.
+  const [localMailEdge, setLocalMailEdge] = createSignal<string | null>(null);
+  // Bumped when the page chain starts over (new input, reset to the first
+  // page), so paging still in flight then cannot restore the old depth.
+  let pagingGeneration = 0;
+  // The last local Mail evaluation for this input succeeded, so cache writes
+  // keep the page current; incomplete or failed ones leave the network page.
+  const [localMailCurrent, setLocalMailCurrent] = createSignal(false);
 
   const firstPageInput = createMemo<GraphqlSoupInput | undefined>(() => {
     const input = request();
@@ -129,6 +145,8 @@ export function createSoupLiveQuery(
       nextCursor: string | null;
       revision: CacheRevision;
       optimistic: boolean;
+      /** Position of the page's last row; null when the engine reports none. */
+      edge: string | null;
     };
   };
   type UnpersistedPage = {
@@ -175,6 +193,9 @@ export function createSoupLiveQuery(
   const [baselineInputKey, setBaselineInputKey] = createSignal<string>();
   let previousInitialInput: GraphqlSoupInput | undefined;
   let networkAuthorityInput: GraphqlSoupInput | undefined;
+  // The server page fetched only to keep the server pages as deep as a local
+  // Mail list (fetchNextPage). It never takes over from that list.
+  let inStepPageIndex: number | undefined;
   let staleFallbackSpan: ReturnType<typeof Telemetry.span> | undefined;
 
   const recordAuthority = (
@@ -249,6 +270,7 @@ export function createSoupLiveQuery(
       setLocalProjection(undefined);
       setBaselineGeneration(undefined);
       setUnpersistedPages(new Map());
+      setLocalMailCurrent(false);
     };
     const observeCurrentRevision = async () => {
       const observedGeneration = cacheGeneration;
@@ -375,6 +397,13 @@ export function createSoupLiveQuery(
           return;
         }
         if (metadata.persistence) {
+          if (
+            page.pageIndex === inStepPageIndex &&
+            untrack(displayLocalProjection)?.mail
+          ) {
+            forgetUnpersistedPage(page.pageIndex);
+            return;
+          }
           const pending: UnpersistedPage = {
             input: firstInput,
             generation: cacheGeneration,
@@ -425,16 +454,20 @@ export function createSoupLiveQuery(
   });
 
   onCleanup(
-    registerGraphqlSoupRevalidations(() => {
-      if (!query.isEnabled) return [];
-      const cursors = new Set([null, ...(query.data?.pageParams ?? [])]);
-      return [...cursors].flatMap((cursor) => {
-        const input = inputForCursor(cursor);
-        return input
-          ? [{ document: queryDocument(), variables: { input } }]
-          : [];
-      });
-    }, getGraphqlSoupClient)
+    registerGraphqlSoupRevalidations(
+      () => {
+        if (!query.isEnabled) return [];
+        const cursors = new Set([null, ...(query.data?.pageParams ?? [])]);
+        return [...cursors].flatMap((cursor) => {
+          const input = inputForCursor(cursor);
+          return input
+            ? [{ document: queryDocument(), variables: { input } }]
+            : [];
+        });
+      },
+      getGraphqlSoupClient,
+      () => cacheMaintained()
+    )
   );
 
   registerChannelNotificationRefresh(() => ({
@@ -552,6 +585,19 @@ export function createSoupLiveQuery(
     live.status() !== 'idle' &&
     live.status() !== 'unsupported' &&
     live.status() !== 'error';
+  // Whether a write that updates the cache also updates this list: a local
+  // Mail page that evaluates, or a maintained predicate query. Other lists
+  // (unsupported filters, a cold cache) still read the server after writes.
+  const cacheMaintained = (): boolean => {
+    if (!hasGraphqlCacheHost()) return false;
+    if (localSource()?.mailView) return localMailCurrent();
+    // A folder list keeps its email rows from the server, and a maintained
+    // query still loading leaves the server page on screen.
+    return (
+      options().localReconciliation !== 'without-email' &&
+      live.status() === 'ready'
+    );
+  };
   const liveRecords = createMemo(
     () => {
       const snapshot = live.data();
@@ -597,14 +643,23 @@ export function createSoupLiveQuery(
     const requestGeneration = cacheGeneration;
     if (input !== previousInitialInput) {
       previousInitialInput = input;
+      pagingGeneration += 1;
       setLocalProjection(undefined);
+      setLocalMailEdge(null);
+      setLocalMailCurrent(false);
     }
+    // Server pages loaded while the network was authoritative.
+    const loaded = definition?.records.length ?? 0;
+    const edge = localMailEdge();
     const existing = untrack(localProjection);
     if (
       existing?.mail &&
       existing.input === input &&
       existing.generation === cacheGeneration &&
-      existing.mail.revision === revision
+      existing.mail.revision === revision &&
+      existing.mail.edge === edge &&
+      (existing.displayedKeys.size >= loaded ||
+        existing.mail.nextCursor == null)
     )
       return;
     const host = getGraphqlSoupCacheHost();
@@ -641,6 +696,7 @@ export function createSoupLiveQuery(
         let retryCount = 0;
         let discarded = false;
         let outcome: 'success' | 'incomplete' | 'error' = 'incomplete';
+        let through = edge;
         try {
           for (let attempt = 0; attempt < 3; attempt += 1) {
             if (requestId !== localRequest) {
@@ -651,9 +707,29 @@ export function createSoupLiveQuery(
               filters,
               sortMethod,
               sortDirection,
-              limit,
-              ...(mailView ? { mail: { view: mailView } } : { baseline }),
+              ...(!mailView
+                ? { limit, baseline }
+                : through
+                  ? {
+                      // At least as deep as the server pages already shown.
+                      limit: Math.min(
+                        Math.max(limit, loaded),
+                        MAX_MAIL_THROUGH_ROWS
+                      ),
+                      mail: { view: mailView, through },
+                    }
+                  : { limit, mail: { view: mailView } }),
             });
+            // A position from a replaced engine: read from the top instead.
+            if (result.kind === 'stale-cursor' && through) {
+              through = null;
+              continue;
+            }
+            if (mailView) {
+              span.setAttr('evaluation.through', Boolean(through));
+              if (result.kind === 'mail-page')
+                span.setAttr('evaluation.depth', result.keys.length);
+            }
             if (
               mailView &&
               (result.kind === 'unsupported' || result.kind === 'incomplete')
@@ -708,11 +784,18 @@ export function createSoupLiveQuery(
                         nextCursor: result.nextCursor,
                         revision: result.revision,
                         optimistic: result.optimistic,
+                        edge: result.endCursor ?? null,
                       },
                     }
                   : {}),
                 records: reconciledRecords,
               });
+              // The next evaluation reads through this one's last row.
+              if (result.kind === 'mail-page')
+                setLocalMailEdge(result.endCursor ?? null);
+              // Set here: a new edge reruns the effect, which supersedes
+              // this request before its `finally`.
+              if (mailView) setLocalMailCurrent(true);
               // The filter, fragments, and final revision agree. A newer coherent
               // page is valid even if hydration advanced past the initial read.
               // Publish both result kinds' watermarks: the Mail guard avoids a
@@ -733,6 +816,9 @@ export function createSoupLiveQuery(
           // Unsupported, incomplete, validation, and storage failures retain
           // the stale network/normalized-cache fallback already on screen.
         } finally {
+          // Only the latest request decides, after any stale-revision retries.
+          if (mailView && requestId === localRequest && outcome !== 'success')
+            setLocalMailCurrent(false);
           span.setAttr('evaluation.outcome', outcome);
           span.setAttr('evaluation.retry_count', retryCount);
           span.setAttr('evaluation.discarded', discarded);
@@ -806,8 +892,49 @@ export function createSoupLiveQuery(
     return additions.length ? [...local.records, ...additions] : local.records;
   });
 
+  // Keeps the server pages as deep as a local Mail list, so it stays as deep
+  // when the network page becomes authoritative again. Load More raises the
+  // rows wanted, and one chain fetches pages until the server has them: the
+  // infinite query coalesces a next page requested while one is in flight.
+  // Not awaited: the local page is what the user sees. A failed page ends the
+  // chain, and the next Load More retries it; so does a restarted page chain.
+  let serverCatchUp: { generation: number; rows: number } | undefined;
+  const fetchServerPagesInStep = (rows: number) => {
+    if (serverCatchUp?.generation === pagingGeneration) {
+      serverCatchUp.rows = Math.max(serverCatchUp.rows, rows);
+      return;
+    }
+    const catchUp = { generation: pagingGeneration, rows };
+    serverCatchUp = catchUp;
+    fireAndForget(
+      (async () => {
+        try {
+          while (
+            catchUp.generation === pagingGeneration &&
+            query.hasNextPage &&
+            !offline() &&
+            (query.data?.records().length ?? 0) < catchUp.rows
+          ) {
+            const pages = query.data?.pageParams.length ?? 0;
+            inStepPageIndex = pages;
+            await query.fetchNextPage();
+            if ((query.data?.pageParams.length ?? 0) <= pages) return;
+          }
+        } finally {
+          if (serverCatchUp === catchUp) serverCatchUp = undefined;
+        }
+      })(),
+      'soup-live-query'
+    );
+  };
+  const cachedMail = createMemo(
+    () => !networkIsAuthoritative() && Boolean(displayLocalProjection()?.mail)
+  );
   const error = (): CombinedError | undefined => {
     const error = query.error;
+    // A local Mail list pages from the cache; the server page kept in step
+    // behind it is retried on the next scroll and must not replace the list.
+    if (query.isFetchNextPageError && cachedMail()) return undefined;
     // A background transport failure must not replace usable current-query
     // cache results (including an empty result) with the full-screen error state.
     // A normalized page is usable before local reconciliation finishes. Keep
@@ -836,6 +963,7 @@ export function createSoupLiveQuery(
   );
 
   return {
+    cacheMaintained,
     queryScope: () => JSON.stringify([firstPageInput(), cacheGeneration]),
     localRevision: () => displayLocalProjection()?.mail?.revision,
     localOptimistic: () => displayLocalProjection()?.mail?.optimistic ?? false,
@@ -844,15 +972,14 @@ export function createSoupLiveQuery(
       return records && withoutPendingSoupEntities(records, pendingDeleteIds());
     }),
     fetchedRecords: () => query.data?.records() ?? [],
-    cachedMail: createMemo(
-      () => !networkIsAuthoritative() && Boolean(displayLocalProjection()?.mail)
-    ),
+    cachedMail,
     error,
     isSupported,
     isEnabled: () => query.isEnabled,
     isLoading: () => query.isLoading && displayLocalProjection() === undefined,
     isFetching: () => query.isFetching,
-    isFetchingNextPage: () => fetchingMailPage() || query.isFetchingNextPage,
+    isFetchingNextPage: () =>
+      fetchingMailPage() || (!cachedMail() && query.isFetchingNextPage),
     isFetchNextPageError: () => query.isFetchNextPageError,
     // Current-query cache results are usable data, not previous-tab
     // placeholders. In particular, local recomputation must not animate the
@@ -865,12 +992,15 @@ export function createSoupLiveQuery(
     fetchNextPage: async () => {
       const local = displayLocalProjection();
       if (!local?.mail || networkIsAuthoritative()) {
+        inStepPageIndex = undefined;
         await query.fetchNextPage();
         return;
       }
       if (!local.mail.nextCursor || fetchingMailPage()) return;
+      const generation = pagingGeneration;
       const initial =
         'initial' in local.input ? local.input.initial : undefined;
+      fetchServerPagesInStep(local.displayedKeys.size + (initial?.limit ?? 20));
       const host = getGraphqlSoupCacheHost();
       if (
         !initial ||
@@ -904,34 +1034,52 @@ export function createSoupLiveQuery(
           keys,
           mailView,
         });
+        if (generation !== pagingGeneration) return;
         if (
           displayLocalProjection() !== local ||
           result.revision !== local.mail.revision ||
           selected.kind === 'stale'
         ) {
-          setLocalEvaluationTrigger((value) => value + 1);
+          // A cache write raced the page: read the list again through the
+          // page's last row, at the new revision.
+          batch(() => {
+            setLocalMailEdge(result.endCursor ?? null);
+            setLocalEvaluationTrigger((value) => value + 1);
+          });
           return;
         }
         const records = selected.records;
-        setLocalProjection({
-          ...local,
-          displayedKeys: new Set(keys),
-          mail: {
-            nextCursor: result.nextCursor,
-            revision: result.revision,
-            optimistic: result.optimistic,
-          },
-          records,
+        const edge = result.endCursor ?? null;
+        // Together, so the evaluation sees the new edge already displayed.
+        batch(() => {
+          setLocalMailEdge(edge);
+          setLocalProjection({
+            ...local,
+            displayedKeys: new Set(keys),
+            mail: {
+              nextCursor: result.nextCursor,
+              revision: result.revision,
+              // Pending writes shown on earlier pages are still pending.
+              optimistic:
+                (local.mail?.optimistic ?? false) || result.optimistic,
+              edge,
+            },
+            records,
+          });
         });
       } finally {
         setFetchingMailPage(false);
       }
     },
     resetToInitialPage: () => {
+      pagingGeneration += 1;
       query.resetToInitialPage();
       if (displayLocalProjection()?.mail) {
-        setLocalProjection(undefined);
-        setLocalEvaluationTrigger((value) => value + 1);
+        batch(() => {
+          setLocalProjection(undefined);
+          setLocalMailEdge(null);
+          setLocalEvaluationTrigger((value) => value + 1);
+        });
       }
     },
     refresh: async () => {

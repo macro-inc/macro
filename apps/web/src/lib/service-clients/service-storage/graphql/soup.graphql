@@ -471,9 +471,10 @@ fragment SoupNotificationMetadataFields on GraphqlNotifEvent {
 # REST metadata (including mention/reply content) remains available to consumers.
 fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 	__typename
-	... on GraphqlWhatsappGroupMessageMetadata {
-		whatsappGroupName: groupName
-		whatsappMessageId: messageId
+	... on GraphqlExternalChatMessageMetadata {
+		externalChatProvider: provider
+		externalChatName: chatName
+		externalChatMessageId: messageId
 	}
 	... on GraphqlChannelMentionMetadata {
 		channelMentionMessageId: messageId

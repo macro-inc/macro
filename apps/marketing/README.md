@@ -1075,7 +1075,8 @@ dimensions. The production product checks hold scripts and verify styled heroes
 and correctly sized logos before releasing them.
 
 The homepage uses a silent dark unification MP4 and its clean opening frame as
-Open Graph media. Keep the image free of navigation and CTA buttons. The video
+Open Graph media. Keep the image free of navigation and CTA buttons, and keep
+the headline above the bottom quarter, where X overlays its title label. The video
 ends in a unified Macro mark; it is not a seamless loop. Use versioned asset URLs
 and retain earlier files for cached previews. Keep video homepage-only, with
 `og:type=website`, the matching `og:image`, and an

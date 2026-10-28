@@ -16309,7 +16309,7 @@ export const ShareWithChannel = z.object({
       z.literal('call'),
       z.literal('thread'),
       z.literal('agent_session'),
-      z.literal('whatsapp_group'),
+      z.literal('external_chat'),
       z.literal('chat'),
     ];
     const errors = schemas.reduce<z.ZodError[]>(
@@ -16343,7 +16343,7 @@ export const ShareWithChannelResponse = z.object({
       z.literal('call'),
       z.literal('thread'),
       z.literal('agent_session'),
-      z.literal('whatsapp_group'),
+      z.literal('external_chat'),
       z.literal('chat'),
     ];
     const errors = schemas.reduce<z.ZodError[]>(

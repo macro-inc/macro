@@ -1488,14 +1488,14 @@ describe('GraphQL Soup browser cache session gate', () => {
   });
 });
 
-it('preserves canonical WhatsApp group identity and notification metadata through GraphQL', async () => {
+it('preserves canonical external chat identity and notification metadata through GraphQL', async () => {
   const { mapGraphqlNotification } = await import('./graphql-soup');
   const mapped = mapGraphqlNotification({
     __typename: 'GraphqlNotification',
     id: 'notification',
-    eventType: 'whatsapp_group_message',
-    entityId: 'group-1',
-    entityType: 'WHATSAPP_GROUP',
+    eventType: 'external_chat_message',
+    entityId: 'chat-1',
+    entityType: 'EXTERNAL_CHAT',
     state: 'UNSEEN',
     sent: true,
     senderId: null,
@@ -1503,17 +1503,22 @@ it('preserves canonical WhatsApp group identity and notification metadata throug
     updatedAt: '2026-10-21T10:00:00Z',
     viewedAt: null,
     metadata: {
-      __typename: 'GraphqlWhatsappGroupMessageMetadata',
-      whatsappGroupName: 'Design Crit',
-      whatsappMessageId: 'message-1',
+      __typename: 'GraphqlExternalChatMessageMetadata',
+      externalChatProvider: 'whatsapp',
+      externalChatName: 'Design Crit',
+      externalChatMessageId: 'message-1',
     },
   });
   expect(mapped).toMatchObject({
-    entity_type: 'whatsapp_group',
-    entity_id: 'group-1',
+    entity_type: 'external_chat',
+    entity_id: 'chat-1',
     notification_metadata: {
-      tag: 'whatsapp_group_message',
-      content: { groupName: 'Design Crit', messageId: 'message-1' },
+      tag: 'external_chat_message',
+      content: {
+        provider: 'whatsapp',
+        chatName: 'Design Crit',
+        messageId: 'message-1',
+      },
     },
   });
 });

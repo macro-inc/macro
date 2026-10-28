@@ -25,6 +25,9 @@ function routineSuggestionsQueryOptions(enabled: boolean) {
     enabled,
     staleTime: 5 * 60 * 1000,
     refetchInterval: pollWhileGenerating,
+    // FE-49: polls under the open suggestion list; an unchanged answer keeps
+    // its objects, so rows don't remount and drop focus.
+    reconcile: 'id',
   });
 }
 

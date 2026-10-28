@@ -558,7 +558,7 @@ pub async fn build(
     let decision_classifier = config
         .typesafe_api_key
         .value()
-        .map(jev::outbound::TypesafeJev::new)
+        .map(jev::outbound::SystemOneJev::typesafe)
         .transpose()
         .context("failed to configure the decision classifier")?
         .map(|provider| jev::domain::JevClassifier::new(provider, recorder.clone()));
@@ -830,7 +830,7 @@ pub async fn build(
 
     let tool_service_context = ai_tools::ToolServiceContext {
         cognition_tool_context: ai_tools::build_cognition_tool_context()?,
-        connector_tool_context: ai_tools::build_connector_tool_context(db.clone(), None),
+        connector_tool_context: ai_tools::build_connector_tool_context(db.clone(), None, None),
         search_service_client: search_service_client.clone(),
         email_service_client: email_service_client_external.clone(),
         soup_service: soup_service.clone(),

@@ -18,6 +18,9 @@ between the sandbox and the rest of the product.
   provisioning.
 - `src/domain/trigger_router.rs`: routes an incoming trigger to a session.
 - `src/inbound/kafka.rs`: trigger ingestion.
+- `src/domain/mode_choice.rs` + `src/inbound/mode_choice.rs`: the agent
+  composer's Auto mode, `POST /agent-mode-choice`, which asks Clef Flash
+  (`jev`) whether a prompt goes to a chat or a coding agent.
 
 ## Scope
 
@@ -30,7 +33,7 @@ between the sandbox and the rest of the product.
 ## Boundaries
 
 - Depends on: `agent_session`, `agent_egress`, `agent_runtime_protocol`,
-  `agent_trigger`, `ai_billing`.
+  `agent_trigger`, `ai_billing`, `jev`.
 - Used by: `agent_harness_service` (its sole host).
 
 ## Recipes
@@ -43,6 +46,9 @@ between the sandbox and the rest of the product.
 
 External runtimes receive the session's configured MCP selection when binding,
 including enabled owner connections and custom servers under `OwnerConnections`.
+Under `Selected`, an overlaid app (`pipedream_mcp` `mcp_overlays`) the owner
+authorized natively is advertised as that custom server instead of its slug;
+an app connected that way also satisfies the `app.connected` resume check.
 Use `external_mcp_servers` to preserve the host-reachable egress URL override.
 
 External chat replies use `domain/service/external_replies.rs` and the

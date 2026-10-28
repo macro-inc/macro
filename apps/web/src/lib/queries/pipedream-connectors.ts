@@ -3,6 +3,7 @@ import {
   type PipedreamConnectEvent,
   type PipedreamConnectUI,
 } from '@core/pipedream/connect-ui';
+import { assignOauthUrl, reserveOauthPopup } from '@core/pipedream/oauth-popup';
 import { pipedreamSlugsMatch } from '@core/pipedream/slugs';
 import { isTauri } from '@core/util/platform';
 import { ThrownResultError, throwOnErr } from '@core/util/result';
@@ -12,12 +13,18 @@ import type { UserInfoData } from '@queries/auth/user-info';
 import { queryClient } from '@queries/client';
 import { queryReadyGate } from '@queries/gate';
 import {
+  mcpServersQueryOptions,
+  useMcpServersQuery,
+} from '@queries/mcp-servers';
+import {
   cognitionApiServiceClient,
   PIPEDREAM_DISABLED,
   type PipedreamCatalogResponse,
   type PipedreamConnectionResponse,
+  type PipedreamOverlayResponse,
   type PipedreamUpdateRequest,
 } from '@service-cognition/client';
+import type { ServerResponse } from '@service-cognition/generated/schemas';
 import {
   type InfiniteData,
   infiniteQueryOptions,
@@ -25,17 +32,21 @@ import {
   useMutation,
   useQuery,
 } from '@tanstack/solid-query';
+import { ResultAsync } from 'neverthrow';
 import { type Accessor, createMemo } from 'solid-js';
 
 const KEYS = {
   all: ['pipedreamConnectors'] as const,
   list: ['pipedreamConnectors', 'list'] as const,
+  overlays: ['pipedreamConnectors', 'overlays'] as const,
   catalog: (search: string) =>
     ['pipedreamConnectors', 'catalog', search] as const,
 };
 
 /** Stable placeholder for `neverSuspend` consumers (see below). */
 const NO_CONNECTIONS: PipedreamConnectionResponse[] = [];
+const NO_OVERLAYS: PipedreamOverlayResponse[] = [];
+const NO_SERVERS: ServerResponse[] = [];
 
 function fetchPipedreamConnections() {
   return throwOnErr(
@@ -66,12 +77,63 @@ export function usePipedreamConnectionsQuery(options?: {
   }));
 }
 
+function fetchPipedreamOverlays() {
+  return throwOnErr(
+    async () => await cognitionApiServiceClient.listPipedreamOverlays()
+  );
+}
+
+function pipedreamOverlaysQueryOptions() {
+  return {
+    queryKey: KEYS.overlays,
+    queryFn: fetchPipedreamOverlays,
+    staleTime: 10 * 60 * 1000,
+  };
+}
+
+/**
+ * The catalog apps that connect through their own MCP server instead of
+ * Pipedream. Never suspends: the empty placeholder only means "not loaded
+ * yet", so surfaces that decide anything from it also check `ready`.
+ */
+export function usePipedreamOverlaysQuery() {
+  return useQuery(() => ({
+    ...pipedreamOverlaysQueryOptions(),
+    placeholderData: NO_OVERLAYS,
+  }));
+}
+
+function sameEndpoint(a: string, b: string) {
+  return a.replace(/\/+$/, '') === b.replace(/\/+$/, '');
+}
+
+/**
+ * The overlaid apps `servers` holds an enabled, authorized native connection
+ * for, by app slug.
+ */
+export function overlaidSlugsConnected(
+  overlays: readonly PipedreamOverlayResponse[],
+  servers: readonly ServerResponse[]
+): string[] {
+  return overlays
+    .filter((overlay) =>
+      servers.some(
+        (server) =>
+          server.enabled &&
+          server.authenticated &&
+          sameEndpoint(server.url, overlay.server_url)
+      )
+    )
+    .map((overlay) => overlay.app_slug);
+}
+
 /**
  * The app slugs the current user has connected, as a set, plus whether the
- * answer is known yet. `ready` is false while the query is still serving the
+ * answer is known yet. `ready` is false while a query is still serving its
  * `neverSuspend` placeholder, which callers must not read as "connected to
  * nothing". Shared by every surface that shows a connected/not-connected
- * indicator so they cannot disagree.
+ * indicator so they cannot disagree. Overlaid apps count as connected
+ * through their native MCP server, never through Pipedream.
  */
 export function usePipedreamConnectedSlugs(options?: {
   refetchInterval?: number;
@@ -83,15 +145,31 @@ export function usePipedreamConnectedSlugs(options?: {
     neverSuspend: true,
     refetchInterval: options?.refetchInterval,
   });
-  const slugs = createMemo<ReadonlySet<string>>(
-    () =>
-      new Set(
-        (queryReadyGate(query) ? query.data : NO_CONNECTIONS)
-          .filter((connection) => connection.enabled)
-          .map((connection) => connection.app_slug)
-      )
-  );
-  const ready = () => !query.isPlaceholderData && queryReadyGate(query);
+  const overlays = usePipedreamOverlaysQuery();
+  const servers = useMcpServersQuery({
+    neverSuspend: true,
+    refetchInterval: options?.refetchInterval,
+  });
+  const slugs = createMemo<ReadonlySet<string>>(() => {
+    const overlayList = queryReadyGate(overlays) ? overlays.data : NO_OVERLAYS;
+    const overlaid = new Set(overlayList.map((overlay) => overlay.app_slug));
+    return new Set([
+      ...(queryReadyGate(query) ? query.data : NO_CONNECTIONS)
+        .filter(
+          (connection) =>
+            connection.enabled && !overlaid.has(connection.app_slug)
+        )
+        .map((connection) => connection.app_slug),
+      ...overlaidSlugsConnected(
+        overlayList,
+        queryReadyGate(servers) ? servers.data : NO_SERVERS
+      ),
+    ]);
+  });
+  const ready = () =>
+    [query, overlays, servers].every(
+      (source) => !source.isPlaceholderData && queryReadyGate(source)
+    );
   return { slugs, ready };
 }
 
@@ -207,6 +285,10 @@ let pipedreamUnsupported = false;
  * with our backend, which verifies ownership against Pipedream before
  * storing it.
  *
+ * An overlaid app (see {@link usePipedreamOverlaysQuery}) never goes through
+ * Pipedream: it authorizes its own MCP server with the native MCP OAuth flow
+ * in a new tab instead, and is connected once that server is authorized.
+ *
  * Resolves `'connected'` on success (connections cache already refreshed),
  * `'closed'` when the user dismissed the UI without finishing, and
  * `'unsupported'` when the deployment has no Pipedream configured. Rejects
@@ -220,19 +302,109 @@ export async function connectPipedreamApp(args: {
   /** Where the Connect iframe mounts; see `openPipedreamConnectUI`. */
   container?: HTMLElement;
 }): Promise<PipedreamConnectOutcome> {
+  // The authorization URL arrives after an await, so an overlaid app's tab
+  // is reserved now, inside the click. Surfaces that offer connecting load
+  // the overlays first; an uncached list falls back to opening the URL.
+  const cachedOverlay = queryClient
+    .getQueryData<PipedreamOverlayResponse[]>(KEYS.overlays)
+    ?.find((overlay) => overlay.app_slug === args.appSlug);
+  const popup = cachedOverlay ? reserveOauthPopup() : null;
   return Telemetry.span('pipedream.connect', async (span) => {
     span.setAttr('connector.app_slug', args.appSlug);
     span.setAttr('connector.native', isTauri());
     try {
-      const outcome = await connectPipedreamAccount(args, span);
+      const overlay =
+        cachedOverlay ?? (await lookUpOverlay(args.appSlug, span));
+      span.setAttr('connector.overlaid', overlay !== undefined);
+      const outcome = overlay
+        ? await connectOverlaidApp(overlay, args, popup, span)
+        : await connectPipedreamAccount(args, span);
       span.setAttr('connector.outcome', outcome);
       return outcome;
     } catch (error) {
+      popup?.close();
       // Do not copy third-party errors or Connect URLs into telemetry.
       span.error('Pipedream connection failed');
       throw error;
     }
   });
+}
+
+/**
+ * The overlay for `appSlug`, or none when the overlay list cannot be read: a
+ * backend without the overlay route still connects through Pipedream, and
+ * one with it refuses overlaid apps there itself.
+ */
+async function lookUpOverlay(
+  appSlug: string,
+  span: Span
+): Promise<PipedreamOverlayResponse | undefined> {
+  const overlays = await ResultAsync.fromPromise(
+    queryClient.ensureQueryData(pipedreamOverlaysQueryOptions()),
+    () => ({ kind: 'overlays-unavailable' as const })
+  );
+  if (overlays.isErr()) {
+    span.setAttr('connector.overlays_unavailable', true);
+    return undefined;
+  }
+  return overlays.value.find((overlay) => overlay.app_slug === appSlug);
+}
+
+const OVERLAY_AUTH_POLL_MS = 2000;
+// Matches the backend's pending-authorization lifetime.
+const OVERLAY_AUTH_TIMEOUT_MS = 10 * 60 * 1000;
+
+function currentUserId() {
+  return queryClient.getQueryData<UserInfoData>(authKeys.userInfo.queryKey)?.id;
+}
+
+/**
+ * Authorize an overlaid app's own MCP server in `popup` (or the system
+ * browser), then wait for the server list to show it authorized. The
+ * callback page cannot message this tab, so the list is re-read until the
+ * grant lands, the tab is closed, or the pending authorization expires.
+ */
+async function connectOverlaidApp(
+  overlay: PipedreamOverlayResponse,
+  args: Parameters<typeof connectPipedreamApp>[0],
+  popup: Window | null,
+  span: Span
+): Promise<PipedreamConnectOutcome> {
+  const userId = currentUserId();
+  const started = await span.span('mcp.auth_start', async () =>
+    throwOnErr(
+      async () =>
+        await cognitionApiServiceClient.startMcpAuth({
+          server_url: overlay.server_url,
+          server_name: args.serverName ?? overlay.app_slug,
+        })
+    )
+  );
+  if (currentUserId() !== userId) {
+    popup?.close();
+    return 'closed';
+  }
+  assignOauthUrl(popup, started.authorization_url);
+
+  const consent = span.span('mcp.consent');
+  try {
+    const deadline = Date.now() + OVERLAY_AUTH_TIMEOUT_MS;
+    while (Date.now() < deadline && currentUserId() === userId) {
+      const closed = popup?.closed ?? false;
+      const servers = await queryClient.fetchQuery({
+        ...mcpServersQueryOptions(),
+        staleTime: 0,
+      });
+      if (overlaidSlugsConnected([overlay], servers).length > 0) {
+        return 'connected';
+      }
+      if (closed) return 'closed';
+      await new Promise((resolve) => setTimeout(resolve, OVERLAY_AUTH_POLL_MS));
+    }
+    return 'closed';
+  } finally {
+    consent.end();
+  }
 }
 
 async function connectPipedreamAccount(
@@ -241,8 +413,6 @@ async function connectPipedreamAccount(
 ): Promise<PipedreamConnectOutcome> {
   if (pipedreamUnsupported) return 'unsupported';
 
-  const currentUserId = () =>
-    queryClient.getQueryData<UserInfoData>(authKeys.userInfo.queryKey)?.id;
   const userId = currentUserId();
   const token = await span.span('pipedream.token', async () =>
     cognitionApiServiceClient.createPipedreamToken()

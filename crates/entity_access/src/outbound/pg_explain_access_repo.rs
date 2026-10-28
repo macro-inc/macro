@@ -149,7 +149,7 @@ impl ExplainAccessRepository for PgExplainAccessRepository {
                 )
                 .await?)
             }
-            EntityType::WhatsAppGroup => {
+            EntityType::ExternalChat => {
                 let id = parse_uuid(entity_id, "Invalid group ID")?;
                 let sources = queries::get_user_source_ids(&self.pool, Some(user_id))
                     .await
@@ -157,7 +157,7 @@ impl ExplainAccessRepository for PgExplainAccessRepository {
                 Ok(queries::list_entity_access_grants(
                     &self.pool,
                     &id,
-                    EntityType::WhatsAppGroup,
+                    EntityType::ExternalChat,
                     &sources,
                 )
                 .await?)

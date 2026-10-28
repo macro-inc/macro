@@ -34,15 +34,16 @@ impl AiUsageEnforcement {
 
 /// Features whose provider costs are recorded but never consume allowances,
 /// prepaid credits, or overage. Dictation is the Whispr transcription feature;
-/// chat rename is the automatic title given to a new chat or agent session;
-/// routine suggestions are generated in the background without the user
-/// asking.
-pub const NON_BILLABLE_AI_FEATURES: [AiFeature; 6] = [
+/// chat rename is the automatic title given to a new chat or agent session; agent
+/// mode choice is the Auto composer routing a prompt to Chat or Code; routine
+/// suggestions are generated in the background without the user asking.
+pub const NON_BILLABLE_AI_FEATURES: [AiFeature; 7] = [
     AiFeature::Memory,
     AiFeature::AiProjection,
     AiFeature::CallSummary,
     AiFeature::Dictation,
     AiFeature::ChatRename,
+    AiFeature::AgentModeChoice,
     AiFeature::RoutineSuggestions,
 ];
 
@@ -55,6 +56,7 @@ pub const fn is_billable_feature(feature: AiFeature) -> bool {
         | AiFeature::CallSummary
         | AiFeature::Dictation
         | AiFeature::ChatRename
+        | AiFeature::AgentModeChoice
         | AiFeature::RoutineSuggestions => false,
         AiFeature::Chat
         | AiFeature::Automation

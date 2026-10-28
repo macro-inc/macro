@@ -785,7 +785,7 @@ where
         ctx: &Context<'_>,
         filter: Option<FavoritesFilterInput>,
     ) -> async_graphql::Result<Vec<GraphqlFavorite>> {
-        resolve_favorites::<FR>(ctx, &self.user_id, filter.unwrap_or_default().into_model()).await
+        resolve_favorites::<FR>(ctx, &self.user_id, filter.unwrap_or_default().into_model()?).await
     }
 
     /// Non-deleted projects the authenticated user can access, as a flat list.

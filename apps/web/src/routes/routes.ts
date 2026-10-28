@@ -583,13 +583,13 @@ export const reviewsSplitRoute = defineRoute({
   search: [reviewsTabSearch.namespace],
 });
 
-/** A shareable WhatsApp conversation in External's main pane, with no channel or legacy block. */
-export const externalWhatsappGroupRoute = defineRoute({
-  id: 'external-whatsapp-group',
-  path: 'whatsapp/:groupId',
-  params: z.object({ groupId: z.string().uuid() }),
-  remountKey: ({ groupId }) => groupId,
-  claim: ({ groupId }) => ({ namespace: 'whatsapp-group', id: groupId }),
+/** A shareable external chat (any provider) in External's main pane, with no channel or legacy block. */
+export const externalChatRoute = defineRoute({
+  id: 'external-chat',
+  path: 'chat/:chatId',
+  params: z.object({ chatId: z.string().uuid() }),
+  remountKey: ({ chatId }) => chatId,
+  claim: ({ chatId }) => ({ namespace: 'external-chat', id: chatId }),
 });
 
 /** External: outside messaging accounts (WhatsApp) linked into Macro. */

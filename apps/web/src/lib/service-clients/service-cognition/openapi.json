@@ -1885,7 +1885,7 @@
       "post": {
         "tags": ["pipedream-mcp"],
         "summary": "Register a connected account reported by the Pipedream Connect UI.",
-        "description": "Verifies with Pipedream that the account exists and was connected for\nthe authenticated user before persisting anything.",
+        "description": "Verifies with Pipedream that the account exists and was connected for\nthe authenticated user before persisting anything. An overlaid app is\nrefused with 409: it connects through its own MCP server instead.",
         "operationId": "complete_pipedream_mcp_connection",
         "requestBody": {
           "content": {
@@ -1919,6 +1919,16 @@
             }
           },
           "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
             "description": "",
             "content": {
               "application/json": {
@@ -2091,11 +2101,54 @@
         }
       }
     },
+    "/pipedream/mcp/overlays": {
+      "get": {
+        "tags": ["pipedream-mcp"],
+        "summary": "List the catalog apps that connect through their own MCP server.",
+        "description": "Clients connect these with the native MCP OAuth flow against\n`server_url`; Pipedream refuses to complete a connection for them.",
+        "operationId": "list_pipedream_mcp_overlays",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PipedreamOverlayResponse"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/pipedream/mcp/recover": {
       "post": {
         "tags": ["pipedream-mcp"],
         "summary": "Register an account a Connect flow created but the Connect UI never\nreported.",
-        "description": "Called after the Connect UI closes without a success event. Answers 404\nwhen Pipedream has no new account for this user and app.",
+        "description": "Called after the Connect UI closes without a success event. Answers 404\nwhen Pipedream has no new account for this user and app.\nAn overlaid app is refused with 409, as in [`complete_connection`].",
         "operationId": "recover_pipedream_mcp_connection",
         "requestBody": {
           "content": {
@@ -2129,6 +2182,16 @@
             }
           },
           "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
             "description": "",
             "content": {
               "application/json": {
@@ -2546,6 +2609,7 @@
           "import",
           "agent_session",
           "agent_repository_choice",
+          "agent_mode_choice",
           "dictation",
           "image_generation",
           "routine_suggestions"
@@ -3513,7 +3577,7 @@
           "database",
           "database_row",
           "form",
-          "whatsapp_group"
+          "external_chat"
         ]
       },
       "ErrorBody": {
@@ -5033,6 +5097,21 @@
           "server_name": {
             "type": "string",
             "description": "Human-readable display name."
+          }
+        }
+      },
+      "PipedreamOverlayResponse": {
+        "type": "object",
+        "description": "A catalog app that connects through its own MCP server instead of\nPipedream.",
+        "required": ["app_slug", "server_url"],
+        "properties": {
+          "app_slug": {
+            "type": "string",
+            "description": "Pipedream app name slug, as it appears in the catalog."
+          },
+          "server_url": {
+            "type": "string",
+            "description": "The MCP server to authorize with the native MCP OAuth flow."
           }
         }
       },

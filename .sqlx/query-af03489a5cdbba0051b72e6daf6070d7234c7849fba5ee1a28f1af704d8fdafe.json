@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT r.metadata FROM whatsapp_roster r\n            JOIN whatsapp_linked_account a ON a.id = r.account_id\n            JOIN external_chat g ON g.user_id = a.user_id AND g.remote_id = r.group_jid\n            WHERE g.id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "metadata",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "af03489a5cdbba0051b72e6daf6070d7234c7849fba5ee1a28f1af704d8fdafe"
+}
