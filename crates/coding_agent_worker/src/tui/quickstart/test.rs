@@ -220,8 +220,16 @@ fn quickstart_renders_permission_consent_and_warning() {
             .find(|row| row.contains("Access") && !row.contains("Full Access"))
             .unwrap();
         let full_access = rows.iter().find(|row| row.contains("Full Access")).unwrap();
-        assert_eq!(workspace.find("/existing/workspace"), scope.find("Team"));
-        assert_eq!(workspace.find("/existing/workspace"), full_access.find('['));
+        // Borders use multibyte glyphs; compare columns rather than UTF-8 offsets.
+        let workspace_column = workspace.chars().position(|character| character == '/');
+        assert_eq!(
+            workspace_column,
+            scope.chars().position(|character| character == 'T')
+        );
+        assert_eq!(
+            workspace_column,
+            full_access.chars().position(|character| character == '[')
+        );
     }
 }
 

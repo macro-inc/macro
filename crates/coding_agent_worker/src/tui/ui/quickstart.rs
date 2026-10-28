@@ -20,7 +20,7 @@ pub(crate) fn render_quickstart(
     let discovered_height = (discovered_lines(setup, 0).len() as u16 + 2).clamp(3, 12);
     let area = centered(
         84,
-        frame.area().height.saturating_sub(2).min(36),
+        frame.area().height.saturating_sub(2).min(38),
         frame.area(),
     );
     frame.render_widget(Clear, area);
@@ -48,7 +48,7 @@ pub(crate) fn render_quickstart(
         Constraint::Length(1),
         Constraint::Length(1),
         Constraint::Length(1),
-        Constraint::Length(1),
+        Constraint::Length(3),
         Constraint::Length(2),
         Constraint::Min(1),
         Constraint::Length(3),
@@ -132,8 +132,8 @@ pub(crate) fn render_quickstart(
     frame.render_widget(
         Paragraph::new(Line::from(vec![
             Span::styled(
-                format!("{}{:<14}", focus_marker(permissions_focused), "Full Access"),
-                Style::new().fg(DIM),
+                format!("{}{:<12}", focus_marker(permissions_focused), "Full Access"),
+                Style::new().bold(),
             ),
             Span::styled(
                 if setup.allow_permission_bypass {
@@ -143,7 +143,16 @@ pub(crate) fn render_quickstart(
                 },
                 focus_style(permissions_focused),
             ),
-        ])),
+        ]))
+        .block(
+            Block::default()
+                .title(" Suggested ")
+                .title_style(Style::new().bold())
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .border_style(Style::new().fg(THEME.border))
+                .padding(Padding::horizontal(1)),
+        ),
         permissions_area,
     );
     if setup.allow_permission_bypass {
