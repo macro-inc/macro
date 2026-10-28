@@ -1,7 +1,6 @@
 import { HeaderActionButton } from '@components/app/HeaderActionButton';
 import { fireAndForget } from '@core/util/fireAndForget';
 import PhoneIcon from '@icon/system/regular/phone-call.svg';
-import { cn } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import { Show } from 'solid-js';
 import { CHANNEL_TOUR } from '../tour';
@@ -21,11 +20,7 @@ export function ChannelCallButton(props: { channelId: string }) {
         tooltip={tooltip()}
         label={label()}
         icon={<PhoneIcon />}
-        variant={call.isCallInProgress() ? 'success' : 'ghost'}
-        class={cn(
-          call.isCallInProgress() &&
-            'border-transparent bg-success text-surface'
-        )}
+        variant={call.isCallInProgress() ? 'success-solid' : 'ghost'}
       />
     </Show>
   );

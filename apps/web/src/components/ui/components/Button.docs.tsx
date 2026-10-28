@@ -11,6 +11,7 @@ const VARIANTS: ButtonVariant[] = [
   'outline',
   'accent',
   'success',
+  'success-solid',
   'danger',
   'strong',
   'cta',

@@ -92,9 +92,9 @@ export function ActiveCallMessage(props: { channelId: string }) {
                     </Show>
                   </div>
                   <Button
-                    variant="success"
+                    variant="success-solid"
                     size="sm"
-                    class="shrink-0 border-transparent bg-success text-surface"
+                    class="shrink-0"
                     onClick={() => fireAndForget(handleJoin(), 'channel-call')}
                   >
                     <PhoneIcon class="size-3.5" />

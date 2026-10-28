@@ -36,6 +36,8 @@ export const buttonVariants = createVariants(
         'bg-accent-bg not-touch:not-disabled:hover:overlay-accent-bg text-accent',
       success:
         'bg-transparent border-edge-button text-success not-touch:not-disabled:hover:overlay-hover not-touch:not-disabled:active:overlay-active',
+      'success-solid':
+        'bg-success text-surface not-touch:not-disabled:hover:overlay-[color-mix(in_oklch,var(--color-surface)_12%,transparent)] not-touch:not-disabled:active:overlay-[color-mix(in_oklch,var(--color-surface)_22%,transparent)]',
       ghost:
         'bg-transparent text-ink-muted not-touch:not-disabled:hover:overlay-hover not-touch:not-disabled:hover:text-ink not-touch:not-disabled:active:overlay-active',
       strong:
