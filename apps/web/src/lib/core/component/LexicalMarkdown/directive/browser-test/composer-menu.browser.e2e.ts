@@ -36,9 +36,7 @@ test('a menu under a composer near the top still opens below it', async ({
 async function formatMenuGap(page: Page, query: string) {
   await page.goto(`${fixture}?fixture=clipped-selection${query}`);
   const menu = page.getByTestId('format-menu');
-  await expect
-    .poll(async () => (await menu.boundingBox())?.y ?? 0)
-    .toBeGreaterThan(0);
+  await expect.poll(() => menu.evaluate((el) => el.style.top)).toMatch(/px$/);
   const menuBox = await menu.boundingBox();
   const shell = await page.getByTestId('editor-shell').boundingBox();
   if (!menuBox || !shell) throw new Error('menu or editor not laid out');
