@@ -36,7 +36,13 @@ agent resumes its native session on the next prompt. Socket errors do not create
 replacement agents. Changing the configured provider does not convert existing
 sessions into sessions for the other provider.
 
-A background reader forwards local TUI turns even without a Macro prompt.
+After ACP attaches a session, a background reader forwards local TUI turns even
+without a Macro prompt. The gateway currently binds existing sessions lazily:
+after a daemon restart or gateway reconnect, a Macro control must reattach the
+session before this reader runs again. Native conversations continue locally
+during that gap, and the next successful ACP load replays their saved history.
+Automatic reattachment for local-only activity is not yet implemented.
+
 Complete JSONL records are read in bounded batches. Partial lines wait for the
 next append; truncation or replacement requires a reload. Turn boundaries are
 forwarded in order, including multiple local turns between polls.
